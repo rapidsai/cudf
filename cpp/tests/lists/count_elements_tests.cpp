@@ -69,7 +69,7 @@ TEST_F(ListsElementsTest, CountElementsSliced)
     {LCW{"", "Héllo", "thesé"}, LCW{}, LCW{"are", "some", "", "z"}, LCW{"tést", "String"}, LCW{""}},
     validity);
 
-  auto sliced = cudf::slice(input, {1, 4}).front();
+  auto sliced = cudf::slice(input, std::vector<cudf::size_type>{1, 4}).front();
   auto result = cudf::lists::count_elements(cudf::lists_column_view(sliced));
   cudf::test::fixed_width_column_wrapper<int32_t> expected({0, 4, 2}, {0, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);

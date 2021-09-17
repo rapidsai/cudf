@@ -329,11 +329,11 @@ TYPED_TEST(ListConcatenateRowsTypedTest, SlicedColumnsInputNoNull)
   using ListsCol = cudf::test::lists_column_wrapper<TypeParam>;
 
   auto const col_original = ListsCol{{1, 2, 3}, {2, 3}, {3, 4, 5, 6}, {5, 6}, {}, {7}}.release();
-  auto const col1         = cudf::slice(col_original->view(), {0, 3})[0];
-  auto const col2         = cudf::slice(col_original->view(), {1, 4})[0];
-  auto const col3         = cudf::slice(col_original->view(), {2, 5})[0];
-  auto const col4         = cudf::slice(col_original->view(), {3, 6})[0];
-  auto const expected     = ListsCol{
+  auto const col1     = cudf::slice(col_original->view(), std::vector<cudf::size_type>{0, 3})[0];
+  auto const col2     = cudf::slice(col_original->view(), std::vector<cudf::size_type>{1, 4})[0];
+  auto const col3     = cudf::slice(col_original->view(), std::vector<cudf::size_type>{2, 5})[0];
+  auto const col4     = cudf::slice(col_original->view(), std::vector<cudf::size_type>{3, 6})[0];
+  auto const expected = ListsCol{
     {1, 2, 3, 2, 3, 3, 4, 5, 6, 5, 6},
     {2, 3, 3, 4, 5, 6, 5, 6},
     {3, 4, 5, 6, 5, 6, 7}}.release();
@@ -354,11 +354,11 @@ TYPED_TEST(ListConcatenateRowsTypedTest, SlicedColumnsInputWithNulls)
                                       ListsCol{8, 9, 10}},
                                      nulls_at({1, 3, 4})}
                               .release();
-  auto const col1     = cudf::slice(col_original->view(), {0, 3})[0];
-  auto const col2     = cudf::slice(col_original->view(), {1, 4})[0];
-  auto const col3     = cudf::slice(col_original->view(), {2, 5})[0];
-  auto const col4     = cudf::slice(col_original->view(), {3, 6})[0];
-  auto const col5     = cudf::slice(col_original->view(), {4, 7})[0];
+  auto const col1     = cudf::slice(col_original->view(), std::vector<cudf::size_type>{0, 3})[0];
+  auto const col2     = cudf::slice(col_original->view(), std::vector<cudf::size_type>{1, 4})[0];
+  auto const col3     = cudf::slice(col_original->view(), std::vector<cudf::size_type>{2, 5})[0];
+  auto const col4     = cudf::slice(col_original->view(), std::vector<cudf::size_type>{3, 6})[0];
+  auto const col5     = cudf::slice(col_original->view(), std::vector<cudf::size_type>{4, 7})[0];
   auto const expected = ListsCol{
     ListsCol{{null, 2, 3, 3, null, 5, 6}, nulls_at({0, 4})},
     ListsCol{{3, null, 5, 6, 7}, null_at(1)},
@@ -382,10 +382,10 @@ TEST_F(ListConcatenateRowsTest, SlicedStringsColumnsInputWithNulls)
        StrListsCol{{"Deer" /*NULL*/, "Snake" /*NULL*/, "Horse" /*NULL*/}, all_nulls()}}, /*NULL*/
       null_at(5)}
       .release();
-  auto const col1 = cudf::slice(col->view(), {0, 3})[0];
-  auto const col2 = cudf::slice(col->view(), {1, 4})[0];
-  auto const col3 = cudf::slice(col->view(), {2, 5})[0];
-  auto const col4 = cudf::slice(col->view(), {3, 6})[0];
+  auto const col1 = cudf::slice(col->view(), std::vector<cudf::size_type>{0, 3})[0];
+  auto const col2 = cudf::slice(col->view(), std::vector<cudf::size_type>{1, 4})[0];
+  auto const col3 = cudf::slice(col->view(), std::vector<cudf::size_type>{2, 5})[0];
+  auto const col4 = cudf::slice(col->view(), std::vector<cudf::size_type>{3, 6})[0];
 
   {
     auto const results  = cudf::lists::concatenate_rows(TView{{col1, col2, col3, col4}});

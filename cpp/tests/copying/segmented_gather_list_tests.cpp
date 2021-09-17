@@ -84,7 +84,7 @@ TYPED_TEST(SegmentedGatherTest, GatherNothing)
 
     // hack to get column of empty list of list
     LCW<T> expected_dummy{{{1, 2, 3, 4}, {5}}, LCW<T>{}, LCW<T>{}, LCW<T>{}};
-    auto expected = cudf::split(expected_dummy, {1})[1];
+    auto expected = cudf::split(expected_dummy, std::vector<cudf::size_type>{1})[1];
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
   }
 
@@ -99,7 +99,7 @@ TYPED_TEST(SegmentedGatherTest, GatherNothing)
     LCW<T> expected_dummy{{{{1, 2, 3, 4}}},  // hack to get column of empty list of list of list
                           LCW<T>{},
                           LCW<T>{}};
-    auto expected = cudf::split(expected_dummy, {1})[1];
+    auto expected = cudf::split(expected_dummy, std::vector<cudf::size_type>{1})[1];
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 
     // the result should preserve the full List<List<List<int>>> hierarchy
@@ -302,7 +302,7 @@ TYPED_TEST(SegmentedGatherTest, GatherSliced)
       {{50, 50, 50, 50}, {6, 13}},
       {{70, 70, 70, 70}, {80}},
     };
-    auto split_a = cudf::split(a, {3});
+    auto split_a = cudf::split(a, std::vector<cudf::size_type>{3});
 
     auto result0 = cudf::lists::detail::segmented_gather(
       lists_column_view{split_a[0]}, lists_column_view{LCW<int>{{1, 2}, {0, 2}, {0, 1}}});
@@ -344,7 +344,7 @@ TYPED_TEST(SegmentedGatherTest, GatherSliced)
       {{{{{10, 20}, valids}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}, valids},
       {{{{10, 20, 30}}, {LCW<T>{30}}, {{{20, 30}, valids}, {62, 72, 82}}}, valids}};
 
-    auto sliced = cudf::slice(list, {0, 1, 2, 5, 5, 7});
+    auto sliced = cudf::slice(list, std::vector<cudf::size_type>{0, 1, 2, 5, 5, 7});
 
     // gather from slice 0
     {
@@ -428,9 +428,9 @@ TEST_F(SegmentedGatherTestFloat, GatherMapSliced)
     cudf::lists::detail::segmented_gather(lists_column_view{list}, lists_column_view{gather_map});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
-  auto sliced  = cudf::split(list, {1, 4});
-  auto split_m = cudf::split(gather_map, {1, 4});
-  auto split_e = cudf::split(expected, {1, 4});
+  auto sliced  = cudf::split(list, std::vector<cudf::size_type>{1, 4});
+  auto split_m = cudf::split(gather_map, std::vector<cudf::size_type>{1, 4});
+  auto split_e = cudf::split(expected, std::vector<cudf::size_type>{1, 4});
 
   auto result0 = cudf::lists::detail::segmented_gather(lists_column_view{sliced[0]},
                                                        lists_column_view{split_m[0]});

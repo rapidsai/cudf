@@ -441,7 +441,7 @@ TEST_F(OverflowTest, Presliced)
 
     // try and concatenate 4 char columns of size ~1/2 billion each
     auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, size);
-    auto sliced     = cudf::split(*many_chars, {511 * 1024 * 1024});
+    auto sliced     = cudf::split(*many_chars, std::vector<cudf::size_type>{511 * 1024 * 1024});
 
     // 511 * 1024 * 1024, should succeed
     table_view a({sliced[0]});
@@ -461,7 +461,7 @@ TEST_F(OverflowTest, Presliced)
     children.push_back(cudf::make_fixed_width_column(data_type{type_id::INT8}, size));
     auto struct_col = cudf::make_structs_column(size, std::move(children), 0, rmm::device_buffer{});
 
-    auto sliced = cudf::split(*struct_col, {511 * 1024 * 1024});
+    auto sliced = cudf::split(*struct_col, std::vector<cudf::size_type>{511 * 1024 * 1024});
 
     // 511 * 1024 * 1024, should succeed
     table_view a({sliced[0]});
@@ -486,7 +486,7 @@ TEST_F(OverflowTest, Presliced)
     auto col        = cudf::make_strings_column(
       num_rows, offsets.release(), std::move(many_chars), 0, rmm::device_buffer{});
 
-    auto sliced = cudf::split(*col, {(num_rows / 2) - 1});
+    auto sliced = cudf::split(*col, std::vector<cudf::size_type>{(num_rows / 2) - 1});
 
     // (num_rows / 2) - 1 should succeed
     table_view a({sliced[0]});
@@ -521,7 +521,7 @@ TEST_F(OverflowTest, Presliced)
     // leaving this disabled as it typically runs out of memory on a T4
     /*
     {
-      auto sliced = cudf::split(*col, {(num_rows / 2) + 1});
+      auto sliced = cudf::split(*col, std::vector<cudf::size_type>{(num_rows / 2) + 1});
       table_view b({sliced[1]});
       cudf::concatenate(std::vector<table_view>({b, b, b, b}));
     }
@@ -530,10 +530,10 @@ TEST_F(OverflowTest, Presliced)
     // should fail by 1 row (2,147,483,647 rows which is fine, but that requires 2,147,483,648
     // offsets, which is not)
     {
-      auto a = cudf::split(*col, {(num_rows / 2)});
+      auto a = cudf::split(*col, std::vector<cudf::size_type>{(num_rows / 2)});
       table_view ta({a[1]});
 
-      auto b = cudf::split(*col, {(num_rows / 2) + 1});
+      auto b = cudf::split(*col, std::vector<cudf::size_type>{(num_rows / 2) + 1});
       table_view tb({b[1]});
 
       EXPECT_THROW(cudf::concatenate(std::vector<table_view>({ta, ta, ta, tb})), cudf::logic_error);
@@ -559,7 +559,7 @@ TEST_F(OverflowTest, Presliced)
     auto col =
       cudf::make_lists_column(4, offsets.release(), std::move(struct_col), 0, rmm::device_buffer{});
 
-    auto sliced = cudf::split(*col, {2});
+    auto sliced = cudf::split(*col, std::vector<cudf::size_type>{2});
     table_view tbl({sliced[1]});
     auto tables = std::vector<table_view>({tbl, tbl, tbl, tbl});
     EXPECT_THROW(cudf::concatenate(tables), cudf::logic_error);
@@ -595,7 +595,7 @@ TEST_F(OverflowTest, Presliced)
     // leaving this disabled as it typically runs out of memory on a T4
     /*
     {
-      auto sliced = cudf::split(*col, {(num_rows / 2) + 1});
+      auto sliced = cudf::split(*col, std::vector<cudf::size_type>{(num_rows / 2) + 1});
       table_view b({sliced[1]});
       cudf::concatenate(std::vector<table_view>({b, b, b, b}));
     }
@@ -604,10 +604,10 @@ TEST_F(OverflowTest, Presliced)
     // should fail by 1 row (2,147,483,647 rows which is fine, but that requires 2,147,483,648
     // offsets, which is not)
     {
-      auto a = cudf::split(*col, {(num_rows / 2)});
+      auto a = cudf::split(*col, std::vector<cudf::size_type>{(num_rows / 2)});
       table_view ta({a[1]});
 
-      auto b = cudf::split(*col, {(num_rows / 2) + 1});
+      auto b = cudf::split(*col, std::vector<cudf::size_type>{(num_rows / 2) + 1});
       table_view tb({b[1]});
 
       EXPECT_THROW(cudf::concatenate(std::vector<table_view>({ta, ta, ta, tb})), cudf::logic_error);
@@ -636,7 +636,7 @@ TEST_F(OverflowTest, Presliced)
     auto struct_col =
       cudf::make_structs_column(num_rows, std::move(children), 0, rmm::device_buffer{});
 
-    auto sliced = cudf::split(*struct_col, {2});
+    auto sliced = cudf::split(*struct_col, std::vector<cudf::size_type>{2});
 
     table_view a({sliced[0]});
     cudf::concatenate(std::vector<table_view>({a, a, a, a}));
@@ -659,7 +659,7 @@ TEST_F(OverflowTest, BigColumnsSmallSlices)
     constexpr size_type size = static_cast<size_type>(static_cast<uint32_t>(1024) * 1024 * 1024);
 
     auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, size);
-    auto sliced     = cudf::slice(*many_chars, {16, 32});
+    auto sliced     = cudf::slice(*many_chars, std::vector<cudf::size_type>{16, 32});
 
     // 192 total rows
     table_view a({sliced[0]});
@@ -686,7 +686,7 @@ TEST_F(OverflowTest, BigColumnsSmallSlices)
     auto col        = cudf::make_strings_column(
       num_rows, std::move(offsets), std::move(many_chars), 0, rmm::device_buffer{});
 
-    auto sliced = cudf::slice(*col, {16, 32});
+    auto sliced = cudf::slice(*col, std::vector<cudf::size_type>{16, 32});
 
     // 192 outer rows
     // 201,326,592 inner rows
@@ -714,7 +714,7 @@ TEST_F(OverflowTest, BigColumnsSmallSlices)
     auto col        = cudf::make_lists_column(
       num_rows, std::move(offsets), std::move(many_chars), 0, rmm::device_buffer{});
 
-    auto sliced = cudf::slice(*col, {16, 32});
+    auto sliced = cudf::slice(*col, std::vector<cudf::size_type>{16, 32});
 
     // 192 outer rows
     // 201,326,592 inner rows
@@ -749,7 +749,7 @@ TEST_F(OverflowTest, BigColumnsSmallSlices)
     auto struct_col =
       cudf::make_structs_column(num_rows, std::move(children), 0, rmm::device_buffer{});
 
-    auto sliced = cudf::slice(*struct_col, {16, 32});
+    auto sliced = cudf::slice(*struct_col, std::vector<cudf::size_type>{16, 32});
 
     // 192 outer rows
     // 201,326,592 inner rows
@@ -1262,13 +1262,13 @@ TEST_F(ListsColumnTest, SlicedColumns)
                                             {{4, 4, 4}, {5, 5}, {6, 6}},
                                             {{7, 7, 7}, {8, 8}, {9, 9}},
                                             {{10, 10, 10}, {11, 11}, {12, 12}}};
-    auto split_a = cudf::split(a, {2});
+    auto split_a = cudf::split(a, std::vector<cudf::size_type>{2});
 
     cudf::test::lists_column_wrapper<int> b{{{-1, -1, -1, -1}, {-2}},
                                             {{-3, -3, -3, -3}, {-4}},
                                             {{-5, -5, -5, -5}, {-6}},
                                             {{-7, -7, -7, -7}, {-8}}};
-    auto split_b = cudf::split(b, {2});
+    auto split_b = cudf::split(b, std::vector<cudf::size_type>{2});
 
     cudf::test::lists_column_wrapper<int> expected0{{{1, 1, 1}, {2, 2}, {3, 3}},
                                                     {{4, 4, 4}, {5, 5}, {6, 6}},
@@ -1311,7 +1311,7 @@ TEST_F(ListsColumnTest, SlicedColumns)
       {LCW{}, {LCW{}}, {{6, 6}, {2}}},
       {LCW{}, LCW{}},
       {LCW{}, LCW{}, {{10, 10, 10}, {11, 11}, {12, 12}}, LCW{}}};
-    auto split_a = cudf::split(a, {2});
+    auto split_a = cudf::split(a, std::vector<cudf::size_type>{2});
 
     cudf::test::lists_column_wrapper<int> b{
       {{LCW{}}},
@@ -1319,7 +1319,7 @@ TEST_F(ListsColumnTest, SlicedColumns)
       {{{1, 2, 9}, LCW{}}, {{5, 6, 7, 8, 9}, {0}, {15, 17}}},
       {{LCW{}}},
     };
-    auto split_b = cudf::split(b, {2});
+    auto split_b = cudf::split(b, std::vector<cudf::size_type>{2});
 
     cudf::test::lists_column_wrapper<int> expected0{
       {{{1, 1, 1}, {2, 2}}, {{3, 3}}, {{10, 9, 16}, {8, 7, 1}, {6, 8, 2}}},
@@ -1374,13 +1374,13 @@ TEST_F(ListsColumnTest, SlicedColumnsWithNulls)
                                             {{{4, 4, 4}, {{5, 5}, valids}, {6, 6}}, valids},
                                             {{7, 7, 7}, {8, 8}, {9, 9}},
                                             {{{10, 10, 10}, {11, 11}, {{12, 12}, valids}}, valids}};
-    auto split_a = cudf::split(a, {3});
+    auto split_a = cudf::split(a, std::vector<cudf::size_type>{3});
 
     cudf::test::lists_column_wrapper<int> b{{{{{-1, -1, -1, -1}, valids}, {-2}}, valids},
                                             {{{{-3, -3, -3, -3}, valids}, {-4}}, valids},
                                             {{{{-5, -5, -5, -5}, valids}, {-6}}, valids},
                                             {{{{-7, -7, -7, -7}, valids}, {-8}}, valids}};
-    auto split_b = cudf::split(b, {3});
+    auto split_b = cudf::split(b, std::vector<cudf::size_type>{3});
 
     cudf::test::lists_column_wrapper<int> expected0{{{{1, 1, 1}, valids}, {2, 2}, {{3, 3}, valids}},
                                                     {{{4, 4, 4}, {{5, 5}, valids}, {6, 6}}, valids},
@@ -1425,7 +1425,7 @@ TEST_F(ListsColumnTest, SlicedColumnsWithNulls)
       {{LCW{}, {{LCW{}}, valids}, {{6, 6}, {2}}}, valids},
       {{{LCW{}, LCW{}}, valids}},
       {LCW{}, LCW{}, {{{10, 10, 10}, {{11, 11}, valids}, {12, 12}}, valids}, LCW{}}};
-    auto split_a = cudf::split(a, {3});
+    auto split_a = cudf::split(a, std::vector<cudf::size_type>{3});
 
     cudf::test::lists_column_wrapper<int> b{
       {{{LCW{}}, valids}},
@@ -1433,7 +1433,7 @@ TEST_F(ListsColumnTest, SlicedColumnsWithNulls)
       {{{{1, 2, 9}, LCW{}}, {{5, 6, 7, 8, 9}, {0}, {15, 17}}}, valids},
       {{LCW{}}},
     };
-    auto split_b = cudf::split(b, {3});
+    auto split_b = cudf::split(b, std::vector<cudf::size_type>{3});
 
     cudf::test::lists_column_wrapper<int> expected0{
       {{{{1, 1, 1}, valids}, {2, 2}},

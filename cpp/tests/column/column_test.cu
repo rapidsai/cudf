@@ -459,7 +459,7 @@ TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructor)
   cudf::test::lists_column_wrapper<TypeParam> list{{1, 2}, {3, 4}, {5, 6, 7}, {8, 9}};
   cudf::test::lists_column_wrapper<TypeParam> expect{{3, 4}, {5, 6, 7}};
 
-  auto sliced = cudf::slice(list, {1, 3}).front();
+  auto sliced = cudf::slice(list, std::vector<cudf::size_type>{1, 3}).front();
   auto result = std::make_unique<cudf::column>(sliced);
 
   cudf::test::expect_columns_equal(expect, result->view());
@@ -470,7 +470,7 @@ TYPED_TEST(ListsColumnTest, ListsSlicedIncludesEmpty)
   cudf::test::lists_column_wrapper<TypeParam> list{{1, 2}, {}, {3, 4}, {8, 9}};
   cudf::test::lists_column_wrapper<TypeParam> expect{{}, {3, 4}};
 
-  auto sliced = cudf::slice(list, {1, 3}).front();
+  auto sliced = cudf::slice(list, std::vector<cudf::size_type>{1, 3}).front();
   auto result = std::make_unique<cudf::column>(sliced);
 
   cudf::test::expect_columns_equal(expect, result->view());
@@ -485,7 +485,7 @@ TYPED_TEST(ListsColumnTest, ListsSlicedNonNestedEmpty)
   // Column of 1 row, an empty List<int>
   LCW expect{LCW{}};
 
-  auto sliced = cudf::slice(list, {1, 2}).front();
+  auto sliced = cudf::slice(list, std::vector<cudf::size_type>{1, 2}).front();
   auto result = std::make_unique<cudf::column>(sliced);
 
   cudf::test::expect_columns_equal(expect, result->view());
@@ -518,7 +518,7 @@ TYPED_TEST(ListsColumnTest, ListsSlicedNestedEmpty)
   auto expect =
     cudf::make_lists_column(1, std::move(offset), std::move(leaf), 0, std::move(null_mask));
 
-  auto sliced = cudf::slice(list, {1, 2}).front();
+  auto sliced = cudf::slice(list, std::vector<cudf::size_type>{1, 2}).front();
   auto result = std::make_unique<cudf::column>(sliced);
 
   cudf::test::expect_columns_equal(*expect, result->view());
@@ -534,7 +534,7 @@ TYPED_TEST(ListsColumnTest, ListsSlicedZeroSliceLengthNested)
 
   auto expect = cudf::empty_like(list);
 
-  auto sliced = cudf::slice(list, {0, 0}).front();
+  auto sliced = cudf::slice(list, std::vector<cudf::size_type>{0, 0}).front();
   auto result = std::make_unique<cudf::column>(sliced);
 
   cudf::test::expect_columns_equal(*expect, result->view());
@@ -549,7 +549,7 @@ TYPED_TEST(ListsColumnTest, ListsSlicedZeroSliceLengthNonNested)
 
   auto expect = cudf::empty_like(list);
 
-  auto sliced = cudf::slice(list, {0, 0}).front();
+  auto sliced = cudf::slice(list, std::vector<cudf::size_type>{0, 0}).front();
   auto result = std::make_unique<cudf::column>(sliced);
 
   cudf::test::expect_columns_equal(*expect, result->view());
@@ -572,7 +572,7 @@ TYPED_TEST(ListsColumnTest, ListsSlicedColumnViewConstructorWithNulls)
   cudf::test::lists_column_wrapper<TypeParam> expect{
     {LCW{}, {{{5, 6, 7}, LCW{}, {8, 9}}, valids}, LCW{}, LCW{}}, expect_valids};
 
-  auto sliced = cudf::slice(list, {1, 5}).front();
+  auto sliced = cudf::slice(list, std::vector<cudf::size_type>{1, 5}).front();
   auto result = std::make_unique<cudf::column>(sliced);
 
   cudf::test::expect_columns_equal(expect, result->view());

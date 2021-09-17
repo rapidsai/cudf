@@ -1930,8 +1930,10 @@ TYPED_TEST(TypedCollectSetTest, SlicedGroupedRollingWindow)
   auto const group_original = fixed_width_column_wrapper<int32_t>{1, 1, 1, 1, 1, 2, 2, 2, 2};
   auto const input_original =
     fixed_width_column_wrapper<T, int32_t>{10, 11, 11, 13, 13, 20, 21, 21, 23};
-  auto const group_col = cudf::slice(group_original, {2, 7})[0];  // { 1, 1, 1, 2, 2 }
-  auto const input_col = cudf::slice(input_original, {2, 7})[0];  // { 11, 13, 13, 20, 21 }
+  auto const group_col =
+    cudf::slice(group_original, std::vector<cudf::size_type>{2, 7})[0];  // { 1, 1, 1, 2, 2 }
+  auto const input_col =
+    cudf::slice(input_original, std::vector<cudf::size_type>{2, 7})[0];  // { 11, 13, 13, 20, 21 }
 
   auto const preceding   = 2;
   auto const following   = 1;

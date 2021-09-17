@@ -339,7 +339,8 @@ TEST_P(FromArrowTestSlice, SliceTest)
   auto start           = std::get<0>(GetParam());
   auto end             = std::get<1>(GetParam());
 
-  auto sliced_cudf_table   = cudf::slice(cudf_table_view, {start, end})[0];
+  auto sliced_cudf_table =
+    cudf::slice(cudf_table_view, std::vector<cudf::size_type>{start, end})[0];
   auto expected_cudf_table = cudf::table{sliced_cudf_table};
   auto sliced_arrow_table  = arrow_table->Slice(start, end - start);
   auto got_cudf_table      = cudf::from_arrow(*sliced_arrow_table);

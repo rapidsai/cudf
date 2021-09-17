@@ -418,7 +418,7 @@ TEST(TestStringData, SlicedNonAsciiStringTest)
                                            "de",
                                            "\t\r\n\f "};
 
-  auto sliced_inputs = cudf::slice(input, {1, 5, 5, 11});
+  auto sliced_inputs = cudf::slice(input, std::vector<cudf::size_type>{1, 5, 5, 11});
 
   {
     auto result = cudf::label_bins(

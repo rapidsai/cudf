@@ -213,10 +213,10 @@ TYPED_TEST(DropListDuplicatesTypedTest, NonNullInputTests)
   // Sliced list column
   auto const list0 =
     LIST_COL{{1, 2, 3, 2, 3, 2, 3, 2, 3}, {3, 2, 1, 4, 1}, {5}, {10, 8, 9}, {6, 7}};
-  auto const list1 = cudf::slice(list0, {0, 5})[0];
-  auto const list2 = cudf::slice(list0, {1, 5})[0];
-  auto const list3 = cudf::slice(list0, {1, 3})[0];
-  auto const list4 = cudf::slice(list0, {0, 3})[0];
+  auto const list1 = cudf::slice(list0, std::vector<cudf::size_type>{0, 5})[0];
+  auto const list2 = cudf::slice(list0, std::vector<cudf::size_type>{1, 5})[0];
+  auto const list3 = cudf::slice(list0, std::vector<cudf::size_type>{1, 3})[0];
+  auto const list4 = cudf::slice(list0, std::vector<cudf::size_type>{0, 3})[0];
 
   test_once(list0, LIST_COL{{1, 2, 3}, {1, 2, 3, 4}, {5}, {8, 9, 10}, {6, 7}});
   test_once(list1, LIST_COL{{1, 2, 3}, {1, 2, 3, 4}, {5}, {8, 9, 10}, {6, 7}});

@@ -149,7 +149,7 @@ TEST_F(TextNormalizeTest, NormalizeSlicedColumn)
   cudf::test::strings_column_wrapper strings(
     {"abc£def", "éè â îô\taeio", "ACEN U", "P^NP", "$41.07", "[a,b]", "丏丟"});
 
-  std::vector<cudf::column_view> sliced = cudf::split(strings, {4});
+  std::vector<cudf::column_view> sliced = cudf::split(strings, std::vector<cudf::size_type>{4});
   auto results = nvtext::normalize_characters(cudf::strings_column_view(sliced.front()), true);
   cudf::test::strings_column_wrapper expected({"abc£def", "ee a io aeio", "acen u", "p ^ np"});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);

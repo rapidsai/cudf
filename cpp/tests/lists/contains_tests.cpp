@@ -180,7 +180,8 @@ TYPED_TEST(TypedContainsTest, SlicedLists)
       return (i != 3) && (i != 10);
     })}.release();
 
-  auto sliced_column_1 = cudf::detail::slice(search_space->view(), {1, 8}).front();
+  auto sliced_column_1 =
+    cudf::detail::slice(search_space->view(), std::vector<cudf::size_type>{1, 8}).front();
 
   auto search_key_one = create_scalar_search_key<T>(1);
   auto result_1       = lists::contains(sliced_column_1, *search_key_one);
@@ -192,7 +193,8 @@ TYPED_TEST(TypedContainsTest, SlicedLists)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result_1->view(), result_1->view());
 
-  auto sliced_column_2 = cudf::detail::slice(search_space->view(), {3, 10}).front();
+  auto sliced_column_2 =
+    cudf::detail::slice(search_space->view(), std::vector<cudf::size_type>{3, 10}).front();
 
   auto result_2 = lists::contains(sliced_column_2, *search_key_one);
 

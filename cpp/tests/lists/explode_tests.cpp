@@ -523,7 +523,7 @@ TEST_F(ExplodeTest, SlicedList)
   FCW expected_b{300, 300, 300, 400, 400, 400};
 
   cudf::table_view t({a, b});
-  auto sliced_t = cudf::slice(t, {2, 4});
+  auto sliced_t = cudf::slice(t, std::vector<cudf::size_type>{2, 4});
   cudf::table_view expected({expected_a, expected_b});
 
   auto ret = cudf::explode(sliced_t[0], 0);
@@ -1170,7 +1170,7 @@ TEST_F(ExplodeOuterTest, SlicedList)
   FCW expected_b{300, 300, 300, 400, 400, 400};
 
   cudf::table_view t({a, b});
-  auto sliced_t = cudf::slice(t, {2, 4});
+  auto sliced_t = cudf::slice(t, std::vector<cudf::size_type>{2, 4});
   cudf::table_view expected({expected_a, expected_b});
 
   auto ret = cudf::explode_outer(sliced_t[0], 0);

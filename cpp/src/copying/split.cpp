@@ -27,7 +27,7 @@ namespace {
 template <typename T>
 std::vector<T> split(T const& input,
                      size_type column_size,
-                     std::vector<size_type> const& splits,
+                     host_span<size_type const> splits,
                      rmm::cuda_stream_view stream)
 {
   if (splits.empty() or column_size == 0) { return std::vector<T>{input}; }
@@ -48,14 +48,14 @@ std::vector<T> split(T const& input,
 };  // anonymous namespace
 
 std::vector<cudf::column_view> split(cudf::column_view const& input,
-                                     std::vector<size_type> const& splits,
+                                     host_span<size_type const> splits,
                                      rmm::cuda_stream_view stream)
 {
   return split(input, input.size(), splits, stream);
 }
 
 std::vector<cudf::table_view> split(cudf::table_view const& input,
-                                    std::vector<size_type> const& splits,
+                                    host_span<size_type const> splits,
                                     rmm::cuda_stream_view stream)
 {
   std::vector<table_view> result{};
@@ -66,14 +66,14 @@ std::vector<cudf::table_view> split(cudf::table_view const& input,
 }  // namespace detail
 
 std::vector<cudf::column_view> split(cudf::column_view const& input,
-                                     std::vector<size_type> const& splits)
+                                     host_span<size_type const> splits)
 {
   CUDF_FUNC_RANGE();
   return detail::split(input, splits, rmm::cuda_stream_default);
 }
 
 std::vector<cudf::table_view> split(cudf::table_view const& input,
-                                    std::vector<size_type> const& splits)
+                                    host_span<size_type const> splits)
 {
   CUDF_FUNC_RANGE();
   return detail::split(input, splits, rmm::cuda_stream_default);

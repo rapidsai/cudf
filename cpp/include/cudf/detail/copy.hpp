@@ -19,6 +19,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -72,7 +73,7 @@ ColumnView slice(ColumnView const& input, cudf::size_type begin, cudf::size_type
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::vector<column_view> slice(column_view const& input,
-                               std::vector<size_type> const& indices,
+                               host_span<size_type const> indices,
                                rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
@@ -81,7 +82,7 @@ std::vector<column_view> slice(column_view const& input,
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::vector<table_view> slice(table_view const& input,
-                              std::vector<size_type> const& indices,
+                              host_span<size_type const> indices,
                               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
@@ -90,7 +91,7 @@ std::vector<table_view> slice(table_view const& input,
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::vector<column_view> split(column_view const& input,
-                               std::vector<size_type> const& splits,
+                               host_span<size_type const> splits,
                                rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
@@ -99,7 +100,7 @@ std::vector<column_view> split(column_view const& input,
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::vector<table_view> split(table_view const& input,
-                              std::vector<size_type> const& splits,
+                              host_span<size_type const> splits,
                               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**

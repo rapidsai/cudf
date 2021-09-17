@@ -620,7 +620,7 @@ TEST_F(RowBitCount, SlicedColumnsFixedWidth)
 {
   auto const slice_size = 7;
   cudf::test::fixed_width_column_wrapper<int16_t> c0_unsliced{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
-  auto c0 = cudf::slice(c0_unsliced, {2, 2 + slice_size});
+  auto c0 = cudf::slice(c0_unsliced, std::vector<cudf::size_type>{2, 2 + slice_size});
 
   table_view t({c0});
   auto result = cudf::row_bit_count(t);
@@ -636,7 +636,7 @@ TEST_F(RowBitCount, SlicedColumnsStrings)
   std::vector<std::string> strings{
     "banana", "metric", "imperial", "abc", "daïs", "", "fire", "def", "cudf", "xyzw"};
   cudf::test::strings_column_wrapper c0_unsliced(strings.begin(), strings.end());
-  auto c0 = cudf::slice(c0_unsliced, {3, 3 + slice_size});
+  auto c0 = cudf::slice(c0_unsliced, std::vector<cudf::size_type>{3, 3 + slice_size});
 
   table_view t({c0});
   auto result = cudf::row_bit_count(t);
@@ -659,7 +659,7 @@ TEST_F(RowBitCount, SlicedColumnsLists)
     {{"dogs", "yay"}, {"xyz", ""}, {"daïs"}},
     {{"fast", "parrot"}, {"orange"}},
     {{"blue"}, {"red", "yellow"}, {"ultraviolet", "", "green"}}};
-  auto c0 = cudf::slice(c0_unsliced, {1, 1 + slice_size});
+  auto c0 = cudf::slice(c0_unsliced, std::vector<cudf::size_type>{1, 1 + slice_size});
 
   table_view t({c0});
   auto result = cudf::row_bit_count(t);
@@ -679,7 +679,8 @@ TEST_F(RowBitCount, SlicedColumnsStructs)
   cudf::test::strings_column_wrapper c1(strings.begin(), strings.end());
 
   auto struct_col_unsliced = cudf::test::structs_column_wrapper({c0, c1});
-  auto struct_col          = cudf::slice(struct_col_unsliced, {3, 3 + slice_size});
+  auto struct_col =
+    cudf::slice(struct_col_unsliced, std::vector<cudf::size_type>{3, 3 + slice_size});
 
   table_view t({struct_col});
   auto result = cudf::row_bit_count(t);

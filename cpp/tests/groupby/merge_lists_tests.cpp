@@ -297,9 +297,12 @@ TYPED_TEST(GroupbyMergeListsTypedTest, SlicedColumnsInput)
   auto const keys2_original = keys_col{0, 0, 1, 1, 1, 3, 4, 5, 6};
   auto const keys3_original = keys_col{0, 1, 2, 3, 4, 5, 6, 7, 8};
 
-  auto const keys1 = cudf::slice(keys1_original, {0, 2})[0];  // { 1, 2 }
-  auto const keys2 = cudf::slice(keys2_original, {4, 6})[0];  // { 1, 3 }
-  auto const keys3 = cudf::slice(keys3_original, {2, 5})[0];  // { 2, 3, 4 }
+  auto const keys1 =
+    cudf::slice(keys1_original, std::vector<cudf::size_type>{0, 2})[0];  // { 1, 2 }
+  auto const keys2 =
+    cudf::slice(keys2_original, std::vector<cudf::size_type>{4, 6})[0];  // { 1, 3 }
+  auto const keys3 =
+    cudf::slice(keys3_original, std::vector<cudf::size_type>{2, 5})[0];  // { 2, 3, 4 }
 
   auto const lists1_original = lists_col{
     {10, 11, 12},
@@ -318,9 +321,9 @@ TYPED_TEST(GroupbyMergeListsTypedTest, SlicedColumnsInput)
                                          {24, 25, 26},  // key = 4
                                          {1, 2, 3, 4, 5}};
 
-  auto const lists1 = cudf::slice(lists1_original, {2, 4})[0];
-  auto const lists2 = cudf::slice(lists2_original, {1, 3})[0];
-  auto const lists3 = cudf::slice(lists3_original, {0, 3})[0];
+  auto const lists1 = cudf::slice(lists1_original, std::vector<cudf::size_type>{2, 4})[0];
+  auto const lists2 = cudf::slice(lists2_original, std::vector<cudf::size_type>{1, 3})[0];
+  auto const lists3 = cudf::slice(lists3_original, std::vector<cudf::size_type>{0, 3})[0];
 
   auto const [out_keys, out_lists] =
     merge_lists(vcol_views{keys1, keys2, keys3}, vcol_views{lists1, lists2, lists3});

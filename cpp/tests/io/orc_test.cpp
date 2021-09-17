@@ -559,7 +559,8 @@ TEST_F(OrcWriterTest, SlicedTable)
   auto expected = std::make_unique<table>(std::move(cols));
   EXPECT_EQ(4, expected->num_columns());
 
-  auto expected_slice = cudf::slice(expected->view(), {2, static_cast<cudf::size_type>(num_rows)});
+  auto expected_slice = cudf::slice(
+    expected->view(), std::vector<cudf::size_type>{2, static_cast<cudf::size_type>(num_rows)});
 
   auto filepath = temp_env->get_temp_filepath("SlicedTable.orc");
   cudf_io::orc_writer_options out_opts =

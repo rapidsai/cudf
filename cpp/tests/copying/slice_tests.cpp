@@ -515,9 +515,9 @@ TEST_F(SliceTableCornerCases, PreSlicedInputs)
 
     cudf::table_view t({a, b, c, d});
 
-    auto pre_sliced = cudf::slice(t, {0, 4, 4, 10});
+    auto pre_sliced = cudf::slice(t, std::vector<cudf::size_type>{0, 4, 4, 10});
 
-    auto result = cudf::slice(pre_sliced[1], {0, 1, 1, 6});
+    auto result = cudf::slice(pre_sliced[1], std::vector<cudf::size_type>{0, 1, 1, 6});
 
     cudf::test::fixed_width_column_wrapper<int> e0_a({4}, {1});
     cudf::test::fixed_width_column_wrapper<int> e0_b({-4}, {0});

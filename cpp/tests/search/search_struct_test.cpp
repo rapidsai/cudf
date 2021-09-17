@@ -122,22 +122,23 @@ TYPED_TEST(TypedStructSearchTest, SlicedColumnInputTests)
   auto child_col_t              = col_wrapper{0, 1, 2, 2, 2, 2, 3, 3, 4, 4};
   auto const structs_t_original = structs_col{child_col_t}.release();
 
-  auto structs_t = cudf::slice(structs_t_original->view(), {0, 10})[0];  // the entire column t
-  auto results   = search_bounds(structs_t, structs_values);
+  auto structs_t            = cudf::slice(structs_t_original->view(),
+                               std::vector<cudf::size_type>{0, 10})[0];  // the entire column t
+  auto results              = search_bounds(structs_t, structs_values);
   auto expected_lower_bound = int32s_col{0, 1, 2, 6, 8, 10};
   auto expected_upper_bound = int32s_col{1, 2, 6, 8, 10, 10};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), verbosity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), verbosity);
 
-  structs_t            = cudf::slice(structs_t_original->view(), {0, 5})[0];
-  results              = search_bounds(structs_t, structs_values);
+  structs_t = cudf::slice(structs_t_original->view(), std::vector<cudf::size_type>{0, 5})[0];
+  results   = search_bounds(structs_t, structs_values);
   expected_lower_bound = int32s_col{0, 1, 2, 5, 5, 5};
   expected_upper_bound = int32s_col{1, 2, 5, 5, 5, 5};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), verbosity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_upper_bound, results.second->view(), verbosity);
 
-  structs_t            = cudf::slice(structs_t_original->view(), {5, 10})[0];
-  results              = search_bounds(structs_t, structs_values);
+  structs_t = cudf::slice(structs_t_original->view(), std::vector<cudf::size_type>{5, 10})[0];
+  results   = search_bounds(structs_t, structs_values);
   expected_lower_bound = int32s_col{0, 0, 0, 1, 3, 5};
   expected_upper_bound = int32s_col{0, 0, 1, 3, 5, 5};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_lower_bound, results.first->view(), verbosity);

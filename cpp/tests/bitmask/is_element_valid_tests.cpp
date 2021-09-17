@@ -57,14 +57,14 @@ TEST_F(IsElementValidTest, IsElementValidOffset)
 {
   fixed_width_column_wrapper<int32_t> col({1, 1, 1, 1, 1}, {1, 0, 0, 0, 1});
   {
-    auto offset_col = slice(col, {1, 5}).front();
+    auto offset_col = slice(col, std::vector<cudf::size_type>{1, 5}).front();
     EXPECT_FALSE(cudf::detail::is_element_valid_sync(offset_col, 0));
     EXPECT_FALSE(cudf::detail::is_element_valid_sync(offset_col, 1));
     EXPECT_FALSE(cudf::detail::is_element_valid_sync(offset_col, 2));
     EXPECT_TRUE(cudf::detail::is_element_valid_sync(offset_col, 3));
   }
   {
-    auto offset_col = slice(col, {2, 5}).front();
+    auto offset_col = slice(col, std::vector<cudf::size_type>{2, 5}).front();
     EXPECT_FALSE(cudf::detail::is_element_valid_sync(offset_col, 0));
     EXPECT_FALSE(cudf::detail::is_element_valid_sync(offset_col, 1));
     EXPECT_TRUE(cudf::detail::is_element_valid_sync(offset_col, 2));
@@ -80,7 +80,7 @@ TEST_F(IsElementValidTest, IsElementValidOffsetLarge)
   size_type num_rows = 1000;
 
   fixed_width_column_wrapper<int32_t> col(val, val + num_rows, valid);
-  auto offset_col = slice(col, {offset, num_rows}).front();
+  auto offset_col = slice(col, std::vector<cudf::size_type>{offset, num_rows}).front();
 
   for (int i = 0; i < offset_col.size(); i++) {
     EXPECT_EQ(cudf::detail::is_element_valid_sync(offset_col, i), filter(i + offset));

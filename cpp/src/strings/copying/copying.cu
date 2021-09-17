@@ -42,7 +42,9 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
 
   // slice the offsets child column
   auto offsets_column = std::make_unique<cudf::column>(
-    cudf::slice(strings.offsets(), {offsets_offset, offsets_offset + strings_count + 1}).front(),
+    cudf::slice(strings.offsets(),
+                std::vector<size_type>{offsets_offset, offsets_offset + strings_count + 1})
+      .front(),
     stream,
     mr);
   auto const chars_offset =
@@ -61,7 +63,10 @@ std::unique_ptr<cudf::column> copy_slice(strings_column_view const& strings,
   auto const data_size =
     cudf::detail::get_value<int32_t>(offsets_column->view(), strings_count, stream);
   auto chars_column = std::make_unique<cudf::column>(
-    cudf::slice(strings.chars(), {chars_offset, chars_offset + data_size}).front(), stream, mr);
+    cudf::slice(strings.chars(), std::vector<size_type>{chars_offset, chars_offset + data_size})
+      .front(),
+    stream,
+    mr);
 
   // slice the null mask
   auto null_mask = cudf::detail::copy_bitmask(

@@ -429,15 +429,23 @@ TYPED_TEST(GroupbyMergeM2TypedTest, SlicedColumnsInput)
     nulls_at({10, 11})};
 
   // Partitioned datasets, taken from the original dataset in the range [10, 24).
-  auto const keys1 = cudf::slice(keys_original, {10, 14})[0];  // {4, 3, 1, 2}
-  auto const keys2 = cudf::slice(keys_original, {14, 17})[0];  // {3, 1, 2}
-  auto const keys3 = cudf::slice(keys_original, {17, 20})[0];  // {2, 1, null}
-  auto const keys4 = cudf::slice(keys_original, {20, 24})[0];  // {3, 2, 4, 4}
+  auto const keys1 =
+    cudf::slice(keys_original, std::vector<cudf::size_type>{10, 14})[0];  // {4, 3, 1, 2}
+  auto const keys2 =
+    cudf::slice(keys_original, std::vector<cudf::size_type>{14, 17})[0];  // {3, 1, 2}
+  auto const keys3 =
+    cudf::slice(keys_original, std::vector<cudf::size_type>{17, 20})[0];  // {2, 1, null}
+  auto const keys4 =
+    cudf::slice(keys_original, std::vector<cudf::size_type>{20, 24})[0];  // {3, 2, 4, 4}
 
-  auto const vals1 = cudf::slice(vals_original, {10, 14})[0];  // {null, null, 0.0, 1.0}
-  auto const vals2 = cudf::slice(vals_original, {14, 17})[0];  // {2.0, 3.0, 4.0}
-  auto const vals3 = cudf::slice(vals_original, {17, 20})[0];  // {NaN, 6.0, 7.0}
-  auto const vals4 = cudf::slice(vals_original, {20, 24})[0];  // {8.0, 9.0, 10.0, NaN}
+  auto const vals1 =
+    cudf::slice(vals_original, std::vector<cudf::size_type>{10, 14})[0];  // {null, null, 0.0, 1.0}
+  auto const vals2 =
+    cudf::slice(vals_original, std::vector<cudf::size_type>{14, 17})[0];  // {2.0, 3.0, 4.0}
+  auto const vals3 =
+    cudf::slice(vals_original, std::vector<cudf::size_type>{17, 20})[0];  // {NaN, 6.0, 7.0}
+  auto const vals4 =
+    cudf::slice(vals_original, std::vector<cudf::size_type>{20, 24})[0];  // {8.0, 9.0, 10.0, NaN}
 
   // The expected results to validate.
   auto const expected_keys = keys_col<T>{1, 2, 3, 4};

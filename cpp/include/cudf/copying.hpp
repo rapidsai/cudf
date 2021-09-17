@@ -408,7 +408,7 @@ std::unique_ptr<column> shift(
  * @param indices A vector of indices used to take slices of `input`.
  * @return Vector of views of `input` indicated by the ranges in `indices`.
  */
-std::vector<column_view> slice(column_view const& input, std::vector<size_type> const& indices);
+std::vector<column_view> slice(column_view const& input, host_span<size_type const> indices);
 
 /**
  * @brief Slices a `table_view` into a set of `table_view`s according to a set of indices.
@@ -442,7 +442,7 @@ std::vector<column_view> slice(column_view const& input, std::vector<size_type> 
  * @param indices A vector of indices used to take slices of `input`.
  * @return Vector of views of `input` indicated by the ranges in `indices`.
  */
-std::vector<table_view> slice(table_view const& input, std::vector<size_type> const& indices);
+std::vector<table_view> slice(table_view const& input, host_span<size_type const> indices);
 
 /**
  * @brief Splits a `column_view` into a set of `column_view`s according to a set of indices
@@ -476,7 +476,7 @@ std::vector<table_view> slice(table_view const& input, std::vector<size_type> co
  * @param splits A vector of indices where the view will be split
  * @return The set of requested views of `input` indicated by the `splits`.
  */
-std::vector<column_view> split(column_view const& input, std::vector<size_type> const& splits);
+std::vector<column_view> split(column_view const& input, host_span<size_type const> splits);
 
 /**
  * @brief Splits a `table_view` into a set of `table_view`s according to a set of indices
@@ -512,7 +512,7 @@ std::vector<column_view> split(column_view const& input, std::vector<size_type> 
  * @param splits A vector of indices where the view will be split
  * @return The set of requested views of `input` indicated by the `splits`.
  */
-std::vector<table_view> split(table_view const& input, std::vector<size_type> const& splits);
+std::vector<table_view> split(table_view const& input, host_span<size_type const> splits);
 
 /**
  * @brief Column data in a serialized format

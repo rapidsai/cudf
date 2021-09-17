@@ -1526,7 +1526,7 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitTable)
     static_cast<cudf::column_view>(col0).size(), std::move(children), 0, rmm::device_buffer{});
 
   cudf::table_view t({col0, col1, col2, *col3});
-  auto pre_split = cudf::split(t, {1});
+  auto pre_split = cudf::split(t, std::vector<cudf::size_type>{1});
 
   {
     std::vector<cudf::size_type> splits{1, 4};
@@ -1568,7 +1568,7 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitTableLarge)
     create_fixed_columns<int>(start, size, pre_split_valids.begin());
 
   // pre-split this column
-  auto split_cols = cudf::split(pre_split, {47});
+  auto split_cols = cudf::split(pre_split, std::vector<cudf::size_type>{47});
 
   std::vector<cudf::size_type> splits{
     2, 16, 31, 35, 64, 97, 158, 190, 638, 899, 900, 901, 996, 4200, 7131, 8111};
@@ -1606,11 +1606,11 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitList)
                                                {{-8, -9}, {-10, -11}},
                                                {{-12, -13}, {-14}, {-15, -16}},
                                                {{-17, -18}, {}, {-19, -20}}};
-    auto pre_split = cudf::split(list, {2});
+    auto pre_split = cudf::split(list, std::vector<cudf::size_type>{2});
 
     cudf::table_view t({pre_split[1]});
     auto result   = cudf::contiguous_split(t, {3, 4});
-    auto expected = cudf::split(t, {3, 4});
+    auto expected = cudf::split(t, std::vector<cudf::size_type>{3, 4});
 
     auto iter = thrust::make_counting_iterator(0);
     std::for_each(iter, iter + expected.size(), [&](cudf::size_type index) {
@@ -1629,11 +1629,11 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitList)
     auto list =
       cudf::make_lists_column(8, offsets.release(), data.release(), 0, rmm::device_buffer{});
 
-    auto pre_split = cudf::split(*list, {2});
+    auto pre_split = cudf::split(*list, std::vector<cudf::size_type>{2});
 
     cudf::table_view t({pre_split[1]});
     auto result   = cudf::contiguous_split(t, {3, 4});
-    auto expected = cudf::split(t, {3, 4});
+    auto expected = cudf::split(t, std::vector<cudf::size_type>{3, 4});
 
     auto iter = thrust::make_counting_iterator(0);
     std::for_each(iter, iter + expected.size(), [&](cudf::size_type index) {
@@ -1664,13 +1664,13 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitStructs)
     cudf::test::structs_column_wrapper e({_a, _b, _c}, {1, 1, 1, 0, 1, 1, 1, 0, 1, 1});
     cudf::test::structs_column_wrapper s({a, b, c, d, e}, {1, 1, 0, 1, 1, 1, 1, 1, 1, 1});
 
-    auto pre_split = cudf::split(s, {4});
+    auto pre_split = cudf::split(s, std::vector<cudf::size_type>{4});
 
     auto iter = thrust::make_counting_iterator(0);
     std::for_each(iter, iter + pre_split.size(), [&](cudf::size_type index) {
       cudf::table_view t({pre_split[index]});
       auto result   = cudf::contiguous_split(t, {1});
-      auto expected = cudf::split(t, {1});
+      auto expected = cudf::split(t, std::vector<cudf::size_type>{1});
 
       CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result[0].table, expected[0]);
       CUDF_TEST_EXPECT_TABLES_EQUIVALENT(result[1].table, expected[1]);
@@ -1693,11 +1693,11 @@ TEST_F(ContiguousSplitTableCornerCases, PreSplitStructs)
     struct_children.push_back(strings.release());
     cudf::test::structs_column_wrapper col(std::move(struct_children));
 
-    auto pre_split = cudf::split(col, {2});
+    auto pre_split = cudf::split(col, std::vector<cudf::size_type>{2});
 
     cudf::table_view t({pre_split[1]});
     auto result   = cudf::contiguous_split(t, {3, 4});
-    auto expected = cudf::split(t, {3, 4});
+    auto expected = cudf::split(t, std::vector<cudf::size_type>{3, 4});
 
     auto iter = thrust::make_counting_iterator(0);
     std::for_each(iter, iter + expected.size(), [&](cudf::size_type index) {
@@ -1818,7 +1818,7 @@ TEST_F(ContiguousSplitTableCornerCases, SplitEmpty)
 
   cudf::table_view t({a, b, c, d});
 
-  auto sliced = cudf::split(t, {0});
+  auto sliced = cudf::split(t, std::vector<cudf::size_type>{0});
 
   {
     auto result = cudf::contiguous_split(sliced[0], {});

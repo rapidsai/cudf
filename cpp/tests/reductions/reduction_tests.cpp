@@ -893,7 +893,7 @@ TEST_P(StringReductionTest, DictionaryMinMax)
             expected_max_result);
 
   // test sliced column
-  result = cudf::minmax(cudf::slice(col_nulls, {3, 7}).front());
+  result = cudf::minmax(cudf::slice(col_nulls, std::vector<cudf::size_type>{3, 7}).front());
   // 3->2 and 7->5 because r_strings contains no null entries
   expected_min_result = *(std::min_element(r_strings.begin() + 2, r_strings.begin() + 5));
   expected_max_result = *(std::max_element(r_strings.begin() + 2, r_strings.begin() + 5));
@@ -945,7 +945,7 @@ TYPED_TEST(ReductionTest, Median)
   this->reduction_test(
     col, expected_value, this->ret_non_arithmetic, cudf::make_median_aggregation());
 
-  auto col_odd              = cudf::split(col, {1})[1];
+  auto col_odd              = cudf::split(col, std::vector<cudf::size_type>{1})[1];
   double expected_value_odd = [] {
     if (std::is_same_v<T, bool>) return 1.0;
     if (std::is_signed<T>::value) return 0.0;
@@ -964,7 +964,7 @@ TYPED_TEST(ReductionTest, Median)
   this->reduction_test(
     col_nulls, expected_null_value, this->ret_non_arithmetic, cudf::make_median_aggregation());
 
-  auto col_nulls_odd             = cudf::split(col_nulls, {1})[1];
+  auto col_nulls_odd             = cudf::split(col_nulls, std::vector<cudf::size_type>{1})[1];
   double expected_null_value_odd = [] {
     if (std::is_same_v<T, bool>) return 1.0;
     if (std::is_signed<T>::value) return -6.5;
@@ -1492,7 +1492,7 @@ TEST_P(DictionaryStringReductionTest, MinMax)
                        cudf::make_min_aggregation(),
                        output_type);
   // sliced
-  this->reduction_test(cudf::slice(col, {1, 7}).front(),
+  this->reduction_test(cudf::slice(col, std::vector<cudf::size_type>{1, 7}).front(),
                        *(std::min_element(host_strings.begin() + 1, host_strings.begin() + 7)),
                        true,
                        cudf::make_min_aggregation(),
@@ -1504,7 +1504,7 @@ TEST_P(DictionaryStringReductionTest, MinMax)
                        cudf::make_max_aggregation(),
                        output_type);
   // sliced
-  this->reduction_test(cudf::slice(col, {1, 7}).front(),
+  this->reduction_test(cudf::slice(col, std::vector<cudf::size_type>{1, 7}).front(),
                        *(std::max_element(host_strings.begin() + 1, host_strings.begin() + 7)),
                        true,
                        cudf::make_max_aggregation(),
@@ -1539,12 +1539,12 @@ TYPED_TEST(DictionaryAnyAllTest, AnyAll)
     this->reduction_test(some_col, true, true, cudf::make_any_aggregation(), output_dtype);
     this->reduction_test(some_col, false, true, cudf::make_all_aggregation(), output_dtype);
     // sliced test
-    this->reduction_test(cudf::slice(some_col, {1, 3}).front(),
+    this->reduction_test(cudf::slice(some_col, std::vector<cudf::size_type>{1, 3}).front(),
                          true,
                          true,
                          cudf::make_any_aggregation(),
                          output_dtype);
-    this->reduction_test(cudf::slice(some_col, {1, 2}).front(),
+    this->reduction_test(cudf::slice(some_col, std::vector<cudf::size_type>{1, 2}).front(),
                          true,
                          true,
                          cudf::make_all_aggregation(),
@@ -1563,12 +1563,12 @@ TYPED_TEST(DictionaryAnyAllTest, AnyAll)
     this->reduction_test(some_col, true, true, cudf::make_any_aggregation(), output_dtype);
     this->reduction_test(some_col, false, true, cudf::make_all_aggregation(), output_dtype);
     // sliced test
-    this->reduction_test(cudf::slice(some_col, {0, 3}).front(),
+    this->reduction_test(cudf::slice(some_col, std::vector<cudf::size_type>{0, 3}).front(),
                          true,
                          true,
                          cudf::make_any_aggregation(),
                          output_dtype);
-    this->reduction_test(cudf::slice(some_col, {1, 4}).front(),
+    this->reduction_test(cudf::slice(some_col, std::vector<cudf::size_type>{1, 4}).front(),
                          true,
                          true,
                          cudf::make_all_aggregation(),
