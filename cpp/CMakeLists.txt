@@ -102,9 +102,8 @@ include(cmake/Modules/ConfigureCUDA.cmake) # set other CUDA compilation flags
 # - dependencies ----------------------------------------------------------------------------------
 
 # find zlib
-rapids_find_package(ZLIB REQUIRED
-    BUILD_EXPORT_SET cudf-exports
-    INSTALL_EXPORT_SET cudf-exports)
+rapids_find_package(ZLIB REQUIRED)
+
 # find Threads (needed by cudftestutil)
 rapids_find_package(Threads REQUIRED
     BUILD_EXPORT_SET cudf-exports
@@ -506,11 +505,11 @@ add_dependencies(cudf jitify_preprocess_run)
 
 # Specify the target module library dependencies
 target_link_libraries(cudf
-           PUBLIC ZLIB::ZLIB
-                  ${ARROW_LIBRARIES}
+           PUBLIC ${ARROW_LIBRARIES}
                   cudf::Thrust
                   rmm::rmm
            PRIVATE cuco::cuco
+	             ZLIB::ZLIB
                    nvcomp::nvcomp)
 
 # Add Conda library, and include paths if specified
