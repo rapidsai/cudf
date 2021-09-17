@@ -5517,7 +5517,7 @@ class DatetimeProperties(object):
 
         @property
         def day(self):
-            return isoSeries["iso_day"]
+            return isoSeries["day"]
 
         @property
         def week(self):
