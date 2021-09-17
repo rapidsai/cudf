@@ -248,6 +248,58 @@ TEST_F(PercentileApproxTest, Simple)
   }
 }
 
+struct group_index {
+  __device__ int operator()(int i) { return i / 2000; }
+};
+
+TEST_F(PercentileApproxTest, Grouped)
+{
+  auto values =
+    cudf::test::generate_standardized_percentile_distribution(data_type{type_id::FLOAT64});
+  // all in the same group
+  auto keys = cudf::make_fixed_width_column(
+    data_type{type_id::INT32}, values->size(), mask_state::UNALLOCATED);
+  auto i = thrust::make_counting_iterator(0);
+  thrust::transform(rmm::exec_policy(rmm::cuda_stream_default),
+                    i,
+                    i + values->size(),
+                    keys->mutable_view().template begin<int>(),
+                    group_index{});
+
+  // delta 1000
+  {
+    int const delta = 1000;
+    percentile_approx_test(*keys,
+                           *values,
+                           delta,
+                           {0.0, 0.05, 0.25, 0.5, 0.75, 0.95, 1.0},
+                           data_type{type_id::FLOAT64},
+                           cudf::test::default_ulp);
+  }
+
+  // delta 100
+  {
+    int const delta = 100;
+    percentile_approx_test(*keys,
+                           *values,
+                           delta,
+                           {0.0, 0.05, 0.25, 0.5, 0.75, 0.95, 1.0},
+                           data_type{type_id::FLOAT64},
+                           cudf::test::default_ulp);
+  }
+
+  // delta 10
+  {
+    int const delta = 10;
+    percentile_approx_test(*keys,
+                           *values,
+                           delta,
+                           {0.0, 0.05, 0.25, 0.5, 0.75, 0.95, 1.0},
+                           data_type{type_id::FLOAT64},
+                           cudf::test::default_ulp * 4);
+  }
+}
+
 std::pair<rmm::device_buffer, size_type> make_null_mask(column_view const& col)
 {
   return cudf::detail::valid_if(thrust::make_counting_iterator<size_type>(0),
@@ -302,5 +354,57 @@ TEST_F(PercentileApproxTest, SimpleWithNulls)
                            {0.0, 0.05, 0.25, 0.5, 0.75, 0.95, 1.0},
                            data_type{type_id::FLOAT64},
                            cudf::test::default_ulp * 11);
+  }
+}
+
+TEST_F(PercentileApproxTest, GroupedWithNulls)
+{
+  auto values =
+    cudf::test::generate_standardized_percentile_distribution(data_type{type_id::FLOAT64});
+  // all in the same group
+  auto keys = cudf::make_fixed_width_column(
+    data_type{type_id::INT32}, values->size(), mask_state::UNALLOCATED);
+  auto i = thrust::make_counting_iterator(0);
+  thrust::transform(rmm::exec_policy(rmm::cuda_stream_default),
+                    i,
+                    i + values->size(),
+                    keys->mutable_view().template begin<int>(),
+                    group_index{});
+
+  // add a null mask
+  auto mask = make_null_mask(*values);
+  values->set_null_mask(mask.first, mask.second);
+
+  // delta 1000
+  {
+    int const delta = 1000;
+    percentile_approx_test(*keys,
+                           *values,
+                           delta,
+                           {0.0, 0.05, 0.25, 0.5, 0.75, 0.95, 1.0},
+                           data_type{type_id::FLOAT64},
+                           cudf::test::default_ulp);
+  }
+
+  // delta 100
+  {
+    int const delta = 100;
+    percentile_approx_test(*keys,
+                           *values,
+                           delta,
+                           {0.0, 0.05, 0.25, 0.5, 0.75, 0.95, 1.0},
+                           data_type{type_id::FLOAT64},
+                           cudf::test::default_ulp);
+  }
+
+  // delta 10
+  {
+    int const delta = 10;
+    percentile_approx_test(*keys,
+                           *values,
+                           delta,
+                           {0.0, 0.05, 0.25, 0.5, 0.75, 0.95, 1.0},
+                           data_type{type_id::FLOAT64},
+                           cudf::test::default_ulp);
   }
 }
