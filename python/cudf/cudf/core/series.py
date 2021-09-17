@@ -5521,7 +5521,7 @@ class DatetimeProperties(object):
 
         @property
         def week(self):
-            return isoSeries["iso_week"]
+            return isoSeries["week"]
 
         @property
         def year(self):
