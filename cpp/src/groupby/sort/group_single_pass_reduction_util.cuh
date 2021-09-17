@@ -37,7 +37,11 @@ namespace cudf {
 namespace groupby {
 namespace detail {
 
-// ArgMin binary operator with tuple of (value, index)
+/**
+ * @brief ArgMin binary operator with index values into input column.
+ *
+ * @tparam T Type of the underlying column. Must support '<' operator.
+ */
 template <typename T>
 struct ArgMin {
   column_device_view const d_col;
@@ -52,6 +56,11 @@ struct ArgMin {
   }
 };
 
+/**
+ * @brief ArgMax binary operator with index values into input column.
+ *
+ * @tparam T Type of the underlying column. Must support '<' operator.
+ */
 template <typename T>
 struct ArgMax {
   column_device_view const d_col;
