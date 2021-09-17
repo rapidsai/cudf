@@ -1653,7 +1653,7 @@ class DatetimeIndex(GenericIndex):
 
         @property
         def year(self):
-            return indexSeries["iso_year"]
+            return indexSeries["year"]
 
         return indexSeries
 
