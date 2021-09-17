@@ -113,8 +113,8 @@ void materialize_bitmask(column_view const& left_col,
   constexpr size_type BLOCK_SIZE{256};
   detail::grid_1d grid_config{num_elements, BLOCK_SIZE};
 
-  auto p_left_dcol  = column_device_view::create(left_col);
-  auto p_right_dcol = column_device_view::create(right_col);
+  auto p_left_dcol  = column_device_view::create(left_col, stream);
+  auto p_right_dcol = column_device_view::create(right_col, stream);
 
   auto left_valid  = *p_left_dcol;
   auto right_valid = *p_right_dcol;

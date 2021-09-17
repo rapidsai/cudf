@@ -14,20 +14,26 @@
 # limitations under the License.
 #=============================================================================
 
-# cuCollections doesn't have a version
+function(find_and_configure_nvcomp VERSION)
 
-function(find_and_configure_cucollections)
-
-    # Find or install cuCollections
-    rapids_cpm_find(cuco 0.0
-        GLOBAL_TARGETS cuco::cuco
+    # Find or install nvcomp
+    rapids_cpm_find(nvcomp ${VERSION}
+        GLOBAL_TARGETS     nvcomp::nvcomp
         CPM_ARGS
-            GITHUB_REPOSITORY PointKernel/cuCollections
-            GIT_TAG           static-multi-map
-            OPTIONS           "BUILD_TESTS OFF"
-                              "BUILD_BENCHMARKS OFF"
-                              "BUILD_EXAMPLES OFF"
+            GITHUB_REPOSITORY  NVIDIA/nvcomp
+            GIT_TAG            4f4e5713e69473be6e0c8ae483a932f666ae3c2f
+            OPTIONS            "BUILD_STATIC ON"
+                               "BUILD_TESTS OFF"
+                               "BUILD_BENCHMARKS OFF"
+                               "BUILD_EXAMPLES OFF"
     )
+
+    if(NOT TARGET nvcomp::nvcomp)
+        add_library(nvcomp::nvcomp ALIAS nvcomp)
+    endif()
+
 endfunction()
 
-find_and_configure_cucollections()
+set(CUDF_MIN_VERSION_nvCOMP 2.1.0)
+
+find_and_configure_nvcomp(${CUDF_MIN_VERSION_nvCOMP})

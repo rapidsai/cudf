@@ -260,7 +260,7 @@ def test_orc_read_stripes(datadir, engine):
         for i in range(stripes)
     ]
     gdf = cudf.concat(gdf).reset_index(drop=True)
-    assert_eq(pdf, gdf, check_categorical=False)
+    assert_eq(pdf, gdf, check_categorical=False, check_index_type=True)
 
     # Read stripes all at once
     gdf = cudf.read_orc(
@@ -273,7 +273,9 @@ def test_orc_read_stripes(datadir, engine):
     assert_eq(gdf, pdf.head(25000))
     gdf = cudf.read_orc(path, engine=engine, stripes=[[0, stripes - 1]])
     assert_eq(
-        gdf, cudf.concat([pdf.head(15000), pdf.tail(10000)], ignore_index=True)
+        gdf,
+        cudf.concat([pdf.head(15000), pdf.tail(10000)], ignore_index=True),
+        check_index_type=True,
     )
 
 

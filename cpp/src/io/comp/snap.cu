@@ -257,7 +257,7 @@ static __device__ uint32_t Match60(const uint8_t* src1,
  * @param[out] outputs Compression status per block
  * @param[in] count Number of blocks to compress
  */
-extern "C" __global__ void __launch_bounds__(128)
+__global__ void __launch_bounds__(128)
   snap_kernel(gpu_inflate_input_s* inputs, gpu_inflate_status_s* outputs, int count)
 {
   __shared__ __align__(16) snap_state_s state_g;
