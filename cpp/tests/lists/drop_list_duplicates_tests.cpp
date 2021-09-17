@@ -136,10 +136,13 @@ TEST_F(DropListDuplicatesTest, StringTestsNonNull)
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
+
+  // No duplicate entry.
   {
     auto const lists    = StrListsCol{"this", "is", "a", "string"};
     auto const expected = StrListsCol{"a", "is", "string", "this"};
-    auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
+    auto const results  = cudf::lists::drop_list_duplicates(
+      cudf::lists_column_view{lists}, cudf::null_equality::EQUAL, cudf::nan_equality::ALL_EQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 
@@ -148,6 +151,16 @@ TEST_F(DropListDuplicatesTest, StringTestsNonNull)
     auto const lists    = StrListsCol{"this", "is", "is", "is", "a", "string", "string"};
     auto const expected = StrListsCol{"a", "is", "string", "this"};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
+  }
+
+  // One list column, input is a strings column with given non-default null_equality and
+  // nans_equality parameters.
+  {
+    auto const lists    = StrListsCol{"this", "is", "is", "is", "a", "string", "string"};
+    auto const expected = StrListsCol{"a", "is", "string", "this"};
+    auto const results  = cudf::lists::drop_list_duplicates(
+      cudf::lists_column_view{lists}, cudf::null_equality::UNEQUAL, cudf::nan_equality::ALL_EQUAL);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 
