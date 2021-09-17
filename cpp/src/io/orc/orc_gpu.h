@@ -37,13 +37,12 @@ namespace orc {
  * @brief `column_device_view` and additional, ORC specific, information on the column.
  */
 struct orc_column_device_view : public column_device_view {
-  thrust::optional<uint32_t> parent_index;
-  bitmask_type const* pushdown_mask = nullptr;
   __device__ orc_column_device_view(column_device_view col, thrust::optional<uint32_t> parent_idx)
     : column_device_view{col}, parent_index{parent_idx}
   {
   }
-  // TODO element, offset
+  thrust::optional<uint32_t> parent_index;
+  bitmask_type const* pushdown_mask = nullptr;
 };
 namespace gpu {
 

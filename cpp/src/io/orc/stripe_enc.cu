@@ -852,8 +852,8 @@ __global__ void __launch_bounds__(block_size)
           case LIST: {
             auto const& offsets = column.child(lists_column_view::offsets_column_index);
             // Compute list length from the offsets
-            s->lengths.u32[nz_idx] =
-              offsets.element<size_type>(row + 1) - offsets.element<size_type>(row);
+            s->lengths.u32[nz_idx] = offsets.element<size_type>(row + 1 + column.offset()) -
+                                     offsets.element<size_type>(row + column.offset());
           } break;
           default: break;
         }

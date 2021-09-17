@@ -513,13 +513,22 @@ TEST_F(OrcWriterTest, SlicedTable)
   column_wrapper<float> col2{seq_col2.begin(), seq_col2.end(), validity};
   column_wrapper<float> col3{seq_col3, seq_col3 + num_rows, validity};
 
-  table_view expected({col0, col1, col2, col3});
+  using lcw = cudf::test::lists_column_wrapper<int64_t>;
+  lcw col4{{9, 8}, {7, 6, 5}, {}, {4}, {3, 2, 1, 0}, {20, 21, 22, 23, 24}, {}, {66, 666}};
+
+  auto ages_col = cudf::test::fixed_width_column_wrapper<int16_t>{
+    {48, 27, 25, 31, 351, 351, 29, 15}, {1, 1, 1, 1, 1, 0, 1, 1}};
+  auto col5 = cudf::test::structs_column_wrapper{{ages_col}, {1, 1, 1, 1, 0, 1, 1, 1}};
+
+  table_view expected({col0, col1, col2, col3, col4, col5});
 
   cudf_io::table_input_metadata expected_metadata(expected);
   expected_metadata.column_metadata[0].set_name("col_other");
   expected_metadata.column_metadata[1].set_name("col_string");
   expected_metadata.column_metadata[2].set_name("col_another");
   expected_metadata.column_metadata[3].set_name("col_decimal");
+  expected_metadata.column_metadata[4].set_name("lists");
+  expected_metadata.column_metadata[5].set_name("structs");
 
   auto expected_slice = cudf::slice(expected, {2, static_cast<cudf::size_type>(num_rows)});
 
