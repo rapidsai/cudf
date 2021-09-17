@@ -355,6 +355,34 @@ void compute_recurrence(rmm::device_uvector<thrust::pair<double, double>>& input
 }
 
 /**
+ * @brief Return an array whose values y_i are the number of null entries
+ * in between the last valid entry of the input and the current index.
+ * Example: {1, NULL, 3, 4, NULL, NULL, 7}
+         -> {0, 0     1, 0, 0,    1,    2}
+ */
+rmm::device_uvector<double> null_roll_up(column_view const& input, rmm::cuda_stream_view stream)
+{
+  rmm::device_uvector<double> output(input.size(), stream, rmm::mr::get_current_device_resource());
+
+  auto device_view = *column_device_view::create(input);
+  auto valid_it    = cudf::detail::make_validity_iterator(device_view);
+
+  // TODO - not sure why two iterators produce a different result
+  // Invert the null iterator
+  thrust::transform(rmm::exec_policy(stream),
+                    valid_it,
+                    valid_it + input.size(),
+                    output.begin(),
+                    [=] __host__ __device__(bool valid) -> bool { return 1 - valid; });
+
+  // 0, 1, 0, 1, 1, 0 -> 0, 0, 1, 0, 0, 2
+  thrust::inclusive_scan_by_key(
+    rmm::exec_policy(stream), output.begin(), output.end() - 1, output.begin(), output.begin() + 1);
+
+  return output;
+}
+
+/**
  * @brief modify the source pairs that eventually yield the numerator
  * and denoninator to account for nan values. Pairs at nan indicies
  * become the identity operator (1, 0). The first pair after a nan
@@ -363,31 +391,12 @@ void compute_recurrence(rmm::device_uvector<thrust::pair<double, double>>& input
  */
 void pair_beta_adjust(column_view const& input,
                       rmm::device_uvector<thrust::pair<double, double>>& pairs,
-                      double beta,
                       rmm::cuda_stream_view stream)
 {
+  rmm::device_uvector<double> nullcnt = null_roll_up(input, stream);
+
   auto device_view = *column_device_view::create(input);
   auto valid_it    = cudf::detail::make_validity_iterator(device_view);
-
-  // Holds count of nulls
-  rmm::device_vector<int> nullcnt(input.size());
-
-  // TODO - not sure why two iterators produce a different result
-  // Invert the null iterator
-  thrust::transform(rmm::exec_policy(stream),
-                    valid_it,
-                    valid_it + input.size(),
-                    nullcnt.begin(),
-                    [=] __host__ __device__(bool valid) -> bool { return 1 - valid; });
-
-  // 0, 1, 0, 1, 1, 0 -> 0, 0, 1, 0, 0, 2
-  thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
-                                nullcnt.begin(),
-                                nullcnt.end() - 1,
-                                nullcnt.begin(),
-                                nullcnt.begin() + 1);
-
-  valid_it = cudf::detail::make_validity_iterator(device_view);
   thrust::transform(
     rmm::exec_policy(stream),
     valid_it,
@@ -444,7 +453,7 @@ rmm::device_uvector<double> compute_ewma_adjust(column_view const& input,
                       return thrust::pair<double, double>(beta, input);
                     });
 
-  if (input.has_nulls()) { pair_beta_adjust(input, pairs, beta, stream); }
+  if (input.has_nulls()) { pair_beta_adjust(input, pairs, stream); }
 
   compute_recurrence(pairs, stream);
 
@@ -462,7 +471,7 @@ rmm::device_uvector<double> compute_ewma_adjust(column_view const& input,
   thrust::fill(
     rmm::exec_policy(stream), pairs.begin(), pairs.end(), thrust::pair<double, double>(beta, 1.0));
 
-  if (input.has_nulls()) { pair_beta_adjust(input, pairs, beta, stream); }
+  if (input.has_nulls()) { pair_beta_adjust(input, pairs, stream); }
   compute_recurrence(pairs, stream);
 
   thrust::transform(
@@ -503,23 +512,20 @@ rmm::device_uvector<double> compute_ewma_noadjust(column_view const& input,
                       return thrust::pair<double, double>(beta, input);
                     });
   if (input.has_nulls()) {
-    auto device_view = *column_device_view::create(input);
-    auto valid_it    = cudf::detail::make_validity_iterator(device_view);
+    /*
+    In this case, a denominator actually has to be computed. The formula is
+    y_{i+1} - (1 - alpha)x_{i-1} + alpha x_i, but really there is a "denominator"
+    which is the sum of the weights: alpha + (1 - alpha) == 1. If a null is
+    encountered, that means that the "previous" value is downweighted by a
+    factor (for each missing value). For example this would y_2 be for one NULL:
+    data = {x_0, NULL, x_1},
+    y_2 = (1 - alpha)**2 x_0 + alpha * x_2 / (alpha + (1-alpha)**2)
 
-    thrust::transform(
-      rmm::exec_policy(stream),
-      valid_it,
-      valid_it + input.size(),
-      pairs.begin(),
-      pairs.begin(),
-      [=] __host__ __device__(bool valid,
-                              thrust::pair<double, double> pair) -> thrust::pair<double, double> {
-        if (!valid) {
-          return thrust::pair<double, double>(1.0, 0.0);
-        } else {
-          return pair;
-        }
-      });
+    As such, the pairs must be updated before summing like the adjusted case,
+    but we also have to compute normalization factors
+
+    */
+    pair_beta_adjust(input, pairs, stream);
   }
   compute_recurrence(pairs, stream);
   // copy the second elements to the output for now
