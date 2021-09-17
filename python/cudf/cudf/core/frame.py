@@ -532,8 +532,8 @@ class Frame(libcudf.table.Table):
         raise TypeError(
             "Implicit conversion to a host NumPy array via __array__ is not "
             "allowed, To explicitly construct a GPU matrix, consider using "
-            ".as_gpu_matrix()\nTo explicitly construct a host "
-            "matrix, consider using .to_numpy()"
+            ".to_cupy()\nTo explicitly construct a host matrix, consider "
+            "using .to_numpy()."
         )
 
     def __arrow_array__(self, type=None):
@@ -4919,7 +4919,7 @@ class SingleColumnFrame(Frame):
     # ColumnBase.to_gpu_array.
     def to_gpu_array(self, fillna=None):
         warnings.warn(
-            "The to_gpu_array method will be remove in a future cuDF "
+            "The to_gpu_array method will be removed in a future cuDF "
             "release. Consider using `to_cupy` instead.",
             DeprecationWarning,
         )

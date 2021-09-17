@@ -3660,7 +3660,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
     def as_gpu_matrix(self, columns=None, order="F"):
         warnings.warn(
-            "The as_gpu_matrix method will be remove in a future cuDF "
+            "The as_gpu_matrix method will be removed in a future cuDF "
             "release. Consider using `to_cupy` instead.",
             DeprecationWarning,
         )
@@ -3708,7 +3708,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
     def as_matrix(self, columns=None):
         warnings.warn(
-            "The as_matrix method will be remove in a future cuDF "
+            "The as_matrix method will be removed in a future cuDF "
             "release. Consider using `to_numpy` instead.",
             DeprecationWarning,
         )

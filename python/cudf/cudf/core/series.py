@@ -2495,7 +2495,7 @@ class Series(SingleColumnFrame, Serializable):
     # TODO: When this method is removed we can also remove ColumnBase.to_array.
     def to_array(self, fillna=None):
         warnings.warn(
-            "The to_array method will be remove in a future cuDF "
+            "The to_array method will be removed in a future cuDF "
             "release. Consider using `to_numpy` instead.",
             DeprecationWarning,
         )
