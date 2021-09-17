@@ -486,7 +486,6 @@ def test_struct_field_integer(data):
 def test_dask_struct_field_Key_Error(data):
     got = dgd.from_cudf(Series(data), 2)
 
-    # import pdb; pdb.set_trace()
     with pytest.raises(KeyError):
         got.struct.field("notakey").compute()
 
