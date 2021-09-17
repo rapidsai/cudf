@@ -87,8 +87,8 @@ struct has_negative_nans_dispatch {
                              !std::is_same_v<Type, cudf::struct_view>>* = nullptr>
   bool operator()(column_view const&, rmm::cuda_stream_view) const
   {
-    CUDF_FAIL(
-      "Only floating-point types and structs type are supported in `has_negative_nans_dispatch`.");
+    // Columns of non floating-point data will never contain NaN.
+    return false;
   }
 };
 
