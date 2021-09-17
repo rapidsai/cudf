@@ -4463,7 +4463,7 @@ class Frame(libcudf.table.Table):
     def __str__(self):
         return self.to_string()
 
-    def __deepcopy__(self):
+    def __deepcopy__(self, memo):
         return self.copy(deep=True)
 
     def __copy__(self):
