@@ -1618,7 +1618,7 @@ class DatetimeIndex(GenericIndex):
     def isocalendar(self):
         """
         Returns a DataFrame with the year, week, and day
-        calculated according tothe ISO 8601 standard.
+        calculated according to the ISO 8601 standard.
         Returns
         -------
         DataFrame
