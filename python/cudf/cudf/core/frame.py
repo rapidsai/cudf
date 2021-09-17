@@ -46,7 +46,7 @@ from cudf.core.join import merge
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import is_column_like, find_common_type
+from cudf.utils.dtypes import find_common_type, is_column_like
 
 T = TypeVar("T", bound="Frame")
 
@@ -4915,6 +4915,8 @@ class SingleColumnFrame(Frame):
 
     to_list = tolist
 
+    # TODO: When this method is removed we can also remove
+    # ColumnBase.to_gpu_array.
     def to_gpu_array(self, fillna=None):
         warnings.warn(
             "The to_gpu_array method will be remove in a future cuDF "

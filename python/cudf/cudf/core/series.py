@@ -2492,6 +2492,7 @@ class Series(SingleColumnFrame, Serializable):
             value=value, method=method, axis=axis, inplace=inplace, limit=limit
         )
 
+    # TODO: When this method is removed we can also remove ColumnBase.to_array.
     def to_array(self, fillna=None):
         warnings.warn(
             "The to_array method will be remove in a future cuDF "
