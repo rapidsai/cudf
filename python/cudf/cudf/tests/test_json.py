@@ -366,13 +366,7 @@ def test_json_null_literal(buffer):
     np.testing.assert_array_equal(
         df["0"].to_array(fillna=np.nan), [1.0, np.nan]
     )
-    np.testing.assert_array_equal(
-        df["1"].to_array(fillna=np.nan),
-        [
-            df["1"]._column.default_na_value(),
-            df["1"]._column.default_na_value(),
-        ],
-    )
+    np.testing.assert_array_equal(df["1"].to_numpy(na_value=0), [0, 0])
 
 
 def test_json_bad_protocol_string():

@@ -433,14 +433,11 @@ class DatetimeColumn(column.ColumnBase):
     def _make_copy_with_na_as_null(self):
         """Return a copy with NaN values replaced with nulls."""
         null = column_empty_like(self, masked=True, newsize=1)
+        na_value = np.datetime64("nat", self.time_unit)
         out_col = cudf._lib.replace.replace(
             self,
             as_column(
-                Buffer(
-                    np.array([self.default_na_value()], dtype=self.dtype).view(
-                        "|u1"
-                    )
-                ),
+                Buffer(np.array([na_value], dtype=self.dtype).view("|u1")),
                 dtype=self.dtype,
             ),
             null,

@@ -679,12 +679,8 @@ def test_index_where(data, condition, other, error):
             assert_eq(expect.categories, got.categories)
         else:
             assert_eq(
-                ps.where(ps_condition, other=ps_other).fillna(
-                    gs._values.default_na_value()
-                ),
-                gs.where(gs_condition, other=gs_other)
-                .to_pandas()
-                .fillna(gs._values.default_na_value()),
+                ps.where(ps_condition, other=ps_other),
+                gs.where(gs_condition, other=gs_other).to_pandas(),
             )
     else:
         assert_exceptions_equal(
