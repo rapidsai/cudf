@@ -197,21 +197,22 @@ def compile_or_get(df, f):
         sig = construct_signature(df, scalar_return_type)
         f_ = cuda.jit(device=True)(f)
 
-        lcl = {}
-        exec(
-            # Defines a kernel named "_kernel" in the lcl dict
-            _define_function(df, scalar_return=_is_scalar_return),
-            {
+        # Dict of 'local' variables into which `_kernel` is defined
+        local_exec_context = {}
+        global_exec_context = {
                 "f_": f_,
                 "cuda": cuda,
                 "Masked": Masked,
                 "mask_get": mask_get,
                 "pack_return": pack_return,
-            },
-            lcl,
+            }
+        exec(
+            _define_function(df, scalar_return=_is_scalar_return),
+            global_exec_context,
+            local_exec_context,
         )
         # The python function definition representing the kernel
-        _kernel = lcl["_kernel"]
+        _kernel = local_exec_context["_kernel"]
         kernel = cuda.jit(sig)(_kernel)
         precompiled[cache_key] = (kernel, scalar_return_type)
 
