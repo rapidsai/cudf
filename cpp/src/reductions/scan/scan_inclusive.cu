@@ -573,7 +573,6 @@ std::unique_ptr<column> ewmvar(column_view const& input,
                     input.end<double>(),
                     xi_sqr_d.begin<double>(),
                     [=] __host__ __device__(double input) -> double { return input * input; });
-  print_col(xi_sqr, stream);
 
   // get EWMA[xi**2]
   std::unique_ptr<column> ewma_xi_sqr = ewma((*xi_sqr).view(), com, adjust, stream, mr);
