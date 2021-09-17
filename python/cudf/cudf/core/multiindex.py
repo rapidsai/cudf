@@ -476,9 +476,7 @@ class MultiIndex(Frame, BaseIndex):
 
     @property
     def nlevels(self):
-        """
-        Integer number of levels in this MultiIndex.
-        """
+        """Integer number of levels in this MultiIndex."""
         return len(self._data)
 
     @property
@@ -520,12 +518,11 @@ class MultiIndex(Frame, BaseIndex):
 
     @property
     def ndim(self):
-        """Dimension of the data. For MultiIndex ndim is always 2.
-        """
+        """Dimension of the data. For MultiIndex ndim is always 2."""
         return 2
 
     def _get_level_label(self, level):
-        """ Get name of the level.
+        """Get name of the level.
 
         Parameters
         ----------
