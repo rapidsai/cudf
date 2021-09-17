@@ -288,7 +288,7 @@ class DatetimeColumn(column.ColumnBase):
                 column.column_empty(0, dtype="object", masked=False),
             )
 
-    def default_na_value(self) -> DatetimeLikeScalar:
+    def _default_na_value(self) -> DatetimeLikeScalar:
         """Returns the default NA value for this column
         """
         return np.datetime64("nat", self.time_unit)

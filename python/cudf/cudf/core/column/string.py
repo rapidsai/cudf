@@ -5407,7 +5407,7 @@ class StringColumn(column.ColumnBase):
         else:
             raise TypeError(f"cannot broadcast {type(other)}")
 
-    def default_na_value(self) -> ScalarLike:
+    def _default_na_value(self) -> ScalarLike:
         return None
 
     def binary_operator(

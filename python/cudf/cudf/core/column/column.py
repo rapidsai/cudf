@@ -325,7 +325,7 @@ class ColumnBase(Column, Serializable):
     def _memory_usage(self, **kwargs) -> int:
         return self.__sizeof__()
 
-    def default_na_value(self) -> Any:
+    def _default_na_value(self) -> Any:
         raise NotImplementedError()
 
     def to_gpu_array(self, fillna=None) -> "cuda.devicearray.DeviceNDArray":
@@ -343,7 +343,7 @@ class ColumnBase(Column, Serializable):
         output size could be smaller.
         """
         if fillna:
-            return self.fillna(self.default_na_value()).data_array_view
+            return self.fillna(self._default_na_value()).data_array_view
         else:
             return self.dropna(drop_nan=False).data_array_view
 
