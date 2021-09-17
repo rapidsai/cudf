@@ -637,7 +637,8 @@ namespace detail {
 /**
  * @brief Computes a hash value from the shallow state of the specified column
  *
- * For any two columns, if `is_shallow_equivalent(c0,c1)` then `shallow_hash(c0) == shallow_hash(c1)`. 
+ * For any two columns, if `is_shallow_equivalent(c0,c1)` then `shallow_hash(c0) ==
+ * shallow_hash(c1)`.
  *
  * The complexity of computing the hash value of `input` is `O( count_descendants(input) )`, i.e.,
  * it is independent of the number of elements in the column.
@@ -646,24 +647,27 @@ namespace detail {
  * any kernels.
  *
  * @param input The `column_view` to compute hash
- * @return The hash value derived from the shallow state of `input`. 
+ * @return The hash value derived from the shallow state of `input`.
  */
 std::size_t shallow_hash(column_view const& input);
 
 /**
- * @brief Uses only shallow state to determine if two `column_view`s view equivalent columns 
+ * @brief Uses only shallow state to determine if two `column_view`s view equivalent columns
  *
  *  Two columns are equivalent if for any operation `F` then:
  *   ```
  *    is_shallow_equivalent(c0, c1) ==> is_shallow_equivalent(F(c0),F(c1))
  *   ```
- * For any two non-empty columns, `is_shallow_equivalent(c0,c1)` is true only if they view the exact same physical column. In other words, two physically independent columns may have exactly equivalent elements but their shallow state would not be equivalent. 
- * 
- * The complexity of this function is `O( min(count_descendants(lhs), count_descendants(rhs)) )`, i.e., it is independent of the number of elements in either column.
+ * For any two non-empty columns, `is_shallow_equivalent(c0,c1)` is true only if they view the exact
+ * same physical column. In other words, two physically independent columns may have exactly
+ * equivalent elements but their shallow state would not be equivalent.
  *
- * This function does _not_ inspect the elements of `lhs` or `rhs` nor access any device memory nor launch
- * any kernels.
- * 
+ * The complexity of this function is `O( min(count_descendants(lhs), count_descendants(rhs)) )`,
+ * i.e., it is independent of the number of elements in either column.
+ *
+ * This function does _not_ inspect the elements of `lhs` or `rhs` nor access any device memory nor
+ * launch any kernels.
+ *
  * @param lhs The left `column_view` to compare
  * @param rhs The right `column_view` to compare
  * @return If `lhs` and `rhs` have equivalent shallow state
