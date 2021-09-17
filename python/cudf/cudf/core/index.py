@@ -871,8 +871,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         # Not sorted and not unique. Return a boolean mask
         mask = cupy.full(self._data.nrows, False)
-        true_inds = sort_inds.slice(lower_bound, upper_bound).to_gpu_array()
-        mask[cupy.array(true_inds)] = True
+        true_inds = sort_inds.slice(lower_bound, upper_bound).values
+        mask[true_inds] = True
         return mask
 
     def __sizeof__(self):
