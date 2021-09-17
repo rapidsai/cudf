@@ -115,15 +115,13 @@ class MultiIndex(Frame, BaseIndex):
                 "MultiIndex has unequal number of levels and "
                 "codes and is inconsistent!"
             )
-        code_length = len(codes[codes.columns[0]])
-        for index, code in enumerate(codes):
-            if code_length != len(codes[code]):
-                raise ValueError(
-                    "MultiIndex length of codes does not match "
-                    "and is inconsistent!"
-                )
-        for index, code in enumerate(codes):
-            if codes[code].max() > len(levels[index]) - 1:
+        if len(set(c.size for c in codes._data.columns)) != 1:
+            raise ValueError(
+                "MultiIndex length of codes does not match "
+                "and is inconsistent!"
+            )
+        for level, code in zip(levels, codes._data.columns):
+            if code.max() > len(level) - 1:
                 raise ValueError(
                     "MultiIndex code %d contains value %d larger "
                     "than maximum level size at this position"
@@ -154,7 +152,6 @@ class MultiIndex(Frame, BaseIndex):
     @names.setter
     def names(self, value):
         value = [None] * self.nlevels if value is None else value
-        assert len(value) == self.nlevels
 
         if len(value) == len(set(value)):
             # IMPORTANT: if the provided names are unique,
