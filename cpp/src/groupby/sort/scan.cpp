@@ -29,6 +29,8 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <structs/utilities.hpp>
+
 #include <memory>
 
 namespace cudf {
@@ -114,12 +116,8 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
   CUDF_EXPECTS(helper.is_presorted(),
                "Rank aggregate in groupby scan requires the keys to be presorted");
   auto const order_by = get_grouped_values();
-  CUDF_EXPECTS(order_by.type().id() != type_id::LIST,
+  CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(order_by),
                "Unsupported list type in grouped rank scan.");
-  CUDF_EXPECTS(std::none_of(order_by.child_begin(),
-                            order_by.child_end(),
-                            [](auto const& col) { return is_nested(col.type()); }),
-               "Unsupported nested columns in grouped rank scan.");
 
   cache.add_result(
     values,
@@ -135,12 +133,8 @@ void scan_result_functor::operator()<aggregation::DENSE_RANK>(aggregation const&
   CUDF_EXPECTS(helper.is_presorted(),
                "Dense rank aggregate in groupby scan requires the keys to be presorted");
   auto const order_by = get_grouped_values();
-  CUDF_EXPECTS(order_by.type().id() != type_id::LIST,
+  CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(order_by),
                "Unsupported list type in grouped dense_rank scan.");
-  CUDF_EXPECTS(std::none_of(order_by.child_begin(),
-                            order_by.child_end(),
-                            [](auto const& col) { return is_nested(col.type()); }),
-               "Unsupported nested columns in grouped dense_rank scan.");
 
   cache.add_result(
     values,

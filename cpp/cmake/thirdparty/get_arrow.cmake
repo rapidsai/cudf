@@ -101,34 +101,6 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
                         "ARROW_PROTOBUF_USE_SHARED ${ARROW_BUILD_SHARED}"
                         "ARROW_ZSTD_USE_SHARED ${ARROW_BUILD_SHARED}")
 
-    if(Arrow_ADDED)
-        rapids_export(BUILD Arrow
-          VERSION ${VERSION}
-          EXPORT_SET arrow_targets
-          GLOBAL_TARGETS arrow_shared arrow_static
-          NAMESPACE cudf::)
-
-        rapids_export(BUILD ArrowCUDA
-          VERSION ${VERSION}
-          EXPORT_SET arrow_cuda_targets
-          GLOBAL_TARGETS arrow_cuda_shared arrow_cuda_static
-          NAMESPACE cudf::)
-    endif()
-    # We generate the arrow-config and arrowcuda-config files
-    # when we built arrow locally, so always do `find_dependency`
-    rapids_export_package(BUILD Arrow cudf-exports)
-    rapids_export_package(INSTALL Arrow cudf-exports)
-
-    # We have to generate the find_dependency(ArrowCUDA) ourselves
-    # since we need to specify ArrowCUDA_DIR to be where Arrow
-    # was found, since Arrow packages ArrowCUDA.config in a non-standard
-    # location
-    rapids_export_package(BUILD ArrowCUDA cudf-exports)
-
-    include("${rapids-cmake-dir}/export/find_package_root.cmake")
-    rapids_export_find_package_root(BUILD Arrow [=[${CMAKE_CURRENT_LIST_DIR}]=] cudf-exports)
-    rapids_export_find_package_root(BUILD ArrowCUDA [=[${CMAKE_CURRENT_LIST_DIR}]=] cudf-exports)
-
     set(ARROW_FOUND TRUE)
     set(ARROW_LIBRARIES "")
 
@@ -183,6 +155,34 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
         set(ARROW_FOUND FALSE)
         message(FATAL_ERROR "CUDF: Arrow library not found or downloaded.")
     endif()
+
+    if(Arrow_ADDED)
+        rapids_export(BUILD Arrow
+          VERSION ${VERSION}
+          EXPORT_SET arrow_targets
+          GLOBAL_TARGETS arrow_shared arrow_static
+          NAMESPACE cudf::)
+
+        rapids_export(BUILD ArrowCUDA
+          VERSION ${VERSION}
+          EXPORT_SET arrow_cuda_targets
+          GLOBAL_TARGETS arrow_cuda_shared arrow_cuda_static
+          NAMESPACE cudf::)
+    endif()
+    # We generate the arrow-config and arrowcuda-config files
+    # when we built arrow locally, so always do `find_dependency`
+    rapids_export_package(BUILD Arrow cudf-exports)
+    rapids_export_package(INSTALL Arrow cudf-exports)
+
+    # We have to generate the find_dependency(ArrowCUDA) ourselves
+    # since we need to specify ArrowCUDA_DIR to be where Arrow
+    # was found, since Arrow packages ArrowCUDA.config in a non-standard
+    # location
+    rapids_export_package(BUILD ArrowCUDA cudf-exports)
+
+    include("${rapids-cmake-dir}/export/find_package_root.cmake")
+    rapids_export_find_package_root(BUILD Arrow [=[${CMAKE_CURRENT_LIST_DIR}]=] cudf-exports)
+    rapids_export_find_package_root(BUILD ArrowCUDA [=[${CMAKE_CURRENT_LIST_DIR}]=] cudf-exports)
 
     set(ARROW_FOUND "${ARROW_FOUND}" PARENT_SCOPE)
     set(ARROW_LIBRARIES "${ARROW_LIBRARIES}" PARENT_SCOPE)

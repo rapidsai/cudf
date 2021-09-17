@@ -22,14 +22,13 @@ try:
 except ImportError:
     import json
 
-from cudf.utils.dtypes import (
+from cudf.api.types import (
     is_categorical_dtype,
     is_decimal_dtype,
     is_list_dtype,
     is_struct_dtype,
-    np_dtypes_to_pandas_dtypes,
-    np_to_pa_dtype,
 )
+from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes, np_to_pa_dtype
 
 PARQUET_META_TYPE_MAP = {
     str(cudf_dtype): str(pandas_dtype)
@@ -42,22 +41,6 @@ cdef vector[column_view] make_column_views(object columns):
     views.reserve(len(columns))
     for col in columns:
         views.push_back((<Column> col).view())
-    return views
-
-
-cdef vector[table_view] make_table_views(object tables):
-    cdef vector[table_view] views
-    views.reserve(len(tables))
-    for tbl in tables:
-        views.push_back((<Table> tbl).view())
-    return views
-
-
-cdef vector[table_view] make_table_data_views(object tables):
-    cdef vector[table_view] views
-    views.reserve(len(tables))
-    for tbl in tables:
-        views.push_back((<Table> tbl).data_view())
     return views
 
 
