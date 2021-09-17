@@ -66,15 +66,18 @@ def nulludf(func):
     return wrapper
 
 
-def masked_arrty_from_np_type(dtype):
+def masked_array_type_from_col(col):
     """
     Return a type representing a tuple of arrays,
     the first element an array of the numba type
     corresponding to `dtype`, and the second an
     array of bools representing a mask.
     """
-    nb_scalar_ty = numpy_support.from_dtype(dtype)
-    return Tuple((nb_scalar_ty[::1], libcudf_bitmask_type[::1]))
+    nb_scalar_ty = numpy_support.from_dtype(col.dtype)
+    if col.mask is None:
+        return nb_scalar_ty[::1]
+    else:
+        return Tuple((nb_scalar_ty[::1], libcudf_bitmask_type[::1]))
 
 
 def construct_signature(df, return_type):
@@ -89,7 +92,7 @@ def construct_signature(df, return_type):
     offsets = []
     sig = [return_type]
     for col in df._data.values():
-        sig.append(masked_arrty_from_np_type(col.dtype))
+        sig.append(masked_array_type_from_col(col))
         offsets.append(int64)
 
     # return_type + data,masks + offsets + size
@@ -116,7 +119,7 @@ def _kernel(retval, {input_columns}, {input_offsets}, size):
 """
 
 unmasked_input_initializer_template = """\
-        d_{idx}, m_{idx} = input_col_{idx}
+        d_{idx} = input_col_{idx}
         masked_{idx} = Masked(d_{idx}[i], True)
 """
 
@@ -200,12 +203,12 @@ def compile_or_get(df, f):
         # Dict of 'local' variables into which `_kernel` is defined
         local_exec_context = {}
         global_exec_context = {
-                "f_": f_,
-                "cuda": cuda,
-                "Masked": Masked,
-                "mask_get": mask_get,
-                "pack_return": pack_return,
-            }
+            "f_": f_,
+            "cuda": cuda,
+            "Masked": Masked,
+            "mask_get": mask_get,
+            "pack_return": pack_return,
+        }
         exec(
             _define_function(df, scalar_return=_is_scalar_return),
             global_exec_context,
