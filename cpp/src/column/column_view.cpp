@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/hashing.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -78,11 +79,6 @@ size_type column_view_base::null_count(size_type begin, size_type end) const
            ? 0
            : cudf::count_unset_bits(null_mask(), offset() + begin, offset() + end);
 }
-
-// Alternative fast hash functions
-// simple prime number multiplication algorithm.
-// Adapted from http://myeyesareblind.com/2017/02/06/Combine-hash-values/#apachecommons
-// constexpr std::size_t combine_hash(std::size_t h1, std::size_t h2) { return h1 * 127 + h2; }
 
 // Struct to use custom hash combine and fold expression
 struct HashValue {
