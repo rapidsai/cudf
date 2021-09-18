@@ -57,7 +57,7 @@ class AggregationKind(Enum):
     UNIQUE = libcudf_aggregation.aggregation.Kind.COLLECT_SET
     PTX = libcudf_aggregation.aggregation.Kind.PTX
     CUDA = libcudf_aggregation.aggregation.Kind.CUDA
-    CORRELATION = libcudf_aggregation.aggregation.Kind.CORRELATION
+
 
 cdef class Aggregation:
     """A Cython wrapper for aggregations.
@@ -325,9 +325,7 @@ cdef class Aggregation:
     def correlation(cls):
         cdef Aggregation agg = cls()
         agg.c_obj = move(
-            libcudf_aggregation.make_correlation_aggregation[aggregation](
-                libcudf_aggregation.correlation_type.PEARSON
-            ))
+            libcudf_aggregation.make_correlation_aggregation[aggregation]())
         return agg
 
 cdef class RollingAggregation:
@@ -706,9 +704,7 @@ cdef class GroupbyAggregation:
         cdef GroupbyAggregation agg = cls()
         agg.c_obj = move(
             libcudf_aggregation.
-            make_correlation_aggregation[groupby_aggregation](
-                libcudf_aggregation.correlation_type.PEARSON
-            ))
+            make_correlation_aggregation[groupby_aggregation]())
         return agg
 
 cdef class GroupbyScanAggregation:
