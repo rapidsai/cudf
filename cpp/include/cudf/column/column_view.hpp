@@ -656,7 +656,7 @@ std::size_t shallow_hash(column_view const& input);
  *
  *  Two columns are equivalent if for any operation `F` then:
  *   ```
- *    is_shallow_equivalent(c0, c1) ==> is_shallow_equivalent(F(c0),F(c1))
+ *    is_shallow_equivalent(c0, c1) ==> The results of F(c0) and F(c1) are equivalent
  *   ```
  * For any two non-empty columns, `is_shallow_equivalent(c0,c1)` is true only if they view the exact
  * same physical column. In other words, two physically independent columns may have exactly
