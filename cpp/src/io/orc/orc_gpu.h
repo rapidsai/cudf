@@ -32,18 +32,6 @@
 namespace cudf {
 namespace io {
 namespace orc {
-
-/**
- * @brief `column_device_view` and additional, ORC specific, information on the column.
- */
-struct orc_column_device_view : public column_device_view {
-  __device__ orc_column_device_view(column_device_view col, thrust::optional<uint32_t> parent_idx)
-    : column_device_view{col}, parent_index{parent_idx}
-  {
-  }
-  thrust::optional<uint32_t> parent_index;
-  bitmask_type const* pushdown_mask = nullptr;
-};
 namespace gpu {
 
 using cudf::detail::device_2dspan;

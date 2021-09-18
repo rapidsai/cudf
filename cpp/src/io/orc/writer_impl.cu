@@ -206,11 +206,11 @@ class orc_column_view {
 
   // Index in the table
   uint32_t index() const noexcept { return _index; }
-  auto parent_index() const noexcept { return _parent_index; }
   // Id in the ORC file
   auto id() const noexcept { return _index + 1; }
 
   auto is_child() const noexcept { return _is_child; }
+  auto parent_index() const noexcept { return _parent_index.value(); }
   auto child_begin() const noexcept { return children.cbegin(); }
   auto child_end() const noexcept { return children.cend(); }
 
@@ -1367,9 +1367,7 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
       mask_ptrs.emplace_back(nullptr);
       continue;
     }
-    auto const parent_col =
-      col.parent_index().has_value() ? &orc_table.column(col.parent_index().value()) : nullptr;
-    auto const parent_pd_mask = parent_col != nullptr ? mask_ptrs[parent_col->index()] : nullptr;
+    auto const parent_pd_mask = col.is_child() ? mask_ptrs[col.parent_index()] : nullptr;
     auto const null_mask      = col.null_mask();
 
     if (null_mask == nullptr and parent_pd_mask == nullptr) {

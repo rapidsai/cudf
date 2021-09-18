@@ -214,7 +214,6 @@ class column_in_metadata {
   friend table_input_metadata;
   std::string _name = "";
   thrust::optional<bool> _nullable;
-  // TODO: This isn't implemented yet
   bool _list_column_is_map  = false;
   bool _use_int96_timestamp = false;
   // bool _output_as_binary = false;

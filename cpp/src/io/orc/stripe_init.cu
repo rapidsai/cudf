@@ -529,19 +529,6 @@ void __host__ PostDecompressionReassemble(CompressedStreamInfo* strm_info,
                                                                              num_streams);
 }
 
-/**
- * @brief Launches kernel for constructing rowgroup from index streams
- *
- * @param[out] row_groups RowGroup device array [rowgroup][column]
- * @param[in] strm_info List of compressed streams (or NULL if uncompressed)
- * @param[in] chunks ColumnDesc device array [stripe][column]
- * @param[in] num_columns Number of columns
- * @param[in] num_stripes Number of stripes
- * @param[in] num_rowgroups Number of row groups
- * @param[in] rowidx_stride Row index stride
- * @param[in] use_base_stride Whether to use base stride obtained from meta or the computed value
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
- */
 void __host__ ParseRowGroupIndex(RowGroup* row_groups,
                                  CompressedStreamInfo* strm_info,
                                  ColumnDesc* chunks,
