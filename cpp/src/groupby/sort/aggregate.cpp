@@ -532,9 +532,9 @@ void aggregate_result_functor::operator()<aggregation::MERGE_M2>(aggregation con
 template <>
 void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation const& agg)
 {
-  if (cache.has_result(col_idx, agg)) { return; }
+  if (cache.has_result(values, agg)) { return; }
 
-  cache.add_result(col_idx,
+  cache.add_result(values,
                    agg,
                    detail::group_corr(get_grouped_values(),
                                       helper.group_offsets(stream),
