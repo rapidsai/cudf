@@ -48,7 +48,8 @@ struct CompressedStreamInfo {
       copyctl(nullptr),
       num_compressed_blocks(0),
       num_uncompressed_blocks(0),
-      max_uncompressed_size(0)
+      max_uncompressed_size(0),
+      max_uncompressed_block_size(0)
   {
   }
   const uint8_t* compressed_data;  // [in] base ptr to compressed stream data
@@ -60,9 +61,10 @@ struct CompressedStreamInfo {
     copyctl;  // [in] base ptr to copy structure to be filled for uncompressed blocks
   uint32_t num_compressed_blocks;  // [in,out] number of entries in decctl(in), number of compressed
                                    // blocks(out)
-  uint32_t num_uncompressed_blocks;  // [in,out] number of entries in copyctl(in), number of
-                                     // uncompressed blocks(out)
-  uint64_t max_uncompressed_size;    // [out] maximum uncompressed data size
+  uint32_t num_uncompressed_blocks;      // [in,out] number of entries in copyctl(in), number of
+                                         // uncompressed blocks(out)
+  uint64_t max_uncompressed_size;        // [out] maximum uncompressed data size of stream
+  uint32_t max_uncompressed_block_size;  // [out] maximum uncompressed size of any block in stream
 };
 
 enum StreamIndexType {
