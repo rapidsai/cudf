@@ -954,7 +954,9 @@ def generate_list_struct_buff(size=100_000):
     return buff
 
 
-list_struct_buff = generate_list_struct_buff()
+@pytest.fixture(scope="module")
+def list_struct_buff():
+    return generate_list_struct_buff()
 
 
 @pytest.mark.parametrize(
@@ -967,9 +969,7 @@ list_struct_buff = generate_list_struct_buff()
 )
 @pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 100_000])
 @pytest.mark.parametrize("use_index", [True, False])
-def test_lists_struct_nests(
-    columns, num_rows, use_index,
-):
+def test_lists_struct_nests(columns, num_rows, use_index, list_struct_buff):
 
     gdf = cudf.read_orc(
         list_struct_buff,
@@ -993,7 +993,7 @@ def test_lists_struct_nests(
 
 
 @pytest.mark.parametrize("columns", [None, ["lvl1_struct"], ["lvl1_list"]])
-def test_skip_rows_for_nested_types(columns):
+def test_skip_rows_for_nested_types(columns, list_struct_buff):
     with pytest.raises(
         RuntimeError, match="skip_rows is not supported by nested column"
     ):
@@ -1382,7 +1382,7 @@ def test_names_in_struct_dtype_nesting(datadir):
 
 
 @pytest.mark.filterwarnings("ignore:.*struct.*experimental")
-def test_writer_lists_structs():
+def test_writer_lists_structs(list_struct_buff):
     df_in = cudf.read_orc(list_struct_buff)
 
     buff = BytesIO()
