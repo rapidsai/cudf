@@ -13,7 +13,7 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M
 
 import cudf as gd
-from cudf.utils.dtypes import is_categorical_dtype
+from cudf.api.types import is_categorical_dtype
 
 
 def set_index_post(df, index_name, drop, column_dtype):
@@ -187,7 +187,8 @@ def quantile_divisions(df, by, npartitions):
         divisions = divisions[columns[0]].astype("int64")
         divisions.iloc[-1] += 1
         divisions = sorted(
-            divisions.drop_duplicates().astype(dtype).values.tolist()
+            divisions.drop_duplicates().astype(dtype).to_arrow().tolist(),
+            key=lambda x: (x is None, x),
         )
     else:
         for col in columns:

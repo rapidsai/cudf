@@ -117,11 +117,6 @@ gather_data make_gather_data(cudf::lists_column_view const& source_column,
                       return src_offsets[index] - shift;
                     });
 
-  // now that we are done using the gather_map, we can release the underlying prev_base_offsets.
-  // doing this prevents this (potentially large) memory buffer from sitting around unused as the
-  // recursion continues.
-  prev_base_offsets.release();
-
   // Retrieve size of the resulting gather map for level N+1 (the last offset)
   size_type child_gather_map_size =
     cudf::detail::get_value<size_type>(dst_offsets_c->view(), output_count, stream);

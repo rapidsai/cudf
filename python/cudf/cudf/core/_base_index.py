@@ -10,15 +10,13 @@ import pandas as pd
 
 import cudf
 from cudf._typing import DtypeObj
-from cudf.api.types import is_dtype_equal, is_integer
+from cudf.api.types import is_dtype_equal, is_integer, is_list_like, is_scalar
 from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils import ioutils
 from cudf.utils.dtypes import (
-    is_list_like,
     is_mixed_with_object_dtype,
-    is_scalar,
     numeric_normalize_types,
 )
 from cudf.utils.utils import cached_property
@@ -517,7 +515,7 @@ class BaseIndex(Serializable):
             if self.dtype != other.dtype:
                 difference = difference.astype(self.dtype)
 
-        if sort is None:
+        if sort is None and len(other):
             return difference.sort_values()
 
         return difference
@@ -821,7 +819,7 @@ class BaseIndex(Serializable):
             name=self.name if name is None else name,
         )
 
-    def get_slice_bound(self, label, side, kind):
+    def get_slice_bound(self, label, side, kind=None):
         """
         Calculate slice bound that corresponds to given label.
         Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
