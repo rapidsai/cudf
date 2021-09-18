@@ -570,6 +570,9 @@ class orc_writer_options_builder {
  *  cudf::io::write_orc(options);
  * @endcode
  *
+ * Note: Support for writing tables with struct columns is currently experimental, the output may
+ * not be as reliable as writing for other datatypes.
+ *
  * @param options Settings for controlling reading behavior.
  * @param mr Device memory resource to use for device memory allocation.
  */

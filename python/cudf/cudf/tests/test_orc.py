@@ -58,7 +58,6 @@ def path_or_buf(datadir):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-@pytest.mark.filterwarnings("ignore:Strings are not yet supported")
 @pytest.mark.parametrize("engine", ["pyarrow", "cudf"])
 @pytest.mark.parametrize("use_index", [False, True])
 @pytest.mark.parametrize(
@@ -221,6 +220,7 @@ def test_orc_read_statistics(datadir):
     assert_eq(file_statistics[0]["string1"]["minimum"], "one")
 
 
+@pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 @pytest.mark.parametrize(
     "predicate,expected_len",
@@ -244,6 +244,7 @@ def test_orc_read_filtered(datadir, engine, predicate, expected_len):
     assert len(df_filtered) == expected_len
 
 
+@pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 def test_orc_read_stripes(datadir, engine):
     path = datadir / "TestOrcFile.testDate1900.orc"
@@ -558,7 +559,6 @@ def test_orc_reader_boolean_type(datadir, orc_file):
     assert_eq(pdf, df)
 
 
-@pytest.mark.filterwarnings("ignore:Using CPU")
 def test_orc_reader_tzif_timestamps(datadir):
     # Contains timstamps in the range covered by the TZif file
     # Other timedate tests only cover "future" times
@@ -1381,6 +1381,7 @@ def test_names_in_struct_dtype_nesting(datadir):
     assert edf.dtypes.equals(got.dtypes)
 
 
+@pytest.mark.filterwarnings("ignore:.*struct.*experimental")
 def test_writer_lists_structs():
     df_in = cudf.read_orc(list_struct_buff)
 
@@ -1392,6 +1393,7 @@ def test_writer_lists_structs():
     assert pyarrow_tbl.equals(df_in.to_arrow())
 
 
+@pytest.mark.filterwarnings("ignore:.*struct.*experimental")
 @pytest.mark.parametrize(
     "data",
     [

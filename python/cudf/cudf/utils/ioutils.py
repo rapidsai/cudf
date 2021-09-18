@@ -389,6 +389,12 @@ compression : {{ 'snappy', None }}, default None
 enable_statistics: boolean, default True
     Enable writing column statistics.
 
+
+Notes
+-----
+Support for writing tables with struct columns is currently experimental,
+the output may not be as reliable as writing for other datatypes.
+
 See Also
 --------
 cudf.read_orc
