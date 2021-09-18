@@ -19,6 +19,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cstddef>
 #include <functional>
 
 namespace cudf {
