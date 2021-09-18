@@ -24,7 +24,6 @@
 #include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
-#include <cstddef>
 #include <exception>
 #include <numeric>
 #include <vector>
