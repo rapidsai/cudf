@@ -33,7 +33,7 @@ inline std::vector<aggregation_result> extract_results(host_span<RequestType con
 
   for (size_t i = 0; i < requests.size(); i++) {
     for (auto&& agg : requests[i].aggregations) {
-      results[i].results.emplace_back(cache.release_result(i, *agg));
+      results[i].results.emplace_back(cache.release_result(requests[i].values, *agg));
     }
   }
   return results;
