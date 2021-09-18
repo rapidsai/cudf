@@ -1390,3 +1390,32 @@ def test_writer_lists_structs():
     pyarrow_tbl = pyarrow.orc.ORCFile(buff).read()
 
     assert pyarrow_tbl.equals(df_in.to_arrow())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "with_pd": [
+                [i if i % 3 else None] if i < 9999 or i > 20001 else None
+                for i in range(21000)
+            ],
+            "no_pd": [
+                [i if i % 3 else None] if i < 9999 or i > 20001 else []
+                for i in range(21000)
+            ],
+        },
+    ],
+)
+def test_orc_writer_lists_empty_rg(data):
+    pdf_in = pd.DataFrame(data)
+    buffer = BytesIO()
+    cudf_in = cudf.from_pandas(pdf_in)
+
+    cudf_in.to_orc(buffer)
+
+    df = cudf.read_orc(buffer)
+    assert_eq(df, cudf_in)
+
+    pdf_out = pa.orc.ORCFile(buffer).read().to_pandas()
+    assert_eq(pdf_in, pdf_out)

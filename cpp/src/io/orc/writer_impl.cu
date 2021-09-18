@@ -697,51 +697,64 @@ std::vector<std::vector<rowgroup_rows>> calculate_aligned_rowgroup_bounds(
       auto const parent_column  = columns[parent_col_idx];
       auto const stripe_end     = stripe.first + stripe.size;
 
+      auto seek_last_borrow_rg = [&](auto rg_idx, size_type& bits_to_borrow) {
+        auto curr         = rg_idx + 1;
+        auto curr_rg_size = [&]() {
+          return parent_column.pushdown_mask != nullptr ? d_pd_set_counts[curr][parent_col_idx]
+                                                        : out_rowgroups[curr][col_idx].size();
+        };
+        while (curr < stripe_end and curr_rg_size() <= bits_to_borrow) {
+          // All bits from rowgroup borrowed, make the rowgroup empty
+          out_rowgroups[curr][col_idx].begin = out_rowgroups[curr][col_idx].end;
+          bits_to_borrow -= curr_rg_size();
+          ++curr;
+        }
+        return curr;
+      };
+
       int previously_borrowed = 0;
       for (auto rg_idx = stripe.first; rg_idx + 1 < stripe_end; ++rg_idx) {
         auto& rg = out_rowgroups[rg_idx][col_idx];
+
         if (parent_column.pushdown_mask == nullptr) {
           // No pushdown mask, all null mask bits will be encoded
           // Align on rowgroup size (can be misaligned for list children)
           if (rg.size() % 8) {
-            auto& next_rg = out_rowgroups[rg_idx + 1][col_idx];
-            // Comparison only needed to borrow from the last rowgroup in stripe
-            auto const bits_to_borrow = std::min(8 - rg.size() % 8, next_rg.size());
-            rg.end += bits_to_borrow;
-            next_rg.begin += bits_to_borrow;
+            auto bits_to_borrow           = 8 - rg.size() % 8;
+            auto const last_borrow_rg_idx = seek_last_borrow_rg(rg_idx, bits_to_borrow);
+            if (last_borrow_rg_idx == stripe_end) {
+              // Didn't find enough bits to borrow, move the rowgroup end to the stripe end
+              rg.end = out_rowgroups[stripe_end - 1][col_idx].end;
+              // Done with this stripe
+              break;
+            }
+            auto& last_borrow_rg = out_rowgroups[last_borrow_rg_idx][col_idx];
+            last_borrow_rg.begin += bits_to_borrow;
+            rg.end = last_borrow_rg.begin;
+            // Skip the rowgroups we emptied in the loop
+            rg_idx = last_borrow_rg_idx - 1;
           }
-          continue;
-        }
-
-        // pushdown mask present; null mask bits w/ set pushdown mask bits will be encoded
-        // Use the number of set bits in pushdown mask as size
-        auto bits_to_borrow =
-          8 - (d_pd_set_counts[rg_idx][parent_col_idx] - previously_borrowed) % 8;
-        if (bits_to_borrow == 0) {
-          // Didn't borrow any bits for this rowgroup
-          previously_borrowed = 0;
-          continue;
-        }
-
-        // Find rowgroup in which we finish the search for missing bits
-        auto const last_borrow_rg_idx = [&]() {
-          auto curr = rg_idx + 1;
-          while (curr < stripe_end and d_pd_set_counts[curr][parent_col_idx] <= bits_to_borrow) {
-            // All bits from rowgroup borrowed, make the rowgroup empty
-            out_rowgroups[curr][col_idx].begin = out_rowgroups[curr][col_idx].end;
-            bits_to_borrow -= d_pd_set_counts[curr][parent_col_idx];
-            ++curr;
-          }
-          return curr;
-        }();
-        auto& last_borrow_rg = out_rowgroups[last_borrow_rg_idx][col_idx];
-
-        if (last_borrow_rg_idx == stripe_end) {
-          // Didn't find enough bits to borrow, move the rowgroup end to the stripe end
-          rg.end = out_rowgroups[stripe_end - 1][col_idx].end;
-          // Done with this stripe
-          break;
         } else {
+          // pushdown mask present; null mask bits w/ set pushdown mask bits will be encoded
+          // Use the number of set bits in pushdown mask as size
+          auto bits_to_borrow =
+            8 - (d_pd_set_counts[rg_idx][parent_col_idx] - previously_borrowed) % 8;
+          if (bits_to_borrow == 0) {
+            // Didn't borrow any bits for this rowgroup
+            previously_borrowed = 0;
+            continue;
+          }
+
+          // Find rowgroup in which we finish the search for missing bits
+          auto const last_borrow_rg_idx = seek_last_borrow_rg(rg_idx, bits_to_borrow);
+          if (last_borrow_rg_idx == stripe_end) {
+            // Didn't find enough bits to borrow, move the rowgroup end to the stripe end
+            rg.end = out_rowgroups[stripe_end - 1][col_idx].end;
+            // Done with this stripe
+            break;
+          }
+
+          auto& last_borrow_rg = out_rowgroups[last_borrow_rg_idx][col_idx];
           // First row that does not need to be borrowed
           auto borrow_end = last_borrow_rg.begin;
 
