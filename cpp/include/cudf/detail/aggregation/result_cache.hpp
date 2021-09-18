@@ -18,6 +18,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
+#include <cudf/detail/hashing.hpp>
 #include <cudf/types.hpp>
 
 #include <unordered_map>
