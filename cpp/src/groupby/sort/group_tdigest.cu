@@ -532,15 +532,16 @@ struct scalar_total_weight {
 // return the min/max value of scalar inputs by group index
 template <typename T>
 struct get_scalar_minmax {
-  device_storage_type_t<T> const* values;
+  column_device_view const col;
   device_span<size_type const> group_offsets;
   size_type const* group_valid_counts;
 
   __device__ thrust::tuple<double, double> operator()(size_type group_index)
   {
-    return {static_cast<double>(values[group_offsets[group_index]]),
+    // note: .element<T>() is taking care of fixed-point conversions for us.
+    return {static_cast<double>(col.element<T>(group_offsets[group_index])),
             static_cast<double>(
-              values[group_offsets[group_index] + (group_valid_counts[group_index] - 1)])};
+              col.element<T>(group_offsets[group_index] + (group_valid_counts[group_index] - 1)))};
   }
 };
 
@@ -569,6 +570,10 @@ struct typed_group_tdigest {
                                   stream,
                                   mr);
 
+    // device column view. handy because the .element() function
+    // automatically handles fixed-point conversions for us
+    auto d_col = cudf::column_device_view::create(col);
+
     // compute min and max columns
     auto min_col = cudf::make_fixed_width_column(
       data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
@@ -580,12 +585,9 @@ struct typed_group_tdigest {
       thrust::make_counting_iterator(0) + num_groups,
       thrust::make_zip_iterator(thrust::make_tuple(min_col->mutable_view().begin<double>(),
                                                    max_col->mutable_view().begin<double>())),
-      get_scalar_minmax<T>{col.begin<device_storage_type_t<T>>(),
-                           group_offsets,
-                           group_valid_counts.begin<size_type>()});
+      get_scalar_minmax<T>{*d_col, group_offsets, group_valid_counts.begin<size_type>()});
 
     // for simple input values, the "centroids" all have a weight of 1.
-    auto d_col = cudf::column_device_view::create(col);
     auto scalar_to_centroid =
       cudf::detail::make_counting_transform_iterator(0, make_centroid_tuple<T>{*d_col});
 
