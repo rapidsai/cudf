@@ -204,6 +204,8 @@ void percentile_approx_test(column_view const& _keys,
                                                                percentages.end());
   structs_column_view scv(*(gb_result.second[0].results[0]));
   auto result = cudf::percentile_approx(scv, g_percentages, output_t);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *result);
 }
 
 void simple_test(data_type input_type,
@@ -230,7 +232,7 @@ void simple_test(data_type input_type,
 }
 
 struct group_index {
-  __device__ int operator()(int i) { return i / 25000; }
+  __device__ int operator()(int i) { return i / 150000; }
 };
 
 void grouped_test(data_type input_type,
@@ -357,7 +359,7 @@ TYPED_TEST(PercentileApproxInputTypesTest, Grouped)
                data_type{type_id::FLOAT64},
                {{1000, cudf::test::default_ulp},
                 {100, cudf::test::default_ulp * 2},
-                {10, cudf::test::default_ulp * 5}});
+                {10, cudf::test::default_ulp * 10}});
 }
 
 TYPED_TEST(PercentileApproxInputTypesTest, SimpleWithNulls)
@@ -381,7 +383,7 @@ TYPED_TEST(PercentileApproxInputTypesTest, GroupedWithNulls)
                           data_type{type_id::FLOAT64},
                           {{1000, cudf::test::default_ulp},
                            {100, cudf::test::default_ulp * 2},
-                           {10, cudf::test::default_ulp * 4}});
+                           {10, cudf::test::default_ulp * 6}});
 }
 
 template <typename T>
@@ -410,7 +412,7 @@ TYPED_TEST(PercentileApproxOutputTypesTest, Grouped)
                output_type,
                {{1000, cudf::test::default_ulp},
                 {100, cudf::test::default_ulp * 2},
-                {10, cudf::test::default_ulp * 5}});
+                {10, cudf::test::default_ulp * 6}});
 }
 
 TYPED_TEST(PercentileApproxOutputTypesTest, SimpleWithNulls)
