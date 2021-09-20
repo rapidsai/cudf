@@ -104,101 +104,42 @@ struct corr_transform {  // : thrust::unary_function<size_type, ResultType>
     return (x - xmean) * (y - ymean) / (group_size - ddof) / xstddev / ystddev;
   }
 };
-
-/*
-sum((x-xu)*(y-yu))
-transform_output_iterator /N-1, stdx, stdy  how do you know the indices? we can not.
-So,
-(x-xu)*(y-yu))/N-1/stdx/stdy as single iterator., then reduce_by_key.
-very similar to var_transform in group_std.
-*/
-
-std::tuple<std::unique_ptr<column>, std::unique_ptr<column>> group_mean_stddev(
-  column_view const& values_0,
-  cudf::device_span<size_type const> group_offsets,
-  cudf::device_span<size_type const> group_labels,
-  size_type num_groups,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
-{
-  auto sum1   = detail::group_sum(values_0, num_groups, group_labels, stream, mr);
-  auto count1 = values_0.nullable()
-                  ? detail::group_count_valid(values_0, group_labels, num_groups, stream, mr)
-                  : detail::group_count_all(group_offsets, num_groups, stream, mr);
-  auto mean1 =
-    cudf::detail::binary_operation(*sum1,
-                                   *count1,
-                                   binary_operator::DIV,
-                                   cudf::detail::target_type(values_0.type(), aggregation::MEAN),
-                                   stream,
-                                   mr);
-
-  auto var1    = detail::group_var(values_0,
-                                *mean1,
-                                *count1,
-                                group_labels,
-                                1,  // default var_agg._ddof,
-                                stream,
-                                mr);
-  auto stddev1 = cudf::detail::unary_operation(*var1, unary_operator::SQRT, stream, mr);
-  return std::make_tuple(std::move(mean1), std::move(stddev1));
-}
-
 }  // namespace
 
 // TODO Eventually this function should accept values_0, values_1, not a struct.
-std::unique_ptr<column> group_corr(column_view const& values,
+std::unique_ptr<column> group_corr(column_view const& values_0,
+                                   column_view const& values_1,
                                    cudf::device_span<size_type const> group_offsets,
                                    cudf::device_span<size_type const> group_labels,
                                    size_type num_groups,
+                                   column_view const& mean_0,
+                                   column_view const& mean_1,
+                                   column_view const& stddev_0,
+                                   column_view const& stddev_1,
                                    rmm::cuda_stream_view stream,
                                    rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(values.type().id() == type_id::STRUCT,
-               "Input to `group_corr` must be a structs column.");
-  CUDF_EXPECTS(values.num_children() == 2,
-               "Input to `group_corr` must be a structs column having 2 children columns.");
-  CUDF_EXPECTS(values.nullable() == false,
-               "Input to `group_corr` must be a non-nullable structs column.");
-  std::cout << "size=" << values.size() << std::endl;
-  std::cout << "num_children=" << values.num_children() << std::endl;
-
   using result_type = id_to_type<type_id::FLOAT64>;
   static_assert(
     std::is_same_v<cudf::detail::target_type_t<result_type, aggregation::Kind::CORRELATION>,
                    result_type>);
 
   // check if each child type can be converted to float64.
-  bool const is_convertible =
-    std::all_of(values.child_begin(), values.child_end(), [](auto const& c) {
-      return type_dispatcher(c.type(), is_double_convertible_impl{});
-    });
-  CUDF_EXPECTS(is_convertible,
-               "Input to `group_corr` must be a structs column having all children columns of type "
-               "convertible to float64.");
+  bool const is_convertible = type_dispatcher(values_0.type(), is_double_convertible_impl{}) or
+                              type_dispatcher(values_1.type(), is_double_convertible_impl{});
 
-  // TODO calculate SUM
+  CUDF_EXPECTS(is_convertible,
+               "Input to `group_corr` must be columns of type convertible to float64.");
+
   // TODO calculate COUNT_VALID  (need to do for 2 seperately. for MEAN, and
   // bitmask_and->COUNT_VALID for CORR.)
-  // TODO calculate MEAN
-  // TODO calculate VARIANCE
-  // TODO calculate STDDEV
   // TODO calculate CORR. (requires MEAN1, MEAN2, COUNT_VALID_ANDed, STDDEV1, STDDEV2)
   // TODO shuffle.
 
-  auto const& values_0 = values.child(0);
-  auto const& values_1 = values.child(1);
-  // TODO fix caching of child sum, count_valid, mean, variance, stddev. [unsupported due to
-  // result_cache design]
-  auto [mean0, stddev0] =
-    group_mean_stddev(values_0, group_offsets, group_labels, num_groups, stream, mr);
-  auto [mean1, stddev1] =
-    group_mean_stddev(values_1, group_offsets, group_labels, num_groups, stream, mr);
-
-  auto mean0_ptr   = mean0->mutable_view().begin<result_type>();
-  auto mean1_ptr   = mean1->mutable_view().begin<result_type>();
-  auto stddev0_ptr = stddev0->mutable_view().begin<result_type>();
-  auto stddev1_ptr = stddev1->mutable_view().begin<result_type>();
+  auto mean0_ptr   = mean_0.begin<result_type>();
+  auto mean1_ptr   = mean_1.begin<result_type>();
+  auto stddev0_ptr = stddev_0.begin<result_type>();
+  auto stddev1_ptr = stddev_1.begin<result_type>();
 
   // TODO replace with ANDed bitmask. (values, stddev)
   auto count1 = values_0.nullable()
@@ -217,9 +158,8 @@ std::unique_ptr<column> group_corr(column_view const& values,
                                                 group_labels.begin()};
 
   // result
-  auto const any_nulls = std::any_of(
-    values.child_begin(), values.child_end(), [](auto const& c) { return c.has_nulls(); });
-  auto mask_type = any_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED;
+  auto const any_nulls = values_0.has_nulls() or values_1.has_nulls();
+  auto mask_type       = any_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED;
 
   auto result =
     make_numeric_column(data_type(type_to_id<result_type>()), num_groups, mask_type, stream, mr);

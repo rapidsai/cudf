@@ -533,13 +533,40 @@ template <>
 void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation const& agg)
 {
   if (cache.has_result(values, agg)) { return; }
+  CUDF_EXPECTS(values.type().id() == type_id::STRUCT,
+               "Input to `group_corr` must be a structs column.");
+  CUDF_EXPECTS(values.num_children() == 2,
+               "Input to `group_corr` must be a structs column having 2 children columns.");
+  CUDF_EXPECTS(values.nullable() == false,
+               "Input to `group_corr` must be a non-nullable structs column.");
+
+  auto const& corr_agg = dynamic_cast<cudf::detail::correlation_aggregation const&>(agg);
+  CUDF_EXPECTS(corr_agg._type == correlation_type::PEARSON,
+               "Only Pearson correlation is supported.");
+
+  auto std_agg = make_std_aggregation();
+  cudf::detail::aggregation_dispatcher(
+    std_agg->kind, aggregate_result_functor(values.child(0), helper, cache, stream, mr), *std_agg);
+  cudf::detail::aggregation_dispatcher(
+    std_agg->kind, aggregate_result_functor(values.child(1), helper, cache, stream, mr), *std_agg);
+
+  auto const stddev0 = cache.get_result(values.child(0), *std_agg);
+  auto const stddev1 = cache.get_result(values.child(1), *std_agg);
+  auto mean_agg      = make_mean_aggregation();
+  auto const mean0   = cache.get_result(values.child(0), *mean_agg);
+  auto const mean1   = cache.get_result(values.child(1), *mean_agg);
 
   cache.add_result(values,
                    agg,
-                   detail::group_corr(get_grouped_values(),
+                   detail::group_corr(get_grouped_values().child(0),
+                                      get_grouped_values().child(1),
                                       helper.group_offsets(stream),
                                       helper.group_labels(stream),
                                       helper.num_groups(stream),
+                                      mean0,
+                                      mean1,
+                                      stddev0,
+                                      stddev1,
                                       stream,
                                       mr));
 };
