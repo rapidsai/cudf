@@ -87,12 +87,12 @@ void CUDA_DEVICE_CALLABLE md5_hash_step(md5_intermediate_data* hash_state)
 template <typename TKey>
 void CUDA_DEVICE_CALLABLE md5_process(TKey const& key, md5_intermediate_data* hash_state)
 {
-  uint32_t const len  = sizeof(TKey);
+  uint32_t constexpr len  = sizeof(TKey);
   uint8_t const* data = reinterpret_cast<uint8_t const*>(&key);
   hash_state->message_length += len;
 
   // 64 bytes are processed in each hash step
-  constexpr int md5_chunk_size = 64;
+  uint32_t constexpr md5_chunk_size = 64;
   if (hash_state->buffer_length + len < md5_chunk_size) {
     std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
     hash_state->buffer_length += len;
@@ -181,7 +181,7 @@ MD5ListHasher::operator()<string_view>(column_device_view data_col,
       hash_state->message_length += len;
 
       // 64 bytes are processed in each hash step
-      constexpr int md5_chunk_size = 64;
+      uint32_t constexpr md5_chunk_size = 64;
       if (hash_state->buffer_length + len < md5_chunk_size) {
         std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
         hash_state->buffer_length += len;
