@@ -5,7 +5,6 @@ import os
 import urllib
 import warnings
 from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
-from queue import Queue
 from threading import Thread
 
 import fsspec
@@ -1646,66 +1645,23 @@ def _assign_block(fs, path_or_fob, local_buffer, offset, nbytes):
             )
 
 
-class ReadBlockWorker(Thread):
-    def __init__(self, queue, fs, path_or_fob, local_buffer):
-        Thread.__init__(self)
-        self.queue = queue
-        self.fs = fs
-        self.path_or_fob = path_or_fob
-        self.local_buffer = local_buffer
-
-    def run(self):
-        while True:
-            # Get the work from the queue and expand the tuple
-            offset, nbytes = self.queue.get()
-            try:
-                _assign_block(
-                    self.fs,
-                    self.path_or_fob,
-                    self.local_buffer,
-                    offset,
-                    nbytes,
-                )
-            finally:
-                self.queue.task_done()
-
-
 def _read_byte_ranges(
-    path_or_fob, ranges, local_buffer, fs=None, num_threads=None, **kwargs,
+    path_or_fob, ranges, local_buffer, fs=None, **kwargs,
 ):
-
-    # If we have a fs object that supports `cat_ranges`,
-    # the ranges should be collected concurrently
-    if fs is not None and hasattr(fs, "cat_ranges"):
-        paths, starts, ends = [], [], []
-        for offset, nbytes in ranges:
-            paths.append(path_or_fob)
-            starts.append(offset)
-            ends.append(offset + nbytes)
-        blocks = fs.cat_ranges(paths, starts, ends)
-        for block, (offset, nbytes) in zip(blocks, ranges):
-            local_buffer[offset : offset + nbytes] = np.frombuffer(
-                block, dtype="b",
-            )
-        return
-
-    # No reason to generate more threads than byte-ranges
-    if num_threads is None:
-        num_threads = len(ranges)
-    num_threads = min(num_threads, len(ranges))
-
-    if num_threads > 1:
-        queue = Queue()
-        for x in range(num_threads):
-            worker = ReadBlockWorker(queue, fs, path_or_fob, local_buffer)
-            worker.daemon = True
-            worker.start()
-
+    # Simple utility to copy remote byte ranges
+    # into a local buffer for IO in libcudf
+    workers = []
     for (offset, nbytes) in ranges:
-        if num_threads > 1:
-            queue.put((offset, nbytes))
+        if len(ranges) > 1:
+            workers.append(
+                Thread(
+                    target=_assign_block,
+                    args=(fs, path_or_fob, local_buffer, offset, nbytes),
+                )
+            )
+            workers[-1].start()
         else:
             _assign_block(fs, path_or_fob, local_buffer, offset, nbytes)
 
-    if num_threads > 1:
-        queue.join()
+    for worker in workers:
+        worker.join()
