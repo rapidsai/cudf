@@ -121,19 +121,19 @@ bool md5_type_check(data_type dt)
 
 struct MD5ListHasher {
   template <typename T, std::enable_if_t<is_chrono<T>()>* = nullptr>
-  void __device__ operator()(column_device_view data_col,
-                             size_type offset_begin,
-                             size_type offset_end,
-                             md5_intermediate_data* hash_state) const
+  void __device__ operator()(column_device_view,
+                             size_type,
+                             size_type,
+                             md5_intermediate_data*) const
   {
     cudf_assert(false && "MD5 Unsupported chrono type column");
   }
 
   template <typename T, std::enable_if_t<!is_fixed_width<T>()>* = nullptr>
-  void __device__ operator()(column_device_view data_col,
-                             size_type offset_begin,
-                             size_type offset_end,
-                             md5_intermediate_data* hash_state) const
+  void __device__ operator()(column_device_view,
+                             size_type,
+                             size_type,
+                             md5_intermediate_data*) const
   {
     cudf_assert(false && "MD5 Unsupported non-fixed-width type column");
   }
@@ -242,17 +242,17 @@ struct MD5Hash {
   }
 
   template <typename T, std::enable_if_t<is_chrono<T>()>* = nullptr>
-  void __device__ operator()(column_device_view col,
-                             size_type row_index,
-                             md5_intermediate_data* hash_state) const
+  void __device__ operator()(column_device_view,
+                             size_type,
+                             md5_intermediate_data*) const
   {
     cudf_assert(false && "MD5 Unsupported chrono type column");
   }
 
   template <typename T, std::enable_if_t<!is_fixed_width<T>()>* = nullptr>
-  void __device__ operator()(column_device_view col,
-                             size_type row_index,
-                             md5_intermediate_data* hash_state) const
+  void __device__ operator()(column_device_view,
+                             size_type,
+                             md5_intermediate_data*) const
   {
     cudf_assert(false && "MD5 Unsupported non-fixed-width type column");
   }
