@@ -5521,15 +5521,15 @@ class DatetimeProperties(object):
 
         @property
         def day(self):
-            return isoSeries["iso_day"]
+            return isoSeries["day"]
 
         @property
         def week(self):
-            return isoSeries["iso_week"]
+            return isoSeries["week"]
 
         @property
         def year(self):
-            return isoSeries["iso_year"]
+            return isoSeries["year"]
 
         return isoSeries
 
