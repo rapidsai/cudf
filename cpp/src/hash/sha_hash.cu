@@ -111,11 +111,14 @@ struct SHAHash : public crtp<HasherT> {
     hash_state->message_length += len;
 
     if (hash_state->buffer_length + len < Hasher::message_chunk_size) {
+      // If the buffer will not be filled by this data, we copy the new data into
+      // the buffer but do not trigger a hash step yet.
       std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
       hash_state->buffer_length += len;
     } else {
+      // The buffer will be filled by this data. Copy a chunk of the data to fill
+      // the buffer and trigger a hash step.
       uint32_t copylen = Hasher::message_chunk_size - hash_state->buffer_length;
-
       std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
       Hasher::hash_step(hash_state);
 
@@ -126,6 +129,8 @@ struct SHAHash : public crtp<HasherT> {
         copylen += Hasher::message_chunk_size;
       }
 
+      // The remaining data chunk does not fill the buffer. We copy the data into
+      // the buffer but do not trigger a hash step yet.
       std::memcpy(hash_state->buffer, data + copylen, len - copylen);
       hash_state->buffer_length = len - copylen;
     }
