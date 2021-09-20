@@ -1576,11 +1576,11 @@ def test_pickle_rountrip_multiIndex(names):
             "four": [0.2, 0.1, -10.2],
         }
     )
-    actual_df = df.set_index(["one", "two", "three"])
-    actual_df.index.names = names
+    expected_df = df.set_index(["one", "two", "three"])
+    expected_df.index.names = names
     local_file = BytesIO()
 
-    pickle.dump(actual_df, local_file)
+    pickle.dump(expected_df, local_file)
     local_file.seek(0)
-    expected_df = pickle.load(local_file)
+    actual_df = pickle.load(local_file)
     assert_eq(expected_df, actual_df)
