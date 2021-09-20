@@ -35,9 +35,12 @@ namespace detail {
 
 namespace {
 
-class row_contains_null {
+/**
+ * @brief Device functor to determine if a row is valid.
+ */
+class row_is_valid {
  public:
-  row_contains_null(bitmask_type const* row_bitmask) : _row_bitmask{row_bitmask} {}
+  row_is_valid(bitmask_type const* row_bitmask) : _row_bitmask{row_bitmask} {}
 
   __device__ __inline__ bool operator()(const size_type& i) const noexcept
   {
@@ -81,16 +84,17 @@ void build_join_hash_table(cudf::table_view const& build,
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   make_pair_function pair_func{hash_build, empty_key_sentinel};
 
-  thrust::counting_iterator<size_type> stencil(0);
   auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
 
   size_type const build_table_num_rows{build_table_ptr->num_rows()};
   if ((compare_nulls == null_equality::EQUAL) or (not nullable(build))) {
     hash_table.insert(iter, iter + build_table_num_rows, stream.value());
   } else {
+    thrust::counting_iterator<size_type> stencil(0);
     auto const row_bitmask = cudf::detail::bitmask_and(build, stream);
-    row_contains_null pred{static_cast<bitmask_type const*>(row_bitmask.data())};
+    row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
+    // insert valid rows
     hash_table.insert_if(iter, iter + build_table_num_rows, stencil, pred, stream.value());
   }
 }

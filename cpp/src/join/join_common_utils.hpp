@@ -39,8 +39,8 @@ using pair_type = cuco::pair_type<hash_value_type, size_type>;
 using multimap_type = cuco::static_multimap<
   hash_value_type,
   size_type,
-  cuco::detail::double_hashing<hash_value_type, size_type, DEFAULT_JOIN_CG_SIZE>,
   cuda::thread_scope_device,
+  cuco::detail::double_hashing<hash_value_type, size_type, DEFAULT_JOIN_CG_SIZE>,
   default_allocator<char>>;
 
 using row_hash = cudf::row_hasher<default_hash>;
