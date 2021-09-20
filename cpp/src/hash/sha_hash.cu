@@ -364,24 +364,6 @@ void __device__ sha1_hash_step(sha_intermediate_data* hash_state)
   hash_state->buffer_length = 0;
 }
 
-struct SHA1Hash : SHAHash<SHA1Hash> {
-  // Intermediate data type storing the hash state
-  using sha_intermediate_data = sha1_intermediate_data;
-  // The word type used by this hash function
-  using sha_word_type = sha1_word_type;
-  // Number of bytes processed in each hash step
-  static constexpr auto message_chunk_size = 64;
-  // Digest size in bytes
-  static constexpr auto digest_size = 40;
-  // Number of bytes used for the message length
-  static constexpr auto message_length_size = 8;
-
-  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data* hash_state)
-  {
-    sha1_hash_step(hash_state);
-  }
-};
-
 /**
  * @brief Core SHA-256 algorithm implementation. Processes a single 512-bit chunk,
  * updating the hash value so far. Does not zero out the buffer contents.
@@ -452,38 +434,6 @@ void __device__ sha256_hash_step(sha_intermediate_data* hash_state)
   hash_state->buffer_length = 0;
 }
 
-struct SHA224Hash : SHAHash<SHA224Hash> {
-  using sha_intermediate_data = sha224_intermediate_data;
-  using sha_word_type         = sha256_word_type;
-  // Number of bytes processed in each hash step
-  static constexpr auto message_chunk_size = 64;
-  // Digest size in bytes. This is truncated from SHA-256.
-  static constexpr auto digest_size = 56;
-  // Number of bytes used for the message length
-  static constexpr auto message_length_size = 8;
-
-  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data* hash_state)
-  {
-    sha256_hash_step(hash_state);
-  }
-};
-
-struct SHA256Hash : SHAHash<SHA256Hash> {
-  using sha_intermediate_data = sha256_intermediate_data;
-  using sha_word_type         = sha256_word_type;
-  // Number of bytes processed in each hash step
-  static constexpr auto message_chunk_size = 64;
-  // Digest size in bytes
-  static constexpr auto digest_size = 64;
-  // Number of bytes used for the message length
-  static constexpr auto message_length_size = 8;
-
-  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data* hash_state)
-  {
-    sha256_hash_step(hash_state);
-  }
-};
-
 /**
  * @brief Core SHA-512 algorithm implementation. Processes a single 1024-bit chunk,
  * updating the hash value so far. Does not zero out the buffer contents.
@@ -553,6 +503,56 @@ void __device__ sha512_hash_step(sha_intermediate_data* hash_state)
 
   hash_state->buffer_length = 0;
 }
+
+struct SHA1Hash : SHAHash<SHA1Hash> {
+  // Intermediate data type storing the hash state
+  using sha_intermediate_data = sha1_intermediate_data;
+  // The word type used by this hash function
+  using sha_word_type = sha1_word_type;
+  // Number of bytes processed in each hash step
+  static constexpr auto message_chunk_size = 64;
+  // Digest size in bytes
+  static constexpr auto digest_size = 40;
+  // Number of bytes used for the message length
+  static constexpr auto message_length_size = 8;
+
+  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data* hash_state)
+  {
+    sha1_hash_step(hash_state);
+  }
+};
+
+struct SHA224Hash : SHAHash<SHA224Hash> {
+  using sha_intermediate_data = sha224_intermediate_data;
+  using sha_word_type         = sha256_word_type;
+  // Number of bytes processed in each hash step
+  static constexpr auto message_chunk_size = 64;
+  // Digest size in bytes. This is truncated from SHA-256.
+  static constexpr auto digest_size = 56;
+  // Number of bytes used for the message length
+  static constexpr auto message_length_size = 8;
+
+  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data* hash_state)
+  {
+    sha256_hash_step(hash_state);
+  }
+};
+
+struct SHA256Hash : SHAHash<SHA256Hash> {
+  using sha_intermediate_data = sha256_intermediate_data;
+  using sha_word_type         = sha256_word_type;
+  // Number of bytes processed in each hash step
+  static constexpr auto message_chunk_size = 64;
+  // Digest size in bytes
+  static constexpr auto digest_size = 64;
+  // Number of bytes used for the message length
+  static constexpr auto message_length_size = 8;
+
+  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data* hash_state)
+  {
+    sha256_hash_step(hash_state);
+  }
+};
 
 struct SHA384Hash : SHAHash<SHA384Hash> {
   // Intermediate data type storing the hash state
