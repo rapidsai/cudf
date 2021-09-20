@@ -140,8 +140,8 @@ struct SHAHash : public crtp<HasherT> {
   void CUDA_DEVICE_CALLABLE process_key(TKey const& key,
                                         typename Hasher::sha_intermediate_data* hash_state) const
   {
-    uint8_t const* data = reinterpret_cast<uint8_t const*>(&key);
-    uint32_t const len  = sizeof(TKey);
+    uint8_t const* data    = reinterpret_cast<uint8_t const*>(&key);
+    uint32_t constexpr len = sizeof(TKey);
     process(data, len, hash_state);
   }
 
