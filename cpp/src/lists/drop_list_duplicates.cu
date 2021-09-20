@@ -70,7 +70,7 @@ struct has_negative_nans_dispatch {
   }
 
   template <typename Type, std::enable_if_t<std::is_same_v<Type, cudf::struct_view>>* = nullptr>
-  bool operator()(column_view const& lists_entries, rmm::cuda_stream_view stream) const noexcept
+  bool operator()(column_view const& lists_entries, rmm::cuda_stream_view stream) const
   {
     // Recursively check negative NaN on the children columns.
     return std::any_of(
@@ -505,12 +505,12 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_offsets(
  * original lists column are also taken into account to make sure the result lists column will have
  * the same empty list rows (if any) as in the original lists column.
  *
- * @param[in] num_entries The number of unique entries after removing duplicates.
- * @param[in] entries_list_offsets The mapping from list entries to their list offsets.
- * @param[out] original_offsets The list offsets of the original lists column, which will also be
- *             used to store the new list offsets.
- * @param[in] streamCUDA stream used for device memory operations and kernel launches.
- * @param[in] mr Device resource used to allocate memory.
+ * @param num_entries The number of unique entries after removing duplicates.
+ * @param entries_list_offsets The mapping from list entries to their list offsets.
+ * @param original_offsets The list offsets of the original lists column, which will also be used to
+ *        store the new list offsets.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device resource used to allocate memory.
  */
 void generate_offsets(size_type num_entries,
                       column_view const& entries_list_offsets,
