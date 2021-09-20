@@ -280,17 +280,17 @@ cdef class Aggregation:
 
 
     @classmethod
-    def ewmvar(cls, com=1.0, adjust=True):
+    def ewmvar(cls, com=1.0, adjust=True, bias=True):
         cdef Aggregation agg = cls()
         agg.c_obj = move(
-            libcudf_aggregation.make_ewmvar_aggregation[aggregation](com, adjust))
+            libcudf_aggregation.make_ewmvar_aggregation[aggregation](com, adjust, bias))
         return agg
 
     @classmethod
-    def ewmstd(cls, com=1.0, adjust=True):
+    def ewmstd(cls, com=1.0, adjust=True, bias=True):
         cdef Aggregation agg = cls()
         agg.c_obj = move(
-            libcudf_aggregation.make_ewmstd_aggregation[aggregation](com, adjust))
+            libcudf_aggregation.make_ewmstd_aggregation[aggregation](com, adjust, bias))
         return agg
 
     @classmethod

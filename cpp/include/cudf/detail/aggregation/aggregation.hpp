@@ -640,10 +640,12 @@ class ewmvar_aggregation final : public rolling_aggregation {
  public:
   double com;
   bool adjust;
-  ewmvar_aggregation(double com, bool adjust) : aggregation{EWMVAR}
+  bool bias;
+  ewmvar_aggregation(double com, bool adjust, bool bias) : aggregation{EWMVAR}
   {
     this->com    = com;
     this->adjust = adjust;
+    this->bias = bias;
   }
 
   std::unique_ptr<aggregation> clone() const override
@@ -659,7 +661,7 @@ class ewmvar_aggregation final : public rolling_aggregation {
   {
     if (!this->aggregation::is_equal(_other)) { return false; }
     auto const& other = dynamic_cast<ewmvar_aggregation const&>(_other);
-    return this->com == other.com and this->adjust == other.adjust;
+    return this->com == other.com and this->adjust == other.adjust and this->bias == other.bias;
   }
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
@@ -671,10 +673,12 @@ class ewmstd_aggregation final : public rolling_aggregation {
  public:
   double com;
   bool adjust;
-  ewmstd_aggregation(double com, bool adjust) : aggregation{EWMSTD}
+  bool bias;
+  ewmstd_aggregation(double com, bool adjust, bool bias) : aggregation{EWMSTD}
   {
     this->com    = com;
     this->adjust = adjust;
+    this->bias = bias;
   }
 
   std::unique_ptr<aggregation> clone() const override
@@ -690,7 +694,7 @@ class ewmstd_aggregation final : public rolling_aggregation {
   {
     if (!this->aggregation::is_equal(_other)) { return false; }
     auto const& other = dynamic_cast<ewmstd_aggregation const&>(_other);
-    return this->com == other.com and this->adjust == other.adjust;
+    return this->com == other.com and this->adjust == other.adjust and this->bias == other.bias;
   }
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };

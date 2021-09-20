@@ -20,6 +20,7 @@ class ExponentialMovingWindow(_RollingBase):
         self.obj = obj
         self.adjust = adjust
         self.com = get_center_of_mass(com, span, halflife, alpha)
+        self.bias=None
 
     def mean(self):
         return self._apply_agg("ewma")
@@ -43,4 +44,11 @@ class ExponentialMovingWindow(_RollingBase):
         if not is_numeric_dtype(sr.dtype):
             raise TypeError("No numeric types to aggregate")
 
-        return scan(agg_name, sr._column.astype('float64'), True, com=self.com, adjust=self.adjust)
+        kws = {
+            "com": self.com,
+            "adjust": self.adjust,
+        }
+        if self.bias is not None:
+            kws['bias'] = self.bias
+
+        return scan(agg_name, sr._column.astype('float64'), True, **kws)
