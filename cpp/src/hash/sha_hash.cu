@@ -293,6 +293,77 @@ struct SHAHash : public crtp<HasherT> {
   }
 };
 
+/**
+ * @brief Core SHA-1 algorithm implementation. Processes a single 512-bit chunk,
+ * updating the hash value so far. Does not zero out the buffer contents.
+ */
+template <typename sha_intermediate_data>
+void __device__ sha1_hash_step(sha_intermediate_data* hash_state)
+{
+  uint32_t A = hash_state->hash_value[0];
+  uint32_t B = hash_state->hash_value[1];
+  uint32_t C = hash_state->hash_value[2];
+  uint32_t D = hash_state->hash_value[3];
+  uint32_t E = hash_state->hash_value[4];
+
+  uint32_t words[80];
+
+  // Word size in bytes
+  constexpr auto word_size = sizeof(uint32_t);
+
+  // The 512-bit message buffer fills the first 16 words.
+  for (int i = 0; i < 16; i++) {
+    uint32_t buffer_element_as_int;
+    std::memcpy(&buffer_element_as_int, hash_state->buffer + (i * word_size), word_size);
+    // Convert word representation from little-endian to big-endian.
+    words[i] = swap_endian(buffer_element_as_int);
+  }
+
+  // The rest of the 80 words are generated from the first 16 words.
+  for (int i = 16; i < 80; i++) {
+    uint32_t temp = words[i - 3] ^ words[i - 8] ^ words[i - 14] ^ words[i - 16];
+    words[i]      = rotate_bits_left(temp, 1);
+  }
+
+  for (int i = 0; i < 80; i++) {
+    uint32_t F;
+    uint32_t temp;
+    uint32_t k;
+    switch (i / 20) {
+      case 0:
+        F = D ^ (B & (C ^ D));
+        k = 0x5a827999;
+        break;
+      case 1:
+        F = B ^ C ^ D;
+        k = 0x6ed9eba1;
+        break;
+      case 2:
+        F = (B & C) | (B & D) | (C & D);
+        k = 0x8f1bbcdc;
+        break;
+      case 3:
+        F = B ^ C ^ D;
+        k = 0xca62c1d6;
+        break;
+    }
+    temp = rotate_bits_left(A, 5) + F + E + k + words[i];
+    E    = D;
+    D    = C;
+    C    = rotate_bits_left(B, 30);
+    B    = A;
+    A    = temp;
+  }
+
+  hash_state->hash_value[0] += A;
+  hash_state->hash_value[1] += B;
+  hash_state->hash_value[2] += C;
+  hash_state->hash_value[3] += D;
+  hash_state->hash_value[4] += E;
+
+  hash_state->buffer_length = 0;
+}
+
 struct SHA1Hash : SHAHash<SHA1Hash> {
   // Intermediate data type storing the hash state
   using sha_intermediate_data = sha1_intermediate_data;
@@ -305,74 +376,9 @@ struct SHA1Hash : SHAHash<SHA1Hash> {
   // Number of bytes used for the message length
   static constexpr auto message_length_size = 8;
 
-  /**
-   * @brief Core SHA-1 algorithm implementation. Processes a single 512-bit chunk,
-   * updating the hash value so far. Does not zero out the buffer contents.
-   */
-  static void __device__ hash_step(sha_intermediate_data* hash_state)
+  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data* hash_state)
   {
-    uint32_t A = hash_state->hash_value[0];
-    uint32_t B = hash_state->hash_value[1];
-    uint32_t C = hash_state->hash_value[2];
-    uint32_t D = hash_state->hash_value[3];
-    uint32_t E = hash_state->hash_value[4];
-
-    uint32_t words[80];
-
-    // Word size in bytes
-    constexpr auto word_size = sizeof(uint32_t);
-
-    // The 512-bit message buffer fills the first 16 words.
-    for (int i = 0; i < 16; i++) {
-      uint32_t buffer_element_as_int;
-      std::memcpy(&buffer_element_as_int, hash_state->buffer + (i * word_size), word_size);
-      // Convert word representation from little-endian to big-endian.
-      words[i] = swap_endian(buffer_element_as_int);
-    }
-
-    // The rest of the 80 words are generated from the first 16 words.
-    for (int i = 16; i < 80; i++) {
-      uint32_t temp = words[i - 3] ^ words[i - 8] ^ words[i - 14] ^ words[i - 16];
-      words[i]      = rotate_bits_left(temp, 1);
-    }
-
-    for (int i = 0; i < 80; i++) {
-      uint32_t F;
-      uint32_t temp;
-      uint32_t k;
-      switch (i / 20) {
-        case 0:
-          F = D ^ (B & (C ^ D));
-          k = 0x5a827999;
-          break;
-        case 1:
-          F = B ^ C ^ D;
-          k = 0x6ed9eba1;
-          break;
-        case 2:
-          F = (B & C) | (B & D) | (C & D);
-          k = 0x8f1bbcdc;
-          break;
-        case 3:
-          F = B ^ C ^ D;
-          k = 0xca62c1d6;
-          break;
-      }
-      temp = rotate_bits_left(A, 5) + F + E + k + words[i];
-      E    = D;
-      D    = C;
-      C    = rotate_bits_left(B, 30);
-      B    = A;
-      A    = temp;
-    }
-
-    hash_state->hash_value[0] += A;
-    hash_state->hash_value[1] += B;
-    hash_state->hash_value[2] += C;
-    hash_state->hash_value[3] += D;
-    hash_state->hash_value[4] += E;
-
-    hash_state->buffer_length = 0;
+    sha1_hash_step(hash_state);
   }
 };
 
