@@ -226,8 +226,9 @@ def to_datetime(
             if isinstance(arg, (pd.Series)):
                 # this needs to work for a pandas series
                 # input or else it becomes an index
-                arg = cudf.from_pandas(arg)
-            col = arg._column
+                col = column.as_column(arg)
+            else:
+                col = arg._column
             col = _process_col(
                 col=col,
                 unit=unit,
