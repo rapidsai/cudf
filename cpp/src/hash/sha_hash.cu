@@ -103,12 +103,11 @@ struct SHAHash : public crtp<HasherT> {
    * This accepts arbitrary data, handles it as bytes, and calls the hash step
    * when the buffer is filled up to message_chunk_size bytes.
    */
-  template <typename TKey, typename Hasher = HasherT>
-  void CUDA_DEVICE_CALLABLE process(TKey const& key,
+  template <typename Hasher = HasherT>
+  void CUDA_DEVICE_CALLABLE process(uint8_t const* data,
+                                    uint32_t len,
                                     typename Hasher::sha_intermediate_data* hash_state) const
   {
-    uint32_t const len  = sizeof(TKey);
-    uint8_t const* data = reinterpret_cast<uint8_t const*>(&key);
     hash_state->message_length += len;
 
     if (hash_state->buffer_length + len < Hasher::message_chunk_size) {
@@ -130,6 +129,15 @@ struct SHAHash : public crtp<HasherT> {
       std::memcpy(hash_state->buffer, data + copylen, len - copylen);
       hash_state->buffer_length = len - copylen;
     }
+  }
+
+  template <typename TKey, typename Hasher = HasherT>
+  void CUDA_DEVICE_CALLABLE process_key(TKey const& key,
+                                        typename Hasher::sha_intermediate_data* hash_state) const
+  {
+    uint8_t const* data = reinterpret_cast<uint8_t const*>(&key);
+    uint32_t const len  = sizeof(TKey);
+    process(data, len, hash_state);
   }
 
   /**
@@ -247,11 +255,11 @@ struct SHAHash : public crtp<HasherT> {
     T const& key = col.element<T>(row_index);
     if (isnan(key)) {
       T nan = std::numeric_limits<T>::quiet_NaN();
-      process(nan, hash_state);
+      process_key(nan, hash_state);
     } else if (key == T{0.0}) {
-      process(T{0.0}, hash_state);
+      process_key(T{0.0}, hash_state);
     } else {
-      process(key, hash_state);
+      process_key(key, hash_state);
     }
   }
 
@@ -263,7 +271,7 @@ struct SHAHash : public crtp<HasherT> {
                                        size_type row_index,
                                        typename Hasher::sha_intermediate_data* hash_state) const
   {
-    process(col.element<T>(row_index), hash_state);
+    process_key(col.element<T>(row_index), hash_state);
   }
 
   template <typename T,
