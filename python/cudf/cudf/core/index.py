@@ -1634,15 +1634,7 @@ class DatetimeIndex(GenericIndex):
         2020-05-31 08:00:00  2020    22    7
         1999-12-31 18:40:00  1999    52    5
         """
-        iso_day = self._values.as_string_column(self._values.dtype, "%u")
-        iso_week = self._values.as_string_column(self._values.dtype, "%V")
-        iso_year = self._values.as_string_column(self._values.dtype, "%G")
-
-        indexSeries = cudf.DataFrame(
-            {"year": iso_year, "week": iso_week, "day": iso_day},
-            index=self._values,
-            dtype=np.int32,
-        )
+        indexSeries = cudf.core.tools.datetimes.to_iso_calendar(self)
 
         @property
         def day(self):

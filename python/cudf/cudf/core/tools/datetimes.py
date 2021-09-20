@@ -6,6 +6,7 @@ from typing import Sequence, Union
 import numpy as np
 import pandas as pd
 from pandas.core.tools.datetimes import _unit_map
+from pandas.core.indexes.accessors import DatetimeProperties as pdDatetimeProp
 
 import cudf
 from cudf import _lib as libcudf
@@ -15,6 +16,7 @@ from cudf._lib.strings.convert.convert_integers import (
 from cudf.api.types import is_integer, is_scalar
 from cudf.core import column
 from cudf.core.index import as_index
+from cudf.core.series import DatetimeProperties as cudfDatetimeProp
 
 _unit_dtype_map = {
     "ns": "datetime64[ns]",
@@ -658,3 +660,21 @@ def _isin_datetimelike(
 
     res = lhs._obtain_isin_result(rhs)
     return res
+
+
+def to_iso_calendar(self):
+    formats = ["%G", "%V", "%u"]
+    if isinstance(self,(cudfDatetimeProp,pdDatetimeProp)):
+        iso_params = [self.strftime(fmt) for fmt in formats]
+        index=None
+    elif isinstance(self,(cudf.Index, pd.Index)): 
+        iso_params = [self._values.as_string_column(self._values.dtype,fmt) for fmt in formats]
+        index=self._values
+    data = dict(zip(["year","week","day"], iso_params))
+    isoSeries = cudf.DataFrame(
+            data,
+            index=index,
+            dtype=np.int32
+        )
+
+    return isoSeries

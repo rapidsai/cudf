@@ -5509,15 +5509,7 @@ class DatetimeProperties(object):
         1    <NA>
         Name: year, dtype: object
         """
-
-        iso_day = self.strftime("%u")
-        iso_week = self.strftime("%V")
-        iso_year = self.strftime("%G")
-
-        isoSeries = cudf.DataFrame(
-            {"year": iso_year, "week": iso_week, "day": iso_day},
-            dtype=np.int32,
-        )
+        isoSeries = cudf.core.tools.datetimes.to_iso_calendar(self)
 
         @property
         def day(self):
