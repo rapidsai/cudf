@@ -486,41 +486,6 @@ rmm::device_uvector<double> compute_ewma_adjust(column_view const& input,
   return output;
 }
 
-void print_device_uvector(rmm::device_uvector<double> const& input, rmm::cuda_stream_view stream) {
-  thrust::device_vector<double> input_device(input.size());
-  thrust::copy(rmm::exec_policy(stream), input.begin(), input.end(), input_device.begin());
-  thrust::host_vector<double> input_host = input_device;
-  std::cout << std::endl;
-  for (size_t i = 0; i < input_host.size(); i++) {
-    std::cout << input_host[i] << " ";
-  }
-  std::cout << std::endl;
-}
-
-void print_device_uvector_pairs(rmm::device_uvector<thrust::pair<double, double>> const& input, rmm::cuda_stream_view stream) {
-
-  thrust::device_vector<double> zeroths(input.size());
-  thrust::device_vector<double> firsts(input.size());
-
-  thrust::transform(rmm::exec_policy(stream), input.begin(), input.end(), zeroths.begin(), [=] __host__ __device__ (thrust::pair<double, double> input) -> double {
-    return thrust::get<0>(input);
-  });
-
-  thrust::transform(rmm::exec_policy(stream), input.begin(), input.end(), firsts.begin(), [=] __host__ __device__ (thrust::pair<double, double> input) -> double {
-    return thrust::get<1>(input);
-  });
-
-  thrust::host_vector<double> zeroths_host = zeroths;
-  thrust::host_vector<double> firsts_host = firsts;
-
-  std::cout << std::endl;
-  for (size_t i = 0; i < firsts_host.size(); i++) {
-    std::cout << "(" << zeroths_host[i] << "," << firsts_host[i] << ")" << ",";
-  }
-  std::cout << std::endl;
-}
-
-
 rmm::device_uvector<double> compute_ewma_noadjust(column_view const& input,
                                                   double beta,
                                                   rmm::cuda_stream_view stream,
@@ -546,7 +511,7 @@ rmm::device_uvector<double> compute_ewma_noadjust(column_view const& input,
                     [=] __host__ __device__(double input) -> thrust::pair<double, double> {
                       return thrust::pair<double, double>(beta, input);
                     });
-              
+
   if (input.has_nulls()) {
     /*
     In this case, a denominator actually has to be computed. The formula is
@@ -561,52 +526,48 @@ rmm::device_uvector<double> compute_ewma_noadjust(column_view const& input,
     but we also have to compute normalization factors
 
     */
-    print_device_uvector_pairs(pairs, stream);
     pair_beta_adjust(input, pairs, stream);
-  
+
     rmm::device_uvector<double> nullcnt = null_roll_up(input, stream);
 
-    print_device_uvector(nullcnt, stream);
-
-    thrust::transform(rmm::exec_policy(stream), 
+    thrust::transform(rmm::exec_policy(stream),
                       nullcnt.begin(),
                       nullcnt.end(),
                       nullcnt.begin(),
-                      [=] __host__ __device__ (double exponent) -> double {
+                      [=] __host__ __device__(double exponent) -> double {
                         // ex: 2 -> alpha + (1  - alpha)**2
-                        if (exponent != 0) { 
+                        if (exponent != 0) {
                           return (1.0 - beta) + pow(beta, exponent + 1);
                         } else {
                           return exponent;
                         }
-                      }
-    );
+                      });
 
     auto device_view = *column_device_view::create(input);
-    auto valid_it =  detail::make_validity_iterator(device_view);
-    auto null_and_null_count = thrust::make_zip_iterator(thrust::make_tuple(valid_it, nullcnt.begin()));
-    print_device_uvector_pairs(pairs, stream);
-    thrust::transform(rmm::exec_policy(stream),
-                      null_and_null_count,
-                      null_and_null_count + input.size(),
-                      pairs.begin(),
-                      pairs.begin(),
-                      [=] __host__ __device__ (thrust::tuple<bool, double> null_and_null_count, thrust::pair<double, double> pair) -> thrust::pair<double, double> {
-                        bool is_valid = thrust::get<0>(null_and_null_count);
-                        double factor = thrust::get<1>(null_and_null_count);
+    auto valid_it    = detail::make_validity_iterator(device_view);
+    auto null_and_null_count =
+      thrust::make_zip_iterator(thrust::make_tuple(valid_it, nullcnt.begin()));
+    thrust::transform(
+      rmm::exec_policy(stream),
+      null_and_null_count,
+      null_and_null_count + input.size(),
+      pairs.begin(),
+      pairs.begin(),
+      [=] __host__ __device__(thrust::tuple<bool, double> null_and_null_count,
+                              thrust::pair<double, double> pair) -> thrust::pair<double, double> {
+        bool is_valid = thrust::get<0>(null_and_null_count);
+        double factor = thrust::get<1>(null_and_null_count);
 
-                        double ci = thrust::get<0>(pair);
-                        double cj = thrust::get<1>(pair);
+        double ci = thrust::get<0>(pair);
+        double cj = thrust::get<1>(pair);
 
-                        if (is_valid and (factor != 0.0)) {
-                          return {ci / factor, cj / factor};
-                        } else {
-                          return {ci, cj};
-                        }
-                      }
-    );
+        if (is_valid and (factor != 0.0)) {
+          return {ci / factor, cj / factor};
+        } else {
+          return {ci, cj};
+        }
+      });
   }
-  print_device_uvector_pairs(pairs, stream);
   compute_recurrence(pairs, stream);
   // copy the second elements to the output for now
   thrust::transform(rmm::exec_policy(stream),
