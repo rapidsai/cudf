@@ -309,7 +309,7 @@ void __device__ sha1_hash_step(sha_intermediate_data* hash_state)
   uint32_t words[80];
 
   // Word size in bytes
-  constexpr auto word_size = sizeof(uint32_t);
+  auto constexpr word_size = sizeof(uint32_t);
 
   // The 512-bit message buffer fills the first 16 words.
   for (int i = 0; i < 16; i++) {
@@ -383,7 +383,7 @@ void __device__ sha256_hash_step(sha_intermediate_data* hash_state)
   uint32_t words[64];
 
   // Word size in bytes
-  constexpr auto word_size = sizeof(uint32_t);
+  auto constexpr word_size = sizeof(uint32_t);
 
   // The 512-bit message buffer fills the first 16 words.
   for (int i = 0; i < 16; i++) {
@@ -453,7 +453,7 @@ void __device__ sha512_hash_step(sha_intermediate_data* hash_state)
   uint64_t words[80];
 
   // Word size in bytes
-  constexpr auto word_size = sizeof(uint64_t);
+  auto constexpr word_size = sizeof(uint64_t);
 
   // The 512-bit message buffer fills the first 16 words.
   for (int i = 0; i < 16; i++) {
@@ -523,8 +523,10 @@ struct SHA1Hash : SHAHash<SHA1Hash> {
 };
 
 struct SHA224Hash : SHAHash<SHA224Hash> {
+  // Intermediate data type storing the hash state
   using sha_intermediate_data = sha224_intermediate_data;
-  using sha_word_type         = sha256_word_type;
+  // The word type used by this hash function
+  using sha_word_type = sha256_word_type;
   // Number of bytes processed in each hash step
   static constexpr auto message_chunk_size = 64;
   // Digest size in bytes. This is truncated from SHA-256.
@@ -539,8 +541,10 @@ struct SHA224Hash : SHAHash<SHA224Hash> {
 };
 
 struct SHA256Hash : SHAHash<SHA256Hash> {
+  // Intermediate data type storing the hash state
   using sha_intermediate_data = sha256_intermediate_data;
-  using sha_word_type         = sha256_word_type;
+  // The word type used by this hash function
+  using sha_word_type = sha256_word_type;
   // Number of bytes processed in each hash step
   static constexpr auto message_chunk_size = 64;
   // Digest size in bytes
