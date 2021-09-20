@@ -2195,7 +2195,6 @@ TEST_F(CollectSetTest, StructTypeRollingWindow)
                                      foll_column,
                                      1,
                                      *make_collect_set_aggregation<rolling_aggregation>());
-  cudf::test::print(result->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), result->view());
 }
 
