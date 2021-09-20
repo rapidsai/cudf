@@ -38,18 +38,18 @@ void result_cache::add_result(column_view const& input,
 
 column_view result_cache::get_result(column_view const& input, aggregation const& agg) const
 {
-  CUDF_EXPECTS(has_result(input, agg), "Result does not exist in cache");
 
   auto result_it = _cache.find({input, agg});
+  CUDF_EXPECTS(result_it != _cache.end(), "Result does not exist in cache");
   return result_it->second.second->view();
 }
 
 std::unique_ptr<column> result_cache::release_result(column_view const& input,
                                                      aggregation const& agg)
 {
-  CUDF_EXPECTS(has_result(input, agg), "Result does not exist in cache");
 
-  auto result_it = _cache.extract({input, agg});
+  auto node = _cache.extract({input, agg});
+  CUDF_EXPECTS(not node.empty(), "Result does not exist in cache");
   return std::move(result_it.mapped().second);
 }
 
