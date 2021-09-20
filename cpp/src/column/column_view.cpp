@@ -98,7 +98,7 @@ constexpr auto hash(Ts&&... ts)
 std::size_t shallow_hash_impl(column_view const& c, bool is_parent_empty = false)
 {
   std::size_t const init = (c.is_empty() or is_parent_empty)
-                             ? hash(c.type(), c.size())
+                             ? hash(c.type(), 0)
                              : hash(c.type(), c.size(), c.head(), c.null_mask(), c.offset());
   return std::accumulate(c.child_begin(),
                          c.child_end(),
@@ -111,9 +111,9 @@ std::size_t shallow_hash_impl(column_view const& c, bool is_parent_empty = false
 
 std::size_t shallow_hash(column_view const& input) { return shallow_hash_impl(input); }
 
-bool shallow_equal_impl(column_view const& lhs,
-                        column_view const& rhs,
-                        bool is_parent_empty = false)
+bool shallow_equivalent_impl(column_view const& lhs,
+                             column_view const& rhs,
+                             bool is_parent_empty = false)
 {
   bool const is_empty = (lhs.is_empty() and rhs.is_empty()) or is_parent_empty;
   return (lhs.type() == rhs.type()) and
@@ -124,12 +124,12 @@ bool shallow_equal_impl(column_view const& lhs,
                     rhs.child_begin(),
                     rhs.child_end(),
                     [is_empty](auto const& lhs_child, auto const& rhs_child) {
-                      return shallow_equal_impl(lhs_child, rhs_child, is_empty);
+                      return shallow_equivalent_impl(lhs_child, rhs_child, is_empty);
                     });
 }
 bool is_shallow_equivalent(column_view const& lhs, column_view const& rhs)
 {
-  return shallow_equal_impl(lhs, rhs);
+  return shallow_equivalent_impl(lhs, rhs);
 }
 }  // namespace detail
 
