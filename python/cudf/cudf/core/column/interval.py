@@ -3,9 +3,9 @@ import pandas as pd
 import pyarrow as pa
 
 import cudf
+from cudf.api.types import is_interval_dtype
 from cudf.core.column import StructColumn
 from cudf.core.dtypes import IntervalDtype
-from cudf.utils.dtypes import is_interval_dtype
 
 
 class IntervalColumn(StructColumn):

@@ -28,7 +28,13 @@ from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
 from cudf._lib.table import Table
-from cudf.api.types import _is_scalar_or_zero_d_array, is_string_dtype
+from cudf.api.types import (
+    _is_non_decimal_numeric_dtype,
+    _is_scalar_or_zero_d_array,
+    is_categorical_dtype,
+    is_interval_dtype,
+    is_string_dtype,
+)
 from cudf.core._base_index import BaseIndex
 from cudf.core.column import (
     CategoricalColumn,
@@ -46,12 +52,7 @@ from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import Frame, SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import (
-    _is_non_decimal_numeric_dtype,
-    find_common_type,
-    is_categorical_dtype,
-    is_interval_dtype,
-)
+from cudf.utils.dtypes import find_common_type
 from cudf.utils.utils import cached_property, search_range
 
 T = TypeVar("T", bound="Frame")
@@ -990,7 +991,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             end += 1
         return begin, end
 
-    def get_slice_bound(self, label, side, kind):
+    def get_slice_bound(self, label, side, kind=None):
         return self._values.get_slice_bound(label, side, kind)
 
 
@@ -2245,7 +2246,7 @@ def as_index(arbitrary, **kwargs) -> BaseIndex:
     elif isinstance(arbitrary, pd.MultiIndex):
         return cudf.MultiIndex.from_pandas(arbitrary)
     elif isinstance(arbitrary, cudf.DataFrame):
-        return cudf.MultiIndex(source_data=arbitrary)
+        return cudf.MultiIndex.from_frame(arbitrary)
     return as_index(
         column.as_column(arbitrary, dtype=kwargs.get("dtype", None)), **kwargs
     )

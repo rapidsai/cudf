@@ -69,12 +69,12 @@ __launch_bounds__(max_block_size) __global__
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
   auto const start_idx = static_cast<cudf::size_type>(threadIdx.x + blockIdx.x * blockDim.x);
   auto const stride    = static_cast<cudf::size_type>(blockDim.x * gridDim.x);
-  auto evaluator       = cudf::ast::detail::expression_evaluator<has_nulls>(
-    table, device_expression_data, thread_intermediate_storage);
+  auto evaluator =
+    cudf::ast::detail::expression_evaluator<has_nulls>(table, device_expression_data);
 
   for (cudf::size_type row_index = start_idx; row_index < table.num_rows(); row_index += stride) {
     auto output_dest = ast::detail::mutable_column_expression_result<has_nulls>(output_column);
-    evaluator.evaluate(output_dest, row_index);
+    evaluator.evaluate(output_dest, row_index, thread_intermediate_storage);
   }
 }
 
@@ -83,19 +83,15 @@ std::unique_ptr<column> compute_column(table_view const& table,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  // Prepare output column. Whether or not the output column is nullable is
-  // determined by whether any of the columns in the input table are nullable.
-  // If none of the input columns actually contain nulls, we can still use the
-  // non-nullable version of the expression evaluation code path for
-  // performance, so we capture that information as well.
-  auto const nullable  = cudf::nullable(table);
-  auto const has_nulls = nullable && cudf::has_nulls(table);
+  // If evaluating the expression may produce null outputs we create a nullable
+  // output column and follow the null-supporting expression evaluation code
+  // path.
+  auto const has_nulls = expr.may_evaluate_null(table, stream);
 
   auto const parser = ast::detail::expression_parser{expr, table, has_nulls, stream, mr};
 
   auto const output_column_mask_state =
-    nullable ? (has_nulls ? mask_state::UNINITIALIZED : mask_state::ALL_VALID)
-             : mask_state::UNALLOCATED;
+    has_nulls ? mask_state::UNINITIALIZED : mask_state::UNALLOCATED;
 
   auto output_column = cudf::make_fixed_width_column(
     parser.output_type(), table.num_rows(), output_column_mask_state, stream, mr);
@@ -111,12 +107,11 @@ std::unique_ptr<column> compute_column(table_view const& table,
     cudaDeviceGetAttribute(&shmem_limit_per_block, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
   auto constexpr MAX_BLOCK_SIZE = 128;
   auto const block_size =
-    device_expression_data.shmem_per_thread != 0
-      ? std::min(MAX_BLOCK_SIZE, shmem_limit_per_block / device_expression_data.shmem_per_thread)
+    parser.shmem_per_thread != 0
+      ? std::min(MAX_BLOCK_SIZE, shmem_limit_per_block / parser.shmem_per_thread)
       : MAX_BLOCK_SIZE;
-  auto const config = cudf::detail::grid_1d{table.num_rows(), block_size};
-  auto const shmem_per_block =
-    device_expression_data.shmem_per_thread * config.num_threads_per_block;
+  auto const config          = cudf::detail::grid_1d{table.num_rows(), block_size};
+  auto const shmem_per_block = parser.shmem_per_thread * config.num_threads_per_block;
 
   // Execute the kernel
   auto table_device = table_device_view::create(table, stream);

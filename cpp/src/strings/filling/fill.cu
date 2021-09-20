@@ -45,7 +45,7 @@ std::unique_ptr<column> fill(
                "Parameters [begin,end) are outside the range of the provided strings column");
   CUDF_EXPECTS(begin <= end, "Parameters [begin,end) have invalid range values");
   if (begin == end)  // return a copy
-    return std::make_unique<column>(strings.parent());
+    return std::make_unique<column>(strings.parent(), stream, mr);
 
   // string_scalar.data() is null for valid, empty strings
   auto d_value = get_scalar_device_view(const_cast<string_scalar&>(value));
@@ -98,9 +98,7 @@ std::unique_ptr<column> fill(
                              std::move(offsets_column),
                              std::move(chars_column),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail

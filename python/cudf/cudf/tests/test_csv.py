@@ -1487,7 +1487,7 @@ def test_csv_writer_file_append(tmpdir):
 
     result = cudf.read_csv(gdf_df_fname)
     expected = cudf.concat([gdf1, gdf2], ignore_index=True)
-    assert_eq(result, expected)
+    assert_eq(result, expected, check_index_type=True)
 
 
 def test_csv_writer_buffer(tmpdir):
@@ -1762,18 +1762,7 @@ def test_csv_write_empty_column_name(df, index, columns):
         cudf.DataFrame(index=cudf.Index([], name="index name")),
     ],
 )
-@pytest.mark.parametrize(
-    "index",
-    [
-        True,
-        pytest.param(
-            False,
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/6691"
-            ),
-        ),
-    ],
-)
+@pytest.mark.parametrize("index", [True, False])
 def test_csv_write_empty_dataframe(df, index):
     pdf = df.to_pandas()
 

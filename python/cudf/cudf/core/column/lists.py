@@ -19,11 +19,11 @@ from cudf._lib.lists import (
 )
 from cudf._lib.table import Table
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
+from cudf.api.types import _is_non_decimal_numeric_dtype, is_list_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column, column
 from cudf.core.column.methods import ColumnMethods, ParentType
 from cudf.core.dtypes import ListDtype
-from cudf.utils.dtypes import _is_non_decimal_numeric_dtype, is_list_dtype
 
 
 class ListColumn(ColumnBase):
@@ -113,8 +113,9 @@ class ListColumn(ColumnBase):
             for lists concatenation functions
 
         reflect : boolean, default False
-            If ``reflect`` is ``True``, swap the order of
-            the operands.
+            If ``True``, swap the order of the operands. See
+            https://docs.python.org/3/reference/datamodel.html#object.__ror__
+            for more information on when this is necessary.
 
         Returns
         -------
