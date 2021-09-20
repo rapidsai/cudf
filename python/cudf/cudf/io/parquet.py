@@ -226,7 +226,7 @@ def _get_byte_ranges(file_list, row_groups, columns, fs):
         #
         # This "sample size" can be tunable, but should
         # always be >= 8 bytes (so we can read the footer size)
-        tail_size = 32_000
+        tail_size = min(32_000, file_size)
         if fs is None:
             path.seek(file_size - tail_size)
             footer_sample = path.read(tail_size)
