@@ -1546,6 +1546,7 @@ def _fsspec_data_transfer(
     bytes_per_thread=256_000_000,
     max_gap=64_000,
     mode="rb",
+    clip_dummy_buffer=False,
     **kwargs,
 ):
 
@@ -1604,6 +1605,14 @@ def _fsspec_data_transfer(
         _read_byte_ranges(
             path_or_fob, byte_ranges, buf, fs=fs, **kwargs,
         )
+
+    if clip_dummy_buffer:
+        # If we only need the populated byte range
+        # (e.g. a csv byte-range read) then clip parts
+        # of the dummy buffer that are outside this range
+        start = byte_ranges[0][0]
+        end = byte_ranges[-1][0] + byte_ranges[-1][1]
+        return buf[start:end].tobytes()
 
     return buf.tobytes()
 

@@ -62,8 +62,16 @@ def read_csv(
         path_or_data=filepath_or_buffer,
         compression=compression,
         iotypes=(BytesIO, StringIO, NativeFile),
+        byte_ranges=[byte_range] if byte_range else None,
+        clip_dummy_buffer=True if byte_range else False,
         **kwargs,
     )
+
+    # Adjust byte_range for clipped dummy buffers
+    use_byte_range = byte_range
+    if byte_range:
+        if byte_range[1] == len(filepath_or_buffer):
+            use_byte_range = (0, byte_range[1])
 
     if na_values is not None and is_scalar(na_values):
         na_values = [na_values]
@@ -92,7 +100,7 @@ def read_csv(
         true_values=true_values,
         false_values=false_values,
         nrows=nrows,
-        byte_range=byte_range,
+        byte_range=use_byte_range,
         skip_blank_lines=skip_blank_lines,
         parse_dates=parse_dates,
         comment=comment,
