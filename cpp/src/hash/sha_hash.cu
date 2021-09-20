@@ -106,39 +106,39 @@ struct SHAHash : public crtp<HasherT> {
   template <typename Hasher = HasherT>
   void CUDA_DEVICE_CALLABLE process(uint8_t const* data,
                                     uint32_t len,
-                                    typename Hasher::sha_intermediate_data* hash_state) const
+                                    typename Hasher::sha_intermediate_data& hash_state) const
   {
-    hash_state->message_length += len;
+    hash_state.message_length += len;
 
-    if (hash_state->buffer_length + len < Hasher::message_chunk_size) {
+    if (hash_state.buffer_length + len < Hasher::message_chunk_size) {
       // If the buffer will not be filled by this data, we copy the new data into
       // the buffer but do not trigger a hash step yet.
-      std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
-      hash_state->buffer_length += len;
+      std::memcpy(hash_state.buffer + hash_state.buffer_length, data, len);
+      hash_state.buffer_length += len;
     } else {
       // The buffer will be filled by this data. Copy a chunk of the data to fill
       // the buffer and trigger a hash step.
-      uint32_t copylen = Hasher::message_chunk_size - hash_state->buffer_length;
-      std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
+      uint32_t copylen = Hasher::message_chunk_size - hash_state.buffer_length;
+      std::memcpy(hash_state.buffer + hash_state.buffer_length, data, copylen);
       Hasher::hash_step(hash_state);
 
       // Take buffer-sized chunks of the data and do a hash step on each chunk.
       while (len > Hasher::message_chunk_size + copylen) {
-        std::memcpy(hash_state->buffer, data + copylen, Hasher::message_chunk_size);
+        std::memcpy(hash_state.buffer, data + copylen, Hasher::message_chunk_size);
         Hasher::hash_step(hash_state);
         copylen += Hasher::message_chunk_size;
       }
 
       // The remaining data chunk does not fill the buffer. We copy the data into
       // the buffer but do not trigger a hash step yet.
-      std::memcpy(hash_state->buffer, data + copylen, len - copylen);
-      hash_state->buffer_length = len - copylen;
+      std::memcpy(hash_state.buffer, data + copylen, len - copylen);
+      hash_state.buffer_length = len - copylen;
     }
   }
 
   template <typename TKey, typename Hasher = HasherT>
   void CUDA_DEVICE_CALLABLE process_key(TKey const& key,
-                                        typename Hasher::sha_intermediate_data* hash_state) const
+                                        typename Hasher::sha_intermediate_data& hash_state) const
   {
     uint8_t const* data    = reinterpret_cast<uint8_t const*>(&key);
     uint32_t constexpr len = sizeof(TKey);
@@ -153,12 +153,11 @@ struct SHAHash : public crtp<HasherT> {
    * the final hash step.
    */
   template <typename Hasher = HasherT>
-  void CUDA_DEVICE_CALLABLE finalize(typename Hasher::sha_intermediate_data* hash_state,
+  void CUDA_DEVICE_CALLABLE finalize(typename Hasher::sha_intermediate_data& hash_state,
                                      char* result_location)
   {
     // Message length in bits.
-    uint64_t const message_length_in_bits = (static_cast<uint64_t>(hash_state->message_length))
-                                            << 3;
+    uint64_t const message_length_in_bits = (static_cast<uint64_t>(hash_state.message_length)) << 3;
 
     // Add a one bit flag to signal the end of the message
     uint8_t constexpr end_of_message = 0x80;
@@ -166,7 +165,7 @@ struct SHAHash : public crtp<HasherT> {
     uint32_t constexpr end_of_message_size = 1;
 
     thrust::fill_n(thrust::seq,
-                   hash_state->buffer + hash_state->buffer_length,
+                   hash_state.buffer + hash_state.buffer_length,
                    end_of_message_size,
                    end_of_message);
 
@@ -175,35 +174,35 @@ struct SHAHash : public crtp<HasherT> {
     // bits. We always pad the upper 64 bits with zeros.
     auto constexpr message_length_supported_size = sizeof(message_length_in_bits);
 
-    if (hash_state->buffer_length + Hasher::message_length_size + end_of_message_size <=
+    if (hash_state.buffer_length + Hasher::message_length_size + end_of_message_size <=
         Hasher::message_chunk_size) {
       // Fill the remainder of the buffer with zeros up to the space reserved
       // for the message length. The message length fits in this hash step.
       thrust::fill(thrust::seq,
-                   hash_state->buffer + hash_state->buffer_length + end_of_message_size,
-                   hash_state->buffer + Hasher::message_chunk_size - message_length_supported_size,
+                   hash_state.buffer + hash_state.buffer_length + end_of_message_size,
+                   hash_state.buffer + Hasher::message_chunk_size - message_length_supported_size,
                    0x00);
     } else {
       // Fill the remainder of the buffer with zeros. The message length doesn't
       // fit and will be processed in a subsequent hash step comprised of only
       // zeros followed by the message length.
       thrust::fill(thrust::seq,
-                   hash_state->buffer + hash_state->buffer_length + end_of_message_size,
-                   hash_state->buffer + Hasher::message_chunk_size,
+                   hash_state.buffer + hash_state.buffer_length + end_of_message_size,
+                   hash_state.buffer + Hasher::message_chunk_size,
                    0x00);
       Hasher::hash_step(hash_state);
 
       // Fill the entire message with zeros up to the final bytes reserved for
       // the message length.
       thrust::fill_n(thrust::seq,
-                     hash_state->buffer,
+                     hash_state.buffer,
                      Hasher::message_chunk_size - message_length_supported_size,
                      0x00);
     }
 
     // Convert the 64-bit message length from little-endian to big-endian.
     uint64_t const full_length_flipped = swap_endian(message_length_in_bits);
-    std::memcpy(hash_state->buffer + Hasher::message_chunk_size - message_length_supported_size,
+    std::memcpy(hash_state.buffer + Hasher::message_chunk_size - message_length_supported_size,
                 reinterpret_cast<uint8_t const*>(&full_length_flipped),
                 message_length_supported_size);
     Hasher::hash_step(hash_state);
@@ -215,7 +214,7 @@ struct SHAHash : public crtp<HasherT> {
       Hasher::digest_size / (2 * sizeof(typename Hasher::sha_word_type));
     for (int i = 0; i < num_words_to_copy; i++) {
       // Convert word representation from big-endian to little-endian.
-      typename Hasher::sha_word_type flipped = swap_endian(hash_state->hash_value[i]);
+      typename Hasher::sha_word_type flipped = swap_endian(hash_state.hash_value[i]);
       if constexpr (std::is_same_v<typename Hasher::sha_word_type, uint32_t>) {
         uint32ToLowercaseHexString(flipped, result_location + (8 * i));
       } else if constexpr (std::is_same_v<typename Hasher::sha_word_type, uint64_t>) {
@@ -234,7 +233,7 @@ struct SHAHash : public crtp<HasherT> {
             typename std::enable_if_t<is_chrono<T>()>* = nullptr>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
                                        size_type row_index,
-                                       typename Hasher::sha_intermediate_data* hash_state) const
+                                       typename Hasher::sha_intermediate_data& hash_state) const
   {
     cudf_assert(false && "SHA Unsupported chrono type column");
   }
@@ -245,7 +244,7 @@ struct SHAHash : public crtp<HasherT> {
     typename std::enable_if_t<!is_fixed_width<T>() && !std::is_same_v<T, string_view>>* = nullptr>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
                                        size_type row_index,
-                                       typename Hasher::sha_intermediate_data* hash_state) const
+                                       typename Hasher::sha_intermediate_data& hash_state) const
   {
     cudf_assert(false && "SHA Unsupported non-fixed-width type column");
   }
@@ -255,7 +254,7 @@ struct SHAHash : public crtp<HasherT> {
             typename std::enable_if_t<is_floating_point<T>()>* = nullptr>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
                                        size_type row_index,
-                                       typename Hasher::sha_intermediate_data* hash_state) const
+                                       typename Hasher::sha_intermediate_data& hash_state) const
   {
     T const& key = col.element<T>(row_index);
     if (isnan(key)) {
@@ -274,7 +273,7 @@ struct SHAHash : public crtp<HasherT> {
                                       !is_chrono<T>()>* = nullptr>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
                                        size_type row_index,
-                                       typename Hasher::sha_intermediate_data* hash_state) const
+                                       typename Hasher::sha_intermediate_data& hash_state) const
   {
     process_key(col.element<T>(row_index), hash_state);
   }
@@ -284,7 +283,7 @@ struct SHAHash : public crtp<HasherT> {
             typename std::enable_if_t<std::is_same_v<T, string_view>>* = nullptr>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
                                        size_type row_index,
-                                       typename Hasher::sha_intermediate_data* hash_state) const
+                                       typename Hasher::sha_intermediate_data& hash_state) const
   {
     string_view key     = col.element<string_view>(row_index);
     uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
@@ -516,9 +515,9 @@ struct SHA1Hash : SHAHash<SHA1Hash> {
   // Number of bytes used for the message length
   static constexpr auto message_length_size = 8;
 
-  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data* hash_state)
+  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
   {
-    sha1_hash_step(*hash_state);
+    sha1_hash_step(hash_state);
   }
 };
 
@@ -534,9 +533,9 @@ struct SHA224Hash : SHAHash<SHA224Hash> {
   // Number of bytes used for the message length
   static constexpr auto message_length_size = 8;
 
-  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data* hash_state)
+  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
   {
-    sha256_hash_step(*hash_state);
+    sha256_hash_step(hash_state);
   }
 };
 
@@ -552,9 +551,9 @@ struct SHA256Hash : SHAHash<SHA256Hash> {
   // Number of bytes used for the message length
   static constexpr auto message_length_size = 8;
 
-  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data* hash_state)
+  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
   {
-    sha256_hash_step(*hash_state);
+    sha256_hash_step(hash_state);
   }
 };
 
@@ -570,9 +569,9 @@ struct SHA384Hash : SHAHash<SHA384Hash> {
   // Number of bytes used for the message length
   static constexpr auto message_length_size = 16;
 
-  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data* hash_state)
+  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
   {
-    sha512_hash_step(*hash_state);
+    sha512_hash_step(hash_state);
   }
 };
 
@@ -588,9 +587,9 @@ struct SHA512Hash : SHAHash<SHA512Hash> {
   // Number of bytes used for the message length
   static constexpr auto message_length_size = 16;
 
-  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data* hash_state)
+  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
   {
-    sha512_hash_step(*hash_state);
+    sha512_hash_step(hash_state);
   }
 };
 
@@ -654,11 +653,11 @@ std::unique_ptr<column> sha_hash(table_view const& input,
                            hasher,
                            device_input.column(col_index),
                            row_index,
-                           &hash_state);
+                           hash_state);
                        }
                      }
                      auto const result_location = d_chars + (row_index * Hasher::digest_size);
-                     hasher.finalize(&hash_state, result_location);
+                     hasher.finalize(hash_state, result_location);
                    });
 
   return make_strings_column(
