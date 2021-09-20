@@ -47,8 +47,8 @@ struct ArgMin {
   column_device_view const d_col;
   CUDA_DEVICE_CALLABLE auto operator()(size_type const& lhs, size_type const& rhs) const
   {
-    // The extra bounds checking is due to issue 9156 and
-    // https://github.com/NVIDIA/thrust/issues/1525
+    // The extra bounds checking is due to issue github.com/rapidsai/cudf/9156 and
+    // github.com/NVIDIA/thrust/issues/1525
     // where invalid random values may be passed here by thrust::reduce_by_key
     if (lhs < 0 || lhs >= d_col.size() || d_col.is_null(lhs)) { return rhs; }
     if (rhs < 0 || rhs >= d_col.size() || d_col.is_null(rhs)) { return lhs; }
@@ -66,8 +66,8 @@ struct ArgMax {
   column_device_view const d_col;
   CUDA_DEVICE_CALLABLE auto operator()(size_type const& lhs, size_type const& rhs) const
   {
-    // The extra bounds checking is due to issue 9156 and
-    // https://github.com/NVIDIA/thrust/issues/1525
+    // The extra bounds checking is due to issue github.com/rapidsai/cudf/9156 and
+    // github.com/NVIDIA/thrust/issues/1525
     // where invalid random values may be passed here by thrust::reduce_by_key
     if (lhs < 0 || lhs >= d_col.size() || d_col.is_null(lhs)) { return rhs; }
     if (rhs < 0 || rhs >= d_col.size() || d_col.is_null(rhs)) { return lhs; }
