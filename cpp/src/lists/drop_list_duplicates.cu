@@ -44,6 +44,11 @@ struct has_negative_nans_fn {
   column_device_view const d_entries;
   bool const has_nulls;
 
+  has_negative_nans_fn(column_device_view const d_entries, bool const has_nulls)
+    : d_entries(d_entries), has_nulls(has_nulls)
+  {
+  }
+
   __device__ Type operator()(size_type idx) const noexcept
   {
     if (has_nulls && d_entries.is_null_nocheck(idx)) { return false; }
@@ -56,6 +61,13 @@ struct has_negative_nans_fn {
 /**
  * @brief A structure to be used along with type_dispatcher to check if a column has any
  * negative NaN value.
+ *
+ * This functor is used to check for replacing negative NaN if there exists one. It is neccessary
+ * because when calling to `lists::detail::sort_lists`, the negative NaN and positive NaN values (if
+ * both exist) are separated to the two ends of the output column. This is due to the API
+ * `lists::detail::sort_lists` internally calls `cub::DeviceSegmentedRadixSort`, which performs
+ * sorting by comparing bits of the input numbers. Since negative and positive NaN have
+ * different bits representation, they may not be moved to be close to each other after sorted.
  */
 struct has_negative_nans_dispatch {
   template <typename Type, std::enable_if_t<cuda::std::is_floating_point_v<Type>>* = nullptr>
@@ -124,7 +136,7 @@ struct replace_negative_nans_dispatch {
     new_entries->set_null_mask(cudf::detail::copy_bitmask(lists_entries, stream),
                                lists_entries.null_count());
 
-    // Scan and replace all values.
+    // Replace all negative NaN values.
     thrust::transform(rmm::exec_policy(stream),
                       lists_entries.template begin<Type>(),
                       lists_entries.template end<Type>(),
@@ -271,6 +283,28 @@ std::unique_ptr<column> generate_entry_list_offsets(size_type num_entries,
  */
 template <class Type>
 struct column_row_comparator_fn {
+  offset_type const* const list_offsets;
+  column_device_view const lhs;
+  column_device_view const rhs;
+  null_equality const nulls_equal;
+  bool const has_nulls;
+  bool const nans_equal;
+
+  __host__ __device__ column_row_comparator_fn(offset_type const* const list_offsets,
+                                               column_device_view const& lhs,
+                                               column_device_view const& rhs,
+                                               null_equality const nulls_equal,
+                                               bool const has_nulls,
+                                               bool const nans_equal)
+    : list_offsets(list_offsets),
+      lhs(lhs),
+      rhs(rhs),
+      nulls_equal(nulls_equal),
+      has_nulls(has_nulls),
+      nans_equal(nans_equal)
+  {
+  }
+
   template <typename T, std::enable_if_t<!cuda::std::is_floating_point_v<T>>* = nullptr>
   bool __device__ compare(T const& lhs_val, T const& rhs_val) const noexcept
   {
@@ -306,19 +340,34 @@ struct column_row_comparator_fn {
 
     return compare<Type>(lhs.element<Type>(i), lhs.element<Type>(j));
   }
-
-  offset_type const* const list_offsets;
-  column_device_view const lhs;
-  column_device_view const rhs;
-  null_equality const nulls_equal;
-  bool const has_nulls;
-  bool const nans_equal;
 };
 
 /**
  * @brief Struct used in type_dispatcher for comparing two entries in a lists column.
  */
 struct column_row_comparator_dispatch {
+  offset_type const* const list_offsets;
+  column_device_view const lhs;
+  column_device_view const rhs;
+  null_equality const nulls_equal;
+  bool const has_nulls;
+  bool const nans_equal;
+
+  __device__ column_row_comparator_dispatch(offset_type const* const list_offsets,
+                                            column_device_view const& lhs,
+                                            column_device_view const& rhs,
+                                            null_equality const nulls_equal,
+                                            bool const has_nulls,
+                                            bool const nans_equal)
+    : list_offsets(list_offsets),
+      lhs(lhs),
+      rhs(rhs),
+      nulls_equal(nulls_equal),
+      has_nulls(has_nulls),
+      nans_equal(nans_equal)
+  {
+  }
+
   template <class Type, std::enable_if_t<cudf::is_equality_comparable<Type, Type>()>* = nullptr>
   bool __device__ operator()(size_type i, size_type j) const noexcept
   {
@@ -332,13 +381,6 @@ struct column_row_comparator_dispatch {
     CUDF_FAIL(
       "`column_row_comparator_dispatch` cannot operate on types that are not equally comparable.");
   }
-
-  offset_type const* const list_offsets;
-  column_device_view const lhs;
-  column_device_view const rhs;
-  null_equality const nulls_equal;
-  bool const has_nulls;
-  bool const nans_equal;
 };
 
 /**
@@ -346,6 +388,28 @@ struct column_row_comparator_dispatch {
  * to compare rows of their corresponding columns.
  */
 struct table_row_comparator_fn {
+  offset_type const* const list_offsets;
+  table_device_view const lhs;
+  table_device_view const rhs;
+  null_equality const nulls_equal;
+  bool const has_nulls;
+  bool const nans_equal;
+
+  table_row_comparator_fn(offset_type const* const list_offsets,
+                          table_device_view const& lhs,
+                          table_device_view const& rhs,
+                          null_equality const nulls_equal,
+                          bool const has_nulls,
+                          bool const nans_equal)
+    : list_offsets(list_offsets),
+      lhs(lhs),
+      rhs(rhs),
+      nulls_equal(nulls_equal),
+      has_nulls(has_nulls),
+      nans_equal(nans_equal)
+  {
+  }
+
   bool __device__ operator()(size_type i, size_type j) const noexcept
   {
     auto column_comp = [=](column_device_view const& lhs, column_device_view const& rhs) {
@@ -358,13 +422,6 @@ struct table_row_comparator_fn {
 
     return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(), column_comp);
   }
-
-  offset_type const* const list_offsets;
-  table_device_view const lhs;
-  table_device_view const rhs;
-  null_equality const nulls_equal;
-  bool const has_nulls;
-  bool const nans_equal;
 };
 
 /**
