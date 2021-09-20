@@ -10,8 +10,8 @@ from pyarrow import dataset as ds, fs as pa_fs, parquet as pq
 
 import cudf
 from cudf._lib import parquet as libparquet
+from cudf.api.types import is_list_like
 from cudf.utils import ioutils
-from cudf.utils.dtypes import is_list_like
 
 
 def _get_partition_groups(df, partition_cols, preserve_index=False):

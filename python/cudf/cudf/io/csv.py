@@ -7,8 +7,8 @@ from pyarrow.lib import NativeFile
 
 import cudf
 from cudf import _lib as libcudf
+from cudf.api.types import is_scalar
 from cudf.utils import ioutils
-from cudf.utils.dtypes import is_scalar
 
 
 @annotate("READ_CSV", color="purple", domain="cudf_python")

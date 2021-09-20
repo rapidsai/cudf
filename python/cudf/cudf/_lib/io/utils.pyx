@@ -32,7 +32,7 @@ import os
 from pyarrow.lib import NativeFile
 
 import cudf
-from cudf.utils.dtypes import is_struct_dtype
+from cudf.api.types import is_struct_dtype
 
 
 # Converts the Python source input to libcudf++ IO source_info

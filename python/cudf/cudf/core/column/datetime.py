@@ -15,6 +15,7 @@ import pandas as pd
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import DatetimeLikeScalar, Dtype, DtypeObj, ScalarLike
+from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.buffer import Buffer
 from cudf.core.column import (
@@ -24,7 +25,6 @@ from cudf.core.column import (
     column_empty_like,
     string,
 )
-from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import _fillna_natwise
 
 if PANDAS_GE_120:

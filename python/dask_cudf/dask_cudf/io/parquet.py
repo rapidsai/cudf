@@ -29,23 +29,22 @@ class CudfEngine(ArrowDatasetEngine):
         meta, stats, parts, index = ArrowDatasetEngine.read_metadata(
             *args, **kwargs
         )
+        new_meta = cudf.from_pandas(meta)
         if parts:
             # Re-set "object" dtypes align with pa schema
             set_object_dtypes_from_pa_schema(
-                meta, parts[0].get("common_kwargs", {}).get("schema", None),
+                new_meta,
+                parts[0].get("common_kwargs", {}).get("schema", None),
             )
 
         # If `strings_to_categorical==True`, convert objects to int32
         strings_to_cats = kwargs.get("strings_to_categorical", False)
-
-        new_meta = cudf.DataFrame(index=meta.index)
-        for col in meta.columns:
-            if meta[col].dtype == "O":
-                new_meta[col] = as_column(
-                    meta[col], dtype="int32" if strings_to_cats else "object"
-                )
-            else:
-                new_meta[col] = as_column(meta[col])
+        for col in new_meta._data.names:
+            if (
+                isinstance(new_meta._data[col], cudf.core.column.StringColumn)
+                and strings_to_cats
+            ):
+                new_meta._data[col] = new_meta._data[col].astype("int32")
 
         return (new_meta, stats, parts, index)
 
@@ -342,10 +341,12 @@ def set_object_dtypes_from_pa_schema(df, schema):
     # "object" dtypes to agree with a specific
     # pyarrow schema.
     if schema:
-        for name in df.columns:
-            if name in schema.names and df[name].dtype == "O":
-                df[name] = df[name].astype(
-                    cudf_dtype_from_pa_type(schema.field(name).type)
+        for col_name, col in df._data.items():
+            if col_name in schema.names and isinstance(
+                col, cudf.core.column.StringColumn
+            ):
+                df._data[col_name] = col.astype(
+                    cudf_dtype_from_pa_type(schema.field(col_name).type)
                 )
 
 

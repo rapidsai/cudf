@@ -850,7 +850,7 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
   }
 
   // perform the element-wise square root operation on result of VARIANCE
-  void visit(cudf::detail::std_aggregation const& agg) override
+  void visit(cudf::detail::std_aggregation const&) override
   {
     result = detail::unary_operation(intermediate->view(), unary_operator::SQRT, stream, mr);
   }

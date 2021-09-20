@@ -28,7 +28,7 @@ from dask.dataframe.utils import (
 )
 
 import cudf
-from cudf.utils.dtypes import is_string_dtype
+from cudf.api.types import is_string_dtype
 
 from .core import DataFrame, Index, Series
 
@@ -248,7 +248,7 @@ def tolist_cudf(obj):
     (cudf.Series, cudf.BaseIndex, cudf.CategoricalDtype, Series)
 )
 def is_categorical_dtype_cudf(obj):
-    return cudf.utils.dtypes.is_categorical_dtype(obj)
+    return cudf.api.types.is_categorical_dtype(obj)
 
 
 try:
@@ -271,7 +271,7 @@ try:
         if isinstance(q, Iterator):
             q = list(q)
 
-        if cudf.utils.dtypes.is_categorical_dtype(a.dtype):
+        if cudf.api.types.is_categorical_dtype(a.dtype):
             result = cp.percentile(a.cat.codes, q, interpolation=interpolation)
 
             return (
