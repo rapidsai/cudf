@@ -608,6 +608,7 @@ std::unique_ptr<column> ewma(column_view const& input,
 std::unique_ptr<column> ewmvar(column_view const& input,
                                double com,
                                bool adjust,
+                               bool bias,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
@@ -643,10 +644,11 @@ std::unique_ptr<column> ewmvar(column_view const& input,
 std::unique_ptr<column> ewmstd(column_view const& input,
                                double com,
                                bool adjust,
+                               bool bias,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  std::unique_ptr<column> var = ewmvar(input, com, adjust, stream, mr);
+  std::unique_ptr<column> var = ewmvar(input, com, adjust, bias, stream, mr);
   auto var_view               = var.get()[0].mutable_view();
 
   // write into the same memory
@@ -673,12 +675,14 @@ std::unique_ptr<column> ewm(column_view const& input,
     case aggregation::EWMVAR: {
       double com  = (dynamic_cast<ewmvar_aggregation*>(agg.get()))->com;
       bool adjust = (dynamic_cast<ewmvar_aggregation*>(agg.get()))->adjust;
-      return ewmvar(input, com, adjust, stream, mr);
+      bool bias = (dynamic_cast<ewmvar_aggregation*>(agg.get()))->bias;
+      return ewmvar(input, com, adjust, bias, stream, mr);
     }
     case aggregation::EWMSTD: {
       double com  = (dynamic_cast<ewmstd_aggregation*>(agg.get()))->com;
       bool adjust = (dynamic_cast<ewmstd_aggregation*>(agg.get()))->adjust;
-      return ewmstd(input, com, adjust, stream, mr);
+      bool bias = (dynamic_cast<ewmstd_aggregation*>(agg.get()))->bias;
+      return ewmstd(input, com, adjust, bias, stream, mr);
     }
     default: CUDF_FAIL("Unsupported aggregation operator for scan");
   }
