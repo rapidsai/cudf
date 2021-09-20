@@ -52,6 +52,9 @@ constexpr auto remap_sentinel_hash(H hash, S sentinel)
   return (hash == sentinel) ? (hash - 1) : hash;
 }
 
+/**
+ * @brief Device functor to create a pair of hash value and index for a given row.
+ */
 class make_pair_function {
  public:
   make_pair_function(row_hash const& hash, hash_value_type const empty_key_sentinel)
@@ -59,8 +62,9 @@ class make_pair_function {
   {
   }
 
-  __device__ __inline__ cudf::detail::pair_type operator()(size_type i) const noexcept
+  __device__ __forceinline__ cudf::detail::pair_type operator()(size_type i) const noexcept
   {
+    // Compute the hash value of row `i`
     auto row_hash_value = remap_sentinel_hash(_hash(i), _empty_key_sentinel);
     return cuco::make_pair<hash_value_type, size_type>(std::move(row_hash_value), std::move(i));
   }
@@ -120,8 +124,7 @@ std::size_t compute_join_output_size(table_device_view build_table,
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
 
-  thrust::counting_iterator<size_type> first(0);
-  auto iter = thrust::make_transform_iterator(first, pair_func);
+  auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
 
   size_type size;
   if constexpr (JoinKind == join_kind::LEFT_JOIN) {

@@ -81,8 +81,8 @@ void build_join_hash_table(cudf::table_view const& build,
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   make_pair_function pair_func{hash_build, empty_key_sentinel};
 
-  thrust::counting_iterator<size_type> first(0);
-  auto iter = thrust::make_transform_iterator(first, pair_func);
+  thrust::counting_iterator<size_type> stencil(0);
+  auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
 
   size_type const build_table_num_rows{build_table_ptr->num_rows()};
   if ((compare_nulls == null_equality::EQUAL) or (not nullable(build))) {
@@ -91,7 +91,7 @@ void build_join_hash_table(cudf::table_view const& build,
     auto const row_bitmask = cudf::detail::bitmask_and(build, stream);
     row_contains_null pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
-    hash_table.insert_if(iter, iter + build_table_num_rows, first, pred, stream.value());
+    hash_table.insert_if(iter, iter + build_table_num_rows, stencil, pred, stream.value());
   }
 }
 
@@ -145,8 +145,7 @@ probe_join_hash_table(cudf::table_device_view build_table,
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
 
-  thrust::counting_iterator<size_type> first(0);
-  auto iter = thrust::make_transform_iterator(first, pair_func);
+  auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
 
   const cudf::size_type probe_table_num_rows = probe_table.num_rows();
 
@@ -210,8 +209,7 @@ std::size_t get_full_join_size(cudf::table_device_view build_table,
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
 
-  thrust::counting_iterator<size_type> first(0);
-  auto iter = thrust::make_transform_iterator(first, pair_func);
+  auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
 
   const cudf::size_type probe_table_num_rows = probe_table.num_rows();
 
