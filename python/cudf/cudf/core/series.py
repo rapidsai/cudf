@@ -2912,14 +2912,39 @@ class Series(SingleColumnFrame, Serializable):
         """
         return self._sort(ascending=ascending, na_position=na_position)[1]
 
-    def sort_index(self, ascending=True):
+    def sort_index(
+        self,
+        axis=0,
+        level=None,
+        ascending=True,
+        inplace=False,
+        kind=None,
+        na_position="last",
+        sort_remaining=True,
+        ignore_index=False,
+    ):
         """
         Sort by the index.
 
         Parameters
         ----------
+        axis : {0 or ‘index’, 1 or ‘columns’}, default 0
+            Axis to direct sorting. This can only be 0 for Series.
+        level : int or level name or list of ints or list of level names
+            If not None, sort on values in specified index level(s).
+            This is only useful in the case of MultiIndex.
         ascending : bool, default True
             Sort ascending vs. descending.
+        inplace : bool, default False
+            If True, perform operation in-place.
+        kind : sorting method such as `quick sort` and others.
+            Not yet supported.
+        na_position : {‘first’, ‘last’}, default ‘last’
+            Puts NaNs at the beginning if first; last puts NaNs at the end.
+        sort_remaining : bool, default True
+            Not yet supported
+        ignore_index : bool, default False
+            if True, index will be replaced with RangeIndex.
 
         Returns
         -------
@@ -2952,8 +2977,16 @@ class Series(SingleColumnFrame, Serializable):
         1    c
         dtype: object
         """
-        inds = self.index.argsort(ascending=ascending)
-        return self.take(inds)
+        return super()._sort_index(
+            axis=axis,
+            level=level,
+            ascending=ascending,
+            inplace=inplace,
+            kind=kind,
+            na_position=na_position,
+            sort_remaining=sort_remaining,
+            ignore_index=ignore_index,
+        )
 
     def sort_values(
         self,
