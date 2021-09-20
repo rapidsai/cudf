@@ -298,13 +298,13 @@ struct SHAHash : public crtp<HasherT> {
  * updating the hash value so far. Does not zero out the buffer contents.
  */
 template <typename sha_intermediate_data>
-void __device__ sha1_hash_step(sha_intermediate_data* hash_state)
+void __device__ sha1_hash_step(sha_intermediate_data& hash_state)
 {
-  uint32_t A = hash_state->hash_value[0];
-  uint32_t B = hash_state->hash_value[1];
-  uint32_t C = hash_state->hash_value[2];
-  uint32_t D = hash_state->hash_value[3];
-  uint32_t E = hash_state->hash_value[4];
+  uint32_t A = hash_state.hash_value[0];
+  uint32_t B = hash_state.hash_value[1];
+  uint32_t C = hash_state.hash_value[2];
+  uint32_t D = hash_state.hash_value[3];
+  uint32_t E = hash_state.hash_value[4];
 
   uint32_t words[80];
 
@@ -314,7 +314,7 @@ void __device__ sha1_hash_step(sha_intermediate_data* hash_state)
   // The 512-bit message buffer fills the first 16 words.
   for (int i = 0; i < 16; i++) {
     uint32_t buffer_element_as_int;
-    std::memcpy(&buffer_element_as_int, hash_state->buffer + (i * word_size), word_size);
+    std::memcpy(&buffer_element_as_int, hash_state.buffer + (i * word_size), word_size);
     // Convert word representation from little-endian to big-endian.
     words[i] = swap_endian(buffer_element_as_int);
   }
@@ -355,13 +355,13 @@ void __device__ sha1_hash_step(sha_intermediate_data* hash_state)
     A    = temp;
   }
 
-  hash_state->hash_value[0] += A;
-  hash_state->hash_value[1] += B;
-  hash_state->hash_value[2] += C;
-  hash_state->hash_value[3] += D;
-  hash_state->hash_value[4] += E;
+  hash_state.hash_value[0] += A;
+  hash_state.hash_value[1] += B;
+  hash_state.hash_value[2] += C;
+  hash_state.hash_value[3] += D;
+  hash_state.hash_value[4] += E;
 
-  hash_state->buffer_length = 0;
+  hash_state.buffer_length = 0;
 }
 
 /**
@@ -369,16 +369,16 @@ void __device__ sha1_hash_step(sha_intermediate_data* hash_state)
  * updating the hash value so far. Does not zero out the buffer contents.
  */
 template <typename sha_intermediate_data>
-void __device__ sha256_hash_step(sha_intermediate_data* hash_state)
+void __device__ sha256_hash_step(sha_intermediate_data& hash_state)
 {
-  uint32_t A = hash_state->hash_value[0];
-  uint32_t B = hash_state->hash_value[1];
-  uint32_t C = hash_state->hash_value[2];
-  uint32_t D = hash_state->hash_value[3];
-  uint32_t E = hash_state->hash_value[4];
-  uint32_t F = hash_state->hash_value[5];
-  uint32_t G = hash_state->hash_value[6];
-  uint32_t H = hash_state->hash_value[7];
+  uint32_t A = hash_state.hash_value[0];
+  uint32_t B = hash_state.hash_value[1];
+  uint32_t C = hash_state.hash_value[2];
+  uint32_t D = hash_state.hash_value[3];
+  uint32_t E = hash_state.hash_value[4];
+  uint32_t F = hash_state.hash_value[5];
+  uint32_t G = hash_state.hash_value[6];
+  uint32_t H = hash_state.hash_value[7];
 
   uint32_t words[64];
 
@@ -388,7 +388,7 @@ void __device__ sha256_hash_step(sha_intermediate_data* hash_state)
   // The 512-bit message buffer fills the first 16 words.
   for (int i = 0; i < 16; i++) {
     uint32_t buffer_element_as_int;
-    std::memcpy(&buffer_element_as_int, hash_state->buffer + (i * word_size), word_size);
+    std::memcpy(&buffer_element_as_int, hash_state.buffer + (i * word_size), word_size);
     // Convert word representation from little-endian to big-endian.
     words[i] = swap_endian(buffer_element_as_int);
   }
@@ -422,16 +422,16 @@ void __device__ sha256_hash_step(sha_intermediate_data* hash_state)
     A = temp1 + temp2;
   }
 
-  hash_state->hash_value[0] += A;
-  hash_state->hash_value[1] += B;
-  hash_state->hash_value[2] += C;
-  hash_state->hash_value[3] += D;
-  hash_state->hash_value[4] += E;
-  hash_state->hash_value[5] += F;
-  hash_state->hash_value[6] += G;
-  hash_state->hash_value[7] += H;
+  hash_state.hash_value[0] += A;
+  hash_state.hash_value[1] += B;
+  hash_state.hash_value[2] += C;
+  hash_state.hash_value[3] += D;
+  hash_state.hash_value[4] += E;
+  hash_state.hash_value[5] += F;
+  hash_state.hash_value[6] += G;
+  hash_state.hash_value[7] += H;
 
-  hash_state->buffer_length = 0;
+  hash_state.buffer_length = 0;
 }
 
 /**
@@ -439,16 +439,16 @@ void __device__ sha256_hash_step(sha_intermediate_data* hash_state)
  * updating the hash value so far. Does not zero out the buffer contents.
  */
 template <typename sha_intermediate_data>
-void __device__ sha512_hash_step(sha_intermediate_data* hash_state)
+void __device__ sha512_hash_step(sha_intermediate_data& hash_state)
 {
-  uint64_t A = hash_state->hash_value[0];
-  uint64_t B = hash_state->hash_value[1];
-  uint64_t C = hash_state->hash_value[2];
-  uint64_t D = hash_state->hash_value[3];
-  uint64_t E = hash_state->hash_value[4];
-  uint64_t F = hash_state->hash_value[5];
-  uint64_t G = hash_state->hash_value[6];
-  uint64_t H = hash_state->hash_value[7];
+  uint64_t A = hash_state.hash_value[0];
+  uint64_t B = hash_state.hash_value[1];
+  uint64_t C = hash_state.hash_value[2];
+  uint64_t D = hash_state.hash_value[3];
+  uint64_t E = hash_state.hash_value[4];
+  uint64_t F = hash_state.hash_value[5];
+  uint64_t G = hash_state.hash_value[6];
+  uint64_t H = hash_state.hash_value[7];
 
   uint64_t words[80];
 
@@ -458,7 +458,7 @@ void __device__ sha512_hash_step(sha_intermediate_data* hash_state)
   // The 512-bit message buffer fills the first 16 words.
   for (int i = 0; i < 16; i++) {
     uint64_t buffer_element_as_int;
-    std::memcpy(&buffer_element_as_int, hash_state->buffer + (i * word_size), word_size);
+    std::memcpy(&buffer_element_as_int, hash_state.buffer + (i * word_size), word_size);
     // Convert word representation from little-endian to big-endian.
     words[i] = swap_endian(buffer_element_as_int);
   }
@@ -492,16 +492,16 @@ void __device__ sha512_hash_step(sha_intermediate_data* hash_state)
     A = temp1 + temp2;
   }
 
-  hash_state->hash_value[0] += A;
-  hash_state->hash_value[1] += B;
-  hash_state->hash_value[2] += C;
-  hash_state->hash_value[3] += D;
-  hash_state->hash_value[4] += E;
-  hash_state->hash_value[5] += F;
-  hash_state->hash_value[6] += G;
-  hash_state->hash_value[7] += H;
+  hash_state.hash_value[0] += A;
+  hash_state.hash_value[1] += B;
+  hash_state.hash_value[2] += C;
+  hash_state.hash_value[3] += D;
+  hash_state.hash_value[4] += E;
+  hash_state.hash_value[5] += F;
+  hash_state.hash_value[6] += G;
+  hash_state.hash_value[7] += H;
 
-  hash_state->buffer_length = 0;
+  hash_state.buffer_length = 0;
 }
 
 struct SHA1Hash : SHAHash<SHA1Hash> {
@@ -518,7 +518,7 @@ struct SHA1Hash : SHAHash<SHA1Hash> {
 
   static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data* hash_state)
   {
-    sha1_hash_step(hash_state);
+    sha1_hash_step(*hash_state);
   }
 };
 
@@ -536,7 +536,7 @@ struct SHA224Hash : SHAHash<SHA224Hash> {
 
   static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data* hash_state)
   {
-    sha256_hash_step(hash_state);
+    sha256_hash_step(*hash_state);
   }
 };
 
@@ -554,7 +554,7 @@ struct SHA256Hash : SHAHash<SHA256Hash> {
 
   static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data* hash_state)
   {
-    sha256_hash_step(hash_state);
+    sha256_hash_step(*hash_state);
   }
 };
 
@@ -572,7 +572,7 @@ struct SHA384Hash : SHAHash<SHA384Hash> {
 
   static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data* hash_state)
   {
-    sha512_hash_step(hash_state);
+    sha512_hash_step(*hash_state);
   }
 };
 
@@ -590,7 +590,7 @@ struct SHA512Hash : SHAHash<SHA512Hash> {
 
   static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data* hash_state)
   {
-    sha512_hash_step(hash_state);
+    sha512_hash_step(*hash_state);
   }
 };
 
@@ -657,7 +657,8 @@ std::unique_ptr<column> sha_hash(table_view const& input,
                            &hash_state);
                        }
                      }
-                     hasher.finalize(&hash_state, d_chars + (row_index * Hasher::digest_size));
+                     auto const result_location = d_chars + (row_index * Hasher::digest_size);
+                     hasher.finalize(&hash_state, result_location);
                    });
 
   return make_strings_column(
