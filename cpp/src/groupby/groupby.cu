@@ -27,10 +27,12 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/strings/string_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <structs/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -76,6 +78,9 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::disp
     // Optionally flatten nested key columns.
     auto [flattened_keys, _, __, ___] =
       flatten_nested_columns(_keys, {}, {}, column_nullability::FORCE);
+    auto is_supported_key_type = [](auto col) { return cudf::is_equality_comparable(col.type()); };
+    CUDF_EXPECTS(std::all_of(flattened_keys.begin(), flattened_keys.end(), is_supported_key_type),
+                 "Unsupported groupby key type does not support equality comparison");
     auto [grouped_keys, results] =
       detail::hash::groupby(flattened_keys, requests, _include_null_keys, stream, mr);
     return std::make_pair(unflatten_nested_columns(std::move(grouped_keys), _keys),
