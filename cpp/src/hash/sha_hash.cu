@@ -19,6 +19,7 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/types.hpp>
 
 #include <hash/hash_constants.hpp>
 #include <rmm/cuda_stream_view.hpp>
@@ -77,8 +78,25 @@ CUDA_DEVICE_CALLABLE uint64_t swap_endian(uint64_t x)
 
 }  // namespace
 
+/**
+ * @brief A CRTP helper function
+ *
+ * https://www.fluentcpp.com/2017/05/19/crtp-helper/
+ *
+ * Does two things:
+ * 1. Makes "crtp" explicit in the inheritance structure of a CRTP base class.
+ * 2. Avoids having to `static_cast` in a lot of places
+ *
+ * @tparam T The derived class in a CRTP hierarchy
+ */
+template <typename T>
+struct crtp {
+  __device__ T& underlying() { return static_cast<T&>(*this); }
+  __device__ T const& underlying() const { return static_cast<T const&>(*this); }
+};
+
 template <typename HasherT>
-struct SHAHash {
+struct SHAHash : public crtp<HasherT> {
   /**
    * @brief Execute SHA on input data chunks.
    *
@@ -102,6 +120,7 @@ struct SHAHash {
       std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
       Hasher::hash_step(hash_state);
 
+      // Take buffer-sized chunks of the data and do a hash step on each chunk.
       while (len > Hasher::message_chunk_size + copylen) {
         std::memcpy(hash_state->buffer, data + copylen, Hasher::message_chunk_size);
         Hasher::hash_step(hash_state);
@@ -129,9 +148,9 @@ struct SHAHash {
                                             << 3;
 
     // Add a one bit flag to signal the end of the message
-    constexpr uint8_t end_of_message = 0x80;
+    uint8_t constexpr end_of_message = 0x80;
     // 1 byte for the end of the message flag
-    constexpr int end_of_message_size = 1;
+    uint32_t constexpr end_of_message_size = 1;
 
     thrust::fill_n(thrust::seq,
                    hash_state->buffer + hash_state->buffer_length,
@@ -141,7 +160,7 @@ struct SHAHash {
     // SHA-512 uses a 128-bit message length instead of a 64-bit message length
     // but this code does not support messages with lengths exceeding UINT64_MAX
     // bits. We always pad the upper 64 bits with zeros.
-    constexpr auto message_length_supported_size = sizeof(message_length_in_bits);
+    auto constexpr message_length_supported_size = sizeof(message_length_in_bits);
 
     if (hash_state->buffer_length + Hasher::message_length_size + end_of_message_size <=
         Hasher::message_chunk_size) {
@@ -181,7 +200,6 @@ struct SHAHash {
     // include all of the hash values.
     auto constexpr num_words_to_copy =
       Hasher::digest_size / (2 * sizeof(typename Hasher::sha_word_type));
-#pragma unroll
     for (int i = 0; i < num_words_to_copy; i++) {
       // Convert word representation from big-endian to little-endian.
       typename Hasher::sha_word_type flipped = swap_endian(hash_state->hash_value[i]);
@@ -543,8 +561,10 @@ void __device__ sha512_hash_step(sha_intermediate_data* hash_state)
 }
 
 struct SHA384Hash : SHAHash<SHA384Hash> {
+  // Intermediate data type storing the hash state
   using sha_intermediate_data = sha384_intermediate_data;
-  using sha_word_type         = sha512_word_type;
+  // The word type used by this hash function
+  using sha_word_type = sha512_word_type;
   // Number of bytes processed in each hash step
   static constexpr auto message_chunk_size = 128;
   // Digest size in bytes. This is truncated from SHA-512.
@@ -559,8 +579,10 @@ struct SHA384Hash : SHAHash<SHA384Hash> {
 };
 
 struct SHA512Hash : SHAHash<SHA512Hash> {
+  // Intermediate data type storing the hash state
   using sha_intermediate_data = sha512_intermediate_data;
-  using sha_word_type         = sha512_word_type;
+  // The word type used by this hash function
+  using sha_word_type = sha512_word_type;
   // Number of bytes processed in each hash step
   static constexpr auto message_chunk_size = 128;
   // Digest size in bytes
