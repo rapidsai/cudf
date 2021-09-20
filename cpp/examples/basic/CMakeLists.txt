@@ -6,7 +6,7 @@ set(CPM_DOWNLOAD_VERSION v0.32.2)
 file(DOWNLOAD https://github.com/cpm-cmake/CPM.cmake/releases/download/${CPM_DOWNLOAD_VERSION}/get_cpm.cmake ${CMAKE_BINARY_DIR}/cmake/get_cpm.cmake)
 include(${CMAKE_BINARY_DIR}/cmake/get_cpm.cmake)
 
-set(CUDF_TAG branch-21.12)
+set(CUDF_TAG branch-21.10)
 CPMFindPackage(NAME  cudf
     GIT_REPOSITORY  https://github.com/rapidsai/cudf
     GIT_TAG         ${CUDF_TAG}
