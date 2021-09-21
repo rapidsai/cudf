@@ -16,12 +16,8 @@
 
 function(find_and_configure_cucollections)
 
-    if(TARGET cuco::cuco)
-        return()
-    endif()
-
     # Find or install cuCollections
-    CPMFindPackage(NAME   cuco
+    rapids_cpm_find(cuco 0.0
         GLOBAL_TARGETS cuco::cuco
         CPM_ARGS
             GITHUB_REPOSITORY NVIDIA/cuCollections
