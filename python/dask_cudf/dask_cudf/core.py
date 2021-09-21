@@ -233,6 +233,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         max_branch=None,
         divisions=None,
         set_divisions=False,
+        na_position="last",
         **kwargs,
     ):
         if kwargs:
@@ -241,7 +242,9 @@ class DataFrame(_Frame, dd.core.DataFrame):
             )
 
         if self.npartitions == 1:
-            df = self.map_partitions(M.sort_values, by)
+            df = self.map_partitions(
+                M.sort_values, by, na_position=na_position
+            )
         else:
             df = sorting.sort_values(
                 self,
@@ -250,6 +253,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 divisions=divisions,
                 set_divisions=set_divisions,
                 ignore_index=ignore_index,
+                na_position=na_position,
             )
 
         if ignore_index:

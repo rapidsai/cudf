@@ -5,6 +5,7 @@ import cupy
 import numpy as np
 import tlz as toolz
 
+import dask.dataframe as dd
 from dask.base import tokenize
 from dask.dataframe import methods
 from dask.dataframe.core import DataFrame, Index, Series
@@ -213,9 +214,13 @@ def sort_values(
     divisions=None,
     set_divisions=False,
     ignore_index=False,
+    na_position="last",
 ):
     """ Sort by the given list/tuple of column names.
     """
+    if na_position not in ("first", "last"):
+        raise ValueError("na_position must be either 'first' or 'last'")
+
     npartitions = df.npartitions
     if isinstance(by, tuple):
         by = list(by)
@@ -252,4 +257,13 @@ def sort_values(
     if not isinstance(divisions, gd.DataFrame) and set_divisions:
         # Can't have multi-column divisions elsewhere in dask (yet)
         df4.divisions = methods.tolist(divisions)
+
+    # Step 4 - Reposition first column's null values if we need to
+    if na_position == "first":
+        is_na = df4[by[0]].isna()
+        df_is_na = df4[is_na]
+        df_not_is_na = df4[~is_na]
+
+        return dd.concat([df_is_na, df_not_is_na])
+
     return df4

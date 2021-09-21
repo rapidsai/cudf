@@ -9,10 +9,11 @@ import cudf
 import dask_cudf
 
 
+@pytest.mark.parametrize("na_position", ["first", "last"])
 @pytest.mark.parametrize("by", ["a", "b", "c", "d", ["a", "b"], ["c", "d"]])
 @pytest.mark.parametrize("nelem", [10, 500])
 @pytest.mark.parametrize("nparts", [1, 10])
-def test_sort_values(nelem, nparts, by):
+def test_sort_values(nelem, nparts, by, na_position):
     np.random.seed(0)
     df = cudf.DataFrame()
     df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
@@ -22,13 +23,14 @@ def test_sort_values(nelem, nparts, by):
     ddf = dd.from_pandas(df, npartitions=nparts)
 
     with dask.config.set(scheduler="single-threaded"):
-        got = ddf.sort_values(by=by)
-    expect = df.sort_values(by=by)
+        got = ddf.sort_values(by=by, na_position=na_position)
+    expect = df.sort_values(by=by, na_position=na_position)
     dd.assert_eq(got, expect, check_index=False)
 
 
+@pytest.mark.parametrize("na_position", ["first", "last"])
 @pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
-def test_sort_values_single_partition(by):
+def test_sort_values_single_partition(by, na_position):
     df = cudf.DataFrame()
     nelem = 1000
     df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
@@ -36,8 +38,8 @@ def test_sort_values_single_partition(by):
     ddf = dd.from_pandas(df, npartitions=1)
 
     with dask.config.set(scheduler="single-threaded"):
-        got = ddf.sort_values(by=by)
-    expect = df.sort_values(by=by)
+        got = ddf.sort_values(by=by, na_position=na_position)
+    expect = df.sort_values(by=by, na_position=na_position)
     dd.assert_eq(got, expect)
 
 
@@ -51,6 +53,7 @@ def test_sort_repartition():
     dd.assert_eq(len(new_ddf), len(ddf))
 
 
+@pytest.mark.parametrize("na_position", ["first", "last"])
 @pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
 @pytest.mark.parametrize(
     "data",
@@ -62,11 +65,11 @@ def test_sort_repartition():
         {"a": list(range(15)) + [None] * 5, "b": list(reversed(range(20)))},
     ],
 )
-def test_sort_values_with_nulls(data, by):
+def test_sort_values_with_nulls(data, by, na_position):
     df = cudf.DataFrame(data)
     ddf = dd.from_pandas(df, npartitions=5)
 
-    got = ddf.sort_values(by=by)
-    expect = df.sort_values(by=by)
+    got = ddf.sort_values(by=by, na_position=na_position)
+    expect = df.sort_values(by=by, na_position=na_position)
 
     dd.assert_eq(got, expect, check_index=False)
