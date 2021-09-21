@@ -389,14 +389,14 @@ void CUDA_DEVICE_CALLABLE sha1_hash_step(sha_intermediate_data& hash_state)
 
   // The rest of the 80 words are generated from the first 16 words.
   for (int i = 16; i < 80; i++) {
-    uint32_t temp = words[i - 3] ^ words[i - 8] ^ words[i - 14] ^ words[i - 16];
-    words[i]      = rotate_bits_left(temp, 1);
+    uint32_t const temp = words[i - 3] ^ words[i - 8] ^ words[i - 14] ^ words[i - 16];
+    words[i]            = rotate_bits_left(temp, 1);
   }
 
   for (int i = 0; i < 80; i++) {
     uint32_t F;
-    uint32_t temp;
     uint32_t k;
+    uint32_t temp;
     switch (i / 20) {
       case 0:
         F = D ^ (B & (C ^ D));
@@ -459,10 +459,10 @@ void CUDA_DEVICE_CALLABLE sha256_hash_step(sha_intermediate_data& hash_state)
 
   // The rest of the 64 words are generated from the first 16 words.
   for (int i = 16; i < 64; i++) {
-    uint32_t s0 = rotate_bits_right(words[i - 15], 7) ^ rotate_bits_right(words[i - 15], 18) ^
-                  (words[i - 15] >> 3);
-    uint32_t s1 = rotate_bits_right(words[i - 2], 17) ^ rotate_bits_right(words[i - 2], 19) ^
-                  (words[i - 2] >> 10);
+    uint32_t const s0 = rotate_bits_right(words[i - 15], 7) ^ rotate_bits_right(words[i - 15], 18) ^
+                        (words[i - 15] >> 3);
+    uint32_t const s1 = rotate_bits_right(words[i - 2], 17) ^ rotate_bits_right(words[i - 2], 19) ^
+                        (words[i - 2] >> 10);
     words[i] = words[i - 16] + s0 + words[i - 7] + s1;
   }
 
@@ -525,10 +525,10 @@ void CUDA_DEVICE_CALLABLE sha512_hash_step(sha_intermediate_data& hash_state)
 
   // The rest of the 80 words are generated from the first 16 words.
   for (int i = 16; i < 80; i++) {
-    uint64_t s0 = rotate_bits_right(words[i - 15], 1) ^ rotate_bits_right(words[i - 15], 8) ^
-                  (words[i - 15] >> 7);
-    uint64_t s1 = rotate_bits_right(words[i - 2], 19) ^ rotate_bits_right(words[i - 2], 61) ^
-                  (words[i - 2] >> 6);
+    uint64_t const s0 = rotate_bits_right(words[i - 15], 1) ^ rotate_bits_right(words[i - 15], 8) ^
+                        (words[i - 15] >> 7);
+    uint64_t const s1 = rotate_bits_right(words[i - 2], 19) ^ rotate_bits_right(words[i - 2], 61) ^
+                        (words[i - 2] >> 6);
     words[i] = words[i - 16] + s0 + words[i - 7] + s1;
   }
 
@@ -686,8 +686,7 @@ std::unique_ptr<column> sha_hash(table_view const& input,
   if (input.num_columns() == 0 || input.num_rows() == 0) {
     // Return the hash of a zero-length input.
     // TODO: This probably needs tested!
-    auto output = make_column_from_scalar(empty_result, input.num_rows(), stream, mr);
-    return output;
+    return make_column_from_scalar(empty_result, input.num_rows(), stream, mr);
   }
 
   // Accepts string and fixed width columns.
