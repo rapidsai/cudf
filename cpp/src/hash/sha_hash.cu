@@ -120,12 +120,12 @@ struct SHAHash : public crtp<HasherT> {
       // the buffer and trigger a hash step.
       uint32_t copylen = Hasher::message_chunk_size - hash_state.buffer_length;
       std::memcpy(hash_state.buffer + hash_state.buffer_length, data, copylen);
-      Hasher::hash_step(hash_state);
+      this->underlying().hash_step(hash_state);
 
       // Take buffer-sized chunks of the data and do a hash step on each chunk.
       while (len > Hasher::message_chunk_size + copylen) {
         std::memcpy(hash_state.buffer, data + copylen, Hasher::message_chunk_size);
-        Hasher::hash_step(hash_state);
+        this->underlying().hash_step(hash_state);
         copylen += Hasher::message_chunk_size;
       }
 
@@ -189,7 +189,7 @@ struct SHAHash : public crtp<HasherT> {
                    hash_state.buffer + hash_state.buffer_length + end_of_message_size,
                    hash_state.buffer + Hasher::message_chunk_size,
                    0x00);
-      Hasher::hash_step(hash_state);
+      this->underlying().hash_step(hash_state);
 
       // Fill the entire message with zeros up to the final bytes reserved for
       // the message length.
@@ -204,7 +204,7 @@ struct SHAHash : public crtp<HasherT> {
     std::memcpy(hash_state.buffer + Hasher::message_chunk_size - message_length_supported_size,
                 reinterpret_cast<uint8_t const*>(&full_length_flipped),
                 message_length_supported_size);
-    Hasher::hash_step(hash_state);
+    this->underlying().hash_step(hash_state);
 
     // Each byte in the word generates two bytes in the hexadecimal string digest.
     // SHA-224 and SHA-384 digests are truncated because their digest does not
@@ -514,7 +514,7 @@ struct SHA1Hash : SHAHash<SHA1Hash> {
   // Number of bytes used for the message length
   static constexpr auto message_length_size = 8;
 
-  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
+  void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
   {
     sha1_hash_step(hash_state);
   }
@@ -534,7 +534,7 @@ struct SHA224Hash : SHAHash<SHA224Hash> {
   // Number of bytes used for the message length
   static constexpr auto message_length_size = 8;
 
-  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
+  void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
   {
     sha256_hash_step(hash_state);
   }
@@ -554,7 +554,7 @@ struct SHA256Hash : SHAHash<SHA256Hash> {
   // Number of bytes used for the message length
   static constexpr auto message_length_size = 8;
 
-  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
+  void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
   {
     sha256_hash_step(hash_state);
   }
@@ -574,7 +574,7 @@ struct SHA384Hash : SHAHash<SHA384Hash> {
   // Number of bytes used for the message length
   static constexpr auto message_length_size = 16;
 
-  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
+  void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
   {
     sha512_hash_step(hash_state);
   }
@@ -594,7 +594,7 @@ struct SHA512Hash : SHAHash<SHA512Hash> {
   // Number of bytes used for the message length
   static constexpr auto message_length_size = 16;
 
-  static void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
+  void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
   {
     sha512_hash_step(hash_state);
   }
