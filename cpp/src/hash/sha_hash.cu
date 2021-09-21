@@ -136,12 +136,12 @@ struct SHAHash : public crtp<HasherT> {
     }
   }
 
-  template <typename TKey, typename Hasher = HasherT>
-  void CUDA_DEVICE_CALLABLE process_key(TKey const& key,
-                                        typename Hasher::sha_intermediate_data& hash_state)
+  template <typename T, typename Hasher = HasherT>
+  void CUDA_DEVICE_CALLABLE process_fixed_width(T const& key,
+                                                typename Hasher::sha_intermediate_data& hash_state)
   {
     uint8_t const* data    = reinterpret_cast<uint8_t const*>(&key);
-    uint32_t constexpr len = sizeof(TKey);
+    uint32_t constexpr len = sizeof(T);
     process(data, len, hash_state);
   }
 
@@ -258,11 +258,11 @@ struct SHAHash : public crtp<HasherT> {
     T const& key = col.element<T>(row_index);
     if (isnan(key)) {
       T nan = std::numeric_limits<T>::quiet_NaN();
-      process_key(nan, hash_state);
+      process_fixed_width(nan, hash_state);
     } else if (key == T{0.0}) {
-      process_key(T{0.0}, hash_state);
+      process_fixed_width(T{0.0}, hash_state);
     } else {
-      process_key(key, hash_state);
+      process_fixed_width(key, hash_state);
     }
   }
 
@@ -274,7 +274,7 @@ struct SHAHash : public crtp<HasherT> {
                                        size_type row_index,
                                        typename Hasher::sha_intermediate_data& hash_state)
   {
-    process_key(col.element<T>(row_index), hash_state);
+    process_fixed_width(col.element<T>(row_index), hash_state);
   }
 
   template <typename T,
