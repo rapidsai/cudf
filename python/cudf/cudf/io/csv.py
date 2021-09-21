@@ -46,6 +46,7 @@ def read_csv(
     na_filter=True,
     prefix=None,
     index_col=None,
+    arrow_filesystem=False,
     **kwargs,
 ):
     """{docstring}"""
@@ -64,6 +65,7 @@ def read_csv(
         iotypes=(BytesIO, StringIO, NativeFile),
         byte_ranges=[byte_range] if byte_range else None,
         clip_dummy_buffer=True if byte_range else False,
+        arrow_filesystem=arrow_filesystem,
         **kwargs,
     )
 

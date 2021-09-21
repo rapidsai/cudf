@@ -280,7 +280,7 @@ def read_parquet(
     num_rows=None,
     strings_to_categorical=False,
     use_pandas_metadata=True,
-    legacy_transfer=False,
+    arrow_filesystem=False,
     *args,
     **kwargs,
 ):
@@ -328,15 +328,12 @@ def read_parquet(
 
     # Get required byte ranges (used with non-local fsspec filesystems)
     byte_ranges, footers, file_sizes = None, None, None
-    if (
-        need_byte_ranges
-        or (
-            filepath_or_buffer
-            and isinstance(
-                filepath_or_buffer[0], fsspec.spec.AbstractBufferedFile,
-            )
+    if need_byte_ranges or (
+        filepath_or_buffer
+        and isinstance(
+            filepath_or_buffer[0], fsspec.spec.AbstractBufferedFile,
         )
-    ) and not legacy_transfer:
+    ):
         byte_ranges, footers, file_sizes = _get_byte_ranges(
             filepath_or_buffer, row_groups, columns, fs,
         )
@@ -359,7 +356,7 @@ def read_parquet(
             footer=footers[i] if footers else None,
             file_size=file_sizes[i] if file_sizes else None,
             add_par1_magic=True,
-            legacy_transfer=legacy_transfer,
+            arrow_filesystem=arrow_filesystem,
             **kwargs,
         )
         if compression is not None:

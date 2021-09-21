@@ -1148,6 +1148,14 @@ def _try_pyarrow_filesystem(path, storage_options=None):
     except ArrowInvalid:
         # Protocol not supported
         return None, None
+    except OSError:
+        # Bucket not found
+        warnings.warn(
+            "This protocol may be supported by pyarrow. "
+            "However, `FileSystem.from_uri` failed. "
+            "Using fsspec. "
+        )
+        return None, None
 
     if storage_options:
 
@@ -1199,7 +1207,7 @@ def _get_filesystem_and_paths(path_or_data, arrow_filesystem=False, **kwargs):
         else:
             path_or_data = [path_or_data]
 
-        if arrow_filesystem:
+        if arrow_filesystem is True:
 
             # Try infering a pyarrow-backed filesystem
             fs, fs_paths = _try_pyarrow_filesystem(
@@ -1210,6 +1218,11 @@ def _get_filesystem_and_paths(path_or_data, arrow_filesystem=False, **kwargs):
                 for source in path_or_data[1:]:
                     fs_paths.append(_try_pyarrow_filesystem(source)[1])
                 return_paths = fs_paths
+
+        elif arrow_filesystem:
+            # The filesystem is already specified explicitly
+            fs = arrow_filesystem
+            return_paths = [p.split("//")[-1] for p in path_or_data]
 
         if fs is None:
             # Pyarrow did not support the protocol or storage options.
@@ -1234,7 +1247,6 @@ def get_filepath_or_buffer(
     mode="rb",
     fs=None,
     iotypes=(BytesIO, NativeFile),
-    legacy_transfer=False,
     **kwargs,
 ):
     """Return either a filepath string to data, or a memory buffer of data.
@@ -1288,11 +1300,7 @@ def get_filepath_or_buffer(
                 path_or_data = [fs.open_input_file(fpath) for fpath in paths]
             else:
                 path_or_data = [
-                    BytesIO(fs.open(fpath, mode=mode).read())
-                    if legacy_transfer
-                    else _fsspec_data_transfer(
-                        fpath, fs=fs, mode=mode, **kwargs
-                    )
+                    _fsspec_data_transfer(fpath, fs=fs, mode=mode, **kwargs)
                     for fpath in paths
                 ]
             if len(path_or_data) == 1:
@@ -1301,13 +1309,7 @@ def get_filepath_or_buffer(
     elif not isinstance(path_or_data, iotypes) and is_file_like(path_or_data):
         if isinstance(path_or_data, TextIOWrapper):
             path_or_data = path_or_data.buffer
-        if legacy_transfer:
-            path_or_data.seek(0)
-        path_or_data = (
-            BytesIO(path_or_data.read())
-            if legacy_transfer
-            else _fsspec_data_transfer(path_or_data, mode=mode, **kwargs)
-        )
+        path_or_data = _fsspec_data_transfer(path_or_data, mode=mode, **kwargs)
 
     return path_or_data, compression
 

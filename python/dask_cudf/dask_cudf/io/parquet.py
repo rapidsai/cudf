@@ -65,7 +65,6 @@ class CudfEngine(ArrowDatasetEngine):
         partitions=None,
         partitioning=None,
         partition_keys=None,
-        arrow_filesystem=None,
         **kwargs,
     ):
 
@@ -80,21 +79,12 @@ class CudfEngine(ArrowDatasetEngine):
             if not cudf.utils.ioutils._is_local_filesystem(fs):
 
                 # Convert paths to file objects for remote data
-                if arrow_filesystem:
-                    paths_or_fobs = [
-                        stack.enter_context(
-                            arrow_filesystem.open_input_file(path)
-                        )
-                        for path in paths
-                    ]
-                else:
-                    cache_type = "none" if columns or row_groups else "bytes"
-                    paths_or_fobs = [
-                        stack.enter_context(
-                            fs.open(path, mode="rb", cache_type=cache_type)
-                        )
-                        for path in paths
-                    ]
+                paths_or_fobs = [
+                    stack.enter_context(
+                        fs.open(path, mode="rb", cache_type="none")
+                    )
+                    for path in paths
+                ]
 
             # Use cudf to read in data
             df = cudf.read_parquet(
@@ -355,9 +345,6 @@ def read_parquet(
     columns=None,
     split_row_groups=None,
     row_groups_per_part=None,
-    arrow_filesystem=False,
-    legacy_transfer=False,
-    read=None,
     **kwargs,
 ):
     """ Read parquet files into a Dask DataFrame
@@ -388,27 +375,11 @@ def read_parquet(
         if split_row_groups is None:
             split_row_groups = row_groups_per_part
 
-    # Check if we should use an arrow-backed filesystem
-    # on the workers (at IO time)
-    read_kwargs = (read or {}).copy()
-    if arrow_filesystem:
-        arrow_filesystem = cudf.utils.ioutils._try_pyarrow_filesystem(
-            path, kwargs.get("storage_options", {}),
-        )[0]
-        if arrow_filesystem:
-            read_kwargs["arrow_filesystem"] = arrow_filesystem
-
-    # Check if we are using legacy approach to remote
-    # data transfer (single `read` call into host memory)
-    if legacy_transfer:
-        read_kwargs["legacy_transfer"] = legacy_transfer
-
     return dd.read_parquet(
         path,
         columns=columns,
         split_row_groups=split_row_groups,
         engine=CudfEngine,
-        read=read_kwargs,
         **kwargs,
     )
 
