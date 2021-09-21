@@ -621,7 +621,8 @@ std::unique_ptr<column> sha_hash(table_view const& input,
   // Accepts string and fixed width columns.
   // TODO: Accept single layer list columns holding those types.
   CUDF_EXPECTS(
-    std::all_of(input.begin(), input.end(), [](auto col) { return sha_type_check(col.type()); }),
+    std::all_of(
+      input.begin(), input.end(), [](auto const& col) { return sha_type_check(col.type()); }),
     "SHA unsupported column type");
 
   // Result column allocation and creation
