@@ -198,6 +198,24 @@ def test_read_parquet(s3_base, s3so, pdf, bytes_per_thread, columns):
     assert_eq(expect, got)
 
 
+def test_read_parquet_filters(s3_base, s3so, pdf):
+    fname = "test_parquet_reader_filters.parquet"
+    bname = "parquet"
+    buffer = BytesIO()
+    pdf.to_parquet(path=buffer)
+    buffer.seek(0)
+    filters = [("String", "==", "Omega")]
+    with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
+        got = cudf.read_parquet(
+            "s3://{}/{}".format(bname, fname),
+            storage_options=s3so,
+            filters=filters,
+        )
+
+    # All row-groups should be filtered out
+    assert_eq(pdf.iloc[:0], got.reset_index(drop=True))
+
+
 def test_write_parquet(s3_base, s3so, pdf):
     fname = "test_parquet_writer.parquet"
     bname = "parquet"

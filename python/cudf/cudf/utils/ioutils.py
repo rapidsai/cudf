@@ -1224,7 +1224,9 @@ def get_filepath_or_buffer(
 
         else:
             path_or_data = [
-                _fsspec_data_transfer(fpath, fs=fs, mode=mode, **kwargs)
+                BytesIO(
+                    _fsspec_data_transfer(fpath, fs=fs, mode=mode, **kwargs)
+                )
                 for fpath in paths
             ]
             if len(path_or_data) == 1:
@@ -1233,7 +1235,9 @@ def get_filepath_or_buffer(
     elif not isinstance(path_or_data, iotypes) and is_file_like(path_or_data):
         if isinstance(path_or_data, TextIOWrapper):
             path_or_data = path_or_data.buffer
-        path_or_data = _fsspec_data_transfer(path_or_data, mode=mode, **kwargs)
+        path_or_data = BytesIO(
+            _fsspec_data_transfer(path_or_data, mode=mode, **kwargs)
+        )
 
     return path_or_data, compression
 

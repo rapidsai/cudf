@@ -162,7 +162,7 @@ def read_parquet_metadata(path):
     return num_rows, num_row_groups, col_names
 
 
-def _filter_row_groups(paths, fs, filters=None, row_groups=None):
+def _process_row_groups(paths, fs, filters=None, row_groups=None):
 
     # Deal with case that the user passed in a directory name
     file_list = paths
@@ -310,21 +310,21 @@ def read_parquet(
     if fs is None and filters is not None:
         raise ValueError("cudf cannot apply filters to open file objects.")
 
-    # Check if we should calculate the specific byte-ranges
-    # needed for each parquet file. We do this when we have
-    # a file-system object to work with and it is not a local
-    # or pyarrow-backed filesystem object.
-    need_byte_ranges = fs is not None and not ioutils._is_local_filesystem(fs)
-
-    # Apply filters now (before converting non-local paths to buffers)
-    # if fs is not None and (filters is not None or need_byte_ranges):
+    # Apply filters now (before converting non-local paths to buffers).
+    # Note that `_process_row_groups` will also expand `filepath_or_buffer`
+    # into a full list of files if it is a directory.
     if fs is not None:
-        filepath_or_buffer, row_groups = _filter_row_groups(
+        filepath_or_buffer, row_groups = _process_row_groups(
             filepath_or_buffer, fs, filters=filters, row_groups=row_groups,
         )
 
-    # Get required byte ranges (used with non-local fsspec filesystems)
+    # Check if we should calculate the specific byte-ranges
+    # needed for each parquet file. We always do this when we
+    # have a file-system object to work with and it is not a
+    # local filesystem object. We can also do it without a
+    # file-system object for `AbstractBufferedFile` buffers
     byte_ranges, footers, file_sizes = None, None, None
+    need_byte_ranges = fs is not None and not ioutils._is_local_filesystem(fs)
     if need_byte_ranges or (
         filepath_or_buffer
         and isinstance(
