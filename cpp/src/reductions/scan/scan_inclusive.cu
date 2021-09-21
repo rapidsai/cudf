@@ -601,6 +601,17 @@ std::unique_ptr<column> ewma(column_view const& input,
   return col;
 }
 
+void print_device_uvector(rmm::device_uvector<double> const& input, rmm::cuda_stream_view stream) {
+  thrust::device_vector<double> input_device(input.size());
+  thrust::copy(rmm::exec_policy(stream), input.begin(), input.end(), input_device.begin());
+  thrust::host_vector<double> input_host = input_device;
+  std::cout << std::endl;
+  for (size_t i = 0; i < input_host.size(); i++) {
+    std::cout << input_host[i] << " ";
+  }
+  std::cout << std::endl;
+}
+
 /**
  * @brief Compute exponentially weighted moving variance
  * EWMVAR[i] is defined as EWMVAR[i] = EWMA[xi**2] - EWMA[xi]**2
@@ -637,6 +648,119 @@ std::unique_ptr<column> ewmvar(column_view const& input,
     ewma_xi.get()[0].mutable_view().begin<double>(),
     [=] __host__ __device__(double x, double xsqrd) -> double { return xsqrd - x * x; });
 
+
+  if (!bias) {
+    /*
+    We're going to need to compute SUM(w_i ** 2) for each index, this is another pair summation.
+    
+
+    
+    
+    */
+    double beta = 1.0 - (1.0 / (com + 1.0));
+
+    if (adjust) {
+      // allocate pairs
+
+      rmm::device_uvector<double> bias(input.size(), stream, mr);
+
+      rmm::device_uvector<thrust::pair<double, double>> pairs(input.size(), stream, mr);
+      thrust::fill(rmm::exec_policy(stream), pairs.begin(), pairs.end(), thrust::pair<double, double>(beta*beta, 1));
+      compute_recurrence(pairs, stream);
+      
+      thrust::transform(rmm::exec_policy(stream),
+                        pairs.begin(),
+                        pairs.end(),
+                        bias.begin(),
+                        [=] __host__ __device__ (thrust::pair<double, double> input) -> double {
+                          return thrust::get<1>(input);
+                        }
+      );
+      thrust::fill(rmm::exec_policy(stream), pairs.begin(), pairs.end(), thrust::pair<double, double>(beta, 1));
+      compute_recurrence(pairs, stream);
+
+      thrust::transform(rmm::exec_policy(stream),
+                        pairs.begin(),
+                        pairs.end(),
+                        bias.begin(),
+                        bias.begin(),
+                        [=] __host__ __device__ (thrust::pair<double, double> pair, double wisqr) -> double {
+                          double wi = thrust::get<1>(pair);
+                          
+                          return (wi*wi) / ((wi*wi) - wisqr);
+                        }
+      );
+      print_device_uvector(bias, stream);
+      thrust::transform(rmm::exec_policy(stream),
+                        bias.begin(),
+                        bias.end(),
+                        ewma_xi.get()[0].mutable_view().begin<double>(),
+                        ewma_xi.get()[0].mutable_view().begin<double>(),
+                        [=] __host__ __device__ (double bias, double input) -> double {
+                          return bias * input;
+                        }
+      
+      );
+
+    } else {
+      if (input.has_nulls()) {
+        double beta = 1.0 - (1.0 / (com + 1.0));
+        double alpha = 1.0 - beta;
+        auto d_input   = column_device_view::create(input, stream);
+        auto valid_itr = detail::make_validity_iterator(*d_input);
+
+        rmm::device_uvector<double> nullcnt = null_roll_up(input, stream);
+        thrust::transform(rmm::exec_policy(stream), 
+                          valid_itr, 
+                          valid_itr + input.size(), 
+                          nullcnt.begin(), 
+                          nullcnt.begin(),
+                          [=] __host__ __device__ (bool valid, double num_nulls) -> double {
+                            double other_weight;
+                            double wi;
+                            double wisqr;
+                            if (valid) {
+                              if (num_nulls != 0.0) {
+                                other_weight = beta;
+                              } else {
+                                other_weight = pow(beta, num_nulls + 1);
+                              }
+                              wi = alpha + other_weight;
+                              wisqr = alpha * alpha + other_weight*other_weight;
+                              return wi * wi / (wi * wi - wisqr);
+                            } else {
+                              return 1.0;
+                            }
+                          }
+                        );
+
+        thrust::transform(rmm::exec_policy(stream),
+                          nullcnt.begin(),
+                          nullcnt.end(),
+                          ewma_xi.get()[0].mutable_view().begin<double>(),
+                          ewma_xi.get()[0].mutable_view().begin<double>(),
+                          thrust::multiplies<double>()
+        );
+      } else {
+        // the weights will always be (beta, 1 - beta)
+        double wi = beta + (1.0 - beta);
+        double wisqr = beta * beta + (1.0 - beta) * (1.0 - beta);
+        double const bias = wi * wi / (wi * wi - wisqr);
+        auto mutable_view = ewma_xi.get()[0].mutable_view();
+
+        rmm::device_uvector<double> bias_vec(input.size(), stream, mr);
+        thrust::fill(rmm::exec_policy(stream), bias_vec.begin(), bias_vec.end(), bias);
+
+        thrust::transform(rmm::exec_policy(stream),
+                          mutable_view.begin<double>(),
+                          mutable_view.end<double>(),
+                          bias_vec.begin(),
+                          mutable_view.begin<double>(),
+                          thrust::multiplies<double>()
+        );
+      }
+    }
+  }
   // return means;
   return ewma_xi;
 }
