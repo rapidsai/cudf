@@ -86,6 +86,11 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         HASH_MD5 "cudf::hash_id::HASH_MD5"
         HASH_SERIAL_MURMUR3 "cudf::hash_id::HASH_SERIAL_MURMUR3"
         HASH_SPARK_MURMUR3 "cudf::hash_id::HASH_SPARK_MURMUR3"
+        HASH_SHA1 "cudf::hash_id::HASH_SHA1"
+        HASH_SHA224 "cudf::hash_id::HASH_SHA224"
+        HASH_SHA256 "cudf::hash_id::HASH_SHA256"
+        HASH_SHA384 "cudf::hash_id::HASH_SHA384"
+        HASH_SHA512 "cudf::hash_id::HASH_SHA512"
 
     cdef cppclass data_type:
         data_type() except +
