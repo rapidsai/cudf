@@ -33,22 +33,23 @@ namespace detail {
 
 namespace {
 
-__device__ double lerp(double a, double b, double t) { return a + t * (b - a); }
+// https://developer.nvidia.com/blog/lerp-faster-cuda/
+template <typename T>
+__device__ inline T lerp(T v0, T v1, T t)
+{
+  return fma(t, v1, fma(-t, v0, v0));
+}
 
-template <typename _T>
+template <typename T>
 struct cast_output {
   data_type t;
 
-  template <typename T = _T, std::enable_if_t<!cudf::is_fixed_point<T>()>* = nullptr>
   __device__ device_storage_type_t<T> operator()(double v)
   {
-    return static_cast<T>(v);
-  }
-
-  template <typename T = _T, std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
-  __device__ device_storage_type_t<T> operator()(double v)
-  {
-    return T{v, numeric::scale_type{t.scale()}}.value();
+    if constexpr (!cudf::is_fixed_point<T>()) { return static_cast<T>(v); }
+    if constexpr (cudf::is_fixed_point<T>()) {
+      return T{v, numeric::scale_type{t.scale()}}.value();
+    }
   }
 };
 
