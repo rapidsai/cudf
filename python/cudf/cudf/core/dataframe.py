@@ -2732,7 +2732,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if isinstance(
             columns, (Series, cudf.Index, cudf.core.column.ColumnBase)
         ):
-            columns = pd.Index(columns.to_array(), tupleize_cols=is_multiindex)
+            columns = pd.Index(columns.to_numpy(), tupleize_cols=is_multiindex)
         elif not isinstance(columns, pd.Index):
             columns = pd.Index(columns, tupleize_cols=is_multiindex)
 
@@ -5877,9 +5877,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         dtype = np.dtype(members)
         ret = np.recarray(len(self), dtype=dtype)
         if index:
-            ret["index"] = self.index.to_array()
+            ret["index"] = self.index.to_numpy()
         for col in self._data.names:
-            ret[col] = self[col].to_array()
+            ret[col] = self[col].to_numpy()
         return ret
 
     @classmethod

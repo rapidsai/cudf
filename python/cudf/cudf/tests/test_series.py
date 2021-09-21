@@ -954,14 +954,8 @@ def test_series_update(data, other):
 
     ps = gs.to_pandas()
 
-    gs_column_before = gs._column
-    gs.update(g_other)
-    gs_column_after = gs._column
-
-    assert_eq(gs_column_before.to_array(), gs_column_after.to_array())
-
     ps.update(p_other)
-
+    gs.update(g_other)
     assert_eq(gs, ps)
 
 

@@ -426,7 +426,7 @@ class CategoricalAccessor(ColumnMethods):
         # ensure all the removals are in the current categories
         # list. If not, raise an error to match Pandas behavior
         if not removals_mask.all():
-            vals = removals[~removals_mask].to_array()
+            vals = removals[~removals_mask].to_numpy()
             raise ValueError(f"removals must all be in old categories: {vals}")
 
         new_categories = cats[~cats.isin(removals)]._column

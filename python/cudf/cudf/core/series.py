@@ -4437,7 +4437,7 @@ class Series(SingleColumnFrame, Serializable):
             )
             data = (
                 [self.count(), self.mean(), self.std(), self.min()]
-                + self.quantile(percentiles).to_array(fillna="pandas").tolist()
+                + self.quantile(percentiles).to_numpy(na_value=np.nan).tolist()
                 + [self.max()]
             )
             data = _format_stats_values(data)
@@ -4463,7 +4463,7 @@ class Series(SingleColumnFrame, Serializable):
                 ]
                 + self.quantile(percentiles)
                 .astype("str")
-                .to_array(fillna="pandas")
+                .to_numpy(na_value=None)
                 .tolist()
                 + [str(pd.Timedelta(self.max()))]
             )
@@ -4515,7 +4515,7 @@ class Series(SingleColumnFrame, Serializable):
                 ]
                 + self.quantile(percentiles)
                 .astype("str")
-                .to_array(fillna="pandas")
+                .to_numpy(na_value=None)
                 .tolist()
                 + [str(pd.Timestamp((self.max()).astype("datetime64[ns]")))]
             )
