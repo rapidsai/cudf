@@ -328,6 +328,8 @@ class ColumnBase(Column, Serializable):
     def _default_na_value(self) -> Any:
         raise NotImplementedError()
 
+    # TODO: This method is decpreated and can be removed when the associated
+    # Frame methods are removed.
     def to_gpu_array(self, fillna=None) -> "cuda.devicearray.DeviceNDArray":
         """Get a dense numba device array for the data.
 
@@ -347,6 +349,8 @@ class ColumnBase(Column, Serializable):
         else:
             return self.dropna(drop_nan=False).data_array_view
 
+    # TODO: This method is decpreated and can be removed when the associated
+    # Frame methods are removed.
     def to_array(self, fillna=None) -> np.ndarray:
         """Get a dense numpy array for the data.
 

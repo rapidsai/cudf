@@ -5212,6 +5212,8 @@ class StringColumn(column.ColumnBase):
             "String Arrays is not yet implemented in cudf"
         )
 
+    # TODO: This method is deprecated and should be removed when the associated
+    # Frame methods are removed.
     def to_array(self, fillna: bool = None) -> np.ndarray:
         """Get a dense numpy array for the data.
 
