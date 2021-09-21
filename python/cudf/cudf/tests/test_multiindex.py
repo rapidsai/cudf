@@ -5,9 +5,7 @@ Test related to MultiIndex
 """
 import itertools
 import operator
-import pickle
 import re
-from io import BytesIO
 
 import cupy as cp
 import numpy as np
@@ -1555,35 +1553,6 @@ def test_multiIndex_duplicate_names():
     )
 
     assert_eq(gi, pi)
-
-
-@pytest.mark.parametrize(
-    "names",
-    [
-        ["a", "b", "c"],
-        [None, None, None],
-        ["aa", "aa", "aa"],
-        ["bb", "aa", "aa"],
-        None,
-    ],
-)
-def test_pickle_roundtrip_multiIndex(names):
-    df = cudf.DataFrame(
-        {
-            "one": [1, 2, 3],
-            "two": [True, False, True],
-            "three": ["ab", "cd", "ef"],
-            "four": [0.2, 0.1, -10.2],
-        }
-    )
-    expected_df = df.set_index(["one", "two", "three"])
-    expected_df.index.names = names
-    local_file = BytesIO()
-
-    pickle.dump(expected_df, local_file)
-    local_file.seek(0)
-    actual_df = pickle.load(local_file)
-    assert_eq(expected_df, actual_df)
 
 
 def test_difference():
