@@ -3914,71 +3914,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         )
         return cudf.Series(inds_col)
 
-    @annotate("SORT_INDEX", color="red", domain="cudf_python")
-    def sort_index(
-        self,
-        axis=0,
-        level=None,
-        ascending=True,
-        inplace=False,
-        kind=None,
-        na_position="last",
-        sort_remaining=True,
-        ignore_index=False,
-    ):
-        """Sort object by labels (along an axis).
-
-        Parameters
-        ----------
-        axis : {0 or ‘index’, 1 or ‘columns’}, default 0
-            The axis along which to sort. The value 0 identifies the rows,
-            and 1 identifies the columns.
-        level : int or level name or list of ints or list of level names
-            If not None, sort on values in specified index level(s).
-            This is only useful in the case of MultiIndex.
-        ascending : bool, default True
-            Sort ascending vs. descending.
-        inplace : bool, default False
-            If True, perform operation in-place.
-        kind : sorting method such as `quick sort` and others.
-            Not yet supported.
-        na_position : {‘first’, ‘last’}, default ‘last’
-            Puts NaNs at the beginning if first; last puts NaNs at the end.
-        sort_remaining : bool, default True
-            Not yet supported
-        ignore_index : bool, default False
-            if True, index will be replaced with RangeIndex.
-
-        Returns
-        -------
-        DataFrame or None
-
-        Examples
-        --------
-        >>> df = cudf.DataFrame(
-        ... {"b":[3, 2, 1], "a":[2, 1, 3]}, index=[1, 3, 2])
-        >>> df.sort_index(axis=0)
-           b  a
-        1  3  2
-        2  1  3
-        3  2  1
-        >>> df.sort_index(axis=1)
-           a  b
-        1  2  3
-        3  1  2
-        2  3  1
-        """
-        return super()._sort_index(
-            axis=axis,
-            level=level,
-            ascending=ascending,
-            inplace=inplace,
-            kind=kind,
-            na_position=na_position,
-            sort_remaining=sort_remaining,
-            ignore_index=ignore_index,
-        )
-
     def sort_values(
         self,
         by,
@@ -3990,7 +3925,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         ignore_index=False,
     ):
         """
-
         Sort by the values row-wise.
 
         Parameters
