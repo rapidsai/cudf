@@ -158,7 +158,7 @@ struct SHAHash : public crtp<HasherT> {
   {
     // Message length in bits.
     uint64_t const message_length_in_bits = (static_cast<uint64_t>(hash_state.message_length)) << 3;
-    // Add a one bit flag to signal the end of the message
+    // Add a one bit flag (10000000) to signal the end of the message
     uint8_t constexpr end_of_message = 0x80;
     // 1 byte for the end of the message flag
     uint32_t constexpr end_of_message_size = 1;
@@ -171,7 +171,7 @@ struct SHAHash : public crtp<HasherT> {
     // SHA-512 uses a 128-bit message length instead of a 64-bit message length
     // but this code does not support messages with lengths exceeding UINT64_MAX
     // bits. We always pad the upper 64 bits with zeros.
-    auto constexpr message_length_supported_size = sizeof(message_length_in_bits);
+    uint32_t constexpr message_length_supported_size = sizeof(message_length_in_bits);
 
     if (hash_state.buffer_length + Hasher::message_length_size + end_of_message_size <=
         Hasher::message_chunk_size) {
@@ -579,11 +579,11 @@ struct SHA1Hash : SHAHash<SHA1Hash> {
   // The word type used by this hash function
   using sha_word_type = uint32_t;
   // Number of bytes processed in each hash step
-  static constexpr auto message_chunk_size = 64;
+  static constexpr uint32_t message_chunk_size = 64;
   // Digest size in bytes
-  static constexpr auto digest_size = 40;
+  static constexpr uint32_t digest_size = 40;
   // Number of bytes used for the message length
-  static constexpr auto message_length_size = 8;
+  static constexpr uint32_t message_length_size = 8;
 
   void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
   {
@@ -599,11 +599,11 @@ struct SHA224Hash : SHAHash<SHA224Hash> {
   // The word type used by this hash function
   using sha_word_type = uint32_t;
   // Number of bytes processed in each hash step
-  static constexpr auto message_chunk_size = 64;
+  static constexpr uint32_t message_chunk_size = 64;
   // Digest size in bytes. This is truncated from SHA-256.
-  static constexpr auto digest_size = 56;
+  static constexpr uint32_t digest_size = 56;
   // Number of bytes used for the message length
-  static constexpr auto message_length_size = 8;
+  static constexpr uint32_t message_length_size = 8;
 
   void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
   {
@@ -619,11 +619,11 @@ struct SHA256Hash : SHAHash<SHA256Hash> {
   // The word type used by this hash function
   using sha_word_type = uint32_t;
   // Number of bytes processed in each hash step
-  static constexpr auto message_chunk_size = 64;
+  static constexpr uint32_t message_chunk_size = 64;
   // Digest size in bytes
-  static constexpr auto digest_size = 64;
+  static constexpr uint32_t digest_size = 64;
   // Number of bytes used for the message length
-  static constexpr auto message_length_size = 8;
+  static constexpr uint32_t message_length_size = 8;
 
   void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
   {
@@ -639,11 +639,11 @@ struct SHA384Hash : SHAHash<SHA384Hash> {
   // The word type used by this hash function
   using sha_word_type = uint64_t;
   // Number of bytes processed in each hash step
-  static constexpr auto message_chunk_size = 128;
+  static constexpr uint32_t message_chunk_size = 128;
   // Digest size in bytes. This is truncated from SHA-512.
-  static constexpr auto digest_size = 96;
+  static constexpr uint32_t digest_size = 96;
   // Number of bytes used for the message length
-  static constexpr auto message_length_size = 16;
+  static constexpr uint32_t message_length_size = 16;
 
   void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
   {
@@ -659,11 +659,11 @@ struct SHA512Hash : SHAHash<SHA512Hash> {
   // The word type used by this hash function
   using sha_word_type = uint64_t;
   // Number of bytes processed in each hash step
-  static constexpr auto message_chunk_size = 128;
+  static constexpr uint32_t message_chunk_size = 128;
   // Digest size in bytes
-  static constexpr auto digest_size = 128;
+  static constexpr uint32_t digest_size = 128;
   // Number of bytes used for the message length
-  static constexpr auto message_length_size = 16;
+  static constexpr uint32_t message_length_size = 16;
 
   void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
   {
