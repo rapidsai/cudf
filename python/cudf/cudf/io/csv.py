@@ -68,7 +68,7 @@ def read_csv(
 
     # Adjust byte_range for clipped dummy buffers
     use_byte_range = byte_range
-    if byte_range:
+    if byte_range and isinstance(filepath_or_buffer, bytes):
         if byte_range[1] == len(filepath_or_buffer):
             use_byte_range = (0, byte_range[1])
 
