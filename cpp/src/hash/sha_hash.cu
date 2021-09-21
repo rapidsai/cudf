@@ -235,7 +235,7 @@ struct SHAHash : public crtp<HasherT> {
                                        size_type,
                                        typename Hasher::sha_intermediate_data&)
   {
-    cudf_assert(false && "SHA unsupported type.");
+    cudf_assert(false && "Unsupported type for SHA hash.");
   }
 
   template <typename T,
@@ -380,11 +380,8 @@ void CUDA_DEVICE_CALLABLE sha1_hash_step(sha_intermediate_data& hash_state)
 
   uint32_t words[80];
 
-  // Word size in bytes
-  auto constexpr word_size = sizeof(uint32_t);
-
   // The 512-bit message buffer fills the first 16 words.
-  memcpy(&words[0], hash_state.buffer, word_size * 16);
+  memcpy(&words[0], hash_state.buffer, sizeof(words[0]) * 16);
   for (int i = 0; i < 16; i++) {
     // Convert word representation from little-endian to big-endian.
     words[i] = swap_endian(words[i]);
@@ -453,11 +450,8 @@ void CUDA_DEVICE_CALLABLE sha256_hash_step(sha_intermediate_data& hash_state)
 
   uint32_t words[64];
 
-  // Word size in bytes
-  auto constexpr word_size = sizeof(uint32_t);
-
   // The 512-bit message buffer fills the first 16 words.
-  memcpy(&words[0], hash_state.buffer, word_size * 16);
+  memcpy(&words[0], hash_state.buffer, sizeof(words[0]) * 16);
   for (int i = 0; i < 16; i++) {
     // Convert word representation from little-endian to big-endian.
     words[i] = swap_endian(words[i]);
@@ -522,11 +516,8 @@ void CUDA_DEVICE_CALLABLE sha512_hash_step(sha_intermediate_data& hash_state)
 
   uint64_t words[80];
 
-  // Word size in bytes
-  auto constexpr word_size = sizeof(uint64_t);
-
   // The 1024-bit message buffer fills the first 16 words.
-  memcpy(&words[0], hash_state.buffer, word_size * 16);
+  memcpy(&words[0], hash_state.buffer, sizeof(words[0]) * 16);
   for (int i = 0; i < 16; i++) {
     // Convert word representation from little-endian to big-endian.
     words[i] = swap_endian(words[i]);
