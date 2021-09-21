@@ -300,11 +300,10 @@ void CUDA_DEVICE_CALLABLE sha1_hash_step(sha_intermediate_data& hash_state)
   auto constexpr word_size = sizeof(uint32_t);
 
   // The 512-bit message buffer fills the first 16 words.
+  memcpy(&words[0], hash_state.buffer, word_size * 16);
   for (int i = 0; i < 16; i++) {
-    uint32_t buffer_element_as_int;
-    memcpy(&buffer_element_as_int, hash_state.buffer + (i * word_size), word_size);
     // Convert word representation from little-endian to big-endian.
-    words[i] = swap_endian(buffer_element_as_int);
+    words[i] = swap_endian(words[i]);
   }
 
   // The rest of the 80 words are generated from the first 16 words.
@@ -374,11 +373,10 @@ void CUDA_DEVICE_CALLABLE sha256_hash_step(sha_intermediate_data& hash_state)
   auto constexpr word_size = sizeof(uint32_t);
 
   // The 512-bit message buffer fills the first 16 words.
+  memcpy(&words[0], hash_state.buffer, word_size * 16);
   for (int i = 0; i < 16; i++) {
-    uint32_t buffer_element_as_int;
-    memcpy(&buffer_element_as_int, hash_state.buffer + (i * word_size), word_size);
     // Convert word representation from little-endian to big-endian.
-    words[i] = swap_endian(buffer_element_as_int);
+    words[i] = swap_endian(words[i]);
   }
 
   // The rest of the 64 words are generated from the first 16 words.
@@ -443,12 +441,11 @@ void CUDA_DEVICE_CALLABLE sha512_hash_step(sha_intermediate_data& hash_state)
   // Word size in bytes
   auto constexpr word_size = sizeof(uint64_t);
 
-  // The 512-bit message buffer fills the first 16 words.
+  // The 1024-bit message buffer fills the first 16 words.
+  memcpy(&words[0], hash_state.buffer, word_size * 16);
   for (int i = 0; i < 16; i++) {
-    uint64_t buffer_element_as_int;
-    memcpy(&buffer_element_as_int, hash_state.buffer + (i * word_size), word_size);
     // Convert word representation from little-endian to big-endian.
-    words[i] = swap_endian(buffer_element_as_int);
+    words[i] = swap_endian(words[i]);
   }
 
   // The rest of the 80 words are generated from the first 16 words.
