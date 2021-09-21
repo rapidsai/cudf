@@ -31,7 +31,7 @@ def datadir(datadir):
     return datadir / "parquet"
 
 
-@pytest.fixture(params=[1, 5, 10, 100])
+@pytest.fixture(params=[1, 5, 10, 100000])
 def simple_pdf(request):
     types = [
         "bool",
@@ -148,12 +148,12 @@ def build_pdf(num_columns, day_resolution_timestamps):
     return test_pdf
 
 
-@pytest.fixture(params=[0, 1, 10, 100])
+@pytest.fixture(params=[0, 1, 10, 10000])
 def pdf(request):
     return build_pdf(request, False)
 
 
-@pytest.fixture(params=[0, 1, 10, 100])
+@pytest.fixture(params=[0, 1, 10, 10000])
 def pdf_day_timestamps(request):
     return build_pdf(request, True)
 
@@ -371,6 +371,9 @@ def test_parquet_reader_pandas_metadata(tmpdir, columns, pandas_compat):
 
 
 def test_parquet_read_metadata(tmpdir, pdf):
+    if len(pdf) > 100:
+        pytest.skip("Skipping long setup test")
+
     def num_row_groups(rows, group_size):
         return max(1, (rows + (group_size - 1)) // group_size)
 
@@ -504,6 +507,9 @@ def test_parquet_read_filtered_complex_predicate(
 
 @pytest.mark.parametrize("row_group_size", [1, 5, 100])
 def test_parquet_read_row_groups(tmpdir, pdf, row_group_size):
+    if len(pdf) > 100:
+        pytest.skip("Skipping long setup test")
+
     if "col_category" in pdf.columns:
         pdf = pdf.drop(columns=["col_category"])
     fname = tmpdir.join("row_group.parquet")
@@ -528,6 +534,9 @@ def test_parquet_read_row_groups(tmpdir, pdf, row_group_size):
 
 @pytest.mark.parametrize("row_group_size", [1, 5, 100])
 def test_parquet_read_row_groups_non_contiguous(tmpdir, pdf, row_group_size):
+    if len(pdf) > 100:
+        pytest.skip("Skipping long setup test")
+
     fname = tmpdir.join("row_group.parquet")
     pdf.to_parquet(fname, compression="gzip", row_group_size=row_group_size)
 
@@ -553,6 +562,9 @@ def test_parquet_read_row_groups_non_contiguous(tmpdir, pdf, row_group_size):
 
 @pytest.mark.parametrize("row_group_size", [1, 4, 33])
 def test_parquet_read_rows(tmpdir, pdf, row_group_size):
+    if len(pdf) > 100:
+        pytest.skip("Skipping long setup test")
+
     fname = tmpdir.join("row_group.parquet")
     pdf.to_parquet(fname, compression="None", row_group_size=row_group_size)
 
@@ -1887,6 +1899,9 @@ def test_parquet_writer_statistics(tmpdir, pdf):
             actual_max = pd_slice[col].max()
             stats_max = stats.max
             assert normalized_equals(actual_max, stats_max)
+
+            assert stats.null_count == pd_slice[col].isna().sum()
+            assert stats.num_values == pd_slice[col].count()
 
 
 def test_parquet_writer_list_statistics(tmpdir):
