@@ -497,11 +497,24 @@ def find_common_type(dtypes):
     # Early exit for categoricals since they're not hashable and therefore
     # can't be put in a set.
     if any(cudf.api.types.is_categorical_dtype(dtype) for dtype in dtypes):
-        # TODO: Is there a better behavior here? We could check if two distinct
-        # dtype objects actually had the same categories. Alternatively, should
-        # we actually combine categories (that seems wrong, but is also
-        # possible).
-        return cudf.dtype("O")
+        if all(cudf.api.types.is_categorical_dtype(dtype) for dtype in dtypes):
+            if len(set(dtype._categories.dtype for dtype in dtypes)) == 1:
+                return cudf.CategoricalDtype(
+                    cudf.core.column.concat_columns(
+                        [dtype._categories for dtype in dtypes]
+                    ).unique()
+                )
+            else:
+                raise ValueError(
+                    "Only categories of the same underlying type "
+                    "may be coerced to a common type."
+                )
+        else:
+            # TODO: Should this be an error case (mixing categorical with other
+            # dtypes) or should this return object? Unclear if we have enough
+            # information to decide right now, may have to come back to this as
+            # usage of find_common_type increases.
+            return cudf.dtype("O")
 
     # Aggregate same types
     dtypes = set(dtypes)
