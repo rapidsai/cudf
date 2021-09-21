@@ -1553,3 +1553,26 @@ def test_multiIndex_duplicate_names():
     )
 
     assert_eq(gi, pi)
+
+
+@pytest.mark.parametrize(
+    "idx1, idx2",
+    [
+        (
+            pd.MultiIndex.from_arrays(
+                [[1, 1, 2, 2], ["Red", "Blue", "Red", "Blue"]]
+            ),
+            pd.MultiIndex.from_arrays(
+                [[3, 3, 2, 2], ["Red", "Green", "Red", "Green"]]
+            ),
+        )
+    ],
+)
+def test_union_mulitIndex(idx1, idx2):
+    expected = idx1.union(idx2)
+
+    idx1 = cudf.from_pandas(idx1)
+    idx2 = cudf.from_pandas(idx2)
+
+    actual = idx1.union(idx2)
+    assert_eq(expected, actual)

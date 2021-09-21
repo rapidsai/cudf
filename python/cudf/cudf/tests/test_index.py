@@ -2382,3 +2382,16 @@ def test_range_index_concat(objs):
     for obj in objs[1:]:
         expected = expected.append(obj)
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "idx1, idx2", [(pd.RangeIndex(0, 10), pd.RangeIndex(3, 7))]
+)
+def test_union_index(idx1, idx2):
+    expected = idx1.union(idx2)
+
+    idx1 = cudf.from_pandas(idx1)
+    idx2 = cudf.from_pandas(idx2)
+
+    actual = idx1.union(idx2)
+    assert_eq(expected, actual)
