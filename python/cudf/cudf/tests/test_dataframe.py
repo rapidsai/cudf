@@ -201,7 +201,7 @@ def test_series_basic():
     a1 = np.arange(10, dtype=np.float64)
     series = cudf.Series(a1)
     assert len(series) == 10
-    np.testing.assert_equal(series.to_array(), np.hstack([a1]))
+    np.testing.assert_equal(series.to_numpy(), np.hstack([a1]))
 
 
 def test_series_from_cupy_scalars():
@@ -265,13 +265,13 @@ def test_dataframe_basic():
 
     # Populate with cuda memory
     df["keys"] = np.arange(10, dtype=np.float64)
-    np.testing.assert_equal(df["keys"].to_array(), np.arange(10))
+    np.testing.assert_equal(df["keys"].to_numpy(), np.arange(10))
     assert len(df) == 10
 
     # Populate with numpy array
     rnd_vals = np.random.random(10)
     df["vals"] = rnd_vals
-    np.testing.assert_equal(df["vals"].to_array(), rnd_vals)
+    np.testing.assert_equal(df["vals"].to_numpy(), rnd_vals)
     assert len(df) == 10
     assert tuple(df.columns) == ("keys", "vals")
 
@@ -287,8 +287,8 @@ def test_dataframe_basic():
     hkeys = np.asarray(np.arange(10, dtype=np.float64).tolist() + [123])
     hvals = np.asarray(rnd_vals.tolist() + [321])
 
-    np.testing.assert_equal(df["keys"].to_array(), hkeys)
-    np.testing.assert_equal(df["vals"].to_array(), hvals)
+    np.testing.assert_equal(df["keys"].to_numpy(), hkeys)
+    np.testing.assert_equal(df["vals"].to_numpy(), hvals)
 
     # As matrix
     mat = df.values_host
@@ -301,7 +301,7 @@ def test_dataframe_basic():
     df_tup = cudf.DataFrame()
     data = np.arange(10)
     df_tup[(1, "foobar")] = data
-    np.testing.assert_equal(data, df_tup[(1, "foobar")].to_array())
+    np.testing.assert_equal(data, df_tup[(1, "foobar")].to_numpy())
 
     df = cudf.DataFrame(pd.DataFrame({"a": [1, 2, 3], "c": ["a", "b", "c"]}))
     pdf = pd.DataFrame(pd.DataFrame({"a": [1, 2, 3], "c": ["a", "b", "c"]}))
@@ -715,7 +715,7 @@ def test_dataframe_astype(nelem):
     assert df["a"].dtype is np.dtype(np.int32)
     df["b"] = df["a"].astype(np.float32)
     assert df["b"].dtype is np.dtype(np.float32)
-    np.testing.assert_equal(df["a"].to_array(), df["b"].to_array())
+    np.testing.assert_equal(df["a"].to_numpy(), df["b"].to_numpy())
 
 
 def test_astype_dict():
@@ -738,12 +738,12 @@ def test_index_astype(nelem):
     df.index = df.index.astype(np.float32)
     assert df.index.dtype is np.dtype(np.float32)
     df["a"] = df["a"].astype(np.float32)
-    np.testing.assert_equal(df.index.to_array(), df["a"].to_array())
+    np.testing.assert_equal(df.index.to_numpy(), df["a"].to_numpy())
     df["b"] = df["a"]
     df = df.set_index("b")
     df["a"] = df["a"].astype(np.int16)
     df.index = df.index.astype(np.int16)
-    np.testing.assert_equal(df.index.to_array(), df["a"].to_array())
+    np.testing.assert_equal(df.index.to_numpy(), df["a"].to_numpy())
 
 
 def test_dataframe_to_string():
@@ -786,9 +786,9 @@ def test_dataframe_to_string():
     # check data
     values = masked.copy()
     validids = [0, 2, 3, 5]
-    densearray = masked.to_array()
+    densearray = masked.dropna().to_numpy()
     np.testing.assert_equal(data[validids], densearray)
-    # valid position is corret
+    # valid position is correct
 
     for i in validids:
         assert data[i] == values[i]
@@ -971,14 +971,14 @@ def test_dataframe_to_cupy():
     mat = df.to_numpy()
     assert mat.shape == (nelem, 4)
     for i, k in enumerate(df.columns):
-        np.testing.assert_array_equal(df[k].to_array(), mat[:, i])
+        np.testing.assert_array_equal(df[k].to_numpy(), mat[:, i])
 
     # Check column subset
     mat = df[["a", "c"]].to_cupy().get()
     assert mat.shape == (nelem, 2)
 
     for i, k in enumerate("ac"):
-        np.testing.assert_array_equal(df[k].to_array(), mat[:, i])
+        np.testing.assert_array_equal(df[k].to_numpy(), mat[:, i])
 
 
 def test_dataframe_to_cupy_null_values():
@@ -1083,7 +1083,7 @@ def test_dataframe_setitem_index_len1():
     gdf["a"] = [1]
     gdf["b"] = gdf.index._values
 
-    np.testing.assert_equal(gdf.b.to_array(), [0])
+    np.testing.assert_equal(gdf.b.to_numpy(), [0])
 
 
 def test_empty_dataframe_setitem_df():
@@ -1099,7 +1099,7 @@ def test_assign():
     assert list(gdf.columns) == ["x"]
     assert list(gdf2.columns) == ["x", "y"]
 
-    np.testing.assert_equal(gdf2.y.to_array(), [2, 3, 4])
+    np.testing.assert_equal(gdf2.y.to_numpy(), [2, 3, 4])
 
 
 @pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
@@ -1594,7 +1594,7 @@ def test_from_arrow(nelem, data_type):
 
     # For some reason PyArrow to_pandas() converts to numpy array and has
     # better type compatibility
-    np.testing.assert_array_equal(s.to_pandas(), gs.to_array())
+    np.testing.assert_array_equal(s.to_pandas(), gs.to_numpy())
 
 
 @pytest.mark.parametrize("nelem", [0, 2, 3, 100, 1000])
@@ -1734,7 +1734,7 @@ def test_from_python_array(data_type):
 
     gs = cudf.Series(data)
 
-    np.testing.assert_equal(gs.to_array(), np_arr)
+    np.testing.assert_equal(gs.to_numpy(), np_arr)
 
 
 def test_series_shape():
@@ -2201,11 +2201,11 @@ def test_series_hash_encode(nrows):
 
     encoded_series = s.hash_encode(num_features)
     assert isinstance(encoded_series, cudf.Series)
-    enc_arr = encoded_series.to_array()
+    enc_arr = encoded_series.to_numpy()
     assert np.all(enc_arr >= 0)
     assert np.max(enc_arr) < num_features
 
-    enc_with_name_arr = s.hash_encode(num_features, use_name=True).to_array()
+    enc_with_name_arr = s.hash_encode(num_features, use_name=True).to_numpy()
     assert enc_with_name_arr[0] != enc_arr[0]
 
 
@@ -2392,7 +2392,7 @@ def test_series_digitize(num_rows, num_bins, right, dtype, series_bins):
     else:
         indices = s.digitize(bins, right)
     np.testing.assert_array_equal(
-        np.digitize(data, bins, right), indices.to_array()
+        np.digitize(data, bins, right), indices.to_numpy()
     )
 
 
@@ -3214,15 +3214,6 @@ def test_array_ufunc():
     assert_eq(np.sqrt(gdf.x), np.sqrt(pdf.x))
 
 
-@pytest.mark.parametrize("nan_value", [-5, -5.0, 0, 5, 5.0, None, "pandas"])
-def test_series_to_gpu_array(nan_value):
-
-    s = cudf.Series([0, 1, None, 3])
-    np.testing.assert_array_equal(
-        s.to_array(nan_value), s.to_gpu_array(nan_value).copy_to_host()
-    )
-
-
 def test_dataframe_describe_exclude():
     np.random.seed(12)
     data_length = 10000
@@ -3460,8 +3451,6 @@ def test_dataframe_round(decimals):
     expected = pdf.round(pdecimals)
 
     assert_eq(result, expected)
-    for c in gdf.columns:
-        np.array_equal(gdf[c].nullmask.to_array(), result[c].to_array())
 
 
 @pytest.mark.parametrize(
@@ -4047,8 +4036,7 @@ def test_series_values_host_property(data):
             marks=pytest.mark.xfail(raises=NotImplementedError),
         ),
         pytest.param(
-            ["m", "a", "d", "v"],
-            marks=pytest.mark.xfail(raises=NotImplementedError),
+            ["m", "a", "d", "v"], marks=pytest.mark.xfail(raises=TypeError),
         ),
     ],
 )
@@ -5705,7 +5693,7 @@ def test_df_sr_mask_where(data, condition, other, error, inplace):
                 expect_where.cat.codes,
                 got_where.cat.codes.astype(expect_where.cat.codes.dtype)
                 .fillna(-1)
-                .to_array(),
+                .to_numpy(),
             )
             assert_eq(expect_where.cat.categories, got_where.cat.categories)
 
@@ -5713,7 +5701,7 @@ def test_df_sr_mask_where(data, condition, other, error, inplace):
                 expect_mask.cat.codes,
                 got_mask.cat.codes.astype(expect_mask.cat.codes.dtype)
                 .fillna(-1)
-                .to_array(),
+                .to_numpy(),
             )
             assert_eq(expect_mask.cat.categories, got_mask.cat.categories)
         else:
