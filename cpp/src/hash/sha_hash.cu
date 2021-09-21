@@ -228,24 +228,14 @@ struct SHAHash : public crtp<HasherT> {
   };
 
   template <typename T,
-            typename Hasher                            = HasherT,
-            typename std::enable_if_t<is_chrono<T>()>* = nullptr>
-  void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
-                                       size_type row_index,
-                                       typename Hasher::sha_intermediate_data& hash_state)
+            typename Hasher                                             = HasherT,
+            typename std::enable_if_t<(!is_fixed_width<T>() || is_chrono<T>()) &&
+                                      !std::is_same_v<T, string_view>>* = nullptr>
+  void CUDA_DEVICE_CALLABLE operator()(column_device_view,
+                                       size_type,
+                                       typename Hasher::sha_intermediate_data&)
   {
-    cudf_assert(false && "SHA Unsupported chrono type column");
-  }
-
-  template <
-    typename T,
-    typename Hasher                                                                     = HasherT,
-    typename std::enable_if_t<!is_fixed_width<T>() && !std::is_same_v<T, string_view>>* = nullptr>
-  void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
-                                       size_type row_index,
-                                       typename Hasher::sha_intermediate_data& hash_state)
-  {
-    cudf_assert(false && "SHA Unsupported non-fixed-width type column");
+    cudf_assert(false && "SHA unsupported type.");
   }
 
   template <typename T,
