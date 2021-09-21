@@ -1776,3 +1776,14 @@ class MultiIndex(Frame, BaseIndex):
         mask = cupy.full(self._data.nrows, False)
         mask[true_inds] = True
         return mask
+
+    def _union(self, other, sort=None):
+        other_df = other.to_frame()
+        self_df = self.to_frame()
+
+        result_df = cudf.merge(self_df, other_df, how="outer")
+        midx = MultiIndex.from_frame(result_df)
+        midx.names = self.names
+        if sort is None and len(other):
+            return midx.sort_values()
+        return midx
