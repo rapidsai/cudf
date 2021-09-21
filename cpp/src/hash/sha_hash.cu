@@ -113,25 +113,25 @@ struct SHAHash : public crtp<HasherT> {
     if (hash_state.buffer_length + len < Hasher::message_chunk_size) {
       // The buffer will not be filled by this data. We copy the new data into
       // the buffer but do not trigger a hash step yet.
-      std::memcpy(hash_state.buffer + hash_state.buffer_length, data, len);
+      memcpy(hash_state.buffer + hash_state.buffer_length, data, len);
       hash_state.buffer_length += len;
     } else {
       // The buffer will be filled by this data. Copy a chunk of the data to fill
       // the buffer and trigger a hash step.
       uint32_t copylen = Hasher::message_chunk_size - hash_state.buffer_length;
-      std::memcpy(hash_state.buffer + hash_state.buffer_length, data, copylen);
+      memcpy(hash_state.buffer + hash_state.buffer_length, data, copylen);
       this->underlying().hash_step(hash_state);
 
       // Take buffer-sized chunks of the data and do a hash step on each chunk.
       while (len > Hasher::message_chunk_size + copylen) {
-        std::memcpy(hash_state.buffer, data + copylen, Hasher::message_chunk_size);
+        memcpy(hash_state.buffer, data + copylen, Hasher::message_chunk_size);
         this->underlying().hash_step(hash_state);
         copylen += Hasher::message_chunk_size;
       }
 
       // The remaining data chunk does not fill the buffer. We copy the data into
       // the buffer but do not trigger a hash step yet.
-      std::memcpy(hash_state.buffer, data + copylen, len - copylen);
+      memcpy(hash_state.buffer, data + copylen, len - copylen);
       hash_state.buffer_length = len - copylen;
     }
   }
@@ -201,9 +201,9 @@ struct SHAHash : public crtp<HasherT> {
 
     // Convert the 64-bit message length from little-endian to big-endian.
     uint64_t const full_length_flipped = swap_endian(message_length_in_bits);
-    std::memcpy(hash_state.buffer + Hasher::message_chunk_size - message_length_supported_size,
-                reinterpret_cast<uint8_t const*>(&full_length_flipped),
-                message_length_supported_size);
+    memcpy(hash_state.buffer + Hasher::message_chunk_size - message_length_supported_size,
+           reinterpret_cast<uint8_t const*>(&full_length_flipped),
+           message_length_supported_size);
     this->underlying().hash_step(hash_state);
 
     // Each byte in the word generates two bytes in the hexadecimal string digest.
@@ -312,7 +312,7 @@ void CUDA_DEVICE_CALLABLE sha1_hash_step(sha_intermediate_data& hash_state)
   // The 512-bit message buffer fills the first 16 words.
   for (int i = 0; i < 16; i++) {
     uint32_t buffer_element_as_int;
-    std::memcpy(&buffer_element_as_int, hash_state.buffer + (i * word_size), word_size);
+    memcpy(&buffer_element_as_int, hash_state.buffer + (i * word_size), word_size);
     // Convert word representation from little-endian to big-endian.
     words[i] = swap_endian(buffer_element_as_int);
   }
@@ -386,7 +386,7 @@ void CUDA_DEVICE_CALLABLE sha256_hash_step(sha_intermediate_data& hash_state)
   // The 512-bit message buffer fills the first 16 words.
   for (int i = 0; i < 16; i++) {
     uint32_t buffer_element_as_int;
-    std::memcpy(&buffer_element_as_int, hash_state.buffer + (i * word_size), word_size);
+    memcpy(&buffer_element_as_int, hash_state.buffer + (i * word_size), word_size);
     // Convert word representation from little-endian to big-endian.
     words[i] = swap_endian(buffer_element_as_int);
   }
@@ -456,7 +456,7 @@ void CUDA_DEVICE_CALLABLE sha512_hash_step(sha_intermediate_data& hash_state)
   // The 512-bit message buffer fills the first 16 words.
   for (int i = 0; i < 16; i++) {
     uint64_t buffer_element_as_int;
-    std::memcpy(&buffer_element_as_int, hash_state.buffer + (i * word_size), word_size);
+    memcpy(&buffer_element_as_int, hash_state.buffer + (i * word_size), word_size);
     // Convert word representation from little-endian to big-endian.
     words[i] = swap_endian(buffer_element_as_int);
   }
