@@ -115,7 +115,6 @@ using Add_types =
                     cudf::test::Types<duration_us, duration_us, duration_D>,
                     // cudf::test::Types<duration_s, int16_t, int64_t>, //valid
                     cudf::test::Types<numeric::decimal32, numeric::decimal32, numeric::decimal32>,
-                    cudf::test::Types<int, numeric::decimal32, numeric::decimal32>,
                     // Extras
                     cudf::test::Types<duration_D, duration_D, duration_D>,
                     cudf::test::Types<timestamp_D, timestamp_D, duration_D>,
@@ -144,8 +143,7 @@ using Sub_types =
                     cudf::test::Types<timestamp_s, timestamp_D, duration_s>,  // t - d
                     cudf::test::Types<duration_ns, duration_us, duration_s>,  // d - d
                     cudf::test::Types<duration_us, duration_us, duration_s>,  // d - d
-                    cudf::test::Types<numeric::decimal32, numeric::decimal32, numeric::decimal32>,
-                    cudf::test::Types<int, numeric::decimal32, numeric::decimal32>>;
+                    cudf::test::Types<numeric::decimal32, numeric::decimal32, numeric::decimal32>>;
 template <typename T>
 struct BinaryOperationCompiledTest_Sub : public BinaryOperationCompiledTest<T> {
 };
@@ -166,9 +164,7 @@ using Mul_types =
                     cudf::test::Types<duration_s, u_int64_t, duration_s>,
                     cudf::test::Types<duration_ms, duration_D, int16_t>,
                     cudf::test::Types<duration_ns, duration_us, uint8_t>,
-                    cudf::test::Types<numeric::decimal32, numeric::decimal32, numeric::decimal32>,
-                    cudf::test::Types<int, numeric::decimal32, numeric::decimal32>,
-                    cudf::test::Types<numeric::decimal32, int, int>>;
+                    cudf::test::Types<numeric::decimal32, numeric::decimal32, numeric::decimal32>>;
 template <typename T>
 struct BinaryOperationCompiledTest_Mul : public BinaryOperationCompiledTest<T> {
 };
@@ -192,8 +188,7 @@ using Div_types =
                     cudf::test::Types<double, duration_D, duration_ns>,
                     cudf::test::Types<float, duration_ms, duration_ns>,
                     cudf::test::Types<u_int64_t, duration_us, duration_ns>,
-                    cudf::test::Types<numeric::decimal32, numeric::decimal32, numeric::decimal32>,
-                    cudf::test::Types<int, numeric::decimal32, numeric::decimal32>>;
+                    cudf::test::Types<numeric::decimal32, numeric::decimal32, numeric::decimal32>>;
 template <typename T>
 struct BinaryOperationCompiledTest_Div : public BinaryOperationCompiledTest<T> {
 };
@@ -209,13 +204,10 @@ TYPED_TEST(BinaryOperationCompiledTest_Div, Vector_Vector)
 // n n / n
 // t
 // d
-using TrueDiv_types =
-  cudf::test::Types<cudf::test::Types<int16_t, u_int64_t, u_int64_t>,
-                    cudf::test::Types<double, int8_t, int64_t>,
-                    cudf::test::Types<int8_t, bool, u_int32_t>,
-                    cudf::test::Types<u_int64_t, float, int16_t>,
-                    cudf::test::Types<numeric::decimal32, numeric::decimal32, numeric::decimal32>,
-                    cudf::test::Types<int, numeric::decimal32, numeric::decimal32>>;
+using TrueDiv_types = cudf::test::Types<cudf::test::Types<int16_t, u_int64_t, u_int64_t>,
+                                        cudf::test::Types<double, int8_t, int64_t>,
+                                        cudf::test::Types<int8_t, bool, u_int32_t>,
+                                        cudf::test::Types<u_int64_t, float, int16_t>>;
 template <typename T>
 struct BinaryOperationCompiledTest_TrueDiv : public BinaryOperationCompiledTest<T> {
 };
@@ -519,9 +511,7 @@ using Null_types =
                     cudf::test::Types<timestamp_s, timestamp_D, timestamp_s>,
                     cudf::test::Types<duration_ns, duration_us, duration_s>,
                     // cudf::test::Types<std::string, std::string, std::string>, // only fixed-width
-                    cudf::test::Types<numeric::decimal32, numeric::decimal32, numeric::decimal32>,
-                    cudf::test::Types<numeric::decimal32, uint32_t, numeric::decimal32>,
-                    cudf::test::Types<int64_t, numeric::decimal64, int64_t>>;
+                    cudf::test::Types<numeric::decimal32, numeric::decimal32, numeric::decimal32>>;
 
 template <typename T>
 struct BinaryOperationCompiledTest_NullOps : public BinaryOperationCompiledTest<T> {

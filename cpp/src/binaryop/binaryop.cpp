@@ -266,6 +266,28 @@ void binary_operation(mutable_column_view& out,
 
 // Compiled Binary operation
 namespace compiled {
+
+template <typename Lhs, typename Rhs>
+void fixed_point_binary_operation_validation(binary_operator op,
+                                             Lhs lhs,
+                                             Rhs rhs,
+                                             thrust::optional<cudf::data_type> output_type = {})
+{
+  CUDF_EXPECTS(is_fixed_point(lhs), "Input must have fixed_point data_type.");
+  CUDF_EXPECTS(is_fixed_point(rhs), "Input must have fixed_point data_type.");
+  CUDF_EXPECTS(binops::is_supported_fixed_point_binop(op),
+               "Unsupported fixed_point binary operation");
+  CUDF_EXPECTS(lhs.id() == rhs.id(), "Data type mismatch");
+  if (output_type.has_value()) {
+    if (binops::is_comparison_binop(op))
+      CUDF_EXPECTS(output_type == cudf::data_type{type_id::BOOL8},
+                   "Comparison operations require boolean output type.");
+    else
+      CUDF_EXPECTS(is_fixed_point(output_type.value()),
+                   "fixed_point binary operations require fixed_point output type.");
+  }
+}
+
 /**
  * @copydoc cudf::binary_operation(column_view const&, column_view const&,
  * binary_operator, data_type, rmm::mr::device_memory_resource*)
@@ -290,6 +312,11 @@ std::unique_ptr<column> binary_operation(LhsType const& lhs,
 
   if (not cudf::binops::compiled::is_supported_operation(output_type, lhs.type(), rhs.type(), op))
     CUDF_FAIL("Unsupported operator for these types");
+
+  if (cudf::is_fixed_point(lhs.type()) or cudf::is_fixed_point(rhs.type())) {
+    cudf::binops::compiled::fixed_point_binary_operation_validation(
+      op, lhs.type(), rhs.type(), output_type);
+  }
 
   auto out = make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
 
@@ -397,27 +424,6 @@ std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lh
       output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
   }
 };
-
-template <typename Lhs, typename Rhs>
-void fixed_point_binary_operation_validation(binary_operator op,
-                                             Lhs lhs,
-                                             Rhs rhs,
-                                             thrust::optional<cudf::data_type> output_type = {})
-{
-  CUDF_EXPECTS(is_fixed_point(lhs), "Input must have fixed_point data_type.");
-  CUDF_EXPECTS(is_fixed_point(rhs), "Input must have fixed_point data_type.");
-  CUDF_EXPECTS(binops::is_supported_fixed_point_binop(op),
-               "Unsupported fixed_point binary operation");
-  CUDF_EXPECTS(lhs.id() == rhs.id(), "Data type mismatch");
-  if (output_type.has_value()) {
-    if (binops::is_comparison_binop(op))
-      CUDF_EXPECTS(output_type == cudf::data_type{type_id::BOOL8},
-                   "Comparison operations require boolean output type.");
-    else
-      CUDF_EXPECTS(is_fixed_point(output_type.value()),
-                   "fixed_point binary operations require fixed_point output type.");
-  }
-}
 
 namespace jit {
 
@@ -617,7 +623,7 @@ cudf::data_type binary_operation_fixed_point_output_type(binary_operator op,
                                                          cudf::data_type const& lhs,
                                                          cudf::data_type const& rhs)
 {
-  cudf::detail::fixed_point_binary_operation_validation(op, lhs, rhs);
+  cudf::binops::compiled::fixed_point_binary_operation_validation(op, lhs, rhs);
 
   auto const scale = binary_operation_fixed_point_scale(op, lhs.scale(), rhs.scale());
   return cudf::data_type{lhs.id(), scale};
