@@ -396,7 +396,11 @@ def test_series_arith_masked_vs_constant(op, constant):
 
     # Just a single column -> result will be all NA
     data = cudf.Series([1, 2, cudf.NA])
-
+    if constant is cudf.NA and op is operator.pow:
+        # in pandas, 1**NA == 1. In cudf, 1**NA == 1.
+        with pytest.xfail():
+            run_masked_udf_series(func, func, data, check_dtype=False)
+        return
     run_masked_udf_series(func, func, data, check_dtype=False)
 
 
@@ -408,7 +412,11 @@ def test_series_arith_masked_vs_constant_reflected(op, constant):
 
     # Just a single column -> result will be all NA
     data = cudf.Series([1, 2, cudf.NA])
-
+    if constant is not cudf.NA and constant == 1 and op is operator.pow:
+        # in pandas, 1**NA == 1. In cudf, 1**NA == 1.
+        with pytest.xfail():
+            run_masked_udf_series(func, func, data, check_dtype=False)
+        return
     run_masked_udf_series(func, func, data, check_dtype=False)
 
 
