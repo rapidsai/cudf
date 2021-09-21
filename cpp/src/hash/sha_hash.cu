@@ -685,7 +685,6 @@ std::unique_ptr<column> sha_hash(table_view const& input,
 {
   if (input.num_columns() == 0 || input.num_rows() == 0) {
     // Return the hash of a zero-length input.
-    // TODO: This probably needs tested!
     return make_column_from_scalar(empty_result, input.num_rows(), stream, mr);
   }
 

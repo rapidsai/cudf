@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/hashing.hpp>
+#include <cudf/types.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
@@ -717,6 +719,20 @@ TYPED_TEST(MD5HashTestFloatTyped, TestListExtremes)
 class SHA1HashTest : public cudf::test::BaseFixture {
 };
 
+TEST_F(SHA1HashTest, EmptyTable)
+{
+  auto const empty_table        = cudf::table_view{};
+  auto const empty_column       = cudf::make_empty_column(cudf::data_type(cudf::type_id::STRING));
+  auto const output_empty_table = cudf::hash(empty_table, cudf::hash_id::HASH_SHA1);
+  EXPECT_EQ(empty_column->size(), output_empty_table->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(empty_column->view(), output_empty_table->view());
+
+  auto const table_one_empty_column  = cudf::table_view{{empty_column->view()}};
+  auto const output_one_empty_column = cudf::hash(empty_table, cudf::hash_id::HASH_SHA1);
+  EXPECT_EQ(empty_column->size(), output_one_empty_column->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(empty_column->view(), output_one_empty_column->view());
+}
+
 TEST_F(SHA1HashTest, MultiValue)
 {
   strings_column_wrapper const strings_col(
@@ -879,6 +895,20 @@ TYPED_TEST(SHA1HashTestFloatTyped, TestExtremes)
 
 class SHA224HashTest : public cudf::test::BaseFixture {
 };
+
+TEST_F(SHA224HashTest, EmptyTable)
+{
+  auto const empty_table        = cudf::table_view{};
+  auto const empty_column       = cudf::make_empty_column(cudf::data_type(cudf::type_id::STRING));
+  auto const output_empty_table = cudf::hash(empty_table, cudf::hash_id::HASH_SHA224);
+  EXPECT_EQ(empty_column->size(), output_empty_table->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(empty_column->view(), output_empty_table->view());
+
+  auto const table_one_empty_column  = cudf::table_view{{empty_column->view()}};
+  auto const output_one_empty_column = cudf::hash(empty_table, cudf::hash_id::HASH_SHA224);
+  EXPECT_EQ(empty_column->size(), output_one_empty_column->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(empty_column->view(), output_one_empty_column->view());
+}
 
 TEST_F(SHA224HashTest, MultiValue)
 {
@@ -1045,6 +1075,20 @@ TYPED_TEST(SHA224HashTestFloatTyped, TestExtremes)
 class SHA256HashTest : public cudf::test::BaseFixture {
 };
 
+TEST_F(SHA256HashTest, EmptyTable)
+{
+  auto const empty_table        = cudf::table_view{};
+  auto const empty_column       = cudf::make_empty_column(cudf::data_type(cudf::type_id::STRING));
+  auto const output_empty_table = cudf::hash(empty_table, cudf::hash_id::HASH_SHA256);
+  EXPECT_EQ(empty_column->size(), output_empty_table->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(empty_column->view(), output_empty_table->view());
+
+  auto const table_one_empty_column  = cudf::table_view{{empty_column->view()}};
+  auto const output_one_empty_column = cudf::hash(empty_table, cudf::hash_id::HASH_SHA256);
+  EXPECT_EQ(empty_column->size(), output_one_empty_column->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(empty_column->view(), output_one_empty_column->view());
+}
+
 TEST_F(SHA256HashTest, MultiValue)
 {
   strings_column_wrapper const strings_col(
@@ -1209,6 +1253,20 @@ TYPED_TEST(SHA256HashTestFloatTyped, TestExtremes)
 
 class SHA384HashTest : public cudf::test::BaseFixture {
 };
+
+TEST_F(SHA384HashTest, EmptyTable)
+{
+  auto const empty_table        = cudf::table_view{};
+  auto const empty_column       = cudf::make_empty_column(cudf::data_type(cudf::type_id::STRING));
+  auto const output_empty_table = cudf::hash(empty_table, cudf::hash_id::HASH_SHA384);
+  EXPECT_EQ(empty_column->size(), output_empty_table->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(empty_column->view(), output_empty_table->view());
+
+  auto const table_one_empty_column  = cudf::table_view{{empty_column->view()}};
+  auto const output_one_empty_column = cudf::hash(empty_table, cudf::hash_id::HASH_SHA384);
+  EXPECT_EQ(empty_column->size(), output_one_empty_column->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(empty_column->view(), output_one_empty_column->view());
+}
 
 TEST_F(SHA384HashTest, MultiValue)
 {
@@ -1390,6 +1448,20 @@ TYPED_TEST(SHA384HashTestFloatTyped, TestExtremes)
 
 class SHA512HashTest : public cudf::test::BaseFixture {
 };
+
+TEST_F(SHA512HashTest, EmptyTable)
+{
+  auto const empty_table        = cudf::table_view{};
+  auto const empty_column       = cudf::make_empty_column(cudf::data_type(cudf::type_id::STRING));
+  auto const output_empty_table = cudf::hash(empty_table, cudf::hash_id::HASH_SHA512);
+  EXPECT_EQ(empty_column->size(), output_empty_table->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(empty_column->view(), output_empty_table->view());
+
+  auto const table_one_empty_column  = cudf::table_view{{empty_column->view()}};
+  auto const output_one_empty_column = cudf::hash(empty_table, cudf::hash_id::HASH_SHA512);
+  EXPECT_EQ(empty_column->size(), output_one_empty_column->size());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(empty_column->view(), output_one_empty_column->view());
+}
 
 TEST_F(SHA512HashTest, MultiValue)
 {
