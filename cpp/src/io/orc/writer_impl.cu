@@ -1001,10 +1001,10 @@ void writer::impl::write_index_stream(int32_t stripe_id,
       record.pos += stream.lengths[type];
       while ((record.pos >= 0) && (record.blk_pos >= 0) &&
              (static_cast<size_t>(record.pos) >= compression_blocksize_) &&
-             (record.comp_pos + 3 + comp_out[record.blk_pos].bytes_written <
+             (record.comp_pos + BLOCK_HEADER_SIZE + comp_out[record.blk_pos].bytes_written <
               static_cast<size_t>(record.comp_size))) {
         record.pos -= compression_blocksize_;
-        record.comp_pos += 3 + comp_out[record.blk_pos].bytes_written;
+        record.comp_pos += BLOCK_HEADER_SIZE + comp_out[record.blk_pos].bytes_written;
         record.blk_pos += 1;
       }
     }
@@ -1494,9 +1494,9 @@ void writer::impl::write(table_view const& table)
 
         auto num_blocks = std::max<uint32_t>(
           (stream_size + compression_blocksize_ - 1) / compression_blocksize_, 1);
-        stream_size += num_blocks * 3;
+        stream_size += num_blocks * BLOCK_HEADER_SIZE;
         num_compressed_blocks += num_blocks;
-        compressed_bfr_size += (max_compressed_block_size + 3) * num_blocks;
+        compressed_bfr_size += (max_compressed_block_size + BLOCK_HEADER_SIZE) * num_blocks;
       }
       max_stream_size = std::max(max_stream_size, stream_size);
     }

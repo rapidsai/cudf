@@ -1140,7 +1140,7 @@ __global__ void __launch_bounds__(256)
     uint32_t blk_size = min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
     blk_in->srcDevice = src + b * comp_blk_size;
     blk_in->srcSize   = blk_size;
-    blk_in->dstDevice = dst + b * (3 + max_comp_blk_size) + 3;  // reserve 3 bytes for block header
+    blk_in->dstDevice = dst + b * (BLOCK_HEADER_SIZE + max_comp_blk_size) + BLOCK_HEADER_SIZE;
     blk_in->dstSize   = max_comp_blk_size;
     blk_out->bytes_written = blk_size;
     blk_out->status        = 1;

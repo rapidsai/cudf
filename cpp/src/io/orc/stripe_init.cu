@@ -52,13 +52,13 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
     uint32_t max_uncompressed_block_size = 0;
     uint32_t num_compressed_blocks       = 0;
     uint32_t num_uncompressed_blocks     = 0;
-    while (cur + 3 < end) {
+    while (cur + BLOCK_HEADER_SIZE < end) {
       uint32_t block_len = shuffle((lane_id == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
       uint32_t is_uncompressed = block_len & 1;
       uint32_t uncompressed_size;
       gpu_inflate_input_s* init_ctl = nullptr;
       block_len >>= 1;
-      cur += 3;
+      cur += BLOCK_HEADER_SIZE;
       if (block_len > block_size || cur + block_len > end) {
         // Fatal
         num_compressed_blocks       = 0;
@@ -145,12 +145,12 @@ extern "C" __global__ void __launch_bounds__(128, 8)
     uint32_t num_compressed_blocks      = 0;
     uint32_t max_compressed_blocks      = s->info.num_compressed_blocks;
 
-    while (cur + 3 < end) {
+    while (cur + BLOCK_HEADER_SIZE < end) {
       uint32_t block_len = shuffle((lane_id == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
       uint32_t is_uncompressed = block_len & 1;
       uint32_t uncompressed_size_est, uncompressed_size_actual;
       block_len >>= 1;
-      cur += 3;
+      cur += BLOCK_HEADER_SIZE;
       if (cur + block_len > end) { break; }
       if (is_uncompressed) {
         uncompressed_size_est    = block_len;
@@ -367,9 +367,11 @@ static __device__ void gpuMapRowIndexToUncompressed(rowindex_state_s* s,
       for (;;) {
         uint32_t block_len, is_uncompressed;
 
-        if (cur + 3 > end || cur + 3 >= start + compressed_offset) { break; }
+        if (cur + BLOCK_HEADER_SIZE > end || cur + BLOCK_HEADER_SIZE >= start + compressed_offset) {
+          break;
+        }
         block_len = cur[0] | (cur[1] << 8) | (cur[2] << 16);
-        cur += 3;
+        cur += BLOCK_HEADER_SIZE;
         is_uncompressed = block_len & 1;
         block_len >>= 1;
         cur += block_len;
