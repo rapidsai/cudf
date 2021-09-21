@@ -124,7 +124,7 @@ std::unique_ptr<column> hash(table_view const& input,
     case (hash_id::HASH_SHA256): return sha256_hash(input, stream, mr);
     case (hash_id::HASH_SHA384): return sha384_hash(input, stream, mr);
     case (hash_id::HASH_SHA512): return sha512_hash(input, stream, mr);
-    default: return nullptr;
+    default: CUDF_FAIL("Unsupported hash function.");
   }
 }
 
