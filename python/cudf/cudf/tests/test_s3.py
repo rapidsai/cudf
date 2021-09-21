@@ -122,17 +122,39 @@ def pdf(scope="module"):
     return df
 
 
-def test_read_csv(s3_base, s3so, pdf):
+@pytest.mark.parametrize("bytes_per_thread", [32, 1024])
+def test_read_csv(s3_base, s3so, pdf, bytes_per_thread):
     # Write to buffer
     fname = "test_csv_reader.csv"
     bname = "csv"
     buffer = pdf.to_csv(index=False)
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         got = cudf.read_csv(
-            "s3://{}/{}".format(bname, fname), storage_options=s3so
+            "s3://{}/{}".format(bname, fname),
+            storage_options=s3so,
+            bytes_per_thread=bytes_per_thread,
         )
 
     assert_eq(pdf, got)
+
+
+@pytest.mark.parametrize("bytes_per_thread", [32, 1024])
+def test_read_csv_byte_range(s3_base, s3so, pdf, bytes_per_thread):
+    # Write to buffer
+    fname = "test_csv_reader_byte_range.csv"
+    bname = "csv"
+    buffer = pdf.to_csv(index=False)
+    with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
+        got = cudf.read_csv(
+            "s3://{}/{}".format(bname, fname),
+            storage_options=s3so,
+            byte_range=(74, 73),
+            bytes_per_thread=bytes_per_thread,
+            header=False,
+            names=["Integer", "Float", "Integer2", "String", "Boolean"],
+        )
+
+    assert_eq(pdf.iloc[-2:].reset_index(drop=True), got)
 
 
 @pytest.mark.parametrize("chunksize", [None, 3])
@@ -156,7 +178,9 @@ def test_write_csv(s3_base, s3so, pdf, chunksize):
     assert_eq(pdf, got)
 
 
-def test_read_parquet(s3_base, s3so, pdf):
+@pytest.mark.parametrize("bytes_per_thread", [32, 1024])
+@pytest.mark.parametrize("columns", [None, ["Float", "String"]])
+def test_read_parquet(s3_base, s3so, pdf, bytes_per_thread, columns):
     fname = "test_parquet_reader.parquet"
     bname = "parquet"
     buffer = BytesIO()
@@ -164,10 +188,14 @@ def test_read_parquet(s3_base, s3so, pdf):
     buffer.seek(0)
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         got = cudf.read_parquet(
-            "s3://{}/{}".format(bname, fname), storage_options=s3so
+            "s3://{}/{}".format(bname, fname),
+            storage_options=s3so,
+            bytes_per_thread=bytes_per_thread,
+            columns=columns,
         )
 
-    assert_eq(pdf, got)
+    expect = pdf[columns] if columns else pdf
+    assert_eq(expect, got)
 
 
 def test_write_parquet(s3_base, s3so, pdf):
