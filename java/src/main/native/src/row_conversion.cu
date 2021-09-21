@@ -54,7 +54,9 @@ constexpr auto NUM_VALIDITY_BLOCKS_PER_KERNEL_LOADED = 2;
 #endif
 
 using cudf::detail::make_device_uvector_async;
-namespace cudf {
+using cudf::detail::warp_size;
+
+namespace cudf::java {
 
 namespace detail {
 
@@ -526,9 +528,9 @@ __global__ void copy_validity_from_columns(
         align_offset(util::div_rounding_up_unsafe(num_block_cols, 8), 8);
     auto const total_sections = num_sections_x * num_sections_y;
 
-    int const warp_id = threadIdx.x / detail::warp_size;
-    int const lane_id = threadIdx.x % detail::warp_size;
-    auto const warps_per_block = std::max(1u, blockDim.x / detail::warp_size);
+    int const warp_id = threadIdx.x / warp_size;
+    int const lane_id = threadIdx.x % warp_size;
+    auto const warps_per_block = std::max(1u, blockDim.x / warp_size);
 
     // the block is divided into sections. A warp operates on a section at a time.
     for (int my_section_idx = warp_id; my_section_idx < total_sections;
@@ -557,7 +559,7 @@ __global__ void copy_validity_from_columns(
           // lead thread in each warp writes data
           auto const validity_write_offset =
               validity_data_row_length * (relative_row + i) + relative_col / 8;
-          if (threadIdx.x % detail::warp_size == 0) {
+          if (threadIdx.x % warp_size == 0) {
             if (cols_left <= 8) {
               // write byte
               this_shared_block[validity_write_offset] = validity_data & 0xFF;
@@ -855,12 +857,12 @@ __global__ void copy_validity_to_columns(
 
     auto const num_sections_x = (num_block_cols + 7) / 8;
     auto const num_sections_y = (num_block_rows + 31) / 32;
-    auto const validity_data_col_length = align_offset(num_sections_y, 4);
+    auto const validity_data_col_length = num_sections_y * 4; // words to bytes
     auto const total_sections = num_sections_x * num_sections_y;
 
-    int const warp_id = threadIdx.x / detail::warp_size;
-    int const lane_id = threadIdx.x % detail::warp_size;
-    auto const warps_per_block = std::max(1u, blockDim.x / detail::warp_size);
+    int const warp_id = threadIdx.x / warp_size;
+    int const lane_id = threadIdx.x % warp_size;
+    auto const warps_per_block = std::max(1u, blockDim.x / warp_size);
 
     // the block is divided into sections. A warp operates on a section at a time.
     for (int my_section_idx = warp_id; my_section_idx < total_sections;
@@ -888,7 +890,7 @@ __global__ void copy_validity_to_columns(
              ++i, byte_mask <<= 1) {
           auto validity_data = __ballot_sync(participation_mask, my_byte & byte_mask);
           // lead thread in each warp writes data
-          if (threadIdx.x % detail::warp_size == 0) {
+          if (threadIdx.x % warp_size == 0) {
             auto const validity_write_offset =
                 validity_data_col_length * (relative_col + i) + relative_row / 8;
 
