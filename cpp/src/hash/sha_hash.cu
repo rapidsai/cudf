@@ -106,7 +106,7 @@ struct SHAHash : public crtp<HasherT> {
   template <typename Hasher = HasherT>
   void CUDA_DEVICE_CALLABLE process(uint8_t const* data,
                                     uint32_t len,
-                                    typename Hasher::sha_intermediate_data& hash_state) const
+                                    typename Hasher::sha_intermediate_data& hash_state)
   {
     hash_state.message_length += len;
 
@@ -138,7 +138,7 @@ struct SHAHash : public crtp<HasherT> {
 
   template <typename TKey, typename Hasher = HasherT>
   void CUDA_DEVICE_CALLABLE process_key(TKey const& key,
-                                        typename Hasher::sha_intermediate_data& hash_state) const
+                                        typename Hasher::sha_intermediate_data& hash_state)
   {
     uint8_t const* data    = reinterpret_cast<uint8_t const*>(&key);
     uint32_t constexpr len = sizeof(TKey);
@@ -232,7 +232,7 @@ struct SHAHash : public crtp<HasherT> {
             typename std::enable_if_t<is_chrono<T>()>* = nullptr>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
                                        size_type row_index,
-                                       typename Hasher::sha_intermediate_data& hash_state) const
+                                       typename Hasher::sha_intermediate_data& hash_state)
   {
     cudf_assert(false && "SHA Unsupported chrono type column");
   }
@@ -243,7 +243,7 @@ struct SHAHash : public crtp<HasherT> {
     typename std::enable_if_t<!is_fixed_width<T>() && !std::is_same_v<T, string_view>>* = nullptr>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
                                        size_type row_index,
-                                       typename Hasher::sha_intermediate_data& hash_state) const
+                                       typename Hasher::sha_intermediate_data& hash_state)
   {
     cudf_assert(false && "SHA Unsupported non-fixed-width type column");
   }
@@ -253,7 +253,7 @@ struct SHAHash : public crtp<HasherT> {
             typename std::enable_if_t<is_floating_point<T>()>* = nullptr>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
                                        size_type row_index,
-                                       typename Hasher::sha_intermediate_data& hash_state) const
+                                       typename Hasher::sha_intermediate_data& hash_state)
   {
     T const& key = col.element<T>(row_index);
     if (isnan(key)) {
@@ -272,7 +272,7 @@ struct SHAHash : public crtp<HasherT> {
                                       !is_chrono<T>()>* = nullptr>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
                                        size_type row_index,
-                                       typename Hasher::sha_intermediate_data& hash_state) const
+                                       typename Hasher::sha_intermediate_data& hash_state)
   {
     process_key(col.element<T>(row_index), hash_state);
   }
@@ -282,7 +282,7 @@ struct SHAHash : public crtp<HasherT> {
             typename std::enable_if_t<std::is_same_v<T, string_view>>* = nullptr>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
                                        size_type row_index,
-                                       typename Hasher::sha_intermediate_data& hash_state) const
+                                       typename Hasher::sha_intermediate_data& hash_state)
   {
     string_view key     = col.element<string_view>(row_index);
     uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
