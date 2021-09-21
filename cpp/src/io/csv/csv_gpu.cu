@@ -324,7 +324,8 @@ __inline__ __device__ cudf::timestamp_s decode_value(char const* begin,
   if (milli == -1) {
     return timestamp_s{cudf::duration_s{to_non_negative_integer<int64_t>(begin, end)}};
   } else {
-    return timestamp_s{cudf::duration_s{milli / 1000}};
+    duration_ms d{milli};
+    return timestamp_s{cuda::std::chrono::duration_cast<cudf::duration_s>(d)};
   }
 }
 
@@ -350,7 +351,8 @@ __inline__ __device__ cudf::timestamp_us decode_value(char const* begin,
   if (milli == -1) {
     return timestamp_us{cudf::duration_us{to_non_negative_integer<int64_t>(begin, end)}};
   } else {
-    return timestamp_us{cudf::duration_us{milli * 1000}};
+    duration_ms d{milli};
+    return timestamp_us{cuda::std::chrono::duration_cast<cudf::duration_us>(d)};
   }
 }
 
@@ -363,7 +365,8 @@ __inline__ __device__ cudf::timestamp_ns decode_value(char const* begin,
   if (milli == -1) {
     return timestamp_ns{cudf::duration_ns{to_non_negative_integer<int64_t>(begin, end)}};
   } else {
-    return timestamp_ns{cudf::duration_ns{milli * 1000000}};
+    duration_ms d{milli};
+    return timestamp_ns{cuda::std::chrono::duration_cast<cudf::duration_ns>(d)};
   }
 }
 
