@@ -113,21 +113,32 @@ __inline__ __device__ constexpr int32_t days_since_epoch(int year, int month, in
 }
 
 /**
- * @brief Computes the number of seconds since epoch, given a date and time.
+ * @brief Computes the number of milliseconds since epoch, given a date and time.
  *
  * This function takes year, month, day, hour, minute and second and returns
- * the number of seconds since epoch (1970-01-01),
+ * the number of milliseconds since epoch (1970-01-01),
  *
- * @return seconds since epoch
+ * @return milliseconds since epoch
  */
-__inline__ __device__ constexpr int64_t seconds_since_epoch(
+__inline__ __device__ constexpr int64_t milliseconds_since_epoch(
   int year, int month, int day, int hour, int minute, int second)
 {
+  using cuda::std::chrono::duration_cast;
+
   // Leverage the function to find the days since epoch
   const int64_t days = days_since_epoch(year, month, day);
 
-  // Return sum total seconds from each time portion
-  return (days * 24 * 60 * 60) + (hour * 60 * 60) + (minute * 60) + second;
+  cudf::duration_D d{days};
+  cudf::duration_h h{hour};
+  cudf::duration_m m{minute};
+  cudf::duration_s s{second};
+
+  // Convert all durations to milliseconds
+  auto milliseconds =
+    duration_cast<cudf::duration_ms>(d).count() + duration_cast<cudf::duration_ms>(h).count() +
+    duration_cast<cudf::duration_ms>(m).count() + duration_cast<cudf::duration_ms>(s).count();
+
+  return milliseconds;
 }
 
 /**
@@ -322,11 +333,13 @@ __inline__ __device__ int64_t to_date_time(char const* begin, char const* end, b
   if (sep_pos != end) {
     if (extract_date(begin, sep_pos, dayfirst, &year, &month, &day)) {
       extract_time(sep_pos + 1, end, &hour, &minute, &second, &millisecond);
-      answer = seconds_since_epoch(year, month, day, hour, minute, second) * 1000 + millisecond;
+      answer = milliseconds_since_epoch(year, month, day, hour, minute, second) + millisecond;
     }
   } else {
     if (extract_date(begin, end, dayfirst, &year, &month, &day)) {
-      answer = seconds_since_epoch(year, month, day, 0, 0, 0) * 1000;
+      const int64_t days = days_since_epoch(year, month, day);
+      cudf::duration_D d{days};
+      answer = cuda::std::chrono::duration_cast<cudf::duration_ms>(d).count();
     }
   }
 
