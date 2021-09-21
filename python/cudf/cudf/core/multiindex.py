@@ -128,16 +128,18 @@ class MultiIndex(Frame, BaseIndex):
                 )
 
         source_data = {}
-        for i, (cname, col) in enumerate(codes._data.items()):
+        for i, (column_name, col) in enumerate(codes._data.items()):
             if -1 in col.values:
                 level = cudf.DataFrame(
-                    {cname: [None] + list(levels[i])},
+                    {column_name: [None] + list(levels[i])},
                     index=range(-1, len(levels[i])),
                 )
             else:
-                level = cudf.DataFrame({cname: levels[i]})
+                level = cudf.DataFrame({column_name: levels[i]})
 
-            source_data[cname] = libcudf.copying.gather(level, col)[0][cname]
+            source_data[column_name] = libcudf.copying.gather(level, col)[0][
+                column_name
+            ]
 
         super().__init__(source_data)
         self._levels = levels
