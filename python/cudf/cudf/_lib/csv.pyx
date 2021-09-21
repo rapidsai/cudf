@@ -51,8 +51,6 @@ from cudf._lib.table cimport (
 )
 from cudf._lib.utils cimport data_from_unique_ptr
 
-from pyarrow.lib import NativeFile
-
 ctypedef int32_t underlying_type_t_compression
 
 
@@ -396,8 +394,7 @@ def read_csv(
     """
 
     if not isinstance(datasource, (BytesIO, StringIO, bytes,
-                                   cudf._lib.io.datasource.Datasource,
-                                   NativeFile)):
+                                   cudf._lib.io.datasource.Datasource)):
         if not os.path.isfile(datasource):
             raise FileNotFoundError(
                 errno.ENOENT, os.strerror(errno.ENOENT), datasource

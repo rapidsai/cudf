@@ -102,8 +102,3 @@ cdef extern from "cudf/io/datasource.hpp" \
 
     cdef cppclass datasource:
         pass
-
-    cdef cppclass arrow_io_source(datasource):
-        arrow_io_source() except +
-        arrow_io_source(string arrow_uri) except +
-        arrow_io_source(shared_ptr[CRandomAccessFile]) except +
