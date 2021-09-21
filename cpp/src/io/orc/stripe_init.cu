@@ -45,12 +45,13 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
   __syncthreads();
   if (strm_id < num_streams) {
     // Walk through the compressed blocks
-    const uint8_t* cur               = s->info.compressed_data;
-    const uint8_t* end               = cur + s->info.compressed_data_size;
-    uint8_t* uncompressed            = s->info.uncompressed_data;
-    size_t max_uncompressed_size     = 0;
-    uint32_t num_compressed_blocks   = 0;
-    uint32_t num_uncompressed_blocks = 0;
+    const uint8_t* cur                   = s->info.compressed_data;
+    const uint8_t* end                   = cur + s->info.compressed_data_size;
+    uint8_t* uncompressed                = s->info.uncompressed_data;
+    size_t max_uncompressed_size         = 0;
+    uint32_t max_uncompressed_block_size = 0;
+    uint32_t num_compressed_blocks       = 0;
+    uint32_t num_uncompressed_blocks     = 0;
     while (cur + 3 < end) {
       uint32_t block_len = shuffle((lane_id == 0) ? cur[0] | (cur[1] << 8) | (cur[2] << 16) : 0);
       uint32_t is_uncompressed = block_len & 1;
@@ -60,8 +61,9 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
       cur += 3;
       if (block_len > block_size || cur + block_len > end) {
         // Fatal
-        num_compressed_blocks = 0;
-        max_uncompressed_size = 0;
+        num_compressed_blocks       = 0;
+        max_uncompressed_size       = 0;
+        max_uncompressed_block_size = 0;
         break;
       }
       // TBD: For some codecs like snappy, it wouldn't be too difficult to get the actual
@@ -102,12 +104,14 @@ extern "C" __global__ void __launch_bounds__(128, 8) gpuParseCompressedStripeDat
       if (init_ctl && lane_id == 0) *init_ctl = s->ctl;
       cur += block_len;
       max_uncompressed_size += uncompressed_size;
+      max_uncompressed_block_size = max(max_uncompressed_block_size, uncompressed_size);
     }
     __syncwarp();
     if (!lane_id) {
-      s->info.num_compressed_blocks   = num_compressed_blocks;
-      s->info.num_uncompressed_blocks = num_uncompressed_blocks;
-      s->info.max_uncompressed_size   = max_uncompressed_size;
+      s->info.num_compressed_blocks       = num_compressed_blocks;
+      s->info.num_uncompressed_blocks     = num_uncompressed_blocks;
+      s->info.max_uncompressed_size       = max_uncompressed_size;
+      s->info.max_uncompressed_block_size = max_uncompressed_block_size;
     }
   }
 
