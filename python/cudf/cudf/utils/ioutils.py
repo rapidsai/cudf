@@ -1235,7 +1235,9 @@ def get_filepath_or_buffer(
     elif not isinstance(path_or_data, iotypes) and is_file_like(path_or_data):
         if isinstance(path_or_data, TextIOWrapper):
             path_or_data = path_or_data.buffer
-        BytesIO(_fsspec_data_transfer(path_or_data, mode=mode, **kwargs))
+        path_or_data = BytesIO(
+            _fsspec_data_transfer(path_or_data, mode=mode, **kwargs)
+        )
 
     return path_or_data, compression
 
