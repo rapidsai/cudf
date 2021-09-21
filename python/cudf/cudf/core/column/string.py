@@ -5208,9 +5208,7 @@ class StringColumn(column.ColumnBase):
         """
         Return a CuPy representation of the StringColumn.
         """
-        raise NotImplementedError(
-            "String Arrays is not yet implemented in cudf"
-        )
+        raise TypeError("String Arrays is not yet implemented in cudf")
 
     # TODO: This method is deprecated and should be removed when the associated
     # Frame methods are removed.
