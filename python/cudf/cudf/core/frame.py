@@ -1447,8 +1447,9 @@ class Frame(libcudf.table.Table):
             data = col.data
             mask = col.mask
             if mask is None:
-                mask = cudf.core.buffer.Buffer()
-            launch_args.append((data, mask))
+                launch_args.append(data)
+            else:
+                launch_args.append((data, mask))
             offsets.append(col.offset)
         launch_args += offsets
         launch_args.append(len(self))  # size
