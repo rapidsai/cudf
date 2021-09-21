@@ -404,6 +404,8 @@ __inline__ __device__ T parse_optional_integer(char const** begin, char const* e
 template <typename T>
 __inline__ __device__ int64_t to_time_delta(char const* begin, char const* end)
 {
+  using cuda::std::chrono::duration_cast;
+
   // %d days [+]%H:%M:%S.n => %d days, %d days [+]%H:%M:%S,  %H:%M:%S.n, %H:%M:%S, %value.
   constexpr char sep = ':';
 
@@ -431,9 +433,18 @@ __inline__ __device__ int64_t to_time_delta(char const* begin, char const* end)
   auto const minute = parse_optional_integer<int8_t>(&cur, end, sep);
   auto const second = parse_optional_integer<int8_t>(&cur, end, sep);
 
+  cudf::duration_D d{days};
+  cudf::duration_h h{hour};
+  cudf::duration_m m{minute};
+  cudf::duration_s s{second};
+  // Convert all durations to the given type
+  auto res_duration = duration_cast<T>(d).count() + duration_cast<T>(h).count() +
+                      duration_cast<T>(m).count() + duration_cast<T>(s).count();
+
   int nanosecond = 0;
+
   if (std::is_same_v<T, cudf::duration_s>) {
-    return ((days * 24L + hour) * 60L + minute) * 60L + second;
+    return res_duration;
   } else if (*cur == '.') {  //.n
     auto const start_subsecond        = ++cur;
     nanosecond                        = parse_integer<int>(&cur, end);
@@ -443,10 +454,7 @@ __inline__ __device__ int64_t to_time_delta(char const* begin, char const* end)
     nanosecond *= powers_of_ten[9 - num_digits];
   }
 
-  return cuda::std::chrono::duration_cast<T>(
-           cudf::duration_s{((days * 24L + hour) * 60L + minute) * 60L + second})
-           .count() +
-         cuda::std::chrono::duration_cast<T>(cudf::duration_ns{nanosecond}).count();
+  return res_duration + duration_cast<T>(cudf::duration_ns{nanosecond}).count();
 }
 
 }  // namespace io
