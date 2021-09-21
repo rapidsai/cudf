@@ -1569,7 +1569,7 @@ def _fsspec_data_transfer(
         if file_like:
             return path_or_fob.read()
         else:
-            return fs.open(path_or_fob, mode=mode, cache_type="bytes").read()
+            return fs.open(path_or_fob, mode=mode, cache_type="none").read()
 
     # Threaded read into "dummy" buffer
     buf = np.zeros(file_size, dtype="b")
