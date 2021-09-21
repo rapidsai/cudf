@@ -91,8 +91,8 @@ CUDA_DEVICE_CALLABLE uint64_t swap_endian(uint64_t x)
  */
 template <typename T>
 struct crtp {
-  __device__ T& underlying() { return static_cast<T&>(*this); }
-  __device__ T const& underlying() const { return static_cast<T const&>(*this); }
+  CUDA_DEVICE_CALLABLE T& underlying() { return static_cast<T&>(*this); }
+  CUDA_DEVICE_CALLABLE T const& underlying() const { return static_cast<T const&>(*this); }
 };
 
 template <typename HasherT>
@@ -296,7 +296,7 @@ struct SHAHash : public crtp<HasherT> {
  * updating the hash value so far. Does not zero out the buffer contents.
  */
 template <typename sha_intermediate_data>
-void __device__ sha1_hash_step(sha_intermediate_data& hash_state)
+void CUDA_DEVICE_CALLABLE sha1_hash_step(sha_intermediate_data& hash_state)
 {
   uint32_t A = hash_state.hash_value[0];
   uint32_t B = hash_state.hash_value[1];
@@ -367,7 +367,7 @@ void __device__ sha1_hash_step(sha_intermediate_data& hash_state)
  * updating the hash value so far. Does not zero out the buffer contents.
  */
 template <typename sha_intermediate_data>
-void __device__ sha256_hash_step(sha_intermediate_data& hash_state)
+void CUDA_DEVICE_CALLABLE sha256_hash_step(sha_intermediate_data& hash_state)
 {
   uint32_t A = hash_state.hash_value[0];
   uint32_t B = hash_state.hash_value[1];
@@ -437,7 +437,7 @@ void __device__ sha256_hash_step(sha_intermediate_data& hash_state)
  * updating the hash value so far. Does not zero out the buffer contents.
  */
 template <typename sha_intermediate_data>
-void __device__ sha512_hash_step(sha_intermediate_data& hash_state)
+void CUDA_DEVICE_CALLABLE sha512_hash_step(sha_intermediate_data& hash_state)
 {
   uint64_t A = hash_state.hash_value[0];
   uint64_t B = hash_state.hash_value[1];
@@ -518,6 +518,8 @@ struct SHA1Hash : SHAHash<SHA1Hash> {
   {
     sha1_hash_step(hash_state);
   }
+
+  sha_intermediate_data hash_state;
 };
 
 struct SHA224Hash : SHAHash<SHA224Hash> {
@@ -536,6 +538,8 @@ struct SHA224Hash : SHAHash<SHA224Hash> {
   {
     sha256_hash_step(hash_state);
   }
+
+  sha_intermediate_data hash_state;
 };
 
 struct SHA256Hash : SHAHash<SHA256Hash> {
@@ -554,6 +558,8 @@ struct SHA256Hash : SHAHash<SHA256Hash> {
   {
     sha256_hash_step(hash_state);
   }
+
+  sha_intermediate_data hash_state;
 };
 
 struct SHA384Hash : SHAHash<SHA384Hash> {
@@ -572,6 +578,8 @@ struct SHA384Hash : SHAHash<SHA384Hash> {
   {
     sha512_hash_step(hash_state);
   }
+
+  sha_intermediate_data hash_state;
 };
 
 struct SHA512Hash : SHAHash<SHA512Hash> {
@@ -590,6 +598,8 @@ struct SHA512Hash : SHAHash<SHA512Hash> {
   {
     sha512_hash_step(hash_state);
   }
+
+  sha_intermediate_data hash_state;
 };
 
 /**
@@ -643,7 +653,6 @@ std::unique_ptr<column> sha_hash(table_view const& input,
                    thrust::make_counting_iterator(0),
                    thrust::make_counting_iterator(input.num_rows()),
                    [d_chars, device_input = *device_input] __device__(auto row_index) {
-                     typename Hasher::sha_intermediate_data hash_state;
                      Hasher hasher = Hasher{};
                      for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
                        if (device_input.column(col_index).is_valid(row_index)) {
@@ -652,11 +661,11 @@ std::unique_ptr<column> sha_hash(table_view const& input,
                            hasher,
                            device_input.column(col_index),
                            row_index,
-                           hash_state);
+                           hasher.hash_state);
                        }
                      }
                      auto const result_location = d_chars + (row_index * Hasher::digest_size);
-                     hasher.finalize(hash_state, result_location);
+                     hasher.finalize(hasher.hash_state, result_location);
                    });
 
   return make_strings_column(
