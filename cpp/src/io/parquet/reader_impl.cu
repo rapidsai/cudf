@@ -185,15 +185,19 @@ type_id to_type_id(SchemaElement const& schema,
  */
 constexpr int32_t to_clockrate(type_id timestamp_type_id)
 {
+  using cuda::std::chrono::duration_cast;
+
+  duration_s unit_d{1};
+
   switch (timestamp_type_id) {
-    case type_id::DURATION_SECONDS: return 1;
-    case type_id::DURATION_MILLISECONDS: return 1000;
-    case type_id::DURATION_MICROSECONDS: return 1000000;
-    case type_id::DURATION_NANOSECONDS: return 1000000000;
-    case type_id::TIMESTAMP_SECONDS: return 1;
-    case type_id::TIMESTAMP_MILLISECONDS: return 1000;
-    case type_id::TIMESTAMP_MICROSECONDS: return 1000000;
-    case type_id::TIMESTAMP_NANOSECONDS: return 1000000000;
+    case type_id::DURATION_SECONDS: return unit_d.count();
+    case type_id::DURATION_MILLISECONDS: return duration_cast<duration_ms>(unit_d).count();
+    case type_id::DURATION_MICROSECONDS: return duration_cast<duration_us>(unit_d).count();
+    case type_id::DURATION_NANOSECONDS: return duration_cast<duration_ns>(unit_d).count();
+    case type_id::TIMESTAMP_SECONDS: return unit_d.count();
+    case type_id::TIMESTAMP_MILLISECONDS: return duration_cast<duration_ms>(unit_d).count();
+    case type_id::TIMESTAMP_MICROSECONDS: return duration_cast<duration_us>(unit_d).count();
+    case type_id::TIMESTAMP_NANOSECONDS: return duration_cast<duration_ns>(unit_d).count();
     default: return 0;
   }
 }

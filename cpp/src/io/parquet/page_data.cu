@@ -670,8 +670,7 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s* s, int src
                      duration_cast<cudf::duration_s>(cudf::duration_ns{nanos}).count();
       ts = secs * s->col.ts_clock_rate;  // Output to desired clock rate
     } else {
-      int64_t nsecs = duration_cast<cudf::duration_ns>(d).count();
-      ts            = nsecs + nanos;
+      ts = duration_cast<cudf::duration_ns>(d).count() + nanos;
     }
   } else {
     ts = 0;
@@ -1004,11 +1003,15 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
         case INT64:
           if (s->col.ts_clock_rate) {
             int32_t units = 0;
-            if (s->col.converted_type == TIME_MICROS || s->col.converted_type == TIMESTAMP_MICROS)
-              units = 1000000;
+            cudf::duration_s sec{1};
+            if (s->col.converted_type == TIME_MICROS || s->col.converted_type == TIMESTAMP_MICROS) {
+              units = cuda::std::chrono::duration_cast<cudf::duration_us>(sec).count();
+            }
+
             else if (s->col.converted_type == TIME_MILLIS ||
-                     s->col.converted_type == TIMESTAMP_MILLIS)
-              units = 1000;
+                     s->col.converted_type == TIMESTAMP_MILLIS) {
+              units = cuda::std::chrono::duration_cast<cudf::duration_ms>(sec).count();
+            }
             if (units && units != s->col.ts_clock_rate)
               s->ts_scale = (s->col.ts_clock_rate < units) ? -(units / s->col.ts_clock_rate)
                                                            : (s->col.ts_clock_rate / units);
