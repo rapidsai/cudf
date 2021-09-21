@@ -357,6 +357,9 @@ def read_parquet(
             add_par1_magic=True,
             **kwargs,
         )
+        if filters and isinstance(tmp_source, bytes):
+            tmp_source = io.BytesIO(tmp_source)
+
         if compression is not None:
             raise ValueError(
                 "URL content-encoding decompression is not supported"
