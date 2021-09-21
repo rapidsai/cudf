@@ -738,25 +738,6 @@ class Series(SingleColumnFrame, Serializable):
         index = index if isinstance(index, BaseIndex) else as_index(index)
         return self._from_data(self._data, index, self.name)
 
-    def as_index(self):
-        """Returns a new Series with a RangeIndex.
-
-        Examples
-        ----------
-        >>> s = cudf.Series([1,2,3], index=['a','b','c'])
-        >>> s
-        a    1
-        b    2
-        c    3
-        dtype: int64
-        >>> s.as_index()
-        0    1
-        1    2
-        2    3
-        dtype: int64
-        """
-        return self.set_index(RangeIndex(len(self)))
-
     def to_frame(self, name=None):
         """Convert Series into a DataFrame
 
