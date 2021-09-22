@@ -830,8 +830,7 @@ class Series(SingleColumnFrame, Serializable):
         dtype: int64
         """
         warnings.warn(
-            "Series.set_mask is deprecated and will be removed "
-            "in the future.",
+            "Series.set_mask is deprecated and will be removed in the future.",
             DeprecationWarning,
         )
         return self._from_data(
@@ -3241,35 +3240,10 @@ class Series(SingleColumnFrame, Serializable):
         self.mask(mask, other, inplace=True)
 
     def reverse(self):
-        """
-        Reverse the Series
-
-        Returns
-        -------
-        Series
-            A reversed Series.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([1, 2, 3, 4, 5, 6])
-        >>> series
-        0    1
-        1    2
-        2    3
-        3    4
-        4    5
-        5    6
-        dtype: int64
-        >>> series.reverse()
-        5    6
-        4    5
-        3    4
-        2    3
-        1    2
-        0    1
-        dtype: int64
-        """
+        warnings.warn(
+            "Series.reverse is deprecated and will be removed in the future.",
+            DeprecationWarning,
+        )
         rinds = column.arange((self._column.size - 1), -1, -1, dtype=np.int32)
         return self._from_data(
             {self.name: self._column[rinds]}, self.index._values[rinds]
