@@ -712,6 +712,13 @@ static __device__ void PlainBoolEncode(page_enc_state_s* s,
   }
 }
 
+/**
+ * @brief Determines the difference between the Proleptic Gregorian Calendar epoch (1970-01-01
+ * 00:00:00 UTC) and the Julian date epoch (-4713-11-24 12:00:00 UTC).
+ *
+ * @return The difference between two epochs in `cuda::std::chrono::duration` format with a period
+ * of hours.
+ */
 constexpr auto julian_calendar_epoch_diff()
 {
   using namespace cuda::std::chrono;

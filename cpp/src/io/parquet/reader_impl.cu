@@ -187,17 +187,17 @@ constexpr int32_t to_clockrate(type_id timestamp_type_id)
 {
   using cuda::std::chrono::duration_cast;
 
-  duration_s unit_d{1};
+  duration_s t_unit{1};  // Default time unit: 1 second
 
   switch (timestamp_type_id) {
-    case type_id::DURATION_SECONDS: return unit_d.count();
-    case type_id::DURATION_MILLISECONDS: return duration_cast<duration_ms>(unit_d).count();
-    case type_id::DURATION_MICROSECONDS: return duration_cast<duration_us>(unit_d).count();
-    case type_id::DURATION_NANOSECONDS: return duration_cast<duration_ns>(unit_d).count();
-    case type_id::TIMESTAMP_SECONDS: return unit_d.count();
-    case type_id::TIMESTAMP_MILLISECONDS: return duration_cast<duration_ms>(unit_d).count();
-    case type_id::TIMESTAMP_MICROSECONDS: return duration_cast<duration_us>(unit_d).count();
-    case type_id::TIMESTAMP_NANOSECONDS: return duration_cast<duration_ns>(unit_d).count();
+    case type_id::DURATION_SECONDS:
+    case type_id::TIMESTAMP_SECONDS: return t_unit.count();
+    case type_id::DURATION_MILLISECONDS:
+    case type_id::TIMESTAMP_MILLISECONDS: return duration_cast<duration_ms>(t_unit).count();
+    case type_id::DURATION_MICROSECONDS:
+    case type_id::TIMESTAMP_MICROSECONDS: return duration_cast<duration_us>(t_unit).count();
+    case type_id::DURATION_NANOSECONDS:
+    case type_id::TIMESTAMP_NANOSECONDS: return duration_cast<duration_ns>(t_unit).count();
     default: return 0;
   }
 }
@@ -211,6 +211,11 @@ T required_bits(uint32_t max_level)
   return static_cast<T>(CompactProtocolReader::NumRequiredBits(max_level));
 }
 
+/**
+ * @brief Converts cuDF units to Parquet units.
+ *
+ * @return A tuple of Parquet type width, Parquet clock rate and Parquet decimal type.
+ */
 std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
                                                      type_id timestamp_type_id,
                                                      parquet::Type physical,
