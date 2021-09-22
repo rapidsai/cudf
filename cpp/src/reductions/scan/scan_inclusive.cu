@@ -613,8 +613,14 @@ void print_device_uvector(rmm::device_uvector<double> const& input, rmm::cuda_st
 }
 
 /**
- * @brief Compute exponentially weighted moving variance
- * EWMVAR[i] is defined as EWMVAR[i] = EWMA[xi**2] - EWMA[xi]**2
+ * @brief Compute exponentially weighted moving variance.
+ * The simplest definition for EWMVAR is defined is
+ * EWMVAR[i] = EWMA[xi**2] - EWMA[xi]**2. Those EWMA are
+ * themselves calculated with adjust=true/false, leading
+ * to two types of EWMVAR calculations. From there, EWMVAR
+ * may be biased or unbiased, leading to four cases. Finally,
+ * nulls can either be present or not, which requires special
+ * handling in every case. This leads to eight possibilities.
  */
 std::unique_ptr<column> ewmvar(column_view const& input,
                                double com,
@@ -623,6 +629,12 @@ std::unique_ptr<column> ewmvar(column_view const& input,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
+
+  if (!adjust and bias and input.has_nulls()) {
+    // unadjusted, biased result with no nulls
+  }
+
+
   // get xi**2
   std::unique_ptr<column> xi_sqr = make_fixed_width_column(
     cudf::data_type{cudf::type_id::FLOAT64}, input.size(), copy_bitmask(input));
