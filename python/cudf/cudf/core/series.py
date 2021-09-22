@@ -5542,21 +5542,7 @@ class DatetimeProperties(object):
         1    <NA>
         Name: year, dtype: object
         """
-        isoSeries = cudf.core.tools.datetimes.to_iso_calendar(self)
-
-        @property
-        def day(self):
-            return isoSeries["day"]
-
-        @property
-        def week(self):
-            return isoSeries["week"]
-
-        @property
-        def year(self):
-            return isoSeries["year"]
-
-        return isoSeries
+        return cudf.core.tools.datetimes.to_iso_calendar(self)
 
     @property
     def is_month_start(self):
