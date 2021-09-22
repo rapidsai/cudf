@@ -1476,7 +1476,7 @@ def _fsspec_data_transfer(
     bytes_per_thread=256_000_000,
     max_gap=64_000,
     mode="rb",
-    clip_dummy_buffer=False,
+    clip_local_buffer=False,
     **kwargs,
 ):
 
@@ -1499,7 +1499,7 @@ def _fsspec_data_transfer(
         else:
             return fs.open(path_or_fob, mode=mode, cache_type="none").read()
 
-    # Threaded read into "dummy" buffer
+    # Threaded read into "local" buffer
     buf = np.zeros(file_size, dtype="b")
     if byte_ranges:
 
@@ -1536,10 +1536,10 @@ def _fsspec_data_transfer(
             path_or_fob, byte_ranges, buf, fs=fs, **kwargs,
         )
 
-    if clip_dummy_buffer:
+    if clip_local_buffer:
         # If we only need the populated byte range
         # (e.g. a csv byte-range read) then clip parts
-        # of the dummy buffer that are outside this range
+        # of the local buffer that are outside this range
         start = byte_ranges[0][0]
         end = byte_ranges[-1][0] + byte_ranges[-1][1]
         return buf[start:end].tobytes()

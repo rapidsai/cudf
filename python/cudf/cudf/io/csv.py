@@ -62,11 +62,11 @@ def read_csv(
         compression=compression,
         iotypes=(BytesIO, StringIO),
         byte_ranges=[byte_range] if byte_range else None,
-        clip_dummy_buffer=True if byte_range else False,
+        clip_local_buffer=True if byte_range else False,
         **kwargs,
     )
 
-    # Adjust byte_range for clipped dummy buffers
+    # Adjust byte_range for clipped local buffers
     use_byte_range = byte_range
     if byte_range and isinstance(filepath_or_buffer, BytesIO):
         if byte_range[1] == filepath_or_buffer.getbuffer().nbytes:
