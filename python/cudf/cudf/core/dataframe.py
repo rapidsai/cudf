@@ -356,7 +356,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             # Setting `final_columns` to self._index so
             # that the resulting `transpose` will be have
             # columns set to `final_columns`
-            self._index = final_columns
+            self._index = as_index(final_columns)
 
             transpose = self.T
         else:
