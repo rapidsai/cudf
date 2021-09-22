@@ -94,11 +94,14 @@ constexpr type_id to_type_id(const orc::SchemaType& schema,
  */
 constexpr int32_t to_clockrate(type_id timestamp_type_id)
 {
+  using cuda::std::chrono::duration_cast;
+
+  cudf::duration_s t_unit{1};  // Default time unit: 1 second
   switch (timestamp_type_id) {
-    case type_id::TIMESTAMP_SECONDS: return 1;
-    case type_id::TIMESTAMP_MILLISECONDS: return 1000;
-    case type_id::TIMESTAMP_MICROSECONDS: return 1000000;
-    case type_id::TIMESTAMP_NANOSECONDS: return 1000000000;
+    case type_id::TIMESTAMP_SECONDS: return t_unit.count();
+    case type_id::TIMESTAMP_MILLISECONDS: return duration_cast<duration_ms>(t_unit).count();
+    case type_id::TIMESTAMP_MICROSECONDS: return duration_cast<duration_us>(t_unit).count();
+    case type_id::TIMESTAMP_NANOSECONDS: return duration_cast<duration_ns>(t_unit).count();
     default: return 0;
   }
 }
