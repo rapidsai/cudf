@@ -355,6 +355,7 @@ void CompactOrcDataStreams(device_2dspan<StripeStream> strm_desc,
  * @param[in] num_compressed_blocks Total number of compressed blocks
  * @param[in] compression Type of compression
  * @param[in] comp_blk_size Compression block size
+ * @param[in] max_comp_blk_size Max size of any block after compression
  * @param[in,out] strm_desc StripeStream device array [stripe][stream]
  * @param[in,out] enc_streams chunk streams device array [column][rowgroup]
  * @param[out] comp_in Per-block compression input parameters
@@ -365,10 +366,11 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
                             uint32_t num_compressed_blocks,
                             CompressionKind compression,
                             uint32_t comp_blk_size,
+                            uint32_t max_comp_blk_size,
                             device_2dspan<StripeStream> strm_desc,
                             device_2dspan<encoder_chunk_streams> enc_streams,
-                            gpu_inflate_input_s* comp_in,
-                            gpu_inflate_status_s* comp_out,
+                            device_span<gpu_inflate_input_s> comp_in,
+                            device_span<gpu_inflate_status_s> comp_out,
                             rmm::cuda_stream_view stream);
 
 /**

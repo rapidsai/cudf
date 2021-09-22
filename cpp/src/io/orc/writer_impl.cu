@@ -36,6 +36,8 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 
+#include <nvcomp/snappy.h>
+
 #include <algorithm>
 #include <cstring>
 #include <numeric>
@@ -999,10 +1001,10 @@ void writer::impl::write_index_stream(int32_t stripe_id,
       record.pos += stream.lengths[type];
       while ((record.pos >= 0) && (record.blk_pos >= 0) &&
              (static_cast<size_t>(record.pos) >= compression_blocksize_) &&
-             (record.comp_pos + 3 + comp_out[record.blk_pos].bytes_written <
+             (record.comp_pos + BLOCK_HEADER_SIZE + comp_out[record.blk_pos].bytes_written <
               static_cast<size_t>(record.comp_size))) {
         record.pos -= compression_blocksize_;
-        record.comp_pos += 3 + comp_out[record.blk_pos].bytes_written;
+        record.comp_pos += BLOCK_HEADER_SIZE + comp_out[record.blk_pos].bytes_written;
         record.blk_pos += 1;
       }
     }
@@ -1472,29 +1474,31 @@ void writer::impl::write(table_view const& table)
   }
 
   // Allocate intermediate output stream buffer
-  size_t compressed_bfr_size   = 0;
-  size_t num_compressed_blocks = 0;
-  auto stream_output           = [&]() {
+  size_t compressed_bfr_size       = 0;
+  size_t num_compressed_blocks     = 0;
+  size_t max_compressed_block_size = 0;
+  if (compression_kind_ != NONE) {
+    nvcompBatchedSnappyCompressGetMaxOutputChunkSize(
+      compression_blocksize_, nvcompBatchedSnappyDefaultOpts, &max_compressed_block_size);
+  }
+  auto stream_output = [&]() {
     size_t max_stream_size = 0;
     bool all_device_write  = true;
 
-    for (size_t stripe_id = 0; stripe_id < segmentation.num_stripes(); stripe_id++) {
-      for (size_t i = 0; i < num_data_streams; i++) {  // TODO range for (at least)
-        gpu::StripeStream* ss = &strm_descs[stripe_id][i];
-        if (!out_sink_->is_device_write_preferred(ss->stream_size)) { all_device_write = false; }
-        size_t stream_size = ss->stream_size;
-        if (compression_kind_ != NONE) {
-          ss->first_block = num_compressed_blocks;
-          ss->bfr_offset  = compressed_bfr_size;
+    for (auto& ss : strm_descs.host_view().flat_view()) {
+      if (!out_sink_->is_device_write_preferred(ss.stream_size)) { all_device_write = false; }
+      size_t stream_size = ss.stream_size;
+      if (compression_kind_ != NONE) {
+        ss.first_block = num_compressed_blocks;
+        ss.bfr_offset  = compressed_bfr_size;
 
-          auto num_blocks = std::max<uint32_t>(
-            (stream_size + compression_blocksize_ - 1) / compression_blocksize_, 1);
-          stream_size += num_blocks * 3;
-          num_compressed_blocks += num_blocks;
-          compressed_bfr_size += stream_size;
-        }
-        max_stream_size = std::max(max_stream_size, stream_size);
+        auto num_blocks = std::max<uint32_t>(
+          (stream_size + compression_blocksize_ - 1) / compression_blocksize_, 1);
+        stream_size += num_blocks * BLOCK_HEADER_SIZE;
+        num_compressed_blocks += num_blocks;
+        compressed_bfr_size += (max_compressed_block_size + BLOCK_HEADER_SIZE) * num_blocks;
       }
+      max_stream_size = std::max(max_stream_size, stream_size);
     }
 
     if (all_device_write) {
@@ -1519,10 +1523,11 @@ void writer::impl::write(table_view const& table)
                                 num_compressed_blocks,
                                 compression_kind_,
                                 compression_blocksize_,
+                                max_compressed_block_size,
                                 strm_descs,
                                 enc_data.streams,
-                                comp_in.device_ptr(),
-                                comp_out.device_ptr(),
+                                comp_in,
+                                comp_out,
                                 stream);
     strm_descs.device_to_host(stream);
     comp_out.device_to_host(stream, true);
