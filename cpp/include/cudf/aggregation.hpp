@@ -509,7 +509,8 @@ std::unique_ptr<Base> make_merge_m2_aggregation();
  *    struct {
  *      double    // mean
  *      double    // weight
- *    }
+ *    },
+ *    ...
  *   }
  *   // these are from the input stream, not the centroids. they are used
  *   // during the percentile_approx computation near the beginning or
@@ -518,16 +519,18 @@ std::unique_ptr<Base> make_merge_m2_aggregation();
  *   double       // max
  * }
  *
- * @param delta Parameter controlling compression level and accuracy on subsequent
- * queries on the output tdigest data.  Delta places an upper bound on the size of
- * the computed tdigests: A delta of 1000 will result in a tdigest containing no
- * more than 1000 centroids (32 bytes each). Higher values of delta result in more
- * accurate tdigest information.
+ * Each output row is a single tdigest.  The length of the row is the "size" of the
+ * tdigest, each element of which represents a weighted centroid (mean, weight).
+ *
+ * @param max_centroids Parameter controlling compression level and accuracy on subsequent
+ * queries on the output tdigest data.  `max_centroids` places an upper bound on the size of
+ * the computed tdigests: A value of 1000 will result in a tdigest containing no
+ * more than 1000 centroids (32 bytes each). Higher result in more accurate tdigest information.
  *
  * @returns A TDIGEST aggregation object.
  */
-template <typename Base = aggregation>
-std::unique_ptr<Base> make_tdigest_aggregation(int delta = 1000);
+template <typename Base>
+std::unique_ptr<Base> make_tdigest_aggregation(int max_centroids = 1000);
 
 /**
  * @brief Factory to create a MERGE_TDIGEST aggregation
@@ -544,7 +547,8 @@ std::unique_ptr<Base> make_tdigest_aggregation(int delta = 1000);
  *    struct {
  *      double    // mean
  *      double    // weight
- *    }
+ *    },
+ *    ...
  *   }
  *   // these are from the input stream, not the centroids. they are used
  *   // during the percentile_approx computation near the beginning or
@@ -553,16 +557,18 @@ std::unique_ptr<Base> make_tdigest_aggregation(int delta = 1000);
  *   double       // max
  * }
  *
- * @param delta Parameter controlling compression level and accuracy on subsequent
- * queries on the output tdigest data.  Delta places an upper bound on the size of
- * the computed tdigests: A delta of 1000 will result in a tdigest containing no
- * more than 1000 centroids (32 bytes each). Higher values of delta result in more
- * accurate tdigest information.
+ * Each output row is a single tdigest.  The length of the row is the "size" of the
+ * tdigest, each element of which represents a weighted centroid (mean, weight).
+ *
+ * @param max_centroids Parameter controlling compression level and accuracy on subsequent
+ * queries on the output tdigest data.  `max_centroids` places an upper bound on the size of
+ * the computed tdigests: A value of 1000 will result in a tdigest containing no
+ * more than 1000 centroids (32 bytes each). Higher result in more accurate tdigest information.
  *
  * @returns A MERGE_TDIGEST aggregation object.
  */
-template <typename Base = aggregation>
-std::unique_ptr<Base> make_merge_tdigest_aggregation(int delta = 1000);
+template <typename Base>
+std::unique_ptr<Base> make_merge_tdigest_aggregation(int max_centroids = 1000);
 
 /** @} */  // end of group
 }  // namespace cudf

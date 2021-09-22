@@ -536,7 +536,8 @@ void aggregate_result_functor::operator()<aggregation::MERGE_M2>(aggregation con
  *    struct {
  *      double    // mean
  *      double    // weight
- *    }
+ *    },
+ *    ...
  *   }
  *   // these are from the input stream, not the centroids. they are used
  *   // during the percentile_approx computation near the beginning or
@@ -553,7 +554,8 @@ void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation cons
 {
   if (cache.has_result(col_idx, agg)) { return; }
 
-  auto const delta = dynamic_cast<cudf::detail::tdigest_aggregation const&>(agg).delta;
+  auto const max_centroids =
+    dynamic_cast<cudf::detail::tdigest_aggregation const&>(agg).max_centroids;
 
   auto count_agg = make_count_aggregation();
   operator()<aggregation::COUNT_VALID>(*count_agg);
@@ -561,14 +563,15 @@ void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation cons
 
   cache.add_result(col_idx,
                    agg,
-                   detail::group_tdigest(get_sorted_values(),
-                                         helper.group_offsets(stream),
-                                         helper.group_labels(stream),
-                                         valid_counts,
-                                         helper.num_groups(stream),
-                                         delta,
-                                         stream,
-                                         mr));
+                   detail::group_tdigest(
+                     get_sorted_values(),
+                     helper.group_offsets(stream),
+                     helper.group_labels(stream),
+                     {valid_counts.begin<size_type>(), static_cast<size_t>(valid_counts.size())},
+                     helper.num_groups(stream),
+                     max_centroids,
+                     stream,
+                     mr));
 };
 
 /**
@@ -582,7 +585,8 @@ void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation cons
  *    struct {
  *      double    // mean
  *      double    // weight
- *    }
+ *    },
+ *    ...
  *   }
  *   // these are from the input stream, not the centroids. they are used
  *   // during the percentile_approx computation near the beginning or
@@ -599,14 +603,15 @@ void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregatio
 {
   if (cache.has_result(col_idx, agg)) { return; }
 
-  auto const delta = dynamic_cast<cudf::detail::merge_tdigest_aggregation const&>(agg).delta;
+  auto const max_centroids =
+    dynamic_cast<cudf::detail::merge_tdigest_aggregation const&>(agg).max_centroids;
   cache.add_result(col_idx,
                    agg,
                    detail::group_merge_tdigest(get_grouped_values(),
                                                helper.group_offsets(stream),
                                                helper.group_labels(stream),
                                                helper.num_groups(stream),
-                                               delta,
+                                               max_centroids,
                                                stream,
                                                mr));
 };

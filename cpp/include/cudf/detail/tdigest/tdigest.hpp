@@ -21,14 +21,16 @@
 namespace cudf {
 namespace detail {
 
+namespace tdigest {
+
 // mean and weight column indices within tdigest inner struct columns
-constexpr size_type tdigest_mean_column_index   = 0;
-constexpr size_type tdigest_weight_column_index = 1;
+constexpr size_type mean_column_index   = 0;
+constexpr size_type weight_column_index = 1;
 
 // min and max column indices within tdigest outer struct columns
-constexpr size_type tdigest_centroid_column_index = 0;
-constexpr size_type tdigest_min_column_index      = 1;
-constexpr size_type tdigest_max_column_index      = 2;
+constexpr size_type centroid_column_index = 0;
+constexpr size_type min_column_index      = 1;
+constexpr size_type max_column_index      = 2;
 
 /**
  * @brief Verifies that the input column is a valid tdigest column.
@@ -39,7 +41,8 @@ constexpr size_type tdigest_max_column_index      = 2;
  *    struct {
  *      double    // mean
  *      double    // weight
- *    }
+ *    },
+ *    ...
  *   }
  *   // these are from the input stream, not the centroids. they are used
  *   // during the percentile_approx computation near the beginning or
@@ -48,7 +51,8 @@ constexpr size_type tdigest_max_column_index      = 2;
  *   double       // max
  * }
  *
- * Each row represents a unique tdigest.
+ * Each output row is a single tdigest.  The length of the row is the "size" of the
+ * tdigest, each element of which represents a weighted centroid (mean, weight).
  *
  * @param col    Column to be checkeed
  *
@@ -70,5 +74,6 @@ std::unique_ptr<column> make_empty_tdigest_column(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+}  // namespace tdigest
 }  // namespace detail
 }  // namespace cudf

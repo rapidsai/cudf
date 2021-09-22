@@ -20,7 +20,6 @@
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include <cudf/unary.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -73,12 +72,12 @@ struct tdigest_gen {
 void tdigest_sample_compare(column_view const& result,
                             std::vector<expected_value> const& h_expected)
 {
-  cudf::detail::check_is_valid_tdigest_column(result);
+  cudf::detail::tdigest::check_is_valid_tdigest_column(result);
   cudf::structs_column_view scv(result);
-  cudf::lists_column_view lcv(scv.child(cudf::detail::tdigest_centroid_column_index));
+  cudf::lists_column_view lcv(scv.child(cudf::detail::tdigest::centroid_column_index));
   cudf::structs_column_view tdigests(lcv.child());
-  column_view result_mean   = tdigests.child(cudf::detail::tdigest_mean_column_index);
-  column_view result_weight = tdigests.child(cudf::detail::tdigest_weight_column_index);
+  column_view result_mean   = tdigests.child(cudf::detail::tdigest::mean_column_index);
+  column_view result_weight = tdigests.child(cudf::detail::tdigest::weight_column_index);
 
   auto expected_mean = cudf::make_fixed_width_column(
     data_type{type_id::FLOAT64}, h_expected.size(), mask_state::UNALLOCATED);
@@ -156,48 +155,6 @@ std::unique_ptr<column> make_expected_tdigest(column_view const& mean,
   return make_structs_column(1, std::move(children), 0, {});
 }
 
-std::unique_ptr<column> make_typed_values(std::vector<double> const& values, data_type t)
-{
-  cudf::test::fixed_width_column_wrapper<double> src(values.begin(), values.end());
-  return cudf::cast(src, t);
-}
-
-template <typename T>
-T frand()
-{
-  return static_cast<T>(rand()) / static_cast<T>(RAND_MAX);
-}
-
-template <typename T>
-T rand_range(T min, T max)
-{
-  return min + static_cast<T>(frand<T>() * (max - min));
-}
-
-std::unique_ptr<column> generate_distribution(std::vector<double> const& buckets,
-                                              std::vector<int> const& sizes,
-                                              data_type t,
-                                              bool shuffle = true)
-{
-  srand(0);
-
-  std::vector<double> values;
-  size_t total_size = std::reduce(sizes.begin(), sizes.end(), 0);
-  values.reserve(total_size);
-  for (size_t idx = 0; idx < sizes.size(); idx++) {
-    double min = idx == 0 ? 0.0f : buckets[idx - 1];
-    double max = buckets[idx];
-
-    for (int v_idx = 0; v_idx < sizes[idx]; v_idx++) {
-      values.push_back(rand_range(min, max));
-    }
-  }
-
-  if (shuffle) { std::shuffle(values.begin(), values.end(), std::default_random_engine{}); }
-
-  return make_typed_values(values, t);
-}
-
 TYPED_TEST(TDigestAllTypes, Simple)
 {
   using T = TypeParam;
@@ -257,18 +214,14 @@ TYPED_TEST(TDigestAllTypes, AllNull)
     static_cast<column_view>(values).type(), tdigest_gen{}, keys, values, delta);
 
   // NOTE: an empty tdigest column still has 1 row.
-  auto expected = cudf::detail::make_empty_tdigest_column();
+  auto expected = cudf::detail::tdigest::make_empty_tdigest_column();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }
 
 TYPED_TEST(TDigestAllTypes, LargeGroups)
 {
-  // 750k values
-  std::vector<double> buckets{10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f, 70.0f, 80.0, 90.0f, 100.0f};
-  std::vector<int> b_sizes{
-    50000, 50000, 50000, 50000, 50000, 100000, 100000, 100000, 100000, 100000};
-  auto _values    = generate_distribution(buckets, b_sizes, data_type{type_id::FLOAT64});
+  auto _values    = generate_standardized_percentile_distribution(data_type{type_id::FLOAT64});
   int const delta = 1000;
 
   // generate a random set of keys
@@ -344,11 +297,7 @@ TEST_F(TDigestTest, LargeInputDouble)
   // the correct answers for each type by hand. so, we'll choose a reasonable subset (double,
   // decimal, int, bool)
 
-  // 750k values
-  std::vector<double> buckets{10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0};
-  std::vector<int> b_sizes{
-    50000, 50000, 50000, 50000, 50000, 100000, 100000, 100000, 100000, 100000};
-  auto values = generate_distribution(buckets, b_sizes, data_type{type_id::FLOAT64});
+  auto values = generate_standardized_percentile_distribution(data_type{type_id::FLOAT64});
   // all in the same group
   auto keys = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, values->size(), mask_state::UNALLOCATED);
@@ -418,11 +367,7 @@ TEST_F(TDigestTest, LargeInputInt)
   // the correct answers for each type by hand. so, we'll choose a reasonable subset (double,
   // decimal, int, bool)
 
-  // 750k values
-  std::vector<double> buckets{10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0};
-  std::vector<int> b_sizes{
-    50000, 50000, 50000, 50000, 50000, 100000, 100000, 100000, 100000, 100000};
-  auto values = generate_distribution(buckets, b_sizes, data_type{type_id::INT32});
+  auto values = generate_standardized_percentile_distribution(data_type{type_id::INT32});
   // all in the same group
   auto keys = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, values->size(), mask_state::UNALLOCATED);
@@ -495,11 +440,7 @@ TEST_F(TDigestTest, LargeInputDecimal)
   // the correct answers for each type by hand. so, we'll choose a reasonable subset (double,
   // decimal, int, bool)
 
-  // 750k values
-  std::vector<double> buckets{10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0};
-  std::vector<int> b_sizes{
-    50000, 50000, 50000, 50000, 50000, 100000, 100000, 100000, 100000, 100000};
-  auto values = generate_distribution(buckets, b_sizes, data_type{type_id::DECIMAL32, -4});
+  auto values = generate_standardized_percentile_distribution(data_type{type_id::DECIMAL32, -4});
   // all in the same group
   auto keys = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, values->size(), mask_state::UNALLOCATED);
@@ -567,13 +508,8 @@ struct TDigestMergeTest : public cudf::test::BaseFixture {
 // the same regardless of input.
 TEST_F(TDigestMergeTest, Simple)
 {
-  // 750k values
-  std::vector<double> buckets{10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0, 80.0, 90.0, 100.0};
-  std::vector<int> b_sizes{
-    50000, 50000, 50000, 50000, 50000, 100000, 100000, 100000, 100000, 100000};
-  // NOTE: turning the shuffle off.  the data that was used to generate the reference values
-  // used sorted input.
-  auto values = generate_distribution(buckets, b_sizes, data_type{type_id::FLOAT64}, false);
+  auto values = generate_standardized_percentile_distribution(data_type{type_id::FLOAT64});
+  CUDF_EXPECTS(values->size() == 750000, "Unexpected distribution size");
   // all in the same group
   auto keys = cudf::make_fixed_width_column(
     data_type{type_id::INT32}, values->size(), mask_state::UNALLOCATED);

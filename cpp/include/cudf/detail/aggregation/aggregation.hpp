@@ -895,9 +895,12 @@ class merge_m2_aggregation final : public groupby_aggregation {
  */
 class tdigest_aggregation final : public groupby_aggregation {
  public:
-  explicit tdigest_aggregation(int delta_) : aggregation{TDIGEST}, delta{delta_} {}
+  explicit tdigest_aggregation(int max_centroids_)
+    : aggregation{TDIGEST}, max_centroids{max_centroids_}
+  {
+  }
 
-  int const delta;
+  int const max_centroids;
 
   std::unique_ptr<aggregation> clone() const override
   {
@@ -916,9 +919,12 @@ class tdigest_aggregation final : public groupby_aggregation {
  */
 class merge_tdigest_aggregation final : public groupby_aggregation {
  public:
-  explicit merge_tdigest_aggregation(int delta_) : aggregation{MERGE_TDIGEST}, delta{delta_} {}
+  explicit merge_tdigest_aggregation(int max_centroids_)
+    : aggregation{MERGE_TDIGEST}, max_centroids{max_centroids_}
+  {
+  }
 
-  int const delta;
+  int const max_centroids;
 
   std::unique_ptr<aggregation> clone() const override
   {

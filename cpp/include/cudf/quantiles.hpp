@@ -99,7 +99,7 @@ std::unique_ptr<table> quantiles(
  * @brief Calculate approximate percentiles on an input tdigest column.
  *
  * tdigest (https://arxiv.org/pdf/1902.04023.pdf) columns are produced specifically
- * by the TDIGEST and MERGE_TDIGEST groupby aggregations.  These columns represent
+ * by the TDIGEST and MERGE_TDIGEST aggregations.  These columns represent
  * compressed representations of a very large input data set that can be
  * queried for quantile information.
  *
@@ -108,17 +108,18 @@ std::unique_ptr<table> quantiles(
  * is the number of percentages specified in `percentages`.
  *
  * @param input           tdigest input data. One tdigest per row.
- * @param percentages     Desired percentiles in range [0, 1].
- * @param output_type     Desired (numeric) output type.
+ * @param percentiles     Desired percentiles in range [0, 1].
  * @param mr              Device memory resource used to allocate the returned column's device
  * memory
  *
- * @returns LIST Column containing requested percentile values.
+ * @throws cudf::logic_error if `input` is not a valid tdigest column.
+ * @throws cudf::logic_error if `percentiles` is not a FLOAT64 column.
+ *
+ * @returns LIST Column containing requested percentile values as FLOAT64.
  */
 std::unique_ptr<column> percentile_approx(
   structs_column_view const& input,
-  column_view const& percentages,
-  cudf::data_type output_type         = data_type{type_id::FLOAT64},
+  column_view const& percentiles,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

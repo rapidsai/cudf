@@ -124,6 +124,7 @@ ConfigureTest(HASH_MAP_TEST
 ###################################################################################################
 # - quantiles tests -------------------------------------------------------------------------------
 ConfigureTest(QUANTILES_TEST
+    quantiles/percentile_approx_test.cu
     quantiles/quantile_test.cpp
     quantiles/quantiles_test.cpp)
 
