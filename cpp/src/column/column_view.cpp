@@ -97,7 +97,7 @@ constexpr auto hash(Ts&&... ts)
 
 std::size_t shallow_hash_impl(column_view const& c, bool is_parent_empty = false)
 {
-  std::size_t const init = (c.is_empty() or is_parent_empty)
+  std::size_t const init = (is_parent_empty or c.is_empty())
                              ? hash(c.type(), 0)
                              : hash(c.type(), c.size(), c.head(), c.null_mask(), c.offset());
   return std::accumulate(c.child_begin(),
