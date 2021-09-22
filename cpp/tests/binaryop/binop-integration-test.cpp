@@ -2696,11 +2696,19 @@ TYPED_TEST(FixedPointTest_64_128_Reps, FixedPoint_64_128_ComparisonTests)
     auto const b = cudf::binary_operation(lhs, *rhs, binary_operator::LESS_EQUAL, bool_type);
     auto const c = cudf::binary_operation(lhs, *rhs, binary_operator::GREATER, bool_type);
     auto const d = cudf::binary_operation(lhs, *rhs, binary_operator::GREATER_EQUAL, bool_type);
+    auto const e = cudf::binary_operation(*rhs, lhs, binary_operator::GREATER, bool_type);
+    auto const f = cudf::binary_operation(*rhs, lhs, binary_operator::GREATER_EQUAL, bool_type);
+    auto const g = cudf::binary_operation(*rhs, lhs, binary_operator::LESS, bool_type);
+    auto const h = cudf::binary_operation(*rhs, lhs, binary_operator::LESS_EQUAL, bool_type);
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(trues, a->view());
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(trues, b->view());
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(falses, c->view());
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(falses, d->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(trues, e->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(trues, f->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(falses, g->view());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(falses, h->view());
   }
 }
 
