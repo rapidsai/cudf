@@ -14,12 +14,18 @@
 # limitations under the License.
 #=============================================================================
 
-find_path(RDKAFKA_INCLUDE "librdkafka" HINTS "$ENV{RDKAFKA_ROOT}/include")
-find_library(RDKAFKA++_LIBRARY "rdkafka++" HINTS "$ENV{RDKAFKA_ROOT}/lib" "$ENV{RDKAFKA_ROOT}/build")
+function(find_and_configure_cucollections)
 
-if(RDKAFKA_INCLUDE AND RDKAFKA++_LIBRARY)
-  add_library(rdkafka INTERFACE)
-  target_link_libraries(rdkafka INTERFACE "${RDKAFKA++_LIBRARY}")
-  target_include_directories(rdkafka INTERFACE "${RDKAFKA_INCLUDE}")
-  add_library(RDKAFKA::RDKAFKA ALIAS rdkafka)
-endif()
+    # Find or install cuCollections
+    rapids_cpm_find(cuco 0.0
+        GLOBAL_TARGETS cuco::cuco
+        CPM_ARGS
+            GITHUB_REPOSITORY NVIDIA/cuCollections
+            GIT_TAG           0d602ae21ea4f38d23ed816aa948453d97b2ee4e
+            OPTIONS           "BUILD_TESTS OFF"
+                              "BUILD_BENCHMARKS OFF"
+                              "BUILD_EXAMPLES OFF"
+    )
+endfunction()
+
+find_and_configure_cucollections()

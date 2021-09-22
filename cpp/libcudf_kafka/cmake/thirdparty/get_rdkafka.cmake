@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,16 +14,28 @@
 # limitations under the License.
 #=============================================================================
 
-# Jitify doesn't have a version :/
 
-function(find_and_configure_jitify)
-    CPMFindPackage(NAME     jitify
-            VERSION         2.0.0
-            GIT_REPOSITORY  https://github.com/rapidsai/jitify.git
-            GIT_TAG         cudf_0.19
-            GIT_SHALLOW     TRUE
-            DOWNLOAD_ONLY   TRUE)
-    set(JITIFY_INCLUDE_DIR "${jitify_SOURCE_DIR}" PARENT_SCOPE)
+function( get_RDKafka )
+  rapids_find_generate_module(RDKAFKA
+    HEADER_NAMES rdkafkacpp.h
+    INCLUDE_SUFFIXES librdkafka
+    LIBRARY_NAMES rdkafka++
+    BUILD_EXPORT_SET cudf_kafka-exports
+    INSTALL_EXPORT_SET cudf_kafka-exports
+    )
+
+  if(DEFINED ENV{RDKAFKA_ROOT})
+    # Since this is inside a function the modification of
+    # CMAKE_PREFIX_PATH won't leak to other callers/users
+    list(APPEND CMAKE_PREFIX_PATH "$ENV{RDKAFKA_ROOT}")
+    list(APPEND CMAKE_PREFIX_PATH "$ENV{RDKAFKA_ROOT}/build")
+  endif()
+
+
+  rapids_find_package(RDKAFKA REQUIRED
+    BUILD_EXPORT_SET cudf_kafka-exports
+    INSTALL_EXPORT_SET cudf_kafka-exports)
+
 endfunction()
 
-find_and_configure_jitify()
+get_RDKafka()

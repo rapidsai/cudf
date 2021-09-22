@@ -9,7 +9,7 @@ from numba import cuda
 import rmm
 
 from cudf.api.types import dtype
-from cudf import core, datasets, testing
+from cudf import api, core, datasets, testing
 from cudf._version import get_versions
 from cudf.api.extensions import (
     register_dataframe_accessor,
@@ -96,6 +96,7 @@ from cudf.io import (
     read_json,
     read_orc,
     read_parquet,
+    read_text,
 )
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import set_allocator

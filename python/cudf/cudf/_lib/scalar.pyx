@@ -21,7 +21,7 @@ from libcpp.utility cimport move
 
 import cudf
 from cudf._lib.types import (
-    cudf_to_np_types,
+    LIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
     datetime_unit_map,
     duration_unit_map,
 )
@@ -30,7 +30,11 @@ from cudf.core.dtypes import ListDtype, StructDtype
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.table cimport Table, make_table_view
+from cudf._lib.table cimport (
+    Table,
+    table_view_from_columns,
+    table_view_from_table,
+)
 from cudf._lib.types cimport dtype_from_column_view, underlying_type_t_type_id
 
 from cudf._lib.interop import from_arrow, to_arrow
@@ -60,8 +64,6 @@ from cudf._lib.cpp.wrappers.timestamps cimport (
     timestamp_us,
 )
 from cudf._lib.utils cimport data_from_table_view
-
-import cudf
 
 
 cdef class DeviceScalar:
@@ -199,7 +201,7 @@ cdef class DeviceScalar:
                 )
             else:
                 s._dtype = ListDtype(
-                    cudf_to_np_types[
+                    LIBCUDF_TO_SUPPORTED_NUMPY_TYPES[
                         <underlying_type_t_type_id>(
                             (<list_scalar*>s.get_raw_ptr())[0]
                             .view().type().id()
@@ -210,7 +212,7 @@ cdef class DeviceScalar:
             if dtype is not None:
                 s._dtype = dtype
             else:
-                s._dtype = cudf_to_np_types[
+                s._dtype = LIBCUDF_TO_SUPPORTED_NUMPY_TYPES[
                     <underlying_type_t_type_id>(cdtype.id())
                 ]
         return s
@@ -339,7 +341,7 @@ cdef _set_struct_from_pydict(unique_ptr[scalar]& s,
         )
 
     data, _ = from_arrow(pyarrow_table, column_names=columns)
-    cdef table_view struct_view = make_table_view(data.values())
+    cdef table_view struct_view = table_view_from_columns(data.values())
 
     s.reset(
         new struct_scalar(struct_view, valid)

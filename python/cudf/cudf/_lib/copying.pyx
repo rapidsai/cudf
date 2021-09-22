@@ -19,7 +19,11 @@ from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_device_scalar
 
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport (
+    Table,
+    table_view_from_columns,
+    table_view_from_table,
+)
 
 from cudf._lib.reduce import minmax
 from cudf.core.abc import Serializable
@@ -160,11 +164,9 @@ def gather(
                              f" rows.")
 
     cdef unique_ptr[table] c_result
-    cdef table_view source_table_view
-    if keep_index is True:
-        source_table_view = source_table.view()
-    else:
-        source_table_view = source_table.data_view()
+    cdef table_view source_table_view = table_view_from_table(
+        source_table, not keep_index
+    )
     cdef column_view gather_map_view = gather_map.view()
     cdef cpp_copying.out_of_bounds_policy policy = (
         cpp_copying.out_of_bounds_policy.NULLIFY if nullify
@@ -192,92 +194,60 @@ def gather(
     )
 
 
-def _scatter_table(Table source_table, Column scatter_map,
-                   Table target_table, bool bounds_check=True):
-
-    cdef table_view source_table_view = source_table.data_view()
-    cdef column_view scatter_map_view = scatter_map.view()
-    cdef table_view target_table_view = target_table.data_view()
-    cdef bool c_bounds_check = bounds_check
-
-    cdef unique_ptr[table] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.scatter(
-                source_table_view,
-                scatter_map_view,
-                target_table_view,
-                c_bounds_check
-            )
-        )
-
-    data, _ = data_from_unique_ptr(
-        move(c_result),
-        column_names=target_table._column_names,
-        index_names=None
-    )
-
-    return data, (
-        None if target_table._index is None else target_table._index.copy(
-            deep=False)
-    )
-
-
-def _scatter_scalar(scalars, Column scatter_map,
-                    Table target_table, bool bounds_check=True):
-
-    cdef vector[reference_wrapper[constscalar]] source_scalars
-    source_scalars.reserve(len(scalars))
-    cdef bool c_bounds_check = bounds_check
-    cdef DeviceScalar slr
-    for val, col in zip(scalars, target_table._columns):
-        slr = as_device_scalar(val, col.dtype)
-        source_scalars.push_back(reference_wrapper[constscalar](
-            slr.get_raw_ptr()[0]))
-    cdef column_view scatter_map_view = scatter_map.view()
-    cdef table_view target_table_view = target_table.data_view()
-
-    cdef unique_ptr[table] c_result
-
-    with nogil:
-        c_result = move(
-            cpp_copying.scatter(
-                source_scalars,
-                scatter_map_view,
-                target_table_view,
-                c_bounds_check
-            )
-        )
-
-    data, _ = data_from_unique_ptr(
-        move(c_result),
-        column_names=target_table._column_names,
-        index_names=None
-    )
-
-    return data, (
-        None if target_table._index is None else target_table._index.copy(
-            deep=False)
-    )
-
-
-def scatter(object input, object scatter_map, Table target,
+def scatter(object source, Column scatter_map, Column target_column,
             bool bounds_check=True):
     """
     Scattering input into target as per the scatter map,
     input can be a list of scalars or can be a table
     """
 
-    from cudf.core.column.column import as_column
+    cdef column_view scatter_map_view = scatter_map.view()
+    cdef table_view target_table_view = table_view_from_columns(
+        (target_column,))
+    cdef bool c_bounds_check = bounds_check
+    cdef unique_ptr[table] c_result
 
-    if not isinstance(scatter_map, Column):
-        scatter_map = as_column(scatter_map)
+    # Needed for the table branch
+    cdef table_view source_table_view
 
-    if isinstance(input, Table):
-        return _scatter_table(input, scatter_map, target, bounds_check)
+    # Needed for the scalar branch
+    cdef vector[reference_wrapper[constscalar]] source_scalars
+    cdef DeviceScalar slr
+
+    if isinstance(source, Column):
+        source_table_view = table_view_from_columns((<Column> source,))
+
+        with nogil:
+            c_result = move(
+                cpp_copying.scatter(
+                    source_table_view,
+                    scatter_map_view,
+                    target_table_view,
+                    c_bounds_check
+                )
+            )
     else:
-        return _scatter_scalar(input, scatter_map, target, bounds_check)
+        slr = as_device_scalar(source, target_column.dtype)
+        source_scalars.push_back(reference_wrapper[constscalar](
+            slr.get_raw_ptr()[0]))
+
+        with nogil:
+            c_result = move(
+                cpp_copying.scatter(
+                    source_scalars,
+                    scatter_map_view,
+                    target_table_view,
+                    c_bounds_check
+                )
+            )
+
+    data, _ = data_from_unique_ptr(
+        move(c_result),
+        column_names=(None,),
+        index_names=None
+    )
+
+    return next(iter(data.values()))
 
 
 def _reverse_column(Column source_column):
@@ -296,7 +266,7 @@ def _reverse_column(Column source_column):
 
 
 def _reverse_table(Table source_table):
-    cdef table_view reverse_table_view = source_table.view()
+    cdef table_view reverse_table_view = table_view_from_columns(source_table)
 
     cdef unique_ptr[table] c_result
     with nogil:
@@ -358,11 +328,9 @@ def column_allocate_like(Column input_column, size=None):
 
 def table_empty_like(Table input_table, bool keep_index=True):
 
-    cdef table_view input_table_view
-    if keep_index is True:
-        input_table_view = input_table.view()
-    else:
-        input_table_view = input_table.data_view()
+    cdef table_view input_table_view = table_view_from_table(
+        input_table, not keep_index
+    )
 
     cdef unique_ptr[table] c_result
 
@@ -409,11 +377,9 @@ def column_slice(Column input_column, object indices):
 
 def table_slice(Table input_table, object indices, bool keep_index=True):
 
-    cdef table_view input_table_view
-    if keep_index is True:
-        input_table_view = input_table.view()
-    else:
-        input_table_view = input_table.data_view()
+    cdef table_view input_table_view = table_view_from_table(
+        input_table, not keep_index
+    )
 
     cdef vector[size_type] c_indices
     c_indices.reserve(len(indices))
@@ -478,11 +444,9 @@ def column_split(Column input_column, object splits):
 
 def table_split(Table input_table, object splits, bool keep_index=True):
 
-    cdef table_view input_table_view
-    if keep_index is True:
-        input_table_view = input_table.view()
-    else:
-        input_table_view = input_table.data_view()
+    cdef table_view input_table_view = table_view_from_table(
+        input_table, not keep_index
+    )
 
     cdef vector[size_type] c_splits
     c_splits.reserve(len(splits))
@@ -621,8 +585,8 @@ def copy_if_else(object lhs, object rhs, Column boolean_mask):
 def _boolean_mask_scatter_table(Table input_table, Table target_table,
                                 Column boolean_mask):
 
-    cdef table_view input_table_view = input_table.view()
-    cdef table_view target_table_view = target_table.view()
+    cdef table_view input_table_view = table_view_from_columns(input_table)
+    cdef table_view target_table_view = table_view_from_columns(target_table)
     cdef column_view boolean_mask_view = boolean_mask.view()
 
     cdef unique_ptr[table] c_result
@@ -652,7 +616,7 @@ def _boolean_mask_scatter_scalar(list input_scalars, Table target_table,
     for scl in input_scalars:
         input_scalar_vector.push_back(reference_wrapper[constscalar](
             scl.get_raw_ptr()[0]))
-    cdef table_view target_table_view = target_table.view()
+    cdef table_view target_table_view = table_view_from_columns(target_table)
     cdef column_view boolean_mask_view = boolean_mask.view()
 
     cdef unique_ptr[table] c_result
@@ -735,9 +699,7 @@ def get_element(Column input_column, size_type index):
 
 def sample(Table input, size_type n,
            bool replace, int64_t seed, bool keep_index=True):
-    cdef table_view tbl_view = (
-        input.view() if keep_index else input.data_view()
-    )
+    cdef table_view tbl_view = table_view_from_table(input, not keep_index)
     cdef cpp_copying.sample_with_replacement replacement
 
     if replace:
@@ -797,10 +759,11 @@ cdef class _CPackedColumns:
             or input_table.index.stop != len(input_table)
             or input_table.index.step != 1
         ):
-            input_table_view = input_table.view()
+            input_table_view = table_view_from_table(input_table)
             p.index_names = input_table._index_names
         else:
-            input_table_view = input_table.data_view()
+            input_table_view = table_view_from_table(
+                input_table, ignore_index=True)
 
         p.column_names = input_table._column_names
         p.column_dtypes = {}

@@ -62,6 +62,7 @@ ConfigureTest(GROUPBY_TEST
     groupby/count_tests.cpp
     groupby/groups_tests.cpp
     groupby/keys_tests.cpp
+    groupby/lists_tests.cpp
     groupby/m2_tests.cpp
     groupby/min_tests.cpp
     groupby/max_scan_tests.cpp
@@ -80,6 +81,7 @@ ConfigureTest(GROUPBY_TEST
     groupby/replace_nulls_tests.cpp
     groupby/shift_tests.cpp
     groupby/std_tests.cpp
+    groupby/structs_tests.cpp
     groupby/sum_of_squares_tests.cpp
     groupby/sum_scan_tests.cpp
     groupby/sum_tests.cpp

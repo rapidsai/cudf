@@ -22,18 +22,17 @@ try:
 except ImportError:
     import json
 
-from cudf.utils.dtypes import (
-    cudf_dtypes_to_pandas_dtypes,
+from cudf.api.types import (
     is_categorical_dtype,
     is_decimal_dtype,
     is_list_dtype,
     is_struct_dtype,
-    np_to_pa_dtype,
 )
+from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes, np_to_pa_dtype
 
 PARQUET_META_TYPE_MAP = {
     str(cudf_dtype): str(pandas_dtype)
-    for cudf_dtype, pandas_dtype in cudf_dtypes_to_pandas_dtypes.items()
+    for cudf_dtype, pandas_dtype in np_dtypes_to_pandas_dtypes.items()
 }
 
 
@@ -42,22 +41,6 @@ cdef vector[column_view] make_column_views(object columns):
     views.reserve(len(columns))
     for col in columns:
         views.push_back((<Column> col).view())
-    return views
-
-
-cdef vector[table_view] make_table_views(object tables):
-    cdef vector[table_view] views
-    views.reserve(len(tables))
-    for tbl in tables:
-        views.push_back((<Table> tbl).view())
-    return views
-
-
-cdef vector[table_view] make_table_data_views(object tables):
-    cdef vector[table_view] views
-    views.reserve(len(tables))
-    for tbl in tables:
-        views.push_back((<Table> tbl).data_view())
     return views
 
 
@@ -251,7 +234,7 @@ cdef data_from_unique_ptr(
         # Frame factories we may want to look for a less dissonant approach
         # that does not impose performance penalties. The same applies to
         # data_from_table_view below.
-        cudf.Index._from_data(
+        cudf.core.index._index_from_data(
             {
                 name: columns[i]
                 for i, name in enumerate(index_names)
@@ -301,7 +284,8 @@ cdef data_from_table_view(
                 )
             )
             column_idx += 1
-        index = cudf.Index._from_data(dict(zip(index_names, index_columns)))
+        index = cudf.core.index._index_from_data(
+            dict(zip(index_names, index_columns)))
 
     # Construct the data dict
     cdef size_type source_column_idx = 0
