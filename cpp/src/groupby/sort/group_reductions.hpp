@@ -447,11 +447,20 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
  *
  * The tdigest column produced is of the following structure:
  *
- * list {
- *   struct {
- *     double    // mean
- *     double    // weight
+ * struct {
+ *   // centroids for the digest
+ *   list {
+ *    struct {
+ *      double    // mean
+ *      double    // weight
+ *    },
+ *    ...
  *   }
+ *   // these are from the input stream, not the centroids. they are used
+ *   // during the percentile_approx computation near the beginning or
+ *   // end of the quantiles
+ *   double       // min
+ *   double       // max
  * }
  *
  * Each output row is a single tdigest.  The length of the row is the "size" of the
@@ -472,22 +481,31 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
 std::unique_ptr<column> group_tdigest(column_view const& values,
                                       cudf::device_span<size_type const> group_offsets,
                                       cudf::device_span<size_type const> group_labels,
-                                      column_view const& group_valid_counts,
+                                      cudf::device_span<size_type const> group_valid_counts,
                                       size_type num_groups,
                                       int delta,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr);
 
 /**
- * @brief Generate a merged tdigest column from a grouped set of input tdigest columns.
+ * @brief Merges tdigests within the same group to generate a new tdigest.
  *
  * The tdigest column produced is of the following structure:
  *
- * list {
- *   struct {
- *     double    // mean
- *     double    // weight
+ * struct {
+ *   // centroids for the digest
+ *   list {
+ *    struct {
+ *      double    // mean
+ *      double    // weight
+ *    },
+ *    ...
  *   }
+ *   // these are from the input stream, not the centroids. they are used
+ *   // during the percentile_approx computation near the beginning or
+ *   // end of the quantiles
+ *   double       // min
+ *   double       // max
  * }
  *
  * Each output row is a single tdigest.  The length of the row is the "size" of the

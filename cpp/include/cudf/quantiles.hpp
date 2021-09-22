@@ -109,19 +109,17 @@ std::unique_ptr<table> quantiles(
  *
  * @param input           tdigest input data. One tdigest per row.
  * @param percentiles     Desired percentiles in range [0, 1].
- * @param output_type     Desired (numeric) output type.
  * @param mr              Device memory resource used to allocate the returned column's device
  * memory
  *
  * @throws cudf::logic_error if `input` is not a valid tdigest column.
  * @throws cudf::logic_error if `percentiles` is not a FLOAT64 column.
  *
- * @returns LIST Column containing requested percentile values.
+ * @returns LIST Column containing requested percentile values as FLOAT64.
  */
 std::unique_ptr<column> percentile_approx(
   structs_column_view const& input,
   column_view const& percentiles,
-  cudf::data_type output_type         = data_type{type_id::FLOAT64},
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

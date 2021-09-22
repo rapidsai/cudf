@@ -72,12 +72,12 @@ struct tdigest_gen {
 void tdigest_sample_compare(column_view const& result,
                             std::vector<expected_value> const& h_expected)
 {
-  cudf::detail::check_is_valid_tdigest_column(result);
+  cudf::detail::tdigest::check_is_valid_tdigest_column(result);
   cudf::structs_column_view scv(result);
-  cudf::lists_column_view lcv(scv.child(cudf::detail::tdigest_centroid_column_index));
+  cudf::lists_column_view lcv(scv.child(cudf::detail::tdigest::centroid_column_index));
   cudf::structs_column_view tdigests(lcv.child());
-  column_view result_mean   = tdigests.child(cudf::detail::tdigest_mean_column_index);
-  column_view result_weight = tdigests.child(cudf::detail::tdigest_weight_column_index);
+  column_view result_mean   = tdigests.child(cudf::detail::tdigest::mean_column_index);
+  column_view result_weight = tdigests.child(cudf::detail::tdigest::weight_column_index);
 
   auto expected_mean = cudf::make_fixed_width_column(
     data_type{type_id::FLOAT64}, h_expected.size(), mask_state::UNALLOCATED);
@@ -214,7 +214,7 @@ TYPED_TEST(TDigestAllTypes, AllNull)
     static_cast<column_view>(values).type(), tdigest_gen{}, keys, values, delta);
 
   // NOTE: an empty tdigest column still has 1 row.
-  auto expected = cudf::detail::make_empty_tdigest_column();
+  auto expected = cudf::detail::tdigest::make_empty_tdigest_column();
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }

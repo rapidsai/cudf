@@ -451,7 +451,7 @@ std::unique_ptr<column> compute_tdigests(int delta,
   // }
   //
   //
-  if (total_clusters == 0) { return cudf::detail::make_empty_tdigest_column(stream, mr); }
+  if (total_clusters == 0) { return cudf::detail::tdigest::make_empty_tdigest_column(stream, mr); }
   std::vector<std::unique_ptr<column>> inner_children;
   // mean
   inner_children.push_back(cudf::make_fixed_width_column(
@@ -495,9 +495,9 @@ std::unique_ptr<column> compute_tdigests(int delta,
 
   // reduce the centroids down by key.
   cudf::mutable_column_view mean_col =
-    tdigests->child(cudf::detail::tdigest_mean_column_index).mutable_view();
+    tdigests->child(cudf::detail::tdigest::mean_column_index).mutable_view();
   cudf::mutable_column_view weight_col =
-    tdigests->child(cudf::detail::tdigest_weight_column_index).mutable_view();
+    tdigests->child(cudf::detail::tdigest::weight_column_index).mutable_view();
   auto output           = thrust::make_zip_iterator(thrust::make_tuple(
     mean_col.begin<double>(), weight_col.begin<double>(), thrust::make_discard_iterator()));
   auto const num_values = std::distance(centroids_begin, centroids_end);
@@ -552,7 +552,7 @@ struct typed_group_tdigest {
   std::unique_ptr<column> operator()(column_view const& col,
                                      cudf::device_span<size_type const> group_offsets,
                                      cudf::device_span<size_type const> group_labels,
-                                     column_view const& group_valid_counts,
+                                     cudf::device_span<size_type const> group_valid_counts,
                                      size_type num_groups,
                                      int delta,
                                      rmm::cuda_stream_view stream,
@@ -560,7 +560,7 @@ struct typed_group_tdigest {
   {
     // first, generate cluster weight information for each input group
     auto total_weight = cudf::detail::make_counting_transform_iterator(
-      0, scalar_total_weight{group_valid_counts.begin<size_type>()});
+      0, scalar_total_weight{group_valid_counts.begin()});
     auto [group_cluster_wl, group_cluster_offsets, total_clusters] =
       generate_group_cluster_info(delta,
                                   num_groups,
@@ -585,7 +585,7 @@ struct typed_group_tdigest {
       thrust::make_counting_iterator(0) + num_groups,
       thrust::make_zip_iterator(thrust::make_tuple(min_col->mutable_view().begin<double>(),
                                                    max_col->mutable_view().begin<double>())),
-      get_scalar_minmax<T>{*d_col, group_offsets, group_valid_counts.begin<size_type>()});
+      get_scalar_minmax<T>{*d_col, group_offsets, group_valid_counts.begin()});
 
     // for simple input values, the "centroids" all have a weight of 1.
     auto scalar_to_centroid =
@@ -611,7 +611,7 @@ struct typed_group_tdigest {
   std::unique_ptr<column> operator()(column_view const& col,
                                      cudf::device_span<size_type const> group_offsets,
                                      cudf::device_span<size_type const> group_labels,
-                                     column_view const& group_valid_counts,
+                                     cudf::device_span<size_type const> group_valid_counts,
                                      size_type num_groups,
                                      int delta,
                                      rmm::cuda_stream_view stream,
@@ -626,13 +626,13 @@ struct typed_group_tdigest {
 std::unique_ptr<column> group_tdigest(column_view const& col,
                                       cudf::device_span<size_type const> group_offsets,
                                       cudf::device_span<size_type const> group_labels,
-                                      column_view const& group_valid_counts,
+                                      cudf::device_span<size_type const> group_valid_counts,
                                       size_type num_groups,
                                       int delta,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  if (col.size() == 0) { return cudf::detail::make_empty_tdigest_column(stream, mr); }
+  if (col.size() == 0) { return cudf::detail::tdigest::make_empty_tdigest_column(stream, mr); }
 
   return cudf::type_dispatcher(col.type(),
                                typed_group_tdigest{},
@@ -654,21 +654,21 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
-  cudf::detail::check_is_valid_tdigest_column(input);
+  cudf::detail::tdigest::check_is_valid_tdigest_column(input);
 
   if (num_groups == 0 || input.size() == 0) {
-    return cudf::detail::make_empty_tdigest_column(stream, mr);
+    return cudf::detail::tdigest::make_empty_tdigest_column(stream, mr);
   }
 
   structs_column_view scv(input);
-  lists_column_view lcv(scv.child(cudf::detail::tdigest_centroid_column_index));
+  lists_column_view lcv(scv.child(cudf::detail::tdigest::centroid_column_index));
   // ideally, we would just call .parent().child() here because tdigests cannot be
   // sliced. however, lists_column_view() hides that particular interface. However,
   // for the same reason, get_sliced_child() should be just as cheap.
   auto data = lcv.get_sliced_child(stream);
   structs_column_view tdigest(data);
-  auto mean   = tdigest.child(cudf::detail::tdigest_mean_column_index);
-  auto weight = tdigest.child(cudf::detail::tdigest_weight_column_index);
+  auto mean   = tdigest.child(cudf::detail::tdigest::mean_column_index);
+  auto weight = tdigest.child(cudf::detail::tdigest::weight_column_index);
 
   // first step is to merge all the tdigests in each group. at the moment the only way to
   // make this work is to retrieve the group sizes (via group_offsets) and the individual digest
@@ -732,7 +732,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
   });
 
   // generate min and max values
-  auto min_col        = scv.child(cudf::detail::tdigest_min_column_index);
+  auto min_col        = scv.child(cudf::detail::tdigest::min_column_index);
   auto merged_min_col = cudf::make_fixed_width_column(
     data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
   thrust::reduce_by_key(rmm::exec_policy(stream),
@@ -744,7 +744,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
                         thrust::equal_to<size_type>{},  // key equality check
                         thrust::minimum<double>{});
 
-  auto max_col        = scv.child(cudf::detail::tdigest_max_column_index);
+  auto max_col        = scv.child(cudf::detail::tdigest::max_column_index);
   auto merged_max_col = cudf::make_fixed_width_column(
     data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
   thrust::reduce_by_key(rmm::exec_policy(stream),
@@ -767,7 +767,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
 
   // generate cumulative weights
   auto cumulative_weights =
-    std::make_unique<column>(merged->get_column(cudf::detail::tdigest_weight_column_index),
+    std::make_unique<column>(merged->get_column(cudf::detail::tdigest::weight_column_index),
                              stream,
                              rmm::mr::get_current_device_resource());
   auto keys = cudf::detail::make_counting_transform_iterator(
@@ -821,8 +821,8 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
   auto centroids = cudf::detail::make_counting_transform_iterator(
     0,
     make_weighted_centroid_tuple{
-      merged->get_column(cudf::detail::tdigest_mean_column_index).view().begin<double>(),
-      merged->get_column(cudf::detail::tdigest_weight_column_index).view().begin<double>()});
+      merged->get_column(cudf::detail::tdigest::mean_column_index).view().begin<double>(),
+      merged->get_column(cudf::detail::tdigest::weight_column_index).view().begin<double>()});
 
   // compute the tdigest
   return compute_tdigests(delta,

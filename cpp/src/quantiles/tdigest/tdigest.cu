@@ -30,8 +30,7 @@
 
 namespace cudf {
 namespace detail {
-
-namespace {
+namespace tdigest {
 
 // https://developer.nvidia.com/blog/lerp-faster-cuda/
 template <typename T>
@@ -40,39 +39,22 @@ __device__ inline T lerp(T v0, T v1, T t)
   return fma(t, v1, fma(-t, v0, v0));
 }
 
-template <typename T>
-struct cast_output {
-  data_type t;
-
-  __device__ device_storage_type_t<T> operator()(double v)
-  {
-    if constexpr (!cudf::is_fixed_point<T>()) { return static_cast<T>(v); }
-    if constexpr (cudf::is_fixed_point<T>()) {
-      return T{v, numeric::scale_type{t.scale()}}.value();
-    }
-  }
-};
-
 // kernel for computing percentiles on input tdigest (mean, weight) centroid data.
-template <typename T>
 __global__ void compute_percentiles_kernel(offset_type const* tdigest_offsets,
                                            size_type num_tdigests,
                                            column_device_view percentiles,
-                                           double const* mean_,
-                                           double const* weight_,
+                                           double const* means_,
+                                           double const* weights_,
                                            double const* min_,
                                            double const* max_,
                                            double const* cumulative_weight_,
-                                           device_storage_type_t<T>* output,
-                                           data_type output_type)
+                                           double* output)
 {
   int const tid = threadIdx.x + blockIdx.x * blockDim.x;
 
   auto const tdigest_index = tid / percentiles.size();
   if (tdigest_index >= num_tdigests) { return; }
   auto const pindex = tid % percentiles.size();
-  double const percentage =
-    percentiles.is_valid(pindex) ? percentiles.element<double>(pindex) : 0.0;
 
   // size of the digest we're querying
   auto const tdigest_size = tdigest_offsets[tdigest_index + 1] - tdigest_offsets[tdigest_index];
@@ -80,11 +62,13 @@ __global__ void compute_percentiles_kernel(offset_type const* tdigest_offsets,
     // no work to do. values will be set to null
     return;
   }
+  double const percentage =
+    percentiles.is_valid(pindex) ? percentiles.element<double>(pindex) : 0.0;
   double const* cumulative_weight = cumulative_weight_ + tdigest_offsets[tdigest_index];
 
   // means and weights for the tdigest
-  double const* mean   = mean_ + tdigest_offsets[tdigest_index];
-  double const* weight = weight_ + tdigest_offsets[tdigest_index];
+  double const* means   = means_ + tdigest_offsets[tdigest_index];
+  double const* weights = weights_ + tdigest_offsets[tdigest_index];
 
   // min and max for the digest
   double const* min_val = min_ + tdigest_index;
@@ -93,13 +77,11 @@ __global__ void compute_percentiles_kernel(offset_type const* tdigest_offsets,
   double const total_weight = cumulative_weight[tdigest_size - 1];
   double const cluster_q    = percentage * total_weight;
 
-  cast_output<T> cast_op{output_type};
-
   if (cluster_q <= 1) {
-    output[tid] = cast_op(*min_val);
+    output[tid] = *min_val;
     return;
   } else if (cluster_q >= total_weight - 1) {
-    output[tid] = cast_op(*max_val);
+    output[tid] = *max_val;
     return;
   }
 
@@ -109,37 +91,37 @@ __global__ void compute_percentiles_kernel(offset_type const* tdigest_offsets,
       thrust::seq, cumulative_weight, cumulative_weight + tdigest_size, cluster_q) -
     cumulative_weight);
 
-  double diff = cluster_q + weight[centroid_index] / 2 - cumulative_weight[centroid_index];
-  if (weight[centroid_index] == 1 && std::abs(diff) < 0.5) {
-    output[tid] = cast_op(mean[centroid_index]);
+  double diff = cluster_q + weights[centroid_index] / 2 - cumulative_weight[centroid_index];
+  if (weights[centroid_index] == 1 && std::abs(diff) < 0.5) {
+    output[tid] = means[centroid_index];
     return;
   }
   size_type left_index  = centroid_index;
   size_type right_index = centroid_index;
   if (diff > 0) {
     if (right_index == tdigest_size - 1) {
-      output[tid] = cast_op(lerp(mean[right_index], *max_val, diff / (weight[right_index] / 2)));
+      output[tid] = lerp(means[right_index], *max_val, diff / (weights[right_index] / 2));
       return;
     }
     right_index++;
   } else {
     if (left_index == 0) {
-      output[tid] = cast_op(lerp(*min_val, mean[left_index], diff / (weight[left_index] / 2)));
+      output[tid] = lerp(*min_val, means[left_index], diff / (weights[left_index] / 2));
       return;
     }
     left_index--;
-    diff += weight[left_index] / 2 + weight[right_index] / 2;
+    diff += weights[left_index] / 2 + weights[right_index] / 2;
   }
 
-  diff /= (weight[left_index] / 2 + weight[right_index] / 2);
-  output[tid] = cast_op(lerp(mean[left_index], mean[right_index], diff));
+  diff /= (weights[left_index] / 2 + weights[right_index] / 2);
+  output[tid] = lerp(means[left_index], means[right_index], diff);
 }
 
 /**
  * @brief Calculate approximate percentiles on a provided tdigest column.
  *
- * Produces a LIST column where each row N represents output from querying the
- * corresponding tdigest of from row N in `input`. The length of each output list
+ * Produces a LIST column where each row `i` represents output from querying the
+ * corresponding tdigest of from row `i` in `input`. The length of each output list
  * is the number of percentiles specified in `percentiles`
  *
  * @param input           tdigest input data. One tdigest per row.
@@ -150,16 +132,14 @@ __global__ void compute_percentiles_kernel(offset_type const* tdigest_offsets,
  *
  * @returns Column of doubles containing requested percentile values.
  */
-template <typename T>
 std::unique_ptr<column> compute_approx_percentiles(structs_column_view const& input,
                                                    column_view const& percentiles,
-                                                   data_type output_type,
                                                    rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
 {
-  lists_column_view lcv(input.child(tdigest_centroid_column_index));
-  column_view min_col = input.child(tdigest_min_column_index);
-  column_view max_col = input.child(tdigest_max_column_index);
+  lists_column_view lcv(input.child(centroid_column_index));
+  column_view min_col = input.child(min_column_index);
+  column_view max_col = input.child(max_column_index);
 
   // offsets, representing the size of each tdigest
   auto offsets = lcv.offsets();
@@ -167,8 +147,8 @@ std::unique_ptr<column> compute_approx_percentiles(structs_column_view const& in
   // extract means and weights
   auto data = lcv.parent().child(lists_column_view::child_column_index);
   structs_column_view tdigest(data);
-  auto mean   = tdigest.child(tdigest_mean_column_index);
-  auto weight = tdigest.child(tdigest_weight_column_index);
+  auto mean   = tdigest.child(mean_column_index);
+  auto weight = tdigest.child(weight_column_index);
 
   // compute summed weights
   auto cumulative_weights = cudf::make_fixed_width_column(data_type{type_id::FLOAT64},
@@ -178,10 +158,11 @@ std::unique_ptr<column> compute_approx_percentiles(structs_column_view const& in
                                                           rmm::mr::get_current_device_resource());
   auto keys               = cudf::detail::make_counting_transform_iterator(
     0,
-    [offsets = offsets.begin<offset_type>(), num_offsets = offsets.size()] __device__(size_type i) {
-      return static_cast<size_type>(
-               thrust::upper_bound(thrust::seq, offsets, offsets + num_offsets, i) - offsets) -
-             1;
+    [offsets_begin = offsets.begin<offset_type>(),
+     offsets_end   = offsets.end<offset_type>()] __device__(size_type i) {
+      return thrust::distance(
+        thrust::prev(thrust::upper_bound(thrust::seq, offsets_begin, offsets_end, i)),
+        offsets_begin);
     });
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                 keys,
@@ -190,14 +171,17 @@ std::unique_ptr<column> compute_approx_percentiles(structs_column_view const& in
                                 cumulative_weights->mutable_view().begin<double>());
 
   // output is a column of size input.size() * percentiles.size()
-  auto result = cudf::make_fixed_width_column(
-    output_type, input.size() * percentiles.size(), mask_state::UNALLOCATED, stream, mr);
+  auto result = cudf::make_fixed_width_column(data_type{type_id::FLOAT64},
+                                              input.size() * percentiles.size(),
+                                              mask_state::UNALLOCATED,
+                                              stream,
+                                              mr);
 
   auto percentiles_cdv = column_device_view::create(percentiles);
 
   constexpr size_type block_size = 256;
   cudf::detail::grid_1d const grid(percentiles.size() * input.size(), block_size);
-  compute_percentiles_kernel<T><<<grid.num_blocks, block_size, 0, stream.value()>>>(
+  compute_percentiles_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
     offsets.begin<offset_type>(),
     input.size(),
     *percentiles_cdv,
@@ -206,28 +190,10 @@ std::unique_ptr<column> compute_approx_percentiles(structs_column_view const& in
     min_col.begin<double>(),
     max_col.begin<double>(),
     cumulative_weights->view().begin<double>(),
-    result->mutable_view().begin<device_storage_type_t<T>>(),
-    output_type);
+    result->mutable_view().begin<double>());
 
   return result;
 }
-
-struct compute_percentiles_dispatch {
-  template <typename T>
-  std::unique_ptr<column> operator()(structs_column_view const& input,
-                                     column_view const& percentiles,
-                                     data_type output_type,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
-  {
-    if constexpr (cudf::is_numeric<T>() || cudf::is_fixed_point<T>()) {
-      return compute_approx_percentiles<T>(input, percentiles, output_type, stream, mr);
-    }
-    CUDF_FAIL("Invalid non-numeric output requested for percentile_approx");
-  }
-};
-
-}  // anonymous namespace
 
 void check_is_valid_tdigest_column(column_view const& col)
 {
@@ -239,19 +205,19 @@ void check_is_valid_tdigest_column(column_view const& col)
 
   structs_column_view scv(col);
   CUDF_EXPECTS(scv.num_children() == 3, "Encountered invalid tdigest column");
-  CUDF_EXPECTS(scv.child(tdigest_min_column_index).type().id() == type_id::FLOAT64,
+  CUDF_EXPECTS(scv.child(min_column_index).type().id() == type_id::FLOAT64,
                "Encountered invalid tdigest column");
-  CUDF_EXPECTS(scv.child(tdigest_max_column_index).type().id() == type_id::FLOAT64,
+  CUDF_EXPECTS(scv.child(max_column_index).type().id() == type_id::FLOAT64,
                "Encountered invalid tdigest column");
 
-  lists_column_view lcv(scv.child(tdigest_centroid_column_index));
+  lists_column_view lcv(scv.child(centroid_column_index));
   auto data = lcv.child();
   CUDF_EXPECTS(data.type().id() == type_id::STRUCT, "Encountered invalid tdigest column");
   CUDF_EXPECTS(data.num_children() == 2,
                "Encountered tdigest column with an invalid number of children");
-  auto mean = data.child(tdigest_mean_column_index);
+  auto mean = data.child(mean_column_index);
   CUDF_EXPECTS(mean.type().id() == type_id::FLOAT64, "Encountered invalid tdigest mean column");
-  auto weight = data.child(tdigest_weight_column_index);
+  auto weight = data.child(weight_column_index);
   CUDF_EXPECTS(weight.type().id() == type_id::FLOAT64, "Encountered invalid tdigest weight column");
 }
 
@@ -297,13 +263,14 @@ std::unique_ptr<column> make_empty_tdigest_column(rmm::cuda_stream_view stream,
   return make_structs_column(1, std::move(children), 0, {}, stream, mr);
 }
 
+}  // namespace tdigest.
+
 std::unique_ptr<column> percentile_approx(structs_column_view const& input,
                                           column_view const& percentiles,
-                                          cudf::data_type output_type,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
-  check_is_valid_tdigest_column(input);
+  tdigest::check_is_valid_tdigest_column(input);
   CUDF_EXPECTS(percentiles.type().id() == type_id::FLOAT64,
                "percentile_approx expects float64 percentile inputs");
 
@@ -320,7 +287,7 @@ std::unique_ptr<column> percentile_approx(structs_column_view const& input,
     return cudf::make_lists_column(
       input.size(),
       std::move(offsets),
-      cudf::make_empty_column(output_type),
+      cudf::make_empty_column(data_type{type_id::FLOAT64}),
       input.size(),
       cudf::detail::create_null_mask(
         input.size(), mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr));
@@ -329,7 +296,7 @@ std::unique_ptr<column> percentile_approx(structs_column_view const& input,
   // if any of the input digests are empty, nullify the corresponding output rows (values will be
   // uninitialized)
   auto [bitmask, null_count] = [stream, mr, input]() {
-    lists_column_view lcv(input.child(tdigest_centroid_column_index));
+    lists_column_view lcv(input.child(tdigest::centroid_column_index));
     auto iter = cudf::detail::make_counting_transform_iterator(
       0, [offsets = lcv.offsets().begin<offset_type>()] __device__(size_type index) {
         return offsets[index + 1] - offsets[index] == 0 ? 1 : 0;
@@ -351,8 +318,7 @@ std::unique_ptr<column> percentile_approx(structs_column_view const& input,
   return cudf::make_lists_column(
     input.size(),
     std::move(offsets),
-    cudf::type_dispatcher(
-      output_type, compute_percentiles_dispatch{}, input, percentiles, output_type, stream, mr),
+    tdigest::compute_approx_percentiles(input, percentiles, stream, mr),
     null_count,
     std::move(bitmask),
     stream,
@@ -363,10 +329,9 @@ std::unique_ptr<column> percentile_approx(structs_column_view const& input,
 
 std::unique_ptr<column> percentile_approx(structs_column_view const& input,
                                           column_view const& percentiles,
-                                          cudf::data_type output_type,
                                           rmm::mr::device_memory_resource* mr)
 {
-  return percentile_approx(input, percentiles, output_type, rmm::cuda_stream_default, mr);
+  return percentile_approx(input, percentiles, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

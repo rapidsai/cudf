@@ -45,8 +45,7 @@ struct tdigest_gen {
 
 std::unique_ptr<column> arrow_percentile_approx(column_view const& _values,
                                                 int delta,
-                                                std::vector<double> const& percentages,
-                                                data_type output_t)
+                                                std::vector<double> const& percentages)
 {
   // sort the incoming values using the same settings that groupby does.
   // this is a little weak because null_order::AFTER is hardcoded internally to groupby.
@@ -81,11 +80,10 @@ std::unique_ptr<column> arrow_percentile_approx(column_view const& _values,
     percentages.begin(), percentages.end(), std::back_inserter(h_result), [&atd](double p) {
       return atd.Quantile(p);
     });
-  cudf::test::fixed_width_column_wrapper<double> uncast_result(h_result.begin(), h_result.end());
-  auto result = cudf::cast(uncast_result, output_t);
+  cudf::test::fixed_width_column_wrapper<double> result(h_result.begin(), h_result.end());
   cudf::test::fixed_width_column_wrapper<size_type> offsets{
     0, static_cast<size_type>(percentages.size())};
-  return cudf::make_lists_column(1, offsets.release(), std::move(result), 0, {});
+  return cudf::make_lists_column(1, offsets.release(), result.release(), 0, {});
 }
 
 struct percentile_approx_dispatch {
@@ -96,8 +94,7 @@ struct percentile_approx_dispatch {
                                      column_view const& values,
                                      int delta,
                                      std::vector<double> const& percentages,
-                                     size_type ulps,
-                                     data_type output_t)
+                                     size_type ulps)
   {
     // arrow implementation.
     auto expected = [&]() {
@@ -105,7 +102,7 @@ struct percentile_approx_dispatch {
       // exactly what happens inside of the cudf implementation as values are processed as well. so
       // this should not affect results.
       auto as_doubles = cudf::cast(values, data_type{type_id::FLOAT64});
-      return arrow_percentile_approx(*as_doubles, delta, percentages, output_t);
+      return arrow_percentile_approx(*as_doubles, delta, percentages);
     }();
 
     // gpu
@@ -120,7 +117,7 @@ struct percentile_approx_dispatch {
     cudf::test::fixed_width_column_wrapper<double> g_percentages(percentages.begin(),
                                                                  percentages.end());
     structs_column_view scv(*(gb_result.second[0].results[0]));
-    auto result = cudf::percentile_approx(scv, g_percentages, output_t);
+    auto result = cudf::percentile_approx(scv, g_percentages);
 
     cudf::test::expect_columns_equivalent(
       *expected, *result, cudf::test::debug_output_level::FIRST_ERROR, ulps);
@@ -135,8 +132,7 @@ struct percentile_approx_dispatch {
                                      column_view const& values,
                                      int delta,
                                      std::vector<double> const& percentages,
-                                     size_type ulps,
-                                     data_type output_t)
+                                     size_type ulps)
   {
     CUDF_FAIL("Invalid input type for percentile_approx test");
   }
@@ -146,7 +142,6 @@ void percentile_approx_test(column_view const& _keys,
                             column_view const& _values,
                             int delta,
                             std::vector<double> const& percentages,
-                            data_type output_t,
                             size_type ulps)
 {
   // first pass:  validate the actual percentages we get per group.
@@ -178,8 +173,7 @@ void percentile_approx_test(column_view const& _keys,
                                           values[idx],
                                           delta,
                                           percentages,
-                                          ulps,
-                                          output_t));
+                                          ulps));
   }
   std::vector<column_view> part_views;
   std::transform(parts.begin(),
@@ -201,14 +195,12 @@ void percentile_approx_test(column_view const& _keys,
   cudf::test::fixed_width_column_wrapper<double> g_percentages(percentages.begin(),
                                                                percentages.end());
   structs_column_view scv(*(gb_result.second[0].results[0]));
-  auto result = cudf::percentile_approx(scv, g_percentages, output_t);
+  auto result = cudf::percentile_approx(scv, g_percentages);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *result);
 }
 
-void simple_test(data_type input_type,
-                 data_type output_type,
-                 std::vector<std::pair<int, int>> params)
+void simple_test(data_type input_type, std::vector<std::pair<int, int>> params)
 {
   auto values = cudf::test::generate_standardized_percentile_distribution(input_type);
   // all in the same group
@@ -220,12 +212,8 @@ void simple_test(data_type input_type,
                0);
 
   std::for_each(params.begin(), params.end(), [&](std::pair<int, int> const& params) {
-    percentile_approx_test(*keys,
-                           *values,
-                           params.first,
-                           {0.0, 0.05, 0.25, 0.5, 0.75, 0.95, 1.0},
-                           output_type,
-                           params.second);
+    percentile_approx_test(
+      *keys, *values, params.first, {0.0, 0.05, 0.25, 0.5, 0.75, 0.95, 1.0}, params.second);
   });
 }
 
@@ -233,9 +221,7 @@ struct group_index {
   __device__ int operator()(int i) { return i / 150000; }
 };
 
-void grouped_test(data_type input_type,
-                  data_type output_type,
-                  std::vector<std::pair<int, int>> params)
+void grouped_test(data_type input_type, std::vector<std::pair<int, int>> params)
 {
   auto values = cudf::test::generate_standardized_percentile_distribution(input_type);
   // all in the same group
@@ -249,12 +235,8 @@ void grouped_test(data_type input_type,
                     group_index{});
 
   std::for_each(params.begin(), params.end(), [&](std::pair<int, int> const& params) {
-    percentile_approx_test(*keys,
-                           *values,
-                           params.first,
-                           {0.0, 0.05, 0.25, 0.5, 0.75, 0.95, 1.0},
-                           output_type,
-                           params.second);
+    percentile_approx_test(
+      *keys, *values, params.first, {0.0, 0.05, 0.25, 0.5, 0.75, 0.95, 1.0}, params.second);
   });
 }
 
@@ -265,9 +247,7 @@ std::pair<rmm::device_buffer, size_type> make_null_mask(column_view const& col)
                                 [] __device__(size_type i) { return i % 2 == 0; });
 }
 
-void simple_with_nulls_test(data_type input_type,
-                            data_type output_type,
-                            std::vector<std::pair<int, int>> params)
+void simple_with_nulls_test(data_type input_type, std::vector<std::pair<int, int>> params)
 {
   auto values = cudf::test::generate_standardized_percentile_distribution(input_type);
   // all in the same group
@@ -283,18 +263,12 @@ void simple_with_nulls_test(data_type input_type,
   values->set_null_mask(mask.first, mask.second);
 
   std::for_each(params.begin(), params.end(), [&](std::pair<int, int> const& params) {
-    percentile_approx_test(*keys,
-                           *values,
-                           params.first,
-                           {0.0, 0.05, 0.25, 0.5, 0.75, 0.95, 1.0},
-                           output_type,
-                           params.second);
+    percentile_approx_test(
+      *keys, *values, params.first, {0.0, 0.05, 0.25, 0.5, 0.75, 0.95, 1.0}, params.second);
   });
 }
 
-void grouped_with_nulls_test(data_type input_type,
-                             data_type output_type,
-                             std::vector<std::pair<int, int>> params)
+void grouped_with_nulls_test(data_type input_type, std::vector<std::pair<int, int>> params)
 {
   auto values = cudf::test::generate_standardized_percentile_distribution(input_type);
   // all in the same group
@@ -312,12 +286,8 @@ void grouped_with_nulls_test(data_type input_type,
   values->set_null_mask(mask.first, mask.second);
 
   std::for_each(params.begin(), params.end(), [&](std::pair<int, int> const& params) {
-    percentile_approx_test(*keys,
-                           *values,
-                           params.first,
-                           {0.0, 0.05, 0.25, 0.5, 0.75, 0.95, 1.0},
-                           output_type,
-                           params.second);
+    percentile_approx_test(
+      *keys, *values, params.first, {0.0, 0.05, 0.25, 0.5, 0.75, 0.95, 1.0}, params.second);
   });
 }
 
@@ -342,7 +312,6 @@ TYPED_TEST(PercentileApproxInputTypesTest, Simple)
   auto const input_type = get_appropriate_type<T>();
 
   simple_test(input_type,
-              data_type{type_id::FLOAT64},
               {{1000, cudf::test::default_ulp},
                {100, cudf::test::default_ulp * 4},
                {10, cudf::test::default_ulp * 11}});
@@ -354,7 +323,6 @@ TYPED_TEST(PercentileApproxInputTypesTest, Grouped)
   auto const input_type = get_appropriate_type<T>();
 
   grouped_test(input_type,
-               data_type{type_id::FLOAT64},
                {{1000, cudf::test::default_ulp},
                 {100, cudf::test::default_ulp * 2},
                 {10, cudf::test::default_ulp * 10}});
@@ -366,7 +334,6 @@ TYPED_TEST(PercentileApproxInputTypesTest, SimpleWithNulls)
   auto const input_type = get_appropriate_type<T>();
 
   simple_with_nulls_test(input_type,
-                         data_type{type_id::FLOAT64},
                          {{1000, cudf::test::default_ulp},
                           {100, cudf::test::default_ulp * 2},
                           {10, cudf::test::default_ulp * 11}});
@@ -378,71 +345,17 @@ TYPED_TEST(PercentileApproxInputTypesTest, GroupedWithNulls)
   auto const input_type = get_appropriate_type<T>();
 
   grouped_with_nulls_test(input_type,
-                          data_type{type_id::FLOAT64},
                           {{1000, cudf::test::default_ulp},
                            {100, cudf::test::default_ulp * 2},
                            {10, cudf::test::default_ulp * 6}});
 }
 
-template <typename T>
-struct PercentileApproxOutputTypesTest : public cudf::test::BaseFixture {
+struct PercentileApproxTest : public cudf::test::BaseFixture {
 };
-TYPED_TEST_CASE(PercentileApproxOutputTypesTest, PercentileApproxTypes);
 
-TYPED_TEST(PercentileApproxOutputTypesTest, Simple)
+TEST_F(PercentileApproxTest, EmptyInput)
 {
-  using T                = TypeParam;
-  auto const output_type = get_appropriate_type<T>();
-
-  simple_test(data_type{type_id::FLOAT64},
-              output_type,
-              {{1000, cudf::test::default_ulp},
-               {100, cudf::test::default_ulp * 4},
-               {10, cudf::test::default_ulp * 11}});
-}
-
-TYPED_TEST(PercentileApproxOutputTypesTest, Grouped)
-{
-  using T                = TypeParam;
-  auto const output_type = get_appropriate_type<T>();
-
-  grouped_test(data_type{type_id::FLOAT64},
-               output_type,
-               {{1000, cudf::test::default_ulp},
-                {100, cudf::test::default_ulp * 2},
-                {10, cudf::test::default_ulp * 6}});
-}
-
-TYPED_TEST(PercentileApproxOutputTypesTest, SimpleWithNulls)
-{
-  using T                = TypeParam;
-  auto const output_type = get_appropriate_type<T>();
-
-  simple_with_nulls_test(data_type{type_id::FLOAT64},
-                         output_type,
-                         {{1000, cudf::test::default_ulp},
-                          {100, cudf::test::default_ulp * 2},
-                          {10, cudf::test::default_ulp * 11}});
-}
-
-TYPED_TEST(PercentileApproxOutputTypesTest, GroupedWithNulls)
-{
-  using T                = TypeParam;
-  auto const output_type = get_appropriate_type<T>();
-
-  grouped_with_nulls_test(data_type{type_id::FLOAT64},
-                          output_type,
-                          {{1000, cudf::test::default_ulp},
-                           {100, cudf::test::default_ulp * 2},
-                           {10, cudf::test::default_ulp * 4}});
-}
-
-TYPED_TEST(PercentileApproxOutputTypesTest, EmptyInput)
-{
-  using T                = TypeParam;
-  auto const output_type = get_appropriate_type<T>();
-
-  auto empty_ = cudf::detail::make_empty_tdigest_column();
+  auto empty_ = cudf::detail::tdigest::make_empty_tdigest_column();
   cudf::test::fixed_width_column_wrapper<double> percentiles{0.0, 0.25, 0.3};
 
   std::vector<column_view> input;
@@ -452,25 +365,22 @@ TYPED_TEST(PercentileApproxOutputTypesTest, EmptyInput)
   auto empty = cudf::concatenate(input);
 
   structs_column_view scv(*empty);
-  auto result = cudf::percentile_approx(scv, percentiles, output_type);
+  auto result = cudf::percentile_approx(scv, percentiles);
 
   cudf::test::fixed_width_column_wrapper<offset_type> offsets{0, 0, 0, 0};
   std::vector<bool> nulls{0, 0, 0};
   auto expected =
     cudf::make_lists_column(3,
                             offsets.release(),
-                            cudf::make_empty_column(output_type),
+                            cudf::make_empty_column(data_type{type_id::FLOAT64}),
                             3,
                             cudf::test::detail::make_null_mask(nulls.begin(), nulls.end()));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }
 
-TYPED_TEST(PercentileApproxOutputTypesTest, EmptyPercentiles)
+TEST_F(PercentileApproxTest, EmptyPercentiles)
 {
-  using T                = TypeParam;
-  auto const output_type = get_appropriate_type<T>();
-
   auto const delta = 1000;
 
   cudf::test::fixed_width_column_wrapper<double> values{0, 1, 2, 3, 4, 5};
@@ -486,23 +396,20 @@ TYPED_TEST(PercentileApproxOutputTypesTest, EmptyPercentiles)
   cudf::test::fixed_width_column_wrapper<double> percentiles{};
 
   structs_column_view scv(*tdigest_column.second[0].results[0]);
-  auto result = cudf::percentile_approx(scv, percentiles, output_type);
+  auto result = cudf::percentile_approx(scv, percentiles);
 
   cudf::test::fixed_width_column_wrapper<offset_type> offsets{0, 0, 0};
   auto expected = cudf::make_lists_column(2,
                                           offsets.release(),
-                                          cudf::make_empty_column(output_type),
+                                          cudf::make_empty_column(data_type{type_id::FLOAT64}),
                                           2,
                                           cudf::detail::create_null_mask(2, mask_state::ALL_NULL));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }
 
-TYPED_TEST(PercentileApproxOutputTypesTest, NullPercentiles)
+TEST_F(PercentileApproxTest, NullPercentiles)
 {
-  using T                = TypeParam;
-  auto const output_type = get_appropriate_type<T>();
-
   auto const delta = 1000;
 
   cudf::test::fixed_width_column_wrapper<double> values{1, 1, 2, 3, 4, 5, 6, 7, 8};
@@ -519,10 +426,10 @@ TYPED_TEST(PercentileApproxOutputTypesTest, NullPercentiles)
 
   // nulls should result in the min value
   cudf::test::fixed_width_column_wrapper<double> npercentiles{{1.0, 1.0, 0.5, 0.75}, {0, 0, 1, 1}};
-  auto result = cudf::percentile_approx(scv, npercentiles, output_type);
+  auto result = cudf::percentile_approx(scv, npercentiles);
 
   cudf::test::fixed_width_column_wrapper<double> percentiles{0.0, 0.0, 0.5, 0.75};
-  auto expected = cudf::percentile_approx(scv, percentiles, output_type);
+  auto expected = cudf::percentile_approx(scv, percentiles);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }

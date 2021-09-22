@@ -509,7 +509,8 @@ std::unique_ptr<Base> make_merge_m2_aggregation();
  *    struct {
  *      double    // mean
  *      double    // weight
- *    }
+ *    },
+ *    ...
  *   }
  *   // these are from the input stream, not the centroids. they are used
  *   // during the percentile_approx computation near the beginning or
@@ -517,6 +518,9 @@ std::unique_ptr<Base> make_merge_m2_aggregation();
  *   double       // min
  *   double       // max
  * }
+ *
+ * Each output row is a single tdigest.  The length of the row is the "size" of the
+ * tdigest, each element of which represents a weighted centroid (mean, weight).
  *
  * @param delta Parameter controlling compression level and accuracy on subsequent
  * queries on the output tdigest data.  Delta places an upper bound on the size of
@@ -526,7 +530,7 @@ std::unique_ptr<Base> make_merge_m2_aggregation();
  *
  * @returns A TDIGEST aggregation object.
  */
-template <typename Base = aggregation>
+template <typename Base>
 std::unique_ptr<Base> make_tdigest_aggregation(int delta = 1000);
 
 /**
@@ -544,7 +548,8 @@ std::unique_ptr<Base> make_tdigest_aggregation(int delta = 1000);
  *    struct {
  *      double    // mean
  *      double    // weight
- *    }
+ *    },
+ *    ...
  *   }
  *   // these are from the input stream, not the centroids. they are used
  *   // during the percentile_approx computation near the beginning or
@@ -552,6 +557,9 @@ std::unique_ptr<Base> make_tdigest_aggregation(int delta = 1000);
  *   double       // min
  *   double       // max
  * }
+ *
+ * Each output row is a single tdigest.  The length of the row is the "size" of the
+ * tdigest, each element of which represents a weighted centroid (mean, weight).
  *
  * @param delta Parameter controlling compression level and accuracy on subsequent
  * queries on the output tdigest data.  Delta places an upper bound on the size of
@@ -561,7 +569,7 @@ std::unique_ptr<Base> make_tdigest_aggregation(int delta = 1000);
  *
  * @returns A MERGE_TDIGEST aggregation object.
  */
-template <typename Base = aggregation>
+template <typename Base>
 std::unique_ptr<Base> make_merge_tdigest_aggregation(int delta = 1000);
 
 /** @} */  // end of group
