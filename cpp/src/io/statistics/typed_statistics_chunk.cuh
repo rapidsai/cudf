@@ -240,7 +240,7 @@ get_untyped_chunk(const typed_statistics_chunk<T, include_aggregate>& chunk)
   using E = typename detail::extrema_type<T>::type;
   statistics_chunk stat;
   stat.non_nulls  = chunk.non_nulls;
-  stat.null_count = chunk.num_rows - chunk.non_nulls;
+  stat.null_count = chunk.null_count;
   stat.has_minmax = chunk.has_minmax;
   stat.has_sum    = [&]() {
     if (!chunk.has_minmax) return false;
