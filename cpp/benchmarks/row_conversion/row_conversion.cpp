@@ -19,8 +19,8 @@
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
-#include <cudf/row_conversion.hpp>
 #include <cudf/lists/lists_column_view.hpp>
+#include <cudf/row_conversion.hpp>
 #include <cudf_test/column_utilities.hpp>
 
 class RowConversion : public cudf::benchmark {
