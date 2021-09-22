@@ -657,21 +657,16 @@ def _isin_datetimelike(
 
 def to_iso_calendar(self):
     formats = ["%G", "%V", "%u"]
-    if isinstance(
-        self,
-        (
-            cudf.core.series.DatetimeProperties,
-            pd.core.indexes.accessors.DatetimeProperties,
-        ),
-    ):
-        iso_params = [self.strftime(fmt) for fmt in formats]
-        index = None
-    elif isinstance(self, (cudf.Index, pd.Index)):
+    if isinstance(self, (cudf.Index, pd.Index)):
         iso_params = [
             self._values.as_string_column(self._values.dtype, fmt)
             for fmt in formats
         ]
         index = self._values
+    elif isinstance(self.series, (cudf.Series, pd.Series)):
+        iso_params = [self.strftime(fmt) for fmt in formats]
+        index = self.series.index
+
     data = dict(zip(["year", "week", "day"], iso_params))
     isoSeries = cudf.DataFrame(data, index=index, dtype=np.int32)
 
