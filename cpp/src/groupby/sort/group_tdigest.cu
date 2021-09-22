@@ -43,33 +43,32 @@ namespace {
 
 // the most representative point within a cluster of similar
 // values. {mean, weight}
-using centroid_tuple = thrust::tuple<double, double, bool>;
+// NOTE: Using a tuple here instead of a struct to take advantage of
+// thrust zip iterators for output.
+using centroid = thrust::tuple<double, double, bool>;
 
 // make a centroid from a scalar with a weight of 1.
 template <typename T>
-struct make_centroid_tuple {
+struct make_centroid {
   column_device_view const col;
 
-  centroid_tuple operator() __device__(size_type index)
+  centroid operator() __device__(size_type index)
   {
     return {static_cast<double>(col.element<T>(index)), 1, col.is_valid(index)};
   }
 };
 
 // make a centroid from an input stream of mean/weight values.
-struct make_weighted_centroid_tuple {
+struct make_weighted_centroid {
   double const* mean;
   double const* weight;
 
-  centroid_tuple operator() __device__(size_type index)
-  {
-    return {mean[index], weight[index], true};
-  }
+  centroid operator() __device__(size_type index) { return {mean[index], weight[index], true}; }
 };
 
 // merge two centroids
-struct merge_centroid_tuple {
-  centroid_tuple operator() __device__(centroid_tuple const& lhs, centroid_tuple const& rhs)
+struct merge_centroids {
+  centroid operator() __device__(centroid const& lhs, centroid const& rhs)
   {
     bool const lhs_valid = thrust::get<2>(lhs);
     bool const rhs_valid = thrust::get<2>(rhs);
@@ -508,7 +507,7 @@ std::unique_ptr<column> compute_tdigests(int delta,
                         thrust::make_discard_iterator(),  // key output
                         output,                           // output
                         thrust::equal_to<size_type>{},    // key equality check
-                        merge_centroid_tuple{});
+                        merge_centroids{});
 
   // create the list
   auto const num_groups = group_cluster_offsets->size() - 1;
@@ -589,7 +588,7 @@ struct typed_group_tdigest {
 
     // for simple input values, the "centroids" all have a weight of 1.
     auto scalar_to_centroid =
-      cudf::detail::make_counting_transform_iterator(0, make_centroid_tuple<T>{*d_col});
+      cudf::detail::make_counting_transform_iterator(0, make_centroid<T>{*d_col});
 
     // generate the final tdigest
     return compute_tdigests(delta,
@@ -628,12 +627,13 @@ std::unique_ptr<column> group_tdigest(column_view const& col,
                                       cudf::device_span<size_type const> group_labels,
                                       cudf::device_span<size_type const> group_valid_counts,
                                       size_type num_groups,
-                                      int delta,
+                                      int max_centroids,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
   if (col.size() == 0) { return cudf::detail::tdigest::make_empty_tdigest_column(stream, mr); }
 
+  auto const delta = max_centroids;
   return cudf::type_dispatcher(col.type(),
                                typed_group_tdigest{},
                                col,
@@ -650,7 +650,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
                                             cudf::device_span<size_type const> group_offsets,
                                             cudf::device_span<size_type const> group_labels,
                                             size_type num_groups,
-                                            int delta,
+                                            int max_centroids,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
@@ -792,6 +792,8 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
                                 cumulative_weights->view().begin<double>(),
                                 cumulative_weights->mutable_view().begin<double>());
 
+  auto const delta = max_centroids;
+
   // generate cluster info
   auto total_group_weight = cudf::detail::make_counting_transform_iterator(
     0,
@@ -820,7 +822,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
   // input centroid values
   auto centroids = cudf::detail::make_counting_transform_iterator(
     0,
-    make_weighted_centroid_tuple{
+    make_weighted_centroid{
       merged->get_column(cudf::detail::tdigest::mean_column_index).view().begin<double>(),
       merged->get_column(cudf::detail::tdigest::weight_column_index).view().begin<double>()});
 

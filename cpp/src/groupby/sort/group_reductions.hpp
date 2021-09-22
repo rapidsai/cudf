@@ -471,7 +471,7 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
  * @param group_labels 0-based ID of group that the corresponding value belongs to
  * @param group_valid_counts Per-group counts of valid elements.
  * @param num_groups Number of groups.
- * @param delta Parameter controlling the level of compression of the tdigest. Higher
+ * @param max_centroids Parameter controlling the level of compression of the tdigest. Higher
  * values result in a larger, more precise tdigest.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -483,7 +483,7 @@ std::unique_ptr<column> group_tdigest(column_view const& values,
                                       cudf::device_span<size_type const> group_labels,
                                       cudf::device_span<size_type const> group_valid_counts,
                                       size_type num_groups,
-                                      int delta,
+                                      int max_centroids,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr);
 
@@ -515,7 +515,7 @@ std::unique_ptr<column> group_tdigest(column_view const& values,
  * @param group_offsets Offsets of groups' starting points within @p values.
  * @param group_labels 0-based ID of group that the corresponding value belongs to
  * @param num_groups Number of groups.
- * @param delta Parameter controlling the level of compression of the tdigest. Higher
+ * @param max_centroids Parameter controlling the level of compression of the tdigest. Higher
  * values result in a larger, more precise tdigest.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
@@ -526,7 +526,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& values,
                                             cudf::device_span<size_type const> group_offsets,
                                             cudf::device_span<size_type const> group_labels,
                                             size_type num_groups,
-                                            int delta,
+                                            int max_centroids,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr);
 

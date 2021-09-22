@@ -40,8 +40,7 @@ __device__ inline T lerp(T v0, T v1, T t)
 }
 
 // kernel for computing percentiles on input tdigest (mean, weight) centroid data.
-__global__ void compute_percentiles_kernel(offset_type const* tdigest_offsets,
-                                           size_type num_tdigests,
+__global__ void compute_percentiles_kernel(device_span<offset_type const> tdigest_offsets,
                                            column_device_view percentiles,
                                            double const* means_,
                                            double const* weights_,
@@ -52,6 +51,7 @@ __global__ void compute_percentiles_kernel(offset_type const* tdigest_offsets,
 {
   int const tid = threadIdx.x + blockIdx.x * blockDim.x;
 
+  auto const num_tdigests  = tdigest_offsets.size() - 1;
   auto const tdigest_index = tid / percentiles.size();
   if (tdigest_index >= num_tdigests) { return; }
   auto const pindex = tid % percentiles.size();
@@ -86,10 +86,10 @@ __global__ void compute_percentiles_kernel(offset_type const* tdigest_offsets,
   }
 
   // otherwise find the centroid we're in and interpolate
-  size_type const centroid_index = static_cast<size_type>(
+  size_type const centroid_index = static_cast<size_type>(thrust::distance(
+    cumulative_weight,
     thrust::lower_bound(
-      thrust::seq, cumulative_weight, cumulative_weight + tdigest_size, cluster_q) -
-    cumulative_weight);
+      thrust::seq, cumulative_weight, cumulative_weight + tdigest_size, cluster_q)));
 
   double diff = cluster_q + weights[centroid_index] / 2 - cumulative_weight[centroid_index];
   if (weights[centroid_index] == 1 && std::abs(diff) < 0.5) {
@@ -161,8 +161,8 @@ std::unique_ptr<column> compute_approx_percentiles(structs_column_view const& in
     [offsets_begin = offsets.begin<offset_type>(),
      offsets_end   = offsets.end<offset_type>()] __device__(size_type i) {
       return thrust::distance(
-        thrust::prev(thrust::upper_bound(thrust::seq, offsets_begin, offsets_end, i)),
-        offsets_begin);
+        offsets_begin,
+        thrust::prev(thrust::upper_bound(thrust::seq, offsets_begin, offsets_end, i)));
     });
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                 keys,
@@ -182,8 +182,7 @@ std::unique_ptr<column> compute_approx_percentiles(structs_column_view const& in
   constexpr size_type block_size = 256;
   cudf::detail::grid_1d const grid(percentiles.size() * input.size(), block_size);
   compute_percentiles_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
-    offsets.begin<offset_type>(),
-    input.size(),
+    {offsets.begin<offset_type>(), static_cast<size_t>(offsets.size())},
     *percentiles_cdv,
     mean.begin<double>(),
     weight.begin<double>(),

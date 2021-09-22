@@ -691,22 +691,23 @@ template std::unique_ptr<aggregation> make_merge_m2_aggregation<aggregation>();
 template std::unique_ptr<groupby_aggregation> make_merge_m2_aggregation<groupby_aggregation>();
 
 template <typename Base>
-std::unique_ptr<Base> make_tdigest_aggregation(int delta)
+std::unique_ptr<Base> make_tdigest_aggregation(int max_centroids)
 {
-  return std::make_unique<detail::tdigest_aggregation>(delta);
+  return std::make_unique<detail::tdigest_aggregation>(max_centroids);
 }
-template std::unique_ptr<aggregation> make_tdigest_aggregation<aggregation>(int delta);
+template std::unique_ptr<aggregation> make_tdigest_aggregation<aggregation>(int max_centroids);
 template std::unique_ptr<groupby_aggregation> make_tdigest_aggregation<groupby_aggregation>(
-  int delta);
+  int max_centroids);
 
 template <typename Base>
-std::unique_ptr<Base> make_merge_tdigest_aggregation(int delta)
+std::unique_ptr<Base> make_merge_tdigest_aggregation(int max_centroids)
 {
-  return std::make_unique<detail::merge_tdigest_aggregation>(delta);
+  return std::make_unique<detail::merge_tdigest_aggregation>(max_centroids);
 }
-template std::unique_ptr<aggregation> make_merge_tdigest_aggregation<aggregation>(int delta);
+template std::unique_ptr<aggregation> make_merge_tdigest_aggregation<aggregation>(
+  int max_centroids);
 template std::unique_ptr<groupby_aggregation> make_merge_tdigest_aggregation<groupby_aggregation>(
-  int delta);
+  int max_centroids);
 
 namespace detail {
 namespace {
