@@ -99,6 +99,7 @@ struct DeviceMin {
                               !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
+    if constexpr (cudf::is_chrono<T>()) return std::numeric_limits<T>::max();
     return cuda::std::numeric_limits<T>::max();
   }
 
