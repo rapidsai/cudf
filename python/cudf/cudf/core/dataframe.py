@@ -595,12 +595,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         )
 
     @property
-    def shape(self):
-        """Returns a tuple representing the dimensionality of the DataFrame.
-        """
-        return self._num_rows, self._num_columns
-
-    @property
     def ndim(self):
         """Dimension of the data. DataFrame ndim is always 2.
         """
@@ -937,12 +931,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             ind = cudf.Index(ind, dtype="str")
             sizes.append(self.index.memory_usage(deep=deep))
         return Series(sizes, index=ind)
-
-    def __len__(self):
-        """
-        Returns the number of rows
-        """
-        return len(self.index)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         import cudf
