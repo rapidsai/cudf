@@ -167,6 +167,11 @@ class Frame(libcudf.table.Table):
         return self._num_columns * self._num_rows
 
     @property
+    def shape(self):
+        """Returns a tuple representing the dimensionality of the DataFrame."""
+        return self._num_rows, self._num_columns
+
+    @property
     def _is_homogeneous(self):
         # make sure that the dataframe has columns
         if not self._data.columns:
@@ -4458,6 +4463,12 @@ class Frame(libcudf.table.Table):
     def __str__(self):
         return self.to_string()
 
+    def __deepcopy__(self, memo):
+        return self.copy(deep=True)
+
+    def __copy__(self):
+        return self.copy(deep=False)
+
     def head(self, n=5):
         """
         Return the first `n` rows.
@@ -4726,9 +4737,6 @@ class SingleColumnFrame(Frame):
         """
         cudf.utils.utils.raise_iteration_error(obj=self)
 
-    def __len__(self):
-        return len(self._column)
-
     def __bool__(self):
         raise TypeError(
             f"The truth value of a {type(self)} is ambiguous. Use "
@@ -4916,7 +4924,7 @@ class SingleColumnFrame(Frame):
 
     @property
     def is_monotonic(self):
-        """Return boolean if values in the object are monotonic_increasing.
+        """Return boolean if values in the object are monotonically increasing.
 
         This property is an alias for :attr:`is_monotonic_increasing`.
 
@@ -4928,7 +4936,7 @@ class SingleColumnFrame(Frame):
 
     @property
     def is_monotonic_increasing(self):
-        """Return boolean if values in the object are monotonic_increasing.
+        """Return boolean if values in the object are monotonically increasing.
 
         Returns
         -------
@@ -4938,7 +4946,7 @@ class SingleColumnFrame(Frame):
 
     @property
     def is_monotonic_decreasing(self):
-        """Return boolean if values in the object are monotonic_decreasing.
+        """Return boolean if values in the object are monotonically decreasing.
 
         Returns
         -------

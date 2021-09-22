@@ -1553,3 +1553,20 @@ def test_multiIndex_duplicate_names():
     )
 
     assert_eq(gi, pi)
+
+
+def test_difference():
+    midx = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    midx2 = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3, 3], [0, 2, 1, 1, 0, 2]],
+        names=["x", "y"],
+    )
+
+    expected = midx2.to_pandas().difference(midx.to_pandas())
+    actual = midx2.difference(midx)
+    assert_eq(expected, actual)
