@@ -112,7 +112,6 @@ std::unique_ptr<column>
 get_gather_map_for_map_values(column_view const &input, string_scalar &lookup_key,
                               rmm::cuda_stream_view stream, rmm::mr::device_memory_resource *mr) {
   constexpr size_type block_size{256};
-
   cudf::detail::grid_1d grid{input.size(), block_size};
 
   auto input_device_view = cudf::column_device_view::create(input, stream);
