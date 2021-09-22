@@ -54,9 +54,7 @@ constexpr auto NUM_VALIDITY_BLOCKS_PER_KERNEL_LOADED = 2;
 #endif
 
 using cudf::detail::make_device_uvector_async;
-using cudf::detail::warp_size;
-
-namespace cudf::java {
+namespace cudf {
 
 namespace detail {
 
@@ -403,7 +401,6 @@ __global__ void copy_from_columns(const size_type num_rows, const size_type num_
     // Fetch ahead up to stages_count subsets
     for (; fetch < blocks_remaining && fetch < (subset + stages_count); ++fetch) {
       auto const fetch_block = block_infos[blockIdx.x * NUM_BLOCKS_PER_KERNEL_TO_COLUMNS + fetch];
-
       auto const num_fetch_cols = fetch_block.num_cols();
       auto const num_fetch_rows = fetch_block.num_rows();
       auto const num_elements_in_block = num_fetch_cols * num_fetch_rows;
@@ -435,7 +432,7 @@ __global__ void copy_from_columns(const size_type num_rows, const size_type num_
         auto const shared_offset = relative_row * fetch_block_row_size + relative_col_offset;
         auto const input_src = input_data[absolute_col] + col_size * absolute_row;
 
-        // copy the main
+        // copy the element to global memory
         cuda::memcpy_async(&shared[fetch % stages_count][shared_offset], input_src, col_size,
                            fetch_barrier);
       }
@@ -445,18 +442,19 @@ __global__ void copy_from_columns(const size_type num_rows, const size_type num_
     subset_barrier.arrive_and_wait();
 
     auto block = block_infos[blockIdx.x * NUM_BLOCKS_PER_KERNEL_TO_COLUMNS + subset];
-    /*    auto const rows_in_block  = block.num_rows();
-        auto const cols_in_block  = block.num_cols();*/
+
     auto const block_row_size = block.get_row_size(col_offsets, col_sizes);
     auto const column_offset = col_offsets[block.start_col];
 
     // copy entire rows to final dest
     for (auto absolute_row = block.start_row + threadIdx.x; absolute_row <= block.end_row;
          absolute_row += blockDim.x) {
+
       auto const relative_row = absolute_row - block.start_row;
       auto const output_dest =
           output_data[block.buffer_num] + absolute_row * block_row_size + column_offset;
       auto const shared_offset = block_row_size * relative_row;
+
       cuda::memcpy_async(output_dest, &shared[subset % stages_count][shared_offset], block_row_size,
                          subset_barrier);
     }
@@ -528,23 +526,22 @@ __global__ void copy_validity_from_columns(
         align_offset(util::div_rounding_up_unsafe(num_block_cols, 8), 8);
     auto const total_sections = num_sections_x * num_sections_y;
 
-    int const warp_id = threadIdx.x / warp_size;
-    int const lane_id = threadIdx.x % warp_size;
-    auto const warps_per_block = std::max(1u, blockDim.x / warp_size);
+    int const warp_id = threadIdx.x / detail::warp_size;
+    int const lane_id = threadIdx.x % detail::warp_size;
+    auto const warps_per_block = std::max(1u, blockDim.x / detail::warp_size);
 
     // the block is divided into sections. A warp operates on a section at a time.
     for (int my_section_idx = warp_id; my_section_idx < total_sections;
          my_section_idx += warps_per_block) {
-      // convert to rows and cols
-      auto const section_x = my_section_idx / num_sections_x;
-      auto const section_y = my_section_idx % num_sections_x;
 
+      // convert to rows and cols
+      auto const section_x = my_section_idx % num_sections_x;
+      auto const section_y = my_section_idx / num_sections_x;
       auto const relative_col = section_x * 32 + lane_id;
       auto const relative_row = section_y * 8;
       auto const absolute_col = relative_col + block.start_col;
       auto const absolute_row = relative_row + block.start_row;
       auto const cols_left = num_columns - absolute_col;
-
       auto const participation_mask = __ballot_sync(0xFFFFFFFF, absolute_col < num_columns);
 
       if (absolute_col < num_columns) {
@@ -552,14 +549,14 @@ __global__ void copy_validity_from_columns(
             input_nm[absolute_col] != nullptr ? input_nm[absolute_col][absolute_row / 32] : 0xFF;
 
         // every thread that is participating in the warp has a byte, but it's column-based
-        // data and we need it in row-based. So we shiffle the bits around with ballot_sync to make
+        // data and we need it in row-based. So we shuffle the bits around with ballot_sync to make
         // the bytes we actually write.
         for (int i = 0, byte_mask = 1; i < 8 && relative_row + i < num_rows; ++i, byte_mask <<= 1) {
           auto validity_data = __ballot_sync(participation_mask, my_byte & byte_mask);
           // lead thread in each warp writes data
           auto const validity_write_offset =
               validity_data_row_length * (relative_row + i) + relative_col / 8;
-          if (threadIdx.x % warp_size == 0) {
+          if (threadIdx.x % detail::warp_size == 0) {
             if (cols_left <= 8) {
               // write byte
               this_shared_block[validity_write_offset] = validity_data & 0xFF;
@@ -591,6 +588,7 @@ __global__ void copy_validity_from_columns(
       auto const output_ptr =
           output_data[block.buffer_num] + row_offsets[row] + validity_offset + block.start_col / 8;
       auto const num_bytes = util::div_rounding_up_unsafe(num_block_cols, 8);
+
       cuda::memcpy_async(
           output_ptr, &this_shared_block[validity_data_row_length * relative_row], num_bytes,
           shared_block_barriers[validity_block % NUM_VALIDITY_BLOCKS_PER_KERNEL_LOADED]);
@@ -647,7 +645,6 @@ fetch_blocks_for_row_to_column(size_t &fetch_index, size_t const processing_inde
     auto const fetch_block_start_row = fetch_block.start_row;
     auto const fetch_block_end_row = fetch_block.end_row;
     auto const starting_col_offset = col_offsets[fetch_block.start_col];
-
     auto const fetch_block_row_size = fetch_block.get_row_size(col_offsets, col_sizes);
     auto const num_fetch_cols = fetch_block.num_cols();
     auto [col_size_bytes, col_offset_bytes] = get_admin_data_sizes(
@@ -718,9 +715,9 @@ __global__ void copy_to_columns(const size_type num_rows, const size_type num_co
   extern __shared__ int8_t shared_data[];
   int8_t *shared[stages_count] = {shared_data, shared_data + shmem_used_per_block};
 
-  __shared__ cuda::barrier<cuda::thread_scope_block> block_barrier[stages_count];
+  __shared__ cuda::barrier<cuda::thread_scope_block> block_barrier[NUM_BLOCKS_PER_KERNEL_LOADED];
   if (group.thread_rank() == 0) {
-    for (int i = 0; i < stages_count; ++i) {
+    for (int i = 0; i < NUM_BLOCKS_PER_KERNEL_LOADED; ++i) {
       init(&block_barrier[i], group.size());
     }
   }
@@ -748,12 +745,11 @@ __global__ void copy_to_columns(const size_type num_rows, const size_type num_co
                                    block_infos, _col_sizes, _col_offsets, row_offsets, input_data,
                                    shared, group, block_barrier);
 
-    auto &subset_barrier = block_barrier[subset % stages_count];
+    auto &subset_barrier = block_barrier[subset % NUM_BLOCKS_PER_KERNEL_LOADED];
     // ensure our data is ready
     subset_barrier.arrive_and_wait();
 
-    auto const block = block_infos[blockIdx.x * NUM_BLOCKS_PER_KERNEL_TO_COLUMNS + subset];
-
+    auto block = block_infos[blockIdx.x * NUM_BLOCKS_PER_KERNEL_TO_COLUMNS + subset];
     auto const rows_in_block = block.num_rows();
     auto const cols_in_block = block.num_cols();
 
@@ -851,18 +847,15 @@ __global__ void copy_validity_to_columns(
     auto const block = block_infos[blockIdx.x * NUM_VALIDITY_BLOCKS_PER_KERNEL + validity_block];
     auto const block_start_col = block.start_col;
     auto const block_start_row = block.start_row;
-
     auto const num_block_cols = block.num_cols();
     auto const num_block_rows = block.num_rows();
-
     auto const num_sections_x = (num_block_cols + 7) / 8;
     auto const num_sections_y = (num_block_rows + 31) / 32;
     auto const validity_data_col_length = num_sections_y * 4; // words to bytes
     auto const total_sections = num_sections_x * num_sections_y;
-
-    int const warp_id = threadIdx.x / warp_size;
-    int const lane_id = threadIdx.x % warp_size;
-    auto const warps_per_block = std::max(1u, blockDim.x / warp_size);
+    int const warp_id = threadIdx.x / detail::warp_size;
+    int const lane_id = threadIdx.x % detail::warp_size;
+    auto const warps_per_block = std::max(1u, blockDim.x / detail::warp_size);
 
     // the block is divided into sections. A warp operates on a section at a time.
     for (int my_section_idx = warp_id; my_section_idx < total_sections;
@@ -870,7 +863,6 @@ __global__ void copy_validity_to_columns(
       // convert to rows and cols
       auto const section_x = my_section_idx % num_sections_x;
       auto const section_y = my_section_idx / num_sections_x;
-
       auto const relative_col = section_x * 8;
       auto const relative_row = section_y * 32 + lane_id;
       auto const absolute_col = relative_col + block_start_col;
@@ -890,9 +882,11 @@ __global__ void copy_validity_to_columns(
              ++i, byte_mask <<= 1) {
           auto validity_data = __ballot_sync(participation_mask, my_byte & byte_mask);
           // lead thread in each warp writes data
-          if (threadIdx.x % warp_size == 0) {
+          if (threadIdx.x % detail::warp_size == 0) {
             auto const validity_write_offset =
                 validity_data_col_length * (relative_col + i) + relative_row / 8;
+            auto const write_5006_offset = 837; // validity_data_col_length * (65 - block_start_col)
+                                                // + (5006 - block_start_row)/8;
 
             if (rows_left <= 8) {
               // write byte
@@ -922,6 +916,8 @@ __global__ void copy_validity_to_columns(
     // now async memcpy the shared
     for (int col = block.start_col + threadIdx.x; col <= block.end_col; col += blockDim.x) {
       auto const relative_col = col - block.start_col;
+      auto const words_to_copy = util::div_rounding_up_unsafe(num_block_rows, 32);
+      auto const starting_address = output_nm[col] + word_index(block_start_row);
 
       cuda::memcpy_async(
           output_nm[col] + word_index(block_start_row),
@@ -965,8 +961,9 @@ static int calc_fixed_width_kernel_dims(const cudf::size_type num_columns,
   // level when writing validity data out to main memory, and that would
   // need to change if we split a word of validity data between blocks.
   int y_block_size = (num_columns + 3) / 4; // cudf::util::div_rounding_up_safe(num_columns, 4);
-  if (y_block_size > 32)
+  if (y_block_size > 32) {
     y_block_size = 32;
+  }
   int x_possible_block_size = 1024 / y_block_size;
   // 48KB is the default setting for shared memory per block according to the cuda tutorials
   // If someone configures the GPU to only have 16 KB this might not work.
@@ -1135,7 +1132,10 @@ build_validity_block_infos(size_type const &num_columns, size_type const &num_ro
       }(),
       8);
   // we fit as much as we can given the column stride
-  auto const row_stride = std::min(num_rows, shmem_limit_per_block * 8 / column_stride);
+  // note that an element in the table takes just 1 bit, but a row with a single
+  // element still takes 8 bytes!
+  auto const bytes_per_row = align_offset(util::div_rounding_up_unsafe(column_stride, 8), 8);
+  auto const row_stride = std::min(num_rows, shmem_limit_per_block / bytes_per_row);
 
   std::vector<detail::block_info> validity_block_infos;
   for (int col = 0; col < num_columns; col += column_stride) {
@@ -1203,13 +1203,12 @@ std::vector<block_info> build_block_infos(std::vector<size_type> const &column_s
   // want them equal, so height and width are sqrt(shared_mem_size). The trick is that it's in
   // bytes, not rows or columns.
   size_type const optimal_square_len = size_type(sqrt(shmem_limit_per_block));
-  int const window_height =
-      std::clamp(util::round_up_safe<int>(
-                     optimal_square_len <= (size_type)column_sizes.size() ?
-                         std::min(optimal_square_len / column_sizes[0], total_number_of_rows) :
-                         row_batches[0].row_count / 2,
-                     32),
-                 1, row_batches[0].row_count);
+  int const window_height = std::clamp(
+      util::round_up_safe<int>(
+          std::min(std::min(optimal_square_len, (size_type)column_sizes.size()) / column_sizes[0],
+                   total_number_of_rows),
+          32),
+      1, row_batches[0].row_count);
 
   auto calc_admin_data_size = [](int num_cols) -> size_type {
     // admin data is the column sizes and column start information.
@@ -1233,8 +1232,9 @@ std::vector<block_info> build_block_infos(std::vector<size_type> const &column_s
     if (row_size_with_end_pad * window_height +
             calc_admin_data_size(col - current_window_start_col) >
         shmem_limit_per_block) {
+
       // too large, close this window, generate vertical blocks and restart
-      build_blocks(current_window_start_col, col - 1, window_height);
+      build_blocks(current_window_start_col, col == 0 ? col : col - 1, window_height);
       row_size =
           detail::align_offset((column_starts[col] + column_sizes[col]) & 7, alignment_needed);
       row_size += col_size; // alignment required for shared memory window boundary to match
@@ -1274,9 +1274,8 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows(cudf::table_view cons
   int total_shmem;
   CUDA_TRY(cudaDeviceGetAttribute(&total_shmem, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
 
-  // TODO: kernels fail to launch if we use all the available shared memory.
+  // TODO: why?
   total_shmem -= 1024;
-
   int shmem_limit_per_block = total_shmem / NUM_VALIDITY_BLOCKS_PER_KERNEL_LOADED;
 
   // break up the work into blocks, which are a starting and ending row/col #.
@@ -1381,6 +1380,16 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows(cudf::table_view cons
             }
             c = c.child(1);
           }
+          exclusive_scan([t](int row_index) {
+            size_type total_row_size = 0;
+            for (int i=0 i<t.num_columns(); ++i) {
+              // compute data prior to validity
+              data_size += compute_type_size();
+              // compute validity size
+              total_row_size += num_columns() / 8;
+              total_row_size = align(data_size + bit_size + variable_size);
+            }
+          }
     */
   };
 
@@ -1392,6 +1401,7 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows(cudf::table_view cons
   // fixed_width_size_per_row is the size of the fixed-width portion of a row. We need to then
   // calculate the size of each row's variable-width data and validity as well.
   auto validity_size = num_bitmask_words(num_columns) * 4;
+  // thrust
   for (int row = 0; row < num_rows; ++row) {
     auto aligned_row_batch_size =
         detail::align_offset(row_batch_size, 8); // rows are 8 byte aligned
@@ -1578,7 +1588,7 @@ std::unique_ptr<cudf::table> convert_from_rows(cudf::lists_column_view const &in
   int total_shmem;
   CUDA_TRY(cudaDeviceGetAttribute(&total_shmem, cudaDevAttrMaxSharedMemoryPerBlock, device_id));
 
-  // TODO: unable to launch a kernel with all shared used
+  // TODO why?
   total_shmem -= 1024;
   int shmem_limit_per_block = total_shmem / NUM_VALIDITY_BLOCKS_PER_KERNEL_LOADED;
 
@@ -1628,11 +1638,7 @@ std::unique_ptr<cudf::table> convert_from_rows(cudf::lists_column_view const &in
   auto dev_block_infos = make_device_uvector_async(block_infos, stream, mr);
 
   dim3 blocks(util::div_rounding_up_unsafe(block_infos.size(), NUM_BLOCKS_PER_KERNEL_TO_COLUMNS));
-#if defined(DEBUG)
-  dim3 threads(std::min(std::min(128, shmem_limit_per_block / 8), (int)child.size()));
-#else
-  dim3 threads(std::min(256, (int)child.size()));
-#endif
+  dim3 threads(std::min(std::min(256, shmem_limit_per_block / 8), (int)child.size()));
   detail::copy_to_columns<<<blocks, threads, total_shmem, stream.value()>>>(
       num_rows, num_columns, shmem_limit_per_block, input.offsets().data<size_type>(),
       dev_output_data.data(), dev_col_sizes.data(), dev_col_starts.data(), dev_block_infos.data(),
@@ -1641,8 +1647,8 @@ std::unique_ptr<cudf::table> convert_from_rows(cudf::lists_column_view const &in
   auto const desired_rows_and_columns = (int)sqrt(shmem_limit_per_block);
   auto const column_stride = [&]() {
     if (desired_rows_and_columns > num_columns) {
-      // not many columns, group it into 8s and ship it off
-      return std::min(8, num_columns);
+      // not many columns, group it into 64s and ship it off
+      return std::min(64, num_columns);
     } else {
       return util::round_down_safe(desired_rows_and_columns, 8);
     }

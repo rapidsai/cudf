@@ -168,8 +168,8 @@ TEST_F(ColumnToRowTests, Non2Power)
 
   constexpr auto num_rows = 6 * 1024 + 557;
   for (int i = 0; i < 131; ++i) {
-    cols.push_back(
-      cudf::test::fixed_width_column_wrapper<int32_t>(r + num_rows * i, r + num_rows * i + num_rows));
+    cols.push_back(cudf::test::fixed_width_column_wrapper<int32_t>(r + num_rows * i,
+                                                                   r + num_rows * i + num_rows));
     views.push_back(cols.back());
     schema.push_back(cudf::data_type{cudf::type_id::INT32});
   }
@@ -184,9 +184,9 @@ TEST_F(ColumnToRowTests, Non2Power)
     auto old_tbl = cudf::old_convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
     auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
 
-    for (int j=0; j<old_tbl->num_columns(); ++j) {
+    for (int j = 0; j < old_tbl->num_columns(); ++j) {
       printf("testing column %d\n", j);
-      if (j==65) {
+      if (j == 65) {
         printf("old\n");
         cudf::test::print(old_tbl->get_column(j));
         printf("new\n");
@@ -214,8 +214,8 @@ TEST_F(ColumnToRowTests, Big)
   // 28 columns of 1 million rows
   constexpr auto num_rows = 1024 * 1024;
   for (int i = 0; i < 28; ++i) {
-    cols.push_back(
-      cudf::test::fixed_width_column_wrapper<int32_t>(r + num_rows * i, r + num_rows * i + num_rows));
+    cols.push_back(cudf::test::fixed_width_column_wrapper<int32_t>(r + num_rows * i,
+                                                                   r + num_rows * i + num_rows));
     views.push_back(cols.back());
     schema.push_back(cudf::data_type{cudf::type_id::INT32});
   }
@@ -241,8 +241,8 @@ TEST_F(ColumnToRowTests, Bigger)
   // 128 columns of 1 million rows
   constexpr auto num_rows = 1024 * 1024;
   for (int i = 0; i < 128; ++i) {
-    cols.push_back(
-      cudf::test::fixed_width_column_wrapper<int32_t>(r + num_rows * i, r + num_rows * i + num_rows));
+    cols.push_back(cudf::test::fixed_width_column_wrapper<int32_t>(r + num_rows * i,
+                                                                   r + num_rows * i + num_rows));
     views.push_back(cols.back());
     schema.push_back(cudf::data_type{cudf::type_id::INT32});
   }
@@ -268,8 +268,8 @@ TEST_F(ColumnToRowTests, Biggest)
   // 128 columns of 2 million rows
   constexpr auto num_rows = 2 * 1024 * 1024;
   for (int i = 0; i < 128; ++i) {
-    cols.push_back(
-      cudf::test::fixed_width_column_wrapper<int32_t>(r + num_rows * i, r + num_rows * i + num_rows));
+    cols.push_back(cudf::test::fixed_width_column_wrapper<int32_t>(r + num_rows * i,
+                                                                   r + num_rows * i + num_rows));
     views.push_back(cols.back());
     schema.push_back(cudf::data_type{cudf::type_id::INT32});
   }
@@ -396,8 +396,8 @@ TEST_F(RowToColumnTests, Non2Power)
 
   constexpr auto num_rows = 6 * 1024 + 557;
   for (int i = 0; i < 131; ++i) {
-    cols.push_back(
-      cudf::test::fixed_width_column_wrapper<int32_t>(r + num_rows * i, r + num_rows * i + num_rows));
+    cols.push_back(cudf::test::fixed_width_column_wrapper<int32_t>(r + num_rows * i,
+                                                                   r + num_rows * i + num_rows));
     views.push_back(cols.back());
     schema.push_back(cudf::data_type{cudf::type_id::INT32});
   }
@@ -424,8 +424,8 @@ TEST_F(RowToColumnTests, Big)
   // 28 columns of 1 million rows
   constexpr auto num_rows = 1024 * 1024;
   for (int i = 0; i < 28; ++i) {
-    cols.push_back(
-      cudf::test::fixed_width_column_wrapper<int32_t>(r + num_rows * i, r + num_rows * i + num_rows));
+    cols.push_back(cudf::test::fixed_width_column_wrapper<int32_t>(r + num_rows * i,
+                                                                   r + num_rows * i + num_rows));
     views.push_back(cols.back());
     schema.push_back(cudf::data_type{cudf::type_id::INT32});
   }
@@ -452,8 +452,8 @@ TEST_F(RowToColumnTests, Bigger)
   // 28 columns of 1 million rows
   constexpr auto num_rows = 1024 * 1024;
   for (int i = 0; i < 128; ++i) {
-    cols.push_back(
-      cudf::test::fixed_width_column_wrapper<int32_t>(r + num_rows * i, r + num_rows * i + num_rows));
+    cols.push_back(cudf::test::fixed_width_column_wrapper<int32_t>(r + num_rows * i,
+                                                                   r + num_rows * i + num_rows));
     views.push_back(cols.back());
     schema.push_back(cudf::data_type{cudf::type_id::INT32});
   }
@@ -480,8 +480,8 @@ TEST_F(RowToColumnTests, Biggest)
   // 28 columns of 1 million rows
   constexpr auto num_rows = 5 * 1024 * 1024;
   for (int i = 0; i < 128; ++i) {
-    cols.push_back(
-      cudf::test::fixed_width_column_wrapper<int32_t>(r + num_rows * i, r + num_rows * i + num_rows));
+    cols.push_back(cudf::test::fixed_width_column_wrapper<int32_t>(r + num_rows * i,
+                                                                   r + num_rows * i + num_rows));
     views.push_back(cols.back());
     schema.push_back(cudf::data_type{cudf::type_id::INT32});
   }
