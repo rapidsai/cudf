@@ -1798,18 +1798,19 @@ class Frame(libcudf.table.Table):
 
     def round(self, decimals=0, how="half_even"):
         """
-        Round a DataFrame to a variable number of decimal places.
+        Round to a variable number of decimal places.
 
         Parameters
         ----------
         decimals : int, dict, Series
-            Number of decimal places to round each column to. If an int is
-            given, round each column to the same number of places.
-            Otherwise dict and Series round to variable numbers of places.
-            Column names should be in the keys if `decimals` is a
-            dict-like, or in the index if `decimals` is a Series. Any
-            columns not included in `decimals` will be left as is. Elements
-            of `decimals` which are not columns of the input will be
+            Number of decimal places to round each column to. This parameter
+            must be an int for a Series.  For a DataFrame, a dict or a Series
+            are also valid inputs. If an int is given, round each column to the
+            same number of places.  Otherwise dict and Series round to variable
+            numbers of places.  Column names should be in the keys if
+            `decimals` is a dict-like, or in the index if `decimals` is a
+            Series. Any columns not included in `decimals` will be left as is.
+            Elements of `decimals` which are not columns of the input will be
             ignored.
         how : str, optional
             Type of rounding. Can be either "half_even" (default)
@@ -1817,12 +1818,23 @@ class Frame(libcudf.table.Table):
 
         Returns
         -------
-        DataFrame
-            A DataFrame with the affected columns rounded to the specified
-            number of decimal places.
+        Series or DataFrame
+            A Series or DataFrame with the affected columns rounded to the
+            specified number of decimal places.
 
         Examples
         --------
+        **Series**
+
+        >>> s = cudf.Series([0.1, 1.4, 2.9])
+        >>> s.round()
+        0    0.0
+        1    1.0
+        2    3.0
+        dtype: float64
+
+        **DataFrame**
+
         >>> df = cudf.DataFrame(
                 [(.21, .32), (.01, .67), (.66, .03), (.21, .18)],
         ...     columns=['dogs', 'cats']
@@ -1871,33 +1883,25 @@ class Frame(libcudf.table.Table):
         if isinstance(decimals, cudf.Series):
             decimals = decimals.to_pandas()
 
-        if isinstance(decimals, (dict, pd.Series)):
-            if (
-                isinstance(decimals, pd.Series)
-                and not decimals.index.is_unique
-            ):
+        if isinstance(decimals, pd.Series):
+            if not decimals.index.is_unique:
                 raise ValueError("Index of decimals must be unique")
-
-            cols = {
-                name: col.round(decimals[name], how=how)
-                if (
-                    name in decimals.keys()
-                    and _is_non_decimal_numeric_dtype(col.dtype)
-                )
-                else col.copy(deep=True)
-                for name, col in self._data.items()
-            }
+            decimals = decimals.to_dict()
         elif isinstance(decimals, int):
-            cols = {
-                name: col.round(decimals, how=how)
-                if _is_non_decimal_numeric_dtype(col.dtype)
-                else col.copy(deep=True)
-                for name, col in self._data.items()
-            }
-        else:
+            decimals = {name: decimals for name in self._column_names}
+        elif not isinstance(decimals, abc.Mapping):
             raise TypeError(
                 "decimals must be an integer, a dict-like or a Series"
             )
+
+        cols = {
+            name: col.round(decimals[name], how=how)
+            # TODO: Is this the expected behavior for decimal dtypes, that
+            # rounding to a lower number does not reduce precision?
+            if (name in decimals and _is_non_decimal_numeric_dtype(col.dtype))
+            else col.copy(deep=True)
+            for name, col in self._data.items()
+        }
 
         return self.__class__._from_data(
             data=cudf.core.column_accessor.ColumnAccessor(

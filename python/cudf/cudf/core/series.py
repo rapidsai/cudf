@@ -3643,39 +3643,9 @@ class Series(SingleColumnFrame, Serializable):
         return Series(val_counts.index.sort_values(), name=self.name)
 
     def round(self, decimals=0, how="half_even"):
-        """
-        Round each value in a Series to the given number of decimals.
-
-        Parameters
-        ----------
-        decimals : int, default 0
-            Number of decimal places to round to. If decimals is negative,
-            it specifies the number of positions to the left of the decimal
-            point.
-        how : str, optional
-            Type of rounding. Can be either "half_even" (default)
-            of "half_up" rounding.
-
-        Returns
-        -------
-        Series
-            Rounded values of the Series.
-
-        Examples
-        --------
-        >>> s = cudf.Series([0.1, 1.4, 2.9])
-        >>> s.round()
-        0    0.0
-        1    1.0
-        2    3.0
-        dtype: float64
-        """
-        return Series(
-            self._column.round(decimals=decimals, how=how),
-            name=self.name,
-            index=self.index,
-            dtype=self.dtype,
-        )
+        if not isinstance(decimals, int):
+            raise ValueError("decimals must be an int")
+        return super().round(decimals, how)
 
     def cov(self, other, min_periods=None):
         """
