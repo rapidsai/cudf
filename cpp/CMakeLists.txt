@@ -565,6 +565,7 @@ add_library(cudftestutil STATIC
             tests/utilities/base_fixture.cpp
             tests/utilities/column_utilities.cu
             tests/utilities/table_utilities.cu
+            tests/io/metadata_utilities.cpp
             tests/strings/utilities.cu)
 
 set_target_properties(cudftestutil
