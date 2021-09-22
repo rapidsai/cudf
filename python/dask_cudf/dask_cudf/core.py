@@ -169,7 +169,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             or isinstance(divisions, (cudf.DataFrame, cudf.Series))
             or (
                 isinstance(other, str)
-                and cudf.utils.dtypes.is_string_dtype(self[other].dtype)
+                and cudf.api.types.is_string_dtype(self[other].dtype)
             )
         ):
 

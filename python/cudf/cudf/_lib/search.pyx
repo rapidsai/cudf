@@ -10,7 +10,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport Table, table_view_from_table
 
 
 def search_sorted(
@@ -33,8 +33,10 @@ def search_sorted(
     cdef vector[libcudf_types.null_order] c_null_precedence
     cdef libcudf_types.order c_order
     cdef libcudf_types.null_order c_null_order
-    cdef table_view c_table_data = table.data_view()
-    cdef table_view c_values_data = values.data_view()
+    cdef table_view c_table_data = table_view_from_table(
+        table, ignore_index=True)
+    cdef table_view c_values_data = table_view_from_table(
+        values, ignore_index=True)
 
     # Note: We are ignoring index columns here
     c_order = (libcudf_types.order.ASCENDING

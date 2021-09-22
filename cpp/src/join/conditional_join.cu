@@ -94,8 +94,7 @@ conditional_join(table_view const& left,
 
   // Allocate storage for the counter used to get the size of the join output
   detail::grid_1d config(left_table->num_rows(), DEFAULT_JOIN_BLOCK_SIZE);
-  auto const shmem_size_per_block =
-    parser.device_expression_data.shmem_per_thread * config.num_threads_per_block;
+  auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
   join_kind kernel_join_type = join_type == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : join_type;
 
   // If the join size was not provided as an input, compute it here.
@@ -229,8 +228,7 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
   rmm::device_scalar<std::size_t> size(0, stream, mr);
   CHECK_CUDA(stream.value());
   detail::grid_1d config(left_table->num_rows(), DEFAULT_JOIN_BLOCK_SIZE);
-  auto const shmem_size_per_block =
-    parser.device_expression_data.shmem_per_thread * config.num_threads_per_block;
+  auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
 
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
