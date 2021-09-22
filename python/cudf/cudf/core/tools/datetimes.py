@@ -655,17 +655,21 @@ def _isin_datetimelike(
     return res
 
 
-def to_iso_calendar(self):
+def to_iso_calendar(arg):
     formats = ["%G", "%V", "%u"]
-    if isinstance(self, (cudf.Index, pd.Index)):
+    if not isinstance(arg, (cudf.Index,cudf.core.series.DatetimeProperties)):
+        raise AttributeError(
+            "Can only use .isocalendar accessor with series or index"
+        )
+    if isinstance(arg, cudf.Index):
         iso_params = [
-            self._values.as_string_column(self._values.dtype, fmt)
+            arg._values.as_string_column(arg._values.dtype, fmt)
             for fmt in formats
         ]
-        index = self._values
-    elif isinstance(self.series, (cudf.Series, pd.Series)):
-        iso_params = [self.strftime(fmt) for fmt in formats]
-        index = self.series.index
+        index = arg._values
+    elif isinstance(arg.series, cudf.Series):
+        iso_params = [arg.strftime(fmt) for fmt in formats]
+        index = arg.series.index
 
     data = dict(zip(["year", "week", "day"], iso_params))
     isoSeries = cudf.DataFrame(data, index=index, dtype=np.int32)
