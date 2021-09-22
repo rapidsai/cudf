@@ -668,6 +668,4 @@ def to_iso_calendar(self):
         index = self.series.index
 
     data = dict(zip(["year", "week", "day"], iso_params))
-    isoSeries = cudf.DataFrame(data, index=index, dtype=np.int32)
-
-    return isoSeries
+    return cudf.DataFrame(data, index=index, dtype=np.int32)
