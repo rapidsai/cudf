@@ -5297,15 +5297,28 @@ def _drop_rows_by_labels(
 
     if isinstance(obj._index, cudf.MultiIndex):
         if level is None:
-            if not isinstance(labels, SingleColumnFrame):
-                labels = cudf.DataFrame(labels)
-                labels = cudf.MultiIndex.from_frame(
+            if cudf.api.types.is_list_like(labels):
+                labels = cudf.MultiIndex.from_tuples(
                     labels, names=obj._index.names
                 )
-
-            levels_index = obj.index
-            ids = ~levels_index.isin(labels)
-            final_idx = obj._index[ids]
+                ids = ~obj.index.isin(labels)
+                final_idx = obj._index[ids]
+            elif not isinstance(labels, cudf.MultiIndex):
+                idx_slice = obj.index.get_loc(labels)
+                if isinstance(idx_slice, slice):
+                    ids = ~cupy.isin(
+                        cupy.arange(0, len(obj._index)),
+                        cupy.arange(
+                            idx_slice.start, idx_slice.stop, idx_slice.step
+                        ),
+                    )
+                else:
+                    ids = ~idx_slice
+                final_idx = obj.index[ids]
+            else:
+                levels_index = obj.index
+                ids = ~levels_index.isin(labels)
+                final_idx = obj._index[ids]
         else:
             if not isinstance(labels, SingleColumnFrame):
                 labels = as_column(labels)
