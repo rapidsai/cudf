@@ -113,6 +113,9 @@ std::unique_ptr<table> quantiles(
  * @param mr              Device memory resource used to allocate the returned column's device
  * memory
  *
+ * @throws cudf::logic_error if `input` is not a valid tdigest column.
+ * @throws cudf::logic_error if `percentiles` is not a FLOAT64 column.
+ *
  * @returns LIST Column containing requested percentile values.
  */
 std::unique_ptr<column> percentile_approx(

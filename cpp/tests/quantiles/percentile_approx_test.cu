@@ -1,5 +1,6 @@
 #include <arrow/util/tdigest.h>
 
+#include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/groupby.hpp>
 #include <cudf/quantiles.hpp>
@@ -16,9 +17,6 @@
 #include <tests/groupby/groupby_test_util.hpp>
 
 using namespace cudf;
-
-struct PercentileApproxTest : public cudf::test::BaseFixture {
-};
 
 struct tdigest_gen {
   template <
@@ -437,4 +435,94 @@ TYPED_TEST(PercentileApproxOutputTypesTest, GroupedWithNulls)
                           {{1000, cudf::test::default_ulp},
                            {100, cudf::test::default_ulp * 2},
                            {10, cudf::test::default_ulp * 4}});
+}
+
+TYPED_TEST(PercentileApproxOutputTypesTest, EmptyInput)
+{
+  using T                = TypeParam;
+  auto const output_type = get_appropriate_type<T>();
+
+  auto empty_ = cudf::detail::make_empty_tdigest_column();
+  cudf::test::fixed_width_column_wrapper<double> percentiles{0.0, 0.25, 0.3};
+
+  std::vector<column_view> input;
+  input.push_back(*empty_);
+  input.push_back(*empty_);
+  input.push_back(*empty_);
+  auto empty = cudf::concatenate(input);
+
+  structs_column_view scv(*empty);
+  auto result = cudf::percentile_approx(scv, percentiles, output_type);
+
+  cudf::test::fixed_width_column_wrapper<offset_type> offsets{0, 0, 0, 0};
+  std::vector<bool> nulls{0, 0, 0};
+  auto expected =
+    cudf::make_lists_column(3,
+                            offsets.release(),
+                            cudf::make_empty_column(output_type),
+                            3,
+                            cudf::test::detail::make_null_mask(nulls.begin(), nulls.end()));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
+}
+
+TYPED_TEST(PercentileApproxOutputTypesTest, EmptyPercentiles)
+{
+  using T                = TypeParam;
+  auto const output_type = get_appropriate_type<T>();
+
+  auto const delta = 1000;
+
+  cudf::test::fixed_width_column_wrapper<double> values{0, 1, 2, 3, 4, 5};
+  cudf::test::fixed_width_column_wrapper<int> keys{0, 0, 0, 1, 1, 1};
+  cudf::table_view t({keys});
+  cudf::groupby::groupby gb(t);
+  std::vector<cudf::groupby::aggregation_request> requests;
+  std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
+  aggregations.push_back(cudf::make_tdigest_aggregation<cudf::groupby_aggregation>(delta));
+  requests.push_back({values, std::move(aggregations)});
+  auto tdigest_column = gb.aggregate(requests);
+
+  cudf::test::fixed_width_column_wrapper<double> percentiles{};
+
+  structs_column_view scv(*tdigest_column.second[0].results[0]);
+  auto result = cudf::percentile_approx(scv, percentiles, output_type);
+
+  cudf::test::fixed_width_column_wrapper<offset_type> offsets{0, 0, 0};
+  auto expected = cudf::make_lists_column(2,
+                                          offsets.release(),
+                                          cudf::make_empty_column(output_type),
+                                          2,
+                                          cudf::detail::create_null_mask(2, mask_state::ALL_NULL));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
+}
+
+TYPED_TEST(PercentileApproxOutputTypesTest, NullPercentiles)
+{
+  using T                = TypeParam;
+  auto const output_type = get_appropriate_type<T>();
+
+  auto const delta = 1000;
+
+  cudf::test::fixed_width_column_wrapper<double> values{1, 1, 2, 3, 4, 5, 6, 7, 8};
+  cudf::test::fixed_width_column_wrapper<int> keys{0, 0, 0, 0, 0, 0, 0, 0, 0};
+  cudf::table_view t({keys});
+  cudf::groupby::groupby gb(t);
+  std::vector<cudf::groupby::aggregation_request> requests;
+  std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
+  aggregations.push_back(cudf::make_tdigest_aggregation<cudf::groupby_aggregation>(delta));
+  requests.push_back({values, std::move(aggregations)});
+  auto tdigest_column = gb.aggregate(requests);
+
+  structs_column_view scv(*tdigest_column.second[0].results[0]);
+
+  // nulls should result in the min value
+  cudf::test::fixed_width_column_wrapper<double> npercentiles{{1.0, 1.0, 0.5, 0.75}, {0, 0, 1, 1}};
+  auto result = cudf::percentile_approx(scv, npercentiles, output_type);
+
+  cudf::test::fixed_width_column_wrapper<double> percentiles{0.0, 0.0, 0.5, 0.75};
+  auto expected = cudf::percentile_approx(scv, percentiles, output_type);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }

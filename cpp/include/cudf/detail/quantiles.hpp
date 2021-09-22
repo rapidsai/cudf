@@ -52,7 +52,8 @@ std::unique_ptr<table> quantiles(
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc cudf::percentile_approx()
+ * @copydoc cudf::percentile_approx(column_view const&, column_view const&, cudf::data_type,
+ * rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
