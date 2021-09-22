@@ -4,9 +4,11 @@ import datetime
 import os
 import urllib
 from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
+from threading import Thread
 
 import fsspec
 import fsspec.implementations.local
+import numpy as np
 import pandas as pd
 from fsspec.core import get_fs_token_paths
 
@@ -1129,8 +1131,51 @@ def is_directory(path_or_data, **kwargs):
     return False
 
 
+def _get_filesystem_and_paths(path_or_data, **kwargs):
+    # Returns a filesystem object and the filesystem-normalized
+    # paths. If `path_or_data` does not correspond to a path or
+    # list of paths (or if the protocol is not supported), the
+    # return will be `None` for the fs and `[]` for the paths.
+
+    fs = None
+    return_paths = path_or_data
+    if isinstance(path_or_data, str) or (
+        isinstance(path_or_data, list)
+        and isinstance(stringify_pathlike(path_or_data[0]), str)
+    ):
+        # Ensure we are always working with a list
+        storage_options = kwargs.get("storage_options")
+        if isinstance(path_or_data, list):
+            path_or_data = [
+                os.path.expanduser(stringify_pathlike(source))
+                for source in path_or_data
+            ]
+        else:
+            path_or_data = [path_or_data]
+
+        # Pyarrow did not support the protocol or storage options.
+        # Fall back to fsspec
+        try:
+            fs, _, fs_paths = fsspec.get_fs_token_paths(
+                path_or_data, mode="rb", storage_options=storage_options
+            )
+            return_paths = fs_paths
+        except ValueError as e:
+            if str(e).startswith("Protocol not known"):
+                return None, []
+            else:
+                raise e
+
+    return fs, return_paths
+
+
 def get_filepath_or_buffer(
-    path_or_data, compression, mode="rb", iotypes=(BytesIO), **kwargs,
+    path_or_data,
+    compression,
+    mode="rb",
+    fs=None,
+    iotypes=(BytesIO,),
+    **kwargs,
 ):
     """Return either a filepath string to data, or a memory buffer of data.
     If filepath, then the source filepath is expanded to user's environment.
@@ -1158,19 +1203,13 @@ def get_filepath_or_buffer(
     path_or_data = stringify_pathlike(path_or_data)
 
     if isinstance(path_or_data, str):
-        storage_options = kwargs.get("storage_options")
-        # fsspec does not expanduser so handle here
-        path_or_data = os.path.expanduser(path_or_data)
 
-        try:
-            fs, _, paths = fsspec.get_fs_token_paths(
-                path_or_data, mode=mode, storage_options=storage_options
-            )
-        except ValueError as e:
-            if str(e).startswith("Protocol not known"):
+        # Get a filesystem object if one isn't already available
+        paths = [path_or_data]
+        if fs is None:
+            fs, paths = _get_filesystem_and_paths(path_or_data, **kwargs)
+            if fs is None:
                 return path_or_data, compression
-            else:
-                raise e
 
         if len(paths) == 0:
             raise FileNotFoundError(
@@ -1184,14 +1223,21 @@ def get_filepath_or_buffer(
                 path_or_data = paths if len(paths) > 1 else paths[0]
 
         else:
-            path_or_data = [BytesIO(fs.open(fpath).read()) for fpath in paths]
+            path_or_data = [
+                BytesIO(
+                    _fsspec_data_transfer(fpath, fs=fs, mode=mode, **kwargs)
+                )
+                for fpath in paths
+            ]
             if len(path_or_data) == 1:
                 path_or_data = path_or_data[0]
 
     elif not isinstance(path_or_data, iotypes) and is_file_like(path_or_data):
         if isinstance(path_or_data, TextIOWrapper):
             path_or_data = path_or_data.buffer
-        path_or_data = BytesIO(path_or_data.read())
+        path_or_data = BytesIO(
+            _fsspec_data_transfer(path_or_data, mode=mode, **kwargs)
+        )
 
     return path_or_data, compression
 
@@ -1413,3 +1459,148 @@ def _ensure_filesystem(passed_filesystem, path):
             0
         ]
     return passed_filesystem
+
+
+#
+# Fsspec Data-transfer Optimization Code
+#
+
+
+def _fsspec_data_transfer(
+    path_or_fob,
+    fs=None,
+    byte_ranges=None,
+    footer=None,
+    file_size=None,
+    add_par1_magic=None,
+    bytes_per_thread=256_000_000,
+    max_gap=64_000,
+    mode="rb",
+    clip_local_buffer=False,
+    **kwargs,
+):
+
+    # Require `fs` if `path_or_fob` is not file-like
+    file_like = is_file_like(path_or_fob)
+    if fs is None and not file_like:
+        raise ValueError(
+            "fs must be defined if `path_or_fob` is not file-like"
+        )
+
+    # Calculate total file size
+    if file_like:
+        file_size = path_or_fob.size
+    file_size = file_size or fs.size(path_or_fob)
+
+    # Check if a direct read makes the most sense
+    if not byte_ranges and bytes_per_thread >= file_size:
+        if file_like:
+            return path_or_fob.read()
+        else:
+            return fs.open(path_or_fob, mode=mode, cache_type="none").read()
+
+    # Threaded read into "local" buffer
+    buf = np.zeros(file_size, dtype="b")
+    if byte_ranges:
+
+        # Optimize/merge the ranges
+        byte_ranges = _merge_ranges(
+            byte_ranges, max_block=bytes_per_thread, max_gap=max_gap,
+        )
+
+        # Call multi-threaded data transfer of
+        # remote byte-ranges to local buffer
+        _read_byte_ranges(
+            path_or_fob, byte_ranges, buf, fs=fs, **kwargs,
+        )
+
+        # Add Header & Footer bytes
+        if footer is not None:
+            footer_size = len(footer)
+            buf[-footer_size:] = np.frombuffer(
+                footer[-footer_size:], dtype="b"
+            )
+
+        # Add parquet magic bytes (optional)
+        if add_par1_magic:
+            buf[:4] = np.frombuffer(b"PAR1", dtype="b")
+            if footer is None:
+                buf[-4:] = np.frombuffer(b"PAR1", dtype="b")
+
+    else:
+        byte_ranges = [
+            (b, min(bytes_per_thread, file_size - b))
+            for b in range(0, file_size, bytes_per_thread)
+        ]
+        _read_byte_ranges(
+            path_or_fob, byte_ranges, buf, fs=fs, **kwargs,
+        )
+
+    if clip_local_buffer:
+        # If we only need the populated byte range
+        # (e.g. a csv byte-range read) then clip parts
+        # of the local buffer that are outside this range
+        start = byte_ranges[0][0]
+        end = byte_ranges[-1][0] + byte_ranges[-1][1]
+        return buf[start:end].tobytes()
+
+    return buf.tobytes()
+
+
+def _merge_ranges(byte_ranges, max_block=256_000_000, max_gap=64_000):
+    # Simple utility to merge small/adjacent byte ranges
+    new_ranges = []
+    if not byte_ranges:
+        # Early return
+        return new_ranges
+
+    offset, size = byte_ranges[0]
+    for (new_offset, new_size) in byte_ranges[1:]:
+        gap = new_offset - (offset + size)
+        if gap > max_gap or (size + new_size + gap) > max_block:
+            # Gap is too large or total read is too large
+            new_ranges.append((offset, size))
+            offset = new_offset
+            size = new_size
+            continue
+        size += new_size + gap
+    new_ranges.append((offset, size))
+    return new_ranges
+
+
+def _assign_block(fs, path_or_fob, local_buffer, offset, nbytes):
+    if fs is None:
+        # We have an open fsspec file object
+        path_or_fob.seek(offset)
+        local_buffer[offset : offset + nbytes] = np.frombuffer(
+            path_or_fob.read(nbytes), dtype="b",
+        )
+    else:
+        # We have an fsspec filesystem and a path
+        with fs.open(path_or_fob, mode="rb", cache_type="none") as fob:
+            fob.seek(offset)
+            local_buffer[offset : offset + nbytes] = np.frombuffer(
+                fob.read(nbytes), dtype="b",
+            )
+
+
+def _read_byte_ranges(
+    path_or_fob, ranges, local_buffer, fs=None, **kwargs,
+):
+    # Simple utility to copy remote byte ranges
+    # into a local buffer for IO in libcudf
+    workers = []
+    for (offset, nbytes) in ranges:
+        if len(ranges) > 1:
+            workers.append(
+                Thread(
+                    target=_assign_block,
+                    args=(fs, path_or_fob, local_buffer, offset, nbytes),
+                )
+            )
+            workers[-1].start()
+        else:
+            _assign_block(fs, path_or_fob, local_buffer, offset, nbytes)
+
+    for worker in workers:
+        worker.join()
