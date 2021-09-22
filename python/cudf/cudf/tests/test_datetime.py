@@ -1131,7 +1131,22 @@ def test_datetime_fillna(data, dtype, fill_value):
 )
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)
 @pytest.mark.parametrize(
-    "date_format", ["%d - %m", "%y/%H", "%Y", "%I - %M / %S", "%f", "%j", "%p"]
+    "date_format",
+    [
+        "%d - %m",
+        "%y/%H",
+        "%Y",
+        "%I - %M / %S",
+        "%f",
+        "%j",
+        "%p",
+        "%w",
+        "%U",
+        "%W",
+        "%G",
+        "%u",
+        "%V",
+    ],
 )
 def test_datetime_strftime(data, dtype, date_format):
     gsr = cudf.Series(data, dtype=dtype)
