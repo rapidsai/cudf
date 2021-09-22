@@ -3,7 +3,6 @@
 import datetime
 import os
 import urllib
-import warnings
 from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 from threading import Thread
 
@@ -11,10 +10,8 @@ import fsspec
 import fsspec.implementations.local
 import numpy as np
 import pandas as pd
-import pyarrow.fs as pa_fs
 from fsspec.core import get_fs_token_paths
-from pyarrow.fs import LocalFileSystem
-from pyarrow.lib import ArrowInvalid, NativeFile
+from pyarrow.lib import NativeFile
 
 from cudf.utils.docutils import docfmt_partial
 
@@ -1085,9 +1082,7 @@ def is_file_like(obj):
 
 
 def _is_local_filesystem(fs):
-    return isinstance(
-        fs, (fsspec.implementations.local.LocalFileSystem, LocalFileSystem),
-    )
+    return isinstance(fs, fsspec.implementations.local.LocalFileSystem)
 
 
 def ensure_single_filepath_or_buffer(path_or_data, **kwargs):
@@ -1137,55 +1132,7 @@ def is_directory(path_or_data, **kwargs):
     return False
 
 
-def _try_pyarrow_filesystem(path, storage_options=None):
-    # Returns a pyarrow filesystem object and a normalized
-    # path if the url includes a protocol supported by
-    # arrow. The current motivation for this utility is to
-    # improve s3 read performance over fsspec (s3fs).
-
-    try:
-        fs, fs_path = pa_fs.FileSystem.from_uri(path)
-    except ArrowInvalid:
-        # Protocol not supported
-        return None, None
-    except OSError:
-        # Bucket not found
-        warnings.warn(
-            "This protocol may be supported by pyarrow. "
-            "However, `FileSystem.from_uri` failed. "
-            "Using fsspec. "
-        )
-        return None, None
-
-    if storage_options:
-
-        # Translate known s3 options
-        _translation = {
-            "anon": "anonymous",
-            "key": "access_key",
-            "token": "session_token",
-        }
-        translated_storage_options = {
-            _translation.get(k, k): v for k, v in storage_options.items()
-        }
-
-        try:
-            fs = type(fs)(**translated_storage_options)
-        except TypeError:
-            # Warn the user if they are not using an available pyarrow
-            # filesystem class due to incompatible `storage_options`
-            warnings.warn(
-                f"This url protocol is supported by the {fs} "
-                f"FileSystem subclass. IO performance will likely "
-                f"improve by passing `storage_options` that are "
-                f"compatible with this FileSystem implementation."
-            )
-            return None, None
-
-    return fs, fs_path
-
-
-def _get_filesystem_and_paths(path_or_data, arrow_filesystem=False, **kwargs):
+def _get_filesystem_and_paths(path_or_data, **kwargs):
     # Returns a filesystem object and the filesystem-normalized
     # paths. If `path_or_data` does not correspond to a path or
     # list of paths (or if the protocol is not supported), the
@@ -1207,36 +1154,18 @@ def _get_filesystem_and_paths(path_or_data, arrow_filesystem=False, **kwargs):
         else:
             path_or_data = [path_or_data]
 
-        if arrow_filesystem is True:
-
-            # Try infering a pyarrow-backed filesystem
-            fs, fs_paths = _try_pyarrow_filesystem(
-                path_or_data[0], storage_options=storage_options
+        # Pyarrow did not support the protocol or storage options.
+        # Fall back to fsspec
+        try:
+            fs, _, fs_paths = fsspec.get_fs_token_paths(
+                path_or_data, mode="rb", storage_options=storage_options
             )
-            if fs is not None:
-                fs_paths = [fs_paths]
-                for source in path_or_data[1:]:
-                    fs_paths.append(_try_pyarrow_filesystem(source)[1])
-                return_paths = fs_paths
-
-        elif arrow_filesystem:
-            # The filesystem is already specified explicitly
-            fs = arrow_filesystem
-            return_paths = [p.split("//")[-1] for p in path_or_data]
-
-        if fs is None:
-            # Pyarrow did not support the protocol or storage options.
-            # Fall back to fsspec
-            try:
-                fs, _, fs_paths = fsspec.get_fs_token_paths(
-                    path_or_data, mode="rb", storage_options=storage_options
-                )
-                return_paths = fs_paths
-            except ValueError as e:
-                if str(e).startswith("Protocol not known"):
-                    return None, []
-                else:
-                    raise e
+            return_paths = fs_paths
+        except ValueError as e:
+            if str(e).startswith("Protocol not known"):
+                return None, []
+            else:
+                raise e
 
     return fs, return_paths
 
@@ -1295,21 +1224,21 @@ def get_filepath_or_buffer(
                 path_or_data = paths if len(paths) > 1 else paths[0]
 
         else:
-            if isinstance(fs, pa_fs.FileSystem):
-                # We do not want to
-                path_or_data = [fs.open_input_file(fpath) for fpath in paths]
-            else:
-                path_or_data = [
+            path_or_data = [
+                BytesIO(
                     _fsspec_data_transfer(fpath, fs=fs, mode=mode, **kwargs)
-                    for fpath in paths
-                ]
+                )
+                for fpath in paths
+            ]
             if len(path_or_data) == 1:
                 path_or_data = path_or_data[0]
 
     elif not isinstance(path_or_data, iotypes) and is_file_like(path_or_data):
         if isinstance(path_or_data, TextIOWrapper):
             path_or_data = path_or_data.buffer
-        path_or_data = _fsspec_data_transfer(path_or_data, mode=mode, **kwargs)
+        path_or_data = BytesIO(
+            _fsspec_data_transfer(path_or_data, mode=mode, **kwargs)
+        )
 
     return path_or_data, compression
 
@@ -1548,7 +1477,7 @@ def _fsspec_data_transfer(
     bytes_per_thread=256_000_000,
     max_gap=64_000,
     mode="rb",
-    clip_dummy_buffer=False,
+    clip_local_buffer=False,
     **kwargs,
 ):
 
@@ -1571,7 +1500,7 @@ def _fsspec_data_transfer(
         else:
             return fs.open(path_or_fob, mode=mode, cache_type="none").read()
 
-    # Threaded read into "dummy" buffer
+    # Threaded read into "local" buffer
     buf = np.zeros(file_size, dtype="b")
     if byte_ranges:
 
@@ -1608,10 +1537,10 @@ def _fsspec_data_transfer(
             path_or_fob, byte_ranges, buf, fs=fs, **kwargs,
         )
 
-    if clip_dummy_buffer:
+    if clip_local_buffer:
         # If we only need the populated byte range
         # (e.g. a csv byte-range read) then clip parts
-        # of the dummy buffer that are outside this range
+        # of the local buffer that are outside this range
         start = byte_ranges[0][0]
         end = byte_ranges[-1][0] + byte_ranges[-1][1]
         return buf[start:end].tobytes()

@@ -46,7 +46,6 @@ def read_csv(
     na_filter=True,
     prefix=None,
     index_col=None,
-    arrow_filesystem=False,
     **kwargs,
 ):
     """{docstring}"""
@@ -64,15 +63,14 @@ def read_csv(
         compression=compression,
         iotypes=(BytesIO, StringIO, NativeFile),
         byte_ranges=[byte_range] if byte_range else None,
-        clip_dummy_buffer=True if byte_range else False,
-        arrow_filesystem=arrow_filesystem,
+        clip_local_buffer=True if byte_range else False,
         **kwargs,
     )
 
-    # Adjust byte_range for clipped dummy buffers
+    # Adjust byte_range for clipped local buffers
     use_byte_range = byte_range
-    if byte_range:
-        if byte_range[1] == len(filepath_or_buffer):
+    if byte_range and isinstance(filepath_or_buffer, BytesIO):
+        if byte_range[1] == filepath_or_buffer.getbuffer().nbytes:
             use_byte_range = (0, byte_range[1])
 
     if na_values is not None and is_scalar(na_values):

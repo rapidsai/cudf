@@ -6,7 +6,7 @@ from collections import defaultdict
 from uuid import uuid4
 
 import fsspec
-from pyarrow import dataset as ds, fs as pa_fs, parquet as pq
+from pyarrow import dataset as ds, parquet as pq
 
 import cudf
 from cudf._lib import parquet as libparquet
@@ -162,7 +162,11 @@ def read_parquet_metadata(path):
     return num_rows, num_row_groups, col_names
 
 
-def _filter_row_groups(paths, fs, filters=None, row_groups=None):
+def _process_row_groups(paths, fs, filters=None, row_groups=None):
+
+    # The general purpose of this function is to (1) expand
+    # directory input into a list of paths (using the pyarrow
+    # dataset API), and (2) to apply row-group filters.
 
     # Deal with case that the user passed in a directory name
     file_list = paths
@@ -206,6 +210,18 @@ def _filter_row_groups(paths, fs, filters=None, row_groups=None):
 
 
 def _get_byte_ranges(file_list, row_groups, columns, fs):
+
+    # This utility is used to collect the footer metadata
+    # from a parquet file. This metadata is used to define
+    # the exact byte-ranges that will be needed to read the
+    # target column-chunks from the file.
+    #
+    # This utility is only used for remote storage.
+    #
+    # The calculated byte-range information is used within
+    # cudf.io.ioutils.get_filepath_or_buffer (which uses
+    # _fsspec_data_transfer to convert non-local fsspec file
+    # objects into local byte buffers).
 
     if row_groups is None:
         if columns is None:
@@ -280,7 +296,6 @@ def read_parquet(
     num_rows=None,
     strings_to_categorical=False,
     use_pandas_metadata=True,
-    arrow_filesystem=False,
     *args,
     **kwargs,
 ):
@@ -311,23 +326,21 @@ def read_parquet(
     if fs is None and filters is not None:
         raise ValueError("cudf cannot apply filters to open file objects.")
 
-    # Check if we should calculate the specific byte-ranges
-    # needed for each parquet file. We do this when we have
-    # a file-system object to work with and it is not a local
-    # or pyarrow-backed filesystem object.
-    need_byte_ranges = fs is not None and not (
-        ioutils._is_local_filesystem(fs) or isinstance(fs, pa_fs.FileSystem)
-    )
-
-    # Apply filters now (before converting non-local paths to buffers)
-    # if fs is not None and (filters is not None or need_byte_ranges):
+    # Apply filters now (before converting non-local paths to buffers).
+    # Note that `_process_row_groups` will also expand `filepath_or_buffer`
+    # into a full list of files if it is a directory.
     if fs is not None:
-        filepath_or_buffer, row_groups = _filter_row_groups(
+        filepath_or_buffer, row_groups = _process_row_groups(
             filepath_or_buffer, fs, filters=filters, row_groups=row_groups,
         )
 
-    # Get required byte ranges (used with non-local fsspec filesystems)
+    # Check if we should calculate the specific byte-ranges
+    # needed for each parquet file. We always do this when we
+    # have a file-system object to work with and it is not a
+    # local filesystem object. We can also do it without a
+    # file-system object for `AbstractBufferedFile` buffers
     byte_ranges, footers, file_sizes = None, None, None
+    need_byte_ranges = fs is not None and not ioutils._is_local_filesystem(fs)
     if need_byte_ranges or (
         filepath_or_buffer
         and isinstance(
@@ -342,8 +355,10 @@ def read_parquet(
     for i, source in enumerate(filepath_or_buffer):
 
         if ioutils.is_directory(source, **kwargs):
+            # Note: For now, we know `fs` is an fsspec filesystem
+            # object, but it may be an arrow object in the future
             fsspec_fs = ioutils._ensure_filesystem(
-                passed_filesystem=None, path=source
+                passed_filesystem=fs, path=source
             )
             source = ioutils.stringify_pathlike(source)
             source = fsspec_fs.sep.join([source, "*.parquet"])
@@ -356,9 +371,9 @@ def read_parquet(
             footer=footers[i] if footers else None,
             file_size=file_sizes[i] if file_sizes else None,
             add_par1_magic=True,
-            arrow_filesystem=arrow_filesystem,
             **kwargs,
         )
+
         if compression is not None:
             raise ValueError(
                 "URL content-encoding decompression is not supported"
