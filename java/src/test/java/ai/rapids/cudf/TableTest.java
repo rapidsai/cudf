@@ -6669,8 +6669,9 @@ public class TableTest extends CudfTestBase {
     HostColumnVector.StructType structType = new HostColumnVector.StructType(true,
      Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
         new HostColumnVector.BasicType(true, DType.STRING)));
-    try (Table t0 = new Table(ColumnVector.fromLists(new HostColumnVector.ListType(true,
-     structType), list1, list2, list3))) {
+    try (ColumnVector listColumn = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+            structType), list1, list2, list3);
+         Table t0 = new Table(listColumn)) {
       try (TableWriter writer = Table.writeParquetChunked(options, f)) {
         writer.write(t0);
       }
