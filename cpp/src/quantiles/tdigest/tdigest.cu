@@ -39,11 +39,22 @@ __device__ inline T lerp(T v0, T v1, T t)
   return fma(t, v1, fma(-t, v0, v0));
 }
 
+struct centroid {
+  double mean;
+  double weight;
+};
+
+struct make_centroid {
+  double const* means;
+  double const* weights;
+  __device__ centroid operator()(size_type i) { return {means[i], weights[i]}; }
+};
+
 // kernel for computing percentiles on input tdigest (mean, weight) centroid data.
+template <typename CentroidIter>
 __global__ void compute_percentiles_kernel(device_span<offset_type const> tdigest_offsets,
                                            column_device_view percentiles,
-                                           double const* means_,
-                                           double const* weights_,
+                                           CentroidIter centroids_,
                                            double const* min_,
                                            double const* max_,
                                            double const* cumulative_weight_,
@@ -62,59 +73,85 @@ __global__ void compute_percentiles_kernel(device_span<offset_type const> tdiges
     // no work to do. values will be set to null
     return;
   }
-  double const percentage =
-    percentiles.is_valid(pindex) ? percentiles.element<double>(pindex) : 0.0;
-  double const* cumulative_weight = cumulative_weight_ + tdigest_offsets[tdigest_index];
 
-  // means and weights for the tdigest
-  double const* means   = means_ + tdigest_offsets[tdigest_index];
-  double const* weights = weights_ + tdigest_offsets[tdigest_index];
+  output[tid] = [&]() {
+    double const percentage =
+      percentiles.is_valid(pindex) ? percentiles.element<double>(pindex) : 0.0;
+    double const* cumulative_weight = cumulative_weight_ + tdigest_offsets[tdigest_index];
 
-  // min and max for the digest
-  double const* min_val = min_ + tdigest_index;
-  double const* max_val = max_ + tdigest_index;
+    // centroids for this particular tdigest
+    CentroidIter centroids = centroids_ + tdigest_offsets[tdigest_index];
 
-  double const total_weight = cumulative_weight[tdigest_size - 1];
-  double const cluster_q    = percentage * total_weight;
+    // min and max for the digest
+    double const* min_val = min_ + tdigest_index;
+    double const* max_val = max_ + tdigest_index;
 
-  if (cluster_q <= 1) {
-    output[tid] = *min_val;
-    return;
-  } else if (cluster_q >= total_weight - 1) {
-    output[tid] = *max_val;
-    return;
-  }
+    double const total_weight = cumulative_weight[tdigest_size - 1];
 
-  // otherwise find the centroid we're in and interpolate
-  size_type const centroid_index = static_cast<size_type>(thrust::distance(
-    cumulative_weight,
-    thrust::lower_bound(
-      thrust::seq, cumulative_weight, cumulative_weight + tdigest_size, cluster_q)));
-
-  double diff = cluster_q + weights[centroid_index] / 2 - cumulative_weight[centroid_index];
-  if (weights[centroid_index] == 1 && std::abs(diff) < 0.5) {
-    output[tid] = means[centroid_index];
-    return;
-  }
-  size_type left_index  = centroid_index;
-  size_type right_index = centroid_index;
-  if (diff > 0) {
-    if (right_index == tdigest_size - 1) {
-      output[tid] = lerp(means[right_index], *max_val, diff / (weights[right_index] / 2));
-      return;
+    // The following Arrow code serves as a basis for this computation
+    // https://github.com/apache/arrow/blob/master/cpp/src/arrow/util/tdigest.cc#L280
+    double const weighted_q = percentage * total_weight;
+    if (weighted_q <= 1) {
+      return *min_val;
+    } else if (weighted_q >= total_weight - 1) {
+      return *max_val;
     }
-    right_index++;
-  } else {
-    if (left_index == 0) {
-      output[tid] = lerp(*min_val, means[left_index], diff / (weights[left_index] / 2));
-      return;
-    }
-    left_index--;
-    diff += weights[left_index] / 2 + weights[right_index] / 2;
-  }
 
-  diff /= (weights[left_index] / 2 + weights[right_index] / 2);
-  output[tid] = lerp(means[left_index], means[right_index], diff);
+    // determine what centroid this weighted quantile falls within.
+    size_type const centroid_index = static_cast<size_type>(thrust::distance(
+      cumulative_weight,
+      thrust::lower_bound(
+        thrust::seq, cumulative_weight, cumulative_weight + tdigest_size, weighted_q)));
+    centroid c                     = centroids[centroid_index];
+
+    // diff == how far from the "center" of the centroid we are,
+    // in unit weights.
+    // visually:
+    //
+    // centroid of weight 7
+    //        C       <-- center of the centroid
+    //    |-------|
+    //      | |  |
+    //      X Y  Z
+    // X has a diff of -2 (2 units to the left of the center of the centroid)
+    // Y has a diff of 0 (directly in the middle of the centroid)
+    // Z has a diff of 3 (3 units to the right of the center of the centroid)
+    double const diff = weighted_q + c.weight / 2 - cumulative_weight[centroid_index];
+
+    // if we're completely within a centroid of weight 1, just return that.
+    if (c.weight == 1 && std::abs(diff) < 0.5) { return c.mean; }
+
+    // otherwise, interpolate between two centroids.
+
+    // get the two centroids we want to interpolate between
+    auto const look_left  = diff < 0;
+    auto const [lhs, rhs] = [&]() {
+      if (look_left) {
+        // if we're at the first centroid, "left" of us is the min value
+        auto const first_centroid = centroid_index == 0;
+        auto const lhs = first_centroid ? centroid{*min_val, 0} : centroids[centroid_index - 1];
+        auto const rhs = c;
+        return std::pair<centroid, centroid>{lhs, rhs};
+      } else {
+        // if we're at the last centroid, "right" of us is the max value
+        auto const last_centroid = (centroid_index == tdigest_size - 1);
+        auto const lhs           = c;
+        auto const rhs = last_centroid ? centroid{*max_val, 0} : centroids[centroid_index + 1];
+        return std::pair<centroid, centroid>{lhs, rhs};
+      }
+    }();
+
+    // compute interpolation value t
+
+    // total interpolation range. the total range of "space" between the lhs and rhs centroids.
+    auto const tip = lhs.weight / 2 + rhs.weight / 2;
+    // if we're looking left, diff is negative, so shift it so that we are interpolating
+    // from lhs -> rhs.
+    auto const t = (look_left) ? (diff + tip) / tip : diff / tip;
+
+    // interpolate
+    return lerp(lhs.mean, rhs.mean, t);
+  }();
 }
 
 /**
@@ -178,14 +215,15 @@ std::unique_ptr<column> compute_approx_percentiles(structs_column_view const& in
                                               mr);
 
   auto percentiles_cdv = column_device_view::create(percentiles);
+  auto centroids       = cudf::detail::make_counting_transform_iterator(
+    0, make_centroid{mean.begin<double>(), weight.begin<double>()});
 
   constexpr size_type block_size = 256;
   cudf::detail::grid_1d const grid(percentiles.size() * input.size(), block_size);
   compute_percentiles_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
     {offsets.begin<offset_type>(), static_cast<size_t>(offsets.size())},
     *percentiles_cdv,
-    mean.begin<double>(),
-    weight.begin<double>(),
+    centroids,
     min_col.begin<double>(),
     max_col.begin<double>(),
     cumulative_weights->view().begin<double>(),
