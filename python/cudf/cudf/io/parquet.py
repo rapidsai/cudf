@@ -164,6 +164,10 @@ def read_parquet_metadata(path):
 
 def _process_row_groups(paths, fs, filters=None, row_groups=None):
 
+    # The general purpose of this function is to (1) expand
+    # directory input into a list of paths (using the pyarrow
+    # dataset API), and (2) to apply row-group filters.
+
     # Deal with case that the user passed in a directory name
     file_list = paths
     if len(paths) == 1 and ioutils.is_directory(paths[0]):
@@ -206,6 +210,18 @@ def _process_row_groups(paths, fs, filters=None, row_groups=None):
 
 
 def _get_byte_ranges(file_list, row_groups, columns, fs):
+
+    # This utility is used to collect the footer metadata
+    # from a parquet file. This metadata is used to define
+    # the exact byte-ranges that will be needed to read the
+    # target column-chunks from the file.
+    #
+    # This utility is only used for remote storage.
+    #
+    # The calculated byte-range information is used within
+    # cudf.io.ioutils.get_filepath_or_buffer (which uses
+    # _fsspec_data_transfer to convert non-local fsspec file
+    # objects into local byte buffers).
 
     if row_groups is None:
         if columns is None:
