@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
+import numpy as np
 import pyarrow as pa
 
 import cudf
@@ -81,7 +82,14 @@ cpdef generate_pandas_metadata(Table table, index):
         ):
             types.append(col.dtype.to_arrow())
         else:
-            types.append(np_to_pa_dtype(col.dtype))
+            # A boolean element takes 8 bits in cudf and 1 bit in
+            # pyarrow. To make sure the cudf format is interperable
+            # in arrow, we use `int8` type when converting from a
+            # cudf boolean array.
+            if col.dtype.type == np.bool_:
+                types.append(pa.int8())
+            else:
+                types.append(np_to_pa_dtype(col.dtype))
 
     # Indexes
     if index is not False:
@@ -125,7 +133,15 @@ cpdef generate_pandas_metadata(Table table, index):
                 elif is_list_dtype(idx):
                     types.append(col.dtype.to_arrow())
                 else:
-                    types.append(np_to_pa_dtype(idx.dtype))
+                    # A boolean element takes 8 bits in cudf and 1 bit in
+                    # pyarrow. To make sure the cudf format is interperable
+                    # in arrow, we use `int8` type when converting from a
+                    # cudf boolean array.
+                    if idx.dtype.type == np.bool_:
+                        types.append(pa.int8())
+                    else:
+                        types.append(np_to_pa_dtype(idx.dtype))
+
                 index_levels.append(idx)
             col_names.append(name)
             index_descriptors.append(descr)
