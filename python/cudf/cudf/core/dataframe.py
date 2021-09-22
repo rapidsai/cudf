@@ -4742,7 +4742,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             boolmask = queryutils.query_execute(self, expr, callenv)
             return self._apply_boolean_mask(boolmask)
 
-    def apply(self, func, axis=1):
+    def apply(
+        self, func, axis=1, raw=False, result_type=None, args=(), **kwargs
+    ):
         """
         Apply a function along an axis of the DataFrame.
 
@@ -4756,12 +4758,17 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         ----------
         func : function
             Function to apply to each row.
-
         axis : {0 or 'index', 1 or 'columns'}, default 0
             Axis along which the function is applied:
             * 0 or 'index': apply function to each column.
               Note: axis=0 is not yet supported.
             * 1 or 'columns': apply function to each row.
+        raw: bool, default False
+            Not yet supported
+        result_type: {'expand', 'reduce', 'broadcast', None}, default None
+            Not yet supported
+        args: tuple
+            Not yet supported
 
         Examples
         --------
@@ -4910,6 +4917,12 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             raise ValueError(
                 "DataFrame.apply currently only supports row wise ops"
             )
+        if raw:
+            raise ValueError("The `raw` kwarg is not yet supported.")
+        if result_type is not None:
+            raise ValueError("The `result_type` kwarg is not yet supported.")
+        if args or kwargs:
+            raise ValueError("args and kwargs are not yet supported.")
 
         return cudf.Series(func(self))
 
