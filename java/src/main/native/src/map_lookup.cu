@@ -113,10 +113,6 @@ get_gather_map_for_map_values(column_view const &input, string_scalar &lookup_ke
                               rmm::cuda_stream_view stream, rmm::mr::device_memory_resource *mr) {
   constexpr size_type block_size{256};
 
-  if (input.size() == 0) {
-    return make_empty_column(data_type{cudf::type_to_id<size_type>()});
-  }
-
   cudf::detail::grid_1d grid{input.size(), block_size};
 
   auto input_device_view = cudf::column_device_view::create(input, stream);
@@ -188,6 +184,10 @@ std::unique_ptr<column> map_lookup(column_view const &map_column, string_scalar 
   // Defensive checks.
   map_input_check(map_column, stream);
 
+  if (map_column.size() == 0) {
+    return make_empty_column(cudf::data_type{cudf::type_id::STRING});
+  }
+
   lists_column_view lcv{map_column};
   column_view structs_column = lcv.get_sliced_child(stream);
   // Two-pass plan: construct gather map, and then gather() on structs_column.child(1). Plan A.
@@ -196,10 +196,6 @@ std::unique_ptr<column> map_lookup(column_view const &map_column, string_scalar 
   auto gather_map = has_nulls ?
                         get_gather_map_for_map_values<true>(map_column, lookup_key, stream, mr) :
                         get_gather_map_for_map_values<false>(map_column, lookup_key, stream, mr);
-
-  if (gather_map->size() == 0) {
-    return make_empty_column(cudf::data_type{cudf::type_id::STRING});
-  }
 
   // Gather map is now available.
 
