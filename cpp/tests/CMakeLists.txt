@@ -33,7 +33,6 @@ endfunction()
 # - column tests ----------------------------------------------------------------------------------
 ConfigureTest(COLUMN_TEST
     column/bit_cast_test.cpp
-    column/column_view_shallow_test.cpp
     column/column_test.cu
     column/column_device_view_test.cu
     column/compound_test.cu)
