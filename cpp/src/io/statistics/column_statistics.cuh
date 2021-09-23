@@ -95,8 +95,7 @@ struct calculate_group_statistics_functor {
 
     using type_convert = detail::type_conversion<detail::conversion_map<IO>>;
     using CT           = typename type_convert::template type<T>;
-    typed_statistics_chunk<CT, detail::statistics_type_category<T, IO>::include_aggregate> chunk(
-      s.group.num_rows);
+    typed_statistics_chunk<CT, detail::statistics_type_category<T, IO>::include_aggregate> chunk;
 
     for (uint32_t i = 0; i < s.group.num_rows; i += block_size) {
       uint32_t r   = i + t;
@@ -123,7 +122,7 @@ struct calculate_group_statistics_functor {
   __device__ void operator()(stats_state_s& s, uint32_t t)
   {
     detail::storage_wrapper<block_size> storage(temp_storage);
-    typed_statistics_chunk<uint32_t, false> chunk(s.group.num_rows);
+    typed_statistics_chunk<uint32_t, false> chunk;
 
     for (uint32_t i = 0; i < s.group.num_rows; i += block_size) {
       uint32_t r   = i + t;
