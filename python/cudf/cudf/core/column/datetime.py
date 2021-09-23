@@ -8,7 +8,7 @@ import re
 from numbers import Number
 from types import SimpleNamespace
 from typing import Any, Mapping, Sequence, Union, cast
-import locale 
+import locale
 from locale import nl_langinfo as nl_langinfo
 
 import numpy as np
@@ -60,8 +60,8 @@ _DATETIME_SPECIAL_FORMATS = {
 }
 
 _DATETIME_NAMES = [
-    nl_langinfo(locale.AM_STR), # type: ignore
-    nl_langinfo(locale.PM_STR), # type: ignore
+    nl_langinfo(locale.AM_STR),  # type: ignore
+    nl_langinfo(locale.PM_STR),  # type: ignore
     nl_langinfo(locale.DAY_1),
     nl_langinfo(locale.DAY_2),
     nl_langinfo(locale.DAY_3),
@@ -333,7 +333,9 @@ class DatetimeColumn(column.ColumnBase):
         if format in _DATETIME_SPECIAL_FORMATS:
             names = as_column(_DATETIME_NAMES)
         else:
-            names = cudf.core.column.column_empty(0, dtype="object",masked=False)
+            names = cudf.core.column.column_empty(
+                0, dtype="object", masked=False
+            )
         if len(self) > 0:
             return string._datetime_to_str_typecast_functions[
                 cudf.dtype(self.dtype)
