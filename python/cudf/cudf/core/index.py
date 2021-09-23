@@ -1624,9 +1624,9 @@ class DatetimeIndex(GenericIndex):
         -------
         DataFrame
             with columns year, week and day
+
         Examples
         --------
-
         >>> gIndex = cudf.DatetimeIndex(["2020-05-31 08:00:00",
         ...    "1999-12-31 18:40:00"])
         >>> gIndex.isocalendar()
