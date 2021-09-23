@@ -395,6 +395,12 @@ struct MurmurHash3_32 {
     return h;
   }
 
+  /* Copyright 2005-2014 Daniel James.
+   *
+   * Use, modification and distribution is subject to the Boost Software
+   * License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
+   * http://www.boost.org/LICENSE_1_0.txt)
+   */
   /**
    * @brief  Combines two hash values into a new single hash value. Called
    * repeatedly to create a hash value from several variables.
@@ -795,6 +801,12 @@ struct IdentityHash {
   IdentityHash()    = default;
   constexpr IdentityHash(uint32_t seed) : m_seed(seed) {}
 
+  /* Copyright 2005-2014 Daniel James.
+   *
+   * Use, modification and distribution is subject to the Boost Software
+   * License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
+   * http://www.boost.org/LICENSE_1_0.txt)
+   */
   /**
    * @brief  Combines two hash values into a new single hash value. Called
    * repeatedly to create a hash value from several variables.
