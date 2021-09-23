@@ -3636,6 +3636,12 @@ class Series(SingleColumnFrame, Serializable):
         4   -1
         dtype: int8
         """
+        
+        warnings.warn(
+            "Series.label_encoding is deprecated and will be removed "
+            "in the future.",
+            DeprecationWarning,
+        )
 
         def _return_sentinel_series():
             return Series(
