@@ -875,10 +875,10 @@ class MultiIndex(Frame, BaseIndex):
             )
             df = cudf.DataFrame.deserialize(header["source_data"], frames)
             obj = cls.from_frame(df)
-            obj._set_names(names)
-            return obj
+            return obj._set_names(names)
         columns = column.deserialize_columns(header["columns"], frames)
-        return cls._from_data(dict(zip(names, columns)))
+        obj = cls._from_data(dict(zip(range(0, len(names)), columns)))
+        return obj._set_names(names)
 
     def __getitem__(self, index):
         if isinstance(index, int):
