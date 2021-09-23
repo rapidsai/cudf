@@ -58,7 +58,6 @@ def path_or_buf(datadir):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-@pytest.mark.filterwarnings("ignore:Strings are not yet supported")
 @pytest.mark.parametrize("engine", ["pyarrow", "cudf"])
 @pytest.mark.parametrize("use_index", [False, True])
 @pytest.mark.parametrize(
@@ -221,6 +220,7 @@ def test_orc_read_statistics(datadir):
     assert_eq(file_statistics[0]["string1"]["minimum"], "one")
 
 
+@pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 @pytest.mark.parametrize(
     "predicate,expected_len",
@@ -244,6 +244,7 @@ def test_orc_read_filtered(datadir, engine, predicate, expected_len):
     assert len(df_filtered) == expected_len
 
 
+@pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.parametrize("engine", ["cudf", "pyarrow"])
 def test_orc_read_stripes(datadir, engine):
     path = datadir / "TestOrcFile.testDate1900.orc"
@@ -558,7 +559,6 @@ def test_orc_reader_boolean_type(datadir, orc_file):
     assert_eq(pdf, df)
 
 
-@pytest.mark.filterwarnings("ignore:Using CPU")
 def test_orc_reader_tzif_timestamps(datadir):
     # Contains timstamps in the range covered by the TZif file
     # Other timedate tests only cover "future" times
@@ -965,7 +965,9 @@ def generate_list_struct_buff(size=100_000):
     return buff
 
 
-list_struct_buff = generate_list_struct_buff()
+@pytest.fixture(scope="module")
+def list_struct_buff():
+    return generate_list_struct_buff()
 
 
 @pytest.mark.parametrize(
@@ -978,9 +980,7 @@ list_struct_buff = generate_list_struct_buff()
 )
 @pytest.mark.parametrize("num_rows", [0, 15, 1005, 10561, 100_000])
 @pytest.mark.parametrize("use_index", [True, False])
-def test_lists_struct_nests(
-    columns, num_rows, use_index,
-):
+def test_lists_struct_nests(columns, num_rows, use_index, list_struct_buff):
 
     gdf = cudf.read_orc(
         list_struct_buff,
@@ -1004,7 +1004,7 @@ def test_lists_struct_nests(
 
 
 @pytest.mark.parametrize("columns", [None, ["lvl1_struct"], ["lvl1_list"]])
-def test_skip_rows_for_nested_types(columns):
+def test_skip_rows_for_nested_types(columns, list_struct_buff):
     with pytest.raises(
         RuntimeError, match="skip_rows is not supported by nested column"
     ):
@@ -1390,3 +1390,45 @@ def test_names_in_struct_dtype_nesting(datadir):
     edf = cudf.DataFrame(expect.to_pandas())
     # test schema
     assert edf.dtypes.equals(got.dtypes)
+
+
+@pytest.mark.filterwarnings("ignore:.*struct.*experimental")
+def test_writer_lists_structs(list_struct_buff):
+    df_in = cudf.read_orc(list_struct_buff)
+
+    buff = BytesIO()
+    df_in.to_orc(buff)
+
+    pyarrow_tbl = pyarrow.orc.ORCFile(buff).read()
+
+    assert pyarrow_tbl.equals(df_in.to_arrow())
+
+
+@pytest.mark.filterwarnings("ignore:.*struct.*experimental")
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "with_pd": [
+                [i if i % 3 else None] if i < 9999 or i > 20001 else None
+                for i in range(21000)
+            ],
+            "no_pd": [
+                [i if i % 3 else None] if i < 9999 or i > 20001 else []
+                for i in range(21000)
+            ],
+        },
+    ],
+)
+def test_orc_writer_lists_empty_rg(data):
+    pdf_in = pd.DataFrame(data)
+    buffer = BytesIO()
+    cudf_in = cudf.from_pandas(pdf_in)
+
+    cudf_in.to_orc(buffer)
+
+    df = cudf.read_orc(buffer)
+    assert_eq(df, cudf_in)
+
+    pdf_out = pa.orc.ORCFile(buffer).read().to_pandas()
+    assert_eq(pdf_in, pdf_out)

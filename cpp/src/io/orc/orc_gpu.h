@@ -135,6 +135,8 @@ struct RowGroup {
 struct EncChunk {
   uint32_t start_row;                // start row of this chunk
   uint32_t num_rows;                 // number of rows in this chunk
+  uint32_t null_mask_start_row;      // adjusted to multiple of 8
+  uint32_t null_mask_num_rows;       // adjusted to multiple of 8
   ColumnEncodingKind encoding_kind;  // column encoding kind
   TypeKind type_kind;                // column data type
   uint8_t dtype_len;                 // data type length
@@ -142,7 +144,7 @@ struct EncChunk {
 
   uint32_t* dict_index;  // dictionary index from row index
   uint32_t* decimal_offsets;
-  column_device_view const* leaf_column;
+  orc_column_device_view const* column;
 };
 
 /**
@@ -182,7 +184,7 @@ struct DictionaryChunk {
   uint32_t num_dict_strings;  // number of strings in dictionary
   uint32_t dict_char_count;   // size of dictionary string data for this chunk
 
-  column_device_view const* leaf_column;  //!< Pointer to string column
+  orc_column_device_view const* leaf_column;  //!< Pointer to string column
 };
 
 /**
@@ -197,7 +199,7 @@ struct StripeDictionary {
   uint32_t num_strings;      // number of unique strings in the dictionary
   uint32_t dict_char_count;  // total size of dictionary string data
 
-  column_device_view const* leaf_column;  //!< Pointer to string column
+  orc_column_device_view const* leaf_column;  //!< Pointer to string column
 };
 
 constexpr uint32_t encode_block_size = 512;
@@ -327,17 +329,6 @@ void EncodeStripeDictionaries(StripeDictionary const* stripes,
                               rmm::cuda_stream_view stream);
 
 /**
- * @brief Set leaf column element of EncChunk
- *
- * @param[in] orc_columns Pre-order flattened device array of ORC column views
- * @param[in,out] chunks encoder chunk device array [column][rowgroup]
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
- */
-void set_chunk_columns(device_span<orc_column_device_view const> orc_columns,
-                       device_2dspan<EncChunk> chunks,
-                       rmm::cuda_stream_view stream);
-
-/**
  * @brief Launches kernel for compacting chunked column data prior to compression
  *
  * @param[in,out] strm_desc StripeStream device array [stripe][stream]
@@ -440,11 +431,25 @@ void orc_init_statistics_buffersize(statistics_merge_group* groups,
  * @param[in,out] groups Statistics merge groups
  * @param[in,out] chunks Statistics data
  * @param[in] statistics_count Number of statistics buffers
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
  */
 void orc_encode_statistics(uint8_t* blob_bfr,
                            statistics_merge_group* groups,
                            const statistics_chunk* chunks,
                            uint32_t statistics_count,
+                           rmm::cuda_stream_view stream);
+
+/**
+ * @brief Number of set bits in pushdown masks, per rowgroup.
+ *
+ * @param[in] orc_columns Pre-order flattened device array of ORC column views
+ * @param[in] rowgroup_bounds Ranges of rows in each rowgroup [rowgroup][column]
+ * @param[out] set_counts Per rowgroup number of set bits
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ */
+void reduce_pushdown_masks(device_span<orc_column_device_view const> orc_columns,
+                           device_2dspan<rowgroup_rows const> rowgroup_bounds,
+                           device_2dspan<cudf::size_type> set_counts,
                            rmm::cuda_stream_view stream);
 
 }  // namespace gpu
