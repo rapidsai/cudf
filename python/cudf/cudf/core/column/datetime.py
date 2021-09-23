@@ -8,6 +8,8 @@ import re
 from numbers import Number
 from types import SimpleNamespace
 from typing import Any, Mapping, Sequence, Union, cast
+import locale
+from locale import nl_langinfo
 
 import numpy as np
 import pandas as pd
@@ -274,14 +276,68 @@ class DatetimeColumn(column.ColumnBase):
     def as_string_column(
         self, dtype: Dtype, format=None, **kwargs
     ) -> "cudf.core.column.StringColumn":
+        need_names_formats = {
+            "%b",
+            "%B",
+            "%A",
+            "%a",
+        }
         if format is None:
             format = _dtype_to_format_conversion.get(
                 self.dtype.name, "%Y-%m-%d %H:%M:%S"
             )
+        if format in need_names_formats:
+
+            names = [
+                nl_langinfo(locale.AM_STR),
+                nl_langinfo(locale.PM_STR),
+                nl_langinfo(locale.DAY_1),
+                nl_langinfo(locale.DAY_2),
+                nl_langinfo(locale.DAY_3),
+                nl_langinfo(locale.DAY_4),
+                nl_langinfo(locale.DAY_5),
+                nl_langinfo(locale.DAY_6),
+                nl_langinfo(locale.DAY_7),
+                nl_langinfo(locale.ABDAY_1),
+                nl_langinfo(locale.ABDAY_2),
+                nl_langinfo(locale.ABDAY_3),
+                nl_langinfo(locale.ABDAY_4),
+                nl_langinfo(locale.ABDAY_5),
+                nl_langinfo(locale.ABDAY_6),
+                nl_langinfo(locale.ABDAY_7),
+                nl_langinfo(locale.MON_1),
+                nl_langinfo(locale.MON_2),
+                nl_langinfo(locale.MON_3),
+                nl_langinfo(locale.MON_4),
+                nl_langinfo(locale.MON_5),
+                nl_langinfo(locale.MON_6),
+                nl_langinfo(locale.MON_7),
+                nl_langinfo(locale.MON_8),
+                nl_langinfo(locale.MON_9),
+                nl_langinfo(locale.MON_10),
+                nl_langinfo(locale.MON_11),
+                nl_langinfo(locale.MON_12),
+                nl_langinfo(locale.ABMON_1),
+                nl_langinfo(locale.ABMON_2),
+                nl_langinfo(locale.ABMON_3),
+                nl_langinfo(locale.ABMON_4),
+                nl_langinfo(locale.ABMON_5),
+                nl_langinfo(locale.ABMON_6),
+                nl_langinfo(locale.ABMON_7),
+                nl_langinfo(locale.ABMON_8),
+                nl_langinfo(locale.ABMON_9),
+                nl_langinfo(locale.ABMON_10),
+                nl_langinfo(locale.ABMON_11),
+                nl_langinfo(locale.ABMON_12),
+            ]
+
+            names = as_column(names)
+        else:
+            names = cudf.core.column.column_empty(0)
         if len(self) > 0:
             return string._datetime_to_str_typecast_functions[
                 cudf.dtype(self.dtype)
-            ](self, format)
+            ](self, format, names)
         else:
             return cast(
                 "cudf.core.column.StringColumn",

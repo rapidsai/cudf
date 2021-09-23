@@ -1146,6 +1146,10 @@ def test_datetime_fillna(data, dtype, fill_value):
         "%G",
         "%u",
         "%V",
+        "%b",
+        "%B",
+        "%a",
+        "%A",
     ],
 )
 def test_datetime_strftime(data, dtype, date_format):

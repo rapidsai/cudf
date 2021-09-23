@@ -509,7 +509,8 @@ def from_booleans(Column input_col):
 
 def int2timestamp(
         Column input_col,
-        format):
+        format,
+        Column names):
     """
     Converting/Casting input date-time column to string
     column with specified format
@@ -525,12 +526,14 @@ def int2timestamp(
     """
     cdef column_view input_column_view = input_col.view()
     cdef string c_timestamp_format = format.encode("UTF-8")
+    cdef column_view input_strings_names = names.view()
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(
             cpp_from_timestamps(
                 input_column_view,
-                c_timestamp_format))
+                c_timestamp_format,
+                input_strings_names))
 
     return Column.from_unique_ptr(move(c_result))
 
