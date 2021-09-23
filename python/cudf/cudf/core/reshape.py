@@ -497,7 +497,7 @@ def melt(
 
     # Error for unimplemented support for datatype
     dtypes = [frame[col].dtype for col in id_vars + value_vars]
-    if any(cudf.utils.dtypes.is_categorical_dtype(t) for t in dtypes):
+    if any(cudf.api.types.is_categorical_dtype(t) for t in dtypes):
         raise NotImplementedError(
             "Categorical columns are not yet " "supported for function"
         )
@@ -1067,7 +1067,7 @@ def _get_unique(column, dummy_na):
 
 
 def _length_check_params(obj, columns, name):
-    if cudf.utils.dtypes.is_list_like(obj):
+    if cudf.api.types.is_list_like(obj):
         if len(obj) != len(columns):
             raise ValueError(
                 f"Length of '{name}' ({len(obj)}) did not match the "

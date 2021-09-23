@@ -106,12 +106,12 @@ def test_series_argsort(nelem, dtype, asc):
 def test_series_sort_index(nelem, asc):
     np.random.seed(0)
     sr = Series((100 * np.random.random(nelem)))
-    orig = sr.to_array()
-    got = sr.sort_values().sort_index(ascending=asc).to_array()
-    if not asc:
-        # Reverse the array for descending sort
-        got = got[::-1]
-    np.testing.assert_array_equal(orig, got)
+    psr = sr.to_pandas()
+
+    expected = psr.sort_index(ascending=asc)
+    got = sr.sort_index(ascending=asc)
+
+    assert_eq(expected, got)
 
 
 @pytest.mark.parametrize("data", [[0, 1, 1, 2, 2, 2, 3, 3], [0], [1, 2, 3]])

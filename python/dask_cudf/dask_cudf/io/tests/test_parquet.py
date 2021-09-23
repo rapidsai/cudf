@@ -288,6 +288,15 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts, daskcudf, metadata):
             if not fn.startswith("_"):
                 assert "part" in fn
 
+    if parse_version(dask.__version__) > parse_version("2021.07.0"):
+        # This version of Dask supports `aggregate_files=True`.
+        # Check that we can aggregate by a partition name.
+        df_read = dd.read_parquet(
+            tmpdir, engine="pyarrow", aggregate_files="year"
+        )
+        gdf_read = dask_cudf.read_parquet(tmpdir, aggregate_files="year")
+        dd.assert_eq(df_read, gdf_read)
+
 
 @pytest.mark.parametrize("metadata", [True, False])
 @pytest.mark.parametrize("chunksize", [None, 1024, 4096, "1MiB"])
@@ -327,6 +336,7 @@ def test_chunksize(tmpdir, chunksize, metadata):
         split_row_groups=True,
         gather_statistics=True,
     )
+    ddf2.compute(scheduler="synchronous")
 
     dd.assert_eq(ddf1, ddf2, check_divisions=False)
 
@@ -476,3 +486,21 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
     # before computing, and "int" after
     dd.assert_eq(ddf1.compute(), ddf2)
     dd.assert_eq(ddf1.compute(), ddf2.compute())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [[0], [1, 2], [3]],
+        [None, [1, 2], [3]],
+        [{"f1": 1}, {"f1": 0, "f2": "dog"}, {"f2": "cat"}],
+        [None, {"f1": 0, "f2": "dog"}, {"f2": "cat"}],
+    ],
+)
+def test_cudf_dtypes_from_pandas(tmpdir, data):
+    # Simple test that we can read in list and struct types
+    fn = str(tmpdir.join("test.parquet"))
+    dfp = pd.DataFrame({"data": data})
+    dfp.to_parquet(fn, engine="pyarrow", index=True)
+    ddf2 = dask_cudf.read_parquet(fn)
+    dd.assert_eq(cudf.from_pandas(dfp), ddf2)

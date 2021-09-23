@@ -19,10 +19,11 @@ from cudf._typing import (
     DtypeObj,
     ScalarLike,
 )
+from cudf.api.types import is_scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, column, string
 from cudf.core.column.datetime import _numpy_to_pandas_conversion
-from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
+from cudf.utils.dtypes import np_to_pa_dtype
 from cudf.utils.utils import _fillna_natwise
 
 _dtype_to_format_conversion = {
@@ -343,7 +344,7 @@ class TimeDeltaColumn(column.ColumnBase):
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DatetimeColumn":
         raise TypeError(
-            f"cannot astype a timedelta from [{self.dtype}] to [{dtype}]"
+            f"cannot astype a timedelta from {self.dtype} to {dtype}"
         )
 
     def as_string_column(

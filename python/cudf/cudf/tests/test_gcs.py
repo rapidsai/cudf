@@ -34,10 +34,14 @@ def test_read_csv(pdf, monkeypatch):
     fpath = TEST_BUCKET + "test_csv_reader.csv"
     buffer = pdf.to_csv(index=False)
 
-    def mock_open(*args):
+    def mock_open(*args, **kwargs):
         return io.BytesIO(buffer.encode())
 
+    def mock_size(*args):
+        return len(buffer.encode())
+
     monkeypatch.setattr(gcsfs.core.GCSFileSystem, "open", mock_open)
+    monkeypatch.setattr(gcsfs.core.GCSFileSystem, "size", mock_size)
     got = cudf.read_csv("gcs://{}".format(fpath))
 
     assert_eq(pdf, got)

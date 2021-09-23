@@ -1,4 +1,4 @@
-# Copyright (c) 2020, NVIDIA CORPORATION
+# Copyright (c) 2020-2021, NVIDIA CORPORATION
 
 import itertools
 
@@ -177,6 +177,7 @@ class Rolling(GetAttrGetItemMixin):
         self.min_periods = min_periods
         self.center = center
         self._normalize()
+        self.agg_params = {}
         if axis != 0:
             raise NotImplementedError("axis != 0 is not supported yet.")
         self.axis = axis
@@ -237,6 +238,7 @@ class Rolling(GetAttrGetItemMixin):
             min_periods=min_periods,
             center=self.center,
             op=agg_name,
+            agg_params=self.agg_params,
         )
         return sr._from_data({sr.name: result_col}, sr._index)
 
@@ -265,6 +267,14 @@ class Rolling(GetAttrGetItemMixin):
 
     def mean(self):
         return self._apply_agg("mean")
+
+    def var(self, ddof=1):
+        self.agg_params["ddof"] = ddof
+        return self._apply_agg("var")
+
+    def std(self, ddof=1):
+        self.agg_params["ddof"] = ddof
+        return self._apply_agg("std")
 
     def count(self):
         return self._apply_agg("count")
@@ -393,7 +403,9 @@ class RollingGroupby(Rolling):
         # of `groupby.grouping.keys` and `groupby.obj`.
         # As an optimization, avoid gathering those twice.
         self._group_keys = groupby.grouping.keys.take(sort_order)
-        obj = groupby.obj.take(sort_order)
+        obj = groupby.obj.drop(
+            columns=groupby.grouping._key_column_names_from_obj
+        ).take(sort_order)
 
         gb_size = groupby.size().sort_index()
         self._group_starts = (

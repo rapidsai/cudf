@@ -852,8 +852,13 @@ class ColumnBase(Column, Serializable):
         side : {'left', 'right'}
         kind : {'ix', 'loc', 'getitem'}
         """
-        assert kind in ["ix", "loc", "getitem", None]
-        if side not in ("left", "right"):
+        if kind not in {"ix", "loc", "getitem", None}:
+            raise ValueError(
+                f"Invalid value for ``kind`` parameter,"
+                f" must be either one of the following: "
+                f"{'ix', 'loc', 'getitem', None}, but found: {kind}"
+            )
+        if side not in {"left", "right"}:
             raise ValueError(
                 "Invalid value for side kwarg,"
                 " must be either 'left' or 'right': %s" % (side,)
@@ -2084,10 +2089,7 @@ def as_column(
                             data
                         )
                     np_type = np.dtype(dtype).type
-                    if np_type == np.bool_:
-                        pa_type = pa.bool_()
-                    else:
-                        pa_type = np_to_pa_dtype(np.dtype(dtype))
+                    pa_type = np_to_pa_dtype(np.dtype(dtype))
                 data = as_column(
                     pa.array(
                         arbitrary,

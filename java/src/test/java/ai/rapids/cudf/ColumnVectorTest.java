@@ -4194,6 +4194,28 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testDropListDuplicates() {
+    List<Integer> list1 = Arrays.asList(1, 2);
+    List<Integer> list2 = Arrays.asList(3, 4, 5);
+    List<Integer> list3 = Arrays.asList(null, 0, 6, 6, 0);
+    List<Integer> dedupeList3 = Arrays.asList(0, 6, null);
+    List<Integer> list4 = Arrays.asList(null, 6, 7, null, 7);
+    List<Integer> dedupeList4 = Arrays.asList(6, 7, null);
+    List<Integer> list5 = null;
+
+    HostColumnVector.DataType listType = new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.INT32));
+    try (ColumnVector v = ColumnVector.fromLists(listType, list1, list2, list3, list4, list5);
+         ColumnVector expected = ColumnVector.fromLists(listType, list1, list2, dedupeList3, dedupeList4, list5);
+         ColumnVector tmp = v.dropListDuplicates();
+         // Note dropping duplicates does not have any ordering guarantee, so sort to make it all
+         // consistent
+         ColumnVector result = tmp.listSortRows(false, false)) {
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
   void testListContainsString() {
     List<String> list1 = Arrays.asList("Héllo there", "thésé");
     List<String> list2 = Arrays.asList("", "ARé some", "test strings");
@@ -5386,6 +5408,17 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list3);
          ColumnVector res = cv.getMapValue(Scalar.fromString("a"));
          ColumnVector expected = ColumnVector.fromStrings("b", "c", null)) {
+      assertColumnsAreEqual(expected, res);
+    }
+  }
+
+  @Test
+  void testGetMapValueEmptyInput() {
+    HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
+        new HostColumnVector.BasicType(true, DType.STRING)));
+    try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType));
+         ColumnVector res = cv.getMapValue(Scalar.fromString("a"));
+         ColumnVector expected = ColumnVector.fromStrings()) {
       assertColumnsAreEqual(expected, res);
     }
   }
