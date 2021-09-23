@@ -169,6 +169,10 @@ struct compute_string_sizes_and_interleave_lists_fn {
     auto const start_str_idx = list_offsets[list_id];
     auto const end_str_idx   = list_offsets[list_id + 1];
 
+    // In case of empty list (i.e. it doesn't contain any string element), we just ignore it because
+    // there will not be anything to store for that list in the child column.
+    if (start_str_idx == end_str_idx) { return; }
+
     // read_idx and write_idx are indices of string elements.
     size_type write_idx = dst_list_offsets[idx];
 
