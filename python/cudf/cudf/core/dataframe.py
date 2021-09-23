@@ -4605,6 +4605,8 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             column names when avoiding conflicts.
         sort : bool
             Set to True to ensure sorted ordering.
+        method : {‘hash’, ‘sort’}, default ‘hash’
+            The implementation method to be used for the operation.
 
         Returns
         -------
