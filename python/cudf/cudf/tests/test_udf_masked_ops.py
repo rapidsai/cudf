@@ -114,7 +114,6 @@ def test_arith_masked_vs_constant(op, constant, data):
             #   insists that (NA**0 == 1) where we do not
             run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
         return
-    breakpoint()
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
 
