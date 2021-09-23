@@ -628,7 +628,6 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
 
 }  // namespace
 
-// TODO move this to more appropriate file
 struct has_atomic_support_type_dispatcher {
   template <typename T>
   bool operator()()
@@ -637,6 +636,12 @@ struct has_atomic_support_type_dispatcher {
   }
 };
 
+/**
+ * @brief Indicates whether `type` has support for atomics
+ *
+ * @param type  The `data_type` that is being checked
+ * @return      `true` if `type` has support for atomics, `false` otherwise
+ */
 bool has_atomic_support(cudf::data_type const& type)
 {
   return type_dispatcher(type, has_atomic_support_type_dispatcher{});
