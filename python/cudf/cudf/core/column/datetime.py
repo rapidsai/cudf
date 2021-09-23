@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import builtins
 import datetime as dt
+import locale
 import re
+from locale import nl_langinfo
 from numbers import Number
 from types import SimpleNamespace
 from typing import Any, Mapping, Sequence, Union, cast
-import locale
-from locale import nl_langinfo
 
 import numpy as np
 import pandas as pd
