@@ -26,13 +26,13 @@ requirements:
   host:
     - python
     - cudf {{ version }}
-    - dask=2021.9.1
-    - distributed=2021.9.1
+    - dask=2021.09.1
+    - distributed=2021.09.1
   run:
     - python
     - cudf {{ version }}
-    - dask=2021.9.1
-    - distributed=2021.9.1
+    - dask=2021.09.1
+    - distributed=2021.09.1
 
 test:                                   # [linux64]
   requires:                             # [linux64]
