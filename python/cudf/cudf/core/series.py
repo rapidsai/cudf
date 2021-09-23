@@ -332,15 +332,15 @@ class Series(SingleColumnFrame, Serializable):
         return cls(s, nan_as_null=nan_as_null)
 
     def serialize(self):
-        header = {}
-        frames = []
-        header["type-serialized"] = pickle.dumps(type(self))
+        header, frames = super().serialize()
         header["index"], index_frames = self._index.serialize()
         header["index_frame_count"] = len(index_frames)
         frames.extend(index_frames)
 
-        header["column"], column_frames = self._column.serialize()
-        header["column_frame_count"] = len(column_frames)
+        header["columns"], column_frames = column.serialize_columns(
+            self._columns
+        )
+        # header["column"], column_frames = self._column.serialize()
         frames.extend(column_frames)
 
         header["name"] = pickle.dumps(self.name)
@@ -383,11 +383,18 @@ class Series(SingleColumnFrame, Serializable):
 
         frames = frames[index_nframes:]
 
-        column_nframes = header["column_frame_count"]
-        col_typ = pickle.loads(header["column"]["type-serialized"])
-        column = col_typ.deserialize(header["column"], frames[:column_nframes])
+        if "column" in header:
+            warnings.warn(
+                "Series objects serialized in cudf version "
+                "21.10 or older will no longer be deserializable "
+                "after version 21.12. Please load and resave any "
+                "pickles before upgrading to version 22.02.",
+                DeprecationWarning,
+            )
+            header["columns"] = [header.pop("column")]
+        columns = column.deserialize_columns(header["columns"], frames)
 
-        return cls._from_data({name: column}, index=index)
+        return cls._from_data({name: columns[0]}, index=index)
 
     def _get_columns_by_label(self, labels, downcast=False):
         """Return the column specified by `labels`

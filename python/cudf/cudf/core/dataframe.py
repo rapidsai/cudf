@@ -529,9 +529,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         )
 
     def serialize(self):
-        header = {}
-        frames = []
-        header["type-serialized"] = pickle.dumps(type(self))
+        header, frames = super().serialize()
         header["index"], index_frames = self._index.serialize()
         header["index_frame_count"] = len(index_frames)
         frames.extend(index_frames)

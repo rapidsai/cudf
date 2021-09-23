@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import pickle
 import warnings
 from collections import abc
 from typing import (
@@ -64,6 +65,10 @@ class Frame(libcudf.table.Table):
     """
 
     _data: "ColumnAccessor"
+
+    def serialize(self):
+        header = {"type-serialized": pickle.dumps(type(self))}
+        return header, []
 
     @classmethod
     def _from_data(

@@ -4,6 +4,7 @@ from __future__ import annotations, division, print_function
 
 import math
 import pickle
+import warnings
 from numbers import Number
 from typing import (
     Any,
@@ -600,6 +601,39 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         name = kwargs.get("name")
         super().__init__({name: data})
+
+    def serialize(self):
+        header, frames = super().serialize()
+        # store metadata values of index separately
+        # Indexes: Numerical/DateTime/String are often GPU backed
+        header["columns"], column_frames = column.serialize_columns(
+            self._columns
+        )
+        # header["index_column"], column_frames = self._values.serialize()
+        frames.extend(column_frames)
+
+        header["name"] = pickle.dumps(self.name)
+        header["dtype"] = pickle.dumps(self.dtype)
+        header["type-serialized"] = pickle.dumps(type(self))
+        header["frame_count"] = len(frames)
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        idx_typ = pickle.loads(header["type-serialized"])
+        name = pickle.loads(header["name"])
+
+        if "index_column" in header:
+            warnings.warn(
+                "Index objects serialized in cudf version "
+                "21.10 or older will no longer be deserializable "
+                "after version 21.12. Please load and resave any "
+                "pickles before upgrading to version 22.02.",
+                DeprecationWarning,
+            )
+            header["columns"] = [header.pop("index_column")]
+        columns = column.deserialize_columns(header["columns"], frames)
+        return idx_typ(columns[0], name=name)
 
     def drop_duplicates(self, keep="first"):
         """
