@@ -23,6 +23,7 @@ from cudf.testing._utils import (
     TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    random_bitmask,
 )
 
 
@@ -1851,6 +1852,10 @@ def test_parquet_allnull_str(tmpdir, engine):
 
 
 def normalized_equals(value1, value2):
+    if value1 is pd.NA or value1 is pd.NaT:
+        value1 = None
+    if value2 is pd.NA or value1 is pd.NaT:
+        value2 = None
     if isinstance(value1, pd.Timestamp):
         value1 = value1.to_pydatetime()
     if isinstance(value2, pd.Timestamp):
@@ -1871,15 +1876,22 @@ def normalized_equals(value1, value2):
     return value1 == value2
 
 
-def test_parquet_writer_statistics(tmpdir, pdf):
+@pytest.mark.parametrize("add_nulls", [True, False])
+def test_parquet_writer_statistics(tmpdir, pdf, add_nulls):
     file_path = tmpdir.join("cudf.parquet")
     if "col_category" in pdf.columns:
         pdf = pdf.drop(columns=["col_category", "col_bool"])
 
-    for t in TIMEDELTA_TYPES:
-        pdf["col_" + t] = pd.Series(np.arange(len(pdf.index))).astype(t)
+    if not add_nulls:
+        # Timedelta types convert NA to None when reading from parquet into
+        # pandas which interferes with series.max()/min()
+        for t in TIMEDELTA_TYPES:
+            pdf["col_" + t] = pd.Series(np.arange(len(pdf.index))).astype(t)
 
     gdf = cudf.from_pandas(pdf)
+    if add_nulls:
+        for col in gdf:
+            gdf[col] = gdf[col].set_mask(random_bitmask(len(gdf)))
     gdf.to_parquet(file_path, index=False)
 
     # Read back from pyarrow
