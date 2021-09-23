@@ -678,7 +678,6 @@ class hash_join {
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join.
- * @param compare_nulls Whether the equality operator returns true or false for two nulls.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -690,7 +689,6 @@ conditional_inner_join(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
-  null_equality compare_nulls            = null_equality::EQUAL,
   std::optional<std::size_t> output_size = {},
   rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
 
@@ -725,7 +723,6 @@ conditional_inner_join(
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join.
- * @param compare_nulls Whether the equality operator returns true or false for two nulls.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -736,7 +733,6 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 conditional_left_join(table_view const& left,
                       table_view const& right,
                       ast::expression const& binary_predicate,
-                      null_equality compare_nulls            = null_equality::EQUAL,
                       std::optional<std::size_t> output_size = {},
                       rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -770,7 +766,6 @@ conditional_left_join(table_view const& left,
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join.
- * @param compare_nulls Whether the equality operator returns true or false for two nulls.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -781,7 +776,6 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 conditional_full_join(table_view const& left,
                       table_view const& right,
                       ast::expression const& binary_predicate,
-                      null_equality compare_nulls         = null_equality::EQUAL,
                       rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -809,7 +803,6 @@ conditional_full_join(table_view const& left,
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join.
- * @param compare_nulls Whether the equality operator returns true or false for two nulls.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A vector `left_indices` that can be used to construct the result of
@@ -820,7 +813,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
-  null_equality compare_nulls            = null_equality::EQUAL,
   std::optional<std::size_t> output_size = {},
   rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
 
@@ -849,7 +841,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join.
- * @param compare_nulls Whether the equality operator returns true or false for two nulls.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A vector `left_indices` that can be used to construct the result of
@@ -860,7 +851,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
-  null_equality compare_nulls            = null_equality::EQUAL,
   std::optional<std::size_t> output_size = {},
   rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
 
@@ -877,7 +867,6 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join.
- * @param compare_nulls Whether the equality operator returns true or false for two nulls.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return The size that would result from performing the requested join.
@@ -886,7 +875,6 @@ std::size_t conditional_inner_join_size(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
-  null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -902,7 +890,6 @@ std::size_t conditional_inner_join_size(
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join.
- * @param compare_nulls Whether the equality operator returns true or false for two nulls.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return The size that would result from performing the requested join.
@@ -911,7 +898,6 @@ std::size_t conditional_left_join_size(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
-  null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -927,7 +913,6 @@ std::size_t conditional_left_join_size(
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join.
- * @param compare_nulls Whether the equality operator returns true or false for two nulls.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return The size that would result from performing the requested join.
@@ -936,7 +921,6 @@ std::size_t conditional_left_semi_join_size(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
-  null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -952,7 +936,6 @@ std::size_t conditional_left_semi_join_size(
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join.
- * @param compare_nulls Whether the equality operator returns true or false for two nulls.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return The size that would result from performing the requested join.
@@ -961,7 +944,6 @@ std::size_t conditional_left_anti_join_size(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
-  null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 /** @} */  // end of group
 }  // namespace cudf

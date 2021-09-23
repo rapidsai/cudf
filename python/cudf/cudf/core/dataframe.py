@@ -26,7 +26,20 @@ from pandas.io.formats.printing import pprint_thing
 import cudf
 import cudf.core.common
 from cudf import _lib as libcudf
-from cudf.api.types import is_bool_dtype, is_dict_like, is_dtype_equal
+from cudf.api.types import (
+    _is_scalar_or_zero_d_array,
+    is_bool_dtype,
+    is_categorical_dtype,
+    is_datetime_dtype,
+    is_dict_like,
+    is_dtype_equal,
+    is_list_dtype,
+    is_list_like,
+    is_numeric_dtype,
+    is_scalar,
+    is_string_dtype,
+    is_struct_dtype,
+)
 from cudf.core import column, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import (
@@ -44,19 +57,10 @@ from cudf.core.series import Series
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    _is_scalar_or_zero_d_array,
     can_convert_to_column,
     cudf_dtype_from_pydata_dtype,
     find_common_type,
-    is_categorical_dtype,
     is_column_like,
-    is_datetime_dtype,
-    is_list_dtype,
-    is_list_like,
-    is_numerical_dtype,
-    is_scalar,
-    is_string_dtype,
-    is_struct_dtype,
     min_scalar_type,
     numeric_normalize_types,
 )
@@ -1058,6 +1062,10 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         # the number of empty input frames
         num_empty_input_frames = 0
 
+        # flag to indicate if all DataFrame's have
+        # RangeIndex as their index
+        are_all_range_index = False
+
         for i, obj in enumerate(objs):
             # shallow-copy the input DFs in case the same DF instance
             # is concatenated with itself
@@ -1075,6 +1083,10 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 num_empty_input_frames += 1
                 result_index_length += len(obj)
                 empty_has_index = empty_has_index or len(obj) > 0
+
+            are_all_range_index = (
+                True if i == 0 else are_all_range_index
+            ) and isinstance(obj.index, cudf.RangeIndex)
 
         if join == "inner":
             sets_of_column_names = [set(obj._column_names) for obj in objs]
@@ -1150,7 +1162,8 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         columns = [
             (
                 []
-                if (ignore_index and not empty_has_index)
+                if are_all_range_index
+                or (ignore_index and not empty_has_index)
                 else list(f._index._data.columns)
             )
             + [f._data[name] if name in f._data else None for name in names]
@@ -1205,7 +1218,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         # Concatenate the Tables
         out = cls._from_data(
-            *libcudf.concat.concat_tables(tables, ignore_index)
+            *libcudf.concat.concat_tables(
+                tables, ignore_index=ignore_index or are_all_range_index
+            )
         )
 
         # If ignore_index is True, all input frames are empty, and at
@@ -1213,6 +1228,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         # to the result frame.
         if empty_has_index and num_empty_input_frames == len(objs):
             out._index = cudf.RangeIndex(result_index_length)
+        elif are_all_range_index and not ignore_index:
+            out._index = cudf.core.index.GenericIndex._concat(
+                [o._index for o in objs]
+            )
+
         # Reassign the categories for any categorical table cols
         _reassign_categories(
             categories, out._data, indices[first_data_column_position:]
@@ -3960,44 +3980,16 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         3  1  2
         2  3  1
         """
-        if kind is not None:
-            raise NotImplementedError("kind is not yet supported")
-
-        if not sort_remaining:
-            raise NotImplementedError(
-                "sort_remaining == False is not yet supported"
-            )
-
-        if axis in (0, "index"):
-            if level is not None and isinstance(self.index, cudf.MultiIndex):
-                # Pandas currently don't handle na_position
-                # in case of MultiIndex
-                if ascending is True:
-                    na_position = "first"
-                else:
-                    na_position = "last"
-
-                if is_list_like(level):
-                    labels = [
-                        self.index._get_level_label(lvl) for lvl in level
-                    ]
-                else:
-                    labels = [self.index._get_level_label(level)]
-                inds = self.index._source_data[labels].argsort(
-                    ascending=ascending, na_position=na_position
-                )
-            else:
-                inds = self.index.argsort(
-                    ascending=ascending, na_position=na_position
-                )
-            outdf = self.take(inds)
-        else:
-            labels = sorted(self._data.names, reverse=not ascending)
-            outdf = self[labels]
-
-        if ignore_index is True:
-            outdf = outdf.reset_index(drop=True)
-        return self._mimic_inplace(outdf, inplace=inplace)
+        return super()._sort_index(
+            axis=axis,
+            level=level,
+            ascending=ascending,
+            inplace=inplace,
+            kind=kind,
+            na_position=na_position,
+            sort_remaining=sort_remaining,
+            ignore_index=ignore_index,
+        )
 
     def sort_values(
         self,
@@ -4750,7 +4742,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             boolmask = queryutils.query_execute(self, expr, callenv)
             return self._apply_boolean_mask(boolmask)
 
-    def apply(self, func, axis=1):
+    def apply(
+        self, func, axis=1, raw=False, result_type=None, args=(), **kwargs
+    ):
         """
         Apply a function along an axis of the DataFrame.
 
@@ -4764,12 +4758,17 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         ----------
         func : function
             Function to apply to each row.
-
         axis : {0 or 'index', 1 or 'columns'}, default 0
             Axis along which the function is applied:
             * 0 or 'index': apply function to each column.
               Note: axis=0 is not yet supported.
             * 1 or 'columns': apply function to each row.
+        raw: bool, default False
+            Not yet supported
+        result_type: {'expand', 'reduce', 'broadcast', None}, default None
+            Not yet supported
+        args: tuple
+            Not yet supported
 
         Examples
         --------
@@ -4918,6 +4917,12 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             raise ValueError(
                 "DataFrame.apply currently only supports row wise ops"
             )
+        if raw:
+            raise ValueError("The `raw` kwarg is not yet supported.")
+        if result_type is not None:
+            raise ValueError("The `result_type` kwarg is not yet supported.")
+        if args or kwargs:
+            raise ValueError("args and kwargs are not yet supported.")
 
         return cudf.Series(func(self))
 
@@ -7606,7 +7611,7 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
         # default to the first non-null dtype
         dtypes[idx] = cols[0].dtype
         # If all the non-null dtypes are int/float, find a common dtype
-        if all(is_numerical_dtype(col.dtype) for col in cols):
+        if all(is_numeric_dtype(col.dtype) for col in cols):
             dtypes[idx] = find_common_type([col.dtype for col in cols])
         # If all categorical dtypes, combine the categories
         elif all(
