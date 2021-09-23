@@ -1350,7 +1350,7 @@ def test_quarter():
     ],
 )
 def test_isocalendar_series(data):
-    ps = data
+    ps = data.copy()
     gs = cudf.from_pandas(ps)
 
     expect = ps.dt.isocalendar()
@@ -1376,7 +1376,7 @@ def test_isocalendar_series(data):
     ],
 )
 def test_isocalendar_index(data):
-    ps = data
+    ps = data.copy()
     gs = cudf.from_pandas(ps)
 
     expect = ps.isocalendar()
