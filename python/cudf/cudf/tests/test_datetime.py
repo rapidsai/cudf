@@ -1383,7 +1383,6 @@ def test_isocalendar():
     expect2 = pIndex.isocalendar()
     got2 = gIndex.isocalendar()
 
-    # assert isinstance(got2, cudf.Int8Index)
     assert_eq(expect2.values, got2.values, check_dtype=False)
 
 

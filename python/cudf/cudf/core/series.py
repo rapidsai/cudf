@@ -5542,7 +5542,7 @@ class DatetimeProperties(object):
         1    <NA>
         Name: year, dtype: object
         """
-        return cudf.core.tools.datetimes.to_iso_calendar(self)
+        return cudf.core.tools.datetimes._to_iso_calendar(self)
 
     @property
     def is_month_start(self):

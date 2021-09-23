@@ -1634,7 +1634,7 @@ class DatetimeIndex(GenericIndex):
         2020-05-31 08:00:00  2020    22    7
         1999-12-31 18:40:00  1999    52    5
         """
-        return cudf.core.tools.datetimes.to_iso_calendar(self)
+        return cudf.core.tools.datetimes._to_iso_calendar(self)
 
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
