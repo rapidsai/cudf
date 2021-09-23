@@ -1003,14 +1003,13 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
         case INT64:
           if (s->col.ts_clock_rate) {
             int32_t units = 0;
-            cudf::duration_s t_unit{1};  // Default time unit: 1 second
             if (s->col.converted_type == TIME_MICROS || s->col.converted_type == TIMESTAMP_MICROS) {
-              units = cuda::std::chrono::duration_cast<cudf::duration_us>(t_unit).count();
+              units = cudf::timestamp_us::period::den;
             }
 
             else if (s->col.converted_type == TIME_MILLIS ||
                      s->col.converted_type == TIMESTAMP_MILLIS) {
-              units = cuda::std::chrono::duration_cast<cudf::duration_ms>(t_unit).count();
+              units = cudf::timestamp_ms::period::den;
             }
             if (units && units != s->col.ts_clock_rate)
               s->ts_scale = (s->col.ts_clock_rate < units) ? -(units / s->col.ts_clock_rate)
