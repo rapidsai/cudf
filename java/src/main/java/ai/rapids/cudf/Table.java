@@ -1147,11 +1147,7 @@ public final class Table implements AutoCloseable {
    */
   @Deprecated
   public void writeORC(File outputFile) {
-    // Need to specify the number of columns but leave all column names undefined
-    String[] names = new String[getNumberOfColumns()];
-    Arrays.fill(names, "");
-    ORCWriterOptions opts = ORCWriterOptions.builder().withColumnNames(names).build();
-    writeORC(opts, outputFile);
+    writeORC(ORCWriterOptions.DEFAULT, outputFile);
   }
 
   /**
@@ -1161,7 +1157,6 @@ public final class Table implements AutoCloseable {
    */
   @Deprecated
   public void writeORC(ORCWriterOptions options, File outputFile) {
-    assert options.getColumnNames().length == getNumberOfColumns() : "must specify names for all columns";
     try (TableWriter writer = Table.writeORCChunked(options, outputFile)) {
       writer.write(this);
     }

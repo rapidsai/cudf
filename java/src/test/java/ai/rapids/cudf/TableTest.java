@@ -6876,10 +6876,7 @@ public class TableTest extends CudfTestBase {
   void testORCWriteToBufferChunked() {
     try (Table table0 = getExpectedFileTable();
          MyBufferConsumer consumer = new MyBufferConsumer()) {
-      String[] colNames = new String[table0.getNumberOfColumns()];
-      Arrays.fill(colNames, "");
-      ORCWriterOptions opts = ORCWriterOptions.builder().withColumnNames(colNames).build();
-      try (TableWriter writer = Table.writeORCChunked(opts, consumer)) {
+      try (TableWriter writer = Table.writeORCChunked(ORCWriterOptions.DEFAULT, consumer)) {
         writer.write(table0);
         writer.write(table0);
         writer.write(table0);
@@ -6927,13 +6924,7 @@ public class TableTest extends CudfTestBase {
   void testORCWriteToFileUncompressed() throws IOException {
     File tempFileUncompressed = File.createTempFile("test-uncompressed", ".orc");
     try (Table table0 = getExpectedFileTable()) {
-      String[] colNames = new String[table0.getNumberOfColumns()];
-      Arrays.fill(colNames, "");
-      ORCWriterOptions opts = ORCWriterOptions.builder()
-              .withColumnNames(colNames)
-              .withCompressionType(CompressionType.NONE)
-              .build();
-      table0.writeORC(opts, tempFileUncompressed.getAbsoluteFile());
+      table0.writeORC(ORCWriterOptions.builder().withCompressionType(CompressionType.NONE).build(), tempFileUncompressed.getAbsoluteFile());
       try (Table table2 = Table.readORC(tempFileUncompressed.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table2);
       }

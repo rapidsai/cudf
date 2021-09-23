@@ -338,11 +338,11 @@ def to_orc(df, fname, compression=None, enable_statistics=True, **kwargs):
 
     for col in df._data.columns:
         if isinstance(col, cudf.core.column.StructColumn):
-            warnings.warn(
-                "Support for writing tables with struct columns is "
-                "currently experimental."
+            raise NotImplementedError(
+                "Writing to ORC format is not yet supported with "
+                "Struct columns."
             )
-        if isinstance(col, cudf.core.column.CategoricalColumn):
+        elif isinstance(col, cudf.core.column.CategoricalColumn):
             raise NotImplementedError(
                 "Writing to ORC format is not yet supported with "
                 "Categorical columns."
