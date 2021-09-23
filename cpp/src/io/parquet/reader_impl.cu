@@ -22,6 +22,7 @@
 #include "reader_impl.hpp"
 
 #include <io/comp/gpuinflate.h>
+#include <io/utilities/time_utils.cuh>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
@@ -178,28 +179,6 @@ type_id to_type_id(SchemaElement const& schema,
   }
 
   return type_id::EMPTY;
-}
-
-/**
- * @brief Function that translates cuDF time unit to Parquet clock frequency
- */
-constexpr int32_t to_clockrate(type_id timestamp_type_id)
-{
-  using cuda::std::chrono::duration_cast;
-
-  duration_s t_unit{1};  // Default time unit: 1 second
-
-  switch (timestamp_type_id) {
-    case type_id::DURATION_SECONDS:
-    case type_id::TIMESTAMP_SECONDS: return t_unit.count();
-    case type_id::DURATION_MILLISECONDS:
-    case type_id::TIMESTAMP_MILLISECONDS: return duration_cast<duration_ms>(t_unit).count();
-    case type_id::DURATION_MICROSECONDS:
-    case type_id::TIMESTAMP_MICROSECONDS: return duration_cast<duration_us>(t_unit).count();
-    case type_id::DURATION_NANOSECONDS:
-    case type_id::TIMESTAMP_NANOSECONDS: return duration_cast<duration_ns>(t_unit).count();
-    default: return 0;
-  }
 }
 
 /**
