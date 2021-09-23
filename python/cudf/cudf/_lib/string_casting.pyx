@@ -518,6 +518,9 @@ def int2timestamp(
     Parameters
     ----------
     input_col : input column of type timestamp in integer format
+    format : The string specifying output format
+    names : The string names to use for weekdays ("%a", "%A") and
+    months ("%b", "%B")
 
     Returns
     -------

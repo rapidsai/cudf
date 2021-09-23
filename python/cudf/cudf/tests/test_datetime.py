@@ -1364,7 +1364,14 @@ def test_isocalendar_series(data):
     [
         pd.DatetimeIndex([], dtype="datetime64[ns]"),
         pd.DatetimeIndex([None, None], dtype="datetime64[ns]"),
-        pd.DatetimeIndex(["2020-05-31 08:00:00"], dtype="datetime64[ns]"),
+        pd.DatetimeIndex(
+            [
+                "2020-05-31 08:00:00",
+                "1999-12-31 18:40:00",
+                "2000-12-31 04:00:00",
+            ],
+            dtype="datetime64[ns]",
+        ),
         pd.DatetimeIndex(["2100-03-14 07:30:00"], dtype="datetime64[ns]"),
     ],
 )
