@@ -9,7 +9,7 @@ from numbers import Number
 from types import SimpleNamespace
 from typing import Any, Mapping, Sequence, Union, cast
 import locale
-from locale import nl_langinfo as nl_langinfo
+from locale import nl_langinfo
 
 import numpy as np
 import pandas as pd

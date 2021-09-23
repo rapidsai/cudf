@@ -1336,21 +1336,21 @@ def test_quarter():
     assert_eq(expect2.values, got2.values, check_dtype=False)
 
 
-def test_isocalendar():
-    data = [
-        "2020-05-31 08:00:00",
-        "1999-12-31 18:40:00",
-        "2000-12-31 04:00:00",
-        "1900-02-28 07:00:00",
-        "1800-03-14 07:30:00",
-        "2100-03-14 07:30:00",
-        "1970-01-01 00:00:00",
-        "1969-12-31 12:59:00",
-    ]
-    dtype = "datetime64[s]"
-
-    # Series
-    ps = pd.Series(data, dtype=dtype)
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.Series([], dtype="datetime64[ns]"),
+        pd.Series(pd.date_range("2010-01-01", "2010-02-01")),
+        pd.Series([None, None], dtype="datetime64[ns]"),
+        pd.Series("2020-05-31 08:00:00", dtype="datetime64[s]"),
+        pd.Series(
+            pd.date_range(start="2021-07-25", end="2021-07-30"),
+            index=["a", "b", "c", "d", "e", "f"],
+        ),
+    ],
+)
+def test_isocalendar_series(data):
+    ps = data
     gs = cudf.from_pandas(ps)
 
     expect = ps.dt.isocalendar()
@@ -1358,32 +1358,24 @@ def test_isocalendar():
 
     assert_eq(expect, got, check_dtype=False)
 
-    # Series day
-    expectday = ps.dt.isocalendar().day
-    gotday = gs.dt.isocalendar().day
 
-    assert_eq(expectday, gotday, check_dtype=False)
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.DatetimeIndex([], dtype="datetime64[ns]"),
+        pd.DatetimeIndex([None, None], dtype="datetime64[ns]"),
+        pd.DatetimeIndex(["2020-05-31 08:00:00"], dtype="datetime64[ns]"),
+        pd.DatetimeIndex(["2100-03-14 07:30:00"], dtype="datetime64[ns]"),
+    ],
+)
+def test_isocalendar_index(data):
+    ps = data
+    gs = cudf.from_pandas(ps)
 
-    # Series week
-    expectweek = ps.dt.isocalendar().week
-    gotweek = gs.dt.isocalendar().week
+    expect = ps.isocalendar()
+    got = gs.isocalendar()
 
-    assert_eq(expectweek, gotweek, check_dtype=False)
-
-    # Series year
-    expectyear = ps.dt.isocalendar().year
-    gotyear = gs.dt.isocalendar().year
-
-    assert_eq(expectyear, gotyear, check_dtype=False)
-
-    # DatetimeIndex
-    pIndex = pd.DatetimeIndex(data)
-    gIndex = cudf.from_pandas(pIndex)
-
-    expect2 = pIndex.isocalendar()
-    got2 = gIndex.isocalendar()
-
-    assert_eq(expect2.values, got2.values, check_dtype=False)
+    assert_eq(expect, got, check_dtype=False)
 
 
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)
