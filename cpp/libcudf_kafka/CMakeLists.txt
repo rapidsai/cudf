@@ -25,7 +25,7 @@ include(rapids-cuda)
 include(rapids-export)
 include(rapids-find)
 
-project(CUDA_KAFKA VERSION 21.10.00 LANGUAGES CXX)
+project(CUDA_KAFKA VERSION 21.12.00 LANGUAGES CXX)
 
 # Set a default build type if none was specified
 rapids_cmake_build_type(Release)
