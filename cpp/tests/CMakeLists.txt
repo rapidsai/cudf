@@ -33,6 +33,7 @@ endfunction()
 # - column tests ----------------------------------------------------------------------------------
 ConfigureTest(COLUMN_TEST
     column/bit_cast_test.cpp
+    column/column_view_shallow_test.cpp
     column/column_test.cu
     column/column_device_view_test.cu
     column/compound_test.cu)
@@ -62,6 +63,7 @@ ConfigureTest(GROUPBY_TEST
     groupby/count_tests.cpp
     groupby/groups_tests.cpp
     groupby/keys_tests.cpp
+    groupby/lists_tests.cpp
     groupby/m2_tests.cpp
     groupby/min_tests.cpp
     groupby/max_scan_tests.cpp

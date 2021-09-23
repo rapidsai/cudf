@@ -22,8 +22,6 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
-#include "cudf/aggregation.hpp"
-#include "cudf/types.hpp"
 
 using namespace cudf::test::iterators;
 
@@ -34,7 +32,7 @@ template <typename V>
 struct groupby_structs_test : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(groupby_structs_test, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(groupby_structs_test, cudf::test::FixedWidthTypes);
 
 using V       = int32_t;  // Type of Aggregation Column.
 using M0      = int32_t;  // Type of STRUCT's first (i.e. 0th) member.
@@ -79,10 +77,24 @@ void print_agg_results(column_view const& keys, column_view const& vals)
   }
 }
 
-void test_sum_agg(column_view const& keys,
-                  column_view const& values,
-                  column_view const& expected_keys,
-                  column_view const& expected_values)
+void test_sort_based_sum_agg(column_view const& keys,
+                             column_view const& values,
+                             column_view const& expected_keys,
+                             column_view const& expected_values)
+{
+  test_single_agg(keys,
+                  values,
+                  expected_keys,
+                  expected_values,
+                  sum_agg(),
+                  force_use_sort_impl::YES,
+                  null_policy::INCLUDE);
+}
+
+void test_hash_based_sum_agg(column_view const& keys,
+                             column_view const& values,
+                             column_view const& expected_keys,
+                             column_view const& expected_values)
 {
   test_single_agg(keys,
                   values,
@@ -91,13 +103,15 @@ void test_sum_agg(column_view const& keys,
                   sum_agg(),
                   force_use_sort_impl::NO,
                   null_policy::INCLUDE);
-  test_single_agg(keys,
-                  values,
-                  expected_keys,
-                  expected_values,
-                  sum_agg(),
-                  force_use_sort_impl::YES,
-                  null_policy::INCLUDE);
+}
+
+void test_sum_agg(column_view const& keys,
+                  column_view const& values,
+                  column_view const& expected_keys,
+                  column_view const& expected_values)
+{
+  test_sort_based_sum_agg(keys, values, expected_keys, expected_values);
+  test_hash_based_sum_agg(keys, values, expected_keys, expected_values);
 }
 
 }  // namespace
@@ -312,7 +326,8 @@ TYPED_TEST(groupby_structs_test, lists_are_unsupported)
   // clang-format on
   auto keys = structs{{member_0, member_1}};
 
-  EXPECT_THROW(test_sum_agg(keys, values, keys, values), cudf::logic_error);
+  EXPECT_THROW(test_sort_based_sum_agg(keys, values, keys, values), cudf::logic_error);
+  EXPECT_THROW(test_hash_based_sum_agg(keys, values, keys, values), cudf::logic_error);
 }
 
 }  // namespace test
