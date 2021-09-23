@@ -509,7 +509,7 @@ def from_booleans(Column input_col):
 
 def int2timestamp(
         Column input_col,
-        format,
+        string format,
         Column names):
     """
     Converting/Casting input date-time column to string
