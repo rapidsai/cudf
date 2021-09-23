@@ -69,14 +69,11 @@ __global__ void compute_percentiles_kernel(device_span<offset_type const> tdiges
 
   // size of the digest we're querying
   auto const tdigest_size = tdigest_offsets[tdigest_index + 1] - tdigest_offsets[tdigest_index];
-  if (tdigest_size == 0) {
-    // no work to do. values will be set to null
-    return;
-  }
+  // no work to do. values will be set to null
+  if (tdigest_size == 0 || !percentiles.is_valid(pindex)) { return; }
 
   output[tid] = [&]() {
-    double const percentage =
-      percentiles.is_valid(pindex) ? percentiles.element<double>(pindex) : 0.0;
+    double const percentage         = percentiles.element<double>(pindex);
     double const* cumulative_weight = cumulative_weight_ + tdigest_offsets[tdigest_index];
 
     // centroids for this particular tdigest
@@ -207,15 +204,27 @@ std::unique_ptr<column> compute_approx_percentiles(structs_column_view const& in
                                 weight.begin<double>(),
                                 cumulative_weights->mutable_view().begin<double>());
 
-  // output is a column of size input.size() * percentiles.size()
-  auto result = cudf::make_fixed_width_column(data_type{type_id::FLOAT64},
-                                              input.size() * percentiles.size(),
-                                              mask_state::UNALLOCATED,
-                                              stream,
-                                              mr);
-
   auto percentiles_cdv = column_device_view::create(percentiles);
-  auto centroids       = cudf::detail::make_counting_transform_iterator(
+
+  // leaf is a column of size input.size() * percentiles.size()
+  auto const num_output_values = input.size() * percentiles.size();
+
+  // null percentiles become null results.
+  auto [null_mask, null_count] = [&]() {
+    return percentiles.null_count() != 0
+             ? cudf::detail::valid_if(
+                 thrust::make_counting_iterator<size_type>(0),
+                 thrust::make_counting_iterator<size_type>(0) + num_output_values,
+                 [percentiles = *percentiles_cdv] __device__(size_type i) {
+                   return percentiles.is_valid(i % percentiles.size());
+                 })
+             : std::pair<rmm::device_buffer, size_type>{rmm::device_buffer{}, 0};
+  }();
+
+  auto result = cudf::make_fixed_width_column(
+    data_type{type_id::FLOAT64}, num_output_values, std::move(null_mask), null_count, stream, mr);
+
+  auto centroids = cudf::detail::make_counting_transform_iterator(
     0, make_centroid{mean.begin<double>(), weight.begin<double>()});
 
   constexpr size_type block_size = 256;
