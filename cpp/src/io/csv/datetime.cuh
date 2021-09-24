@@ -183,19 +183,19 @@ __inline__ __device__ cudf::duration_ms extract_time(char const* begin, char con
 }
 
 /**
- * @brief Parses a datetime string and computes the corresponding time stamp.
+ * @brief Parses a datetime string and computes the corresponding timestamp.
  *
  * This function takes a string and produces a `timestamp_type` representation.
  * Acceptable formats are a combination of `MM/YYYY` and `MM/DD/YYYY`.
  *
- * @tparam timestamp_type Type of output time stamp
+ * @tparam timestamp_type Type of output timestamp
  * @param begin Pointer to the first element of the string
  * @param end Pointer to the first element after the string
  * @param dayfirst Flag to indicate day/month or month/day order
- * @return Time stamp converted to `timestamp_type`
+ * @return Timestamp converted to `timestamp_type`
  */
 template <typename timestamp_type>
-__inline__ __device__ timestamp_type to_date_time(char const* begin, char const* end, bool dayfirst)
+__inline__ __device__ timestamp_type to_timestamp(char const* begin, char const* end, bool dayfirst)
 {
   using duration_type = typename timestamp_type::duration;
 

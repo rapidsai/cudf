@@ -313,7 +313,7 @@ __inline__ __device__ T decode_value(char const* begin,
   __inline__ __device__ Type decode_value(                              \
     char const* begin, char const* end, parse_options_view const& opts) \
   {                                                                     \
-    return to_date_time<Type>(begin, end, opts.dayfirst);               \
+    return to_timestamp<Type>(begin, end, opts.dayfirst);               \
   }
 #endif
 TIMESTAMP_DECODE_VALUE(timestamp_D);
