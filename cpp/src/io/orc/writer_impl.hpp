@@ -351,7 +351,7 @@ class writer::impl {
   rmm::cuda_stream_view stream = rmm::cuda_stream_default;
 
   stripe_size_limits max_stripe_size;
-  size_type row_index_stride        = default_row_index_stride;
+  size_type row_index_stride;
   size_t compression_blocksize_     = DEFAULT_COMPRESSION_BLOCKSIZE;
   CompressionKind compression_kind_ = CompressionKind::NONE;
 
