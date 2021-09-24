@@ -552,16 +552,16 @@ void aggregate_result_functor::operator()<aggregation::MERGE_M2>(aggregation con
 template <>
 void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation const& agg)
 {
-  if (cache.has_result(col_idx, agg)) { return; }
+  if (cache.has_result(values, agg)) { return; }
 
   auto const max_centroids =
     dynamic_cast<cudf::detail::tdigest_aggregation const&>(agg).max_centroids;
 
   auto count_agg = make_count_aggregation();
   operator()<aggregation::COUNT_VALID>(*count_agg);
-  column_view valid_counts = cache.get_result(col_idx, *count_agg);
+  column_view valid_counts = cache.get_result(values, *count_agg);
 
-  cache.add_result(col_idx,
+  cache.add_result(values,
                    agg,
                    detail::group_tdigest(
                      get_sorted_values(),
@@ -601,11 +601,11 @@ void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation cons
 template <>
 void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregation const& agg)
 {
-  if (cache.has_result(col_idx, agg)) { return; }
+  if (cache.has_result(values, agg)) { return; }
 
   auto const max_centroids =
     dynamic_cast<cudf::detail::merge_tdigest_aggregation const&>(agg).max_centroids;
-  cache.add_result(col_idx,
+  cache.add_result(values,
                    agg,
                    detail::group_merge_tdigest(get_grouped_values(),
                                                helper.group_offsets(stream),
