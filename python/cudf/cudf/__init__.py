@@ -96,6 +96,7 @@ from cudf.io import (
     read_json,
     read_orc,
     read_parquet,
+    read_text,
 )
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import set_allocator

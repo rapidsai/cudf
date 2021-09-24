@@ -104,6 +104,7 @@ CUDA_HOST_DEVICE_CALLABLE void clear_bit_unsafe(bitmask_type* bitmask, size_type
 /**
  * @brief Indicates whether the specified bit is set to `1`
  *
+ * @param bitmask The bitmask containing the bit to clear
  * @param bit_index Index of the bit to test
  * @return true The specified bit is `1`
  * @return false  The specified bit is `0`
@@ -112,6 +113,23 @@ CUDA_HOST_DEVICE_CALLABLE bool bit_is_set(bitmask_type const* bitmask, size_type
 {
   assert(nullptr != bitmask);
   return bitmask[word_index(bit_index)] & (bitmask_type{1} << intra_word_index(bit_index));
+}
+
+/**
+ * @brief optional-like interface to check if a specified bit of a bitmask is set.
+ *
+ * @param bitmask The bitmask containing the bit to clear
+ * @param bit_index Index of the bit to test
+ * @param default_value Value to return if `bitmask` is nullptr
+ * @return true The specified bit is `1`
+ * @return false  The specified bit is `0`
+ * @return `default_value` if `bitmask` is nullptr
+ */
+CUDA_HOST_DEVICE_CALLABLE bool bit_value_or(bitmask_type const* bitmask,
+                                            size_type bit_index,
+                                            bool default_value)
+{
+  return bitmask != nullptr ? bit_is_set(bitmask, bit_index) : default_value;
 }
 
 /**

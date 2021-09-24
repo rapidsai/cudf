@@ -434,6 +434,95 @@ class Frame(libcudf.table.Table):
             res.index.names = self._index.names
         return res
 
+    def _sort_index(
+        self,
+        axis=0,
+        level=None,
+        ascending=True,
+        inplace=False,
+        kind=None,
+        na_position="last",
+        sort_remaining=True,
+        ignore_index=False,
+    ):
+        """
+        Helper for .sort_index
+
+        Parameters
+        ----------
+        axis : {0 or ‘index’, 1 or ‘columns’}, default 0
+            The axis along which to sort. The value 0 identifies the rows,
+            and 1 identifies the columns.
+        level : int or level name or list of ints or list of level names
+            If not None, sort on values in specified index level(s).
+            This is only useful in the case of MultiIndex.
+        ascending : bool, default True
+            Sort ascending vs. descending.
+        inplace : bool, default False
+            If True, perform operation in-place.
+        kind : sorting method such as `quick sort` and others.
+            Not yet supported.
+        na_position : {‘first’, ‘last’}, default ‘last’
+            Puts NaNs at the beginning if first; last puts NaNs at the end.
+        sort_remaining : bool, default True
+            Not yet supported
+        ignore_index : bool, default False
+            if True, index will be replaced with RangeIndex.
+
+        Returns
+        -------
+        DataFrame/Series or None
+        """
+        if kind is not None:
+            raise NotImplementedError("kind is not yet supported")
+
+        if not sort_remaining:
+            raise NotImplementedError(
+                "sort_remaining == False is not yet supported"
+            )
+
+        if axis in (0, "index"):
+            if isinstance(self.index, cudf.MultiIndex):
+                if level is None:
+                    midx_data = self.index.to_frame(index=False)
+                else:
+                    # Pandas currently don't handle na_position
+                    # in case of MultiIndex
+                    if ascending is True:
+                        na_position = "first"
+                    else:
+                        na_position = "last"
+
+                    if cudf.api.types.is_list_like(level):
+                        labels = [
+                            self.index._get_level_label(lvl) for lvl in level
+                        ]
+                    else:
+                        labels = [self.index._get_level_label(level)]
+                    midx_data = cudf.DataFrame._from_data(
+                        self.index._data.select_by_label(labels)
+                    )
+                inds = midx_data.argsort(
+                    ascending=ascending, na_position=na_position
+                )
+                outdf = self.take(inds)
+            elif (ascending and self.index.is_monotonic_increasing) or (
+                not ascending and self.index.is_monotonic_decreasing
+            ):
+                outdf = self.copy()
+            else:
+                inds = self.index.argsort(
+                    ascending=ascending, na_position=na_position
+                )
+                outdf = self.take(inds)
+        else:
+            labels = sorted(self._data.names, reverse=not ascending)
+            outdf = self[labels]
+
+        if ignore_index is True:
+            outdf = outdf.reset_index(drop=True)
+        return self._mimic_inplace(outdf, inplace=inplace)
+
     def _get_columns_by_label(self, labels, downcast=False):
         """
         Returns columns of the Frame specified by `labels`
