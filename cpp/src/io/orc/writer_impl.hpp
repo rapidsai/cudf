@@ -268,23 +268,6 @@ class writer::impl {
                              std::map<uint32_t, size_t> const& decimal_column_sizes);
 
   /**
-   * @brief Encodes the input columns into streams.
-   *
-   * @param orc_table Non-owning view of a cuDF table w/ ORC-related info
-   * @param dict_data Dictionary data memory
-   * @param dict_index Dictionary index memory
-   * @param dec_chunk_sizes Information about size of encoded decimal columns
-   * @param segmentation stripe and rowgroup ranges
-   * @param stream CUDA stream used for device memory operations and kernel launches
-   * @return Encoded data and per-chunk stream descriptors
-   */
-  encoded_data encode_columns(orc_table_view const& orc_table,
-                              string_dictionaries&& dictionaries,
-                              encoder_decimal_info&& dec_chunk_sizes,
-                              file_segmentation const& segmentation,
-                              orc_streams const& streams);
-
-  /**
    * @brief Returns stripe information after compacting columns' individual data
    * chunks into contiguous data streams.
    *
@@ -380,14 +363,11 @@ class writer::impl {
   cudf::io::orc::Metadata md;
   // current write position for rowgroups/chunks
   size_t current_chunk_offset;
-  // optional user metadata
-  table_metadata const* user_metadata = nullptr;
-  // only used in the write_chunked() case. copied from the (optionally) user supplied
-  // argument to write_chunked_begin()
-  table_metadata_with_nullability user_metadata_with_nullability;
   // special parameter only used by detail::write() to indicate that we are guaranteeing
   // a single table write.  this enables some internal optimizations.
   bool const single_write_mode;
+  // optional user metadata
+  std::unique_ptr<table_input_metadata> table_meta;
   // to track if the output has been written to sink
   bool closed = false;
 

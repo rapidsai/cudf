@@ -102,9 +102,8 @@ include(cmake/Modules/ConfigureCUDA.cmake) # set other CUDA compilation flags
 # - dependencies ----------------------------------------------------------------------------------
 
 # find zlib
-rapids_find_package(ZLIB REQUIRED
-    BUILD_EXPORT_SET cudf-exports
-    INSTALL_EXPORT_SET cudf-exports)
+rapids_find_package(ZLIB REQUIRED)
+
 # find Threads (needed by cudftestutil)
 rapids_find_package(Threads REQUIRED
     BUILD_EXPORT_SET cudf-exports
@@ -237,8 +236,9 @@ add_library(cudf
     src/groupby/sort/group_max_scan.cu
     src/groupby/sort/group_min_scan.cu
     src/groupby/sort/group_rank_scan.cu
-    src/groupby/sort/group_sum_scan.cu
     src/groupby/sort/group_replace_nulls.cu
+    src/groupby/sort/group_sum_scan.cu
+    src/groupby/sort/group_tdigest.cu
     src/groupby/sort/sort_helper.cu
     src/hash/hashing.cu
     src/hash/md5_hash.cu
@@ -319,6 +319,7 @@ add_library(cudf
     src/merge/merge.cu
     src/partitioning/partitioning.cu
     src/partitioning/round_robin.cu
+    src/quantiles/tdigest/tdigest.cu
     src/quantiles/quantile.cu
     src/quantiles/quantiles.cu
     src/reductions/all.cu
@@ -506,11 +507,11 @@ add_dependencies(cudf jitify_preprocess_run)
 
 # Specify the target module library dependencies
 target_link_libraries(cudf
-           PUBLIC ZLIB::ZLIB
-                  ${ARROW_LIBRARIES}
+           PUBLIC ${ARROW_LIBRARIES}
                   cudf::Thrust
                   rmm::rmm
            PRIVATE cuco::cuco
+	             ZLIB::ZLIB
                    nvcomp::nvcomp)
 
 # Add Conda library, and include paths if specified
@@ -566,6 +567,7 @@ add_library(cudftestutil STATIC
             tests/utilities/base_fixture.cpp
             tests/utilities/column_utilities.cu
             tests/utilities/table_utilities.cu
+            tests/io/metadata_utilities.cpp
             tests/strings/utilities.cu)
 
 set_target_properties(cudftestutil

@@ -3485,6 +3485,106 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupByApproxPercentileReproCase() {
+    double[] percentiles = {0.25, 0.50, 0.75};
+    try (Table t1 = new Table.TestBuilder()
+            .column("a", "a", "b", "c", "d")
+            .column(1084.0, 1719.0, 15948.0, 148029.0, 1269761.0)
+            .build();
+         Table t2 = t1
+            .groupBy(0)
+            .aggregate(GroupByAggregation.createTDigest(100).onColumn(1));
+         Table sorted = t2.orderBy(OrderByArg.asc(0));
+         ColumnVector actual = sorted.getColumn(1).approxPercentile(percentiles);
+         ColumnVector expected = ColumnVector.fromLists(
+             new ListType(false, new BasicType(false, DType.FLOAT64)),
+             Arrays.asList(1084.0, 1084.0, 1719.0),
+             Arrays.asList(15948.0, 15948.0, 15948.0),
+             Arrays.asList(148029.0, 148029.0, 148029.0),
+             Arrays.asList(1269761.0, 1269761.0, 1269761.0)
+         )) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testGroupByApproxPercentile() {
+    double[] percentiles = {0.25, 0.50, 0.75};
+    try (Table t1 = new Table.TestBuilder()
+            .column("a", "a", "a", "b", "b", "b")
+            .column(100, 150, 160, 70, 110, 160)
+            .build();
+      Table t2 = t1
+          .groupBy(0)
+          .aggregate(GroupByAggregation.createTDigest(1000).onColumn(1));
+      Table sorted = t2.orderBy(OrderByArg.asc(0));
+      ColumnVector actual = sorted.getColumn(1).approxPercentile(percentiles);
+      ColumnVector expected = ColumnVector.fromLists(
+        new ListType(false, new BasicType(false, DType.FLOAT64)),
+          Arrays.asList(100d, 150d, 160d),
+          Arrays.asList(70d, 110d, 160d)
+      )) {
+        assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testMergeApproxPercentile() {
+    double[] percentiles = {0.25, 0.50, 0.75};
+    try (Table t1 = new Table.TestBuilder()
+            .column("a", "a", "a", "b", "b", "b")
+            .column(100, 150, 160, 70, 110, 160)
+            .build();
+         Table t2 = t1
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.createTDigest(1000).onColumn(1));
+         Table t3 = t1
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.createTDigest(1000).onColumn(1));
+         Table t4 = Table.concatenate(t2, t3);
+         Table t5 = t4
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.mergeTDigest(1000).onColumn(1));
+         Table sorted = t5.orderBy(OrderByArg.asc(0));
+         ColumnVector actual = sorted.getColumn(1).approxPercentile(percentiles);
+         ColumnVector expected = ColumnVector.fromLists(
+                 new ListType(false, new BasicType(false, DType.FLOAT64)),
+                 Arrays.asList(100d, 150d, 160d),
+                 Arrays.asList(70d, 110d, 160d)
+         )) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testMergeApproxPercentile2() {
+    double[] percentiles = {0.25, 0.50, 0.75};
+    try (Table t1 = new Table.TestBuilder()
+            .column("a", "a", "a", "b", "b", "b")
+            .column(70, 110, 160, 100, 150, 160)
+            .build();
+         Table t2 = t1
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.createTDigest(1000).onColumn(1));
+         Table t3 = t1
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.createTDigest(1000).onColumn(1));
+         Table t4 = Table.concatenate(t2, t3);
+         Table t5 = t4
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.mergeTDigest(1000).onColumn(1));
+         Table sorted = t5.orderBy(OrderByArg.asc(0));
+         ColumnVector actual = sorted.getColumn(1).approxPercentile(percentiles);
+         ColumnVector expected = ColumnVector.fromLists(
+                 new ListType(false, new BasicType(false, DType.FLOAT64)),
+                 Arrays.asList(70d, 110d, 160d),
+                 Arrays.asList(100d, 150d, 160d)
+         )) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
   void testGroupByUniqueCount() {
     try (Table t1 = new Table.TestBuilder()
             .column( "1",  "1",  "1",  "1",  "1",  "1")
@@ -6669,8 +6769,9 @@ public class TableTest extends CudfTestBase {
     HostColumnVector.StructType structType = new HostColumnVector.StructType(true,
      Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
         new HostColumnVector.BasicType(true, DType.STRING)));
-    try (Table t0 = new Table(ColumnVector.fromLists(new HostColumnVector.ListType(true,
-     structType), list1, list2, list3))) {
+    try (ColumnVector listColumn = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+            structType), list1, list2, list3);
+         Table t0 = new Table(listColumn)) {
       try (TableWriter writer = Table.writeParquetChunked(options, f)) {
         writer.write(t0);
       }
@@ -6875,7 +6976,10 @@ public class TableTest extends CudfTestBase {
   void testORCWriteToBufferChunked() {
     try (Table table0 = getExpectedFileTable();
          MyBufferConsumer consumer = new MyBufferConsumer()) {
-      try (TableWriter writer = Table.writeORCChunked(ORCWriterOptions.DEFAULT, consumer)) {
+      String[] colNames = new String[table0.getNumberOfColumns()];
+      Arrays.fill(colNames, "");
+      ORCWriterOptions opts = ORCWriterOptions.builder().withColumnNames(colNames).build();
+      try (TableWriter writer = Table.writeORCChunked(opts, consumer)) {
         writer.write(table0);
         writer.write(table0);
         writer.write(table0);
@@ -6923,7 +7027,13 @@ public class TableTest extends CudfTestBase {
   void testORCWriteToFileUncompressed() throws IOException {
     File tempFileUncompressed = File.createTempFile("test-uncompressed", ".orc");
     try (Table table0 = getExpectedFileTable()) {
-      table0.writeORC(ORCWriterOptions.builder().withCompressionType(CompressionType.NONE).build(), tempFileUncompressed.getAbsoluteFile());
+      String[] colNames = new String[table0.getNumberOfColumns()];
+      Arrays.fill(colNames, "");
+      ORCWriterOptions opts = ORCWriterOptions.builder()
+              .withColumnNames(colNames)
+              .withCompressionType(CompressionType.NONE)
+              .build();
+      table0.writeORC(opts, tempFileUncompressed.getAbsoluteFile());
       try (Table table2 = Table.readORC(tempFileUncompressed.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table2);
       }
