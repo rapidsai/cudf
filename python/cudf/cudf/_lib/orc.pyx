@@ -136,7 +136,10 @@ cdef compression_type _get_comp_type(object compression):
 cpdef write_orc(Table table,
                 object path_or_buf,
                 object compression=None,
-                bool enable_statistics=True):
+                bool enable_statistics=True,
+                size_t stripe_size_bytes=67108864,
+                size_type stripe_size_rows=1000000,
+                size_type row_index_stride=10000):
     """
     Cython function to call into libcudf API, see `write_orc`.
 
@@ -176,6 +179,9 @@ cpdef write_orc(Table table,
         ).metadata(tbl_meta.get())
         .compression(compression_)
         .enable_statistics(<bool> (True if enable_statistics else False))
+        .stripe_size_bytes(stripe_size_bytes)
+        .stripe_size_rows(stripe_size_rows)
+        .row_index_stride(row_index_stride)
         .build()
     )
 

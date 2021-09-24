@@ -387,7 +387,16 @@ def read_orc(
 
 
 @ioutils.doc_to_orc()
-def to_orc(df, fname, compression=None, enable_statistics=True, **kwargs):
+def to_orc(
+    df,
+    fname,
+    compression=None,
+    enable_statistics=True,
+    stripe_size_bytes=67108864,
+    stripe_size_rows=1000000,
+    row_index_stride=10000,
+    **kwargs,
+):
     """{docstring}"""
 
     for col in df._data.columns:
@@ -414,9 +423,25 @@ def to_orc(df, fname, compression=None, enable_statistics=True, **kwargs):
     if ioutils.is_fsspec_open_file(path_or_buf):
         with path_or_buf as file_obj:
             file_obj = ioutils.get_IOBase_writer(file_obj)
-            liborc.write_orc(df, file_obj, compression, enable_statistics)
+            liborc.write_orc(
+                df,
+                file_obj,
+                compression,
+                enable_statistics,
+                stripe_size_bytes,
+                stripe_size_rows,
+                row_index_stride,
+            )
     else:
-        liborc.write_orc(df, path_or_buf, compression, enable_statistics)
+        liborc.write_orc(
+            df,
+            path_or_buf,
+            compression,
+            enable_statistics,
+            stripe_size_bytes,
+            stripe_size_rows,
+            row_index_stride,
+        )
 
 
 ORCWriter = liborc.ORCWriter
