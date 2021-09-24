@@ -703,8 +703,9 @@ endif()
 # version shipped with the CUDA Toolkit we need to make sure it is a non-SYSTEM
 # include on the CMake side.
 #
-# Todo this currently we move the includes from the cudf::cudf target to a
+# To do this currently, we move the includes from the cudf::cudf target to a
 # non-import target to ensure they are `-I` instead of `-isystem`
+
 add_library(cudf_non_system_includes INTERFACE)
 target_link_libraries(cudf::cudf INTERFACE cudf_non_system_includes)
 
