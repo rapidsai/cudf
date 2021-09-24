@@ -13,7 +13,6 @@ from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype
 from cudf.testing._utils import (
     FLOAT_TYPES,
     INTEGER_TYPES,
-    NUMERIC_TYPES,
     SIGNED_TYPES,
     _decimal_series,
     assert_eq,
