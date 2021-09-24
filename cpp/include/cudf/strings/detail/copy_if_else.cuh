@@ -36,9 +36,9 @@ namespace detail {
  * output[i] = filter_fn(i) ? lhs(i).first : rhs(i).first
  * ```
  *
- * @tparam StringIterLeft Optional iterator returning thrust::optional<string_view> where the
+ * @tparam StringIterLeft An optional-iterator returning thrust::optional<string_view> where the
  *         the result is a string_view only if the element is valid.
- * @tparam StringIterRight Optional iterator returning thrust::optional<string_view> where the
+ * @tparam StringIterRight An optional-iterator returning thrust::optional<string_view> where the
  *         the result is a string_view only if the element is valid.
  * @tparam Filter Functor that takes an index and returns a boolean.
  *
