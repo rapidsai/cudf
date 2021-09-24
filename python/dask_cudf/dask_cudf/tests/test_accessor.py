@@ -499,3 +499,18 @@ def test_dask_struct_field_Int_Error(data):
 
     with pytest.raises(IndexError):
         got.struct.field(1000).compute()
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [{}, {}, {}],
+        [{"a": 100, "b": "abc"}, {"a": 42, "b": "def"}, {"a": -87, "b": ""}],
+        [{"a": [1, 2, 3], "b": {"c": 101}}, {"a": [4, 5], "b": {"c": 102}}],
+    ],
+)
+def test_struct_explode(data):
+    expect = Series(data).struct.explode()
+    got = dgd.from_cudf(Series(data), 2).struct.explode()
+
+    assert_eq(expect, got.compute())
