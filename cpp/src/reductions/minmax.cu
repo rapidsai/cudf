@@ -60,7 +60,6 @@ struct minmax_pair {
  * @param d_in input iterator
  * @param num_items number of items to reduce
  * @param binary_op binary operator used to reduce
- * @param mr Device resource used for result allocation
  * @param stream CUDA stream to run kernels on.
  * @return rmm::device_scalar<OutputType>
  */
