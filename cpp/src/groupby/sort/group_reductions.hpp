@@ -443,7 +443,6 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
                                        rmm::mr::device_memory_resource* mr);
 /**
  * @brief Internal API to find correlation of child columns of a non-nullable struct column.
- * TODO fill documentation.
  *
  * @param values_0 The first grouped values column to correlate
  * @param values_1 The second grouped values column to correlate
@@ -454,8 +453,8 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
  * @param mean_1 The mean of the second grouped values column
  * @param stddev_0 The standard deviation of the first grouped values column
  * @param stddev_1 The standard deviation of the second grouped values column
- * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> group_correlation(column_view const& values_0,
                                           column_view const& values_1,
