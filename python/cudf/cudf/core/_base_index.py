@@ -45,6 +45,11 @@ class BaseIndex(Serializable):
         raise NotImplementedError
 
     @property
+    def size(self):
+        # The size of an index is always its length irrespective of dimension.
+        return len(self)
+
+    @property
     def values(self):
         return self._values.values
 
@@ -161,6 +166,38 @@ class BaseIndex(Serializable):
             )
         else:
             return self
+
+    @property
+    def is_monotonic(self):
+        """Return boolean if values in the object are monotonic_increasing.
+
+        This property is an alias for :attr:`is_monotonic_increasing`.
+
+        Returns
+        -------
+        bool
+        """
+        return self.is_monotonic_increasing
+
+    @property
+    def is_monotonic_increasing(self):
+        """Return boolean if values in the object are monotonically increasing.
+
+        Returns
+        -------
+        bool
+        """
+        raise NotImplementedError
+
+    @property
+    def is_monotonic_decreasing(self):
+        """Return boolean if values in the object are monotonically decreasing.
+
+        Returns
+        -------
+        bool
+        """
+        raise NotImplementedError
 
     @property
     def nlevels(self):

@@ -525,6 +525,97 @@ void aggregate_result_functor::operator()<aggregation::MERGE_M2>(aggregation con
       get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream, mr));
 };
 
+/**
+ * @brief Generate a tdigest column from a grouped set of numeric input values.
+ *
+ * The tdigest column produced is of the following structure:
+ *
+ * struct {
+ *   // centroids for the digest
+ *   list {
+ *    struct {
+ *      double    // mean
+ *      double    // weight
+ *    },
+ *    ...
+ *   }
+ *   // these are from the input stream, not the centroids. they are used
+ *   // during the percentile_approx computation near the beginning or
+ *   // end of the quantiles
+ *   double       // min
+ *   double       // max
+ * }
+ *
+ * Each output row is a single tdigest.  The length of the row is the "size" of the
+ * tdigest, each element of which represents a weighted centroid (mean, weight).
+ */
+template <>
+void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation const& agg)
+{
+  if (cache.has_result(col_idx, agg)) { return; }
+
+  auto const max_centroids =
+    dynamic_cast<cudf::detail::tdigest_aggregation const&>(agg).max_centroids;
+
+  auto count_agg = make_count_aggregation();
+  operator()<aggregation::COUNT_VALID>(*count_agg);
+  column_view valid_counts = cache.get_result(col_idx, *count_agg);
+
+  cache.add_result(col_idx,
+                   agg,
+                   detail::group_tdigest(
+                     get_sorted_values(),
+                     helper.group_offsets(stream),
+                     helper.group_labels(stream),
+                     {valid_counts.begin<size_type>(), static_cast<size_t>(valid_counts.size())},
+                     helper.num_groups(stream),
+                     max_centroids,
+                     stream,
+                     mr));
+};
+
+/**
+ * @brief Generate a merged tdigest column from a grouped set of input tdigest columns.
+ *
+ * The tdigest column produced is of the following structure:
+ *
+ * struct {
+ *   // centroids for the digest
+ *   list {
+ *    struct {
+ *      double    // mean
+ *      double    // weight
+ *    },
+ *    ...
+ *   }
+ *   // these are from the input stream, not the centroids. they are used
+ *   // during the percentile_approx computation near the beginning or
+ *   // end of the quantiles
+ *   double       // min
+ *   double       // max
+ * }
+ *
+ * Each output row is a single tdigest.  The length of the row is the "size" of the
+ * tdigest, each element of which represents a weighted centroid (mean, weight).
+ */
+template <>
+void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregation const& agg)
+{
+  if (cache.has_result(col_idx, agg)) { return; }
+
+  auto const max_centroids =
+    dynamic_cast<cudf::detail::merge_tdigest_aggregation const&>(agg).max_centroids;
+  cache.add_result(col_idx,
+                   agg,
+                   detail::group_merge_tdigest(get_grouped_values(),
+                                               helper.group_offsets(stream),
+                                               helper.group_labels(stream),
+                                               helper.num_groups(stream),
+                                               max_centroids,
+                                               stream,
+                                               mr));
+};
+
 }  // namespace detail
 
 // Sort-based groupby
