@@ -736,6 +736,29 @@ void createTableMetaData(JNIEnv *env, jint num_children, jobjectArray &j_col_nam
   }
 }
 
+cudf::io::table_input_metadata createORCTableInputMetadata(JNIEnv *env,
+                                                           jobjectArray const &j_col_names,
+                                                           jbooleanArray const &j_col_nullability,
+                                                           jobjectArray const &j_metadata_keys,
+                                                           jobjectArray const &j_metadata_values) {
+  cudf::jni::native_jstringArray const col_names(env, j_col_names);
+  cudf::jni::native_jbooleanArray const col_nullability(env, j_col_nullability);
+  cudf::jni::native_jstringArray const meta_keys(env, j_metadata_keys);
+  cudf::jni::native_jstringArray const meta_values(env, j_metadata_values);
+
+  std::vector<std::string> const cpp_names = col_names.as_cpp_vector();
+  std::size_t const num_columns = cpp_names.size();
+  cudf::io::table_input_metadata metadata;
+  metadata.column_metadata.resize(cpp_names.size());
+  for (std::size_t i = 0; i < num_columns; i++) {
+    metadata.column_metadata[i].set_name(cpp_names[i]).set_nullability(col_nullability[i]);
+  }
+  for (int i = 0; i < meta_keys.size(); ++i) {
+    metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
+  }
+  return metadata;
+}
+
 // Check that window parameters are valid.
 bool valid_window_parameters(native_jintArray const &values,
                              native_jpointerArray<cudf::aggregation> const &ops,
@@ -1500,19 +1523,8 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCBufferBegin(
   try {
     cudf::jni::auto_set_device(env);
     using namespace cudf::io;
-    cudf::jni::native_jstringArray col_names(env, j_col_names);
-    cudf::jni::native_jbooleanArray col_nullability(env, j_col_nullability);
-    cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
-    cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
-
-    auto d = col_nullability.data();
-    std::vector<bool> nullability(d, d + col_nullability.size());
-    table_metadata_with_nullability metadata;
-    metadata.column_nullable = nullability;
-    metadata.column_names = col_names.as_cpp_vector();
-    for (int i = 0; i < meta_keys.size(); ++i) {
-      metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
-    }
+    table_input_metadata metadata = cudf::jni::createORCTableInputMetadata(
+        env, j_col_names, j_col_nullability, j_metadata_keys, j_metadata_values);
 
     std::unique_ptr<cudf::jni::jni_writer_data_sink> data_sink(
         new cudf::jni::jni_writer_data_sink(env, consumer));
@@ -1542,20 +1554,10 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(
   try {
     cudf::jni::auto_set_device(env);
     using namespace cudf::io;
-    cudf::jni::native_jstringArray col_names(env, j_col_names);
-    cudf::jni::native_jbooleanArray col_nullability(env, j_col_nullability);
-    cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
-    cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
     cudf::jni::native_jstring output_path(env, j_output_path);
 
-    auto d = col_nullability.data();
-    std::vector<bool> nullability(d, d + col_nullability.size());
-    table_metadata_with_nullability metadata;
-    metadata.column_nullable = nullability;
-    metadata.column_names = col_names.as_cpp_vector();
-    for (int i = 0; i < meta_keys.size(); ++i) {
-      metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
-    }
+    table_input_metadata metadata = cudf::jni::createORCTableInputMetadata(
+        env, j_col_names, j_col_nullability, j_metadata_keys, j_metadata_values);
 
     sink_info sink{output_path.get()};
     chunked_orc_writer_options opts = chunked_orc_writer_options::builder(sink)
@@ -1577,7 +1579,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCChunk(JNIEnv *env, jcla
   JNI_NULL_CHECK(env, j_state, "null state", );
 
   using namespace cudf::io;
-  cudf::table_view *tview = reinterpret_cast<cudf::table_view *>(j_table);
+  cudf::table_view *tview_orig = reinterpret_cast<cudf::table_view *>(j_table);
+  cudf::table_view tview = cudf::jni::remove_validity_if_needed(tview_orig);
   cudf::jni::native_orc_writer_handle *state =
       reinterpret_cast<cudf::jni::native_orc_writer_handle *>(j_state);
 
@@ -1587,7 +1590,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Table_writeORCChunk(JNIEnv *env, jcla
   }
   try {
     cudf::jni::auto_set_device(env);
-    state->writer->write(*tview);
+    state->writer->write(tview);
   }
   CATCH_STD(env, )
 }

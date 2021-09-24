@@ -31,75 +31,48 @@
 #include <thrust/functional.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
-#include <thrust/iterator/transform_output_iterator.h>
-#include <thrust/iterator/zip_iterator.h>
 #include <thrust/reduce.h>
 
 namespace cudf {
 namespace groupby {
 namespace detail {
 
-// ArgMin binary operator with tuple of (value, index)
+/**
+ * @brief ArgMin binary operator with index values into input column.
+ *
+ * @tparam T Type of the underlying column. Must support '<' operator.
+ */
 template <typename T>
 struct ArgMin {
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(thrust::tuple<T, size_type> const& lhs,
-                                            thrust::tuple<T, size_type> const& rhs) const
+  column_device_view const d_col;
+  CUDA_DEVICE_CALLABLE auto operator()(size_type const& lhs, size_type const& rhs) const
   {
-    if (thrust::get<1>(lhs) == cudf::detail::ARGMIN_SENTINEL)
-      return rhs;
-    else if (thrust::get<1>(rhs) == cudf::detail::ARGMIN_SENTINEL)
-      return lhs;
-    else
-      return thrust::get<0>(lhs) < thrust::get<0>(rhs) ? lhs : rhs;
+    // The extra bounds checking is due to issue github.com/rapidsai/cudf/9156 and
+    // github.com/NVIDIA/thrust/issues/1525
+    // where invalid random values may be passed here by thrust::reduce_by_key
+    if (lhs < 0 || lhs >= d_col.size() || d_col.is_null(lhs)) { return rhs; }
+    if (rhs < 0 || rhs >= d_col.size() || d_col.is_null(rhs)) { return lhs; }
+    return d_col.element<T>(lhs) < d_col.element<T>(rhs) ? lhs : rhs;
   }
 };
 
-// ArgMax binary operator with tuple of (value, index)
+/**
+ * @brief ArgMax binary operator with index values into input column.
+ *
+ * @tparam T Type of the underlying column. Must support '<' operator.
+ */
 template <typename T>
 struct ArgMax {
-  CUDA_HOST_DEVICE_CALLABLE auto operator()(thrust::tuple<T, size_type> const& lhs,
-                                            thrust::tuple<T, size_type> const& rhs) const
+  column_device_view const d_col;
+  CUDA_DEVICE_CALLABLE auto operator()(size_type const& lhs, size_type const& rhs) const
   {
-    if (thrust::get<1>(lhs) == cudf::detail::ARGMIN_SENTINEL)
-      return rhs;
-    else if (thrust::get<1>(rhs) == cudf::detail::ARGMIN_SENTINEL)
-      return lhs;
-    else
-      return thrust::get<0>(lhs) > thrust::get<0>(rhs) ? lhs : rhs;
+    // The extra bounds checking is due to issue github.com/rapidsai/cudf/9156 and
+    // github.com/NVIDIA/thrust/issues/1525
+    // where invalid random values may be passed here by thrust::reduce_by_key
+    if (lhs < 0 || lhs >= d_col.size() || d_col.is_null(lhs)) { return rhs; }
+    if (rhs < 0 || rhs >= d_col.size() || d_col.is_null(rhs)) { return lhs; }
+    return d_col.element<T>(rhs) < d_col.element<T>(lhs) ? lhs : rhs;
   }
-};
-
-struct get_tuple_second_element {
-  template <typename T>
-  __device__ size_type operator()(thrust::tuple<T, size_type> const& rhs) const
-  {
-    return thrust::get<1>(rhs);
-  }
-};
-
-/**
- * @brief Functor to store the boolean value to null mask.
- */
-struct bool_to_nullmask {
-  mutable_column_device_view d_result;
-  __device__ void operator()(size_type i, bool rhs)
-  {
-    if (rhs) {
-      d_result.set_valid(i);
-    } else {
-      d_result.set_null(i);
-    }
-  }
-};
-
-/**
- * @brief Returns index for non-null element, and SENTINEL for null element in a column.
- *
- */
-struct null_as_sentinel {
-  column_device_view const col;
-  size_type const SENTINEL;
-  __device__ size_type operator()(size_type i) const { return col.is_null(i) ? SENTINEL : i; }
 };
 
 /**
@@ -191,25 +164,16 @@ struct reduce_functor {
     auto resultview = mutable_column_device_view::create(result->mutable_view(), stream);
     auto valuesview = column_device_view::create(values, stream);
     if constexpr (K == aggregation::ARGMAX || K == aggregation::ARGMIN) {
-      constexpr auto SENTINEL =
-        (K == aggregation::ARGMAX ? cudf::detail::ARGMAX_SENTINEL : cudf::detail::ARGMIN_SENTINEL);
-      auto idx_begin =
-        cudf::detail::make_counting_transform_iterator(0, null_as_sentinel{*valuesview, SENTINEL});
-      // dictionary keys are sorted, so dictionary32 index comparison is enough.
-      auto column_begin = valuesview->begin<DeviceType>();
-      auto begin        = thrust::make_zip_iterator(thrust::make_tuple(column_begin, idx_begin));
-      auto result_begin = thrust::make_transform_output_iterator(resultview->begin<ResultDType>(),
-                                                                 get_tuple_second_element{});
       using OpType =
         std::conditional_t<(K == aggregation::ARGMAX), ArgMax<DeviceType>, ArgMin<DeviceType>>;
       thrust::reduce_by_key(rmm::exec_policy(stream),
                             group_labels.data(),
                             group_labels.data() + group_labels.size(),
-                            begin,
+                            thrust::make_counting_iterator<ResultType>(0),
                             thrust::make_discard_iterator(),
-                            result_begin,
-                            thrust::equal_to<size_type>{},
-                            OpType{});
+                            resultview->begin<ResultType>(),
+                            thrust::equal_to<ResultType>{},
+                            OpType{*valuesview});
     } else {
       auto init  = OpType::template identity<DeviceType>();
       auto begin = cudf::detail::make_counting_transform_iterator(

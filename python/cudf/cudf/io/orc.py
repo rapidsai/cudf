@@ -41,37 +41,90 @@ def _parse_column_statistics(cs, column_statistics_blob):
         column_statistics["number_of_values"] = cs.numberOfValues
     if cs.HasField("hasNull"):
         column_statistics["has_null"] = cs.hasNull
+
     if cs.HasField("intStatistics"):
-        column_statistics["minimum"] = cs.intStatistics.minimum
-        column_statistics["maximum"] = cs.intStatistics.maximum
-        column_statistics["sum"] = cs.intStatistics.sum
+        column_statistics["minimum"] = (
+            cs.intStatistics.minimum
+            if cs.intStatistics.HasField("minimum")
+            else None
+        )
+        column_statistics["maximum"] = (
+            cs.intStatistics.maximum
+            if cs.intStatistics.HasField("maximum")
+            else None
+        )
+        column_statistics["sum"] = (
+            cs.intStatistics.sum if cs.intStatistics.HasField("sum") else None
+        )
+
     elif cs.HasField("doubleStatistics"):
-        column_statistics["minimum"] = cs.doubleStatistics.minimum
-        column_statistics["maximum"] = cs.doubleStatistics.maximum
-        column_statistics["sum"] = cs.doubleStatistics.sum
+        column_statistics["minimum"] = (
+            cs.doubleStatistics.minimum
+            if cs.doubleStatistics.HasField("minimum")
+            else None
+        )
+        column_statistics["maximum"] = (
+            cs.doubleStatistics.maximum
+            if cs.doubleStatistics.HasField("maximum")
+            else None
+        )
+        column_statistics["sum"] = (
+            cs.doubleStatistics.sum
+            if cs.doubleStatistics.HasField("sum")
+            else None
+        )
+
     elif cs.HasField("stringStatistics"):
-        column_statistics["minimum"] = cs.stringStatistics.minimum
-        column_statistics["maximum"] = cs.stringStatistics.maximum
+        column_statistics["minimum"] = (
+            cs.stringStatistics.minimum
+            if cs.stringStatistics.HasField("minimum")
+            else None
+        )
+        column_statistics["maximum"] = (
+            cs.stringStatistics.maximum
+            if cs.stringStatistics.HasField("maximum")
+            else None
+        )
         column_statistics["sum"] = cs.stringStatistics.sum
+
     elif cs.HasField("bucketStatistics"):
         column_statistics["true_count"] = cs.bucketStatistics.count[0]
         column_statistics["false_count"] = (
             column_statistics["number_of_values"]
             - column_statistics["true_count"]
         )
+
     elif cs.HasField("decimalStatistics"):
-        column_statistics["minimum"] = cs.decimalStatistics.minimum
-        column_statistics["maximum"] = cs.decimalStatistics.maximum
+        column_statistics["minimum"] = (
+            cs.decimalStatistics.minimum
+            if cs.decimalStatistics.HasField("minimum")
+            else None
+        )
+        column_statistics["maximum"] = (
+            cs.decimalStatistics.maximum
+            if cs.decimalStatistics.HasField("maximum")
+            else None
+        )
         column_statistics["sum"] = cs.decimalStatistics.sum
+
     elif cs.HasField("dateStatistics"):
-        column_statistics["minimum"] = datetime.datetime.fromtimestamp(
-            datetime.timedelta(cs.dateStatistics.minimum).total_seconds(),
-            datetime.timezone.utc,
+        column_statistics["minimum"] = (
+            datetime.datetime.fromtimestamp(
+                datetime.timedelta(cs.dateStatistics.minimum).total_seconds(),
+                datetime.timezone.utc,
+            )
+            if cs.dateStatistics.HasField("minimum")
+            else None
         )
-        column_statistics["maximum"] = datetime.datetime.fromtimestamp(
-            datetime.timedelta(cs.dateStatistics.maximum).total_seconds(),
-            datetime.timezone.utc,
+        column_statistics["maximum"] = (
+            datetime.datetime.fromtimestamp(
+                datetime.timedelta(cs.dateStatistics.maximum).total_seconds(),
+                datetime.timezone.utc,
+            )
+            if cs.dateStatistics.HasField("maximum")
+            else None
         )
+
     elif cs.HasField("timestampStatistics"):
         # Before ORC-135, the local timezone offset was included and they were
         # stored as minimum and maximum. After ORC-135, the timestamp is
@@ -87,6 +140,7 @@ def _parse_column_statistics(cs, column_statistics_blob):
             column_statistics["maximum"] = datetime.datetime.fromtimestamp(
                 cs.timestampStatistics.maximumUtc / 1000, datetime.timezone.utc
             )
+
     elif cs.HasField("binaryStatistics"):
         column_statistics["sum"] = cs.binaryStatistics.sum
 
@@ -338,11 +392,11 @@ def to_orc(df, fname, compression=None, enable_statistics=True, **kwargs):
 
     for col in df._data.columns:
         if isinstance(col, cudf.core.column.StructColumn):
-            raise NotImplementedError(
-                "Writing to ORC format is not yet supported with "
-                "Struct columns."
+            warnings.warn(
+                "Support for writing tables with struct columns is "
+                "currently experimental."
             )
-        elif isinstance(col, cudf.core.column.CategoricalColumn):
+        if isinstance(col, cudf.core.column.CategoricalColumn):
             raise NotImplementedError(
                 "Writing to ORC format is not yet supported with "
                 "Categorical columns."
