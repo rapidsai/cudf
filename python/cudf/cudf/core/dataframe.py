@@ -4576,7 +4576,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             right_index=right_index,
             how=how,
             sort=sort,
-            method=method,
             indicator=indicator,
             suffixes=suffixes,
         )

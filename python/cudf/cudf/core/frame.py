@@ -3065,7 +3065,6 @@ class Frame(libcudf.table.Table):
         right_index=False,
         how="inner",
         sort=False,
-        method="hash",
         indicator=False,
         suffixes=("_x", "_y"),
     ):
@@ -3088,7 +3087,6 @@ class Frame(libcudf.table.Table):
             right_index=right_index,
             how=how,
             sort=sort,
-            method=method,
             indicator=indicator,
             suffixes=suffixes,
         )
