@@ -28,7 +28,7 @@ include(rapids-find)
 
 rapids_cuda_init_architectures(CUDF)
 
-project(CUDF VERSION 21.10.00 LANGUAGES C CXX CUDA)
+project(CUDF VERSION 21.12.00 LANGUAGES C CXX CUDA)
 
 # Needed because GoogleBenchmark changes the state of FindThreads.cmake,
 # causing subsequent runs to have different values for the `Threads::Threads` target.
@@ -237,8 +237,9 @@ add_library(cudf
     src/groupby/sort/group_max_scan.cu
     src/groupby/sort/group_min_scan.cu
     src/groupby/sort/group_rank_scan.cu
-    src/groupby/sort/group_sum_scan.cu
     src/groupby/sort/group_replace_nulls.cu
+    src/groupby/sort/group_sum_scan.cu
+    src/groupby/sort/group_tdigest.cu
     src/groupby/sort/sort_helper.cu
     src/hash/hashing.cu
     src/hash/md5_hash.cu
@@ -319,6 +320,7 @@ add_library(cudf
     src/merge/merge.cu
     src/partitioning/partitioning.cu
     src/partitioning/round_robin.cu
+    src/quantiles/tdigest/tdigest.cu
     src/quantiles/quantile.cu
     src/quantiles/quantiles.cu
     src/reductions/all.cu
@@ -566,6 +568,7 @@ add_library(cudftestutil STATIC
             tests/utilities/base_fixture.cpp
             tests/utilities/column_utilities.cu
             tests/utilities/table_utilities.cu
+            tests/io/metadata_utilities.cpp
             tests/strings/utilities.cu)
 
 set_target_properties(cudftestutil
