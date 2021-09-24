@@ -56,12 +56,15 @@ from cudf._lib.cpp.io.types cimport column_in_metadata, table_input_metadata
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type
+from cudf._lib.io.datasource cimport Datasource, NativeFileDatasource
 from cudf._lib.io.utils cimport (
     make_sink_info,
     make_source_info,
     update_struct_field_names,
 )
 from cudf._lib.table cimport Table, table_view_from_table
+
+from pyarrow.lib import NativeFile
 
 
 cdef class BufferArrayFromVector:
@@ -115,7 +118,9 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     cudf.io.parquet.read_parquet
     cudf.io.parquet.to_parquet
     """
-
+    for i, datasource in enumerate(filepaths_or_buffers):
+        if isinstance(datasource, NativeFile):
+            filepaths_or_buffers[i] = NativeFileDatasource(datasource)
     cdef cudf_io_types.source_info source = make_source_info(
         filepaths_or_buffers)
 

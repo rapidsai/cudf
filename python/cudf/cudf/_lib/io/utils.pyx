@@ -8,12 +8,9 @@ from libcpp.pair cimport pair
 from libcpp.string cimport string
 from libcpp.utility cimport move
 from libcpp.vector cimport vector
-from pyarrow.includes.libarrow cimport CRandomAccessFile
-from pyarrow.lib cimport NativeFile
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.io.types cimport (
-    arrow_io_source,
     column_name_info,
     data_sink,
     datasource,
@@ -22,14 +19,12 @@ from cudf._lib.cpp.io.types cimport (
     sink_info,
     source_info,
 )
-from cudf._lib.io.datasource cimport Datasource, NativeFileDatasource
+from cudf._lib.io.datasource cimport Datasource
 
 import codecs
 import errno
 import io
 import os
-
-from pyarrow.lib import NativeFile
 
 import cudf
 from cudf.api.types import is_struct_dtype
@@ -63,9 +58,6 @@ cdef source_info make_source_info(list src) except*:
     #                 change when UCX and/or cuStreamz support is added.
     elif isinstance(src[0], Datasource):
         csrc = src[0]
-        return source_info(csrc.get_datasource())
-    elif isinstance(src[0], NativeFile):
-        csrc = NativeFileDatasource(src[0])
         return source_info(csrc.get_datasource())
     elif isinstance(src[0], (int, float, complex, basestring, os.PathLike)):
         # If source is a file, return source_info where type=FILEPATH

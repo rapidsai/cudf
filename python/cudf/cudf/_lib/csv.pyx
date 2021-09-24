@@ -9,6 +9,7 @@ from libcpp.vector cimport vector
 
 cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.cpp.types cimport data_type, type_id
+from cudf._lib.io.datasource cimport Datasource, NativeFileDatasource
 from cudf._lib.types cimport dtype_to_data_type
 
 import numpy as np
@@ -119,6 +120,8 @@ cdef csv_reader_options make_csv_reader_options(
     object prefix,
     object index_col,
 ) except *:
+    if isinstance(datasource, NativeFile):
+        datasource = NativeFileDatasource(datasource)
     cdef source_info c_source_info = make_source_info([datasource])
     cdef compression_type c_compression
     cdef size_type c_header
