@@ -853,6 +853,12 @@ class MultiIndex(Frame, BaseIndex):
         result.names = self.names
         return result
 
+    def serialize(self):
+        header, frames = super().serialize()
+        # Overwrite the names in _data with the true names.
+        header["column_names"] = pickle.dumps(self.names)
+        return header, frames
+
     @classmethod
     def deserialize(cls, header, frames):
         if "names" in header:
@@ -864,7 +870,7 @@ class MultiIndex(Frame, BaseIndex):
                 DeprecationWarning,
             )
             header["column_names"] = header["names"]
-        names = pickle.loads(header["column_names"])
+        column_names = pickle.loads(header["column_names"])
         if "source_data" in header:
             warnings.warn(
                 "MultiIndex objects serialized in cudf version "
@@ -874,11 +880,12 @@ class MultiIndex(Frame, BaseIndex):
                 DeprecationWarning,
             )
             df = cudf.DataFrame.deserialize(header["source_data"], frames)
-            obj = cls.from_frame(df)
-            return obj._set_names(names)
-        columns = column.deserialize_columns(header["columns"], frames)
-        obj = cls._from_data(dict(zip(range(0, len(names)), columns)))
-        return obj._set_names(names)
+            return cls.from_frame(df)._set_names(column_names)
+
+        # Spoof the column names to construct the frame, then set manually.
+        header["column_names"] = pickle.dumps(range(0, len(column_names)))
+        obj = super().deserialize(header, frames)
+        return obj._set_names(column_names)
 
     def __getitem__(self, index):
         if isinstance(index, int):

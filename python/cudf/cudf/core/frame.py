@@ -41,6 +41,7 @@ from cudf.core.column import (
     as_column,
     build_categorical_column,
     column_empty,
+    deserialize_columns,
     serialize_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
@@ -74,6 +75,13 @@ class Frame(libcudf.table.Table):
         }
         header["columns"], frames = serialize_columns(self._columns)
         return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        cls_deserialize = pickle.loads(header["type-serialized"])
+        column_names = pickle.loads(header["column_names"])
+        columns = deserialize_columns(header["columns"], frames)
+        return cls_deserialize._from_data(dict(zip(column_names, columns)))
 
     @classmethod
     def _from_data(

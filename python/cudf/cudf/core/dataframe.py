@@ -541,19 +541,16 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
     @classmethod
     def deserialize(cls, header, frames):
-        # Reconstruct the index
-        index_frames = frames[: header["index_frame_count"]]
+        index_nframes = header["index_frame_count"]
+        obj = super().deserialize(
+            header, frames[header["index_frame_count"] :]
+        )
 
         idx_typ = pickle.loads(header["index"]["type-serialized"])
-        index = idx_typ.deserialize(header["index"], index_frames)
+        index = idx_typ.deserialize(header["index"], frames[:index_nframes])
+        obj._index = index
 
-        # Reconstruct the columns
-        column_frames = frames[header["index_frame_count"] :]
-
-        column_names = pickle.loads(header["column_names"])
-        columns = column.deserialize_columns(header["columns"], column_frames)
-
-        return cls._from_data(dict(zip(column_names, columns)), index=index,)
+        return obj
 
     @property
     def dtypes(self):

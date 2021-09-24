@@ -617,10 +617,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 [pickle.loads(header["name"])]
             )
 
-        idx_typ = pickle.loads(header["type-serialized"])
-        column_names = pickle.loads(header["column_names"])
-        columns = column.deserialize_columns(header["columns"], frames)
-        return idx_typ._from_data(dict(zip(column_names, columns)))
+        return super().deserialize(header, frames)
 
     def drop_duplicates(self, keep="first"):
         """
