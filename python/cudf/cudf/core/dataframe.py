@@ -2954,36 +2954,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         return result
 
-    def _set_index(
-        self, index, to_drop=None, inplace=False, verify_integrity=False,
-    ):
-        """Helper for `.set_index`
-
-        Parameters
-        ----------
-        index : Index
-            The new index to set.
-        to_drop : list optional, default None
-            A list of labels indicating columns to drop.
-        inplace : boolean, default False
-            Modify the DataFrame in place (do not create a new object).
-        verify_integrity : boolean, default False
-            Check for duplicates in the new index.
-        """
-        if not isinstance(index, BaseIndex):
-            raise ValueError("Parameter index should be type `Index`.")
-
-        df = self if inplace else self.copy(deep=True)
-
-        if verify_integrity and not index.is_unique:
-            raise ValueError(f"Values in Index are not unique: {index}")
-
-        if to_drop:
-            df.drop(columns=to_drop, inplace=True)
-
-        df.index = index
-        return df if not inplace else None
-
     def set_index(
         self,
         keys,
@@ -3090,7 +3060,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         columns_to_add = []
         names = []
         to_drop = []
-        for i, col in enumerate(keys):
+        for col in keys:
             # Is column label
             if is_scalar(col) or isinstance(col, tuple):
                 if col in self.columns:
@@ -3148,17 +3118,24 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         elif len(columns_to_add) == 1:
             idx = cudf.Index(columns_to_add[0], name=names[0])
         else:
-            idf = cudf.DataFrame()
-            for i, col in enumerate(columns_to_add):
-                idf[i] = col
-            idx = cudf.MultiIndex.from_frame(idf, names=names)
+            idx = cudf.MultiIndex._from_data(
+                {i: col for i, col in enumerate(columns_to_add)}
+            )
+            idx.names = names
 
-        return self._set_index(
-            index=idx,
-            to_drop=to_drop,
-            inplace=inplace,
-            verify_integrity=verify_integrity,
-        )
+        if not isinstance(idx, BaseIndex):
+            raise ValueError("Parameter index should be type `Index`.")
+
+        df = self if inplace else self.copy(deep=True)
+
+        if verify_integrity and not idx.is_unique:
+            raise ValueError(f"Values in Index are not unique: {idx}")
+
+        if to_drop:
+            df.drop(columns=to_drop, inplace=True)
+
+        df.index = idx
+        return df if not inplace else None
 
     def reset_index(
         self, level=None, drop=False, inplace=False, col_level=0, col_fill=""
@@ -3221,10 +3198,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 "col_fill parameter is not supported yet."
             )
 
-        if inplace:
-            result = self
-        else:
-            result = self.copy()
+        result = self if inplace else self.copy()
 
         if not drop:
             if isinstance(self.index, cudf.MultiIndex):
@@ -3247,9 +3221,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             ):
                 result.insert(0, name, index_column)
         result.index = RangeIndex(len(self))
-        if inplace:
-            return
-        else:
+        if not inplace:
             return result
 
     def take(self, positions, keep_index=True):
@@ -3302,12 +3274,12 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             name or label of column to be inserted
         value : Series or array-like
         """
-        num_cols = len(self._data)
         if name in self._data:
             raise NameError(f"duplicated column name {name}")
 
+        num_cols = len(self._data)
         if loc < 0:
-            loc = num_cols + loc + 1
+            loc += num_cols + 1
 
         if not (0 <= loc <= num_cols):
             raise ValueError(
