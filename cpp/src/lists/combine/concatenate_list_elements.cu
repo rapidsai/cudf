@@ -201,6 +201,7 @@ std::unique_ptr<column> gather_list_entries(column_view const& input,
                        d_list_offsets[d_row_offsets[idx]]);
     });
 
+  // wrap gather_map as a column_view to save compile time/size
   auto map_col = column_view(
     cudf::data_type{cudf::type_to_id<cudf::size_type>()}, num_output_entries, gather_map.data());
 
