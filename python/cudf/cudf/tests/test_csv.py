@@ -11,6 +11,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+from pyarrow import fs as pa_fs
 
 import cudf
 from cudf import read_csv
@@ -974,6 +975,17 @@ def test_csv_reader_filenotfound(tmpdir):
 def test_csv_reader_filepath_or_buffer(tmpdir, path_or_buf, src):
     expect = pd.read_csv(path_or_buf("filepath"))
     got = cudf.read_csv(path_or_buf(src))
+
+    assert_eq(expect, got)
+
+
+def test_csv_reader_arrow_nativefile(path_or_buf):
+    # Check that we can read a file opened with the
+    # Arrow FileSystem inferface
+    expect = cudf.read_csv(path_or_buf("filepath"))
+    fs, path = pa_fs.FileSystem.from_uri(path_or_buf("filepath"))
+    with fs.open_input_file(path) as fil:
+        got = cudf.read_csv(fil)
 
     assert_eq(expect, got)
 
