@@ -1238,5 +1238,49 @@ TEST_F(OrcStatisticsTest, Overflow)
   check_sum_exist(3, true);
   check_sum_exist(4, true);
 }
+struct OrcWriterTestStripes
+  : public OrcWriterTest,
+    public ::testing::WithParamInterface<std::tuple<size_t, cudf::size_type>> {
+};
+
+TEST_P(OrcWriterTestStripes, StripeSize)
+{
+  constexpr auto num_rows = 1000000;
+  auto size_bytes         = std::get<0>(GetParam());
+  auto size_rows          = std::get<1>(GetParam());
+
+  const auto seq_col = random_values<int>(num_rows);
+  const auto validity =
+    cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  column_wrapper<int64_t> col{seq_col.begin(), seq_col.end(), validity};
+
+  std::vector<std::unique_ptr<column>> cols;
+  cols.push_back(col.release());
+  const auto expected = std::make_unique<table>(std::move(cols));
+
+  std::vector<char> out_buffer;
+  cudf_io::orc_writer_options out_opts =
+    cudf_io::orc_writer_options::builder(cudf_io::sink_info(&out_buffer), expected->view())
+      .stripe_size_rows(size_rows)
+      .stripe_size_bytes(size_bytes);
+  cudf_io::write_orc(out_opts);
+
+  auto const expected_stripe_num =
+    std::max<cudf::size_type>(num_rows / size_rows, (num_rows * sizeof(int64_t)) / size_bytes);
+
+  auto const stats =
+    cudf_io::read_parsed_orc_statistics(cudf_io::source_info(out_buffer.data(), out_buffer.size()));
+  EXPECT_EQ(stats.stripes_stats.size(), expected_stripe_num);
+}
+
+INSTANTIATE_TEST_CASE_P(OrcWriterTest,
+                        OrcWriterTestStripes,
+                        ::testing::Values(std::make_tuple(800000ul, 1000000),
+                                          std::make_tuple(2000000ul, 1000000),
+                                          std::make_tuple(4000000ul, 1000000),
+                                          std::make_tuple(8000000ul, 1000000),
+                                          std::make_tuple(8000000ul, 500000),
+                                          std::make_tuple(8000000ul, 250000),
+                                          std::make_tuple(8000000ul, 100000)));
 
 CUDF_TEST_PROGRAM_MAIN()
