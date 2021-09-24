@@ -1428,7 +1428,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * a t-digest aggregation.
    *
    * @param percentiles Required percentiles [0,1]
-   * @return the percentiles as doubles, in the same order passed in
+   * @return Column containing the approximate percentile values as a list of doubles, in
+   *         the same order as the input percentiles
    */
   public final ColumnVector approxPercentile(double[] percentiles) {
     try (ColumnVector cv = ColumnVector.fromDoubles(percentiles)) {
