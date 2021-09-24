@@ -954,14 +954,16 @@ template <typename Source, aggregation::Kind k>
 struct target_type_impl<
   Source,
   k,
-  std::enable_if_t<is_fixed_width<Source>() && !is_chrono<Source>() && (k == aggregation::MEAN)>> {
+  std::enable_if_t<is_fixed_width<Source>() && not is_chrono<Source>() &&
+                   not is_fixed_point<Source>() && (k == aggregation::MEAN)>> {
   using type = double;
 };
 
 template <typename Source, aggregation::Kind k>
-struct target_type_impl<Source,
-                        k,
-                        std::enable_if_t<is_chrono<Source>() && (k == aggregation::MEAN)>> {
+struct target_type_impl<
+  Source,
+  k,
+  std::enable_if_t<(is_chrono<Source>() or is_fixed_point<Source>()) && (k == aggregation::MEAN)>> {
   using type = Source;
 };
 
