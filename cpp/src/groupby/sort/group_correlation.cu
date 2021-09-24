@@ -108,18 +108,17 @@ struct corr_transform {
 };
 }  // namespace
 
-// TODO Eventually this function should accept values_0, values_1, not a struct.
-std::unique_ptr<column> group_corr(column_view const& values_0,
-                                   column_view const& values_1,
-                                   cudf::device_span<size_type const> group_labels,
-                                   size_type num_groups,
-                                   column_view const& count,
-                                   column_view const& mean_0,
-                                   column_view const& mean_1,
-                                   column_view const& stddev_0,
-                                   column_view const& stddev_1,
-                                   rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> group_correlation(column_view const& values_0,
+                                          column_view const& values_1,
+                                          cudf::device_span<size_type const> group_labels,
+                                          size_type num_groups,
+                                          column_view const& count,
+                                          column_view const& mean_0,
+                                          column_view const& mean_1,
+                                          column_view const& stddev_0,
+                                          column_view const& stddev_1,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr)
 {
   using result_type = id_to_type<type_id::FLOAT64>;
   static_assert(

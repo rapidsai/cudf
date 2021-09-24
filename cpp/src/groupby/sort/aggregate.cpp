@@ -593,17 +593,17 @@ void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation 
 
   cache.add_result(values,
                    agg,
-                   detail::group_corr(get_grouped_values().child(0),
-                                      get_grouped_values().child(1),
-                                      helper.group_labels(stream),
-                                      helper.num_groups(stream),
-                                      count,
-                                      mean0,
-                                      mean1,
-                                      stddev0,
-                                      stddev1,
-                                      stream,
-                                      mr));
+                   detail::group_correlation(get_grouped_values().child(0),
+                                             get_grouped_values().child(1),
+                                             helper.group_labels(stream),
+                                             helper.num_groups(stream),
+                                             count,
+                                             mean0,
+                                             mean1,
+                                             stddev0,
+                                             stddev1,
+                                             stream,
+                                             mr));
 };
 
 }  // namespace detail
