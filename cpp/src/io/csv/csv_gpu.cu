@@ -307,68 +307,20 @@ __inline__ __device__ T decode_value(char const* begin,
   return cudf::io::parse_numeric<T>(begin, end, opts);
 }
 
-template <>
-__inline__ __device__ cudf::timestamp_D decode_value(char const* begin,
-                                                     char const* end,
-                                                     parse_options_view const& opts)
-{
-  return timestamp_D{cudf::duration_D{to_date(begin, end, opts.dayfirst)}};
-}
-
-template <>
-__inline__ __device__ cudf::timestamp_s decode_value(char const* begin,
-                                                     char const* end,
-                                                     parse_options_view const& opts)
-{
-  auto milli = to_date_time(begin, end, opts.dayfirst);
-  if (milli == -1) {
-    return timestamp_s{cudf::duration_s{to_non_negative_integer<int64_t>(begin, end)}};
-  } else {
-    duration_ms d{milli};
-    return timestamp_s{cuda::std::chrono::duration_cast<cudf::duration_s>(d)};
+#ifndef TIMESTAMP_DECODE_VALUE
+#define TIMESTAMP_DECODE_VALUE(Type)                                    \
+  template <>                                                           \
+  __inline__ __device__ Type decode_value(                              \
+    char const* begin, char const* end, parse_options_view const& opts) \
+  {                                                                     \
+    return to_date_time<Type>(begin, end, opts.dayfirst);               \
   }
-}
-
-template <>
-__inline__ __device__ cudf::timestamp_ms decode_value(char const* begin,
-                                                      char const* end,
-                                                      parse_options_view const& opts)
-{
-  auto milli = to_date_time(begin, end, opts.dayfirst);
-  if (milli == -1) {
-    return timestamp_ms{cudf::duration_ms{to_non_negative_integer<int64_t>(begin, end)}};
-  } else {
-    return timestamp_ms{cudf::duration_ms{milli}};
-  }
-}
-
-template <>
-__inline__ __device__ cudf::timestamp_us decode_value(char const* begin,
-                                                      char const* end,
-                                                      parse_options_view const& opts)
-{
-  auto milli = to_date_time(begin, end, opts.dayfirst);
-  if (milli == -1) {
-    return timestamp_us{cudf::duration_us{to_non_negative_integer<int64_t>(begin, end)}};
-  } else {
-    duration_ms d{milli};
-    return timestamp_us{cuda::std::chrono::duration_cast<cudf::duration_us>(d)};
-  }
-}
-
-template <>
-__inline__ __device__ cudf::timestamp_ns decode_value(char const* begin,
-                                                      char const* end,
-                                                      parse_options_view const& opts)
-{
-  auto milli = to_date_time(begin, end, opts.dayfirst);
-  if (milli == -1) {
-    return timestamp_ns{cudf::duration_ns{to_non_negative_integer<int64_t>(begin, end)}};
-  } else {
-    duration_ms d{milli};
-    return timestamp_ns{cuda::std::chrono::duration_cast<cudf::duration_ns>(d)};
-  }
-}
+#endif
+TIMESTAMP_DECODE_VALUE(timestamp_D);
+TIMESTAMP_DECODE_VALUE(timestamp_s);
+TIMESTAMP_DECODE_VALUE(timestamp_ms);
+TIMESTAMP_DECODE_VALUE(timestamp_us);
+TIMESTAMP_DECODE_VALUE(timestamp_ns);
 
 #ifndef DURATION_DECODE_VALUE
 #define DURATION_DECODE_VALUE(Type)                                     \

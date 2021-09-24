@@ -133,94 +133,20 @@ __inline__ __device__ T decode_value(const char* begin,
   return cudf::io::parse_numeric<T>(begin, end, opts);
 }
 
-/**
- * @brief Decodes a timestamp_D
- *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- * @param opts The global parsing behavior options
- *
- * @return The parsed timestamp_D
- */
-template <>
-__inline__ __device__ cudf::timestamp_D decode_value(const char* begin,
-                                                     const char* end,
-                                                     parse_options_view const& opts)
-{
-  return cudf::timestamp_D{cudf::duration_D{to_date(begin, end, opts.dayfirst)}};
-}
-
-/**
- * @brief Decodes a timestamp_s
- *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- * @param opts The global parsing behavior options
- *
- * @return The parsed timestamp_s
- */
-template <>
-__inline__ __device__ cudf::timestamp_s decode_value(const char* begin,
-                                                     const char* end,
-                                                     parse_options_view const& opts)
-{
-  auto milli = to_date_time(begin, end, opts.dayfirst);
-  return cudf::timestamp_s{cudf::duration_s{milli / 1000}};
-}
-
-/**
- * @brief Decodes a timestamp_ms
- *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- * @param opts The global parsing behavior options
- *
- * @return The parsed timestamp_ms
- */
-template <>
-__inline__ __device__ cudf::timestamp_ms decode_value(const char* begin,
-                                                      const char* end,
-                                                      parse_options_view const& opts)
-{
-  auto milli = to_date_time(begin, end, opts.dayfirst);
-  return cudf::timestamp_ms{cudf::duration_ms{milli}};
-}
-
-/**
- * @brief Decodes a timestamp_us
- *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- * @param opts The global parsing behavior options
- *
- * @return The parsed timestamp_us
- */
-template <>
-__inline__ __device__ cudf::timestamp_us decode_value(const char* begin,
-                                                      const char* end,
-                                                      parse_options_view const& opts)
-{
-  auto milli = to_date_time(begin, end, opts.dayfirst);
-  return cudf::timestamp_us{cudf::duration_us{milli * 1000}};
-}
-
-/**
- * @brief Decodes a timestamp_ns
- *
- * @param[in] begin Beginning of the character string
- * @param[in] end End of the character string
- * @param opts The global parsing behavior options
- *
- * @return The parsed timestamp_ns
- */
-template <>
-__inline__ __device__ cudf::timestamp_ns decode_value(const char* begin,
-                                                      const char* end,
-                                                      parse_options_view const& opts)
-{
-  auto milli = to_date_time(begin, end, opts.dayfirst);
-  return cudf::timestamp_ns{cudf::duration_ns{milli * 1000000}};
-}
+#ifndef TIMESTAMP_DECODE_VALUE
+#define TIMESTAMP_DECODE_VALUE(Type)                                    \
+  template <>                                                           \
+  __inline__ __device__ Type decode_value(                              \
+    const char* begin, const char* end, parse_options_view const& opts) \
+  {                                                                     \
+    return to_date_time<Type>(begin, end, opts.dayfirst);               \
+  }
+#endif
+TIMESTAMP_DECODE_VALUE(timestamp_D);
+TIMESTAMP_DECODE_VALUE(timestamp_s);
+TIMESTAMP_DECODE_VALUE(timestamp_ms);
+TIMESTAMP_DECODE_VALUE(timestamp_us);
+TIMESTAMP_DECODE_VALUE(timestamp_ns);
 
 #ifndef DURATION_DECODE_VALUE
 #define DURATION_DECODE_VALUE(Type)                                \
