@@ -289,8 +289,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_scan(JNIEnv *env, jclass,
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_approxPercentile(
-    JNIEnv *env, jclass clazz, jlong input_column, jlong percentiles_column) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_approxPercentile(JNIEnv *env, jclass clazz,
+                                                                        jlong input_column,
+                                                                        jlong percentiles_column) {
   JNI_NULL_CHECK(env, input_column, "input_column native handle is null", 0);
   JNI_NULL_CHECK(env, percentiles_column, "percentiles_column native handle is null", 0);
   try {
@@ -298,7 +299,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_approxPercentile(
     cudf::column_view *n_input_column = reinterpret_cast<cudf::column_view *>(input_column);
     std::unique_ptr<cudf::structs_column_view> input_view =
         std::make_unique<cudf::structs_column_view>(*n_input_column);
-    cudf::column_view *n_percentiles_column = reinterpret_cast<cudf::column_view *>(percentiles_column);
+    cudf::column_view *n_percentiles_column =
+        reinterpret_cast<cudf::column_view *>(percentiles_column);
     std::unique_ptr<cudf::column> result =
         cudf::percentile_approx(*input_view, *n_percentiles_column);
     return reinterpret_cast<jlong>(result.release());

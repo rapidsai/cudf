@@ -130,8 +130,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createDdofAgg(JNIEnv *en
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createTDigestAgg(
-    JNIEnv *env, jclass class_object, jint kind, jint delta) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Aggregation_createTDigestAgg(JNIEnv *env,
+                                                                         jclass class_object,
+                                                                         jint kind, jint delta) {
   try {
     cudf::jni::auto_set_device(env);
 
