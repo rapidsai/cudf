@@ -41,6 +41,7 @@ from cudf.core.column import (
     as_column,
     build_categorical_column,
     column_empty,
+    serialize_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import merge
@@ -68,7 +69,8 @@ class Frame(libcudf.table.Table):
 
     def serialize(self):
         header = {"type-serialized": pickle.dumps(type(self))}
-        return header, []
+        header["columns"], frames = serialize_columns(self._columns)
+        return header, frames
 
     @classmethod
     def _from_data(

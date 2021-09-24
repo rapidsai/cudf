@@ -856,12 +856,6 @@ class MultiIndex(Frame, BaseIndex):
     def serialize(self):
         header, frames = super().serialize()
         header["names"] = pickle.dumps(self.names)
-
-        header["columns"], column_frames = column.serialize_columns(
-            self._columns
-        )
-        frames.extend(column_frames)
-
         return header, frames
 
     @classmethod

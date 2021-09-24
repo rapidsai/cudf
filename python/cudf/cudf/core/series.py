@@ -331,21 +331,6 @@ class Series(SingleColumnFrame, Serializable):
         """
         return cls(s, nan_as_null=nan_as_null)
 
-    def serialize(self):
-        header, frames = super().serialize()
-        header["index"], index_frames = self._index.serialize()
-        header["index_frame_count"] = len(index_frames)
-        frames.extend(index_frames)
-
-        header["columns"], column_frames = column.serialize_columns(
-            self._columns
-        )
-        # header["column"], column_frames = self._column.serialize()
-        frames.extend(column_frames)
-
-        header["name"] = pickle.dumps(self.name)
-        return header, frames
-
     @property
     def dt(self):
         """
@@ -374,15 +359,19 @@ class Series(SingleColumnFrame, Serializable):
                 "Can only use .dt accessor with datetimelike values"
             )
 
+    def serialize(self):
+        header, frames = super().serialize()
+        header["index"], index_frames = self._index.serialize()
+        header["index_frame_count"] = len(index_frames)
+        # For backwards compatibility with older versions of cuDF, index
+        # columns are placed before data columns.
+        frames = index_frames + frames
+
+        header["name"] = pickle.dumps(self.name)
+        return header, frames
+
     @classmethod
     def deserialize(cls, header, frames):
-        index_nframes = header["index_frame_count"]
-        idx_typ = pickle.loads(header["index"]["type-serialized"])
-        index = idx_typ.deserialize(header["index"], frames[:index_nframes])
-        name = pickle.loads(header["name"])
-
-        frames = frames[index_nframes:]
-
         if "column" in header:
             warnings.warn(
                 "Series objects serialized in cudf version "
@@ -392,7 +381,15 @@ class Series(SingleColumnFrame, Serializable):
                 DeprecationWarning,
             )
             header["columns"] = [header.pop("column")]
-        columns = column.deserialize_columns(header["columns"], frames)
+
+        index_nframes = header["index_frame_count"]
+        idx_typ = pickle.loads(header["index"]["type-serialized"])
+        index = idx_typ.deserialize(header["index"], frames[:index_nframes])
+        name = pickle.loads(header["name"])
+
+        columns = column.deserialize_columns(
+            header["columns"], frames[index_nframes:]
+        )
 
         return cls._from_data({name: columns[0]}, index=index)
 

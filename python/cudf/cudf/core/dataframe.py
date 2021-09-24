@@ -530,16 +530,12 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
     def serialize(self):
         header, frames = super().serialize()
+
         header["index"], index_frames = self._index.serialize()
         header["index_frame_count"] = len(index_frames)
-        frames.extend(index_frames)
-
-        # Use the column directly to avoid duplicating the index
-        # need to pickle column names to handle numpy integer columns
-        header["columns"], column_frames = column.serialize_columns(
-            self._columns
-        )
-        frames.extend(column_frames)
+        # For backwards compatibility with older versions of cuDF, index
+        # columns are placed before data columns.
+        frames = index_frames + frames
 
         header["column_names"] = pickle.dumps(tuple(self._data.names))
         return header, frames
