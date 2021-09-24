@@ -1267,10 +1267,16 @@ TEST_P(OrcWriterTestStripes, StripeSize)
 
   auto const expected_stripe_num =
     std::max<cudf::size_type>(num_rows / size_rows, (num_rows * sizeof(int64_t)) / size_bytes);
-
   auto const stats =
     cudf_io::read_parsed_orc_statistics(cudf_io::source_info(out_buffer.data(), out_buffer.size()));
   EXPECT_EQ(stats.stripes_stats.size(), expected_stripe_num);
+
+  cudf_io::orc_reader_options in_opts =
+    cudf_io::orc_reader_options::builder(cudf_io::source_info(out_buffer.data(), out_buffer.size()))
+      .use_index(false);
+  auto result = cudf_io::read_orc(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
 }
 
 INSTANTIATE_TEST_CASE_P(OrcWriterTest,
@@ -1282,5 +1288,24 @@ INSTANTIATE_TEST_CASE_P(OrcWriterTest,
                                           std::make_tuple(8000000ul, 500000),
                                           std::make_tuple(8000000ul, 250000),
                                           std::make_tuple(8000000ul, 100000)));
+
+TEST_F(OrcWriterTest, StripeSizeInvalid)
+{
+  const auto unused_table = std::make_unique<table>();
+  std::vector<char> out_buffer;
+
+  EXPECT_THROW(
+    cudf_io::orc_writer_options::builder(cudf_io::sink_info(&out_buffer), unused_table->view())
+      .stripe_size_rows(511),
+    cudf::logic_error);
+  EXPECT_THROW(
+    cudf_io::orc_writer_options::builder(cudf_io::sink_info(&out_buffer), unused_table->view())
+      .stripe_size_bytes(63 << 10),
+    cudf::logic_error);
+  EXPECT_THROW(
+    cudf_io::orc_writer_options::builder(cudf_io::sink_info(&out_buffer), unused_table->view())
+      .row_index_stride(511),
+    cudf::logic_error);
+}
 
 CUDF_TEST_PROGRAM_MAIN()
