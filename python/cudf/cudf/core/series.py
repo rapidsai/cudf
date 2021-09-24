@@ -361,13 +361,13 @@ class Series(SingleColumnFrame, Serializable):
 
     def serialize(self):
         header, frames = super().serialize()
+
         header["index"], index_frames = self._index.serialize()
         header["index_frame_count"] = len(index_frames)
         # For backwards compatibility with older versions of cuDF, index
         # columns are placed before data columns.
         frames = index_frames + frames
 
-        header["name"] = pickle.dumps(self.name)
         return header, frames
 
     @classmethod
@@ -381,17 +381,20 @@ class Series(SingleColumnFrame, Serializable):
                 DeprecationWarning,
             )
             header["columns"] = [header.pop("column")]
+            header["column_names"] = pickle.dumps(
+                [pickle.loads(header["name"])]
+            )
 
         index_nframes = header["index_frame_count"]
         idx_typ = pickle.loads(header["index"]["type-serialized"])
         index = idx_typ.deserialize(header["index"], frames[:index_nframes])
-        name = pickle.loads(header["name"])
+        column_names = pickle.loads(header["column_names"])
 
         columns = column.deserialize_columns(
             header["columns"], frames[index_nframes:]
         )
 
-        return cls._from_data({name: columns[0]}, index=index)
+        return cls._from_data(dict(zip(column_names, columns)), index=index)
 
     def _get_columns_by_label(self, labels, downcast=False):
         """Return the column specified by `labels`

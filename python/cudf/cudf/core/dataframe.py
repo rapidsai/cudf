@@ -537,7 +537,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         # columns are placed before data columns.
         frames = index_frames + frames
 
-        header["column_names"] = pickle.dumps(tuple(self._data.names))
         return header, frames
 
     @classmethod

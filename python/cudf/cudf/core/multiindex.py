@@ -853,14 +853,18 @@ class MultiIndex(Frame, BaseIndex):
         result.names = self.names
         return result
 
-    def serialize(self):
-        header, frames = super().serialize()
-        header["names"] = pickle.dumps(self.names)
-        return header, frames
-
     @classmethod
     def deserialize(cls, header, frames):
-        names = pickle.loads(header["names"])
+        if "names" in header:
+            warnings.warn(
+                "MultiIndex objects serialized in cudf version "
+                "21.10 or older will no longer be deserializable "
+                "after version 21.12. Please load and resave any "
+                "pickles before upgrading to version 22.02.",
+                DeprecationWarning,
+            )
+            header["column_names"] = header["names"]
+        names = pickle.loads(header["column_names"])
         if "source_data" in header:
             warnings.warn(
                 "MultiIndex objects serialized in cudf version "

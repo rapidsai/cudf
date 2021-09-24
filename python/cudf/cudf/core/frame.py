@@ -68,7 +68,10 @@ class Frame(libcudf.table.Table):
     _data: "ColumnAccessor"
 
     def serialize(self):
-        header = {"type-serialized": pickle.dumps(type(self))}
+        header = {
+            "type-serialized": pickle.dumps(type(self)),
+            "column_names": pickle.dumps(tuple(self._data.names)),
+        }
         header["columns"], frames = serialize_columns(self._columns)
         return header, frames
 

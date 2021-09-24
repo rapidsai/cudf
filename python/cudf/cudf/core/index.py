@@ -602,11 +602,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         name = kwargs.get("name")
         super().__init__({name: data})
 
-    def serialize(self):
-        header, frames = super().serialize()
-        header["name"] = pickle.dumps(self.name)
-        return header, frames
-
     @classmethod
     def deserialize(cls, header, frames):
         if "index_column" in header:
@@ -618,11 +613,14 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 DeprecationWarning,
             )
             header["columns"] = [header.pop("index_column")]
+            header["column_names"] = pickle.dumps(
+                [pickle.loads(header["name"])]
+            )
 
         idx_typ = pickle.loads(header["type-serialized"])
-        name = pickle.loads(header["name"])
+        column_names = pickle.loads(header["column_names"])
         columns = column.deserialize_columns(header["columns"], frames)
-        return idx_typ._from_data({name: columns[0]})
+        return idx_typ._from_data(dict(zip(column_names, columns)))
 
     def drop_duplicates(self, keep="first"):
         """
