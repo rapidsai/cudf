@@ -413,7 +413,7 @@ TEST_F(PercentileApproxTest, NullPercentiles)
   auto const delta = 1000;
 
   cudf::test::fixed_width_column_wrapper<double> values{1, 1, 2, 3, 4, 5, 6, 7, 8};
-  cudf::test::fixed_width_column_wrapper<int> keys{0, 0, 0, 0, 0, 0, 0, 0, 0};
+  cudf::test::fixed_width_column_wrapper<int> keys{0, 0, 0, 0, 0, 1, 1, 1, 1};
   cudf::table_view t({keys});
   cudf::groupby::groupby gb(t);
   std::vector<cudf::groupby::aggregation_request> requests;
@@ -424,12 +424,12 @@ TEST_F(PercentileApproxTest, NullPercentiles)
 
   structs_column_view scv(*tdigest_column.second[0].results[0]);
 
-  // nulls should result in the min value
-  cudf::test::fixed_width_column_wrapper<double> npercentiles{{1.0, 1.0, 0.5, 0.75}, {0, 0, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<double> npercentiles{{0.5, 0.5, 1.0, 1.0}, {0, 0, 1, 1}};
   auto result = cudf::percentile_approx(scv, npercentiles);
 
-  cudf::test::fixed_width_column_wrapper<double> percentiles{0.0, 0.0, 0.5, 0.75};
-  auto expected = cudf::percentile_approx(scv, percentiles);
+  std::vector<bool> valids{0, 0, 1, 1};
+  cudf::test::lists_column_wrapper<double> expected{{{99, 99, 4, 4}, valids.begin()},
+                                                    {{99, 99, 8, 8}, valids.begin()}};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected);
 }

@@ -19,6 +19,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/detail/concatenate.hpp>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/merge.cuh>
 #include <cudf/detail/sorting.hpp>
@@ -344,8 +345,7 @@ generate_group_cluster_info(int delta,
 
   // compute number of clusters per group
   // each thread computes 1 set of clusters (# of cluster sets == # of groups)
-  rmm::device_uvector<size_type> group_num_clusters(
-    num_groups, stream, rmm::mr::get_current_device_resource());
+  rmm::device_uvector<size_type> group_num_clusters(num_groups, stream);
   generate_cluster_limits_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
     delta,
     num_groups,
@@ -370,16 +370,11 @@ generate_group_cluster_info(int delta,
                          0);
 
   // total # of clusters
-  offset_type total_clusters;
-  cudaMemcpyAsync(&total_clusters,
-                  group_cluster_offsets->view().begin<offset_type>() + num_groups,
-                  sizeof(offset_type),
-                  cudaMemcpyDeviceToHost);
-  stream.synchronize();
+  offset_type total_clusters =
+    cudf::detail::get_value<offset_type>(group_cluster_offsets->view(), num_groups, stream);
 
   // fill in the actual cluster weight limits
-  rmm::device_uvector<double> group_cluster_wl(
-    total_clusters, stream, rmm::mr::get_current_device_resource());
+  rmm::device_uvector<double> group_cluster_wl(total_clusters, stream);
   generate_cluster_limits_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
     delta,
     num_groups,
@@ -707,29 +702,30 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
   // generate the merged (but not yet compressed) tdigests for each group.
   std::vector<std::unique_ptr<table>> tdigests;
   tdigests.reserve(num_groups);
-  auto iter = thrust::make_counting_iterator(0);
-  std::transform(iter, iter + num_groups, std::back_inserter(tdigests), [&](int outer_index) {
-    // the range of tdigests in this group
-    auto const tdigest_start = h_outer_offsets[outer_index];
-    auto const tdigest_end   = h_outer_offsets[outer_index + 1];
-    auto const num_tdigests  = tdigest_end - tdigest_start;
+  std::transform(
+    h_outer_offsets.begin(),
+    h_outer_offsets.end() - 1,
+    std::next(h_outer_offsets.begin()),
+    std::back_inserter(tdigests),
+    [&](auto tdigest_start, auto tdigest_end) {
+      // the range of tdigests in this group
+      auto const num_tdigests = tdigest_end - tdigest_start;
 
-    // slice each tdigest from the input
-    std::vector<table_view> unmerged_tdigests;
-    unmerged_tdigests.reserve(num_tdigests);
-    auto offset_iter = thrust::make_counting_iterator(tdigest_start);
-    std::transform(offset_iter,
-                   offset_iter + num_tdigests,
-                   std::back_inserter(unmerged_tdigests),
-                   [&](int inner_index) {
-                     std::vector<size_type> indices{h_inner_offsets[inner_index],
-                                                    h_inner_offsets[inner_index + 1]};
-                     return cudf::detail::slice(tdigests_unsliced, indices, stream);
-                   });
+      // slice each tdigest from the input
+      std::vector<table_view> unmerged_tdigests;
+      unmerged_tdigests.reserve(num_tdigests);
+      auto offset_iter = std::next(h_inner_offsets.begin(), tdigest_start);
+      std::transform(offset_iter,
+                     offset_iter + num_tdigests,
+                     std::next(offset_iter),
+                     std::back_inserter(unmerged_tdigests),
+                     [&](auto start, auto end) {
+                       return cudf::detail::slice(tdigests_unsliced, {start, end}, stream);
+                     });
 
-    // merge
-    return cudf::detail::merge(unmerged_tdigests, {0}, {order::ASCENDING}, {}, stream, mr);
-  });
+      // merge
+      return cudf::detail::merge(unmerged_tdigests, {0}, {order::ASCENDING}, {}, stream, mr);
+    });
 
   // generate min and max values
   auto min_col        = scv.child(cudf::detail::tdigest::min_column_index);
@@ -766,22 +762,18 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
   auto merged = cudf::detail::concatenate(tdigest_views, stream, mr);
 
   // generate cumulative weights
-  auto cumulative_weights =
-    std::make_unique<column>(merged->get_column(cudf::detail::tdigest::weight_column_index),
-                             stream,
-                             rmm::mr::get_current_device_resource());
+  auto merged_weights     = merged->get_column(cudf::detail::tdigest::weight_column_index).view();
+  auto cumulative_weights = cudf::make_fixed_width_column(
+    data_type{type_id::FLOAT64}, merged_weights.size(), mask_state::UNALLOCATED);
   auto keys = cudf::detail::make_counting_transform_iterator(
     0,
     [group_labels      = group_labels.begin(),
      inner_offsets     = tdigest_offsets.begin<size_type>(),
      num_inner_offsets = tdigest_offsets.size()] __device__(int index) {
       // what -original- tdigest index this absolute index corresponds to
-      auto const tdigest_index =
-        static_cast<size_type>(
-          thrust::upper_bound(
-            thrust::seq, inner_offsets, inner_offsets + num_inner_offsets, index) -
-          inner_offsets) -
-        1;
+      auto const iter = thrust::prev(
+        thrust::upper_bound(thrust::seq, inner_offsets, inner_offsets + num_inner_offsets, index));
+      auto const tdigest_index = thrust::distance(inner_offsets, iter);
 
       // what group index the original tdigest belongs to
       return group_labels[tdigest_index];
@@ -789,7 +781,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
   thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                 keys,
                                 keys + cumulative_weights->size(),
-                                cumulative_weights->view().begin<double>(),
+                                merged_weights.begin<double>(),
                                 cumulative_weights->mutable_view().begin<double>());
 
   auto const delta = max_centroids;
@@ -824,7 +816,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
     0,
     make_weighted_centroid{
       merged->get_column(cudf::detail::tdigest::mean_column_index).view().begin<double>(),
-      merged->get_column(cudf::detail::tdigest::weight_column_index).view().begin<double>()});
+      merged_weights.begin<double>()});
 
   // compute the tdigest
   return compute_tdigests(delta,
