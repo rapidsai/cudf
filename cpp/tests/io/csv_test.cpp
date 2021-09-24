@@ -2199,65 +2199,25 @@ TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
   auto const filepath = temp_env->get_temp_dir() + "issue.csv";
 
   // make up some kind of dataframe
-  auto constexpr num_rows = 10;
-
-  template <typename T>
-  create_random_column_wrapper(int32_t num_rows)
-  {
-    auto values = random_values<T>(num_rows);
-    return column_wrapper<T>(values.begin(), values.end());
-  }
-
-  auto int8_column     = create_random_column_wrapper<int8_t>(num_rows);
-  auto int16_column    = create_random_column_wrapper<int16_t>(num_rows);
-  auto int32_column    = create_random_column_wrapper<int32_t>(num_rows);
-  auto int64_column    = create_random_column_wrapper<int64_t>(num_rows);
-  auto uint8_column    = create_random_column_wrapper<uint8_t>(num_rows);
-  auto uint16_column   = create_random_column_wrapper<uint16_t>(num_rows);
-  auto uint32_column   = create_random_column_wrapper<uint32_t>(num_rows);
-  auto uint64_column   = create_random_column_wrapper<uint64_t>(num_rows);
-  auto float32_column  = create_random_column_wrapper<float>(num_rows);
-  auto float64_columnn = create_random_column_wrapper<double>(num_rows);
-
-  auto input_columns = std::vector<cudf::column_view>{int8_column,
-                                                      int16_column,
-                                                      int32_column,
-                                                      int64_column,
-                                                      uint8_column,
-                                                      uint16_column,
-                                                      uint32_column,
-                                                      uint64_column,
-                                                      float32_column,
-                                                      float64_column};
-
-  auto input_table = cudf::table_view{input_columns};
+  auto int_column = column_wrapper<int32_t>{10, 20, 30};
+  auto str_column = column_wrapper<cudf::string_view>{"abc", "mno", "xyz"};
+  cudf::table_view input_table(std::vector<cudf::column_view>{int_column, str_column});
 
   // write that dataframe to a csv using default options to some temporary file
-  auto writer_options =
-    cudf_io::csv_writer_options::builder(cudf_io::sink_info{"issue.csv"}, input_table);
+  cudf_io::csv_writer_options writer_options =
+    cudf_io::csv_writer_options::builder(cudf_io::sink_info{filepath}, input_table);
   cudf_io::write_csv(writer_options);
 
   // read the temp csv file using default options
-  auto read_options = cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
-                        .header(-1)
-                        .dtypes({dtype<int8_t>(),
-                                 dtype<int16_t>(),
-                                 dtype<int32_t>(),
-                                 dtype<int64_t>(),
-                                 dtype<uint8_t>(),
-                                 dtype<uint16_t>(),
-                                 dtype<uint32_t>(),
-                                 dtype<uint64_t>(),
-                                 dtype<float>(),
-                                 dtype<double>()});
-
-  struct table_with_metadata {
-    std::unique_ptr<table> tbl;
-    table_metadata metadata;
-  } new_table_and_metadata = cudf_io::read_csv(read_options);
+  cudf_io::csv_reader_options read_options = 
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
+      .header(-1)
+      .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<cudf::string_view>()});
+  
+  cudf_io::table_with_metadata new_table_and_metadata = cudf_io::read_csv(read_options);
 
   // check to see / assert / verify they are identical, or at least as identical as expected.
-  auto new_table_view = new_table_and_metadata.tbl->view();
+  const auto new_table_view = new_table_and_metadata.tbl->view();
   EXPECT_EQ(input_table, new_table_view);
 }
 

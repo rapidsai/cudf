@@ -288,6 +288,10 @@ void writer::impl::write_chunked_begin(table_view const& table,
                  "Mismatch between number of column headers and table columns.");
 
     // column_names should be filled out,generated, if metadata == nullptr
+    std::vector<std::string> col_names;
+    for (int col_idx = 0; col_idx < table.num_columns(); ++col_idx) {
+      col_names.emplace_back(std::to_string(col_idx));
+    }
 
     auto const delimiter  = options_.get_inter_column_delimiter();
     auto const terminator = options_.get_line_terminator();
