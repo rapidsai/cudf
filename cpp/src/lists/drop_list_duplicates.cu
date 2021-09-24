@@ -25,6 +25,7 @@
 #include <cudf/lists/detail/sorting.hpp>
 #include <cudf/lists/drop_list_duplicates.hpp>
 #include <cudf/structs/struct_view.hpp>
+#include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -544,10 +545,9 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_offsets(
                                           all_lists_entries.has_nulls(),
                                           stream);
 
-  auto gather_map =
-    column_view(data_type{type_to_id<offset_type>()},
-                static_cast<offset_type>(thrust::distance(output_begin, output_end)),
-                unique_indices.data());
+  auto gather_map = column_view(data_type{type_to_id<offset_type>()},
+                                static_cast<size_type>(thrust::distance(output_begin, output_end)),
+                                unique_indices.data());
 
   // Collect unique entries and entry list offsets.
   // The new null_count and bitmask of the unique entries will also be generated
