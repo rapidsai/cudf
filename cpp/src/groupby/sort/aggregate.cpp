@@ -26,6 +26,7 @@
 #include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
@@ -547,25 +548,56 @@ void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation 
   CUDF_EXPECTS(corr_agg._type == correlation_type::PEARSON,
                "Only Pearson correlation is supported.");
 
+  // Correlation only for valid values in both columns.
+  auto [_, values_child0, values_child1] = [this]() {
+    rmm::device_buffer new_nullmask =
+      cudf::bitmask_and(table_view{{values.child(0), values.child(1)}});
+    auto null_count = cudf::count_unset_bits(
+      static_cast<cudf::bitmask_type const*>(new_nullmask.data()), 0, values.size());
+    if (null_count == 0) {
+      return std::make_tuple(std::move(new_nullmask), values.child(0), values.child(1));
+    }
+    auto column_view_with_new_nullmask = [](auto const& col, void* nullmask, auto null_count) {
+      return column_view(col.type(),
+                         col.size(),
+                         col.head(),
+                         static_cast<cudf::bitmask_type const*>(nullmask),
+                         null_count,
+                         col.offset(),
+                         std::vector(col.child_begin(), col.child_end()));
+    };
+    auto values_child0 =
+      null_count == values.child(0).null_count()
+        ? values.child(0)
+        : column_view_with_new_nullmask(values.child(0), new_nullmask.data(), null_count);
+    auto values_child1 =
+      null_count == values.child(1).null_count()
+        ? values.child(1)
+        : column_view_with_new_nullmask(values.child(1), new_nullmask.data(), null_count);
+    return std::make_tuple(std::move(new_nullmask), values_child0, values_child1);
+  }();
+
   auto std_agg = make_std_aggregation();
   cudf::detail::aggregation_dispatcher(
-    std_agg->kind, aggregate_result_functor(values.child(0), helper, cache, stream, mr), *std_agg);
+    std_agg->kind, aggregate_result_functor(values_child0, helper, cache, stream, mr), *std_agg);
   cudf::detail::aggregation_dispatcher(
-    std_agg->kind, aggregate_result_functor(values.child(1), helper, cache, stream, mr), *std_agg);
+    std_agg->kind, aggregate_result_functor(values_child1, helper, cache, stream, mr), *std_agg);
 
-  auto const stddev0 = cache.get_result(values.child(0), *std_agg);
-  auto const stddev1 = cache.get_result(values.child(1), *std_agg);
+  auto const stddev0 = cache.get_result(values_child0, *std_agg);
+  auto const stddev1 = cache.get_result(values_child1, *std_agg);
   auto mean_agg      = make_mean_aggregation();
-  auto const mean0   = cache.get_result(values.child(0), *mean_agg);
-  auto const mean1   = cache.get_result(values.child(1), *mean_agg);
+  auto const mean0   = cache.get_result(values_child0, *mean_agg);
+  auto const mean1   = cache.get_result(values_child1, *mean_agg);
+  auto count_agg     = make_count_aggregation();
+  auto const count   = cache.get_result(values_child0, *count_agg);
 
   cache.add_result(values,
                    agg,
                    detail::group_corr(get_grouped_values().child(0),
                                       get_grouped_values().child(1),
-                                      helper.group_offsets(stream),
                                       helper.group_labels(stream),
                                       helper.num_groups(stream),
+                                      count,
                                       mean0,
                                       mean1,
                                       stddev0,

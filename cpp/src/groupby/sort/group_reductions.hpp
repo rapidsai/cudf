@@ -447,9 +447,9 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
  *
  * @param values_0 The first grouped values column to correlate
  * @param values_1 The second grouped values column to correlate
- * @param group_offsets Offsets of groups' starting points within @p values.
  * @param group_labels ID of group that the corresponding value belongs to
  * @param num_groups Number of groups.
+ * @param count The count of valid rows of the grouped values of both columns
  * @param mean_0 The mean of the first grouped values column
  * @param mean_1 The mean of the second grouped values column
  * @param stddev_0 The standard deviation of the first grouped values column
@@ -459,9 +459,9 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
  */
 std::unique_ptr<column> group_corr(column_view const& values_0,
                                    column_view const& values_1,
-                                   cudf::device_span<size_type const> group_offsets,
                                    cudf::device_span<size_type const> group_labels,
                                    size_type num_groups,
+                                   column_view const& count,
                                    column_view const& mean_0,
                                    column_view const& mean_1,
                                    column_view const& stddev_0,
