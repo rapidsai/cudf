@@ -390,6 +390,8 @@ class orc_writer_options {
   size_t _stripe_size_bytes = 64 * 1024 * 1024;
   // Maximum number of rows in stripe (unless smaller than a single row group)
   size_type _stripe_size_rows = 1000000;
+  // Row index stride (maximum number of rows in each row group)
+  size_type _row_index_stride = 10000;
   // Set of columns to output
   table_view _table;
   // Optional associated metadata
@@ -452,6 +454,15 @@ class orc_writer_options {
   auto stripe_size_rows() const { return _stripe_size_rows; }
 
   /**
+   * @brief Returns the row index stride.
+   */
+  auto row_index_stride() const
+  {
+    auto const unaligned_stride = std::min(_row_index_stride, stripe_size_rows());
+    return unaligned_stride - unaligned_stride % 8;
+  }
+
+  /**
    * @brief Returns table to be written to output.
    */
   table_view get_table() const { return _table; }
@@ -496,6 +507,17 @@ class orc_writer_options {
   {
     CUDF_EXPECTS(size_rows >= 512, "Maximum stripe size cannot be smaller than 512");
     _stripe_size_rows = size_rows;
+  }
+
+  /**
+   * @brief Sets the row index stride.
+   *
+   * Rounded down to a multiple of 8.
+   */
+  void set_row_index_stride(size_type stride)
+  {
+    CUDF_EXPECTS(stride >= 512, "Row index stride cannot be smaller than 512");
+    _row_index_stride = stride;
   }
 
   /**
@@ -583,6 +605,18 @@ class orc_writer_options_builder {
   }
 
   /**
+   * @brief Sets the row index stride.
+   *
+   * @param val new row index stride
+   * @return this for chaining.
+   */
+  orc_writer_options_builder& row_index_stride(size_type val)
+  {
+    options.set_row_index_stride(val);
+    return *this;
+  }
+
+  /**
    * @brief Sets table to be written to output.
    *
    * @param tbl Table for the output.
@@ -654,6 +688,8 @@ class chunked_orc_writer_options {
   size_t _stripe_size_bytes = 64 * 1024 * 1024;
   // Maximum number of rows in stripe (unless smaller than a single row group)
   size_type _stripe_size_rows = 1000000;
+  // Row index stride (maximum number of rows in each row group)
+  size_type _row_index_stride = 10000;
   // Optional associated metadata
   const table_metadata_with_nullability* _metadata = nullptr;
 
@@ -709,6 +745,15 @@ class chunked_orc_writer_options {
   auto stripe_size_rows() const { return _stripe_size_rows; }
 
   /**
+   * @brief Returns the row index stride.
+   */
+  auto row_index_stride() const
+  {
+    auto const unaligned_stride = std::min(_row_index_stride, stripe_size_rows());
+    return unaligned_stride - unaligned_stride % 8;
+  }
+
+  /**
    * @brief Returns associated metadata.
    */
   table_metadata_with_nullability const* get_metadata() const { return _metadata; }
@@ -748,6 +793,17 @@ class chunked_orc_writer_options {
   {
     CUDF_EXPECTS(size_rows >= 512, "maximum stripe size cannot be smaller than 512");
     _stripe_size_rows = size_rows;
+  }
+
+  /**
+   * @brief Sets the row index stride.
+   *
+   * Rounded down to a multiple of 8.
+   */
+  void set_row_index_stride(size_type stride)
+  {
+    CUDF_EXPECTS(stride >= 512, "Row index stride cannot be smaller than 512");
+    _row_index_stride = stride;
   }
 
   /**
@@ -821,6 +877,18 @@ class chunked_orc_writer_options_builder {
   chunked_orc_writer_options_builder& enable_statistics(size_type val)
   {
     options.set_stripe_size_rows(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the row index stride.
+   *
+   * @param val new row index stride
+   * @return this for chaining.
+   */
+  chunked_orc_writer_options_builder& row_index_stride(size_type val)
+  {
+    options.set_row_index_stride(val);
     return *this;
   }
 

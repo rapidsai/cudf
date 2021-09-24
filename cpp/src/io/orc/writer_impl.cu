@@ -1095,6 +1095,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
   : max_stripe_size{options.stripe_size_bytes(), options.stripe_size_rows()},
+    row_index_stride{options.row_index_stride()},
     compression_kind_(to_orc_compression(options.get_compression())),
     enable_statistics_(options.enable_statistics()),
     out_sink_(std::move(sink)),
@@ -1103,9 +1104,6 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     stream(stream),
     _mr(mr)
 {
-  row_index_stride = std::min(row_index_stride, options.stripe_size_rows());
-  row_index_stride -= row_index_stride % 8;
-
   init_state();
 }
 
@@ -1115,6 +1113,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
   : max_stripe_size{options.stripe_size_bytes(), options.stripe_size_rows()},
+    row_index_stride{options.row_index_stride()},
     compression_kind_(to_orc_compression(options.get_compression())),
     enable_statistics_(options.enable_statistics()),
     out_sink_(std::move(sink)),
@@ -1126,9 +1125,6 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     user_metadata_with_nullability = *options.get_metadata();
     user_metadata                  = &user_metadata_with_nullability;
   }
-
-  row_index_stride = std::min(row_index_stride, options.stripe_size_rows());
-  row_index_stride -= row_index_stride % 8;
 
   init_state();
 }
