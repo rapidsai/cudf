@@ -236,8 +236,9 @@ add_library(cudf
     src/groupby/sort/group_max_scan.cu
     src/groupby/sort/group_min_scan.cu
     src/groupby/sort/group_rank_scan.cu
-    src/groupby/sort/group_sum_scan.cu
     src/groupby/sort/group_replace_nulls.cu
+    src/groupby/sort/group_sum_scan.cu
+    src/groupby/sort/group_tdigest.cu
     src/groupby/sort/sort_helper.cu
     src/hash/hashing.cu
     src/hash/md5_hash.cu
@@ -318,6 +319,7 @@ add_library(cudf
     src/merge/merge.cu
     src/partitioning/partitioning.cu
     src/partitioning/round_robin.cu
+    src/quantiles/tdigest/tdigest.cu
     src/quantiles/quantile.cu
     src/quantiles/quantiles.cu
     src/reductions/all.cu
