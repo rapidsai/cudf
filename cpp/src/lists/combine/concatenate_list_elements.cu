@@ -17,7 +17,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/valid_if.cuh>
@@ -201,10 +201,13 @@ std::unique_ptr<column> gather_list_entries(column_view const& input,
                        d_list_offsets[d_row_offsets[idx]]);
     });
 
+  auto map_col = column_view(
+    cudf::data_type{cudf::type_to_id<cudf::size_type>()}, num_output_entries, gather_map.data());
+
   auto result = cudf::detail::gather(table_view{{entry_col}},
-                                     gather_map.begin(),
-                                     gather_map.end(),
+                                     map_col,
                                      out_of_bounds_policy::DONT_CHECK,
+                                     cudf::detail::negative_index_policy::NOT_ALLOWED,
                                      stream,
                                      mr);
   return std::move(result->release()[0]);

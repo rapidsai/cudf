@@ -26,13 +26,14 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/binaryop.hpp>
-#include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/replace.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -203,11 +204,13 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
 
   auto to_dense_agg_result(cudf::aggregation const& agg)
   {
-    auto s                  = sparse_results->get_result(col_idx, agg);
+    auto map = column_view(data_type{type_to_id<size_type>()}, map_size, gather_map.data());
+    auto s   = sparse_results->get_result(col_idx, agg);
+
     auto dense_result_table = cudf::detail::gather(table_view({std::move(s)}),
-                                                   gather_map.begin(),
-                                                   gather_map.begin() + map_size,
+                                                   map,
                                                    out_of_bounds_policy::DONT_CHECK,
+                                                   cudf::detail::negative_index_policy::NOT_ALLOWED,
                                                    stream,
                                                    mr);
     return std::move(dense_result_table->release()[0]);
@@ -620,8 +623,15 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
                           stream,
                           mr);
 
-  return cudf::detail::gather(
-    keys, gather_map.begin(), gather_map.end(), out_of_bounds_policy::DONT_CHECK, stream, mr);
+  auto map_col = column_view(data_type{type_to_id<size_type>()},
+                             static_cast<size_type>(gather_map.size()),
+                             gather_map.data());
+  return cudf::detail::gather(keys,
+                              map_col,
+                              out_of_bounds_policy::DONT_CHECK,
+                              cudf::detail::negative_index_policy::NOT_ALLOWED,
+                              stream,
+                              mr);
 }
 
 }  // namespace

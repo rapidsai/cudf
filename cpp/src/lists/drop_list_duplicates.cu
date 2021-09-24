@@ -16,7 +16,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -29,6 +29,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
+#include <thrust/copy.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -375,13 +376,18 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_offsets(
                                           all_lists_entries.has_nulls(),
                                           stream);
 
+  auto gather_map =
+    column_view(data_type{type_to_id<offset_type>()},
+                static_cast<offset_type>(thrust::distance(output_begin, output_end)),
+                unique_indices.data());
+
   // Collect unique entries and entry list offsets
   // The new null_count and bitmask of the unique entries will also be generated
   // by the gather function
   return cudf::detail::gather(table_view{{all_lists_entries, entries_list_offsets}},
-                              output_begin,
-                              output_end,
+                              gather_map,
                               cudf::out_of_bounds_policy::DONT_CHECK,
+                              cudf::detail::negative_index_policy::NOT_ALLOWED,
                               stream,
                               mr)
     ->release();

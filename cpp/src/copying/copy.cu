@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-#include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/copy_if_else.cuh>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/scatter.cuh>
+#include <cudf/detail/scatter.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/traits.hpp>
 
@@ -188,16 +187,20 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lh
                                                scatter_map.begin(),
                                                is_left);
 
+  auto gather_map =
+    column_view(data_type{type_to_id<size_type>()},
+                static_cast<size_type>(thrust::distance(scatter_map.begin(), scatter_map_end)),
+                scatter_map.data());
+
   auto const scatter_src_lhs = cudf::detail::gather(table_view{std::vector<column_view>{lhs}},
-                                                    scatter_map.begin(),
-                                                    scatter_map_end,
+                                                    gather_map,
                                                     out_of_bounds_policy::DONT_CHECK,
+                                                    negative_index_policy::NOT_ALLOWED,
                                                     stream);
 
   auto result = cudf::detail::scatter(
     table_view{std::vector<column_view>{scatter_src_lhs->get_column(0).view()}},
-    scatter_map.begin(),
-    scatter_map_end,
+    gather_map,
     table_view{std::vector<column_view>{rhs}},
     false,
     stream,
@@ -227,8 +230,12 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::scalar const& lhs,
                                                    static_cast<cudf::size_type>(scatter_map_size),
                                                    scatter_map.begin()};
 
-  auto result = cudf::scatter(
-    scatter_source, scatter_map_column_view, table_view{std::vector<column_view>{rhs}}, false, mr);
+  auto result = cudf::detail::scatter(scatter_source,
+                                      scatter_map_column_view,
+                                      table_view{std::vector<column_view>{rhs}},
+                                      false,
+                                      stream,
+                                      mr);
 
   return std::move(result->release()[0]);
 }

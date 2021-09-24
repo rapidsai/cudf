@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/group_replace_nulls.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/replace/nulls.cuh>
 #include <cudf/replace.hpp>
 
@@ -67,10 +68,11 @@ std::unique_ptr<column> group_replace_nulls(cudf::column_view const& grouped_val
       rmm::exec_policy(stream), gl_rbegin, gl_rbegin + size, in_rbegin, gm_rbegin, eq, func);
   }
 
-  auto output = cudf::detail::gather(cudf::table_view({grouped_value}),
-                                     gather_map.begin(),
-                                     gather_map.end(),
+  auto map_col = column_view(data_type{type_to_id<size_type>()}, size, gather_map.data());
+  auto output  = cudf::detail::gather(cudf::table_view({grouped_value}),
+                                     map_col,
                                      cudf::out_of_bounds_policy::DONT_CHECK,
+                                     cudf::detail::negative_index_policy::NOT_ALLOWED,
                                      stream,
                                      mr);
 
