@@ -28,7 +28,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static ai.rapids.cudf.Cuda.DEFAULT_STREAM;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -440,10 +439,11 @@ public class RmmTest {
   @Test
   public void testCudaMemoryBuffer() {
     Rmm.initialize(RmmAllocationMode.ARENA, false, 1024);
-    try (CudaMemoryBuffer one = Rmm.allocCuda(512, DEFAULT_STREAM);
-         CudaMemoryBuffer two = Rmm.allocCuda(1024, DEFAULT_STREAM)) {
+    try (CudaMemoryBuffer one = CudaMemoryBuffer.allocate(512);
+         CudaMemoryBuffer two = CudaMemoryBuffer.allocate(1024)) {
       assertEquals(512, one.length);
       assertEquals(1024, two.length);
+      assertEquals(0, Rmm.getTotalBytesAllocated());
     }
   }
 
