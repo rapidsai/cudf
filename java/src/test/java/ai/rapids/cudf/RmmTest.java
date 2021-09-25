@@ -28,6 +28,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static ai.rapids.cudf.Cuda.DEFAULT_STREAM;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -434,6 +435,16 @@ public class RmmTest {
         () -> Rmm.initialize(
             RmmAllocationMode.CUDA_ASYNC | RmmAllocationMode.CUDA_MANAGED_MEMORY,
             false, 1024, 2048));
+  }
+
+  @Test
+  public void testCudaMemoryBuffer() {
+    Rmm.initialize(RmmAllocationMode.ARENA, false, 1024);
+    try (CudaMemoryBuffer one = Rmm.allocCuda(512, DEFAULT_STREAM);
+         CudaMemoryBuffer two = Rmm.allocCuda(1024, DEFAULT_STREAM)) {
+      assertEquals(512, one.length);
+      assertEquals(1024, two.length);
+    }
   }
 
   private static class AllocFailException extends RuntimeException {
