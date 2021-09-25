@@ -27,7 +27,6 @@ import cudf
 from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
-from cudf._lib.table import Table
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
@@ -60,7 +59,7 @@ T = TypeVar("T", bound="Frame")
 
 def _lexsorted_equal_range(
     idx: Union[GenericIndex, cudf.MultiIndex],
-    key_as_table: Table,
+    key_as_table: Frame,
     is_sorted: bool,
 ) -> Tuple[int, int, Optional[ColumnBase]]:
     """Get equal range for key in lexicographically sorted index. If index
@@ -807,7 +806,9 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 "is specified."
             )
 
-        key_as_table = Table({"None": as_column(key, length=1)})
+        key_as_table = cudf.core.frame.Frame(
+            {"None": as_column(key, length=1)}
+        )
         lower_bound, upper_bound, sort_inds = _lexsorted_equal_range(
             self, key_as_table, is_sorted
         )

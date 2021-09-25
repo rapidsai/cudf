@@ -1184,7 +1184,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             if 1 == first_data_column_position:
                 table_index = cudf.core.index.as_index(cols[0])
             elif first_data_column_position > 1:
-                table_index = libcudf.table.Table(
+                table_index = Frame(
                     data=dict(
                         zip(
                             indices[:first_data_column_position],
@@ -1193,7 +1193,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                     )
                 )
             tables.append(
-                libcudf.table.Table(
+                Frame(
                     data=dict(
                         zip(
                             indices[first_data_column_position:],

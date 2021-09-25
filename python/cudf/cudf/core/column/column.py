@@ -231,7 +231,7 @@ class ColumnBase(Column, Serializable):
         ]
         """
         return libcudf.interop.to_arrow(
-            libcudf.table.Table(
+            cudf.core.frame.Frame(
                 cudf.core.column_accessor.ColumnAccessor({"None": self})
             ),
             [["None"]],
