@@ -154,7 +154,7 @@ TIMESTAMP_DECODE_VALUE(timestamp_ns);
   __inline__ __device__ Type decode_value(                         \
     const char* begin, const char* end, parse_options_view const&) \
   {                                                                \
-    return Type{to_time_delta<Type>(begin, end)};                  \
+    return to_duration<Type>(begin, end);                          \
   }
 #endif
 DURATION_DECODE_VALUE(duration_D)

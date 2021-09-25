@@ -284,14 +284,15 @@ __inline__ __device__ T parse_optional_integer(char const** begin, char const* e
 }
 
 /**
- * @brief Parses the input string into a duration of the given type.
+ * @brief Parses the input string into a duration of `duration_type`.
  *
+ * @tparam duration_type Type of the parsed duration
  * @param begin Pointer to the first element of the string
  * @param end Pointer to the first element after the string
- * @return The parsed duration
+ * @return The parsed duration in `duration_type`
  */
-template <typename T>
-__inline__ __device__ int64_t to_time_delta(char const* begin, char const* end)
+template <typename duration_type>
+__inline__ __device__ duration_type to_duration(char const* begin, char const* end)
 {
   using cuda::std::chrono::duration_cast;
 
@@ -299,14 +300,15 @@ __inline__ __device__ int64_t to_time_delta(char const* begin, char const* end)
   constexpr char sep = ':';
 
   int32_t days{0};
-  int8_t hour{0};
+  int32_t hour{0};
   // single pass to parse days, hour, minute, seconds, nanosecond
   auto cur         = begin;
   auto const value = parse_integer<int32_t>(&cur, end);
   cur              = skip_spaces(cur, end);
-  if (std::is_same_v<T, cudf::duration_D> || cur >= end) {  // %value
-    return value;
+  if (std::is_same_v<duration_type, cudf::duration_D> || cur >= end) {
+    return duration_type{static_cast<typename duration_type::rep>(value)};
   }
+
   // " days [+]"
   auto const after_days_sep     = skip_if_starts_with(cur, end, "days");
   auto const has_days_seperator = (after_days_sep != cur);
@@ -314,27 +316,26 @@ __inline__ __device__ int64_t to_time_delta(char const* begin, char const* end)
   cur += (*cur == '+');
   if (has_days_seperator) {
     days = value;
-    hour = parse_integer<int8_t>(&cur, end);
+    hour = parse_integer<int32_t>(&cur, end);
   } else {
     hour = value;
   }
 
-  auto const minute = parse_optional_integer<int8_t>(&cur, end, sep);
-  auto const second = parse_optional_integer<int8_t>(&cur, end, sep);
+  auto const minute = parse_optional_integer<int32_t>(&cur, end, sep);
+  auto const second = parse_optional_integer<int64_t>(&cur, end, sep);
 
-  cudf::duration_D d{days};
-  cudf::duration_h h{hour};
-  cudf::duration_m m{minute};
-  cudf::duration_s s{second};
+  cudf::duration_D d_d{days};
+  cudf::duration_h d_h{hour};
+  cudf::duration_m d_m{minute};
+  cudf::duration_s d_s{second};
   // Convert all durations to the given type
-  auto res_duration = duration_cast<T>(d).count() + duration_cast<T>(h).count() +
-                      duration_cast<T>(m).count() + duration_cast<T>(s).count();
+  auto output_d = duration_cast<duration_type>(d_d + d_h + d_m + d_s);
 
-  int nanosecond = 0;
+  if constexpr (std::is_same_v<duration_type, cudf::duration_s>) { return output_d; }
 
-  if (std::is_same_v<T, cudf::duration_s>) {
-    return res_duration;
-  } else if (*cur == '.') {  //.n
+  int64_t nanosecond = 0L;
+
+  if (*cur == '.') {  //.n
     auto const start_subsecond        = ++cur;
     nanosecond                        = parse_integer<int>(&cur, end);
     int8_t const num_digits           = min(9L, cur - start_subsecond);
@@ -343,7 +344,7 @@ __inline__ __device__ int64_t to_time_delta(char const* begin, char const* end)
     nanosecond *= powers_of_ten[9 - num_digits];
   }
 
-  return res_duration + duration_cast<T>(cudf::duration_ns{nanosecond}).count();
+  return output_d + duration_cast<duration_type>(duration_ns{nanosecond});
 }
 
 }  // namespace io
