@@ -14,11 +14,11 @@ from cudf._lib.cpp.hash cimport hash as cpp_hash
 from cudf._lib.cpp.partitioning cimport hash_partition as cpp_hash_partition
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.table cimport Table, table_view_from_table
+from cudf._lib.table cimport table_view_from_table
 from cudf._lib.utils cimport data_from_unique_ptr
 
 
-def hash_partition(Table source_table, object columns_to_hash,
+def hash_partition(source_table, object columns_to_hash,
                    int num_partitions, bool keep_index=True):
     cdef vector[libcudf_types.size_type] c_columns_to_hash = columns_to_hash
     cdef int c_num_partitions = num_partitions
@@ -55,7 +55,7 @@ def hash_partition(Table source_table, object columns_to_hash,
     )
 
 
-def hash(Table source_table, object initial_hash_values=None, int seed=0):
+def hash(source_table, object initial_hash_values=None, int seed=0):
     cdef vector[uint32_t] c_initial_hash = initial_hash_values or []
     cdef table_view c_source_view = table_view_from_table(
         source_table, ignore_index=True)

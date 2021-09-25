@@ -61,7 +61,7 @@ from cudf._lib.io.utils cimport (
     make_source_info,
     update_struct_field_names,
 )
-from cudf._lib.table cimport Table, table_view_from_table
+from cudf._lib.table cimport table_view_from_table
 
 
 cdef class BufferArrayFromVector:
@@ -257,7 +257,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     return df
 
 cpdef write_parquet(
-        Table table,
+        table,
         object path,
         object index=None,
         object compression="snappy",
@@ -370,7 +370,7 @@ cdef class ParquetWriter:
         self.index = index
         self.initialized = False
 
-    def write_table(self, Table table):
+    def write_table(self, table):
         """ Writes a single table to the file """
         if not self.initialized:
             self._initialize_chunked_state(table)
@@ -412,7 +412,7 @@ cdef class ParquetWriter:
     def __dealloc__(self):
         self.close()
 
-    def _initialize_chunked_state(self, Table table):
+    def _initialize_chunked_state(self, table):
         """ Prepares all the values required to build the
         chunked_parquet_writer_options and creates a writer"""
         cdef table_view tv

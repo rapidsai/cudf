@@ -11,7 +11,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.partitioning cimport partition as cpp_partition
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.table cimport Table, table_view_from_table
+from cudf._lib.table cimport table_view_from_table
 
 from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
 
@@ -19,7 +19,7 @@ cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.utils cimport data_from_unique_ptr
 
 
-def partition(Table source_table, Column partition_map,
+def partition(source_table, Column partition_map,
               object num_partitions, bool keep_index=True):
 
     if num_partitions is None:

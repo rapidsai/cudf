@@ -44,11 +44,7 @@ from cudf._lib.cpp.io.types cimport (
 )
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.io.utils cimport make_sink_info, make_source_info
-from cudf._lib.table cimport (
-    Table,
-    table_view_from_columns,
-    table_view_from_table,
-)
+from cudf._lib.table cimport table_view_from_columns, table_view_from_table
 from cudf._lib.utils cimport data_from_unique_ptr
 
 ctypedef int32_t underlying_type_t_compression
@@ -446,7 +442,7 @@ def read_csv(
 
 
 cpdef write_csv(
-    Table table,
+    table,
     object path_or_buf=None,
     object sep=",",
     object na_rep="",

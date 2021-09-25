@@ -30,11 +30,7 @@ from cudf.core.dtypes import ListDtype, StructDtype
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.table cimport (
-    Table,
-    table_view_from_columns,
-    table_view_from_table,
-)
+from cudf._lib.table cimport table_view_from_columns, table_view_from_table
 from cudf._lib.types cimport dtype_from_column_view, underlying_type_t_type_id
 
 from cudf._lib.interop import from_arrow, to_arrow
@@ -359,7 +355,7 @@ cdef _get_py_dict_from_struct(unique_ptr[scalar]& s):
         None,
         column_names=columns
     )
-    cdef Table to_arrow_table = Table(
+    to_arrow_table = cudf.core.frame.Frame(
         cudf.core.column_accessor.ColumnAccessor(data)
     )
 
@@ -394,7 +390,7 @@ cdef _get_py_list_from_list(unique_ptr[scalar]& s):
 
     cdef column_view list_col_view = (<list_scalar*>s.get()).view()
     cdef Column list_col = Column.from_column_view(list_col_view, None)
-    cdef Table to_arrow_table = Table({"col": list_col})
+    to_arrow_table = cudf.core.frame.Frame({"col": list_col})
 
     arrow_table = to_arrow(to_arrow_table, [["col", []]])
     result = arrow_table['col'].to_pylist()
