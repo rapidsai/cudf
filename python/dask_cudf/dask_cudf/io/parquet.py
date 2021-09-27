@@ -332,13 +332,13 @@ def set_object_dtypes_from_pa_schema(df, schema):
     # pyarrow schema.
     if schema:
         for col_name, col in df._data.items():
-            if col_name in schema.names and isinstance(
-                cudf_dtype_from_pa_type(schema.field(col_name).type),
-                cudf.core.column.StringColumn,
+            typ = cudf_dtype_from_pa_type(schema.field(col_name).type)
+            if (
+                col_name in schema.names
+                and typ not in ("list", "struct")
+                and isinstance(col, cudf.core.column.StringColumn)
             ):
-                df._data[col_name] = col.astype(
-                    cudf_dtype_from_pa_type(schema.field(col_name).type)
-                )
+                df._data[col_name] = col.astype(typ)
 
 
 def read_parquet(

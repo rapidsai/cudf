@@ -491,6 +491,7 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
 @pytest.mark.parametrize(
     "data",
     [
+        ["dog", "cat", "fish"],
         [[0], [1, 2], [3]],
         [None, [1, 2], [3]],
         [{"f1": 1}, {"f1": 0, "f2": "dog"}, {"f2": "cat"}],
