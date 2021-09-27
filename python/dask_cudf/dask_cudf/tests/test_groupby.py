@@ -7,11 +7,11 @@ import pytest
 import dask
 from dask import dataframe as dd
 
-import cudf
-from cudf.core._compat import PANDAS_GE_120
-
 import dask_cudf
 from dask_cudf.groupby import _is_supported
+
+import cudf
+from cudf.core._compat import PANDAS_GE_120
 
 
 @pytest.mark.parametrize("aggregation", ["sum", "mean", "count", "min", "max"])

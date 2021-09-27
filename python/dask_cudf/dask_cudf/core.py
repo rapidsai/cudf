@@ -23,11 +23,11 @@ from dask.dataframe.utils import raise_on_meta_error
 from dask.highlevelgraph import HighLevelGraph
 from dask.utils import M, OperatorMethodMixin, apply, derived_from, funcname
 
-import cudf
-from cudf import _lib as libcudf
-
 from dask_cudf import sorting
 from dask_cudf.accessors import ListMethods, StructMethods
+
+import cudf
+from cudf import _lib as libcudf
 
 DASK_VERSION = LooseVersion(dask.__version__)
 
