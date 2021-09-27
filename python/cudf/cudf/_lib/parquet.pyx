@@ -45,15 +45,14 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.io.parquet cimport (
     chunked_parquet_writer_options,
     chunked_parquet_writer_options_builder,
-    column_in_metadata,
     merge_rowgroup_metadata as parquet_merge_metadata,
     parquet_chunked_writer as cpp_parquet_chunked_writer,
     parquet_reader_options,
     parquet_writer_options,
     read_parquet as parquet_reader,
-    table_input_metadata,
     write_parquet as parquet_writer,
 )
+from cudf._lib.cpp.io.types cimport column_in_metadata, table_input_metadata
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type
