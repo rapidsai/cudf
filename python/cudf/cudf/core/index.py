@@ -1605,7 +1605,7 @@ class DatetimeIndex(GenericIndex):
         Returns
         -------
         DataFrame
-            with columns year, week and day
+        with columns year, week and day
 
         Examples
         --------

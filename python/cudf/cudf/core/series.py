@@ -5517,7 +5517,7 @@ class DatetimeProperties(object):
         Returns
         -------
         DataFrame
-            with columns year, week and day
+        with columns year, week and day
 
         Examples
         --------

@@ -8,7 +8,6 @@ from numba import cuda
 
 import rmm
 
-from cudf.api.types import dtype
 from cudf import api, core, datasets, testing
 from cudf._version import get_versions
 from cudf.api.extensions import (
@@ -16,18 +15,27 @@ from cudf.api.extensions import (
     register_index_accessor,
     register_series_accessor,
 )
-from cudf.core.scalar import (
-    NA,
-    Scalar,
+from cudf.api.types import dtype
+from cudf.core.algorithms import factorize
+from cudf.core.cut import cut
+from cudf.core.dataframe import DataFrame, from_pandas, merge
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    Decimal32Dtype,
+    Decimal64Dtype,
+    IntervalDtype,
+    ListDtype,
+    StructDtype,
 )
+from cudf.core.groupby import Grouper
 from cudf.core.index import (
     BaseIndex,
     CategoricalIndex,
     DatetimeIndex,
     Float32Index,
     Float64Index,
-    Index,
     GenericIndex,
+    Index,
     Int8Index,
     Int16Index,
     Int32Index,
@@ -42,20 +50,7 @@ from cudf.core.index import (
     UInt64Index,
     interval_range,
 )
-from cudf.core.dataframe import DataFrame, from_pandas, merge
-from cudf.core.series import Series
 from cudf.core.multiindex import MultiIndex
-from cudf.core.cut import cut
-from cudf.core.algorithms import factorize
-from cudf.core.dtypes import (
-    CategoricalDtype,
-    Decimal64Dtype,
-    Decimal32Dtype,
-    IntervalDtype,
-    ListDtype,
-    StructDtype,
-)
-from cudf.core.groupby import Grouper
 from cudf.core.ops import (
     add,
     arccos,
@@ -84,7 +79,8 @@ from cudf.core.reshape import (
     pivot,
     unstack,
 )
-from cudf.core.series import isclose
+from cudf.core.scalar import NA, Scalar
+from cudf.core.series import Series, isclose
 from cudf.core.tools.datetimes import DateOffset, to_datetime
 from cudf.core.tools.numeric import to_numeric
 from cudf.io import (
