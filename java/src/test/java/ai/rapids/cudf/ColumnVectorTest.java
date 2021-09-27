@@ -5413,6 +5413,17 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testGetMapValueEmptyInput() {
+    HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
+        new HostColumnVector.BasicType(true, DType.STRING)));
+    try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType));
+         ColumnVector res = cv.getMapValue(Scalar.fromString("a"));
+         ColumnVector expected = ColumnVector.fromStrings()) {
+      assertColumnsAreEqual(expected, res);
+    }
+  }
+
+  @Test
   void testGetMapKeyExistence() {
     List<HostColumnVector.StructData> list1 = Arrays.asList(new HostColumnVector.StructData("a", "b"));
     List<HostColumnVector.StructData> list2 = Arrays.asList(new HostColumnVector.StructData("a", "c"));
