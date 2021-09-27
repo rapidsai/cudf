@@ -299,7 +299,8 @@ __inline__ __device__ T decode_value(char const* begin,
   return cudf::io::parse_numeric<T, base>(begin, end, opts);
 }
 
-template <typename T>
+template <typename T,
+          std::enable_if_t<!cudf::is_timestamp<T>() and !cudf::is_duration<T>()>* = nullptr>
 __inline__ __device__ T decode_value(char const* begin,
                                      char const* end,
                                      parse_options_view const& opts)
@@ -307,35 +308,21 @@ __inline__ __device__ T decode_value(char const* begin,
   return cudf::io::parse_numeric<T>(begin, end, opts);
 }
 
-#ifndef TIMESTAMP_DECODE_VALUE
-#define TIMESTAMP_DECODE_VALUE(Type)                                    \
-  template <>                                                           \
-  __inline__ __device__ Type decode_value(                              \
-    char const* begin, char const* end, parse_options_view const& opts) \
-  {                                                                     \
-    return to_timestamp<Type>(begin, end, opts.dayfirst);               \
-  }
-#endif
-TIMESTAMP_DECODE_VALUE(timestamp_D);
-TIMESTAMP_DECODE_VALUE(timestamp_s);
-TIMESTAMP_DECODE_VALUE(timestamp_ms);
-TIMESTAMP_DECODE_VALUE(timestamp_us);
-TIMESTAMP_DECODE_VALUE(timestamp_ns);
+template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+__inline__ __device__ T decode_value(char const* begin,
+                                     char const* end,
+                                     parse_options_view const& opts)
+{
+  return to_timestamp<T>(begin, end, opts.dayfirst);
+}
 
-#ifndef DURATION_DECODE_VALUE
-#define DURATION_DECODE_VALUE(Type)                                     \
-  template <>                                                           \
-  __inline__ __device__ Type decode_value(                              \
-    const char* begin, const char* end, parse_options_view const& opts) \
-  {                                                                     \
-    return to_duration<Type>(begin, end);                               \
-  }
-#endif
-DURATION_DECODE_VALUE(duration_D)
-DURATION_DECODE_VALUE(duration_s)
-DURATION_DECODE_VALUE(duration_ms)
-DURATION_DECODE_VALUE(duration_us)
-DURATION_DECODE_VALUE(duration_ns)
+template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
+__inline__ __device__ T decode_value(char const* begin,
+                                     char const* end,
+                                     parse_options_view const& opts)
+{
+  return to_duration<T>(begin, end);
+}
 
 // The purpose of this is merely to allow compilation ONLY
 // TODO : make this work for csv
