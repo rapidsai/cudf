@@ -61,7 +61,7 @@ from cudf._lib.io.utils cimport (
     make_source_info,
     update_struct_field_names,
 )
-from cudf._lib.table cimport table_view_from_table
+from cudf._lib.utils cimport table_view_from_table
 
 
 cdef class BufferArrayFromVector:

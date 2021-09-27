@@ -20,7 +20,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_device_scalar
 
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.table cimport table_view_from_columns, table_view_from_table
+from cudf._lib.utils cimport table_view_from_columns, table_view_from_table
 
 from cudf._lib.reduce import minmax
 from cudf.core.abc import Serializable

@@ -30,7 +30,6 @@ from cudf.core.dtypes import ListDtype, StructDtype
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.table cimport table_view_from_columns, table_view_from_table
 from cudf._lib.types cimport dtype_from_column_view, underlying_type_t_type_id
 
 from cudf._lib.interop import from_arrow, to_arrow
@@ -59,7 +58,11 @@ from cudf._lib.cpp.wrappers.timestamps cimport (
     timestamp_s,
     timestamp_us,
 )
-from cudf._lib.utils cimport data_from_table_view
+from cudf._lib.utils cimport (
+    data_from_table_view,
+    table_view_from_columns,
+    table_view_from_table,
+)
 
 
 cdef class DeviceScalar:

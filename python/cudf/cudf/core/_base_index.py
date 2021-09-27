@@ -44,6 +44,9 @@ class BaseIndex(Serializable):
     def copy(self, deep: bool = True) -> BaseIndex:
         raise NotImplementedError
 
+    def __len__(self):
+        raise NotImplementedError
+
     @property
     def size(self):
         # The size of an index is always its length irrespective of dimension.

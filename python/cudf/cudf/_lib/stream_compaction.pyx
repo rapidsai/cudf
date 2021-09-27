@@ -24,8 +24,7 @@ from cudf._lib.cpp.types cimport (
     null_policy,
     size_type,
 )
-from cudf._lib.table cimport table_view_from_table
-from cudf._lib.utils cimport data_from_unique_ptr
+from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
 
 def drop_nulls(source_table, how="any", keys=None, thresh=None):

@@ -8,6 +8,7 @@ from collections import abc
 from typing import (
     Any,
     Dict,
+    List,
     MutableMapping,
     Optional,
     Tuple,
@@ -63,6 +64,7 @@ class Frame:
     """
 
     _data: "ColumnAccessor"
+    _index: Optional[cudf.core.index.BaseIndex]
 
     def __init__(self, data=None, index=None):
         if data is None:
@@ -71,18 +73,18 @@ class Frame:
         self._index = index
 
     @property
-    def _num_columns(self):
+    def _num_columns(self) -> int:
         return len(self._data)
 
     @property
-    def _num_indices(self):
+    def _num_indices(self) -> int:
         if self._index is None:
             return 0
         else:
             return len(self._index_names)
 
     @property
-    def _num_rows(self):
+    def _num_rows(self) -> int:
         if self._index is not None:
             return len(self._index)
         if len(self._data) == 0:
@@ -90,15 +92,21 @@ class Frame:
         return len(self._data.columns[0])
 
     @property
-    def _column_names(self):
+    def _column_names(self) -> List[Any]:  # TODO: List[str]?
         return self._data.names
 
     @property
-    def _index_names(self):
-        return None if self._index is None else self._index._data.names
+    def _index_names(self) -> List[Any]:  # TODO: List[str]?
+        # TODO: Temporarily suppressing mypy warnings to avoid introducing bugs
+        # by returning an empty list if one is not expected.
+        return (
+            None  # type: ignore
+            if self._index is None
+            else self._index._data.names
+        )
 
     @property
-    def _columns(self):
+    def _columns(self) -> List[Any]:  # TODO: List[Column]?
         return self._data.columns
 
     @classmethod

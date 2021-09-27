@@ -13,8 +13,7 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.transpose cimport transpose as cpp_transpose
-from cudf._lib.table cimport table_view_from_table
-from cudf._lib.utils cimport data_from_table_view
+from cudf._lib.utils cimport data_from_table_view, table_view_from_table
 
 
 def transpose(source):

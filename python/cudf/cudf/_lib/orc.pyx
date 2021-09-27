@@ -40,7 +40,6 @@ from cudf._lib.io.utils cimport (
     update_column_struct_field_names,
     update_struct_field_names,
 )
-from cudf._lib.table cimport table_view_from_table
 
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
@@ -48,7 +47,11 @@ from cudf._lib.types cimport underlying_type_t_type_id
 
 import numpy as np
 
-from cudf._lib.utils cimport data_from_unique_ptr, get_column_names
+from cudf._lib.utils cimport (
+    data_from_unique_ptr,
+    get_column_names,
+    table_view_from_table,
+)
 
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 from cudf.api.types import is_list_dtype, is_struct_dtype

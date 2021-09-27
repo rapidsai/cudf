@@ -33,7 +33,6 @@ from cudf._lib.cpp.types cimport (
     size_type,
 )
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.table cimport table_view_from_table
 from cudf._lib.types cimport (
     underlying_type_t_null_order,
     underlying_type_t_order,
@@ -43,7 +42,7 @@ from cudf.core.dtypes import ListDtype
 
 from cudf._lib.cpp.lists.contains cimport contains
 from cudf._lib.cpp.lists.extract cimport extract_list_element
-from cudf._lib.utils cimport data_from_unique_ptr
+from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
 
 def count_elements(Column col):
