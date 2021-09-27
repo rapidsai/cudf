@@ -848,3 +848,29 @@ TYPED_TEST(FixedPointTests, FixedPointToFixedPointDifferentTypeidUpNullMask)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
+
+TEST_F(FixedPointTestSingleType, AvoidOverflowDecimal32ToDecimal64)
+{
+  using namespace numeric;
+  using fp_wrapper32 = cudf::test::fixed_point_column_wrapper<int32_t>;
+  using fp_wrapper64 = cudf::test::fixed_point_column_wrapper<int64_t>;
+
+  auto const input    = fp_wrapper32{{9999999}, scale_type{3}};
+  auto const expected = fp_wrapper64{{9999999}, scale_type{3}};
+  auto const result   = cudf::cast(input, make_fixed_point_data_type<decimal64>(3));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(FixedPointTestSingleType, AvoidOverflowDecimal32ToInt64)
+{
+  using namespace numeric;
+  using fp_wrapper32 = cudf::test::fixed_point_column_wrapper<int32_t>;
+  using fw_wrapper64 = cudf::test::fixed_width_column_wrapper<int64_t>;
+
+  auto const input    = fp_wrapper32{{9999999}, scale_type{3}};
+  auto const expected = fw_wrapper64{{9999999000}};
+  auto const result   = cudf::cast(input, cudf::data_type{cudf::type_id::INT64});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}

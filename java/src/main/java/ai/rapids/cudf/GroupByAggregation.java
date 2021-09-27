@@ -293,4 +293,26 @@ public final class GroupByAggregation {
   public static GroupByAggregation mergeM2() {
     return new GroupByAggregation(Aggregation.mergeM2());
   }
+
+  /**
+   * Compute a t-digest from on a fixed-width numeric input column.
+   *
+   * @param delta Required accuracy (number of buckets).
+   * @return A list of centroids per grouping, where each centroid has a mean value and a
+   *         weight. The number of centroids will be <= delta.
+   */
+  public static GroupByAggregation createTDigest(int delta) {
+    return new GroupByAggregation(Aggregation.createTDigest(delta));
+  }
+
+  /**
+   * Merge t-digests.
+   *
+   * @param delta Required accuracy (number of buckets).
+   * @return A list of centroids per grouping, where each centroid has a mean value and a
+   *         weight. The number of centroids will be <= delta.
+   */
+  public static GroupByAggregation mergeTDigest(int delta) {
+    return new GroupByAggregation(Aggregation.mergeTDigest(delta));
+  }
 }
