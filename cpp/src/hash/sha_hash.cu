@@ -96,7 +96,7 @@ struct crtp {
 };
 
 template <typename HasherT>
-struct SHAHash : public crtp<HasherT> {
+struct HashBase : public crtp<HasherT> {
   /**
    * @brief Execute SHA on input data chunks.
    *
@@ -106,43 +106,42 @@ struct SHAHash : public crtp<HasherT> {
   template <typename Hasher = HasherT>
   void CUDA_DEVICE_CALLABLE process(uint8_t const* data,
                                     uint32_t len,
-                                    typename Hasher::sha_intermediate_data& hash_state)
+                                    typename Hasher::hash_state& state)
   {
-    hash_state.message_length += len;
+    state.message_length += len;
 
-    if (hash_state.buffer_length + len < Hasher::message_chunk_size) {
+    if (state.buffer_length + len < Hasher::message_chunk_size) {
       // The buffer will not be filled by this data. We copy the new data into
       // the buffer but do not trigger a hash step yet.
-      memcpy(hash_state.buffer + hash_state.buffer_length, data, len);
-      hash_state.buffer_length += len;
+      memcpy(state.buffer + state.buffer_length, data, len);
+      state.buffer_length += len;
     } else {
       // The buffer will be filled by this data. Copy a chunk of the data to fill
       // the buffer and trigger a hash step.
-      uint32_t copylen = Hasher::message_chunk_size - hash_state.buffer_length;
-      memcpy(hash_state.buffer + hash_state.buffer_length, data, copylen);
-      this->underlying().hash_step(hash_state);
+      uint32_t copylen = Hasher::message_chunk_size - state.buffer_length;
+      memcpy(state.buffer + state.buffer_length, data, copylen);
+      this->underlying().hash_step(state);
 
       // Take buffer-sized chunks of the data and do a hash step on each chunk.
       while (len > Hasher::message_chunk_size + copylen) {
-        memcpy(hash_state.buffer, data + copylen, Hasher::message_chunk_size);
-        this->underlying().hash_step(hash_state);
+        memcpy(state.buffer, data + copylen, Hasher::message_chunk_size);
+        this->underlying().hash_step(state);
         copylen += Hasher::message_chunk_size;
       }
 
       // The remaining data chunk does not fill the buffer. We copy the data into
       // the buffer but do not trigger a hash step yet.
-      memcpy(hash_state.buffer, data + copylen, len - copylen);
-      hash_state.buffer_length = len - copylen;
+      memcpy(state.buffer, data + copylen, len - copylen);
+      state.buffer_length = len - copylen;
     }
   }
 
   template <typename T, typename Hasher = HasherT>
-  void CUDA_DEVICE_CALLABLE process_fixed_width(T const& key,
-                                                typename Hasher::sha_intermediate_data& hash_state)
+  void CUDA_DEVICE_CALLABLE process_fixed_width(T const& key, typename Hasher::hash_state& state)
   {
     uint8_t const* data    = reinterpret_cast<uint8_t const*>(&key);
     uint32_t constexpr len = sizeof(T);
-    process(data, len, hash_state);
+    process(data, len, state);
   }
 
   /**
@@ -153,58 +152,55 @@ struct SHAHash : public crtp<HasherT> {
    * the final hash step.
    */
   template <typename Hasher = HasherT>
-  void CUDA_DEVICE_CALLABLE finalize(typename Hasher::sha_intermediate_data& hash_state,
-                                     char* result_location)
+  void CUDA_DEVICE_CALLABLE finalize(typename Hasher::hash_state& state, char* result_location)
   {
     // Message length in bits.
-    uint64_t const message_length_in_bits = (static_cast<uint64_t>(hash_state.message_length)) << 3;
+    uint64_t const message_length_in_bits = (static_cast<uint64_t>(state.message_length)) << 3;
     // Add a one bit flag (10000000) to signal the end of the message
     uint8_t constexpr end_of_message = 0x80;
     // 1 byte for the end of the message flag
     uint32_t constexpr end_of_message_size = 1;
 
-    thrust::fill_n(thrust::seq,
-                   hash_state.buffer + hash_state.buffer_length,
-                   end_of_message_size,
-                   end_of_message);
+    thrust::fill_n(
+      thrust::seq, state.buffer + state.buffer_length, end_of_message_size, end_of_message);
 
     // SHA-512 uses a 128-bit message length instead of a 64-bit message length
     // but this code does not support messages with lengths exceeding UINT64_MAX
     // bits. We always pad the upper 64 bits with zeros.
     uint32_t constexpr message_length_supported_size = sizeof(message_length_in_bits);
 
-    if (hash_state.buffer_length + Hasher::message_length_size + end_of_message_size <=
+    if (state.buffer_length + Hasher::message_length_size + end_of_message_size <=
         Hasher::message_chunk_size) {
       // Fill the remainder of the buffer with zeros up to the space reserved
       // for the message length. The message length fits in this hash step.
       thrust::fill(thrust::seq,
-                   hash_state.buffer + hash_state.buffer_length + end_of_message_size,
-                   hash_state.buffer + Hasher::message_chunk_size - message_length_supported_size,
+                   state.buffer + state.buffer_length + end_of_message_size,
+                   state.buffer + Hasher::message_chunk_size - message_length_supported_size,
                    0x00);
     } else {
       // Fill the remainder of the buffer with zeros. The message length doesn't
       // fit and will be processed in a subsequent hash step comprised of only
       // zeros followed by the message length.
       thrust::fill(thrust::seq,
-                   hash_state.buffer + hash_state.buffer_length + end_of_message_size,
-                   hash_state.buffer + Hasher::message_chunk_size,
+                   state.buffer + state.buffer_length + end_of_message_size,
+                   state.buffer + Hasher::message_chunk_size,
                    0x00);
-      this->underlying().hash_step(hash_state);
+      this->underlying().hash_step(state);
 
       // Fill the entire message with zeros up to the final bytes reserved for
       // the message length.
       thrust::fill_n(thrust::seq,
-                     hash_state.buffer,
+                     state.buffer,
                      Hasher::message_chunk_size - message_length_supported_size,
                      0x00);
     }
 
     // Convert the 64-bit message length from little-endian to big-endian.
     uint64_t const full_length_flipped = swap_endian(message_length_in_bits);
-    memcpy(hash_state.buffer + Hasher::message_chunk_size - message_length_supported_size,
+    memcpy(state.buffer + Hasher::message_chunk_size - message_length_supported_size,
            reinterpret_cast<uint8_t const*>(&full_length_flipped),
            message_length_supported_size);
-    this->underlying().hash_step(hash_state);
+    this->underlying().hash_step(state);
 
     // Each byte in the word generates two bytes in the hexadecimal string digest.
     // SHA-224 and SHA-384 digests are truncated because their digest does not
@@ -213,7 +209,7 @@ struct SHAHash : public crtp<HasherT> {
       Hasher::digest_size / (2 * sizeof(typename Hasher::sha_word_type));
     for (int i = 0; i < num_words_to_copy; i++) {
       // Convert word representation from big-endian to little-endian.
-      typename Hasher::sha_word_type flipped = swap_endian(hash_state.hash_value[i]);
+      typename Hasher::sha_word_type flipped = swap_endian(state.hash_value[i]);
       if constexpr (std::is_same_v<typename Hasher::sha_word_type, uint32_t>) {
         uint32ToLowercaseHexString(flipped, result_location + (8 * i));
       } else if constexpr (std::is_same_v<typename Hasher::sha_word_type, uint64_t>) {
@@ -231,9 +227,7 @@ struct SHAHash : public crtp<HasherT> {
             typename Hasher                                             = HasherT,
             typename std::enable_if_t<(!is_fixed_width<T>() || is_chrono<T>()) &&
                                       !std::is_same_v<T, string_view>>* = nullptr>
-  void CUDA_DEVICE_CALLABLE operator()(column_device_view,
-                                       size_type,
-                                       typename Hasher::sha_intermediate_data&)
+  void CUDA_DEVICE_CALLABLE operator()(column_device_view, size_type, typename Hasher::hash_state&)
   {
     cudf_assert(false && "Unsupported type for SHA hash.");
   }
@@ -243,16 +237,16 @@ struct SHAHash : public crtp<HasherT> {
             typename std::enable_if_t<is_floating_point<T>()>* = nullptr>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
                                        size_type row_index,
-                                       typename Hasher::sha_intermediate_data& hash_state)
+                                       typename Hasher::hash_state& state)
   {
     T const& key = col.element<T>(row_index);
     if (isnan(key)) {
       T nan = std::numeric_limits<T>::quiet_NaN();
-      process_fixed_width(nan, hash_state);
+      process_fixed_width(nan, state);
     } else if (key == T{0.0}) {
-      process_fixed_width(T{0.0}, hash_state);
+      process_fixed_width(T{0.0}, state);
     } else {
-      process_fixed_width(key, hash_state);
+      process_fixed_width(key, state);
     }
   }
 
@@ -262,9 +256,9 @@ struct SHAHash : public crtp<HasherT> {
                                       !is_chrono<T>()>* = nullptr>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
                                        size_type row_index,
-                                       typename Hasher::sha_intermediate_data& hash_state)
+                                       typename Hasher::hash_state& state)
   {
-    process_fixed_width(col.element<T>(row_index), hash_state);
+    process_fixed_width(col.element<T>(row_index), state);
   }
 
   template <typename T,
@@ -272,23 +266,23 @@ struct SHAHash : public crtp<HasherT> {
             typename std::enable_if_t<std::is_same_v<T, string_view>>* = nullptr>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
                                        size_type row_index,
-                                       typename Hasher::sha_intermediate_data& hash_state)
+                                       typename Hasher::hash_state& state)
   {
     string_view key     = col.element<string_view>(row_index);
     uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
     uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
-    process(data, len, hash_state);
+    process(data, len, state);
   }
 };
 
-struct sha1_intermediate_data {
+struct sha1_hash_state {
   uint64_t message_length = 0;
   uint32_t buffer_length  = 0;
   uint32_t hash_value[5]  = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476, 0xc3d2e1f0};
   uint8_t buffer[64];
 };
 
-struct sha224_intermediate_data {
+struct sha224_hash_state {
   uint64_t message_length = 0;
   uint32_t buffer_length  = 0;
   uint32_t hash_value[8]  = {
@@ -296,7 +290,7 @@ struct sha224_intermediate_data {
   uint8_t buffer[64];
 };
 
-struct sha256_intermediate_data {
+struct sha256_hash_state {
   uint64_t message_length = 0;
   uint32_t buffer_length  = 0;
   uint32_t hash_value[8]  = {
@@ -304,7 +298,7 @@ struct sha256_intermediate_data {
   uint8_t buffer[64];
 };
 
-struct sha384_intermediate_data {
+struct sha384_hash_state {
   uint64_t message_length = 0;
   uint32_t buffer_length  = 0;
   uint64_t hash_value[8]  = {0xcbbb9d5dc1059ed8,
@@ -318,7 +312,7 @@ struct sha384_intermediate_data {
   uint8_t buffer[128];
 };
 
-struct sha512_intermediate_data {
+struct sha512_hash_state {
   uint64_t message_length = 0;
   uint32_t buffer_length  = 0;
   uint64_t hash_value[8]  = {0x6a09e667f3bcc908,
@@ -369,19 +363,19 @@ __constant__ uint64_t sha512_hash_constants[80] = {
  * @brief Core SHA-1 algorithm implementation. Processes a single 512-bit chunk,
  * updating the hash value so far. Does not zero out the buffer contents.
  */
-template <typename sha_intermediate_data>
-void CUDA_DEVICE_CALLABLE sha1_hash_step(sha_intermediate_data& hash_state)
+template <typename hash_state>
+void CUDA_DEVICE_CALLABLE sha1_hash_step(hash_state& state)
 {
-  uint32_t A = hash_state.hash_value[0];
-  uint32_t B = hash_state.hash_value[1];
-  uint32_t C = hash_state.hash_value[2];
-  uint32_t D = hash_state.hash_value[3];
-  uint32_t E = hash_state.hash_value[4];
+  uint32_t A = state.hash_value[0];
+  uint32_t B = state.hash_value[1];
+  uint32_t C = state.hash_value[2];
+  uint32_t D = state.hash_value[3];
+  uint32_t E = state.hash_value[4];
 
   uint32_t words[80];
 
   // The 512-bit message buffer fills the first 16 words.
-  memcpy(&words[0], hash_state.buffer, sizeof(words[0]) * 16);
+  memcpy(&words[0], state.buffer, sizeof(words[0]) * 16);
   for (int i = 0; i < 16; i++) {
     // Convert word representation from little-endian to big-endian.
     words[i] = swap_endian(words[i]);
@@ -423,35 +417,35 @@ void CUDA_DEVICE_CALLABLE sha1_hash_step(sha_intermediate_data& hash_state)
     A    = temp;
   }
 
-  hash_state.hash_value[0] += A;
-  hash_state.hash_value[1] += B;
-  hash_state.hash_value[2] += C;
-  hash_state.hash_value[3] += D;
-  hash_state.hash_value[4] += E;
+  state.hash_value[0] += A;
+  state.hash_value[1] += B;
+  state.hash_value[2] += C;
+  state.hash_value[3] += D;
+  state.hash_value[4] += E;
 
-  hash_state.buffer_length = 0;
+  state.buffer_length = 0;
 }
 
 /**
  * @brief Core SHA-256 algorithm implementation. Processes a single 512-bit chunk,
  * updating the hash value so far. Does not zero out the buffer contents.
  */
-template <typename sha_intermediate_data>
-void CUDA_DEVICE_CALLABLE sha256_hash_step(sha_intermediate_data& hash_state)
+template <typename hash_state>
+void CUDA_DEVICE_CALLABLE sha256_hash_step(hash_state& state)
 {
-  uint32_t A = hash_state.hash_value[0];
-  uint32_t B = hash_state.hash_value[1];
-  uint32_t C = hash_state.hash_value[2];
-  uint32_t D = hash_state.hash_value[3];
-  uint32_t E = hash_state.hash_value[4];
-  uint32_t F = hash_state.hash_value[5];
-  uint32_t G = hash_state.hash_value[6];
-  uint32_t H = hash_state.hash_value[7];
+  uint32_t A = state.hash_value[0];
+  uint32_t B = state.hash_value[1];
+  uint32_t C = state.hash_value[2];
+  uint32_t D = state.hash_value[3];
+  uint32_t E = state.hash_value[4];
+  uint32_t F = state.hash_value[5];
+  uint32_t G = state.hash_value[6];
+  uint32_t H = state.hash_value[7];
 
   uint32_t words[64];
 
   // The 512-bit message buffer fills the first 16 words.
-  memcpy(&words[0], hash_state.buffer, sizeof(words[0]) * 16);
+  memcpy(&words[0], state.buffer, sizeof(words[0]) * 16);
   for (int i = 0; i < 16; i++) {
     // Convert word representation from little-endian to big-endian.
     words[i] = swap_endian(words[i]);
@@ -486,38 +480,38 @@ void CUDA_DEVICE_CALLABLE sha256_hash_step(sha_intermediate_data& hash_state)
     A = temp1 + temp2;
   }
 
-  hash_state.hash_value[0] += A;
-  hash_state.hash_value[1] += B;
-  hash_state.hash_value[2] += C;
-  hash_state.hash_value[3] += D;
-  hash_state.hash_value[4] += E;
-  hash_state.hash_value[5] += F;
-  hash_state.hash_value[6] += G;
-  hash_state.hash_value[7] += H;
+  state.hash_value[0] += A;
+  state.hash_value[1] += B;
+  state.hash_value[2] += C;
+  state.hash_value[3] += D;
+  state.hash_value[4] += E;
+  state.hash_value[5] += F;
+  state.hash_value[6] += G;
+  state.hash_value[7] += H;
 
-  hash_state.buffer_length = 0;
+  state.buffer_length = 0;
 }
 
 /**
  * @brief Core SHA-512 algorithm implementation. Processes a single 1024-bit chunk,
  * updating the hash value so far. Does not zero out the buffer contents.
  */
-template <typename sha_intermediate_data>
-void CUDA_DEVICE_CALLABLE sha512_hash_step(sha_intermediate_data& hash_state)
+template <typename hash_state>
+void CUDA_DEVICE_CALLABLE sha512_hash_step(hash_state& state)
 {
-  uint64_t A = hash_state.hash_value[0];
-  uint64_t B = hash_state.hash_value[1];
-  uint64_t C = hash_state.hash_value[2];
-  uint64_t D = hash_state.hash_value[3];
-  uint64_t E = hash_state.hash_value[4];
-  uint64_t F = hash_state.hash_value[5];
-  uint64_t G = hash_state.hash_value[6];
-  uint64_t H = hash_state.hash_value[7];
+  uint64_t A = state.hash_value[0];
+  uint64_t B = state.hash_value[1];
+  uint64_t C = state.hash_value[2];
+  uint64_t D = state.hash_value[3];
+  uint64_t E = state.hash_value[4];
+  uint64_t F = state.hash_value[5];
+  uint64_t G = state.hash_value[6];
+  uint64_t H = state.hash_value[7];
 
   uint64_t words[80];
 
   // The 1024-bit message buffer fills the first 16 words.
-  memcpy(&words[0], hash_state.buffer, sizeof(words[0]) * 16);
+  memcpy(&words[0], state.buffer, sizeof(words[0]) * 16);
   for (int i = 0; i < 16; i++) {
     // Convert word representation from little-endian to big-endian.
     words[i] = swap_endian(words[i]);
@@ -552,21 +546,21 @@ void CUDA_DEVICE_CALLABLE sha512_hash_step(sha_intermediate_data& hash_state)
     A = temp1 + temp2;
   }
 
-  hash_state.hash_value[0] += A;
-  hash_state.hash_value[1] += B;
-  hash_state.hash_value[2] += C;
-  hash_state.hash_value[3] += D;
-  hash_state.hash_value[4] += E;
-  hash_state.hash_value[5] += F;
-  hash_state.hash_value[6] += G;
-  hash_state.hash_value[7] += H;
+  state.hash_value[0] += A;
+  state.hash_value[1] += B;
+  state.hash_value[2] += C;
+  state.hash_value[3] += D;
+  state.hash_value[4] += E;
+  state.hash_value[5] += F;
+  state.hash_value[6] += G;
+  state.hash_value[7] += H;
 
-  hash_state.buffer_length = 0;
+  state.buffer_length = 0;
 }
 
-struct SHA1Hash : SHAHash<SHA1Hash> {
+struct SHA1Hash : HashBase<SHA1Hash> {
   // Intermediate data type storing the hash state
-  using sha_intermediate_data = sha1_intermediate_data;
+  using hash_state = sha1_hash_state;
   // The word type used by this hash function
   using sha_word_type = uint32_t;
   // Number of bytes processed in each hash step
@@ -576,17 +570,14 @@ struct SHA1Hash : SHAHash<SHA1Hash> {
   // Number of bytes used for the message length
   static constexpr uint32_t message_length_size = 8;
 
-  void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
-  {
-    sha1_hash_step(hash_state);
-  }
+  void CUDA_DEVICE_CALLABLE hash_step(hash_state& state) { sha1_hash_step(state); }
 
-  sha_intermediate_data hash_state;
+  hash_state state;
 };
 
-struct SHA224Hash : SHAHash<SHA224Hash> {
+struct SHA224Hash : HashBase<SHA224Hash> {
   // Intermediate data type storing the hash state
-  using sha_intermediate_data = sha224_intermediate_data;
+  using hash_state = sha224_hash_state;
   // The word type used by this hash function
   using sha_word_type = uint32_t;
   // Number of bytes processed in each hash step
@@ -596,17 +587,14 @@ struct SHA224Hash : SHAHash<SHA224Hash> {
   // Number of bytes used for the message length
   static constexpr uint32_t message_length_size = 8;
 
-  void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
-  {
-    sha256_hash_step(hash_state);
-  }
+  void CUDA_DEVICE_CALLABLE hash_step(hash_state& state) { sha256_hash_step(state); }
 
-  sha_intermediate_data hash_state;
+  hash_state state;
 };
 
-struct SHA256Hash : SHAHash<SHA256Hash> {
+struct SHA256Hash : HashBase<SHA256Hash> {
   // Intermediate data type storing the hash state
-  using sha_intermediate_data = sha256_intermediate_data;
+  using hash_state = sha256_hash_state;
   // The word type used by this hash function
   using sha_word_type = uint32_t;
   // Number of bytes processed in each hash step
@@ -616,17 +604,14 @@ struct SHA256Hash : SHAHash<SHA256Hash> {
   // Number of bytes used for the message length
   static constexpr uint32_t message_length_size = 8;
 
-  void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
-  {
-    sha256_hash_step(hash_state);
-  }
+  void CUDA_DEVICE_CALLABLE hash_step(hash_state& state) { sha256_hash_step(state); }
 
-  sha_intermediate_data hash_state;
+  hash_state state;
 };
 
-struct SHA384Hash : SHAHash<SHA384Hash> {
+struct SHA384Hash : HashBase<SHA384Hash> {
   // Intermediate data type storing the hash state
-  using sha_intermediate_data = sha384_intermediate_data;
+  using hash_state = sha384_hash_state;
   // The word type used by this hash function
   using sha_word_type = uint64_t;
   // Number of bytes processed in each hash step
@@ -636,17 +621,14 @@ struct SHA384Hash : SHAHash<SHA384Hash> {
   // Number of bytes used for the message length
   static constexpr uint32_t message_length_size = 16;
 
-  void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
-  {
-    sha512_hash_step(hash_state);
-  }
+  void CUDA_DEVICE_CALLABLE hash_step(hash_state& state) { sha512_hash_step(state); }
 
-  sha_intermediate_data hash_state;
+  hash_state state;
 };
 
-struct SHA512Hash : SHAHash<SHA512Hash> {
+struct SHA512Hash : HashBase<SHA512Hash> {
   // Intermediate data type storing the hash state
-  using sha_intermediate_data = sha512_intermediate_data;
+  using hash_state = sha512_hash_state;
   // The word type used by this hash function
   using sha_word_type = uint64_t;
   // Number of bytes processed in each hash step
@@ -656,12 +638,9 @@ struct SHA512Hash : SHAHash<SHA512Hash> {
   // Number of bytes used for the message length
   static constexpr uint32_t message_length_size = 16;
 
-  void CUDA_DEVICE_CALLABLE hash_step(sha_intermediate_data& hash_state)
-  {
-    sha512_hash_step(hash_state);
-  }
+  void CUDA_DEVICE_CALLABLE hash_step(hash_state& state) { sha512_hash_step(state); }
 
-  sha_intermediate_data hash_state;
+  hash_state state;
 };
 
 /**
@@ -722,11 +701,11 @@ std::unique_ptr<column> sha_hash(table_view const& input,
                            hasher,
                            device_input.column(col_index),
                            row_index,
-                           hasher.hash_state);
+                           hasher.state);
                        }
                      }
                      auto const result_location = d_chars + (row_index * Hasher::digest_size);
-                     hasher.finalize(hasher.hash_state, result_location);
+                     hasher.finalize(hasher.state, result_location);
                    });
 
   return make_strings_column(
