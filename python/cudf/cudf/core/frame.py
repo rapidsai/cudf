@@ -98,7 +98,7 @@ class Frame:
     @property
     def _index_names(self) -> List[Any]:  # TODO: List[str]?
         # TODO: Temporarily suppressing mypy warnings to avoid introducing bugs
-        # by returning an empty list if one is not expected.
+        # by returning an empty list where one is not expected.
         return (
             None  # type: ignore
             if self._index is None
