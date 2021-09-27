@@ -1,8 +1,8 @@
 import pytest
 
-import cudf
-
 import dask_cudf
+
+import cudf
 
 
 @pytest.mark.parametrize(

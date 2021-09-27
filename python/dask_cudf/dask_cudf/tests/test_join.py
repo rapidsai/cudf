@@ -1,77 +1,363 @@
-import numba.cuda
+from functools import partial
+
+import numpy as np
+import pandas as pd
 import pytest
 
-import dask
 from dask import dataframe as dd
-from dask.distributed import Client
-from distributed.utils_test import loop  # noqa: F401
 
 import cudf
-from cudf.testing._utils import assert_eq
 
-import dask_cudf
+import dask_cudf as dgd
 
-dask_cuda = pytest.importorskip("dask_cuda")
-
-
-def more_than_two_gpus():
-    ngpus = len(numba.cuda.gpus)
-    return ngpus >= 2
+param_nrows = [5, 10, 50, 100]
 
 
-@pytest.mark.parametrize("delayed", [True, False])
-def test_basic(loop, delayed):  # noqa: F811
-    with dask_cuda.LocalCUDACluster(loop=loop) as cluster:
-        with Client(cluster):
-            pdf = dask.datasets.timeseries(dtypes={"x": int}).reset_index()
-            gdf = pdf.map_partitions(cudf.DataFrame.from_pandas)
-            if delayed:
-                gdf = dd.from_delayed(gdf.to_delayed())
-            assert_eq(pdf.head(), gdf.head())
+@pytest.mark.parametrize("left_nrows", param_nrows)
+@pytest.mark.parametrize("right_nrows", param_nrows)
+@pytest.mark.parametrize("left_nkeys", [4, 5])
+@pytest.mark.parametrize("right_nkeys", [4, 5])
+def test_join_inner(left_nrows, right_nrows, left_nkeys, right_nkeys):
+    chunksize = 50
+
+    np.random.seed(0)
+
+    # cuDF
+    left = cudf.DataFrame(
+        {
+            "x": np.random.randint(0, left_nkeys, size=left_nrows),
+            "a": np.arange(left_nrows),
+        }
+    )
+    right = cudf.DataFrame(
+        {
+            "x": np.random.randint(0, right_nkeys, size=right_nrows),
+            "a": 1000 * np.arange(right_nrows),
+        }
+    )
+
+    expect = left.set_index("x").join(
+        right.set_index("x"), how="inner", sort=True, lsuffix="l", rsuffix="r"
+    )
+    expect = expect.to_pandas()
+
+    # dask_cudf
+    left = dgd.from_cudf(left, chunksize=chunksize)
+    right = dgd.from_cudf(right, chunksize=chunksize)
+
+    joined = left.set_index("x").join(
+        right.set_index("x"), how="inner", lsuffix="l", rsuffix="r"
+    )
+    got = joined.compute().to_pandas()
+
+    if len(got.columns):
+        got = got.sort_values(list(got.columns))
+        expect = expect.sort_values(list(expect.columns))
+
+    # Check index
+    np.testing.assert_array_equal(expect.index.values, got.index.values)
+
+    # Check rows in each groups
+    expect_rows = {}
+    got_rows = {}
+
+    def gather(df, grows):
+        grows[df["x"].values[0]] = (set(df.al), set(df.ar))
+
+    expect.reset_index().groupby("x").apply(partial(gather, grows=expect_rows))
+    expect.reset_index().groupby("x").apply(partial(gather, grows=got_rows))
+
+    assert got_rows == expect_rows
 
 
-def test_merge():
-    # Repro Issue#3366
-    with dask_cuda.LocalCUDACluster(n_workers=1) as cluster:
-        with Client(cluster):
-            r1 = cudf.DataFrame()
-            r1["a1"] = range(4)
-            r1["a2"] = range(4, 8)
-            r1["a3"] = range(4)
+@pytest.mark.parametrize("left_nrows", param_nrows)
+@pytest.mark.parametrize("right_nrows", param_nrows)
+@pytest.mark.parametrize("left_nkeys", [4, 5])
+@pytest.mark.parametrize("right_nkeys", [4, 5])
+@pytest.mark.parametrize("how", ["left", "right"])
+def test_join_left(left_nrows, right_nrows, left_nkeys, right_nkeys, how):
+    chunksize = 50
 
-            r2 = cudf.DataFrame()
-            r2["b0"] = range(4)
-            r2["b1"] = range(4)
-            r2["b1"] = r2.b1.astype("str")
+    np.random.seed(0)
 
-            d1 = dask_cudf.from_cudf(r1, 2)
-            d2 = dask_cudf.from_cudf(r2, 2)
+    # cuDF
+    left = cudf.DataFrame(
+        {
+            "x": np.random.randint(0, left_nkeys, size=left_nrows),
+            "a": np.arange(left_nrows, dtype=np.float64),
+        }
+    )
+    right = cudf.DataFrame(
+        {
+            "x": np.random.randint(0, right_nkeys, size=right_nrows),
+            "a": 1000 * np.arange(right_nrows, dtype=np.float64),
+        }
+    )
 
-            res = d1.merge(d2, left_on=["a3"], right_on=["b0"])
-            assert len(res) == 4
+    expect = left.set_index("x").join(
+        right.set_index("x"), how=how, sort=True, lsuffix="l", rsuffix="r"
+    )
+    expect = expect.to_pandas()
+
+    # dask_cudf
+    left = dgd.from_cudf(left, chunksize=chunksize)
+    right = dgd.from_cudf(right, chunksize=chunksize)
+
+    joined = left.set_index("x").join(
+        right.set_index("x"), how=how, lsuffix="l", rsuffix="r"
+    )
+    got = joined.compute().to_pandas()
+
+    if len(got.columns):
+        got = got.sort_values(list(got.columns))
+        expect = expect.sort_values(list(expect.columns))
+
+    # Check index
+    np.testing.assert_array_equal(expect.index.values, got.index.values)
+
+    # Check rows in each groups
+    expect_rows = {}
+    got_rows = {}
+
+    def gather(df, grows):
+        cola = np.sort(np.asarray(df.al))
+        colb = np.sort(np.asarray(df.ar))
+
+        grows[df["x"].values[0]] = (cola, colb)
+
+    expect.reset_index().groupby("x").apply(partial(gather, grows=expect_rows))
+
+    expect.reset_index().groupby("x").apply(partial(gather, grows=got_rows))
+
+    for k in expect_rows:
+        np.testing.assert_array_equal(expect_rows[k][0], got_rows[k][0])
+        np.testing.assert_array_equal(expect_rows[k][1], got_rows[k][1])
 
 
-@pytest.mark.skipif(
-    not more_than_two_gpus(), reason="Machine does not have more than two GPUs"
-)
-def test_ucx_seriesgroupby():
-    pytest.importorskip("ucp")
+@pytest.mark.parametrize("left_nrows", param_nrows)
+@pytest.mark.parametrize("right_nrows", param_nrows)
+@pytest.mark.parametrize("left_nkeys", [4, 5])
+@pytest.mark.parametrize("right_nkeys", [4, 5])
+def test_merge_left(
+    left_nrows, right_nrows, left_nkeys, right_nkeys, how="left"
+):
+    chunksize = 3
 
-    # Repro Issue#3913
-    with dask_cuda.LocalCUDACluster(n_workers=2, protocol="ucx") as cluster:
-        with Client(cluster):
-            df = cudf.DataFrame({"a": [1, 2, 3, 4], "b": [5, 1, 2, 5]})
-            dask_df = dask_cudf.from_cudf(df, npartitions=2)
-            dask_df_g = dask_df.groupby(["a"]).b.sum().compute()
+    np.random.seed(0)
 
-            assert dask_df_g.name == "b"
+    # cuDF
+    left = cudf.DataFrame(
+        {
+            "x": np.random.randint(0, left_nkeys, size=left_nrows),
+            "y": np.random.randint(0, left_nkeys, size=left_nrows),
+            "a": np.arange(left_nrows, dtype=np.float64),
+        }
+    )
+    right = cudf.DataFrame(
+        {
+            "x": np.random.randint(0, right_nkeys, size=right_nrows),
+            "y": np.random.randint(0, right_nkeys, size=right_nrows),
+            "a": 1000 * np.arange(right_nrows, dtype=np.float64),
+        }
+    )
+
+    expect = left.merge(right, on=("x", "y"), how=how)
+
+    def normalize(df):
+        return (
+            df.to_pandas()
+            .sort_values(["x", "y", "a_x", "a_y"])
+            .reset_index(drop=True)
+        )
+
+    # dask_cudf
+    left = dgd.from_cudf(left, chunksize=chunksize)
+    right = dgd.from_cudf(right, chunksize=chunksize)
+
+    result = left.merge(right, on=("x", "y"), how=how).compute(
+        scheduler="single-threaded"
+    )
+
+    dd.assert_eq(normalize(expect), normalize(result))
 
 
-def test_str_series_roundtrip():
-    with dask_cuda.LocalCUDACluster(n_workers=1) as cluster:
-        with Client(cluster):
-            expected = cudf.Series(["hi", "hello", None])
-            dask_series = dask_cudf.from_cudf(expected, npartitions=2)
+@pytest.mark.parametrize("left_nrows", [2, 5])
+@pytest.mark.parametrize("right_nrows", [5, 10])
+@pytest.mark.parametrize("left_nkeys", [4])
+@pytest.mark.parametrize("right_nkeys", [4])
+def test_merge_1col_left(
+    left_nrows, right_nrows, left_nkeys, right_nkeys, how="left"
+):
+    chunksize = 3
 
-            actual = dask_series.compute()
-            assert_eq(actual, expected)
+    np.random.seed(0)
+
+    # cuDF
+    left = cudf.DataFrame(
+        {
+            "x": np.random.randint(0, left_nkeys, size=left_nrows),
+            "a": np.arange(left_nrows, dtype=np.float64),
+        }
+    )
+    right = cudf.DataFrame(
+        {
+            "x": np.random.randint(0, right_nkeys, size=right_nrows),
+            "a": 1000 * np.arange(right_nrows, dtype=np.float64),
+        }
+    )
+
+    expect = left.merge(right, on=["x"], how=how)
+    expect = (
+        expect.to_pandas()
+        .sort_values(["x", "a_x", "a_y"])
+        .reset_index(drop=True)
+    )
+
+    # dask_cudf
+    left = dgd.from_cudf(left, chunksize=chunksize)
+    right = dgd.from_cudf(right, chunksize=chunksize)
+
+    joined = left.merge(right, on=["x"], how=how)
+
+    got = joined.compute().to_pandas()
+
+    got = got.sort_values(["x", "a_x", "a_y"]).reset_index(drop=True)
+
+    dd.assert_eq(expect, got)
+
+
+def test_merge_should_fail():
+    # Expected failure cases described in #2694
+    df1 = cudf.DataFrame()
+    df1["a"] = [1, 2, 3, 4, 5, 6] * 2
+    df1["b"] = np.random.randint(0, 12, 12)
+
+    df2 = cudf.DataFrame()
+    df2["a"] = [7, 2, 3, 8, 5, 9] * 2
+    df2["c"] = np.random.randint(0, 12, 12)
+
+    left = dgd.from_cudf(df1, 1).groupby("a").b.min().to_frame()
+    right = dgd.from_cudf(df2, 1).groupby("a").c.min().to_frame()
+
+    with pytest.raises(KeyError):
+        left.merge(right, how="left", on=["nonCol"])
+    with pytest.raises(KeyError):
+        left.merge(right, how="left", on=["b"])
+    with pytest.raises(KeyError):
+        left.merge(right, how="left", on=["c"])
+    with pytest.raises(KeyError):
+        left.merge(right, how="left", on=["a"])
+
+    # Same column names
+    df2["b"] = np.random.randint(0, 12, 12)
+    right = dgd.from_cudf(df2, 1).groupby("a").b.min().to_frame()
+
+    with pytest.raises(KeyError):
+        left.merge(right, how="left", on="NonCol")
+    with pytest.raises(KeyError):
+        left.merge(right, how="left", on="a")
+
+
+@pytest.mark.parametrize("how", ["inner", "left"])
+def test_indexed_join(how):
+    p_left = pd.DataFrame({"x": np.arange(10)}, index=np.arange(10) * 2)
+    p_right = pd.DataFrame({"y": 1}, index=np.arange(15))
+
+    g_left = cudf.from_pandas(p_left)
+    g_right = cudf.from_pandas(p_right)
+
+    dg_left = dd.from_pandas(g_left, npartitions=4)
+    dg_right = dd.from_pandas(g_right, npartitions=5)
+
+    d = g_left.merge(g_right, left_index=True, right_index=True, how=how)
+    dg = dg_left.merge(dg_right, left_index=True, right_index=True, how=how)
+
+    # occasionally order is not correct (possibly do to hashing in the merge)
+    d = d.sort_values("x")  # index is preserved
+    dg = dg.sort_values(
+        "x"
+    )  # index is reset -- sort_values will slow test down
+
+    dd.assert_eq(d, dg, check_index=False)
+
+
+@pytest.mark.parametrize("how", ["left", "inner"])
+def test_how(how):
+    left = cudf.DataFrame(
+        {"x": [1, 2, 3, 4, None], "y": [1.0, 2.0, 3.0, 4.0, 0.0]}
+    )
+    right = cudf.DataFrame({"x": [2, 3, None, 2], "y": [20, 30, 0, 20]})
+
+    dleft = dd.from_pandas(left, npartitions=2)
+    dright = dd.from_pandas(right, npartitions=3)
+
+    expected = left.merge(right, how=how, on="x")
+    result = dleft.merge(dright, how=how, on="x")
+
+    dd.assert_eq(
+        result.compute().to_pandas().sort_values("x"),
+        expected.to_pandas().sort_values("x"),
+        check_index=False,
+    )
+
+
+@pytest.mark.parametrize("daskify", [True, False])
+def test_single_dataframe_merge(daskify):
+    right = cudf.DataFrame({"x": [1, 2, 1, 2], "y": [1, 2, 3, 4]})
+    left = cudf.DataFrame({"x": np.arange(100) % 10, "z": np.arange(100)})
+
+    dleft = dd.from_pandas(left, npartitions=10)
+
+    if daskify:
+        dright = dd.from_pandas(right, npartitions=1)
+    else:
+        dright = right
+
+    expected = left.merge(right, how="inner")
+    result = dd.merge(dleft, dright, how="inner")
+    assert len(result.dask) < 25
+
+    dd.assert_eq(
+        result.compute().to_pandas().sort_values(["z", "y"]),
+        expected.to_pandas().sort_values(["z", "y"]),
+        check_index=False,
+    )
+
+
+@pytest.mark.parametrize("how", ["inner", "left"])
+@pytest.mark.parametrize("on", ["id_1", ["id_1"], ["id_1", "id_2"]])
+def test_on(how, on):
+    left = cudf.DataFrame(
+        {"id_1": [1, 2, 3, 4, 5], "id_2": [1.0, 2.0, 3.0, 4.0, 0.0]}
+    )
+    right = cudf.DataFrame(
+        {"id_1": [2, 3, None, 2], "id_2": [2.0, 3.0, 4.0, 20]}
+    )
+
+    dleft = dd.from_pandas(left, npartitions=2)
+    dright = dd.from_pandas(right, npartitions=3)
+
+    expected = left.merge(right, how=how, on=on)
+    result = dleft.merge(dright, how=how, on=on)
+
+    dd.assert_eq(
+        result.compute().to_pandas().sort_values(on),
+        expected.to_pandas().sort_values(on),
+        check_index=False,
+    )
+
+
+def test_single_partition():
+    left = cudf.DataFrame({"x": range(200), "y": range(200)})
+    right = cudf.DataFrame({"x": range(100), "z": range(100)})
+
+    dleft = dd.from_pandas(left, npartitions=1)
+    dright = dd.from_pandas(right, npartitions=10)
+
+    m = dleft.merge(dright, how="inner")
+    assert len(m.dask) < len(dleft.dask) + len(dright.dask) * 3
+
+    dleft = dd.from_pandas(left, npartitions=5)
+    m2 = dleft.merge(right, how="inner")
+    assert len(m2.dask) < len(dleft.dask) * 3
+    assert len(m2) == 100

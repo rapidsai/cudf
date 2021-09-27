@@ -1,80 +1,75 @@
-# Copyright (c) 2021, NVIDIA CORPORATION.
-
 import numpy as np
-import pandas as pd
 import pytest
 
+import dask
 from dask import dataframe as dd
 
 import cudf
 
-import dask_cudf as dgd
+import dask_cudf
+from dask_cudf.sorting import quantile_divisions
 
 
-def _make_random_frame(nelem, npartitions=2):
-    df = pd.DataFrame(
+@pytest.mark.parametrize("by", ["a", "b", "c", "d", ["a", "b"], ["c", "d"]])
+@pytest.mark.parametrize("nelem", [10, 500])
+@pytest.mark.parametrize("nparts", [1, 10])
+def test_sort_values(nelem, nparts, by):
+    np.random.seed(0)
+    df = cudf.DataFrame()
+    df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
+    df["b"] = np.arange(100, nelem + 100)
+    df["c"] = df["b"].astype("str")
+    df["d"] = df["a"].astype("category")
+    ddf = dd.from_pandas(df, npartitions=nparts)
+
+    with dask.config.set(scheduler="single-threaded"):
+        got = ddf.sort_values(by=by)
+    expect = df.sort_values(by=by)
+    dd.assert_eq(got, expect, check_index=False)
+
+
+@pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
+def test_sort_values_single_partition(by):
+    df = cudf.DataFrame()
+    nelem = 1000
+    df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
+    df["b"] = np.arange(100, nelem + 100)
+    ddf = dd.from_pandas(df, npartitions=1)
+
+    with dask.config.set(scheduler="single-threaded"):
+        got = ddf.sort_values(by=by)
+    expect = df.sort_values(by=by)
+    dd.assert_eq(got, expect)
+
+
+def test_sort_repartition():
+    ddf = dask_cudf.from_cudf(
+        cudf.DataFrame({"a": [0, 0, 1, 2, 3, 4, 2]}), npartitions=2
+    )
+
+    new_ddf = ddf.shuffle(on="a", ignore_index=True, npartitions=3)
+
+    dd.assert_eq(len(new_ddf), len(ddf))
+
+
+@pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
+def test_sort_values_with_nulls(by):
+    df = cudf.DataFrame(
         {
-            "x": np.random.randint(0, 5, size=nelem),
-            "y": np.random.normal(size=nelem) + 1,
+            "a": list(range(50)) + [None] * 50 + list(range(50, 100)),
+            "b": [None] * 100 + list(range(100, 150)),
         }
     )
-    gdf = cudf.DataFrame.from_pandas(df)
-    dgf = dgd.from_cudf(gdf, npartitions=npartitions)
-    return df, dgf
+    ddf = dd.from_pandas(df, npartitions=10)
 
-
-_reducers = ["sum", "count", "mean", "var", "std", "min", "max"]
-
-
-def _get_reduce_fn(name):
-    def wrapped(series):
-        fn = getattr(series, name)
-        return fn()
-
-    return wrapped
-
-
-@pytest.mark.parametrize("reducer", _reducers)
-def test_series_reduce(reducer):
-    reducer = _get_reduce_fn(reducer)
-    np.random.seed(0)
-    size = 10
-    df, gdf = _make_random_frame(size)
-
-    got = reducer(gdf.x)
-    exp = reducer(df.x)
-    dd.assert_eq(got, exp)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        cudf.datasets.randomdata(
-            nrows=10000,
-            dtypes={"a": "category", "b": int, "c": float, "d": int},
-        ),
-        cudf.datasets.randomdata(
-            nrows=10000,
-            dtypes={"a": "category", "b": int, "c": float, "d": str},
-        ),
-        cudf.datasets.randomdata(
-            nrows=10000, dtypes={"a": bool, "b": int, "c": float, "d": str}
-        ),
-    ],
-)
-@pytest.mark.parametrize(
-    "op", ["max", "min", "sum", "prod", "mean", "var", "std"]
-)
-def test_rowwise_reductions(data, op):
-
-    gddf = dgd.from_cudf(data, npartitions=10)
-    pddf = gddf.to_dask_dataframe()
-
-    if op in ("var", "std"):
-        expected = getattr(pddf, op)(axis=1, ddof=0)
-        got = getattr(gddf, op)(axis=1, ddof=0)
+    # assert that quantile divisions of dataframe contains nulls
+    divisions = quantile_divisions(ddf, by, ddf.npartitions)
+    if isinstance(divisions, list):
+        assert None in divisions
     else:
-        expected = getattr(pddf, op)(axis=1)
-        got = getattr(pddf, op)(axis=1)
+        assert all([divisions[col].has_nulls for col in by])
 
-    dd.assert_eq(expected.compute(), got.compute(), check_exact=False)
+    got = ddf.sort_values(by=by)
+    expect = df.sort_values(by=by)
+
+    dd.assert_eq(got, expect)

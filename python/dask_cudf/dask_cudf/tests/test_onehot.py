@@ -3,9 +3,9 @@ import pytest
 
 from dask import dataframe as dd
 
-import cudf
-
 import dask_cudf
+
+import cudf
 
 
 def test_get_dummies_cat():
