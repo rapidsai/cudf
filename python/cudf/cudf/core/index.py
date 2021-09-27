@@ -4,6 +4,7 @@ from __future__ import annotations, division, print_function
 
 import math
 import pickle
+import warnings
 from numbers import Number
 from typing import (
     Any,
@@ -600,6 +601,23 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         name = kwargs.get("name")
         super().__init__({name: data})
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        if "index_column" in header:
+            warnings.warn(
+                "Index objects serialized in cudf version "
+                "21.10 or older will no longer be deserializable "
+                "after version 21.12. Please load and resave any "
+                "pickles before upgrading to version 22.02.",
+                DeprecationWarning,
+            )
+            header["columns"] = [header.pop("index_column")]
+            header["column_names"] = pickle.dumps(
+                [pickle.loads(header["name"])]
+            )
+
+        return super().deserialize(header, frames)
 
     def drop_duplicates(self, keep="first"):
         """

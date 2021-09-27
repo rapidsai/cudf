@@ -854,17 +854,23 @@ class MultiIndex(Frame, BaseIndex):
         return result
 
     def serialize(self):
-        header = {}
-        header["type-serialized"] = pickle.dumps(type(self))
-        header["names"] = pickle.dumps(self.names)
-
-        header["columns"], frames = column.serialize_columns(self._columns)
-
+        header, frames = super().serialize()
+        # Overwrite the names in _data with the true names.
+        header["column_names"] = pickle.dumps(self.names)
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
-        names = pickle.loads(header["names"])
+        if "names" in header:
+            warnings.warn(
+                "MultiIndex objects serialized in cudf version "
+                "21.10 or older will no longer be deserializable "
+                "after version 21.12. Please load and resave any "
+                "pickles before upgrading to version 22.02.",
+                DeprecationWarning,
+            )
+            header["column_names"] = header["names"]
+        column_names = pickle.loads(header["column_names"])
         if "source_data" in header:
             warnings.warn(
                 "MultiIndex objects serialized in cudf version "
@@ -874,11 +880,12 @@ class MultiIndex(Frame, BaseIndex):
                 DeprecationWarning,
             )
             df = cudf.DataFrame.deserialize(header["source_data"], frames)
-            obj = cls.from_frame(df)
-            return obj._set_names(names)
-        columns = column.deserialize_columns(header["columns"], frames)
-        obj = cls._from_data(dict(zip(range(0, len(names)), columns)))
-        return obj._set_names(names)
+            return cls.from_frame(df)._set_names(column_names)
+
+        # Spoof the column names to construct the frame, then set manually.
+        header["column_names"] = pickle.dumps(range(0, len(column_names)))
+        obj = super().deserialize(header, frames)
+        return obj._set_names(column_names)
 
     def __getitem__(self, index):
         if isinstance(index, int):
