@@ -1914,8 +1914,6 @@ class Frame(libcudf.table.Table):
 
         cols = {
             name: col.round(decimals[name], how=how)
-            # TODO: Is this the expected behavior for decimal dtypes, that
-            # rounding to a lower number does not reduce precision?
             if (name in decimals and _is_non_decimal_numeric_dtype(col.dtype))
             else col.copy(deep=True)
             for name, col in self._data.items()
