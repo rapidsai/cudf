@@ -12,9 +12,9 @@ from dask import dataframe as dd
 from dask.dataframe.core import make_meta as dask_make_meta, meta_nonempty
 from dask.utils import M
 
-import dask_cudf as dgd
-
 import cudf
+
+import dask_cudf as dgd
 
 
 def test_from_cudf():

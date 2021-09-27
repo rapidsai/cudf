@@ -1,1 +1,2 @@
-from . import lowering, typing
+from . import typing, lowering
+
