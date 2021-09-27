@@ -133,5 +133,3 @@ def test_to_orc(tmpdir, dtypes, compression, compute):
     # the cudf dataframes (df and df_read)
     dd.assert_eq(df, ddf_read)
     dd.assert_eq(df_read, ddf_read)
-    
-    

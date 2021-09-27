@@ -361,5 +361,3 @@ def test_single_partition():
     m2 = dleft.merge(right, how="inner")
     assert len(m2.dask) < len(dleft.dask) * 3
     assert len(m2) == 100
-
-    
