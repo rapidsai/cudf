@@ -29,7 +29,7 @@ if(DEFINED GPU_ARCHS)
 endif()
 rapids_cuda_init_architectures(CUDF_JNI)
 
-project(CUDF_JNI VERSION 21.10.00 LANGUAGES C CXX CUDA)
+project(CUDF_JNI VERSION 21.12.00 LANGUAGES C CXX CUDA)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------
