@@ -699,7 +699,7 @@ std::unique_ptr<Base> make_merge_m2_aggregation()
 template std::unique_ptr<aggregation> make_merge_m2_aggregation<aggregation>();
 template std::unique_ptr<groupby_aggregation> make_merge_m2_aggregation<groupby_aggregation>();
 
-/// Factory to create a CORR aggregation
+/// Factory to create a CORRELATION aggregation
 template <typename Base>
 std::unique_ptr<Base> make_correlation_aggregation(correlation_type type)
 {

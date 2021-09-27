@@ -580,8 +580,6 @@ void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation 
   auto std_agg = make_std_aggregation();
   aggregate_result_functor(values_child0, helper, cache, stream, mr).operator()<aggregation::STD>(*std_agg);
   aggregate_result_functor(values_child1, helper, cache, stream, mr).operator()<aggregation::STD>(*std_agg);
-  // cudf::detail::aggregation_dispatcher(
-  //   std_agg->kind, aggregate_result_functor(values_child1, helper, cache, stream, mr), *std_agg);
 
   auto const stddev0 = cache.get_result(values_child0, *std_agg);
   auto const stddev1 = cache.get_result(values_child1, *std_agg);

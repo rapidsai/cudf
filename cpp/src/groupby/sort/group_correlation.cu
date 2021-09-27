@@ -53,8 +53,7 @@ struct is_double_convertible_impl {
 };
 
 /**
- * @brief Type casts each element of the column to `CastType`
- *
+ * @brief Typecasts each element of the column to `CastType`
  */
 template <typename CastType>
 struct type_casted_accessor {
