@@ -674,4 +674,4 @@ def test_groupby_nested_dict(func):
     b.name = None
 
     dd.assert_eq(a, b)
-    
+        
