@@ -65,7 +65,9 @@ abstract class Aggregation {
         M2(26),
         MERGE_M2(27),
         RANK(28),
-        DENSE_RANK(29);
+        DENSE_RANK(29),
+        TDIGEST(30), // This can take a delta argument for accuracy level
+        MERGE_TDIGEST(31); // This can take a delta argument for accuracy level
 
         final int nativeId;
 
@@ -864,6 +866,44 @@ abstract class Aggregation {
         return new MergeM2Aggregation();
     }
 
+    static class TDigestAggregation extends Aggregation {
+        private final int delta;
+
+        public TDigestAggregation(Kind kind, int delta) {
+            super(kind);
+            this.delta = delta;
+        }
+
+        @Override
+        long createNativeInstance() {
+            return Aggregation.createTDigestAgg(kind.nativeId, delta);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * kind.hashCode() + delta;
+        }
+
+        @Override
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            } else if (other instanceof TDigestAggregation) {
+                TDigestAggregation o = (TDigestAggregation) other;
+                return o.delta == this.delta;
+            }
+            return false;
+        }
+    }
+
+    static TDigestAggregation createTDigest(int delta) {
+        return new TDigestAggregation(Kind.TDIGEST, delta);
+    }
+
+    static TDigestAggregation mergeTDigest(int delta) {
+        return new TDigestAggregation(Kind.MERGE_TDIGEST, delta);
+    }
+
     /**
      * Create one of the aggregations that only needs a kind, no other parameters. This does not
      * work for all types and for code safety reasons each kind is added separately.
@@ -909,4 +949,9 @@ abstract class Aggregation {
      * Create a merge sets aggregation.
      */
     private static native long createMergeSetsAgg(boolean nullsEqual, boolean nansEqual);
+
+    /**
+     * Create a TDigest aggregation.
+     */
+    private static native long createTDigestAgg(int kind, int delta);
 }

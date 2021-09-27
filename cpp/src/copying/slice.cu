@@ -63,17 +63,9 @@ std::vector<column_view> slice(column_view const& input,
   return std::vector<column_view>{begin, begin + indices.size() / 2};
 }
 
-}  // namespace detail
-
-std::vector<cudf::column_view> slice(cudf::column_view const& input,
-                                     std::vector<size_type> const& indices)
-{
-  CUDF_FUNC_RANGE();
-  return detail::slice(input, indices, rmm::cuda_stream_default);
-}
-
-std::vector<cudf::table_view> slice(cudf::table_view const& input,
-                                    std::vector<size_type> const& indices)
+std::vector<table_view> slice(table_view const& input,
+                              std::vector<size_type> const& indices,
+                              rmm::cuda_stream_view stream)
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(indices.size() % 2 == 0, "indices size must be even");
@@ -81,7 +73,7 @@ std::vector<cudf::table_view> slice(cudf::table_view const& input,
 
   // 2d arrangement of column_views that represent the outgoing table_views sliced_table[i][j]
   // where i is the i'th column of the j'th table_view
-  auto op = [&indices](auto const& c) { return cudf::slice(c, indices); };
+  auto op = [&indices, stream](auto const& c) { return cudf::detail::slice(c, indices, stream); };
   auto f  = thrust::make_transform_iterator(input.begin(), op);
 
   auto sliced_table = std::vector<std::vector<cudf::column_view>>(f, f + input.num_columns());
@@ -99,6 +91,22 @@ std::vector<cudf::table_view> slice(cudf::table_view const& input,
   }
 
   return result;
-};
+}
+
+}  // namespace detail
+
+std::vector<cudf::column_view> slice(cudf::column_view const& input,
+                                     std::vector<size_type> const& indices)
+{
+  CUDF_FUNC_RANGE();
+  return detail::slice(input, indices, rmm::cuda_stream_default);
+}
+
+std::vector<cudf::table_view> slice(cudf::table_view const& input,
+                                    std::vector<size_type> const& indices)
+{
+  CUDF_FUNC_RANGE();
+  return detail::slice(input, indices, rmm::cuda_stream_default);
+}
 
 }  // namespace cudf

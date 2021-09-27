@@ -1424,11 +1424,38 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Calculate various percentiles of this ColumnVector, which must contain centroids produced by
+   * a t-digest aggregation.
+   *
+   * @param percentiles Required percentiles [0,1]
+   * @return Column containing the approximate percentile values as a list of doubles, in
+   *         the same order as the input percentiles
+   */
+  public final ColumnVector approxPercentile(double[] percentiles) {
+    try (ColumnVector cv = ColumnVector.fromDoubles(percentiles)) {
+      return approxPercentile(cv);
+    }
+  }
+
+  /**
+   * Calculate various percentiles of this ColumnVector, which must contain centroids produced by
+   * a t-digest aggregation.
+   *
+   * @param percentiles Column containing percentiles [0,1]
+   * @return Column containing the approximate percentile values as a list of doubles, in
+   *         the same order as the input percentiles
+   */
+  public final ColumnVector approxPercentile(ColumnVector percentiles) {
+    return new ColumnVector(approxPercentile(getNativeView(), percentiles.getNativeView()));
+  }
+
+  /**
    * Calculate various quantiles of this ColumnVector.  It is assumed that this is already sorted
    * in the desired order.
    * @param method   the method used to calculate the quantiles
    * @param quantiles the quantile values [0,1]
-   * @return the quantiles as doubles, in the same order passed in. The type can be changed in future
+   * @return Column containing the approximate percentile values as a list of doubles, in
+   *         the same order as the input percentiles
    */
   public final ColumnVector quantile(QuantileMethod method, double[] quantiles) {
     return new ColumnVector(quantile(getNativeView(), method.nativeId, quantiles));
@@ -3543,6 +3570,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *         by the upper method.
    */
   private static native long upperStrings(long cudfViewHandle);
+
+  /**
+   * Native method to compute approx percentiles.
+   * @param cudfColumnHandle T-Digest column
+   * @param percentilesHandle Percentiles
+   * @return native handle of the resulting cudf column, used to construct the Java column
+   *         by the approxPercentile method.
+   */
+  private static native long approxPercentile(long cudfColumnHandle, long percentilesHandle) throws CudfException;
 
   private static native long quantile(long cudfColumnHandle, int quantileMethod, double[] quantiles) throws CudfException;
 

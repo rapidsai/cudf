@@ -349,17 +349,6 @@ class RangeIndex(BaseIndex):
         """
         return cudf.dtype(np.int64)
 
-    @property
-    def is_contiguous(self):
-        """
-        Returns if the index is contiguous.
-        """
-        return self._step == 1
-
-    @property
-    def size(self):
-        return len(self)
-
     def find_label_range(self, first=None, last=None):
         """Find subrange in the ``RangeIndex``, marked by their positions, that
         starts greater or equal to ``first`` and ends less or equal to ``last``
@@ -417,18 +406,10 @@ class RangeIndex(BaseIndex):
 
     @property
     def is_monotonic_increasing(self):
-        """
-        Return if the index is monotonic increasing
-        (only equal or increasing) values.
-        """
         return self._step > 0 or len(self) <= 1
 
     @property
     def is_monotonic_decreasing(self):
-        """
-        Return if the index is monotonic decreasing
-        (only equal or decreasing) values.
-        """
         return self._step < 0 or len(self) <= 1
 
     def get_slice_bound(self, label, side, kind=None):
