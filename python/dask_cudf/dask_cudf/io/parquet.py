@@ -333,7 +333,8 @@ def set_object_dtypes_from_pa_schema(df, schema):
     if schema:
         for col_name, col in df._data.items():
             if col_name in schema.names and isinstance(
-                col, cudf.core.column.StringColumn
+                cudf_dtype_from_pa_type(schema.field(col_name).type),
+                cudf.core.column.StringColumn,
             ):
                 df._data[col_name] = col.astype(
                     cudf_dtype_from_pa_type(schema.field(col_name).type)
