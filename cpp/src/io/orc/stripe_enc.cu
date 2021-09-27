@@ -21,6 +21,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <io/utilities/block_utils.cuh>
+#include <io/utilities/time_utils.cuh>
 
 #include <cub/cub.cuh>
 #include <rmm/cuda_stream_view.hpp>
@@ -613,12 +614,6 @@ inline __device__ void lengths_to_positions(volatile T* vals, uint32_t numvals, 
 }
 
 /**
- * @brief Timestamp scale table (powers of 10)
- */
-static const __device__ __constant__ int32_t kTimeScale[10] = {
-  1000000000, 100000000, 10000000, 1000000, 100000, 10000, 1000, 100, 10, 1};
-
-/**
  * @brief Encode column data
  *
  * @param[in] chunks encoder chunks device array [column][rowgroup]
@@ -757,7 +752,7 @@ __global__ void __launch_bounds__(block_size)
           case BYTE: s->vals.u8[nz_idx] = s->chunk.leaf_column->element<uint8_t>(row); break;
           case TIMESTAMP: {
             int64_t ts       = s->chunk.leaf_column->element<int64_t>(row);
-            int32_t ts_scale = kTimeScale[min(s->chunk.scale, 9)];
+            int32_t ts_scale = powers_of_ten[9 - min(s->chunk.scale, 9)];
             int64_t seconds  = ts / ts_scale;
             int64_t nanos    = (ts - seconds * ts_scale);
             // There is a bug in the ORC spec such that for negative timestamps, it is understood
@@ -771,7 +766,7 @@ __global__ void __launch_bounds__(block_size)
             if (nanos != 0) {
               // Trailing zeroes are encoded in the lower 3-bits
               uint32_t zeroes = 0;
-              nanos *= kTimeScale[9 - min(s->chunk.scale, 9)];
+              nanos *= powers_of_ten[min(s->chunk.scale, 9)];
               if (!(nanos % 100)) {
                 nanos /= 100;
                 zeroes = 1;

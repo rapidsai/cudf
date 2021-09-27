@@ -20,6 +20,7 @@
 
 #include <cudf/wrappers/timestamps.hpp>
 #include <io/utilities/parsing_utils.cuh>
+#include <io/utilities/time_utils.cuh>
 
 namespace cudf {
 namespace io {
@@ -336,11 +337,9 @@ __inline__ __device__ duration_type to_duration(char const* begin, char const* e
   int64_t nanosecond = 0L;
 
   if (*cur == '.') {  //.n
-    auto const start_subsecond        = ++cur;
-    nanosecond                        = parse_integer<int>(&cur, end);
-    int8_t const num_digits           = min(9L, cur - start_subsecond);
-    constexpr int64_t powers_of_ten[] = {
-      1L, 10L, 100L, 1000L, 10000L, 100000L, 1000000L, 10000000L, 100000000L, 1000000000L};
+    auto const start_subsecond = ++cur;
+    nanosecond                 = parse_integer<int>(&cur, end);
+    int8_t const num_digits    = min(9L, cur - start_subsecond);
     nanosecond *= powers_of_ten[9 - num_digits];
   }
 

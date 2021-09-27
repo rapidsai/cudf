@@ -17,6 +17,7 @@
 #include <cub/cub.cuh>
 #include <io/utilities/block_utils.cuh>
 #include <rmm/cuda_stream_view.hpp>
+
 #include "orc_common.h"
 #include "orc_gpu.h"
 
@@ -1789,11 +1790,10 @@ __global__ void __launch_bounds__(block_size)
               }
               if (seconds < 0 && nanos != 0) { seconds -= 1; }
               if (s->chunk.ts_clock_rate) {
-                // TODO: get rid of magic numbers
+                duration_ns d_ns{nanos};
+                d_ns += duration_s{seconds};
                 static_cast<int64_t*>(data_out)[row] =
-                  seconds * s->chunk.ts_clock_rate +
-                  (nanos + (499999999 / s->chunk.ts_clock_rate)) /
-                    (1000000000 / s->chunk.ts_clock_rate);  // Output to desired clock rate
+                  d_ns.count() * s->chunk.ts_clock_rate * 1e-9;  // Output to desired clock rate
               } else {
                 cudf::duration_s d{seconds};
                 static_cast<int64_t*>(data_out)[row] =

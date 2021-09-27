@@ -16,8 +16,17 @@
 
 #pragma once
 
+#include <cudf/types.hpp>
+#include <cudf/wrappers/timestamps.hpp>
+
 namespace cudf {
 namespace io {
+
+/**
+ * @brief Lookup table to compute power of ten
+ */
+static const __device__ __constant__ int32_t powers_of_ten[10] = {
+  1, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000};
 
 /**
  * @brief Function that translates cuDF time unit to clock frequency
