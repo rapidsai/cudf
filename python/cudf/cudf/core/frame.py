@@ -50,7 +50,7 @@ from cudf.utils.dtypes import is_column_like
 T = TypeVar("T", bound="Frame")
 
 
-class Frame(libcudf.table.Table):
+class Frame:
     """
     Frame: A collection of Column objects with an optional index.
 
@@ -64,6 +64,43 @@ class Frame(libcudf.table.Table):
 
     _data: "ColumnAccessor"
 
+    def __init__(self, data=None, index=None):
+        if data is None:
+            data = {}
+        self._data = cudf.core.column_accessor.ColumnAccessor(data)
+        self._index = index
+
+    @property
+    def _num_columns(self):
+        return len(self._data)
+
+    @property
+    def _num_indices(self):
+        if self._index is None:
+            return 0
+        else:
+            return len(self._index_names)
+
+    @property
+    def _num_rows(self):
+        if self._index is not None:
+            return len(self._index)
+        if len(self._data) == 0:
+            return 0
+        return len(self._data.columns[0])
+
+    @property
+    def _column_names(self):
+        return self._data.names
+
+    @property
+    def _index_names(self):
+        return None if self._index is None else self._index._data.names
+
+    @property
+    def _columns(self):
+        return self._data.columns
+
     @classmethod
     def _from_data(
         cls,
@@ -71,7 +108,7 @@ class Frame(libcudf.table.Table):
         index: Optional[cudf.core.index.BaseIndex] = None,
     ):
         obj = cls.__new__(cls)
-        libcudf.table.Table.__init__(obj, data, index)
+        Frame.__init__(obj, data, index)
         return obj
 
     def _mimic_inplace(
