@@ -295,11 +295,8 @@ struct scatter_gather_functor {
                     indices.begin(),
                     filter);
 
-    auto gather_map = column_view(
-      cudf::data_type{cudf::type_to_id<cudf::size_type>()}, output_size, indices.data());
-
     auto output_table = cudf::detail::gather(cudf::table_view{{input}},
-                                             gather_map,
+                                             indices,
                                              cudf::out_of_bounds_policy::DONT_CHECK,
                                              cudf::detail::negative_index_policy::NOT_ALLOWED,
                                              stream,

@@ -386,11 +386,8 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
       rmm::exec_policy(stream), in_rbegin, in_rbegin + input.size(), gm_rbegin, func);
   }
 
-  auto map_col = cudf::column_view(
-    cudf::data_type{cudf::type_to_id<cudf::size_type>()}, input.size(), gather_map.data());
-
   auto output = cudf::detail::gather(cudf::table_view({input}),
-                                     map_col,
+                                     gather_map,
                                      cudf::out_of_bounds_policy::DONT_CHECK,
                                      cudf::detail::negative_index_policy::NOT_ALLOWED,
                                      stream,

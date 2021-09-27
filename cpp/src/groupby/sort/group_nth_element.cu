@@ -114,9 +114,9 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
                          return (bitmask_iterator[i] && intra_group_index[i] == nth);
                        });
   }
-  auto gather_map   = column_view(data_type{type_to_id<size_type>()}, num_groups, nth_index.data());
+
   auto output_table = cudf::detail::gather(table_view{{values}},
-                                           gather_map,
+                                           nth_index,
                                            out_of_bounds_policy::NULLIFY,
                                            cudf::detail::negative_index_policy::NOT_ALLOWED,
                                            stream,

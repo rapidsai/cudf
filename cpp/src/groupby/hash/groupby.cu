@@ -168,7 +168,6 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   cudf::detail::result_cache* sparse_results;
   cudf::detail::result_cache* dense_results;
   device_span<size_type const> gather_map;
-  size_type const map_size;
   Map const& map;
   bitmask_type const* __restrict__ row_bitmask;
   rmm::mr::device_memory_resource* mr;
@@ -182,7 +181,6 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
                               cudf::detail::result_cache* sparse_results,
                               cudf::detail::result_cache* dense_results,
                               device_span<size_type const> gather_map,
-                              size_type map_size,
                               Map const& map,
                               bitmask_type const* row_bitmask,
                               rmm::cuda_stream_view stream,
@@ -192,7 +190,6 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
       sparse_results(sparse_results),
       dense_results(dense_results),
       gather_map(gather_map),
-      map_size(map_size),
       map(map),
       row_bitmask(row_bitmask),
       stream(stream),
@@ -204,11 +201,10 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
 
   auto to_dense_agg_result(cudf::aggregation const& agg)
   {
-    auto map = column_view(data_type{type_to_id<size_type>()}, map_size, gather_map.data());
-    auto s   = sparse_results->get_result(col_idx, agg);
+    auto s = sparse_results->get_result(col_idx, agg);
 
     auto dense_result_table = cudf::detail::gather(table_view({std::move(s)}),
-                                                   map,
+                                                   gather_map,
                                                    out_of_bounds_policy::DONT_CHECK,
                                                    cudf::detail::negative_index_policy::NOT_ALLOWED,
                                                    stream,
@@ -388,7 +384,7 @@ void sparse_to_dense_results(table_view const& keys,
                              cudf::detail::result_cache* sparse_results,
                              cudf::detail::result_cache* dense_results,
                              device_span<size_type const> gather_map,
-                             size_type map_size,
+                             // size_type map_size,
                              Map const& map,
                              bool keys_have_nulls,
                              null_policy include_null_keys,
@@ -406,16 +402,8 @@ void sparse_to_dense_results(table_view const& keys,
 
     // Given an aggregation, this will get the result from sparse_results and
     // convert and return dense, compacted result
-    auto finalizer = hash_compound_agg_finalizer<Map>(i,
-                                                      col,
-                                                      sparse_results,
-                                                      dense_results,
-                                                      gather_map,
-                                                      map_size,
-                                                      map,
-                                                      row_bitmask_ptr,
-                                                      stream,
-                                                      mr);
+    auto finalizer = hash_compound_agg_finalizer<Map>(
+      i, col, sparse_results, dense_results, gather_map, map, row_bitmask_ptr, stream, mr);
     for (auto&& agg : agg_v) {
       agg->finalize(finalizer);
     }
@@ -616,18 +604,14 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
                           &sparse_results,
                           cache,
                           gather_map,
-                          gather_map.size(),
                           *map,
                           keys_have_nulls,
                           include_null_keys,
                           stream,
                           mr);
 
-  auto map_col = column_view(data_type{type_to_id<size_type>()},
-                             static_cast<size_type>(gather_map.size()),
-                             gather_map.data());
   return cudf::detail::gather(keys,
-                              map_col,
+                              gather_map,
                               out_of_bounds_policy::DONT_CHECK,
                               cudf::detail::negative_index_policy::NOT_ALLOWED,
                               stream,
