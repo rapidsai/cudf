@@ -104,10 +104,9 @@ struct HashBase : public crtp<HasherT> {
    * when the buffer is filled up to message_chunk_size bytes.
    */
   template <typename Hasher = HasherT>
-  void CUDA_DEVICE_CALLABLE process(uint8_t const* data,
-                                    uint32_t len,
-                                    typename Hasher::hash_state& state)
+  void CUDA_DEVICE_CALLABLE process(uint8_t const* data, uint32_t len)
   {
+    auto& state = this->underlying().state;
     state.message_length += len;
 
     if (state.buffer_length + len < Hasher::message_chunk_size) {
@@ -136,12 +135,12 @@ struct HashBase : public crtp<HasherT> {
     }
   }
 
-  template <typename T, typename Hasher = HasherT>
-  void CUDA_DEVICE_CALLABLE process_fixed_width(T const& key, typename Hasher::hash_state& state)
+  template <typename T>
+  void CUDA_DEVICE_CALLABLE process_fixed_width(T const& key)
   {
     uint8_t const* data    = reinterpret_cast<uint8_t const*>(&key);
     uint32_t constexpr len = sizeof(T);
-    process(data, len, state);
+    process(data, len);
   }
 
   /**
@@ -152,8 +151,9 @@ struct HashBase : public crtp<HasherT> {
    * the final hash step.
    */
   template <typename Hasher = HasherT>
-  void CUDA_DEVICE_CALLABLE finalize(typename Hasher::hash_state& state, char* result_location)
+  void CUDA_DEVICE_CALLABLE finalize(char* result_location)
   {
+    auto& state = this->underlying().state;
     // Message length in bits.
     uint64_t const message_length_in_bits = (static_cast<uint64_t>(state.message_length)) << 3;
     // Add a one bit flag (10000000) to signal the end of the message
@@ -222,56 +222,50 @@ struct HashBase : public crtp<HasherT> {
       }
     }
   };
+};
+
+template <typename Hasher>
+struct HashDispatcher {
+  Hasher* hash;
+  column_device_view col;
 
   template <typename T,
-            typename Hasher                                             = HasherT,
             typename std::enable_if_t<(!is_fixed_width<T>() || is_chrono<T>()) &&
                                       !std::is_same_v<T, string_view>>* = nullptr>
-  void CUDA_DEVICE_CALLABLE operator()(column_device_view, size_type, typename Hasher::hash_state&)
+  void CUDA_DEVICE_CALLABLE operator()(size_type)
   {
-    cudf_assert(false && "Unsupported type for SHA hash.");
+    cudf_assert(false && "Unsupported type for hash function.");
   }
 
-  template <typename T,
-            typename Hasher                                    = HasherT,
-            typename std::enable_if_t<is_floating_point<T>()>* = nullptr>
-  void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
-                                       size_type row_index,
-                                       typename Hasher::hash_state& state)
+  template <typename T, typename std::enable_if_t<is_floating_point<T>()>* = nullptr>
+  void CUDA_DEVICE_CALLABLE operator()(size_type row_index)
   {
     T const& key = col.element<T>(row_index);
     if (isnan(key)) {
       T nan = std::numeric_limits<T>::quiet_NaN();
-      process_fixed_width(nan, state);
+      hash->process_fixed_width(nan);
     } else if (key == T{0.0}) {
-      process_fixed_width(T{0.0}, state);
+      hash->process_fixed_width(T{0.0});
     } else {
-      process_fixed_width(key, state);
+      hash->process_fixed_width(key);
     }
   }
 
   template <typename T,
-            typename Hasher                             = HasherT,
             typename std::enable_if_t<is_fixed_width<T>() && !is_floating_point<T>() &&
                                       !is_chrono<T>()>* = nullptr>
-  void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
-                                       size_type row_index,
-                                       typename Hasher::hash_state& state)
+  void CUDA_DEVICE_CALLABLE operator()(size_type row_index)
   {
-    process_fixed_width(col.element<T>(row_index), state);
+    hash->process_fixed_width(col.element<T>(row_index));
   }
 
-  template <typename T,
-            typename Hasher                                            = HasherT,
-            typename std::enable_if_t<std::is_same_v<T, string_view>>* = nullptr>
-  void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
-                                       size_type row_index,
-                                       typename Hasher::hash_state& state)
+  template <typename T, typename std::enable_if_t<std::is_same_v<T, string_view>>* = nullptr>
+  void CUDA_DEVICE_CALLABLE operator()(size_type row_index)
   {
     string_view key     = col.element<string_view>(row_index);
     uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
     uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
-    process(data, len, state);
+    hash->process(data, len);
   }
 };
 
@@ -696,16 +690,14 @@ std::unique_ptr<column> sha_hash(table_view const& input,
                      Hasher hasher = Hasher{};
                      for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
                        if (device_input.column(col_index).is_valid(row_index)) {
+                         auto const& col = device_input.column(col_index);
+                         HashDispatcher<Hasher> hash_dispatcher{&hasher, col};
                          cudf::type_dispatcher<dispatch_storage_type>(
-                           device_input.column(col_index).type(),
-                           hasher,
-                           device_input.column(col_index),
-                           row_index,
-                           hasher.state);
+                           col.type(), hash_dispatcher, row_index);
                        }
                      }
                      auto const result_location = d_chars + (row_index * Hasher::digest_size);
-                     hasher.finalize(hasher.state, result_location);
+                     hasher.finalize(result_location);
                    });
 
   return make_strings_column(
