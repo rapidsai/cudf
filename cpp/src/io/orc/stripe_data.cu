@@ -1793,7 +1793,8 @@ __global__ void __launch_bounds__(block_size)
                 duration_ns d_ns{nanos};
                 d_ns += duration_s{seconds};
                 static_cast<int64_t*>(data_out)[row] =
-                  d_ns.count() * s->chunk.ts_clock_rate * 1e-9;  // Output to desired clock rate
+                  d_ns.count() * s->chunk.ts_clock_rate /
+                  duration_ns::period::den;  // Output to desired clock rate
               } else {
                 cudf::duration_s d{seconds};
                 static_cast<int64_t*>(data_out)[row] =

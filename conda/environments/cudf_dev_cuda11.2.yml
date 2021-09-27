@@ -39,8 +39,8 @@ dependencies:
   - mypy=0.782
   - typing_extensions
   - pre_commit
-  - dask>=2021.6.0
-  - distributed>=2021.6.0
+  - dask>=2021.09.1
+  - distributed>=2021.09.1
   - streamz
   - arrow-cpp=5.0.0
   - dlpack>=0.5,<0.6.0a0

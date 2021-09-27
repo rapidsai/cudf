@@ -18,7 +18,6 @@
 
 #include <thrust/reduce.h>
 
-#include <cudf/wrappers/timestamps.hpp>
 #include <io/utilities/parsing_utils.cuh>
 #include <io/utilities/time_utils.cuh>
 
