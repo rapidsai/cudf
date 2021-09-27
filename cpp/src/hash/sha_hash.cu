@@ -95,15 +95,14 @@ struct crtp {
   CUDA_DEVICE_CALLABLE T const& underlying() const { return static_cast<T const&>(*this); }
 };
 
-template <typename HasherT>
-struct HashBase : public crtp<HasherT> {
+template <typename Hasher>
+struct HashBase : public crtp<Hasher> {
   /**
    * @brief Execute SHA on input data chunks.
    *
    * This accepts arbitrary data, handles it as bytes, and calls the hash step
    * when the buffer is filled up to message_chunk_size bytes.
    */
-  template <typename Hasher = HasherT>
   void CUDA_DEVICE_CALLABLE process(uint8_t const* data, uint32_t len)
   {
     auto& state = this->underlying().state;
@@ -150,7 +149,6 @@ struct HashBase : public crtp<HasherT> {
    * the message length (in another step of the hash, if needed), and performs
    * the final hash step.
    */
-  template <typename Hasher = HasherT>
   void CUDA_DEVICE_CALLABLE finalize(char* result_location)
   {
     auto& state = this->underlying().state;
@@ -225,8 +223,8 @@ struct HashBase : public crtp<HasherT> {
 };
 
 template <typename Hasher>
-struct HashDispatcher {
-  Hasher* hash;
+struct HasherDispatcher {
+  Hasher* hasher;
   column_device_view col;
 
   template <typename T,
@@ -243,11 +241,11 @@ struct HashDispatcher {
     T const& key = col.element<T>(row_index);
     if (isnan(key)) {
       T nan = std::numeric_limits<T>::quiet_NaN();
-      hash->process_fixed_width(nan);
+      hasher->process_fixed_width(nan);
     } else if (key == T{0.0}) {
-      hash->process_fixed_width(T{0.0});
+      hasher->process_fixed_width(T{0.0});
     } else {
-      hash->process_fixed_width(key);
+      hasher->process_fixed_width(key);
     }
   }
 
@@ -256,7 +254,7 @@ struct HashDispatcher {
                                       !is_chrono<T>()>* = nullptr>
   void CUDA_DEVICE_CALLABLE operator()(size_type row_index)
   {
-    hash->process_fixed_width(col.element<T>(row_index));
+    hasher->process_fixed_width(col.element<T>(row_index));
   }
 
   template <typename T, typename std::enable_if_t<std::is_same_v<T, string_view>>* = nullptr>
@@ -265,7 +263,7 @@ struct HashDispatcher {
     string_view key     = col.element<string_view>(row_index);
     uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
     uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
-    hash->process(data, len);
+    hasher->process(data, len);
   }
 };
 
@@ -360,12 +358,6 @@ __constant__ uint64_t sha512_hash_constants[80] = {
 template <typename hash_state>
 void CUDA_DEVICE_CALLABLE sha1_hash_step(hash_state& state)
 {
-  uint32_t A = state.hash_value[0];
-  uint32_t B = state.hash_value[1];
-  uint32_t C = state.hash_value[2];
-  uint32_t D = state.hash_value[3];
-  uint32_t E = state.hash_value[4];
-
   uint32_t words[80];
 
   // The 512-bit message buffer fills the first 16 words.
@@ -380,6 +372,12 @@ void CUDA_DEVICE_CALLABLE sha1_hash_step(hash_state& state)
     uint32_t const temp = words[i - 3] ^ words[i - 8] ^ words[i - 14] ^ words[i - 16];
     words[i]            = rotate_bits_left(temp, 1);
   }
+
+  uint32_t A = state.hash_value[0];
+  uint32_t B = state.hash_value[1];
+  uint32_t C = state.hash_value[2];
+  uint32_t D = state.hash_value[3];
+  uint32_t E = state.hash_value[4];
 
   for (int i = 0; i < 80; i++) {
     uint32_t F;
@@ -427,15 +425,6 @@ void CUDA_DEVICE_CALLABLE sha1_hash_step(hash_state& state)
 template <typename hash_state>
 void CUDA_DEVICE_CALLABLE sha256_hash_step(hash_state& state)
 {
-  uint32_t A = state.hash_value[0];
-  uint32_t B = state.hash_value[1];
-  uint32_t C = state.hash_value[2];
-  uint32_t D = state.hash_value[3];
-  uint32_t E = state.hash_value[4];
-  uint32_t F = state.hash_value[5];
-  uint32_t G = state.hash_value[6];
-  uint32_t H = state.hash_value[7];
-
   uint32_t words[64];
 
   // The 512-bit message buffer fills the first 16 words.
@@ -453,6 +442,15 @@ void CUDA_DEVICE_CALLABLE sha256_hash_step(hash_state& state)
                         (words[i - 2] >> 10);
     words[i] = words[i - 16] + s0 + words[i - 7] + s1;
   }
+
+  uint32_t A = state.hash_value[0];
+  uint32_t B = state.hash_value[1];
+  uint32_t C = state.hash_value[2];
+  uint32_t D = state.hash_value[3];
+  uint32_t E = state.hash_value[4];
+  uint32_t F = state.hash_value[5];
+  uint32_t G = state.hash_value[6];
+  uint32_t H = state.hash_value[7];
 
   for (int i = 0; i < 64; i++) {
     uint32_t const s1 =
@@ -493,15 +491,6 @@ void CUDA_DEVICE_CALLABLE sha256_hash_step(hash_state& state)
 template <typename hash_state>
 void CUDA_DEVICE_CALLABLE sha512_hash_step(hash_state& state)
 {
-  uint64_t A = state.hash_value[0];
-  uint64_t B = state.hash_value[1];
-  uint64_t C = state.hash_value[2];
-  uint64_t D = state.hash_value[3];
-  uint64_t E = state.hash_value[4];
-  uint64_t F = state.hash_value[5];
-  uint64_t G = state.hash_value[6];
-  uint64_t H = state.hash_value[7];
-
   uint64_t words[80];
 
   // The 1024-bit message buffer fills the first 16 words.
@@ -519,6 +508,15 @@ void CUDA_DEVICE_CALLABLE sha512_hash_step(hash_state& state)
                         (words[i - 2] >> 6);
     words[i] = words[i - 16] + s0 + words[i - 7] + s1;
   }
+
+  uint64_t A = state.hash_value[0];
+  uint64_t B = state.hash_value[1];
+  uint64_t C = state.hash_value[2];
+  uint64_t D = state.hash_value[3];
+  uint64_t E = state.hash_value[4];
+  uint64_t F = state.hash_value[5];
+  uint64_t G = state.hash_value[6];
+  uint64_t H = state.hash_value[7];
 
   for (int i = 0; i < 80; i++) {
     uint64_t const s1 =
@@ -691,9 +689,9 @@ std::unique_ptr<column> sha_hash(table_view const& input,
                      for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
                        if (device_input.column(col_index).is_valid(row_index)) {
                          auto const& col = device_input.column(col_index);
-                         HashDispatcher<Hasher> hash_dispatcher{&hasher, col};
+                         HasherDispatcher<Hasher> hasher_dispatcher{&hasher, col};
                          cudf::type_dispatcher<dispatch_storage_type>(
-                           col.type(), hash_dispatcher, row_index);
+                           col.type(), hasher_dispatcher, row_index);
                        }
                      }
                      auto const result_location = d_chars + (row_index * Hasher::digest_size);
