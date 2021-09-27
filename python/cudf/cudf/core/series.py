@@ -5513,16 +5513,18 @@ class DatetimeProperties(object):
         """
         Returns a DataFrame with the year, week, and day
         calculated according to the ISO 8601 standard.
+
         Returns
         -------
         DataFrame
             with columns year, week and day
+
         Examples
         --------
         >>> ser = cudf.Series(pd.date_range(start="2021-07-25",
         ... end="2021-07-30"))
         >>> ser.dt.isocalendar()
-        year  week  day
+           year  week  day
         0  2021    29    7
         1  2021    30    1
         2  2021    30    2
@@ -5540,7 +5542,7 @@ class DatetimeProperties(object):
 
         >>> serIndex = cudf.to_datetime(pd.Series(["2010-01-01", pd.NaT]))
         >>> serIndex.dt.isocalendar()
-           year  week  day
+            year  week  day
         0  2009    53     5
         1  <NA>  <NA>  <NA>
         >>> serIndex.dt.isocalendar().year
