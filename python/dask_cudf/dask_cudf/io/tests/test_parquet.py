@@ -12,9 +12,9 @@ import dask
 from dask import dataframe as dd
 from dask.utils import natural_sort_key
 
-import dask_cudf
-
 import cudf
+
+import dask_cudf
 
 # Check if create_metadata_file is supported by
 # the current dask.dataframe version
