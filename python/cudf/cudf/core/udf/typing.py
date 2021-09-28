@@ -17,8 +17,8 @@ from numba.core.typing.typeof import typeof
 from numba.cuda.cudadecl import registry as cuda_decl_registry
 from pandas._libs.missing import NAType as _NAType
 
-from . import api
-from ._ops import arith_ops, comparison_ops
+from cudf.core.udf import api
+from cudf.core.udf._ops import arith_ops, comparison_ops
 
 
 class MaskedType(types.Type):
