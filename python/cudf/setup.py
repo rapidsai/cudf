@@ -51,7 +51,7 @@ extras_require = {
         "hypothesis" "mimesis",
         "pyorc",
         "msgpack",
-        "transformers",
+        "transformers<=4.10.3",
     ]
 }
 
