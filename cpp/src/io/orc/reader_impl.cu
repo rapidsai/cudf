@@ -1411,7 +1411,11 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                     : cudf::size_of(column_types[col_idx]);
             chunk.num_rowgroups = stripe_num_rowgroups;
             if (chunk.type_kind == orc::TIMESTAMP) {
-              chunk.ts_clock_rate = to_clockrate(_timestamp_type.id());
+              if (_timestamp_type.id() == type_id::EMPTY) {
+                chunk.ts_clock_rate = 0;
+              } else {
+                chunk.ts_clock_rate = to_clockrate(_timestamp_type.id());
+              }
             }
             if (not is_data_empty) {
               for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
