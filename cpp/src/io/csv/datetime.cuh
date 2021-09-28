@@ -52,6 +52,10 @@ __inline__ __device__ T to_non_negative_integer(char const* begin, char const* e
 /**
  * @brief Extracts the Day, Month, and Year from a string.
  *
+ * This function takes a string and produces a `year_month_day` representation.
+ * Acceptable formats are a combination of `YYYY`, `M`, `MM`, `D` and `DD` with
+ * `/` or `-` as separators. Data with only year and month (no day) is also valid.
+ *
  * @param begin Pointer to the first element of the string
  * @param end Pointer to the first element after the string
  * @param dayfirst Flag indicating that first field is the day
@@ -187,9 +191,6 @@ __inline__ __device__ cuda::std::chrono::hh_mm_ss<duration_ms> extract_time_of_d
 
 /**
  * @brief Parses a datetime string and computes the corresponding timestamp.
- *
- * This function takes a string and produces a `timestamp_type` representation.
- * Acceptable formats are a combination of `MM/YYYY` and `MM/DD/YYYY`.
  *
  * @tparam timestamp_type Type of output timestamp
  * @param begin Pointer to the first element of the string
