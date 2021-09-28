@@ -678,7 +678,8 @@ std::unique_ptr<column> sha_hash(table_view const& input,
   auto chars_view = chars_column->mutable_view();
   auto d_chars    = chars_view.template data<char>();
 
-  rmm::device_buffer null_mask{0, stream, mr};
+  // Build an output null mask from the logical AND of all input columns' null masks.
+  rmm::device_buffer null_mask{cudf::detail::bitmask_and(input, stream)};
 
   auto const device_input = table_device_view::create(input, stream);
 
@@ -688,9 +689,8 @@ std::unique_ptr<column> sha_hash(table_view const& input,
                    thrust::make_counting_iterator(input.num_rows()),
                    [d_chars, device_input = *device_input] __device__(auto row_index) {
                      Hasher hasher = Hasher{};
-                     for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
-                       if (device_input.column(col_index).is_valid(row_index)) {
-                         auto const& col = device_input.column(col_index);
+                     for (auto const& col : device_input) {
+                       if (col.is_valid(row_index)) {
                          HasherDispatcher<Hasher> hasher_dispatcher{&hasher, col};
                          cudf::type_dispatcher<dispatch_storage_type>(
                            col.type(), hasher_dispatcher, row_index);
