@@ -4628,7 +4628,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             right_index=True,
             how=how,
             suffixes=(lsuffix, rsuffix),
-            method=method,
             sort=sort,
         )
         df.index.name = (
