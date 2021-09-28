@@ -805,19 +805,19 @@ TEST_F(SHA1HashTest, MultiValueNulls)
                                              "Very different... but null",
                                              "All work and no play makes Jack a dull boy",
                                              ""},
-                                            {1, 0, 0, 1, 1});  // empty string is equivalent to null
+                                            {1, 0, 0, 1, 0});
 
   // Nulls with different values should be equal
   using limits = std::numeric_limits<int32_t>;
   fixed_width_column_wrapper<int32_t> const ints_col1({0, 100, -100, limits::min(), limits::max()},
-                                                      {1, 0, 0, 1, 1});
+                                                      {1, 0, 0, 1, 0});
   fixed_width_column_wrapper<int32_t> const ints_col2({0, -200, 200, limits::min(), limits::max()},
-                                                      {1, 0, 0, 1, 1});
+                                                      {1, 0, 0, 0, 1});
 
   // Nulls with different values should be equal
   // Different truthy values should be equal
   fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
-  fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 0, 1});
+  fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 1, 0});
 
   auto const input1 = cudf::table_view({strings_col1, ints_col1, bools_col1});
   auto const input2 = cudf::table_view({strings_col2, ints_col2, bools_col2});
@@ -984,19 +984,19 @@ TEST_F(SHA224HashTest, MultiValueNulls)
                                              "Very different... but null",
                                              "All work and no play makes Jack a dull boy",
                                              ""},
-                                            {1, 0, 0, 1, 1});  // empty string is equivalent to null
+                                            {1, 0, 0, 1, 0});
 
   // Nulls with different values should be equal
   using limits = std::numeric_limits<int32_t>;
   fixed_width_column_wrapper<int32_t> const ints_col1({0, 100, -100, limits::min(), limits::max()},
-                                                      {1, 0, 0, 1, 1});
+                                                      {1, 0, 0, 1, 0});
   fixed_width_column_wrapper<int32_t> const ints_col2({0, -200, 200, limits::min(), limits::max()},
-                                                      {1, 0, 0, 1, 1});
+                                                      {1, 0, 0, 0, 1});
 
   // Nulls with different values should be equal
   // Different truthy values should be equal
   fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
-  fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 0, 1});
+  fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 1, 0});
 
   auto const input1 = cudf::table_view({strings_col1, ints_col1, bools_col1});
   auto const input2 = cudf::table_view({strings_col2, ints_col2, bools_col2});
@@ -1163,19 +1163,19 @@ TEST_F(SHA256HashTest, MultiValueNulls)
                                              "Very different... but null",
                                              "All work and no play makes Jack a dull boy",
                                              ""},
-                                            {1, 0, 0, 1, 1});  // empty string is equivalent to null
+                                            {1, 0, 0, 1, 0});
 
   // Nulls with different values should be equal
   using limits = std::numeric_limits<int32_t>;
   fixed_width_column_wrapper<int32_t> const ints_col1({0, 100, -100, limits::min(), limits::max()},
-                                                      {1, 0, 0, 1, 1});
+                                                      {1, 0, 0, 1, 0});
   fixed_width_column_wrapper<int32_t> const ints_col2({0, -200, 200, limits::min(), limits::max()},
-                                                      {1, 0, 0, 1, 1});
+                                                      {1, 0, 0, 0, 1});
 
   // Nulls with different values should be equal
   // Different truthy values should be equal
   fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
-  fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 0, 1});
+  fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 1, 0});
 
   auto const input1 = cudf::table_view({strings_col1, ints_col1, bools_col1});
   auto const input2 = cudf::table_view({strings_col2, ints_col2, bools_col2});
@@ -1358,19 +1358,19 @@ TEST_F(SHA384HashTest, MultiValueNulls)
                                              "Very different... but null",
                                              "All work and no play makes Jack a dull boy",
                                              ""},
-                                            {1, 0, 0, 1, 1});  // empty string is equivalent to null
+                                            {1, 0, 0, 1, 0});
 
   // Nulls with different values should be equal
   using limits = std::numeric_limits<int32_t>;
   fixed_width_column_wrapper<int32_t> const ints_col1({0, 100, -100, limits::min(), limits::max()},
-                                                      {1, 0, 0, 1, 1});
+                                                      {1, 0, 0, 1, 0});
   fixed_width_column_wrapper<int32_t> const ints_col2({0, -200, 200, limits::min(), limits::max()},
-                                                      {1, 0, 0, 1, 1});
+                                                      {1, 0, 0, 0, 1});
 
   // Nulls with different values should be equal
   // Different truthy values should be equal
   fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
-  fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 0, 1});
+  fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 1, 0});
 
   auto const input1 = cudf::table_view({strings_col1, ints_col1, bools_col1});
   auto const input2 = cudf::table_view({strings_col2, ints_col2, bools_col2});
@@ -1553,19 +1553,19 @@ TEST_F(SHA512HashTest, MultiValueNulls)
                                              "Very different... but null",
                                              "All work and no play makes Jack a dull boy",
                                              ""},
-                                            {1, 0, 0, 1, 1});  // empty string is equivalent to null
+                                            {1, 0, 0, 1, 0});
 
   // Nulls with different values should be equal
   using limits = std::numeric_limits<int32_t>;
   fixed_width_column_wrapper<int32_t> const ints_col1({0, 100, -100, limits::min(), limits::max()},
-                                                      {1, 0, 0, 1, 1});
+                                                      {1, 0, 0, 1, 0});
   fixed_width_column_wrapper<int32_t> const ints_col2({0, -200, 200, limits::min(), limits::max()},
-                                                      {1, 0, 0, 1, 1});
+                                                      {1, 0, 0, 0, 1});
 
   // Nulls with different values should be equal
   // Different truthy values should be equal
   fixed_width_column_wrapper<bool> const bools_col1({0, 1, 0, 1, 1}, {1, 1, 0, 0, 1});
-  fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 0, 1});
+  fixed_width_column_wrapper<bool> const bools_col2({0, 2, 1, 0, 255}, {1, 1, 0, 1, 0});
 
   auto const input1 = cudf::table_view({strings_col1, ints_col1, bools_col1});
   auto const input2 = cudf::table_view({strings_col2, ints_col2, bools_col2});
