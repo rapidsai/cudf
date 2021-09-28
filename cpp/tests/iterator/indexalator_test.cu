@@ -61,9 +61,7 @@ TYPED_TEST(IndexalatorTest, pair_iterator)
                  host_values.end(),
                  validity.begin(),
                  expected_values.begin(),
-                 [host_values, validity](T v, bool b) {
-                   return thrust::make_pair(static_cast<cudf::size_type>(v), b);
-                 });
+                 [](T v, bool b) { return thrust::make_pair(static_cast<cudf::size_type>(v), b); });
 
   auto it_dev = cudf::detail::indexalator_factory::make_input_pair_iterator(d_col);
   this->iterator_test_thrust(expected_values, it_dev, host_values.size());
@@ -85,7 +83,7 @@ TYPED_TEST(IndexalatorTest, optional_iterator)
                  host_values.end(),
                  validity.begin(),
                  expected_values.begin(),
-                 [host_values, validity](T v, bool b) {
+                 [](T v, bool b) {
                    return (b) ? thrust::make_optional(static_cast<cudf::size_type>(v))
                               : thrust::nullopt;
                  });
