@@ -87,8 +87,8 @@ void CUDA_DEVICE_CALLABLE md5_hash_step(md5_intermediate_data* hash_state)
 template <typename TKey>
 void CUDA_DEVICE_CALLABLE md5_process(TKey const& key, md5_intermediate_data* hash_state)
 {
-  uint32_t constexpr len  = sizeof(TKey);
-  uint8_t const* data = reinterpret_cast<uint8_t const*>(&key);
+  uint32_t constexpr len = sizeof(TKey);
+  uint8_t const* data    = reinterpret_cast<uint8_t const*>(&key);
   hash_state->message_length += len;
 
   // 64 bytes are processed in each hash step
@@ -242,17 +242,13 @@ struct MD5Hash {
   }
 
   template <typename T, std::enable_if_t<is_chrono<T>()>* = nullptr>
-  void __device__ operator()(column_device_view,
-                             size_type,
-                             md5_intermediate_data*) const
+  void __device__ operator()(column_device_view, size_type, md5_intermediate_data*) const
   {
     cudf_assert(false && "MD5 Unsupported chrono type column");
   }
 
   template <typename T, std::enable_if_t<!is_fixed_width<T>()>* = nullptr>
-  void __device__ operator()(column_device_view,
-                             size_type,
-                             md5_intermediate_data*) const
+  void __device__ operator()(column_device_view, size_type, md5_intermediate_data*) const
   {
     cudf_assert(false && "MD5 Unsupported non-fixed-width type column");
   }
