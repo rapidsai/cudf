@@ -13,6 +13,7 @@ from uuid import uuid4
 import cupy
 import numpy as np
 import pandas as pd
+from numba import cuda
 from pandas._config import get_option
 
 import cudf
@@ -3765,7 +3766,11 @@ class Series(SingleColumnFrame, Serializable):
                 "UDFs using *args or **kwargs are not yet supported."
             )
 
-        return super()._apply(func)
+        name = self.name or "__temp_srname"
+        df = cudf.DataFrame({name: self})
+        f_ = cuda.jit(device=True)(func)
+
+        return df.apply(lambda row: f_(row[name]))
 
     def applymap(self, udf, out_dtype=None):
         """Apply an elementwise function to transform the values in the Column.

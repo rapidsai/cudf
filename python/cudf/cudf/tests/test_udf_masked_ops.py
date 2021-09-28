@@ -4,7 +4,6 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core.udf.pipeline import nulludf
 from cudf.testing._utils import NUMERIC_TYPES, assert_eq
 
 arith_ops = [
@@ -31,12 +30,8 @@ def run_masked_udf_test(func_pdf, func_gdf, data, **kwargs):
     gdf = data
     pdf = data.to_pandas(nullable=True)
 
-    expect = pdf.apply(
-        lambda row: func_pdf(*[row[i] for i in data.columns]), axis=1
-    )
-    obtain = gdf.apply(
-        lambda row: func_gdf(*[row[i] for i in data.columns]), axis=1
-    )
+    expect = pdf.apply(func_pdf, axis=1)
+    obtain = gdf.apply(func_gdf, axis=1)
     assert_eq(expect, obtain, **kwargs)
 
 
@@ -54,11 +49,14 @@ def test_arith_masked_vs_masked(op):
     # This test should test all the typing
     # and lowering for arithmetic ops between
     # two columns
-    def func_pdf(x, y):
+    def func_pdf(row):
+        x = row["a"]
+        y = row["b"]
         return op(x, y)
 
-    @nulludf
-    def func_gdf(x, y):
+    def func_gdf(row):
+        x = row["a"]
+        y = row["b"]
         return op(x, y)
 
     gdf = cudf.DataFrame({"a": [1, None, 3, None], "b": [4, 5, None, None]})
@@ -71,11 +69,14 @@ def test_compare_masked_vs_masked(op):
     # typing and lowering for comparisons
     # between columns
 
-    def func_pdf(x, y):
+    def func_pdf(row):
+        x = row["a"]
+        y = row["b"]
         return op(x, y)
 
-    @nulludf
-    def func_gdf(x, y):
+    def func_gdf(row):
+        x = row["a"]
+        y = row["b"]
         return op(x, y)
 
     # we should get:
@@ -90,11 +91,12 @@ def test_compare_masked_vs_masked(op):
 @pytest.mark.parametrize("constant", [1, 1.5, True, False])
 @pytest.mark.parametrize("data", [[1, 2, cudf.NA]])
 def test_arith_masked_vs_constant(op, constant, data):
-    def func_pdf(x):
+    def func_pdf(row):
+        x = row["data"]
         return op(x, constant)
 
-    @nulludf
-    def func_gdf(x):
+    def func_gdf(row):
+        x = row["data"]
         return op(x, constant)
 
     gdf = cudf.DataFrame({"data": data})
@@ -119,11 +121,12 @@ def test_arith_masked_vs_constant(op, constant, data):
 @pytest.mark.parametrize("constant", [1, 1.5, True, False])
 @pytest.mark.parametrize("data", [[2, 3, cudf.NA], [1, cudf.NA, 1]])
 def test_arith_masked_vs_constant_reflected(op, constant, data):
-    def func_pdf(x):
+    def func_pdf(row):
+        x = row["data"]
         return op(constant, x)
 
-    @nulludf
-    def func_gdf(x):
+    def func_gdf(row):
+        x = row["data"]
         return op(constant, x)
 
     # Just a single column -> result will be all NA
@@ -141,11 +144,12 @@ def test_arith_masked_vs_constant_reflected(op, constant, data):
 @pytest.mark.parametrize("op", arith_ops)
 @pytest.mark.parametrize("data", [[1, cudf.NA, 3], [2, 3, cudf.NA]])
 def test_arith_masked_vs_null(op, data):
-    def func_pdf(x):
+    def func_pdf(row):
+        x = row["data"]
         return op(x, pd.NA)
 
-    @nulludf
-    def func_gdf(x):
+    def func_gdf(row):
+        x = row["data"]
         return op(x, cudf.NA)
 
     gdf = cudf.DataFrame({"data": data})
@@ -158,11 +162,12 @@ def test_arith_masked_vs_null(op, data):
 
 @pytest.mark.parametrize("op", arith_ops)
 def test_arith_masked_vs_null_reflected(op):
-    def func_pdf(x):
+    def func_pdf(row):
+        x = row["data"]
         return op(pd.NA, x)
 
-    @nulludf
-    def func_gdf(x):
+    def func_gdf(row):
+        x = row["data"]
         return op(cudf.NA, x)
 
     gdf = cudf.DataFrame({"data": [1, None, 3]})
@@ -170,14 +175,17 @@ def test_arith_masked_vs_null_reflected(op):
 
 
 def test_masked_is_null_conditional():
-    def func_pdf(x, y):
+    def func_pdf(row):
+        x = row["a"]
+        y = row["b"]
         if x is pd.NA:
             return y
         else:
             return x + y
 
-    @nulludf
-    def func_gdf(x, y):
+    def func_gdf(row):
+        x = row["a"]
+        y = row["b"]
         if x is cudf.NA:
             return y
         else:
@@ -196,11 +204,14 @@ def test_apply_mixed_dtypes(dtype_a, dtype_b):
     values and nulls
     """
     # TODO: Parameterize over the op here
-    def func_pdf(x, y):
+    def func_pdf(row):
+        x = row["a"]
+        y = row["b"]
         return x + y
 
-    @nulludf
-    def func_gdf(x, y):
+    def func_gdf(row):
+        x = row["a"]
+        y = row["b"]
         return x + y
 
     gdf = cudf.DataFrame({"a": [1.5, None, 3, None], "b": [4, 5, None, None]})
@@ -218,14 +229,17 @@ def test_apply_return_literal(val):
     to a MaskedType
     """
 
-    def func_pdf(x, y):
+    def func_pdf(row):
+        x = row["a"]
+        y = row["b"]
         if x is not pd.NA and x < 2:
             return val
         else:
             return x + y
 
-    @nulludf
-    def func_gdf(x, y):
+    def func_gdf(row):
+        x = row["a"]
+        y = row["b"]
         if x is not cudf.NA and x < 2:
             return val
         else:
@@ -241,14 +255,15 @@ def test_apply_return_null():
     Tests casting / unification of Masked and NA
     """
 
-    def func_pdf(x):
+    def func_pdf(row):
+        x = row["a"]
         if x is pd.NA:
             return pd.NA
         else:
             return x
 
-    @nulludf
-    def func_gdf(x):
+    def func_gdf(row):
+        x = row["a"]
         if x is cudf.NA:
             return cudf.NA
         else:
@@ -259,14 +274,15 @@ def test_apply_return_null():
 
 
 def test_apply_return_either_null_or_literal():
-    def func_pdf(x):
+    def func_pdf(row):
+        x = row["a"]
         if x > 5:
             return 2
         else:
             return pd.NA
 
-    @nulludf
-    def func_gdf(x):
+    def func_gdf(row):
+        x = row["a"]
         if x > 5:
             return 2
         else:
@@ -280,7 +296,6 @@ def test_apply_return_literal_only():
     def func_pdf(x):
         return 5
 
-    @nulludf
     def func_gdf(x):
         return 5
 
@@ -289,7 +304,11 @@ def test_apply_return_literal_only():
 
 
 def test_apply_everything():
-    def func_pdf(w, x, y, z):
+    def func_pdf(row):
+        w = row["a"]
+        x = row["b"]
+        y = row["c"]
+        z = row["d"]
         if x is pd.NA:
             return w + y - z
         elif ((z > y) is not pd.NA) and z > y:
@@ -301,8 +320,11 @@ def test_apply_everything():
         else:
             return y > 2
 
-    @nulludf
-    def func_gdf(w, x, y, z):
+    def func_gdf(row):
+        w = row["a"]
+        x = row["b"]
+        y = row["c"]
+        z = row["d"]
         if x is cudf.NA:
             return w + y - z
         elif ((z > y) is not cudf.NA) and z > y:
