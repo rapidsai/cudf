@@ -606,13 +606,7 @@ struct typed_group_tdigest {
     typename T,
     typename... Args,
     typename std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
-  std::unique_ptr<column> operator()(Args&&...)  // column_view const&,
-                                                 // cudf::device_span<size_type const>
-                                                 // group_offsets, cudf::device_span<size_type const>
-                                                 // group_labels, cudf::device_span<size_type const>
-                                                 // group_valid_counts, size_type num_groups, int
-                                                 // delta, rmm::cuda_stream_view stream,
-                                                 // rmm::mr::device_memory_resource* mr)
+  std::unique_ptr<column> operator()(Args&&...)
   {
     CUDF_FAIL("Non-numeric type in group_tdigest");
   }
