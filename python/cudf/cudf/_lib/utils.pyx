@@ -234,7 +234,7 @@ cdef data_from_unique_ptr(
     cdef vector[unique_ptr[column]] c_columns = move(c_tbl.get().release())
     cdef vector[unique_ptr[column]].iterator it = c_columns.begin()
 
-    cdef size_type i
+    cdef size_t i
 
     columns = [Column.from_unique_ptr(move(dereference(it+i)))
                for i in range(c_columns.size())]
