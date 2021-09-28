@@ -742,7 +742,7 @@ def segmented_gather(Column source_column, Column gather_map):
 cdef class _CPackedColumns:
 
     @staticmethod
-    cdef _CPackedColumns from_py_table(input_table, keep_index=True):
+    def from_py_table(input_table, keep_index=True):
         """
         Construct a ``PackedColumns`` object from a ``cudf.DataFrame``.
         """

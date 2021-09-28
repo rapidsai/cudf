@@ -8,6 +8,3 @@ cdef class _CPackedColumns:
     cdef object column_names
     cdef object column_dtypes
     cdef object index_names
-
-    @staticmethod
-    cdef _CPackedColumns from_py_table(input_table, keep_index=*)
