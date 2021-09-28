@@ -180,17 +180,14 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lh
                                                      rmm::cuda_stream_view stream,
                                                      rmm::mr::device_memory_resource* mr)
 {
-  auto scatter_map = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
-  auto const scatter_map_end = thrust::copy_if(rmm::exec_policy(stream),
-                                               thrust::make_counting_iterator(size_type{0}),
-                                               thrust::make_counting_iterator(size_type{size}),
-                                               scatter_map.begin(),
-                                               is_left);
+  auto gather_map = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
+  auto const gather_map_end = thrust::copy_if(rmm::exec_policy(stream),
+                                              thrust::make_counting_iterator(size_type{0}),
+                                              thrust::make_counting_iterator(size_type{size}),
+                                              gather_map.begin(),
+                                              is_left);
 
-  auto gather_map =
-    column_view(data_type{type_to_id<size_type>()},
-                static_cast<size_type>(thrust::distance(scatter_map.begin(), scatter_map_end)),
-                scatter_map.data());
+  gather_map.resize(thrust::distance(gather_map.begin(), gather_map_end), stream);
 
   auto const scatter_src_lhs = cudf::detail::gather(table_view{std::vector<column_view>{lhs}},
                                                     gather_map,

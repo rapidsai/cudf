@@ -178,18 +178,14 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                     scatter_map.begin(),
                     is_null_index_predicate(input.size(), gather_map.begin<size_type>()));
 
+  scatter_map.resize(thrust::distance(scatter_map.begin(), scatter_map_end), stream);
   // Bail early, if all LEAD/LAG computations succeeded. No defaults need be substituted.
   if (scatter_map.is_empty()) { return std::move(output_with_nulls->release()[0]); }
-
-  auto map =
-    column_view(data_type{type_to_id<size_type>()},
-                static_cast<size_type>(thrust::distance(scatter_map.begin(), scatter_map_end)),
-                scatter_map.data());
 
   // Gather only those default values that are to be substituted.
   auto gathered_defaults =
     cudf::detail::gather(table_view{std::vector<column_view>{default_outputs}},
-                         map,
+                         scatter_map,
                          out_of_bounds_policy::DONT_CHECK,
                          cudf::detail::negative_index_policy::NOT_ALLOWED,
                          stream);
@@ -197,7 +193,7 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
   // Scatter defaults into locations where LEAD/LAG computed nulls.
   auto scattered_results = cudf::detail::scatter(
     table_view{std::vector<column_view>{gathered_defaults->release()[0]->view()}},
-    map,
+    scatter_map,
     table_view{std::vector<column_view>{output_with_nulls->release()[0]->view()}},
     false,
     stream,
