@@ -61,6 +61,8 @@ __inline__ __device__ cuda::std::chrono::year_month_day extract_date(char const*
                                                                      char const* end,
                                                                      bool dayfirst)
 {
+  using namespace cuda::std::chrono;
+
   char sep = '/';
 
   auto sep_pos = thrust::find(thrust::seq, begin, end, sep);
@@ -70,12 +72,13 @@ __inline__ __device__ cuda::std::chrono::year_month_day extract_date(char const*
     sep_pos = thrust::find(thrust::seq, begin, end, sep);
   }
 
-  int y;          // year is signed
-  unsigned m, d;  // month and day are unsigned
+  year y;
+  month m;
+  day d;
 
   //--- is year the first filed?
   if ((sep_pos - begin) == 4) {
-    y = to_non_negative_integer<int>(begin, sep_pos);
+    y = year{to_non_negative_integer<int32_t>(begin, sep_pos)};  //  year is signed
 
     // Month
     auto s2 = sep_pos + 1;
@@ -83,50 +86,49 @@ __inline__ __device__ cuda::std::chrono::year_month_day extract_date(char const*
 
     if (sep_pos == end) {
       //--- Data is just Year and Month - no day
-      m = to_non_negative_integer<int>(s2, end);
-      d = 1;
+      m = month{to_non_negative_integer<uint32_t>(s2, end)};  // month and day are unsigned
+      d = day{1};
 
     } else {
-      m = to_non_negative_integer<int>(s2, sep_pos);
-      d = to_non_negative_integer<int>((sep_pos + 1), end);
+      m = month{to_non_negative_integer<uint32_t>(s2, sep_pos)};
+      d = day{to_non_negative_integer<uint32_t>((sep_pos + 1), end)};
     }
 
   } else {
     //--- if the dayfirst flag is set, then restricts the format options
     if (dayfirst) {
-      d = to_non_negative_integer<int>(begin, sep_pos);
+      d = day{to_non_negative_integer<uint32_t>(begin, sep_pos)};
 
       auto s2 = sep_pos + 1;
       sep_pos = thrust::find(thrust::seq, s2, end, sep);
 
-      m = to_non_negative_integer<int>(s2, sep_pos);
-      y = to_non_negative_integer<int>((sep_pos + 1), end);
+      m = month{to_non_negative_integer<uint32_t>(s2, sep_pos)};
+      y = year{to_non_negative_integer<int32_t>((sep_pos + 1), end)};
 
     } else {
-      m = to_non_negative_integer<int>(begin, sep_pos);
+      m = month{to_non_negative_integer<uint32_t>(begin, sep_pos)};
 
       auto s2 = sep_pos + 1;
       sep_pos = thrust::find(thrust::seq, s2, end, sep);
 
       if (sep_pos == end) {
         //--- Data is just Year and Month - no day
-        y = to_non_negative_integer<int>(s2, end);
-        d = 1;
+        y = year{to_non_negative_integer<int32_t>(s2, end)};
+        d = day{1};
 
       } else {
-        d = to_non_negative_integer<int>(s2, sep_pos);
-        y = to_non_negative_integer<int>((sep_pos + 1), end);
+        d = day{to_non_negative_integer<uint32_t>(s2, sep_pos)};
+        y = year{to_non_negative_integer<int32_t>((sep_pos + 1), end)};
       }
     }
   }
 
-  using namespace cuda::std::chrono;
-  return year_month_day{year{y}, month{m}, day{d}};
+  return year_month_day{y, m, d};
 }
 
 /**
  * @brief Parses a string to extract the hour, minute, second and millisecond time field
- * values.
+ * values of a day.
  *
  * Incoming format is expected to be `HH:MM:SS.MS`, with the latter second and millisecond fields
  * optional. Each time field can be a single, double, or triple (in the case of milliseconds)
@@ -135,18 +137,19 @@ __inline__ __device__ cuda::std::chrono::year_month_day extract_date(char const*
  *
  * @param begin Pointer to the first element of the string
  * @param end Pointer to the first element after the string
- * @return Duration in cudf milliseconds by summing up the extracted hours, minutes, seconds and
- * milliseconds
+ * @return Extracted hours, minutes, seconds and milliseconds of `chrono::hh_mm_ss` type with a
+ * precision of milliseconds
  */
-__inline__ __device__ cudf::duration_ms extract_time(char const* begin, char const* end)
+__inline__ __device__ cuda::std::chrono::hh_mm_ss<duration_ms> extract_time_of_day(
+  char const* begin, char const* end)
 {
   constexpr char sep = ':';
 
   // Adjust for AM/PM and any whitespace before
-  int32_t hour_adjust = 0;
-  auto last           = end - 1;
+  duration_h d_h{0};
+  auto last = end - 1;
   if (*last == 'M' || *last == 'm') {
-    if (*(last - 1) == 'P' || *(last - 1) == 'p') { hour_adjust = 12; }
+    if (*(last - 1) == 'P' || *(last - 1) == 'p') { d_h = duration_h{12}; }
     last = last - 2;
     while (*last == ' ') {
       --last;
@@ -156,30 +159,30 @@ __inline__ __device__ cudf::duration_ms extract_time(char const* begin, char con
 
   // Find hour-minute separator
   const auto hm_sep = thrust::find(thrust::seq, begin, end, sep);
-  cudf::duration_h d_h{to_non_negative_integer<int>(begin, hm_sep) + hour_adjust};
+  // Extract hours
+  d_h += cudf::duration_h{to_non_negative_integer<int>(begin, hm_sep)};
 
-  int m, s, ms;
+  duration_m d_m{0};
+  duration_s d_s{0};
+  duration_ms d_ms{0};
 
   // Find minute-second separator (if present)
   const auto ms_sep = thrust::find(thrust::seq, hm_sep + 1, end, sep);
   if (ms_sep == end) {
-    m  = to_non_negative_integer<int>(hm_sep + 1, end);
-    s  = 0;
-    ms = 0;
+    d_m = duration_m{to_non_negative_integer<int32_t>(hm_sep + 1, end)};
   } else {
-    m = to_non_negative_integer<int>(hm_sep + 1, ms_sep);
+    d_m = duration_m{to_non_negative_integer<int32_t>(hm_sep + 1, ms_sep)};
 
     // Find second-millisecond separator (if present)
     const auto sms_sep = thrust::find(thrust::seq, ms_sep + 1, end, '.');
     if (sms_sep == end) {
-      s  = to_non_negative_integer<int>(ms_sep + 1, end);
-      ms = 0;
+      d_s = duration_s{to_non_negative_integer<int64_t>(ms_sep + 1, end)};
     } else {
-      s  = to_non_negative_integer<int>(ms_sep + 1, sms_sep);
-      ms = to_non_negative_integer<int>(sms_sep + 1, end);
+      d_s  = duration_s{to_non_negative_integer<int64_t>(ms_sep + 1, sms_sep)};
+      d_ms = duration_ms{to_non_negative_integer<int64_t>(sms_sep + 1, end)};
     }
   }
-  return d_h + duration_m{m} + duration_s{s} + duration_ms{ms};
+  return cuda::std::chrono::hh_mm_ss<duration_ms>{d_h + d_m + d_s + d_ms};
 }
 
 /**
@@ -228,8 +231,8 @@ __inline__ __device__ timestamp_type to_timestamp(char const* begin, char const*
 
   // Extract time only if separator is present
   if (sep_pos != end) {
-    auto t = extract_time(sep_pos + 1, end);
-    answer += cuda::std::chrono::duration_cast<duration_type>(t);
+    auto t = extract_time_of_day(sep_pos + 1, end);
+    answer += cuda::std::chrono::duration_cast<duration_type>(t.to_duration());
   }
 
   return answer;
@@ -299,8 +302,6 @@ __inline__ __device__ duration_type to_duration(char const* begin, char const* e
   // %d days [+]%H:%M:%S.n => %d days, %d days [+]%H:%M:%S,  %H:%M:%S.n, %H:%M:%S, %value.
   constexpr char sep = ':';
 
-  int32_t days{0};
-  int32_t hour{0};
   // single pass to parse days, hour, minute, seconds, nanosecond
   auto cur         = begin;
   auto const value = parse_integer<int32_t>(&cur, end);
@@ -314,32 +315,31 @@ __inline__ __device__ duration_type to_duration(char const* begin, char const* e
   auto const has_days_seperator = (after_days_sep != cur);
   cur                           = skip_spaces(after_days_sep, end);
   cur += (*cur == '+');
+
+  duration_D d_d{0};
+  duration_h d_h{0};
   if (has_days_seperator) {
-    days = value;
-    hour = parse_integer<int32_t>(&cur, end);
+    d_d = duration_D{value};
+    d_h = duration_h{parse_integer<int32_t>(&cur, end)};
   } else {
-    hour = value;
+    d_h = duration_h{value};
   }
 
-  auto const minute = parse_optional_integer<int32_t>(&cur, end, sep);
-  auto const second = parse_optional_integer<int64_t>(&cur, end, sep);
+  duration_m d_m{parse_optional_integer<int32_t>(&cur, end, sep)};
+  duration_s d_s{parse_optional_integer<int64_t>(&cur, end, sep)};
 
-  cudf::duration_D d_d{days};
-  cudf::duration_h d_h{hour};
-  cudf::duration_m d_m{minute};
-  cudf::duration_s d_s{second};
   // Convert all durations to the given type
   auto output_d = duration_cast<duration_type>(d_d + d_h + d_m + d_s);
 
   if constexpr (std::is_same_v<duration_type, cudf::duration_s>) { return output_d; }
 
+  // Duration type not allowed due to the use of `*` operator
   int64_t nanosecond = 0L;
-
   if (*cur == '.') {  //.n
     auto const start_subsecond = ++cur;
-    nanosecond                 = parse_integer<int>(&cur, end);
+    nanosecond                 = parse_integer<int64_t>(&cur, end);
     int8_t const num_digits    = min(9L, cur - start_subsecond);
-    nanosecond *= powers_of_ten[9 - num_digits];
+    nanosecond *= powers_of_ten[9 - num_digits];  // Duration has no * operator
   }
 
   return output_d + duration_cast<duration_type>(duration_ns{nanosecond});
