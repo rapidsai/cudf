@@ -15,20 +15,22 @@
  */
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/hashing.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 
-#include <hash/hash_constants.hpp>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include <type_traits>
 
 #include <thrust/fill.h>
 #include <thrust/for_each.h>
 #include <thrust/iterator/constant_iterator.h>
+
+#include <algorithm>
+#include <type_traits>
 
 namespace cudf {
 namespace detail {
@@ -664,7 +666,7 @@ std::unique_ptr<column> sha_hash(table_view const& input,
   CUDF_EXPECTS(
     std::all_of(
       input.begin(), input.end(), [](auto const& col) { return sha_type_check(col.type()); }),
-    "SHA unsupported column type");
+    "Unsupported column type for hash function.");
 
   // Result column allocation and creation
   auto begin = thrust::make_constant_iterator(Hasher::digest_size);
