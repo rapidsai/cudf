@@ -21,9 +21,8 @@
 #include <cudf/lists/detail/gather.cuh>
 
 #include <thrust/binary_search.h>
-#include <limits>
+
 #include <rmm/cuda_stream_view.hpp>
-#include "cudf/types.hpp"
 
 namespace cudf {
 namespace lists {
@@ -65,9 +64,9 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
         thrust::seq, gather_index_begin, gather_index_end, gather_index_begin[-1] + index) -
       gather_index_begin;
     // Get each sub_index in list in each row of gather_map.
-    auto sub_index          = map_begin[index];
-    auto list_size          = value_offsets[offset_idx + 1] - value_offsets[offset_idx];
-    auto wrapped_sub_index  = (sub_index % list_size + list_size) % list_size;
+    auto sub_index = map_begin[index];
+    auto list_size = value_offsets[offset_idx + 1] - value_offsets[offset_idx];
+    auto wrapped_sub_index  = sub_index < 0 ? sub_index + list_size : sub_index;
     auto constexpr null_idx = cuda::std::numeric_limits<cudf::size_type>::max();
     // Add sub_index to value_column offsets, to get gather indices of child of value_column
     return (bounds_policy == out_of_bounds_policy::NULLIFY && out_of_bounds(sub_index, list_size))

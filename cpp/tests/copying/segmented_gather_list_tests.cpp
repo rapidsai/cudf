@@ -176,7 +176,7 @@ TYPED_TEST(SegmentedGatherTest, GatherNested)
     LCW<T> list{{{2, 3}, {4, 5}},
                 {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}},
                 {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {-17, -18}}};
-    LCW<int> gather_map{{0, 2, -2}, {1}, {1, 0, -1, 5}};
+    LCW<int> gather_map{{0, -2, -2}, {1}, {1, 0, -1, -5}};
 
     auto results =
       cudf::lists::detail::segmented_gather(lists_column_view{list}, lists_column_view{gather_map});
@@ -256,14 +256,14 @@ TYPED_TEST(SegmentedGatherTest, GatherOutOfOrder)
     LCW<T> list{{{2, 3}, {4, 5}},
                 {{6, 7, 8}, {9, 10, 11}, {12, 13, 14}},
                 {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}}};
-    LCW<int> gather_map{{1, 0}, {1, 2, 0}, {5, 4, 3, 2, 1, 0}};
+    LCW<int> gather_map{{1, 0}, {1, 2, 0}, {4, 3, 2, 1, 0}};
 
     auto results =
       cudf::lists::detail::segmented_gather(lists_column_view{list}, lists_column_view{gather_map});
 
     LCW<T> expected{{{4, 5}, {2, 3}},
                     {{9, 10, 11}, {12, 13, 14}, {6, 7, 8}},
-                    {{15, 16}, {17, 18}, {17, 18}, {17, 18}, {17, 18}, {15, 16}}};
+                    {{17, 18}, {17, 18}, {17, 18}, {17, 18}, {15, 16}}};
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
   }
