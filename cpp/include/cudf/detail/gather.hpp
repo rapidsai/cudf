@@ -70,7 +70,8 @@ std::unique_ptr<table> gather(
 
 /**
  * @copydoc cudf::detail::gather(table_view const&,column_view const&,table_view
- * const&,cudf::out_of_bounds_policy,cudf::detail::negative_index_policy,rmm::cuda_stream_view,rmm::mr::device_memory_resource*
+ * const&,cudf::out_of_bounds_policy,cudf::detail::negative_index_policy,rmm::cuda_stream_view,
+ * rmm::mr::device_memory_resource*)
  *
  * @throws cudf::logic_error if `gather_map` span size is larger than max of `size_type`.
  */
