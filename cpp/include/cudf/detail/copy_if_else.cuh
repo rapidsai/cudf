@@ -18,18 +18,11 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/column/column_view.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
-#include <cudf/scalar/scalar.hpp>
-#include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/strings/detail/copy_if_else.cuh>
-#include <cudf/utilities/traits.hpp>
-#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/device_scalar.hpp>
-
-#include <cub/cub.cuh>
 
 namespace cudf {
 namespace detail {
@@ -71,23 +64,17 @@ __launch_bounds__(block_size) __global__
   size_type warp_cur = warp_begin + warp_id;
   size_type index    = tid;
   while (warp_cur <= warp_end) {
-    bool in_range = (index >= begin && index < end);
-
-    bool valid = true;
-    if (has_validity) {
-      valid = in_range && (filter(index) ? thrust::get<1>(lhs[index]) : thrust::get<1>(rhs[index]));
-    }
-
-    // do the copy if-else
-    if (in_range) {
-      out.element<T>(index) = filter(index) ? static_cast<T>(thrust::get<0>(lhs[index]))
-                                            : static_cast<T>(thrust::get<0>(rhs[index]));
+    bool valid = false;
+    if (index >= begin && index < end) {
+      auto value = filter(index) ? lhs[index] : rhs[index];
+      valid      = !has_validity || value.has_value();
+      if (valid) { out.element<T>(index) = static_cast<T>(value.value()); }
     }
 
     // update validity
     if (has_validity) {
       // the final validity mask for this warp
-      int warp_mask = __ballot_sync(0xFFFF'FFFF, valid && in_range);
+      int warp_mask = __ballot_sync(0xFFFF'FFFF, valid);
       // only one guy in the warp needs to update the mask and count
       if (lane_id == 0) {
         out.set_mask_word(warp_cur, warp_mask);
@@ -168,8 +155,8 @@ std::unique_ptr<column> copy_if_else(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  using Element =
-    typename thrust::tuple_element<0, typename thrust::iterator_traits<LeftIter>::value_type>::type;
+  // This is the type of the thrust::optional element in the passed iterators
+  using Element = typename thrust::iterator_traits<LeftIter>::value_type::value_type;
 
   size_type size           = std::distance(lhs_begin, lhs_end);
   size_type num_els        = cudf::util::round_up_safe(size, warp_size);
