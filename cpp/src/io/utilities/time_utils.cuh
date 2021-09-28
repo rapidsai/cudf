@@ -44,7 +44,9 @@ struct get_period {
  */
 constexpr int32_t to_clockrate(type_id timestamp_type_id)
 {
-  return type_dispatcher(data_type{timestamp_type_id}, get_period{});
+  return timestamp_type_id == type_id::EMPTY
+           ? 0
+           : type_dispatcher(data_type{timestamp_type_id}, get_period{});
 }
 
 }  // namespace io
