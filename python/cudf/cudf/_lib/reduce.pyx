@@ -100,11 +100,7 @@ def scan(scan_op, Column incol, inclusive, **kwargs):
     cdef unique_ptr[column] c_result
     cdef Aggregation cython_agg = make_aggregation(scan_op, kwargs)
 
-    cdef scan_type c_inclusive
-    if inclusive is True:
-        c_inclusive = scan_type.INCLUSIVE
-    elif inclusive is False:
-        c_inclusive = scan_type.EXCLUSIVE
+    cdef scan_type c_inclusive = scan_type.INCLUSIVE if inclusive else scan_type.EXCLUSIVE
 
     with nogil:
         c_result = move(cpp_scan(
