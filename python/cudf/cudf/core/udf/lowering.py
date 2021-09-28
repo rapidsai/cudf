@@ -9,10 +9,9 @@ from numba.cuda.cudaimpl import (
 )
 from numba.extending import lower_builtin, types
 
+from cudf.core.udf import api
+from cudf.core.udf._ops import arith_ops, comparison_ops
 from cudf.core.udf.typing import MaskedType, NAType
-
-from . import api
-from ._ops import arith_ops, comparison_ops
 
 
 @cuda_lowering_registry.lower_constant(NAType)

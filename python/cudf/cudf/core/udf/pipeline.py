@@ -13,8 +13,6 @@ libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 MASK_BITSIZE = np.dtype("int32").itemsize * 8
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
-cuda.jit(device=True)(pack_return)
-
 
 @annotate("NUMBA JIT", color="green", domain="cudf_python")
 def get_udf_return_type(func, dtypes):
@@ -131,9 +129,7 @@ masked_input_initializer_template = """\
 
 def _define_function(df, scalar_return=False):
     # Create argument list for kernel
-    input_columns = ", ".join(
-        [f"input_col_{i}" for i in range(len(df.columns))]
-    )
+    input_columns = ", ".join([f"input_col_{i}" for i in range(len(df._data))])
 
     input_offsets = ", ".join([f"offset_{i}" for i in range(len(df._data))])
 
@@ -187,36 +183,37 @@ def compile_or_get(df, f):
     )
     if precompiled.get(cache_key) is not None:
         kernel, scalar_return_type = precompiled[cache_key]
-    else:
+        return kernel, scalar_return_type
 
-        numba_return_type = get_udf_return_type(f, df.dtypes)
-        _is_scalar_return = not isinstance(numba_return_type, MaskedType)
-        scalar_return_type = (
-            numba_return_type
-            if _is_scalar_return
-            else numba_return_type.value_type
-        )
+    numba_return_type = get_udf_return_type(f, df.dtypes)
+    _is_scalar_return = not isinstance(numba_return_type, MaskedType)
+    scalar_return_type = (
+        numba_return_type
+        if _is_scalar_return
+        else numba_return_type.value_type
+    )
 
-        sig = construct_signature(df, scalar_return_type)
-        f_ = cuda.jit(device=True)(f)
+    sig = construct_signature(df, scalar_return_type)
+    f_ = cuda.jit(device=True)(f)
 
-        # Dict of 'local' variables into which `_kernel` is defined
-        local_exec_context = {}
-        global_exec_context = {
-            "f_": f_,
-            "cuda": cuda,
-            "Masked": Masked,
-            "mask_get": mask_get,
-            "pack_return": pack_return,
-        }
-        exec(
-            _define_function(df, scalar_return=_is_scalar_return),
-            global_exec_context,
-            local_exec_context,
-        )
-        # The python function definition representing the kernel
-        _kernel = local_exec_context["_kernel"]
-        kernel = cuda.jit(sig)(_kernel)
-        precompiled[cache_key] = (kernel, scalar_return_type)
+    # Dict of 'local' variables into which `_kernel` is defined
+    local_exec_context = {}
+    global_exec_context = {
+        "f_": f_,
+        "cuda": cuda,
+        "Masked": Masked,
+        "mask_get": mask_get,
+        "pack_return": pack_return,
+    }
+    exec(
+        _define_function(df, scalar_return=_is_scalar_return),
+        global_exec_context,
+        local_exec_context,
+    )
+    # The python function definition representing the kernel
+    _kernel = local_exec_context["_kernel"]
+    kernel = cuda.jit(sig)(_kernel)
+    scalar_return_type = numpy_support.as_dtype(scalar_return_type)
+    precompiled[cache_key] = (kernel, scalar_return_type)
 
-    return kernel, numpy_support.as_dtype(scalar_return_type)
+    return kernel, scalar_return_type

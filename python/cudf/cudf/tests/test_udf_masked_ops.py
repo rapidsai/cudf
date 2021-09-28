@@ -96,15 +96,13 @@ def test_arith_masked_vs_constant(op, constant, data):
         operator.truediv,
         operator.floordiv,
     }:
-        with pytest.xfail():
-            # The following tests cases yield undefined behavior:
-            # - truediv(x, False) because its dividing by zero
-            # - floordiv(x, False) because its dividing by zero
-            # - mod(x, False) because its mod by zero,
-            # - pow(x, False) because we have an NA in the series and pandas
-            #   insists that (NA**0 == 1) where we do not
-            run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
-        return
+        # The following tests cases yield undefined behavior:
+        # - truediv(x, False) because its dividing by zero
+        # - floordiv(x, False) because its dividing by zero
+        # - mod(x, False) because its mod by zero,
+        # - pow(x, False) because we have an NA in the series and pandas
+        #   insists that (NA**0 == 1) where we do not
+        pytest.skip()
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
 
@@ -123,13 +121,11 @@ def test_arith_masked_vs_constant_reflected(op, constant, data):
     gdf = cudf.DataFrame({"data": data})
 
     if constant == 1 and op is operator.pow:
-        with pytest.xfail():
-            # The following tests cases yield differing results from pandas:
-            # - 1**NA
-            # - True**NA
-            # both due to pandas insisting that this is equal to 1.
-            run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
-        return
+        # The following tests cases yield differing results from pandas:
+        # - 1**NA
+        # - True**NA
+        # both due to pandas insisting that this is equal to 1.
+        pytest.skip()
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
 
@@ -146,10 +142,8 @@ def test_arith_masked_vs_null(op, data):
     gdf = cudf.DataFrame({"data": data})
 
     if 1 in gdf["data"] and op is operator.pow:
-        with pytest.xfail():
-            # In pandas, 1**NA == 1.
-            run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
-        return
+        # In pandas, 1**NA == 1.
+        pytest.skip()
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
 
