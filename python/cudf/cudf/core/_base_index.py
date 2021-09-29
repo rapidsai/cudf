@@ -287,7 +287,7 @@ class BaseIndex(Serializable):
         if not isinstance(other, cudf.Index):
             other = cudf.Index(other, name=self.name)
 
-        res_name = self.name or other.name
+        res_name = _get_result_name(self.name, other.name)
         if self.equals(other):
             if self.has_duplicates:
                 result = self.unique()
@@ -304,7 +304,15 @@ class BaseIndex(Serializable):
             else:
                 return cudf.Index([], name=res_name)
 
-        result = self._intersection(other, sort=sort)
+        if self.has_duplicates:
+            lhs = self.unique()
+        else:
+            lhs = self
+        if other.has_duplicates:
+            rhs = other.unique()
+        else:
+            rhs = other
+        result = lhs._intersection(rhs, sort=sort)
         result.name = res_name
         return result
 
@@ -607,7 +615,7 @@ class BaseIndex(Serializable):
         return union_result
 
     def _intersection(self, other, sort=None):
-        intersection_result = self.join(other, how="inner")
+        intersection_result = self.unique().join(other.unique(), how="inner")
 
         if sort is None and len(other):
             return intersection_result.sort_values()

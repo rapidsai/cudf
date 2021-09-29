@@ -2406,3 +2406,34 @@ def test_union_index(idx1, idx2, sort):
     actual = idx1.union(idx2, sort=sort)
     print(expected, actual)
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "idx1, idx2",
+    [
+        (pd.RangeIndex(0, 10), pd.RangeIndex(3, 7)),
+        (pd.RangeIndex(0, 10), pd.RangeIndex(-10, 20)),
+        (pd.RangeIndex(0, 10, name="a"), pd.RangeIndex(90, 100, name="b")),
+        (pd.Index([0, 1, 2, 30], name="a"), pd.Index([30, 0, 90, 100])),
+        (pd.Index([0, 1, 2, 30], name="a"), [90, 100]),
+        (pd.Index([0, 1, 2, 30]), pd.Index([0, 10, 1.0, 11])),
+        (pd.Index(["a", "b", "c", "d", "c"]), pd.Index(["a", "c", "z"])),
+        (
+            pd.Index(["a", "b", "c", "d", "c"]),
+            pd.Index(["a", "b", "c", "d", "c"]),
+        ),
+        (pd.Index([True, False, True, True]), pd.Index([10, 11, 12, 0, 1, 2])),
+        (pd.Index([True, False, True, True]), pd.Index([True, True])),
+    ],
+)
+@pytest.mark.parametrize("sort", [None, False])
+def test_intersection_index(idx1, idx2, sort):
+
+    expected = idx1.intersection(idx2, sort=sort)
+
+    idx1 = cudf.from_pandas(idx1) if isinstance(idx1, pd.Index) else idx1
+    idx2 = cudf.from_pandas(idx2) if isinstance(idx2, pd.Index) else idx2
+
+    actual = idx1.intersection(idx2, sort=sort)
+
+    assert_eq(expected, actual, exact=False)
