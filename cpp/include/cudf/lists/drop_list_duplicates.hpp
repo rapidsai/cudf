@@ -19,6 +19,8 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/stream_compaction.hpp>
 
+#include <optional>
+
 namespace cudf {
 namespace lists {
 /**
@@ -27,38 +29,62 @@ namespace lists {
  * @file
  */
 
+/*
+ * @brief Flag to specify which entry to keep when removing the duplicate entries from a repeated
+ * sequence.
+ */
+enum class keep_policy {
+  UNDEFINED,  ///< An arbitrary entry at an unknown position in the repeated sequence will be kept.
+  FIRST,      ///< Keep the first entry (all duplicate entries after it will be removed).
+  LAST        ///< Keep the last entry (all duplicate entries before it will be removed).
+};
+
 /**
- * @brief Create a new lists column by extracting unique entries from list elements in the given
- * lists column.
+ * @brief Create new lists columns by extracting the key list entries and their corresponding value
+ * entries from the given lists columns such that only the unique list entries in the `keys` column
+ * will be copied.
  *
- * Given an input lists column, the list elements in the column are copied to an output lists
- * column such that their duplicated entries are dropped out to keep only the unique ones. The
- * order of those entries within each list are not guaranteed to be preserved as in the input. In
- * the current implementation, entries in the output lists are sorted by ascending order (nulls
- * last), but this is not guaranteed in future implementation.
+ * In some cases, there is only a need to remove duplicates entries from one input lists column. In
+ * such situations, the input values lists column can be ignored.
  *
- * @throw cudf::logic_error if the child column of the input lists column contains nested type other
+ * Given a pair of keys-values lists columns, each list entry in the keys column corresponds to a
+ * list entry in the values column (i.e., the lists at each row index in both keys and values
+ * columns have the same size). The entries in both columns are copied into an output pair of keys
+ * and values lists columns (respectively), in a way such that the repeated key entries (and their
+ * corresponding value entries) are dropped out to keep only the entries with unique keys.
+ *
+ * The order of entries within each list of the output lists columns are not guaranteed to be
+ * preserved as in the input. In the current implementation, entries in the output keys lists are
+ * sorted by ascending order (nulls last), but this is not guaranteed in future implementation.
+ *
+ * @throw cudf::logic_error if the child column of the input keys column contains nested type other
  * than struct.
  *
- * @param lists_column The input lists column to extract lists with unique entries.
- * @param nulls_equal Flag to specify whether null entries should be considered equal.
- * @param nans_equal Flag to specify whether NaN entries should be considered as equal value (only
- *        applicable for floating point data column).
+ * @param keys The input keys lists column to check for uniqueness.
+ * @param values The optional values lists column in which each list entry corresponds to a list
+ *        entry in the keys column.
+ * @param nulls_equal Flag to specify whether null key entries should be considered equal.
+ * @param nans_equal Flag to specify whether NaN key entries should be considered as equal value
+ *        (only applicable for floating point data column).
+ * @param keep_entry Flag to specify which entry will be kept when removing duplicate entries in the
+ *        repeated sequence. This is only relevant when the values lists column is given.
  * @param mr Device resource used to allocate memory.
  *
  * @code{.pseudo}
  * input  = { {1, 1, 2, 1, 3}, {4}, NULL, {}, {NULL, NULL, NULL, 5, 6, 6, 6, 5} }
  * output = { {1, 2, 3}, {4}, NULL, {}, {5, 6, NULL} }
- *
- * Note that permuting the entries of each list in this output also produces another valid output.
  * @endcode
  *
- * @return A lists column with list elements having unique entries.
+ * @return A pair of pointers storing to the columns resulted from removing duplicate key entries
+ *         and their corresponding values entries from the input lists columns. If the input values
+ *         column is missing, its corresponding output will be a null pointer.
  */
-std::unique_ptr<column> drop_list_duplicates(
-  lists_column_view const& lists_column,
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates(
+  lists_column_view const& keys,
+  std::optional<lists_column_view> const& values,
   null_equality nulls_equal           = null_equality::EQUAL,
   nan_equality nans_equal             = nan_equality::UNEQUAL,
+  keep_policy keep_entry              = keep_policy::UNDEFINED,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
