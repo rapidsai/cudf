@@ -2404,7 +2404,7 @@ def test_union_index(idx1, idx2, sort):
     idx2 = cudf.from_pandas(idx2) if isinstance(idx2, pd.Index) else idx2
 
     actual = idx1.union(idx2, sort=sort)
-    print(expected, actual)
+
     assert_eq(expected, actual)
 
 
