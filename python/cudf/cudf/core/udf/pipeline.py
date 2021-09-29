@@ -272,6 +272,7 @@ def compile_or_get(df, f):
     # precompile the user udf to get the right return type.
     # could be a MaskedType or a scalar type.
     numba_return_type = get_udf_return_type(f, df)
+
     _is_scalar_return = not isinstance(numba_return_type, MaskedType)
     scalar_return_type = (
         numba_return_type
