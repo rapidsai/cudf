@@ -46,7 +46,7 @@ TYPED_TEST(OneHotEncodingTestTyped, Basic)
 
   auto expected = table_view{{col0, col1}};
 
-  auto [_, got] = one_hot_encode(input, category);
+  [[maybe_unused]] auto [res_ptr, got] = one_hot_encode(input, category);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got);
 }
@@ -62,7 +62,7 @@ TYPED_TEST(OneHotEncodingTestTyped, Nulls)
 
   auto expected = table_view{{col0, col1, col2}};
 
-  auto [_, got] = one_hot_encode(input, category);
+  [[maybe_unused]] auto [res_ptr, got] = one_hot_encode(input, category);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got);
 }
@@ -80,7 +80,7 @@ TEST_F(OneHotEncodingTest, Diagonal)
 
   auto expected = table_view{{col0, col1, col2, col3, col4}};
 
-  auto [_, got] = one_hot_encode(input, category);
+  [[maybe_unused]] auto [res_ptr, got] = one_hot_encode(input, category);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got);
 }
@@ -95,7 +95,7 @@ TEST_F(OneHotEncodingTest, ZeroInput)
 
   auto expected = table_view{{col0, col1}};
 
-  auto [_, got] = one_hot_encode(input, category);
+  [[maybe_unused]] auto [res_ptr, got] = one_hot_encode(input, category);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got);
 }
@@ -107,7 +107,7 @@ TEST_F(OneHotEncodingTest, ZeroCat)
 
   auto expected = table_view{};
 
-  auto [_, got] = one_hot_encode(input, category);
+  [[maybe_unused]] auto [res_ptr, got] = one_hot_encode(input, category);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got);
 }
@@ -119,7 +119,7 @@ TEST_F(OneHotEncodingTest, ZeroInputCat)
 
   auto expected = table_view{};
 
-  auto [_, got] = one_hot_encode(input, category);
+  [[maybe_unused]] auto [res_ptr, got] = one_hot_encode(input, category);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got);
 }
@@ -133,7 +133,7 @@ TEST_F(OneHotEncodingTest, OneCat)
 
   auto expected = table_view{{col0}};
 
-  auto [_, got] = one_hot_encode(input, category);
+  [[maybe_unused]] auto [res_ptr, got] = one_hot_encode(input, category);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got);
 }
@@ -151,7 +151,7 @@ TEST_F(OneHotEncodingTest, NaNs)
 
   auto expected = table_view{{col0, col1, col2}};
 
-  auto [_, got] = one_hot_encode(input, category);
+  [[maybe_unused]] auto [res_ptr, got] = one_hot_encode(input, category);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got);
 }
@@ -169,7 +169,7 @@ TEST_F(OneHotEncodingTest, Strings)
 
   auto expected = table_view{{col0, col1, col2}};
 
-  auto [_, got] = one_hot_encode(input, category);
+  [[maybe_unused]] auto [res_ptr, got] = one_hot_encode(input, category);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got);
 }
@@ -184,7 +184,7 @@ TEST_F(OneHotEncodingTest, Dictionary)
 
   auto expected = table_view{{col0, col1}};
 
-  auto [_, got] = one_hot_encode(input, category);
+  [[maybe_unused]] auto [res_ptr, got] = one_hot_encode(input, category);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, got);
 }
