@@ -378,10 +378,10 @@ struct column_row_comparator_dispatch {
   }
 
   template <class Type, std::enable_if_t<!cudf::is_equality_comparable<Type, Type>()>* = nullptr>
-  bool operator()(size_type i, size_type j) const
+  bool operator()(size_type, size_type) const
   {
     CUDF_FAIL(
-      "`column_row_comparator_dispatch` cannot operate on types that are not equally comparable.");
+      "column_row_comparator_dispatch cannot operate on types that are not equally comparable.");
   }
 };
 
