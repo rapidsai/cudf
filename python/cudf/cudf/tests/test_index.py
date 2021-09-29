@@ -2385,13 +2385,24 @@ def test_range_index_concat(objs):
 
 
 @pytest.mark.parametrize(
-    "idx1, idx2", [(pd.RangeIndex(0, 10), pd.RangeIndex(3, 7))]
+    "idx1, idx2",
+    [
+        (pd.RangeIndex(0, 10), pd.RangeIndex(3, 7)),
+        (pd.RangeIndex(0, 10), pd.RangeIndex(10, 20)),
+        (pd.RangeIndex(0, 10, name="a"), pd.RangeIndex(90, 100, name="b")),
+        (pd.Index([0, 1, 2, 30], name="a"), pd.Index([90, 100])),
+        (pd.Index([0, 1, 2, 30], name="a"), [90, 100]),
+        (pd.Index([0, 1, 2, 30]), pd.Index([0, 10, 1.0, 11])),
+        (pd.Index(["a", "b", "c", "d", "c"]), pd.Index(["a", "c", "z"])),
+    ],
 )
-def test_union_index(idx1, idx2):
-    expected = idx1.union(idx2)
+@pytest.mark.parametrize("sort", [None, False])
+def test_union_index(idx1, idx2, sort):
+    expected = idx1.union(idx2, sort=sort)
 
-    idx1 = cudf.from_pandas(idx1)
-    idx2 = cudf.from_pandas(idx2)
+    idx1 = cudf.from_pandas(idx1) if isinstance(idx1, pd.Index) else idx1
+    idx2 = cudf.from_pandas(idx2) if isinstance(idx2, pd.Index) else idx2
 
-    actual = idx1.union(idx2)
+    actual = idx1.union(idx2, sort=sort)
+    print(expected, actual)
     assert_eq(expected, actual)

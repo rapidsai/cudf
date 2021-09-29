@@ -266,7 +266,8 @@ class BaseIndex(Serializable):
         if not isinstance(other, cudf.Index):
             other = cudf.Index(other, name=self.name)
 
-        res_name = self.name or other.name
+        res_name = _get_result_name(self.name, other.name)
+
         if not len(other) or self.equals(other):
             if res_name != self.name:
                 return self.rename(res_name)
@@ -1052,3 +1053,10 @@ class BaseIndex(Serializable):
     @property
     def _constructor_expanddim(self):
         return cudf.MultiIndex
+
+
+def _get_result_name(left_name, right_name):
+    if left_name == right_name:
+        return left_name
+    else:
+        return None
