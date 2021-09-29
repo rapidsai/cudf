@@ -179,7 +179,6 @@ def compile_or_get(df, f):
     frame_dtypes = tuple(col.dtype for col in df._data.values())
     cache_key = (
         *cudautils.make_cache_key(f, frame_dtypes),
-
         *(col.mask is None for col in df._data.values()),
     )
     if precompiled.get(cache_key) is not None:
