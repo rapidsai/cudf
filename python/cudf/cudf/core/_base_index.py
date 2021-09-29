@@ -45,6 +45,11 @@ class BaseIndex(Serializable):
         raise NotImplementedError
 
     @property
+    def size(self):
+        # The size of an index is always its length irrespective of dimension.
+        return len(self)
+
+    @property
     def values(self):
         return self._values.values
 
@@ -53,19 +58,6 @@ class BaseIndex(Serializable):
 
     def __getitem__(self, key):
         raise NotImplementedError()
-
-    def serialize(self):
-        header = {}
-        header["index_column"] = {}
-        # store metadata values of index separately
-        # Indexes: Numerical/DateTime/String are often GPU backed
-        header["index_column"], frames = self._values.serialize()
-
-        header["name"] = pickle.dumps(self.name)
-        header["dtype"] = pickle.dumps(self.dtype)
-        header["type-serialized"] = pickle.dumps(type(self))
-        header["frame_count"] = len(frames)
-        return header, frames
 
     def __contains__(self, item):
         return item in self._values
@@ -117,13 +109,10 @@ class BaseIndex(Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-        h = header["index_column"]
-        idx_typ = pickle.loads(header["type-serialized"])
-        name = pickle.loads(header["name"])
-
-        col_typ = pickle.loads(h["type-serialized"])
-        index = col_typ.deserialize(h, frames[: header["frame_count"]])
-        return idx_typ(index, name=name)
+        # Dispatch deserialization to the appropriate index type in case
+        # deserialization is ever attempted with the base class directly.
+        idx_type = pickle.loads(header["type-serialized"])
+        return idx_type.deserialize(header, frames)
 
     @property
     def names(self):
@@ -161,6 +150,38 @@ class BaseIndex(Serializable):
             )
         else:
             return self
+
+    @property
+    def is_monotonic(self):
+        """Return boolean if values in the object are monotonic_increasing.
+
+        This property is an alias for :attr:`is_monotonic_increasing`.
+
+        Returns
+        -------
+        bool
+        """
+        return self.is_monotonic_increasing
+
+    @property
+    def is_monotonic_increasing(self):
+        """Return boolean if values in the object are monotonically increasing.
+
+        Returns
+        -------
+        bool
+        """
+        raise NotImplementedError
+
+    @property
+    def is_monotonic_decreasing(self):
+        """Return boolean if values in the object are monotonically decreasing.
+
+        Returns
+        -------
+        bool
+        """
+        raise NotImplementedError
 
     @property
     def nlevels(self):

@@ -3485,6 +3485,106 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupByApproxPercentileReproCase() {
+    double[] percentiles = {0.25, 0.50, 0.75};
+    try (Table t1 = new Table.TestBuilder()
+            .column("a", "a", "b", "c", "d")
+            .column(1084.0, 1719.0, 15948.0, 148029.0, 1269761.0)
+            .build();
+         Table t2 = t1
+            .groupBy(0)
+            .aggregate(GroupByAggregation.createTDigest(100).onColumn(1));
+         Table sorted = t2.orderBy(OrderByArg.asc(0));
+         ColumnVector actual = sorted.getColumn(1).approxPercentile(percentiles);
+         ColumnVector expected = ColumnVector.fromLists(
+             new ListType(false, new BasicType(false, DType.FLOAT64)),
+             Arrays.asList(1084.0, 1084.0, 1719.0),
+             Arrays.asList(15948.0, 15948.0, 15948.0),
+             Arrays.asList(148029.0, 148029.0, 148029.0),
+             Arrays.asList(1269761.0, 1269761.0, 1269761.0)
+         )) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testGroupByApproxPercentile() {
+    double[] percentiles = {0.25, 0.50, 0.75};
+    try (Table t1 = new Table.TestBuilder()
+            .column("a", "a", "a", "b", "b", "b")
+            .column(100, 150, 160, 70, 110, 160)
+            .build();
+      Table t2 = t1
+          .groupBy(0)
+          .aggregate(GroupByAggregation.createTDigest(1000).onColumn(1));
+      Table sorted = t2.orderBy(OrderByArg.asc(0));
+      ColumnVector actual = sorted.getColumn(1).approxPercentile(percentiles);
+      ColumnVector expected = ColumnVector.fromLists(
+        new ListType(false, new BasicType(false, DType.FLOAT64)),
+          Arrays.asList(100d, 150d, 160d),
+          Arrays.asList(70d, 110d, 160d)
+      )) {
+        assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testMergeApproxPercentile() {
+    double[] percentiles = {0.25, 0.50, 0.75};
+    try (Table t1 = new Table.TestBuilder()
+            .column("a", "a", "a", "b", "b", "b")
+            .column(100, 150, 160, 70, 110, 160)
+            .build();
+         Table t2 = t1
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.createTDigest(1000).onColumn(1));
+         Table t3 = t1
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.createTDigest(1000).onColumn(1));
+         Table t4 = Table.concatenate(t2, t3);
+         Table t5 = t4
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.mergeTDigest(1000).onColumn(1));
+         Table sorted = t5.orderBy(OrderByArg.asc(0));
+         ColumnVector actual = sorted.getColumn(1).approxPercentile(percentiles);
+         ColumnVector expected = ColumnVector.fromLists(
+                 new ListType(false, new BasicType(false, DType.FLOAT64)),
+                 Arrays.asList(100d, 150d, 160d),
+                 Arrays.asList(70d, 110d, 160d)
+         )) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testMergeApproxPercentile2() {
+    double[] percentiles = {0.25, 0.50, 0.75};
+    try (Table t1 = new Table.TestBuilder()
+            .column("a", "a", "a", "b", "b", "b")
+            .column(70, 110, 160, 100, 150, 160)
+            .build();
+         Table t2 = t1
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.createTDigest(1000).onColumn(1));
+         Table t3 = t1
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.createTDigest(1000).onColumn(1));
+         Table t4 = Table.concatenate(t2, t3);
+         Table t5 = t4
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.mergeTDigest(1000).onColumn(1));
+         Table sorted = t5.orderBy(OrderByArg.asc(0));
+         ColumnVector actual = sorted.getColumn(1).approxPercentile(percentiles);
+         ColumnVector expected = ColumnVector.fromLists(
+                 new ListType(false, new BasicType(false, DType.FLOAT64)),
+                 Arrays.asList(70d, 110d, 160d),
+                 Arrays.asList(100d, 150d, 160d)
+         )) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
   void testGroupByUniqueCount() {
     try (Table t1 = new Table.TestBuilder()
             .column( "1",  "1",  "1",  "1",  "1",  "1")
