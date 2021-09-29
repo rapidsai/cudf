@@ -263,6 +263,77 @@ class BaseIndex(Serializable):
         return not self.is_unique
 
     def union(self, other, sort=None):
+        """
+        Form the union of two Index objects.
+
+        Parameters
+        ----------
+        other : Index or array-like
+        sort : bool or None, default None
+            Whether to sort the resulting Index.
+
+            * None : Sort the result, except when
+
+              1. `self` and `other` are equal.
+              2. `self` or `other` has length 0.
+
+            * False : do not sort the result.
+
+        Returns
+        -------
+        union : Index
+
+        Examples
+        --------
+        Union of an Index
+
+        >>> idx1 = cudf.Index([1, 2, 3, 4])
+        >>> idx2 = cudf.Index([3, 4, 5, 6])
+        >>> idx1.union(idx2)
+        Int64Index([1, 2, 3, 4, 5, 6], dtype='int64')
+
+        MultiIndex case
+        >>> idx1 = cudf.MultiIndex.from_pandas(
+        ...    pd.MultiIndex.from_arrays(
+        ...         [[1, 1, 2, 2], ["Red", "Blue", "Red", "Blue"]]
+        ...    )
+        ... )
+        >>> idx1
+        MultiIndex([(1,  'Red'),
+                    (1, 'Blue'),
+                    (2,  'Red'),
+                    (2, 'Blue')],
+                   )
+        >>> idx2 = cudf.MultiIndex.from_pandas(
+        ...    pd.MultiIndex.from_arrays(
+        ...         [[3, 3, 2, 2], ["Red", "Green", "Red", "Green"]]
+        ...    )
+        ... )
+        >>> idx2
+        MultiIndex([(3,   'Red'),
+                    (3, 'Green'),
+                    (2,   'Red'),
+                    (2, 'Green')],
+                   )
+        >>> idx1.union(idx2)
+        MultiIndex([(1,  'Blue'),
+                    (1,   'Red'),
+                    (2,  'Blue'),
+                    (2, 'Green'),
+                    (2,   'Red'),
+                    (3, 'Green'),
+                    (3,   'Red')],
+                   )
+        >>> idx1.union(idx2, sort=False)
+        MultiIndex([(1,   'Red'),
+                    (1,  'Blue'),
+                    (2,   'Red'),
+                    (2,  'Blue'),
+                    (3,   'Red'),
+                    (3, 'Green'),
+                    (2, 'Green')],
+                   )
+        """
         if not isinstance(other, cudf.Index):
             other = cudf.Index(other, name=self.name)
 
