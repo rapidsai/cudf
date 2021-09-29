@@ -101,6 +101,27 @@ TYPED_TEST(CopyTest, CopyIfElseTestLong)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
+TYPED_TEST(CopyTest, CopyIfElseTestMultipleBlocks)
+{
+  using T = TypeParam;
+
+  int num = 1000;  // larger than a single block
+  std::vector<int32_t> h_lhs(num, 5);
+  std::vector<int32_t> h_rhs(num, 6);
+  std::vector<bool> h_mask(num, false);
+  std::vector<bool> h_validity(num, true);
+  h_validity[0] = 0;
+
+  cudf::test::fixed_width_column_wrapper<T, int32_t> lhs_w(
+    h_lhs.begin(), h_lhs.end(), h_validity.begin());
+  cudf::test::fixed_width_column_wrapper<T, int32_t> rhs_w(
+    h_rhs.begin(), h_rhs.end(), h_validity.begin());
+  cudf::test::fixed_width_column_wrapper<bool> mask_w(h_mask.begin(), h_mask.end());
+
+  auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), rhs_w);
+}
+
 TYPED_TEST(CopyTest, CopyIfElseTestEmptyInputs)
 {
   using T = TypeParam;
