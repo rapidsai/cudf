@@ -1451,10 +1451,6 @@ class Frame(libcudf.table.Table):
         result._copy_type_metadata(self)
         return result
 
-    @property
-    def dtypes(self):
-        return pd.Series([self.dtype])
-
     @annotate("APPLY", color="purple", domain="cudf_python")
     def _apply(self, func):
         """
