@@ -145,6 +145,8 @@ class RangeIndex(BaseIndex):
     RangeIndex(start=1, stop=10, step=1, name='a')
     """
 
+    _range: range
+
     def __init__(
         self, start, stop=None, step=1, dtype=None, copy=False, name=None
     ):
@@ -163,6 +165,7 @@ class RangeIndex(BaseIndex):
         self._step = int(step) if step is not None else 1
         self._index = None
         self._name = name
+        self._range = range(self._start, self._stop, self._step)
 
     def _copy_type_metadata(
         self, other: Frame, include_index: bool = True
@@ -215,6 +218,30 @@ class RangeIndex(BaseIndex):
             )
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
+
+    def is_numeric(self):
+        return True
+
+    def is_boolean(self):
+        return False
+
+    def is_integer(self):
+        return True
+
+    def is_floating(self):
+        return False
+
+    def is_object(self):
+        return False
+
+    def is_categorical(self):
+        return False
+
+    def is_interval(self):
+        return False
+
+    def is_mixed(self):
+        return False
 
     @property
     def _data(self):
@@ -539,6 +566,126 @@ class RangeIndex(BaseIndex):
         if tolerance is not None and (abs(idx) * self._step > tolerance):
             raise KeyError(key)
         return np.clip(round_method(idx), 0, idx_int_upper_bound, dtype=int)
+
+    def _union(self, other, sort=None):
+        if isinstance(other, RangeIndex) and sort is None:
+            start_s, step_s = self.start, self.step
+            end_s = self.start + self.step * (len(self) - 1)
+            start_o, step_o = other.start, other.step
+            end_o = other.start + other.step * (len(other) - 1)
+            if self.step < 0:
+                start_s, step_s, end_s = end_s, -step_s, start_s
+            if other.step < 0:
+                start_o, step_o, end_o = end_o, -step_o, start_o
+            if len(self) == 1 and len(other) == 1:
+                step_s = step_o = abs(self.start - other.start)
+            elif len(self) == 1:
+                step_s = step_o
+            elif len(other) == 1:
+                step_o = step_s
+            start_r = min(start_s, start_o)
+            end_r = max(end_s, end_o)
+            if step_o == step_s:
+                if (
+                    (start_s - start_o) % step_s == 0
+                    and (start_s - end_o) <= step_s
+                    and (start_o - end_s) <= step_s
+                ):
+                    return type(self)(start_r, end_r + step_s, step_s)
+                if (
+                    (step_s % 2 == 0)
+                    and (abs(start_s - start_o) <= step_s / 2)
+                    and (abs(end_s - end_o) <= step_s / 2)
+                ):
+                    return type(self)(start_r, end_r + step_s / 2, step_s / 2)
+            elif step_o % step_s == 0:
+                if (
+                    (start_o - start_s) % step_s == 0
+                    and (start_o + step_s >= start_s)
+                    and (end_o - step_s <= end_s)
+                ):
+                    return type(self)(start_r, end_r + step_s, step_s)
+            elif step_s % step_o == 0:
+                if (
+                    (start_s - start_o) % step_o == 0
+                    and (start_s + step_o >= start_o)
+                    and (end_s - step_o <= end_o)
+                ):
+                    return type(self)(start_r, end_r + step_o, step_o)
+
+        return cudf.Int64Index(self._values)._union(other, sort=sort)
+
+    def _extended_gcd(self, a: int, b: int) -> Tuple[int, int, int]:
+        """
+        Extended Euclidean algorithms to solve Bezout's identity:
+           a*x + b*y = gcd(x, y)
+        Finds one particular solution for x, y: s, t
+        Returns: gcd, s, t
+        """
+        s, old_s = 0, 1
+        t, old_t = 1, 0
+        r, old_r = b, a
+        while r:
+            quotient = old_r // r
+            old_r, r = r, old_r - quotient * r
+            old_s, s = s, old_s - quotient * s
+            old_t, t = t, old_t - quotient * t
+        return old_r, old_s, old_t
+
+    def _min_fitting_element(self, lower_limit: int) -> int:
+        """Returns the smallest element greater than or equal to the limit"""
+        no_steps = -(-(lower_limit - self.start) // abs(self.step))
+        return self.start + abs(self.step) * no_steps
+
+    def _intersection(self, other, sort=False):
+        # import pdb;pdb.set_trace()
+        if not isinstance(other, RangeIndex):
+            # Int64Index
+            return super()._intersection(other, sort=sort)
+
+        if not len(self) or not len(other):
+            return RangeIndex(0)
+
+        first = self._range[::-1] if self.step < 0 else self._range
+        second = other._range[::-1] if other.step < 0 else other._range
+
+        # check whether intervals intersect
+        # deals with in- and decreasing ranges
+        int_low = max(first.start, second.start)
+        int_high = min(first.stop, second.stop)
+        if int_high <= int_low:
+            return RangeIndex(0)
+
+        # Method hint: linear Diophantine equation
+        # solve intersection problem
+        # performance hint: for identical step sizes, could use
+        # cheaper alternative
+        gcd, s, _ = self._extended_gcd(first.step, second.step)
+
+        # check whether element sets intersect
+        if (first.start - second.start) % gcd:
+            return RangeIndex(0)
+
+        # calculate parameters for the RangeIndex describing the
+        # intersection disregarding the lower bounds
+        tmp_start = (
+            first.start + (second.start - first.start) * first.step // gcd * s
+        )
+        new_step = first.step * second.step // gcd
+        new_range = range(tmp_start, int_high, new_step)
+        new_index = RangeIndex(new_range)
+
+        # adjust index to limiting interval
+        new_start = new_index._min_fitting_element(int_low)
+        new_range = range(new_start, new_index.stop, new_index.step)
+        new_index = RangeIndex(new_range)
+
+        if (self.step < 0 and other.step < 0) is not (new_index.step < 0):
+            new_index = new_index[::-1]
+        if sort is None:
+            new_index = new_index.sort_values()
+
+        return new_index
 
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
@@ -971,6 +1118,35 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         `dtype` of the underlying values in GenericIndex.
         """
         return self._values.dtype
+
+    def is_numeric(self):
+        if cudf.api.types.is_numeric_dtype(
+            self.dtype
+        ) and self.dtype != np.dtype("bool"):
+            return True
+        else:
+            return False
+
+    def is_boolean(self):
+        return self.dtype == "bool"
+
+    def is_integer(self):
+        return cudf.api.types.is_integer_dtype(self.dtype)
+
+    def is_floating(self):
+        return cudf.api.types.is_float_dtype(self.dtype)
+
+    def is_object(self):
+        return self.dtype == np.dtype("object")
+
+    def is_categorical(self):
+        return isinstance(self.dtype, cudf.CategoricalDtype)
+
+    def is_interval(self):
+        return self.dtype == "interval"
+
+    def is_mixed(self):
+        return False
 
     def find_label_range(self, first, last):
         """Find range that starts with *first* and ends with *last*,

@@ -10,7 +10,7 @@ import cudf
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
 
-def _align_objs(objs, how="outer"):
+def _align_objs(objs, how="outer", ignore_index=False):
     """Align a set of Series or Dataframe objects.
 
     Parameters
@@ -38,36 +38,79 @@ def _align_objs(objs, how="outer"):
 
         index = objs[0].index
         name = index.name
-        if how == "inner" or isinstance(index, cudf.MultiIndex):
-            for obj in objs[1:]:
-                index = (
-                    cudf.DataFrame(index=obj.index)
-                    .join(cudf.DataFrame(index=index), how=how)
-                    .index
-                )
-                index.name = name
-            return [obj.reindex(index) for obj in objs], False
+
+        if how == "inner":  # or isinstance(index, cudf.MultiIndex):
+            # for obj in objs[1:]:
+            #     index = (
+            #         cudf.DataFrame(index=obj.index)
+            #         .join(cudf.DataFrame(index=index), how=how)
+            #         .index
+            #     )
+            #     index.name = name
+            # import pdb;pdb.set_trace()
+            final_index = _get_combined_index(
+                [obj.index for obj in objs], intersect=True
+            )
+            # return [obj.reindex(final_index) for obj in objs], False
 
         else:
-            all_index_objs = [obj.index for obj in objs]
-            appended_index = all_index_objs[0].append(all_index_objs[1:])
-            df = cudf.DataFrame(
-                {
-                    "idxs": appended_index,
-                    "order": cudf.core.column.arange(
-                        start=0, stop=len(appended_index)
-                    ),
-                }
+            final_index = _get_combined_index(
+                [obj.index for obj in objs], intersect=False
             )
-            df = df.drop_duplicates(subset=["idxs"]).sort_values(
-                by=["order"], ascending=True
-            )
-            final_index = df["idxs"]
-            final_index.name = name
+            # appended_index = all_index_objs[0].append(all_index_objs[1:])
+            # df = cudf.DataFrame(
+            #     {
+            #         "idxs": appended_index,
+            #         "order": cudf.core.column.arange(
+            #             start=0, stop=len(appended_index)
+            #         ),
+            #     }
+            # )
+            # df = df.drop_duplicates(subset=["idxs"]).sort_values(
+            #     by=["order"], ascending=True
+            # )
+            # final_index = df["idxs"]
+        final_index.name = name
 
-            return [obj.reindex(final_index) for obj in objs], False
+        # return [obj.reindex(final_index) for obj in objs], False
+        # if ignore_index:
+        #     final_index = cudf.RangeIndex(0, len(final_index))
+        return [obj.reindex(final_index) for obj in objs], False
     else:
         return objs, True
+
+
+def _get_combined_index(
+    indexes, intersect: bool = False, sort: bool = False, copy: bool = False,
+):
+    if len(indexes) == 0:
+        index = cudf.Index([])
+    elif len(indexes) == 1:
+        index = indexes[0]
+    elif intersect:
+        index = indexes[0]
+        for other in indexes[1:]:
+            index = index.intersection(other)
+    else:
+        index = indexes[0]
+        for other in indexes[1:]:
+            index = index.union(
+                other,
+                sort=False if isinstance(index, cudf.StringIndex) else None,
+            )
+
+    if sort:
+        try:
+            if not index.is_monotonic_increasing:  # type: ignore
+                index = index.sort_values()
+        except TypeError:
+            pass
+
+    # GH 29879
+    if copy:
+        index = index.copy()  # type: ignore
+
+    return index
 
 
 def _normalize_series_and_dataframe(objs, axis):
@@ -202,7 +245,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     0      a       1    bird   polly
     1      b       2  monkey  george
     """
-
+    # import pdb;pdb.set_trace()
     # TODO: Do we really need to have different error messages for an empty
     # list and a list of None?
     if not objs:
@@ -286,7 +329,9 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         if len(objs) == 0:
             return df
 
-        objs, match_index = _align_objs(objs, how=join)
+        objs, match_index = _align_objs(
+            objs, how=join, ignore_index=ignore_index
+        )
 
         df.index = objs[0].index
         for o in objs:
@@ -320,12 +365,20 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         # though `True` and `False` are the only valid options from the user.
         if not match_index and sort is not False:
             return df.sort_index()
-
-        if sort or join == "inner":
+        # import pdb;pdb.set_trace()
+        if sort:
             # when join='outer' and sort=False string indexes
             # are returned unsorted. Everything else seems
             # to be returned sorted when axis = 1
+            df = df.sort_index()
+            # if isinstance(df.index, cudf.RangeIndex):
+            #     df.index = cudf.Index(df.index._values)
+            return df
+        elif join == "inner":
             return df.sort_index()
+            # if isinstance(df.index, cudf.RangeIndex):
+            #     df.index = cudf.Index(df.index._values)
+            # return df
         else:
             return df
 
@@ -499,7 +552,7 @@ def melt(
     dtypes = [frame[col].dtype for col in id_vars + value_vars]
     if any(cudf.api.types.is_categorical_dtype(t) for t in dtypes):
         raise NotImplementedError(
-            "Categorical columns are not yet " "supported for function"
+            "Categorical columns are not yet supported for function"
         )
 
     # Check dtype homogeneity in value_var

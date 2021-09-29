@@ -237,6 +237,55 @@ class BaseIndex(Serializable):
 
         return self._set_names(names=names, inplace=inplace)
 
+    @property
+    def has_duplicates(self):
+        return not self.is_unique
+
+    def union(self, other, sort=None):
+        if not isinstance(other, cudf.Index):
+            other = cudf.Index(other, name=self.name)
+
+        res_name = self.name or other.name
+        if not len(other) or self.equals(other):
+            if res_name != self.name:
+                return self.rename(res_name)
+            else:
+                return self
+        elif not len(self):
+            if res_name != other.name:
+                return other.rename(res_name)
+            else:
+                return other
+
+        result = self._union(other, sort=sort)
+        result.name = res_name
+        return result
+
+    def intersection(self, other, sort=False):
+        if not isinstance(other, cudf.Index):
+            other = cudf.Index(other, name=self.name)
+
+        res_name = self.name or other.name
+        if self.equals(other):
+            if self.has_duplicates:
+                result = self.unique()
+            else:
+                if res_name != self.name:
+                    result = self.copy(deep=False)
+                else:
+                    result = self
+        elif (self.is_boolean() and other.is_numeric()) or (
+            self.is_numeric() and other.is_boolean()
+        ):
+            if isinstance(self, cudf.MultiIndex):
+                return self[:0].rename(res_name)
+            else:
+                return cudf.Index([], name=res_name)
+
+        result = self._intersection(other, sort=sort)
+        result.name = res_name
+        return result
+
     def fillna(self, value, downcast=None):
         """
         Fill null values with the specified value.
@@ -519,6 +568,28 @@ class BaseIndex(Serializable):
             return difference.sort_values()
 
         return difference
+
+    def _union(self, other, sort=None):
+        # import pdb;pdb.set_trace()
+        # union_result = self.join(other, how='outer')
+        self_df = self.to_frame(index=False, name=0)
+        other_df = other.to_frame(index=False, name=0)
+        self_df["order"] = self_df.index
+        other_df["order"] = other_df.index
+        res = self_df.merge(other_df, on=[0], how="outer")
+        res = res.sort_values(by=res.columns[1:], ignore_index=True)
+        union_result = cudf.Index(res[0])
+
+        if sort is None and len(other):
+            return union_result.sort_values()
+        return union_result
+
+    def _intersection(self, other, sort=None):
+        intersection_result = self.join(other, how="inner")
+
+        if sort is None and len(other):
+            return intersection_result.sort_values()
+        return intersection_result
 
     def sort_values(self, return_indexer=False, ascending=True, key=None):
         """

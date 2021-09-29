@@ -1040,6 +1040,30 @@ class MultiIndex(Frame, BaseIndex):
         level_values = as_index(self._data[level], name=self.names[level_idx])
         return level_values
 
+    def is_numeric(self):
+        return False
+
+    def is_boolean(self):
+        return False
+
+    def is_integer(self):
+        return False
+
+    def is_floating(self):
+        return False
+
+    def is_object(self):
+        return False
+
+    def is_categorical(self):
+        return False
+
+    def is_interval(self):
+        return False
+
+    def is_mixed(self):
+        return True
+
     @classmethod
     def _concat(cls, objs):
 
@@ -1782,6 +1806,17 @@ class MultiIndex(Frame, BaseIndex):
         self_df = self.to_frame()
 
         result_df = cudf.merge(self_df, other_df, how="outer")
+        midx = MultiIndex.from_frame(result_df)
+        midx.names = self.names
+        if sort is None and len(other):
+            return midx.sort_values()
+        return midx
+
+    def _intersection(self, other, sort=None):
+        other_df = other.to_frame()
+        self_df = self.to_frame()
+
+        result_df = cudf.merge(self_df, other_df, how="inner")
         midx = MultiIndex.from_frame(result_df)
         midx.names = self.names
         if sort is None and len(other):
