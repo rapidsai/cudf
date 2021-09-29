@@ -35,6 +35,6 @@ sphinx
 sphinx-copybutton
 sphinx-markdown-tables
 sphinxcontrib-websupport
-transformers
+transformers<=4.10.3
 typing_extensions
 wheel

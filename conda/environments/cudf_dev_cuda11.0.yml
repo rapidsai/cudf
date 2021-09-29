@@ -55,7 +55,7 @@ dependencies:
   - protobuf
   - nvtx>=0.2.1
   - cachetools
-  - transformers
+  - transformers<=4.10.3
   - pydata-sphinx-theme
   - pip:
       - git+https://github.com/dask/dask.git@2021.09.1
