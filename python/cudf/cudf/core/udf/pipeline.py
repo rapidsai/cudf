@@ -15,6 +15,7 @@ libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 MASK_BITSIZE = np.dtype("int32").itemsize * 8
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
+
 def get_frame_row_type(fr):
     """
     Get the numba `Record` type corresponding to a frame.
@@ -29,9 +30,7 @@ def get_frame_row_type(fr):
     """
 
     # Create the numpy structured type corresponding to the frame.
-    dtype = np.dtype(
-        [(name, col.dtype) for name, col in fr._data.items()]
-    )
+    dtype = np.dtype([(name, col.dtype) for name, col in fr._data.items()])
 
     if dtype.hasobject:
         raise TypeError("Do not support dtype containing object")
@@ -64,7 +63,6 @@ def get_frame_row_type(fr):
     #       recarray(N, dtype=mydtype).dtype.alignment != mydtype.alignment
     return Record(fields, offset, _is_aligned_struct)
 
-    row_type = masked_from_struct_dtype(np_struct_type)
 
 @annotate("NUMBA JIT", color="green", domain="cudf_python")
 def get_udf_return_type(func, df):
@@ -191,11 +189,11 @@ def _define_function(fr, row_type, scalar_return=False):
             ret_mask_arr[i] = ret_masked.valid
 
     However we do not always have two columns and columns do not always have
-    an associated mask. Ideally, we would just write one kernel and make use 
-    of `*args` - and then one function would work for any number of columns, 
+    an associated mask. Ideally, we would just write one kernel and make use
+    of `*args` - and then one function would work for any number of columns,
     currently numba does not support `*args` and treats functions it JITs as
     if `*args` is a singular argument. Thus we are forced to write the right
-    funtions dynamically at runtime and define them using `exec`. 
+    funtions dynamically at runtime and define them using `exec`.
     """
 
     # Create argument list for kernel
@@ -230,7 +228,7 @@ def _define_function(fr, row_type, scalar_return=False):
         "input_offsets": input_offsets,
         "masked_input_initializers": masked_input_initializers,
         "row_initializers": row_initializers,
-        "numba_rectype": row_type, # from global
+        "numba_rectype": row_type,  # from global
     }
 
     return kernel_template.format(**d)
