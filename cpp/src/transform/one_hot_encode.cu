@@ -93,9 +93,9 @@ struct one_hot_encode_launcher {
   }
 
   template <typename InputType,
-            typename... Arg,
+            typename... Args,
             CUDF_ENABLE_IF(not is_equality_comparable<InputType, InputType>())>
-  std::pair<std::unique_ptr<column>, table_view> operator()(Arg&&...)
+  std::pair<std::unique_ptr<column>, table_view> operator()(Args&&...)
   {
     CUDF_FAIL("Cannot encode column type without well-defined equality operator.");
   }
