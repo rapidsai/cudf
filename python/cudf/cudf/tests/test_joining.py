@@ -119,7 +119,7 @@ def test_dataframe_join_how(aa, bb, how):
     assert got.index.name is None
 
     assert list(expect.columns) == list(got.columns)
-    if how in ["left", "inner", "right", "leftanti", "leftsemi"]:
+    if how in {"left", "inner", "right", "leftanti", "leftsemi"}:
         assert_eq(sorted(expect.index.values), sorted(got.index.values))
         if how != "outer":
             # Newly introduced ambiguous ValueError thrown when
