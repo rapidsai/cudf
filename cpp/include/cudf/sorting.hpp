@@ -58,7 +58,7 @@ enum class rank_method {
  * `input` if it were sorted
  */
 std::unique_ptr<column> sorted_order(
-  table_view input,
+  table_view const& input,
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
@@ -72,7 +72,7 @@ std::unique_ptr<column> sorted_order(
  * @copydoc cudf::sorted_order
  */
 std::unique_ptr<column> stable_sorted_order(
-  table_view input,
+  table_view const& input,
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
@@ -112,7 +112,7 @@ bool is_sorted(cudf::table_view const& table,
  * @return New table containing the desired sorted order of `input`
  */
 std::unique_ptr<table> sort(
-  table_view input,
+  table_view const& input,
   std::vector<order> const& column_order         = {},
   std::vector<null_order> const& null_precedence = {},
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());

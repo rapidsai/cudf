@@ -36,6 +36,9 @@ export GBENCH_BENCHMARKS_DIR="$WORKSPACE/cpp/build/gbenchmarks/"
 # like `/tmp` is.
 export LIBCUDF_KERNEL_CACHE_PATH="$HOME/.jitify-cache"
 
+# Dask & Distributed git tag
+export DASK_DISTRIBUTED_GIT_TAG='main'
+
 function remove_libcudf_kernel_cache_dir {
     EXITCODE=$?
     logger "removing kernel cache dir: $LIBCUDF_KERNEL_CACHE_PATH"
@@ -75,10 +78,10 @@ conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
 # conda install "your-pkg=1.0.0"
 
 # Install the master version of dask, distributed, and streamz
-logger "pip install git+https://github.com/dask/distributed.git@main --upgrade --no-deps"
-pip install "git+https://github.com/dask/distributed.git@main" --upgrade --no-deps
-logger "pip install git+https://github.com/dask/dask.git@main --upgrade --no-deps"
-pip install "git+https://github.com/dask/dask.git@main" --upgrade --no-deps
+logger "pip install git+https://github.com/dask/distributed.git@$DASK_DISTRIBUTED_GIT_TAG --upgrade --no-deps"
+pip install "git+https://github.com/dask/distributed.git@$DASK_DISTRIBUTED_GIT_TAG" --upgrade --no-deps
+logger "pip install git+https://github.com/dask/dask.git@$DASK_DISTRIBUTED_GIT_TAG --upgrade --no-deps"
+pip install "git+https://github.com/dask/dask.git@$DASK_DISTRIBUTED_GIT_TAG" --upgrade --no-deps
 logger "pip install git+https://github.com/python-streamz/streamz.git@master --upgrade --no-deps"
 pip install "git+https://github.com/python-streamz/streamz.git@master" --upgrade --no-deps
 
