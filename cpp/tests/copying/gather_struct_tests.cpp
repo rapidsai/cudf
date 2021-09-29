@@ -177,6 +177,64 @@ TYPED_TEST(TypedStructGatherTest, TestSimpleStructGather)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output->view(), expected_output);
 }
 
+TYPED_TEST(TypedStructGatherTest, TestSlicedStructsColumnGatherNoNulls)
+{
+  auto const structs_original = [] {
+    auto child1 = fixed_width_column_wrapper<TypeParam, int32_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    auto child2 = strings_column_wrapper{
+      "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten"};
+    return structs_column_wrapper{{child1, child2}};
+  }();
+
+  auto const expected = [] {
+    auto child1 = fixed_width_column_wrapper<TypeParam, int32_t>{6, 10, 8};
+    auto child2 = strings_column_wrapper{"Six", "Ten", "Eight"};
+    return structs_column_wrapper{{child1, child2}};
+  }();
+
+  auto const structs    = cudf::slice(structs_original, std::vector<cudf::size_type>{4, 10})[0];
+  auto const gather_map = fixed_width_column_wrapper<int32_t>{1, 5, 3};
+  auto const result     = cudf::gather(cudf::table_view{{structs}}, gather_map)->get_column(0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.view(), expected);
+}
+
+TYPED_TEST(TypedStructGatherTest, TestSlicedStructsColumnGatherWithNulls)
+{
+  auto constexpr null = int32_t{0};  // null at child
+  auto constexpr XXX  = int32_t{0};  // null at parent
+
+  auto const structs_original = [] {
+    auto child1 = fixed_width_column_wrapper<TypeParam, int32_t>{
+      {null, XXX, 3, null, null, 6, XXX, null, null, 10}, nulls_at({0, 3, 4, 7, 8})};
+    auto child2 = strings_column_wrapper{{"One",
+                                          "" /*NULL at both parent and child*/,
+                                          "Three",
+                                          "" /*NULL*/,
+                                          "Five",
+                                          "" /*NULL*/,
+                                          "" /*NULL at parent*/,
+                                          "" /*NULL*/,
+                                          "Nine",
+                                          "" /*NULL*/},
+                                         nulls_at({1, 3, 5, 7, 9})};
+    return structs_column_wrapper{{child1, child2}, nulls_at({1, 6})};
+  }();
+
+  auto const expected = [] {
+    auto child1 = fixed_width_column_wrapper<TypeParam, int32_t>{{6, 10, null, XXX}, null_at(2)};
+    auto child2 = strings_column_wrapper{{
+                                           "" /*NULL*/, "" /*NULL*/, "Nine", "" /*NULL at parent*/
+                                         },
+                                         nulls_at({0, 1})};
+    return structs_column_wrapper{{child1, child2}, null_at(3)};
+  }();
+
+  auto const structs    = cudf::slice(structs_original, std::vector<cudf::size_type>{4, 10})[0];
+  auto const gather_map = fixed_width_column_wrapper<int32_t>{1, 5, 4, 2};
+  auto const result     = cudf::gather(cudf::table_view{{structs}}, gather_map)->get_column(0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.view(), expected);
+}
+
 TYPED_TEST(TypedStructGatherTest, TestNullifyOnNonNullInput)
 {
   // Test that the null masks of the struct output (and its children) are set correctly,

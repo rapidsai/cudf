@@ -63,7 +63,7 @@ std::vector<column_view> slice(column_view const& input,
   return std::vector<column_view>{begin, begin + indices.size() / 2};
 }
 
-std::vector<cudf::table_view> slice(cudf::table_view const& input,
+std::vector<cudf::table_view> slice(table_view const& input,
                                     host_span<size_type const> indices,
                                     rmm::cuda_stream_view stream)
 {
@@ -72,7 +72,7 @@ std::vector<cudf::table_view> slice(cudf::table_view const& input,
 
   // 2d arrangement of column_views that represent the outgoing table_views sliced_table[i][j]
   // where i is the i'th column of the j'th table_view
-  auto op = [&indices, &stream](auto const& c) { return slice(c, indices, stream); };
+  auto op = [&indices, &stream](auto const& c) { return cudf::detail::slice(c, indices, stream); };
   auto f  = thrust::make_transform_iterator(input.begin(), op);
 
   auto sliced_table = std::vector<std::vector<cudf::column_view>>(f, f + input.num_columns());
@@ -90,7 +90,7 @@ std::vector<cudf::table_view> slice(cudf::table_view const& input,
   }
 
   return result;
-};
+}
 
 }  // namespace detail
 

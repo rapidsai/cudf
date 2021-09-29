@@ -68,7 +68,7 @@ ColumnView slice(ColumnView const& input, cudf::size_type begin, cudf::size_type
 }
 
 /**
- * @copydoc cudf::slice(column_view const&,std::vector<size_type> const&)
+ * @copydoc cudf::slice(column_view const&, host_span<size_type const>)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -77,7 +77,7 @@ std::vector<column_view> slice(column_view const& input,
                                rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
- * @copydoc cudf::slice(table_view const&,std::vector<size_type> const&)
+ * @copydoc cudf::slice(table_view const&, host_span<size_type const>)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -86,7 +86,7 @@ std::vector<table_view> slice(table_view const& input,
                               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
- * @copydoc cudf::split(column_view const&,std::vector<size_type> const&)
+ * @copydoc cudf::split(column_view const&, host_span<size_type const>)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -95,7 +95,7 @@ std::vector<column_view> split(column_view const& input,
                                rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
- * @copydoc cudf::split(table_view const&,std::vector<size_type> const&)
+ * @copydoc cudf::split(table_view const&, host_span<size_type const>)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */

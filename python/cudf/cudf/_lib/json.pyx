@@ -117,7 +117,7 @@ cpdef read_json(object filepaths_or_buffers,
                                 column_names=column_names)
 
 cdef data_type _get_cudf_data_type_from_dtype(object dtype) except +:
-    if cudf.utils.dtypes.is_categorical_dtype(dtype):
+    if cudf.api.types.is_categorical_dtype(dtype):
         raise NotImplementedError(
             "CategoricalDtype as dtype is not yet "
             "supported in JSON reader"
