@@ -2,7 +2,6 @@ import operator
 
 import pandas as pd
 import pytest
-from numba import cuda
 
 import cudf
 from cudf.core.udf.pipeline import nulludf
@@ -15,12 +14,7 @@ arith_ops = [
     operator.truediv,
     operator.floordiv,
     operator.mod,
-    pytest.param(
-        operator.pow,
-        marks=pytest.mark.xfail(
-            reason="https://github.com/rapidsai/cudf/issues/8470"
-        ),
-    ),
+    operator.pow,
 ]
 
 comparison_ops = [
@@ -34,13 +28,6 @@ comparison_ops = [
 
 
 def run_masked_udf_test(func_pdf, func_gdf, data, **kwargs):
-
-    # Skip testing CUDA 11.0
-    runtime = cuda.cudadrv.runtime.Runtime()
-    mjr, mnr = runtime.get_version()
-    if mjr < 11 or (mjr == 11 and mnr < 1):
-        pytest.skip("Skip testing for CUDA 11.0")
-
     gdf = data
     pdf = data.to_pandas(nullable=True)
 
@@ -91,8 +78,9 @@ def test_compare_masked_vs_masked(op):
 
 
 @pytest.mark.parametrize("op", arith_ops)
-@pytest.mark.parametrize("constant", [1, 1.5])
-def test_arith_masked_vs_constant(op, constant):
+@pytest.mark.parametrize("constant", [1, 1.5, True, False])
+@pytest.mark.parametrize("data", [[1, 2, cudf.NA]])
+def test_arith_masked_vs_constant(op, constant, data):
     def func_pdf(x):
         return op(x, constant)
 
@@ -100,15 +88,28 @@ def test_arith_masked_vs_constant(op, constant):
     def func_gdf(x):
         return op(x, constant)
 
-    # Just a single column -> result will be all NA
-    gdf = cudf.DataFrame({"data": [1, 2, None]})
+    gdf = cudf.DataFrame({"data": data})
 
+    if constant is False and op in {
+        operator.mod,
+        operator.pow,
+        operator.truediv,
+        operator.floordiv,
+    }:
+        # The following tests cases yield undefined behavior:
+        # - truediv(x, False) because its dividing by zero
+        # - floordiv(x, False) because its dividing by zero
+        # - mod(x, False) because its mod by zero,
+        # - pow(x, False) because we have an NA in the series and pandas
+        #   insists that (NA**0 == 1) where we do not
+        pytest.skip()
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
 
 @pytest.mark.parametrize("op", arith_ops)
-@pytest.mark.parametrize("constant", [1, 1.5])
-def test_arith_masked_vs_constant_reflected(op, constant):
+@pytest.mark.parametrize("constant", [1, 1.5, True, False])
+@pytest.mark.parametrize("data", [[2, 3, cudf.NA], [1, cudf.NA, 1]])
+def test_arith_masked_vs_constant_reflected(op, constant, data):
     def func_pdf(x):
         return op(constant, x)
 
@@ -117,13 +118,20 @@ def test_arith_masked_vs_constant_reflected(op, constant):
         return op(constant, x)
 
     # Just a single column -> result will be all NA
-    gdf = cudf.DataFrame({"data": [1, 2, None]})
+    gdf = cudf.DataFrame({"data": data})
 
+    if constant == 1 and op is operator.pow:
+        # The following tests cases yield differing results from pandas:
+        # - 1**NA
+        # - True**NA
+        # both due to pandas insisting that this is equal to 1.
+        pytest.skip()
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
 
 @pytest.mark.parametrize("op", arith_ops)
-def test_arith_masked_vs_null(op):
+@pytest.mark.parametrize("data", [[1, cudf.NA, 3], [2, 3, cudf.NA]])
+def test_arith_masked_vs_null(op, data):
     def func_pdf(x):
         return op(x, pd.NA)
 
@@ -131,7 +139,11 @@ def test_arith_masked_vs_null(op):
     def func_gdf(x):
         return op(x, cudf.NA)
 
-    gdf = cudf.DataFrame({"data": [1, None, 3]})
+    gdf = cudf.DataFrame({"data": data})
+
+    if 1 in gdf["data"] and op is operator.pow:
+        # In pandas, 1**NA == 1.
+        pytest.skip()
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
 
@@ -252,6 +264,18 @@ def test_apply_return_either_null_or_literal():
             return cudf.NA
 
     gdf = cudf.DataFrame({"a": [1, 3, 6]})
+    run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
+
+
+def test_apply_return_literal_only():
+    def func_pdf(x):
+        return 5
+
+    @nulludf
+    def func_gdf(x):
+        return 5
+
+    gdf = cudf.DataFrame({"a": [1, None, 3]})
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
 
