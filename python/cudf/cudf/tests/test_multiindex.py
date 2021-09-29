@@ -1557,6 +1557,23 @@ def test_multiIndex_duplicate_names():
     assert_eq(gi, pi)
 
 
+def test_difference():
+    midx = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    midx2 = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3, 3], [0, 2, 1, 1, 0, 2]],
+        names=["x", "y"],
+    )
+
+    expected = midx2.to_pandas().difference(midx.to_pandas())
+    actual = midx2.difference(midx)
+    assert_eq(expected, actual)
+
+
 @pytest.mark.parametrize(
     "idx1, idx2",
     [
@@ -1590,7 +1607,7 @@ def test_union_mulitIndex(idx1, idx2):
         None,
     ],
 )
-def test_pickle_rountrip_multiIndex(names):
+def test_pickle_roundtrip_multiIndex(names):
     df = cudf.DataFrame(
         {
             "one": [1, 2, 3],
