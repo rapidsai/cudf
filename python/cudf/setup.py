@@ -52,7 +52,7 @@ extras_require = {
         "python-snappy>=0.6.0",
         "pyorc",
         "msgpack",
-        "transformers",
+        "transformers<=4.10.3",
     ]
 }
 
