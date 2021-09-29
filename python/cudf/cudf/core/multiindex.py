@@ -1697,12 +1697,24 @@ class MultiIndex(Frame, BaseIndex):
         return midx
 
     def _intersection(self, other, sort=None):
-        other_df = other.to_frame()
-        self_df = self.to_frame()
+        if self.names != other.names:
+            deep = True
+            col_names = list(range(0, self.nlevels))
+            res_name = None
+        else:
+            deep = False
+            col_names = None
+            res_name = self.names
+
+        other_df = other.copy(deep=deep).to_frame(index=False)
+        self_df = self.copy(deep=deep).to_frame(index=False)
+        if col_names is not None:
+            other_df.columns = col_names
+            self_df.columns = col_names
 
         result_df = cudf.merge(self_df, other_df, how="inner")
         midx = MultiIndex.from_frame(result_df)
-        midx.names = self.names
+        midx.names = res_name
         if sort is None and len(other):
             return midx.sort_values()
         return midx
