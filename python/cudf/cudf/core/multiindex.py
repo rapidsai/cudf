@@ -1677,12 +1677,21 @@ class MultiIndex(Frame, BaseIndex):
         return mask
 
     def _union(self, other, sort=None):
-        other_df = other.to_frame()
-        self_df = self.to_frame()
+        other_df = other.copy(deep=True).to_frame(index=False)
+        self_df = self.copy(deep=True).to_frame(index=False)
+        col_names = list(range(0, self.nlevels))
+        self_df.columns = col_names
+        other_df.columns = col_names
+        self_df["order"] = self_df.index
+        other_df["order"] = other_df.index
 
-        result_df = cudf.merge(self_df, other_df, how="outer")
-        midx = MultiIndex.from_frame(result_df)
-        midx.names = self.names
+        result_df = self_df.merge(other_df, on=col_names, how="outer")
+        result_df = result_df.sort_values(
+            by=result_df.columns[self.nlevels :], ignore_index=True
+        )
+
+        midx = MultiIndex.from_frame(result_df.iloc[:, : self.nlevels])
+        midx.names = self.names if self.names == other.names else None
         if sort is None and len(other):
             return midx.sort_values()
         return midx
