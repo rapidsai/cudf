@@ -301,6 +301,8 @@ def where(
                 result = cudf._lib.copying.copy_if_else(
                     input_col, other_column, cond._data[column_name]
                 )
+                # copy_if_else treats nulls as false; manually set them to None
+                result[input_col.isna()] = None
 
                 if isinstance(
                     frame._data[column_name],
@@ -358,6 +360,8 @@ def where(
             input_col = input_col.codes
 
         result = cudf._lib.copying.copy_if_else(input_col, other, cond)
+        # copy_if_else treats nulls as false; manually set them to None
+        result[input_col.isna()] = None
 
         if isinstance(
             frame._data[frame.name], cudf.core.column.CategoricalColumn
