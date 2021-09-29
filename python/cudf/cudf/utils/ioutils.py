@@ -11,6 +11,8 @@ import fsspec.implementations.local
 import numpy as np
 import pandas as pd
 from fsspec.core import get_fs_token_paths
+from pyarrow import PythonFile as ArrowPythonFile
+from pyarrow.fs import FSSpecHandler, PyFileSystem
 from pyarrow.lib import NativeFile
 
 from cudf.utils.docutils import docfmt_partial
@@ -155,6 +157,10 @@ strings_to_categorical : boolean, default False
 use_pandas_metadata : boolean, default True
     If True and dataset has custom PANDAS schema metadata, ensure that index
     columns are also loaded.
+use_python_file_object : boolean, default False
+    If True, Arrow-backed PythonFile objects will be used in place of fsspec
+    AbstractBufferedFile objects at IO time. This option is likely to improve
+    performance when making small reads from larger parquet files.
 
 Returns
 -------
@@ -1182,6 +1188,8 @@ def get_filepath_or_buffer(
     mode="rb",
     fs=None,
     iotypes=(BytesIO, NativeFile),
+    byte_ranges=None,
+    use_python_file_object=None,
     **kwargs,
 ):
     """Return either a filepath string to data, or a memory buffer of data.
@@ -1198,6 +1206,11 @@ def get_filepath_or_buffer(
         Mode in which file is opened
     iotypes : (), default (BytesIO)
         Object type to exclude from file-like check
+    byte_ranges : list, optional
+        List of known byte ranges that will be read from path_or_data
+    use_python_file_object : boolean, default varies
+        If True, Arrow-backed PythonFile objects will be used in place
+        of fsspec AbstractBufferedFile objects.
 
     Returns
     -------
@@ -1208,6 +1221,11 @@ def get_filepath_or_buffer(
         Type of compression algorithm for the content
     """
     path_or_data = stringify_pathlike(path_or_data)
+
+    # Default for `use_python_file_object` depends on
+    # the `byte_ranges` setting
+    if use_python_file_object is None:
+        use_python_file_object = False if byte_ranges else True
 
     if isinstance(path_or_data, str):
 
@@ -1230,21 +1248,38 @@ def get_filepath_or_buffer(
                 path_or_data = paths if len(paths) > 1 else paths[0]
 
         else:
-            path_or_data = [
-                BytesIO(
-                    _fsspec_data_transfer(fpath, fs=fs, mode=mode, **kwargs)
-                )
-                for fpath in paths
-            ]
+            if use_python_file_object:
+                pa_fs = PyFileSystem(FSSpecHandler(fs))
+                path_or_data = [
+                    pa_fs.open_input_file(fpath) for fpath in paths
+                ]
+            else:
+                path_or_data = [
+                    BytesIO(
+                        _fsspec_data_transfer(
+                            fpath,
+                            fs=fs,
+                            mode=mode,
+                            byte_ranges=byte_ranges,
+                            **kwargs,
+                        )
+                    )
+                    for fpath in paths
+                ]
             if len(path_or_data) == 1:
                 path_or_data = path_or_data[0]
 
     elif not isinstance(path_or_data, iotypes) and is_file_like(path_or_data):
         if isinstance(path_or_data, TextIOWrapper):
             path_or_data = path_or_data.buffer
-        path_or_data = BytesIO(
-            _fsspec_data_transfer(path_or_data, mode=mode, **kwargs)
-        )
+        if use_python_file_object:
+            path_or_data = ArrowPythonFile(path_or_data)
+        else:
+            path_or_data = BytesIO(
+                _fsspec_data_transfer(
+                    path_or_data, mode=mode, byte_ranges=byte_ranges, **kwargs
+                )
+            )
 
     return path_or_data, compression
 
