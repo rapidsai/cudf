@@ -209,7 +209,7 @@ __inline__ __device__ timestamp_type to_timestamp(char const* begin, char const*
   int count        = 0;
   bool digits_only = true;
   for (auto i = begin; i < end; ++i) {
-    digits_only &= (*i >= '0' and *i <= '9');
+    digits_only = digits_only and *i >= '0' and *i <= '9';
     if (*i == 'T') {
       sep_pos = i;
       break;
