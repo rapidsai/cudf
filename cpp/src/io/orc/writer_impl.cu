@@ -1958,13 +1958,13 @@ void writer::impl::write(table_view const& table)
         schema_type.scale     = static_cast<uint32_t>(column.scale());
         schema_type.precision = column.precision();
       }
-      // In preorder traversal the column after a list column is always the child column
-      if (column.orc_kind() == LIST) { schema_type.subtypes.emplace_back(column.id() + 1); }
-      if (column.orc_kind() == STRUCT) {
+      if (column.orc_kind() == STRUCT or column.orc_kind() == LIST) {
         std::transform(column.child_begin(),
                        column.child_end(),
                        std::back_inserter(schema_type.subtypes),
                        [&](auto const& child_idx) { return orc_table.column(child_idx).id(); });
+      }
+      if (column.orc_kind() == STRUCT) {
         std::transform(column.child_begin(),
                        column.child_end(),
                        std::back_inserter(schema_type.fieldNames),
