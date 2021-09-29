@@ -286,13 +286,15 @@ class BaseIndex(Serializable):
         Examples
         --------
         Union of an Index
-
+        >>> import cudf
+        >>> import pandas as pd
         >>> idx1 = cudf.Index([1, 2, 3, 4])
         >>> idx2 = cudf.Index([3, 4, 5, 6])
         >>> idx1.union(idx2)
         Int64Index([1, 2, 3, 4, 5, 6], dtype='int64')
 
         MultiIndex case
+
         >>> idx1 = cudf.MultiIndex.from_pandas(
         ...    pd.MultiIndex.from_arrays(
         ...         [[1, 1, 2, 2], ["Red", "Blue", "Red", "Blue"]]
@@ -355,6 +357,67 @@ class BaseIndex(Serializable):
         return result
 
     def intersection(self, other, sort=False):
+        """
+        Form the intersection of two Index objects.
+
+        This returns a new Index with elements common to the index and `other`.
+
+        Parameters
+        ----------
+        other : Index or array-like
+        sort : False or None, default False
+            Whether to sort the resulting index.
+
+            * False : do not sort the result.
+            * None : sort the result, except when `self` and `other` are equal
+              or when the values cannot be compared.
+
+        Returns
+        -------
+        intersection : Index
+
+        Examples
+        --------
+        >>> import cudf
+        >>> import pandas as pd
+        >>> idx1 = cudf.Index([1, 2, 3, 4])
+        >>> idx2 = cudf.Index([3, 4, 5, 6])
+        >>> idx1.intersection(idx2)
+        Int64Index([3, 4], dtype='int64')
+
+        MultiIndex case
+
+        >>> idx1 = cudf.MultiIndex.from_pandas(
+        ...    pd.MultiIndex.from_arrays(
+        ...         [[1, 1, 3, 4], ["Red", "Blue", "Red", "Blue"]]
+        ...    )
+        ... )
+        >>> idx2 = cudf.MultiIndex.from_pandas(
+        ...    pd.MultiIndex.from_arrays(
+        ...         [[1, 1, 2, 2], ["Red", "Blue", "Red", "Blue"]]
+        ...    )
+        ... )
+        >>> idx1
+        MultiIndex([(1,  'Red'),
+                    (1, 'Blue'),
+                    (3,  'Red'),
+                    (4, 'Blue')],
+                )
+        >>> idx2
+        MultiIndex([(1,  'Red'),
+                    (1, 'Blue'),
+                    (2,  'Red'),
+                    (2, 'Blue')],
+                )
+        >>> idx1.intersection(idx2)
+        MultiIndex([(1,  'Red'),
+                    (1, 'Blue')],
+                )
+        >>> idx1.intersection(idx2, sort=False)
+        MultiIndex([(1,  'Red'),
+                    (1, 'Blue')],
+                )
+        """
         if not isinstance(other, cudf.Index):
             other = cudf.Index(other, name=self.name)
 
