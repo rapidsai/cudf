@@ -532,10 +532,12 @@ struct get_scalar_minmax {
 
   __device__ thrust::tuple<double, double> operator()(size_type group_index)
   {
-    // note: .element<T>() is taking care of fixed-point conversions for us.
-    return {static_cast<double>(col.element<T>(group_offsets[group_index])),
-            static_cast<double>(
-              col.element<T>(group_offsets[group_index] + (group_valid_counts[group_index] - 1)))};
+    auto const valid_count = group_valid_counts[group_index];
+    return valid_count > 0
+             ? thrust::make_tuple(
+                 static_cast<double>(col.element<T>(group_offsets[group_index])),
+                 static_cast<double>(col.element<T>(group_offsets[group_index] + valid_count - 1)))
+             : thrust::make_tuple(0.0, 0.0);
   }
 };
 
