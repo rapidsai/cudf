@@ -75,7 +75,7 @@ def _get_combined_index(
 
     if sort:
         try:
-            if not index.is_monotonic_increasing:  # type: ignore
+            if not index.is_monotonic_increasing:
                 index = index.sort_values()
         except TypeError:
             pass
@@ -218,7 +218,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     0      a       1    bird   polly
     1      b       2  monkey  george
     """
-    # import pdb;pdb.set_trace()
     # TODO: Do we really need to have different error messages for an empty
     # list and a list of None?
     if not objs:
