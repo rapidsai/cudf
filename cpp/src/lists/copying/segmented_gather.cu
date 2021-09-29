@@ -42,9 +42,9 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
 
   auto const gather_map_sliced_child = gather_map.get_sliced_child(stream);
   auto const gather_map_size         = gather_map_sliced_child.size();
-  auto const gather_index_begin = gather_map.offsets().begin<size_type>() + 1 + gather_map.offset();
-  auto const gather_index_end   = gather_index_begin + gather_map.size();
-  auto const value_offsets      = value_column.offsets().begin<size_type>() + value_column.offset();
+  auto const gather_index_begin      = gather_map.offsets_begin() + 1;
+  auto const gather_index_end        = gather_map.offsets_end();
+  auto const value_offsets           = value_column.offsets_begin();
   auto const map_begin =
     cudf::detail::indexalator_factory::make_input_iterator(gather_map_sliced_child);
   auto const out_of_bounds = [] __device__(auto const index, auto const list_size) {
