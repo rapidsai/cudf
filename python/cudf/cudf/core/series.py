@@ -3757,15 +3757,16 @@ class Series(SingleColumnFrame, Serializable):
         1    <NA>
         2     4.5
         dtype: float64
-
-
-
         """
         if args or kwargs:
             raise ValueError(
                 "UDFs using *args or **kwargs are not yet supported."
             )
 
+        # these functions are generally written as functions of scalar
+        # values rather than rows. Rather than writing an entirely separate
+        # numba kernel that is not built around a row object, its simpler
+        # to just turn this into the equivalent single column dataframe case
         name = self.name or "__temp_srname"
         df = cudf.DataFrame({name: self})
         f_ = cuda.jit(device=True)(func)
