@@ -192,6 +192,12 @@ __inline__ __device__ cuda::std::chrono::hh_mm_ss<duration_ms> extract_time_of_d
 /**
  * @brief Parses a datetime string and computes the corresponding timestamp.
  *
+ * Acceptable date formats are a combination of `YYYY`, `M`, `MM`, `D` and `DD` with `/` or `-` as
+ * separators. Input with only year and month (no day) is also valid. Optional hours, minutes,
+ * seconds and milliseconds are expected to be `HH:MM:SS.MS`. Each time field can be a single,
+ * double, or triple (in the case of milliseconds) digits. 12-hr and 24-hr time format is detected
+ * via the absence or presence of AM/PM characters at the end.
+ *
  * @tparam timestamp_type Type of output timestamp
  * @param begin Pointer to the first element of the string
  * @param end Pointer to the first element after the string
