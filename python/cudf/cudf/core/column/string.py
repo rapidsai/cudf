@@ -352,7 +352,9 @@ class StringMethods(ColumnMethods):
 
         if len(data) == 1 and data.null_count == 1:
             data = [""]
-        out = self._return_or_inplace(data)
+        # We only want to keep the index if we are adding something to each
+        # row, not if we are joining all the rows into a single string.
+        out = self._return_or_inplace(data, retain_index=others is not None)
         if len(out) == 1 and others is None:
             if isinstance(out, cudf.Series):
                 out = out.iloc[0]

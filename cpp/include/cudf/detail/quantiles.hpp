@@ -22,7 +22,8 @@
 namespace cudf {
 namespace detail {
 
-/** @copydoc cudf::quantile()
+/**
+ * @copydoc cudf::quantile()
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -35,7 +36,8 @@ std::unique_ptr<column> quantile(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-/** @copydoc cudf::quantiles()
+/**
+ * @copydoc cudf::quantiles()
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
@@ -48,6 +50,18 @@ std::unique_ptr<table> quantiles(
   std::vector<null_order> const& null_precedence = {},
   rmm::cuda_stream_view stream                   = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+
+/**
+ * @copydoc cudf::percentile_approx(column_view const&, column_view const&,
+ * rmm::mr::device_memory_resource*)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> percentile_approx(
+  column_view const& input,
+  column_view const& percentiles,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace detail
 }  // namespace cudf
