@@ -654,7 +654,6 @@ def test_concat_dataframe_with_multiIndex(df1, df2):
     pdf1 = gdf1.to_pandas()
     pdf2 = gdf2.to_pandas()
 
-    # import pdb;pdb.set_trace()
     actual = gd.concat([gdf1, gdf2], axis=1)
     expected = pd.concat([pdf1, pdf2], axis=1)
 
@@ -901,7 +900,7 @@ def test_concat_join_no_overlapping_columns(
 ):
     gdf1 = gd.from_pandas(pdf1)
     gdf2 = gd.from_pandas(pdf2)
-    # import pdb;pdb.set_trace()
+
     expected = pd.concat(
         [pdf1, pdf2],
         sort=sort,
@@ -1027,7 +1026,7 @@ def test_concat_join_no_overlapping_columns_many_and_empty2(
     objs, ignore_index, sort, join, axis
 ):
     objs_gd = [gd.from_pandas(o) if o is not None else o for o in objs]
-    # import pdb;pdb.set_trace()
+
     expected = pd.concat(
         objs, sort=sort, join=join, ignore_index=ignore_index, axis=axis,
     )

@@ -591,7 +591,7 @@ class BaseIndex(Serializable):
         return difference
 
     def _union(self, other, sort=None):
-        # import pdb;pdb.set_trace()
+
         # union_result = self.join(other, how='outer')
         self_df = self.to_frame(index=False, name=0)
         other_df = other.to_frame(index=False, name=0)

@@ -340,7 +340,7 @@ class RangeIndex(BaseIndex):
                 other._step,
             ):
                 return True
-        return cudf.Int64Index._from_data(self._data).equals(other)
+        return Int64Index._from_data(self._data).equals(other)
 
     def serialize(self):
         header = {}
@@ -504,7 +504,7 @@ class RangeIndex(BaseIndex):
     def _as_int64(self):
         # Convert self to an Int64Index. This method is used to perform ops
         # that are not defined directly on RangeIndex.
-        return cudf.Int64Index._from_data(self._data)
+        return Int64Index._from_data(self._data)
 
     def __getattr__(self, key):
         # For methods that are not defined for RangeIndex we attempt to operate
@@ -595,7 +595,7 @@ class RangeIndex(BaseIndex):
                 ):
                     return type(self)(start_r, end_r + step_o, step_o)
 
-        return cudf.Int64Index(self._values)._union(other, sort=sort)
+        return Int64Index(self._values)._union(other, sort=sort)
 
     def _extended_gcd(self, a: int, b: int) -> Tuple[int, int, int]:
         """
@@ -620,9 +620,7 @@ class RangeIndex(BaseIndex):
         return self.start + abs(self.step) * no_steps
 
     def _intersection(self, other, sort=False):
-        # import pdb;pdb.set_trace()
         if not isinstance(other, RangeIndex):
-            # Int64Index
             return super()._intersection(other, sort=sort)
 
         if not len(self) or not len(other):
@@ -2179,7 +2177,7 @@ def interval_range(
     if len(right_col) == 0 or len(left_col) == 0:
         dtype = IntervalDtype("int64", closed)
         data = column.column_empty_like_same_mask(left_col, dtype)
-        return cudf.IntervalIndex(data, closed=closed)
+        return IntervalIndex(data, closed=closed)
 
     interval_col = column.build_interval_column(
         left_col, right_col, closed=closed

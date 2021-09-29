@@ -39,42 +39,16 @@ def _align_objs(objs, how="outer", ignore_index=False):
         index = objs[0].index
         name = index.name
 
-        if how == "inner":  # or isinstance(index, cudf.MultiIndex):
-            # for obj in objs[1:]:
-            #     index = (
-            #         cudf.DataFrame(index=obj.index)
-            #         .join(cudf.DataFrame(index=index), how=how)
-            #         .index
-            #     )
-            #     index.name = name
-            # import pdb;pdb.set_trace()
+        if how == "inner":
             final_index = _get_combined_index(
                 [obj.index for obj in objs], intersect=True
             )
-            # return [obj.reindex(final_index) for obj in objs], False
-
         else:
             final_index = _get_combined_index(
                 [obj.index for obj in objs], intersect=False
             )
-            # appended_index = all_index_objs[0].append(all_index_objs[1:])
-            # df = cudf.DataFrame(
-            #     {
-            #         "idxs": appended_index,
-            #         "order": cudf.core.column.arange(
-            #             start=0, stop=len(appended_index)
-            #         ),
-            #     }
-            # )
-            # df = df.drop_duplicates(subset=["idxs"]).sort_values(
-            #     by=["order"], ascending=True
-            # )
-            # final_index = df["idxs"]
-        final_index.name = name
 
-        # return [obj.reindex(final_index) for obj in objs], False
-        # if ignore_index:
-        #     final_index = cudf.RangeIndex(0, len(final_index))
+        final_index.name = name
         return [obj.reindex(final_index) for obj in objs], False
     else:
         return objs, True
@@ -106,7 +80,6 @@ def _get_combined_index(
         except TypeError:
             pass
 
-    # GH 29879
     if copy:
         index = index.copy()  # type: ignore
 
@@ -365,20 +338,9 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         # though `True` and `False` are the only valid options from the user.
         if not match_index and sort is not False:
             return df.sort_index()
-        # import pdb;pdb.set_trace()
-        if sort:
-            # when join='outer' and sort=False string indexes
-            # are returned unsorted. Everything else seems
-            # to be returned sorted when axis = 1
-            df = df.sort_index()
-            # if isinstance(df.index, cudf.RangeIndex):
-            #     df.index = cudf.Index(df.index._values)
-            return df
-        elif join == "inner":
+
+        if sort or join == "inner":
             return df.sort_index()
-            # if isinstance(df.index, cudf.RangeIndex):
-            #     df.index = cudf.Index(df.index._values)
-            # return df
         else:
             return df
 
