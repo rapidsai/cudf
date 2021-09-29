@@ -2898,20 +2898,34 @@ def test_dataframe_empty_sort_index():
     expect = pdf.sort_index()
     got = gdf.sort_index()
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_index_type=True)
 
 
+@pytest.mark.parametrize(
+    "index",
+    [
+        pd.RangeIndex(0, 3, 1),
+        [3.0, 1.0, np.nan],
+        pytest.param(
+            pd.RangeIndex(2, -1, -1),
+            marks=[
+                pytest.mark.xfail(
+                    reason="https://github.com/pandas-dev/pandas/issues/43591"
+                )
+            ],
+        ),
+    ],
+)
 @pytest.mark.parametrize("axis", [0, 1, "index", "columns"])
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("inplace", [True, False])
 @pytest.mark.parametrize("na_position", ["first", "last"])
 def test_dataframe_sort_index(
-    axis, ascending, inplace, ignore_index, na_position
+    index, axis, ascending, inplace, ignore_index, na_position
 ):
     pdf = pd.DataFrame(
-        {"b": [1, 3, 2], "a": [1, 4, 3], "c": [4, 1, 5]},
-        index=[3.0, 1.0, np.nan],
+        {"b": [1, 3, 2], "a": [1, 4, 3], "c": [4, 1, 5]}, index=index,
     )
     gdf = cudf.DataFrame.from_pandas(pdf)
 
@@ -2931,9 +2945,9 @@ def test_dataframe_sort_index(
     )
 
     if inplace is True:
-        assert_eq(pdf, gdf)
+        assert_eq(pdf, gdf, check_index_type=True)
     else:
-        assert_eq(expected, got)
+        assert_eq(expected, got, check_index_type=True)
 
 
 @pytest.mark.parametrize("axis", [0, 1, "index", "columns"])
@@ -2972,6 +2986,7 @@ def test_dataframe_mulitindex_sort_index(
     gdf = cudf.DataFrame.from_pandas(pdf)
 
     # ignore_index is supported in v.1.0
+
     expected = pdf.sort_index(
         axis=axis,
         level=level,
@@ -4455,7 +4470,7 @@ def test_isin_dataframe(data, values):
     pdf = data
     gdf = cudf.from_pandas(pdf)
 
-    if cudf.utils.dtypes.is_scalar(values):
+    if cudf.api.types.is_scalar(values):
         assert_exceptions_equal(
             lfunc=pdf.isin,
             rfunc=gdf.isin,

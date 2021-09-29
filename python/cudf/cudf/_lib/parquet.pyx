@@ -18,13 +18,13 @@ except ImportError:
 import numpy as np
 from cython.operator import dereference
 
-from cudf.utils.dtypes import (
+from cudf.api.types import (
     is_categorical_dtype,
     is_decimal_dtype,
     is_list_dtype,
     is_struct_dtype,
-    np_to_pa_dtype,
 )
+from cudf.utils.dtypes import np_to_pa_dtype
 
 from cudf._lib.utils cimport data_from_unique_ptr, get_column_names
 
@@ -45,15 +45,14 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.io.parquet cimport (
     chunked_parquet_writer_options,
     chunked_parquet_writer_options_builder,
-    column_in_metadata,
     merge_rowgroup_metadata as parquet_merge_metadata,
     parquet_chunked_writer as cpp_parquet_chunked_writer,
     parquet_reader_options,
     parquet_writer_options,
     read_parquet as parquet_reader,
-    table_input_metadata,
     write_parquet as parquet_writer,
 )
+from cudf._lib.cpp.io.types cimport column_in_metadata, table_input_metadata
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type
@@ -161,6 +160,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
     # Access the Parquet user_data json to find the index
     index_col = None
+    is_range_index = False
     cdef map[string, string] user_data = c_out_table.metadata.user_data
     json_str = user_data[b'pandas'].decode('utf-8')
     meta = None
@@ -172,7 +172,6 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                     index_col[0]['kind'] == 'range':
                 is_range_index = True
             else:
-                is_range_index = False
                 index_col_names = OrderedDict()
                 for idx_col in index_col:
                     for c in meta['columns']:

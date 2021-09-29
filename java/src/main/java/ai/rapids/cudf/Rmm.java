@@ -386,4 +386,19 @@ public class Rmm {
 
   static native void setEventHandlerInternal(RmmEventHandler handler,
       long[] allocThresholds, long[] deallocThresholds) throws RmmException;
+
+  /**
+   * Allocate device memory using `cudaMalloc` and return a pointer to device memory.
+   * @param size   The size in bytes of the allocated memory region
+   * @param stream The stream in which to synchronize this command.
+   * @return Returned pointer to the allocated memory
+   */
+  public static CudaMemoryBuffer allocCuda(long size, Cuda.Stream stream) {
+    long s = stream == null ? 0 : stream.getStream();
+    return new CudaMemoryBuffer(allocCudaInternal(size, s), size, stream);
+  }
+
+  private static native long allocCudaInternal(long size, long stream) throws RmmException;
+
+  static native void freeCuda(long ptr, long length, long stream) throws RmmException;
 }

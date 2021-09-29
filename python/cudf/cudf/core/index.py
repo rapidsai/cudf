@@ -4,6 +4,7 @@ from __future__ import annotations, division, print_function
 
 import math
 import pickle
+import warnings
 from numbers import Number
 from typing import (
     Any,
@@ -28,7 +29,13 @@ from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
 from cudf._lib.table import Table
-from cudf.api.types import _is_scalar_or_zero_d_array, is_string_dtype
+from cudf.api.types import (
+    _is_non_decimal_numeric_dtype,
+    _is_scalar_or_zero_d_array,
+    is_categorical_dtype,
+    is_interval_dtype,
+    is_string_dtype,
+)
 from cudf.core._base_index import BaseIndex
 from cudf.core.column import (
     CategoricalColumn,
@@ -46,12 +53,7 @@ from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import Frame, SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import (
-    _is_non_decimal_numeric_dtype,
-    find_common_type,
-    is_categorical_dtype,
-    is_interval_dtype,
-)
+from cudf.utils.dtypes import find_common_type
 from cudf.utils.utils import cached_property, search_range
 
 T = TypeVar("T", bound="Frame")
@@ -348,17 +350,6 @@ class RangeIndex(BaseIndex):
         """
         return cudf.dtype(np.int64)
 
-    @property
-    def is_contiguous(self):
-        """
-        Returns if the index is contiguous.
-        """
-        return self._step == 1
-
-    @property
-    def size(self):
-        return len(self)
-
     def find_label_range(self, first=None, last=None):
         """Find subrange in the ``RangeIndex``, marked by their positions, that
         starts greater or equal to ``first`` and ends less or equal to ``last``
@@ -416,18 +407,10 @@ class RangeIndex(BaseIndex):
 
     @property
     def is_monotonic_increasing(self):
-        """
-        Return if the index is monotonic increasing
-        (only equal or increasing) values.
-        """
         return self._step > 0 or len(self) <= 1
 
     @property
     def is_monotonic_decreasing(self):
-        """
-        Return if the index is monotonic decreasing
-        (only equal or decreasing) values.
-        """
         return self._step < 0 or len(self) <= 1
 
     def get_slice_bound(self, label, side, kind=None):
@@ -618,6 +601,23 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         name = kwargs.get("name")
         super().__init__({name: data})
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        if "index_column" in header:
+            warnings.warn(
+                "Index objects serialized in cudf version "
+                "21.10 or older will no longer be deserializable "
+                "after version 21.12. Please load and resave any "
+                "pickles before upgrading to version 22.02.",
+                DeprecationWarning,
+            )
+            header["columns"] = [header.pop("index_column")]
+            header["column_names"] = pickle.dumps(
+                [pickle.loads(header["name"])]
+            )
+
+        return super().deserialize(header, frames)
 
     def drop_duplicates(self, keep="first"):
         """
@@ -2203,7 +2203,7 @@ def as_index(arbitrary, **kwargs) -> BaseIndex:
     elif isinstance(arbitrary, pd.MultiIndex):
         return cudf.MultiIndex.from_pandas(arbitrary)
     elif isinstance(arbitrary, cudf.DataFrame):
-        return cudf.MultiIndex(source_data=arbitrary)
+        return cudf.MultiIndex.from_frame(arbitrary)
     return as_index(
         column.as_column(arbitrary, dtype=kwargs.get("dtype", None)), **kwargs
     )
