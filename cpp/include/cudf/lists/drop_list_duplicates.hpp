@@ -47,6 +47,9 @@ enum class keep_policy {
  * In some cases, there is only a need to remove duplicates entries from one input lists column. In
  * such situations, the input values lists column can be ignored.
  *
+ * If the `values` lists column is given, the users are responsible to have the keys-values columns
+ * having the same number of entries in each row. Otherwise, the results will be undefined.
+ *
  * Given a pair of keys-values lists columns, each list entry in the keys column corresponds to a
  * list entry in the values column (i.e., the lists at each row index in both keys and values
  * columns have the same size). The entries in both columns are copied into an output pair of keys
