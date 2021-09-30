@@ -33,7 +33,7 @@ namespace detail {
  * strings from the lhs iterator or the rhs iterator.
  *
  * ```
- * output[i] = filter_fn(i) ? lhs(i).first : rhs(i).first
+ * output[i] = filter_fn(i) ? lhs(i) : rhs(i)
  * ```
  *
  * @tparam StringIterLeft An optional-iterator returning thrust::optional<string_view> where the
@@ -42,11 +42,10 @@ namespace detail {
  *         the result is a string_view only if the element is valid.
  * @tparam Filter Functor that takes an index and returns a boolean.
  *
- * @param lhs_begin Start of first set of data. Used when filter_fn returns true.
+ * @param lhs_begin Start of first set of data. Used when `filter_fn` returns true.
  * @param lhs_end End of first set of data.
- * @param rhs_begin Strings of second set of data. Used when filter_fn returns false.
- * @param filter_fn Called to determine which iterator (lhs or rhs) to retrieve an entry for a
- * specific row.
+ * @param rhs_begin Strings of second set of data. Used when `filter_fn` returns false.
+ * @param filter_fn Called to determine which iterator to use for a specific row.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return New strings column.
