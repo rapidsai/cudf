@@ -1189,7 +1189,7 @@ def get_filepath_or_buffer(
     fs=None,
     iotypes=(BytesIO, NativeFile),
     byte_ranges=None,
-    use_python_file_object=None,
+    use_python_file_object=False,
     **kwargs,
 ):
     """Return either a filepath string to data, or a memory buffer of data.
@@ -1208,7 +1208,7 @@ def get_filepath_or_buffer(
         Object type to exclude from file-like check
     byte_ranges : list, optional
         List of known byte ranges that will be read from path_or_data
-    use_python_file_object : boolean, default varies
+    use_python_file_object : boolean, default False
         If True, Arrow-backed PythonFile objects will be used in place
         of fsspec AbstractBufferedFile objects.
 
@@ -1221,11 +1221,6 @@ def get_filepath_or_buffer(
         Type of compression algorithm for the content
     """
     path_or_data = stringify_pathlike(path_or_data)
-
-    # Default for `use_python_file_object` depends on
-    # the `byte_ranges` setting
-    if use_python_file_object is None:
-        use_python_file_object = False if byte_ranges else True
 
     if isinstance(path_or_data, str):
 
