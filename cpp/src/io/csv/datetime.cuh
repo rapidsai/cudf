@@ -190,6 +190,11 @@ __inline__ __device__ cuda::std::chrono::hh_mm_ss<duration_ms> extract_time_of_d
 }
 
 /**
+ * @brief Checks whether `c` is decimal digit
+ */
+constexpr bool is_digit(char c) { return c >= '0' and c <= '9'; }
+
+/**
  * @brief Parses a datetime string and computes the corresponding timestamp.
  *
  * Acceptable date formats are a combination of `YYYY`, `M`, `MM`, `D` and `DD` with `/` or `-` as
@@ -215,7 +220,7 @@ __inline__ __device__ timestamp_type to_timestamp(char const* begin, char const*
   int count        = 0;
   bool digits_only = true;
   for (auto i = begin; i < end; ++i) {
-    digits_only = digits_only and *i >= '0' and *i <= '9';
+    digits_only = digits_only and is_digit(*i);
     if (*i == 'T') {
       sep_pos = i;
       break;
@@ -296,6 +301,10 @@ __inline__ __device__ T parse_optional_integer(char const** begin, char const* e
 /**
  * @brief Parses the input string into a duration of `duration_type`.
  *
+ * The expected format can be one of the following: `DD days`, `DD days +HH:MM:SS.NS`, `DD days
+ * HH:MM::SS.NS`, `HH:MM::SS.NS` and digits-only string. Note `DD` and optional `NS` field can
+ * contain arbitrary number of digits while `HH`, `MM` and `SS` can be single or double digits.
+ *
  * @tparam duration_type Type of the parsed duration
  * @param begin Pointer to the first element of the string
  * @param end Pointer to the first element after the string
@@ -340,13 +349,12 @@ __inline__ __device__ duration_type to_duration(char const* begin, char const* e
 
   if constexpr (std::is_same_v<duration_type, cudf::duration_s>) { return output_d; }
 
-  // Duration type not allowed due to the use of `*` operator
-  int64_t nanosecond = 0L;
-  if (*cur == '.') {  //.n
+  int64_t nanosecond = 0L;  // Duration type not allowed due to the use of `*` operator
+  if (*cur == '.') {        //.n
     auto const start_subsecond = ++cur;
-    nanosecond                 = parse_integer<int64_t>(&cur, end);
-    int8_t const num_digits    = min(9L, cur - start_subsecond);
-    nanosecond *= powers_of_ten[9 - num_digits];  // Duration has no * operator
+    auto raw_time = parse_integer<int64_t>(&cur, end);  // Extract all digits after decimal point
+    int8_t const num_digits = min(9L, cur - start_subsecond);
+    nanosecond              = raw_time * powers_of_ten[9 - num_digits];  // Scale to nanoseconds
   }
 
   return output_d + duration_cast<duration_type>(duration_ns{nanosecond});
