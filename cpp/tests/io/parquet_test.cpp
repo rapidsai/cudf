@@ -638,8 +638,7 @@ TEST_F(ParquetWriterTest, SlicedTable)
   auto expected = table_view({col0, col1, col2, col3, col4, col5, col6});
 
   // auto expected_slice = expected;
-  auto expected_slice = cudf::slice(
-    expected, std::vector<cudf::size_type>{2, static_cast<cudf::size_type>(num_rows) - 1});
+  auto expected_slice = cudf::slice(expected, {2, static_cast<cudf::size_type>(num_rows) - 1});
 
   cudf_io::table_input_metadata expected_metadata(expected_slice);
   expected_metadata.column_metadata[0].set_name("col_other");

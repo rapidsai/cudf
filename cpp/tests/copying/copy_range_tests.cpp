@@ -165,7 +165,7 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNullsNonzeroOffset)
     source_elements + size,
     cudf::detail::make_counting_transform_iterator(0, even_valid));
 
-  auto source_slice = cudf::slice(source, {source_offset, size})[0];
+  auto source_slice = cudf::slice(source, std::vector<cudf::size_type>{source_offset, size})[0];
 
   auto expected_elements = cudf::detail::make_counting_transform_iterator(
     0, [target_offset, target_begin, target_end, row_diff](auto i) {
@@ -183,7 +183,7 @@ TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNullsNonzeroOffset)
                           : all_valid(i);
                }));
 
-  auto expected_slice = cudf::slice(expected, {target_offset, size})[0];
+  auto expected_slice = cudf::slice(expected, std::vector<cudf::size_type>{target_offset, size})[0];
 
   this->test(source_slice, expected_slice, target_slice, source_begin, source_end, target_begin);
 }
@@ -276,7 +276,7 @@ TEST_F(CopyRangeTestFixture, CopyWithNullsNonzeroOffsetString)
     target_elements + size,
     cudf::detail::make_counting_transform_iterator(0, all_valid));
 
-  auto target_slice = cudf::slice(target, {target_offset, size})[0];
+  auto target_slice = cudf::slice(target, std::vector<cudf::size_type>{target_offset, size})[0];
 
   auto source_elements = cudf::detail::make_counting_transform_iterator(
     0, [](auto i) { return "#" + std::to_string(i * 2); });
@@ -285,7 +285,7 @@ TEST_F(CopyRangeTestFixture, CopyWithNullsNonzeroOffsetString)
     source_elements + size,
     cudf::detail::make_counting_transform_iterator(0, even_valid));
 
-  auto source_slice = cudf::slice(source, {source_offset, size})[0];
+  auto source_slice = cudf::slice(source, std::vector<cudf::size_type>{source_offset, size})[0];
 
   auto expected_elements = cudf::detail::make_counting_transform_iterator(
     0, [target_offset, target_begin, target_end, row_diff](auto i) {
@@ -305,7 +305,7 @@ TEST_F(CopyRangeTestFixture, CopyWithNullsNonzeroOffsetString)
                  : all_valid(i);
       }));
 
-  auto expected_slice = cudf::slice(expected, {target_offset, size})[0];
+  auto expected_slice = cudf::slice(expected, std::vector<cudf::size_type>{target_offset, size})[0];
 
   auto p_ret = cudf::copy_range(source_slice, target_slice, source_begin, source_end, target_begin);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*p_ret, expected_slice);

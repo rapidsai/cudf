@@ -117,10 +117,8 @@ TYPED_TEST(CollectSetTypedTest, SlicedColumnsInput)
     test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());
   }
   {
-    auto const keys = cudf::slice(
-      keys_original, std::vector<cudf::size_type>{2, 10})[0];  // { 1, 1, 2, 2, 2, 2, 3, 3 }
-    auto const vals = cudf::slice(
-      vals_original, std::vector<cudf::size_type>{2, 10})[0];  // { 10, 10, 20, 21, 21, 20, 30, 33 }
+    auto const keys = cudf::slice(keys_original, {2, 10})[0];  // { 1, 1, 2, 2, 2, 2, 3, 3 }
+    auto const vals = cudf::slice(vals_original, {2, 10})[0];  // { 10, 10, 20, 21, 21, 20, 30, 33 }
     auto const keys_expected = COL_K{1, 2, 3};
     auto const vals_expected = LCL_V{{10}, {20, 21}, {30, 33}};
     test_single_agg(keys, vals, keys_expected, vals_expected, CollectSetTest::collect_set());

@@ -156,13 +156,11 @@ void percentile_approx_test(column_view const& _keys,
   std::vector<column_view> values;
   for (size_t idx = 0; idx < groups.offsets.size() - 1; idx++) {
     auto k =
-      cudf::slice(groups.keys->get_column(0),
-                  std::vector<cudf::size_type>{groups.offsets[idx], groups.offsets[idx + 1]});
+      cudf::slice(groups.keys->get_column(0), {groups.offsets[idx], groups.offsets[idx + 1]});
     keys.push_back(k[0]);
 
     auto v =
-      cudf::slice(groups.values->get_column(0),
-                  std::vector<cudf::size_type>{groups.offsets[idx], groups.offsets[idx + 1]});
+      cudf::slice(groups.values->get_column(0), {groups.offsets[idx], groups.offsets[idx + 1]});
     values.push_back(v[0]);
   }
 

@@ -209,12 +209,10 @@ TYPED_TEST(ColumnViewShallowTests, shallow_hash_slice)
   }
   // column_view, col copy sliced[0, 0)  = same hash (empty column)
   {
-    auto col_new      = std::make_unique<cudf::column>(*col);
-    auto col_new_view = col_new->view();
-    auto col_sliced   = cudf::slice(
-      col_view, std::vector<cudf::size_type>{0, 0, 1, 1, col_view.size(), col_view.size()});
-    auto col_new_sliced = cudf::slice(
-      col_new_view, std::vector<cudf::size_type>{0, 0, 1, 1, col_view.size(), col_view.size()});
+    auto col_new        = std::make_unique<cudf::column>(*col);
+    auto col_new_view   = col_new->view();
+    auto col_sliced     = cudf::slice(col_view, {0, 0, 1, 1, col_view.size(), col_view.size()});
+    auto col_new_sliced = cudf::slice(col_new_view, {0, 0, 1, 1, col_view.size(), col_view.size()});
 
     EXPECT_EQ(shallow_hash(col_sliced[0]), shallow_hash(col_sliced[1]));
     EXPECT_EQ(shallow_hash(col_sliced[1]), shallow_hash(col_sliced[2]));
@@ -380,12 +378,10 @@ TYPED_TEST(ColumnViewShallowTests, is_shallow_equivalent_slice)
   }
   // column_view, col copy sliced[0, 0)  = same hash (empty column)
   {
-    auto col_new      = std::make_unique<cudf::column>(*col);
-    auto col_new_view = col_new->view();
-    auto col_sliced   = cudf::slice(
-      col_view, std::vector<cudf::size_type>{0, 0, 1, 1, col_view.size(), col_view.size()});
-    auto col_new_sliced = cudf::slice(
-      col_new_view, std::vector<cudf::size_type>{0, 0, 1, 1, col_view.size(), col_view.size()});
+    auto col_new        = std::make_unique<cudf::column>(*col);
+    auto col_new_view   = col_new->view();
+    auto col_sliced     = cudf::slice(col_view, {0, 0, 1, 1, col_view.size(), col_view.size()});
+    auto col_new_sliced = cudf::slice(col_new_view, {0, 0, 1, 1, col_view.size(), col_view.size()});
 
     EXPECT_TRUE(is_shallow_equivalent(col_sliced[0], col_sliced[1]));
     EXPECT_TRUE(is_shallow_equivalent(col_sliced[1], col_sliced[2]));

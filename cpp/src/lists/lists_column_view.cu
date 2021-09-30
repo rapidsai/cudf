@@ -52,9 +52,7 @@ column_view lists_column_view::get_sliced_child(rmm::cuda_stream_view stream) co
     size_type child_offset_start = cudf::detail::get_value<size_type>(offsets(), offset(), stream);
     size_type child_offset_end =
       cudf::detail::get_value<size_type>(offsets(), offset() + size(), stream);
-    return cudf::detail::slice(
-             child(), std::vector<size_type>{child_offset_start, child_offset_end}, stream)
-      .front();
+    return cudf::detail::slice(child(), {child_offset_start, child_offset_end}, stream).front();
   }
 
   // if I don't have a positive offset, but I am shorter than my offsets() would otherwise indicate,

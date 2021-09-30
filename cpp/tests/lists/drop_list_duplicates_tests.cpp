@@ -556,8 +556,7 @@ TEST_F(DropListDuplicatesTest, SlicedInputListsOfStructsWithNaNs)
   // `drop_list_duplicates` is expected to operate properly on this second list.
   auto const lists_original =
     cudf::make_lists_column(2, IntsCol{0, 10, 18}.release(), get_structs().release(), 0, {});
-  auto const lists2 = cudf::slice(
-    lists_original->view(), std::vector<cudf::size_type>{1, 2})[0];  // test on the second list
+  auto const lists2 = cudf::slice(lists_original->view(), {1, 2})[0];  // test on the second list
 
   // Contain expected values excluding NaN.
   auto const results_children_expected = std::unordered_set<float_type>{0, 1, 2};
