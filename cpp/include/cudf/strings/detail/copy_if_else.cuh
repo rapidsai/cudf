@@ -78,7 +78,7 @@ std::unique_ptr<cudf::column> copy_if_else(
   // build offsets column
   auto offsets_transformer = [lhs_begin, rhs_begin, filter_fn] __device__(size_type idx) {
     auto const result = filter_fn(idx) ? lhs_begin[idx] : rhs_begin[idx];
-    return result.has_value() ? result.value().size_bytes() : 0;
+    return result.has_value() ? (*result).size_bytes() : 0;
   };
 
   auto offsets_transformer_itr = thrust::make_transform_iterator(
@@ -100,7 +100,7 @@ std::unique_ptr<cudf::column> copy_if_else(
     [lhs_begin, rhs_begin, filter_fn, d_offsets, d_chars] __device__(size_type idx) {
       auto const result = filter_fn(idx) ? lhs_begin[idx] : rhs_begin[idx];
       if (!result.has_value()) return;
-      auto const d_str = result.value();
+      auto const d_str = *result;
       memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes());
     });
 
