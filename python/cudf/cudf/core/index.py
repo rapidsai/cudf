@@ -241,9 +241,6 @@ class RangeIndex(BaseIndex):
     def is_interval(self):
         return False
 
-    def is_mixed(self):
-        return False
-
     @property
     def _data(self):
         return cudf.core.column_accessor.ColumnAccessor(
@@ -1115,35 +1112,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         `dtype` of the underlying values in GenericIndex.
         """
         return self._values.dtype
-
-    def is_numeric(self):
-        if cudf.api.types.is_numeric_dtype(
-            self.dtype
-        ) and self.dtype != np.dtype("bool"):
-            return True
-        else:
-            return False
-
-    def is_boolean(self):
-        return self.dtype == "bool"
-
-    def is_integer(self):
-        return cudf.api.types.is_integer_dtype(self.dtype)
-
-    def is_floating(self):
-        return cudf.api.types.is_float_dtype(self.dtype)
-
-    def is_object(self):
-        return self.dtype == np.dtype("object")
-
-    def is_categorical(self):
-        return isinstance(self.dtype, cudf.CategoricalDtype)
-
-    def is_interval(self):
-        return self.dtype == "interval"
-
-    def is_mixed(self):
-        return False
 
     def find_label_range(self, first, last):
         """Find range that starts with *first* and ends with *last*,

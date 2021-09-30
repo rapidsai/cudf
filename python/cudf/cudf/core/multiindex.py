@@ -962,9 +962,6 @@ class MultiIndex(Frame, BaseIndex):
     def is_interval(self):
         return False
 
-    def is_mixed(self):
-        return True
-
     @classmethod
     def _concat(cls, objs):
 
