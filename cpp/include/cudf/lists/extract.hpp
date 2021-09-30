@@ -65,6 +65,46 @@ std::unique_ptr<column> extract_list_element(
   size_type index,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief Create a column of values from each sublist within the input `lists_column`,
+ * using indices from the `indices` column.
+ *
+ * Output `column[i]` is set from element `lists_column[i][indices[i]]`.
+ * If `indices[i]` is larger than the size of the sublist at `lists_column[i]`
+ * then output `column[i] = null`.
+ * Similarly, if `indices[i]` is `null`, then `column[i] = null`.
+ *
+ * @code{.pseudo}
+ * l = { {1, 2, 3}, {4}, {5, 6} }
+ * r = extract_list_element(l, {0, null, 2})
+ * r is now {1, null, null}
+ * @endcode
+ *
+ * `indices[i]` may also be negative, in which case the row retrieved is offset
+ * from the end of each sublist.
+ *
+ * @code{.pseudo}
+ * l = { {"a"}, {"b", "c"}, {"d", "e", "f"} }
+ * r = extract_list_element(l, {-1, -2, -4})
+ * r is now {"a", "b", null}
+ * @endcode
+ *
+ * Any input where `lists_column[i] == null` will produce
+ * output `column[i] = null`. Also, any element where
+ * `lists_column[i][indices[i]] == null` will produce
+ * output `column[i] = null`.
+ *
+ * @param lists_column Column to extract elements from.
+ * @param indices The column whose rows indicate the element index to be retrieved from each list
+ * row.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return Column of extracted elements.
+ */
+std::unique_ptr<column> extract_list_element(
+  lists_column_view const& lists_column,
+  column_view const& indices,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /** @} */  // end of group
 }  // namespace lists
 }  // namespace cudf
