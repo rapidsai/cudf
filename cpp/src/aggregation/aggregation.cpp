@@ -203,6 +203,11 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
 }
 
 std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
+  data_type col_type, covariance_aggregation const& agg)
+{
+  return visit(col_type, static_cast<aggregation const&>(agg));
+}
+std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
   data_type col_type, correlation_aggregation const& agg)
 {
   return visit(col_type, static_cast<aggregation const&>(agg));
@@ -363,10 +368,16 @@ void aggregation_finalizer::visit(merge_m2_aggregation const& agg)
   visit(static_cast<aggregation const&>(agg));
 }
 
+void aggregation_finalizer::visit(covariance_aggregation const& agg)
+{
+  visit(static_cast<aggregation const&>(agg));
+}
+
 void aggregation_finalizer::visit(correlation_aggregation const& agg)
 {
   visit(static_cast<aggregation const&>(agg));
 }
+
 void aggregation_finalizer::visit(tdigest_aggregation const& agg)
 {
   visit(static_cast<aggregation const&>(agg));
@@ -698,6 +709,15 @@ std::unique_ptr<Base> make_merge_m2_aggregation()
 }
 template std::unique_ptr<aggregation> make_merge_m2_aggregation<aggregation>();
 template std::unique_ptr<groupby_aggregation> make_merge_m2_aggregation<groupby_aggregation>();
+
+/// Factory to create a COVARIANCE aggregation
+template <typename Base>
+std::unique_ptr<Base> make_covariance_aggregation()
+{
+  return std::make_unique<detail::covariance_aggregation>();
+}
+template std::unique_ptr<aggregation> make_covariance_aggregation<aggregation>();
+template std::unique_ptr<groupby_aggregation> make_covariance_aggregation<groupby_aggregation>();
 
 /// Factory to create a CORRELATION aggregation
 template <typename Base>

@@ -68,10 +68,9 @@ struct type_casted_accessor {
 };
 
 template <typename ResultType>
-struct corr_transform {
+struct covariance_transform {
   column_device_view const d_values_0, d_values_1;
   ResultType const *d_means_0, *d_means_1;
-  ResultType const *d_stddev_0, *d_stddev_1;
   size_type const* d_group_sizes;
   size_type const* d_group_labels;
   size_type ddof{1};  // TODO update based on bias.
@@ -98,26 +97,22 @@ struct corr_transform {
     // prevent divide by zero error
     if (group_size == 0 or group_size - ddof <= 0) return 0.0;
 
-    ResultType xmean   = d_means_0[group_idx];
-    ResultType ymean   = d_means_1[group_idx];
-    ResultType xstddev = d_stddev_0[group_idx];
-    ResultType ystddev = d_stddev_1[group_idx];
-    return (x - xmean) * (y - ymean) / (group_size - ddof) / xstddev / ystddev;
+    ResultType xmean = d_means_0[group_idx];
+    ResultType ymean = d_means_1[group_idx];
+    return (x - xmean) * (y - ymean) / (group_size - ddof);
   }
 };
 }  // namespace
 
-std::unique_ptr<column> group_correlation(column_view const& values_0,
-                                          column_view const& values_1,
-                                          cudf::device_span<size_type const> group_labels,
-                                          size_type num_groups,
-                                          column_view const& count,
-                                          column_view const& mean_0,
-                                          column_view const& mean_1,
-                                          column_view const& stddev_0,
-                                          column_view const& stddev_1,
-                                          rmm::cuda_stream_view stream,
-                                          rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> group_covariance(column_view const& values_0,
+                                         column_view const& values_1,
+                                         cudf::device_span<size_type const> group_labels,
+                                         size_type num_groups,
+                                         column_view const& count,
+                                         column_view const& mean_0,
+                                         column_view const& mean_1,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
 {
   using result_type = id_to_type<type_id::FLOAT64>;
   static_assert(
@@ -136,30 +131,22 @@ std::unique_ptr<column> group_correlation(column_view const& values_0,
     type_dispatcher(get_base_type(values_1), is_double_convertible_impl{});
 
   CUDF_EXPECTS(is_convertible,
-               "Input to `group_corr` must be columns of type convertible to float64.");
+               "Input to `group_correlation` must be columns of type convertible to float64.");
 
-  auto mean0_ptr   = mean_0.begin<result_type>();
-  auto mean1_ptr   = mean_1.begin<result_type>();
-  auto stddev0_ptr = stddev_0.begin<result_type>();
-  auto stddev1_ptr = stddev_1.begin<result_type>();
+  auto mean0_ptr = mean_0.begin<result_type>();
+  auto mean1_ptr = mean_1.begin<result_type>();
 
   auto d_values_0 = column_device_view::create(values_0, stream);
   auto d_values_1 = column_device_view::create(values_1, stream);
-  corr_transform<result_type> corr_transform_op{*d_values_0,
-                                                *d_values_1,
-                                                mean0_ptr,
-                                                mean1_ptr,
-                                                stddev0_ptr,
-                                                stddev1_ptr,
-                                                count.data<size_type>(),
-                                                group_labels.begin()};
+  covariance_transform<result_type> covariance_transform_op{
+    *d_values_0, *d_values_1, mean0_ptr, mean1_ptr, count.data<size_type>(), group_labels.begin()};
 
   auto result = make_numeric_column(
     data_type(type_to_id<result_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
   auto d_result = result->mutable_view().begin<result_type>();
 
   auto corr_iter =
-    thrust::make_transform_iterator(thrust::make_counting_iterator(0), corr_transform_op);
+    thrust::make_transform_iterator(thrust::make_counting_iterator(0), covariance_transform_op);
 
   thrust::reduce_by_key(rmm::exec_policy(stream),
                         group_labels.begin(),
@@ -168,7 +155,7 @@ std::unique_ptr<column> group_correlation(column_view const& values_0,
                         thrust::make_discard_iterator(),
                         d_result);
 
-  auto is_null = [ddof = corr_transform_op.ddof] __device__(size_type group_size) {
+  auto is_null = [ddof = covariance_transform_op.ddof] __device__(size_type group_size) {
     return not(group_size == 0 or group_size - ddof <= 0);
   };
   auto [new_nullmask, null_count] =
@@ -177,6 +164,36 @@ std::unique_ptr<column> group_correlation(column_view const& values_0,
     result->set_null_mask(std::move(new_nullmask));
     result->set_null_count(null_count);
   }
+  return result;
+}
+
+std::unique_ptr<column> group_correlation(column_view const& covariance,
+                                          column_view const& stddev_0,
+                                          column_view const& stddev_1,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr)
+{
+  using result_type = id_to_type<type_id::FLOAT64>;
+  CUDF_EXPECTS(covariance.type().id() == type_id::FLOAT64,
+               "Covariance result as FLOAT64 is supported");
+  auto stddev0_ptr = stddev_0.begin<result_type>();
+  auto stddev1_ptr = stddev_1.begin<result_type>();
+  auto stddev_iter = thrust::make_zip_iterator(thrust::make_tuple(stddev0_ptr, stddev1_ptr));
+  auto result      = make_numeric_column(covariance.type(),
+                                    covariance.size(),
+                                    cudf::detail::copy_bitmask(covariance, stream, mr),
+                                    covariance.null_count(),
+                                    stream,
+                                    mr);
+  auto d_result    = result->mutable_view().begin<result_type>();
+  thrust::transform(rmm::exec_policy(stream),
+                    covariance.begin<result_type>(),
+                    covariance.end<result_type>(),
+                    stddev_iter,
+                    d_result,
+                    [] __device__(auto const covariance, auto const stddev) {
+                      return covariance / thrust::get<0>(stddev) / thrust::get<1>(stddev);
+                    });
   return result;
 }
 
