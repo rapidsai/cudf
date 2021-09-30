@@ -66,7 +66,7 @@ __launch_bounds__(block_size) __global__
   while (warp_cur <= warp_end) {
     auto const opt_value =
       (index < end) ? (filter(index) ? lhs[index] : rhs[index]) : thrust::nullopt;
-    if (not has_nulls or opt_value) { out.element<T>(index) = static_cast<T>(opt_value.value()); }
+    if (not has_nulls or opt_value) { out.element<T>(index) = static_cast<T>(*opt_value); }
 
     // update validity
     if (has_nulls) {
