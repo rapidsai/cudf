@@ -400,9 +400,16 @@ class NumericalColumn(NumericalBaseColumn):
             fill_value = cudf.Scalar(fill_value_casted)
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
-            # cast safely to the same dtype as self
             if is_integer_dtype(col.dtype):
-                fill_value = _safe_cast_to_int(fill_value, col.dtype)
+                # cast safely to the same dtype as self
+                if fill_value.dtype != col.dtype:
+                    fill_value = fill_value.astype(col.dtype)
+                    if not (fill_value == col).all():
+                        raise TypeError(
+                            f"Cannot safely cast non-equivalent "
+                            f"{col.dtype.type.__name__} to "
+                            f"{cudf.dtype(dtype).type.__name__}"
+                        )
             else:
                 fill_value = fill_value.astype(col.dtype)
 
@@ -566,23 +573,6 @@ class NumericalColumn(NumericalBaseColumn):
         if index is not None:
             pd_series.index = index
         return pd_series
-
-
-def _safe_cast_to_int(col: ColumnBase, dtype: DtypeObj) -> ColumnBase:
-    """
-    Cast given NumericalColumn to given integer dtype safely.
-    """
-    if col.dtype == dtype:
-        return col
-
-    new_col = col.astype(dtype)
-    if (new_col == col).all():
-        return new_col
-    else:
-        raise TypeError(
-            f"Cannot safely cast non-equivalent "
-            f"{col.dtype.type.__name__} to {cudf.dtype(dtype).type.__name__}"
-        )
 
 
 def _normalize_find_and_replace_input(

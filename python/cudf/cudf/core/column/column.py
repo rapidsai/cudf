@@ -167,11 +167,9 @@ class ColumnBase(Column, Serializable):
             return True
         if other is None or len(self) != len(other):
             return False
-        if check_dtypes:
-            if self.dtype != other.dtype:
-                return False
-        null_equals = self._null_equals(other)
-        return null_equals.all()
+        if check_dtypes and (self.dtype != other.dtype):
+            return False
+        return self._null_equals(other).all()
 
     def _null_equals(self, other: ColumnBase) -> ColumnBase:
         return self.binary_operator("NULL_EQUALS", other)
@@ -186,8 +184,8 @@ class ColumnBase(Column, Serializable):
 
         if isinstance(result_col, ColumnBase):
             return libcudf.reduce.reduce("all", result_col, dtype=np.bool_)
-        else:
-            return result_col
+
+        return result_col
 
     def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
@@ -199,8 +197,8 @@ class ColumnBase(Column, Serializable):
 
         if isinstance(result_col, ColumnBase):
             return libcudf.reduce.reduce("any", result_col, dtype=np.bool_)
-        else:
-            return result_col
+
+        return result_col
 
     def __sizeof__(self) -> int:
         n = 0
@@ -215,10 +213,7 @@ class ColumnBase(Column, Serializable):
             col = self.nans_to_nulls()
         else:
             col = self
-        dropped_col = (
-            col.as_frame()._drop_na_rows(drop_nan=drop_nan)._as_column()
-        )
-        return dropped_col
+        return col.as_frame()._drop_na_rows(drop_nan=drop_nan)._as_column()
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
@@ -312,10 +307,7 @@ class ColumnBase(Column, Serializable):
 
         result = libcudf.interop.from_arrow(data, data.column_names)[0]["None"]
 
-        result = result._with_type_metadata(
-            cudf_dtype_from_pa_type(array.type)
-        )
-        return result
+        return result._with_type_metadata(cudf_dtype_from_pa_type(array.type))
 
     def _get_mask_as_column(self) -> ColumnBase:
         return libcudf.transform.mask_to_bools(
@@ -1170,15 +1162,13 @@ class ColumnBase(Column, Serializable):
         result_col = self._process_for_reduction(skipna=skipna)
         if isinstance(result_col, ColumnBase):
             return libcudf.reduce.reduce("min", result_col, dtype=dtype)
-        else:
-            return result_col
+        return result_col
 
     def max(self, skipna: bool = None, dtype: Dtype = None):
         result_col = self._process_for_reduction(skipna=skipna)
         if isinstance(result_col, ColumnBase):
             return libcudf.reduce.reduce("max", result_col, dtype=dtype)
-        else:
-            return result_col
+        return result_col
 
     def sum(
         self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
@@ -1217,11 +1207,11 @@ class ColumnBase(Column, Serializable):
         )
 
     def nans_to_nulls(self: T) -> T:
-        if self.dtype.kind == "f":
-            newmask = libcudf.transform.nans_to_nulls(self)
-            return self.set_mask(newmask)
-        else:
+        # Only floats can contain nan.
+        if self.dtype.kind != "f":
             return self
+        newmask = libcudf.transform.nans_to_nulls(self)
+        return self.set_mask(newmask)
 
     def _process_for_reduction(
         self, skipna: bool = None, min_count: int = 0
