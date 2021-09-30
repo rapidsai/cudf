@@ -371,7 +371,7 @@ def read_parquet(
         warnings.warn(
             "row_groups_per_part is deprecated. "
             "Pass an integer value to split_row_groups instead.",
-            DeprecationWarning,
+            FutureWarning,
         )
         if split_row_groups is None:
             split_row_groups = row_groups_per_part

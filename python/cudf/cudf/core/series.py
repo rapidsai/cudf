@@ -378,7 +378,7 @@ class Series(SingleColumnFrame, Serializable):
                 "21.10 or older will no longer be deserializable "
                 "after version 21.12. Please load and resave any "
                 "pickles before upgrading to version 22.02.",
-                DeprecationWarning,
+                FutureWarning,
             )
             header["columns"] = [header.pop("column")]
             header["column_names"] = pickle.dumps(
@@ -838,7 +838,7 @@ class Series(SingleColumnFrame, Serializable):
         """
         warnings.warn(
             "Series.set_mask is deprecated and will be removed in the future.",
-            DeprecationWarning,
+            FutureWarning,
         )
         return self._from_data(
             {self.name: self._column.set_mask(mask)}, self._index
@@ -3249,7 +3249,7 @@ class Series(SingleColumnFrame, Serializable):
     def reverse(self):
         warnings.warn(
             "Series.reverse is deprecated and will be removed in the future.",
-            DeprecationWarning,
+            FutureWarning,
         )
         rinds = column.arange((self._column.size - 1), -1, -1, dtype=np.int32)
         return self._from_data(
@@ -3373,9 +3373,9 @@ class Series(SingleColumnFrame, Serializable):
         """
 
         warnings.warn(
-            "Series.label_encoding is deprecated and will be removed in the future.\
-                 Consider using cuML's LabelEncoder instead",
-            DeprecationWarning,
+            "Series.label_encoding is deprecated and will be removed in the "
+            "future. Consider using cuML's LabelEncoder instead.",
+            FutureWarning,
         )
 
         def _return_sentinel_series():

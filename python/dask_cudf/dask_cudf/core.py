@@ -307,7 +307,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             warnings.warn(
                 "The columns argument will be removed from repartition in "
                 "future versions of dask_cudf. Use DataFrame.shuffle().",
-                DeprecationWarning,
+                FutureWarning,
             )
             warnings.warn(
                 "Rearranging data by column hash. Divisions will lost. "
