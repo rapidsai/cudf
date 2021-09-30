@@ -25,7 +25,6 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <initializer_list>
-#include <type_traits>
 
 namespace cudf {
 namespace detail {

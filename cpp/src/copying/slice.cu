@@ -63,9 +63,9 @@ std::vector<column_view> slice(column_view const& input,
   return std::vector<column_view>{begin, begin + indices.size() / 2};
 }
 
-std::vector<cudf::table_view> slice(table_view const& input,
-                                    host_span<size_type const> indices,
-                                    rmm::cuda_stream_view stream)
+std::vector<table_view> slice(table_view const& input,
+                              host_span<size_type const> indices,
+                              rmm::cuda_stream_view stream)
 {
   CUDF_EXPECTS(indices.size() % 2 == 0, "indices size must be even");
   if (indices.empty()) { return {}; }
