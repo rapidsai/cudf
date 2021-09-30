@@ -13,6 +13,7 @@ import pyarrow as pa
 import pyarrow.fs as pa_fs
 import pyarrow.orc
 import pytest
+from fsspec.core import get_fs_token_paths
 
 import cudf
 from cudf.testing._utils import assert_eq
@@ -196,22 +197,42 @@ def test_write_csv(s3_base, s3so, pdf, chunksize):
 
 @pytest.mark.parametrize("bytes_per_thread", [32, 1024])
 @pytest.mark.parametrize("columns", [None, ["Float", "String"]])
-def test_read_parquet(s3_base, s3so, pdf, bytes_per_thread, columns):
+@pytest.mark.parametrize("use_python_file_object", [False, True])
+def test_read_parquet(
+    s3_base, s3so, pdf, bytes_per_thread, columns, use_python_file_object
+):
     fname = "test_parquet_reader.parquet"
     bname = "parquet"
     buffer = BytesIO()
     pdf.to_parquet(path=buffer)
+
+    # Check direct path handling
     buffer.seek(0)
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
-        got = cudf.read_parquet(
+        got1 = cudf.read_parquet(
             "s3://{}/{}".format(bname, fname),
+            use_python_file_object=use_python_file_object,
             storage_options=s3so,
             bytes_per_thread=bytes_per_thread,
             columns=columns,
         )
-
     expect = pdf[columns] if columns else pdf
-    assert_eq(expect, got)
+    assert_eq(expect, got1)
+
+    # Check fsspec file-object handling
+    buffer.seek(0)
+    with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
+        fs = get_fs_token_paths(
+            "s3://{}/{}".format(bname, fname), storage_options=s3so
+        )[0]
+        with fs.open("s3://{}/{}".format(bname, fname), mode="rb") as f:
+            got2 = cudf.read_parquet(
+                f,
+                use_python_file_object=use_python_file_object,
+                bytes_per_thread=bytes_per_thread,
+                columns=columns,
+            )
+    assert_eq(expect, got2)
 
 
 @pytest.mark.parametrize("columns", [None, ["Float", "String"]])
