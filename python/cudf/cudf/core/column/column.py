@@ -653,11 +653,6 @@ class ColumnBase(Column, Serializable):
 
         return result
 
-    def isna(self) -> ColumnBase:
-        """Identify missing values in a Column. Alias for isnull.
-        """
-        return self.isnull()
-
     def notnull(self) -> ColumnBase:
         """Identify non-missing values in a Column.
         """
@@ -669,11 +664,6 @@ class ColumnBase(Column, Serializable):
             result = result & libcudf.unary.is_non_nan(self)
 
         return result
-
-    def notna(self) -> ColumnBase:
-        """Identify non-missing values in a Column. Alias for notnull.
-        """
-        return self.notnull()
 
     def find_first_value(
         self, value: ScalarLike, closest: bool = False
@@ -788,7 +778,7 @@ class ColumnBase(Column, Serializable):
         """
         if self.dtype != rhs.dtype:
             if self.null_count and rhs.null_count:
-                return self.isna()
+                return self.isnull()
             else:
                 return cudf.core.column.full(len(self), False, dtype="bool")
         elif self.null_count == 0 and (rhs.null_count == len(rhs)):
@@ -832,10 +822,6 @@ class ColumnBase(Column, Serializable):
     @property
     def is_unique(self) -> bool:
         return self.distinct_count() == len(self)
-
-    @property
-    def is_monotonic(self) -> bool:
-        return self.is_monotonic_increasing
 
     @property
     def is_monotonic_increasing(self) -> bool:
@@ -1032,19 +1018,17 @@ class ColumnBase(Column, Serializable):
 
     def apply_boolean_mask(self, mask) -> ColumnBase:
         mask = as_column(mask, dtype="bool")
-        result = (
+        return (
             self.as_frame()._apply_boolean_mask(boolean_mask=mask)._as_column()
         )
-        return result
 
     def argsort(
         self, ascending: bool = True, na_position: builtins.str = "last"
     ) -> ColumnBase:
 
-        sorted_indices = self.as_frame()._get_sorted_inds(
+        return self.as_frame()._get_sorted_inds(
             ascending=ascending, na_position=na_position
         )
-        return sorted_indices
 
     def __arrow_array__(self, type=None):
         raise TypeError(

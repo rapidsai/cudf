@@ -1044,7 +1044,7 @@ class CategoricalColumn(column.ColumnBase):
         df = cudf.DataFrame({"old": to_replace_col, "new": replacement_col})
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:
-            fill_value = df._data["new"][df._data["old"].isna()][0]
+            fill_value = df._data["new"][df._data["old"].isnull()][0]
             if fill_value in self.categories:
                 replaced = self.fillna(fill_value)
             else:
@@ -1060,7 +1060,7 @@ class CategoricalColumn(column.ColumnBase):
         else:
             replaced = self
         if df._data["new"].null_count > 0:
-            drop_values = df._data["old"][df._data["new"].isna()]
+            drop_values = df._data["old"][df._data["new"].isnull()]
             cur_categories = replaced.categories
             new_categories = cur_categories[
                 ~cudf.Series(cur_categories.isin(drop_values))
@@ -1096,7 +1096,7 @@ class CategoricalColumn(column.ColumnBase):
         # those categories don't exist anymore
         # Resetting the index creates a column 'index' that associates
         # the original integers to the new labels
-        bmask = new_cats._data["cats"].notna()
+        bmask = new_cats._data["cats"].notnull()
         new_cats = cudf.DataFrame(
             {"cats": new_cats._data["cats"].apply_boolean_mask(bmask)}
         ).reset_index()

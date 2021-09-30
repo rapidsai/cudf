@@ -352,7 +352,7 @@ class NumericalColumn(NumericalBaseColumn):
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:
             replaced = replaced.fillna(
-                df._data["new"][df._data["old"].isna()][0]
+                df._data["new"][df._data["old"].isnull()][0]
             )
             df = df.dropna(subset=["old"])
 
@@ -425,7 +425,7 @@ class NumericalColumn(NumericalBaseColumn):
             found = cudautils.find_first(
                 self.data_array_view, value, mask=self.mask
             )
-        if found == -1 and self.is_monotonic and closest:
+        if found == -1 and self.is_monotonic_increasing and closest:
             if value < self.min():
                 found = 0
             elif value > self.max():
@@ -454,7 +454,7 @@ class NumericalColumn(NumericalBaseColumn):
             found = cudautils.find_last(
                 self.data_array_view, value, mask=self.mask,
             )
-        if found == -1 and self.is_monotonic and closest:
+        if found == -1 and self.is_monotonic_increasing and closest:
             if value < self.min():
                 found = -1
             elif value > self.max():
@@ -506,10 +506,7 @@ class NumericalColumn(NumericalBaseColumn):
                     return True
 
                 max_ = col.max()
-                if (min_ >= lower_) and (max_ < upper_):
-                    return True
-                else:
-                    return False
+                return (min_ >= lower_) and (max_ < upper_)
 
         # want to cast int to uint
         elif self.dtype.kind == "i" and to_dtype.kind == "u":

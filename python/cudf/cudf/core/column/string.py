@@ -5199,7 +5199,7 @@ class StringColumn(column.ColumnBase):
                 )
             else:
                 format = datetime.infer_format(
-                    self.apply_boolean_mask(self.notna()).element_indexing(0)
+                    self.apply_boolean_mask(self.notnull()).element_indexing(0)
                 )
 
         return self._as_datetime_or_timedelta_column(out_dtype, format)
@@ -5374,7 +5374,7 @@ class StringColumn(column.ColumnBase):
         df = cudf.DataFrame({"old": to_replace_col, "new": replacement_col})
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:
-            res = self.fillna(df._data["new"][df._data["old"].isna()][0])
+            res = self.fillna(df._data["new"][df._data["old"].isnull()][0])
             df = df.dropna(subset=["old"])
         else:
             res = self
