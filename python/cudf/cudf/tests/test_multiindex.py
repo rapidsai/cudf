@@ -682,7 +682,7 @@ def test_multiindex_copy_sem(data, levels, codes, names):
 
     for glv, plv in zip(gmi_copy.levels, pmi_copy.levels):
         assert all(glv.values_host == plv.values)
-    for (_, gval), pval in zip(gmi.codes._data._data.items(), pmi.codes):
+    for (_, gval), pval in zip(gmi.codes._data.items(), pmi.codes):
         assert all(gval.values_host == pval.astype(np.int64))
     assert_eq(gmi_copy.names, pmi_copy.names)
 
@@ -770,8 +770,8 @@ def test_multiindex_copy_deep(data, deep):
         mi2 = mi1.copy(deep=deep)
 
         # Assert ._levels idendity
-        lptrs = [lv._data._data[None].base_data.ptr for lv in mi1._levels]
-        rptrs = [lv._data._data[None].base_data.ptr for lv in mi2._levels]
+        lptrs = [lv._data[None].base_data.ptr for lv in mi1._levels]
+        rptrs = [lv._data[None].base_data.ptr for lv in mi2._levels]
 
         assert all([(x == y) is same_ref for x, y in zip(lptrs, rptrs)])
 
