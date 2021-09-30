@@ -3445,7 +3445,10 @@ class Series(SingleColumnFrame, Serializable):
         Notes
         -----
         UDFs are cached in memory to avoid recompilation. The first
-        call to the UDF will incur compilation overhead.
+        call to the UDF will incur compilation overhead. `func` may
+        call nested functions that are decorated with the decorator
+        `numba.cuda.jit(device=True)`, otherwise numba will raise a
+        typing error.
 
         Examples
         --------

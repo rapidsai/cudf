@@ -32,9 +32,6 @@ def get_frame_row_type(fr):
     # Create the numpy structured type corresponding to the frame.
     dtype = np.dtype([(name, col.dtype) for name, col in fr._data.items()])
 
-    if dtype.hasobject:
-        raise TypeError("Do not support dtype containing object")
-
     fields = []
     offset = 0
     for name, info in dtype.fields.items():
@@ -57,10 +54,6 @@ def get_frame_row_type(fr):
         offset = int(math.ceil(offset / 8.0) * 8.0)
 
     _is_aligned_struct = True
-
-    # Note: dtype.alignment is not consistent.
-    #       It is different after passing into a recarray.
-    #       recarray(N, dtype=mydtype).dtype.alignment != mydtype.alignment
     return Record(fields, offset, _is_aligned_struct)
 
 
