@@ -18,6 +18,8 @@
 
 #include <thrust/reduce.h>
 
+#include <cudf/fixed_point/fixed_point.hpp>
+
 #include <io/utilities/parsing_utils.cuh>
 #include <io/utilities/time_utils.cuh>
 
@@ -350,15 +352,15 @@ __inline__ __device__ duration_type to_duration(char const* begin, char const* e
 
   if constexpr (std::is_same_v<duration_type, cudf::duration_s>) { return output_d; }
 
-  int64_t nanosecond = 0L;  // Duration type not allowed due to the use of `*` operator
-  if (*cur == '.') {        //.n
-    auto const start_subsecond = ++cur;
-    auto raw_time = parse_integer<int64_t>(&cur, end);  // Extract all digits after decimal point
-    int8_t const num_digits = min(9L, cur - start_subsecond);
-    nanosecond              = raw_time * powers_of_ten[9 - num_digits];  // Scale to nanoseconds
-  }
+  auto const d_ns = (*cur != '.') ? duration_ns{0} : [&]() {
+    auto const start_subsecond     = ++cur;
+    auto const unscaled_subseconds = parse_integer<int64_t>(&cur, end);
+    auto const scale               = min(9L, cur - start_subsecond) - 9;
+    auto const rescaled = numeric::decimal64{unscaled_subseconds, numeric::scale_type{scale}};
+    return duration_ns{rescaled.value()};
+  }();
 
-  return output_d + duration_cast<duration_type>(duration_ns{nanosecond});
+  return output_d + duration_cast<duration_type>(d_ns);
 }
 
 }  // namespace io
