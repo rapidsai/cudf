@@ -4595,7 +4595,7 @@ class StringMethods(ColumnMethods):
         This function requires about 21x the number of character bytes
         in the input strings column as working memory.
 
-        ``Series.str.subword_tokenize`` will be deprecated in future versions.
+        ``Series.str.subword_tokenize`` is deprecated and will be removed.
         Use ``cudf.core.subword_tokenizer.SubwordTokenizer`` instead.
 
         Parameters
@@ -4670,9 +4670,9 @@ class StringMethods(ColumnMethods):
                [1, 0, 1]], dtype=uint32)
         """
         warnings.warn(
-            "`Series.str.subword_tokenize` will be deprecated "
-            "in future versions of cudf.\n"
-            "Use `cudf.core.subword_tokenizer.SubwordTokenizer` instead.",
+            "`Series.str.subword_tokenize` is deprecated and will be removed "
+            "in future versions of cudf. Use "
+            "`cudf.core.subword_tokenizer.SubwordTokenizer` instead.",
             FutureWarning,
         )
 
