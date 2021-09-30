@@ -1,6 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import math
 from operator import getitem
+from typing import Set
 
 import numpy as np
 import pandas as pd
@@ -378,7 +379,7 @@ def _is_supported(arg, supported: set):
     """
     if isinstance(arg, (list, dict)):
         if isinstance(arg, dict):
-            _global_set = set()
+            _global_set: Set[str] = set()
             for col in arg:
                 if isinstance(arg[col], list):
                     _global_set = _global_set.union(set(arg[col]))
