@@ -1131,7 +1131,26 @@ def test_datetime_fillna(data, dtype, fill_value):
 )
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)
 @pytest.mark.parametrize(
-    "date_format", ["%d - %m", "%y/%H", "%Y", "%I - %M / %S", "%f", "%j", "%p"]
+    "date_format",
+    [
+        "%d - %m",
+        "%y/%H",
+        "%Y",
+        "%I - %M / %S",
+        "%f",
+        "%j",
+        "%p",
+        "%w",
+        "%U",
+        "%W",
+        "%G",
+        "%u",
+        "%V",
+        "%b",
+        "%B",
+        "%a",
+        "%A",
+    ],
 )
 def test_datetime_strftime(data, dtype, date_format):
     gsr = cudf.Series(data, dtype=dtype)
@@ -1143,24 +1162,7 @@ def test_datetime_strftime(data, dtype, date_format):
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize(
-    "date_format",
-    [
-        "%a",
-        "%A",
-        "%w",
-        "%b",
-        "%B",
-        "%U",
-        "%W",
-        "%c",
-        "%x",
-        "%X",
-        "%G",
-        "%u",
-        "%V",
-    ],
-)
+@pytest.mark.parametrize("date_format", ["%c", "%x", "%X"])
 def test_datetime_strftime_not_implemented_formats(date_format):
     gsr = cudf.Series([1, 2, 3], dtype="datetime64[ms]")
 
@@ -1332,6 +1334,55 @@ def test_quarter():
 
     assert isinstance(got2, cudf.Int8Index)
     assert_eq(expect2.values, got2.values, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.Series([], dtype="datetime64[ns]"),
+        pd.Series(pd.date_range("2010-01-01", "2010-02-01")),
+        pd.Series([None, None], dtype="datetime64[ns]"),
+        pd.Series("2020-05-31 08:00:00", dtype="datetime64[s]"),
+        pd.Series(
+            pd.date_range(start="2021-07-25", end="2021-07-30"),
+            index=["a", "b", "c", "d", "e", "f"],
+        ),
+    ],
+)
+def test_isocalendar_series(data):
+    ps = data.copy()
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.dt.isocalendar()
+    got = gs.dt.isocalendar()
+
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.DatetimeIndex([], dtype="datetime64[ns]"),
+        pd.DatetimeIndex([None, None], dtype="datetime64[ns]"),
+        pd.DatetimeIndex(
+            [
+                "2020-05-31 08:00:00",
+                "1999-12-31 18:40:00",
+                "2000-12-31 04:00:00",
+            ],
+            dtype="datetime64[ns]",
+        ),
+        pd.DatetimeIndex(["2100-03-14 07:30:00"], dtype="datetime64[ns]"),
+    ],
+)
+def test_isocalendar_index(data):
+    ps = data.copy()
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.isocalendar()
+    got = gs.isocalendar()
+
+    assert_eq(expect, got, check_dtype=False)
 
 
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)
