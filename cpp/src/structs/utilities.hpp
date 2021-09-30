@@ -20,6 +20,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include "cudf/binaryop.hpp"
 
 namespace cudf {
 namespace structs {
@@ -153,6 +154,14 @@ void superimpose_parent_nulls(bitmask_type const* parent_null_mask,
  */
 std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_parent_nulls(
   column_view const& parent,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+std::unique_ptr<column> struct_binary_operation(
+  column_view lhs,
+  column_view rhs,
+  binary_operator op,
+  data_type output_type,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

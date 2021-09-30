@@ -74,6 +74,7 @@ enum class binary_operator : int32_t {
                          ///< ptx code
   INVALID_BINARY         ///< invalid operation
 };
+
 /**
  * @brief Performs a binary operation between a scalar and a column.
  *
@@ -288,5 +289,15 @@ std::unique_ptr<column> binary_operation(
   data_type output_type,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace jit
+namespace detail {
+
+std::unique_ptr<column> make_fixed_width_column_for_output(
+  column_view const& lhs,
+  column_view const& rhs,
+  binary_operator op,
+  data_type output_type,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+}  // namespace detail
 /** @} */  // end of group
 }  // namespace cudf

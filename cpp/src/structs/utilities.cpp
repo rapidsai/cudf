@@ -29,6 +29,7 @@
 #include <structs/utilities.hpp>
 
 #include <bitset>
+#include "cudf/binaryop.hpp"
 
 namespace cudf {
 namespace structs {
@@ -414,6 +415,19 @@ std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_paren
                                      ret_children),
                          std::move(ret_validity_buffers));
 }
+
+// std::unique_ptr<column> struct_lexicographic_compare(column_view lhs, column_view rhs, data_type
+// output_type, binary_operator op, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource*
+// mr) {
+
+//   auto out = cudf::detail::make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream,
+//   mr);
+
+//   // superimpose
+//   // flatten
+
+//   return out;
+// }
 
 }  // namespace detail
 }  // namespace structs

@@ -415,6 +415,7 @@ add_library(cudf
     src/structs/structs_column_factories.cu
     src/structs/structs_column_view.cpp
     src/structs/utilities.cpp
+    src/structs/utilities.cu
     src/table/table.cpp
     src/table/table_device_view.cu
     src/table/table_view.cpp

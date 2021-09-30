@@ -16,6 +16,7 @@
 
 #include <structs/utilities.hpp>
 
+#include <cstdint>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -28,6 +29,9 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/null_mask.hpp>
+#include <structs/utilities.hpp>
+#include "cudf/binaryop.hpp"
+#include "groupby/sort/group_scan.hpp"
 
 namespace cudf::test {
 
@@ -502,6 +506,47 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_Sliced)
   auto expected_sliced_structs = slice_off_first_and_last_rows(expected_struct_structs);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(output, expected_sliced_structs);
+}
+
+template <typename T>
+struct TypedBinopStructCompare : StructUtilitiesTest {
+};
+
+TYPED_TEST_SUITE(TypedBinopStructCompare, int32_t);
+TYPED_TEST(TypedBinopStructCompare, binopcompare)
+{
+  // Test with a sliced STRUCT<STRUCT> column.
+  // Ensure that superimpose_parent_nulls() produces the right results, even when the input is
+  // sliced.
+
+  using T = TypeParam;
+
+  auto col1     = fixed_width_column_wrapper<T>{{0, 0, 7, 7, 7, 5, 4, 4, 4, 9, 9, 9}, null_at(5)};
+  auto col2     = fixed_width_column_wrapper<T>{{0, 0, 7, 7, 7, 5, 4, 4, 4, 9, 9, 9}, null_at(5)};
+  auto strings1 = strings_column_wrapper{
+    {"0a", "0a", "2a", "2a", "3b", "5", "6c", "6c", "6c", "9", "9", "10d"}, null_at(8)};
+  auto strings2 = strings_column_wrapper{
+    {"0a", "0a", "2a", "2a", "3b", "5", "6c", "6c", "6c", "9", "9", "10d"}, null_at(8)};
+
+  std::vector<std::unique_ptr<column>> struct_columns;
+  struct_columns.push_back(col1.release());
+  struct_columns.push_back(strings1.release());
+  auto struct_col =
+    cudf::make_structs_column(12, std::move(struct_columns), 0, rmm::device_buffer{});
+  auto const struct_nulls =
+    thrust::host_vector<bool>(std::vector<bool>{1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+  struct_col->set_null_mask(
+    cudf::test::detail::make_null_mask(struct_nulls.begin(), struct_nulls.end()));
+
+  auto lhs               = struct_col->view();
+  auto rhs               = struct_col->view();
+  binary_operator bin_op = binary_operator::EQUAL;
+  data_type dt           = cudf::data_type(cudf::type_id::BOOL8);
+  // auto res = cudf::structs::detail::struct_binary_operation(struct_col->view(),
+  // struct_col->view(), binary_operator::EQUAL, cudf::data_type(cudf::type_id::BOOL8));
+  auto res = cudf::groupby::detail::struct_binary_operation2(lhs, rhs, bin_op, dt);
+  // auto res = cudf::structs::detail::struct_binary_operation();//lhs, rhs, bin_op, dt,
+  // rmm::cuda_stream_default, rmm::mr::get_current_device_resource());
 }
 
 }  // namespace cudf::test
