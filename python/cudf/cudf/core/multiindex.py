@@ -6,6 +6,7 @@ import itertools
 import numbers
 import pickle
 import warnings
+from collections import defaultdict
 from collections.abc import Sequence
 from numbers import Integral
 from typing import Any, List, MutableMapping, Optional, Tuple, Union
@@ -20,10 +21,272 @@ from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_integer, is_list_like
 from cudf.core import column
+from cudf.core.column import ColumnBase
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.frame import Frame
 from cudf.core.index import BaseIndex, _lexsorted_equal_range, as_index
 from cudf.utils.utils import _maybe_indices_to_slice, cached_property
+
+
+class _MultiIndexColumnName(tuple):
+    """A tuple used to hold names of MultiIndex columns.
+
+    The MultiIndex class needs to support duplicate names, and names can be
+    pretty much anything, including tuples. To suport dupcliate names, we want
+    to store names as pairs where the first element is a unique integer
+    identifier. However, we also need to allow users to use tuples askeys. To
+    generally handle this case, we use this trivial tuple subclass to indicate
+    that a top-level name has already been stored by cuDF.
+    """
+
+
+class _MultiIndexColumnAccessor(ColumnAccessor):
+    """A ColumnAccessor that unpacks name tuples."""
+
+    def __init__(
+        self,
+        data: Union[MutableMapping, ColumnAccessor] = None,
+        multiindex: bool = False,
+        level_names=None,
+    ):
+        if data is None:
+            data = {}
+        if isinstance(data, ColumnAccessor):
+            multiindex = multiindex or data.multiindex
+            level_names = level_names or data.level_names
+        data = {
+            (
+                _MultiIndexColumnName(i, k[1])
+                if isinstance(k, _MultiIndexColumnName)
+                else _MultiIndexColumnName(i, k)
+            ): v for i, (k, v) in enumerate(data.items())
+
+        }
+        super().__init__(data, multiindex, level_names)
+
+        # Build up a mapping of names to indexes.
+        # self._column_counter = len(data)
+        self._name_index_map = defaultdict(list)
+        for k in data:
+            self._name_index_map[k[1]] = k[0]
+
+    # TODO: Determine if this needs to be overridden.
+    # @classmethod
+    # def _create_unsafe(
+    #     cls,
+    #     data: Dict[Any, ColumnBase],
+    #     multiindex: bool = False,
+    #     level_names=None,
+    # ) -> ColumnAccessor:
+    #     # create a ColumnAccessor without verifying column
+    #     # type or size
+    #     obj = cls()
+    #     obj._data = data
+    #     obj.multiindex = multiindex
+    #     obj._level_names = level_names
+    #     return obj
+
+    def __getitem__(self, key: Any) -> ColumnBase:
+        # Possible implementation if we need one
+        try:
+            indices = self._name_index_map[key]
+            if len(indices) > 1:
+                raise ValueError(
+                    "__getitem__ not supported with duplicate keys."
+                )
+            return self._data[_MultiIndexColumnName(indices[0], key)]
+        except KeyError:
+            raise KeyError(key)
+
+        return self._data[key]
+
+    def __setitem__(self, key: Any, value: Any):
+        raise NotImplementedError
+
+    def __delitem__(self, key: Any):
+        raise NotImplementedError
+
+    @cached_property
+    def names(self) -> Tuple[Any, ...]:
+        return tuple([key[1] for key in self.keys()])
+
+    def to_pandas_index(self) -> pd.Index:
+        """"
+        Convert the keys of the ColumnAccessor to a Pandas Index object.
+        """
+        if self.multiindex and len(self.level_names) > 0:
+            # Using `from_frame()` instead of `from_tuples`
+            # prevents coercion of values to a different type
+            # (e.g., ''->NaT)
+            result = pd.MultiIndex.from_frame(
+                pd.DataFrame(
+                    self.names, columns=self.level_names, dtype="object"
+                ),
+            )
+        else:
+            result = pd.Index(self.names, name=self.name, tupleize_cols=False)
+        return result
+
+    def insert(
+        self, name: Any, value: Any, loc: int = -1, validate: bool = True
+    ):
+        raise NotImplementedError
+
+    def select_by_label(self, key: Any) -> ColumnAccessor:
+        """
+        Return a subset of this column accessor,
+        composed of the keys specified by `key`.
+
+        Parameters
+        ----------
+        key : slice, list-like, tuple or scalar
+
+        Returns
+        -------
+        ColumnAccessor
+        """
+        if isinstance(key, slice):
+            return self._select_by_label_slice(key)
+        elif pd.api.types.is_list_like(key) and not isinstance(key, tuple):
+            return self._select_by_label_list_like(key)
+        else:
+            if isinstance(key, tuple):
+                if any(isinstance(k, slice) for k in key):
+                    return self._select_by_label_with_wildcard(key)
+            return self._select_by_label_grouped(key)
+
+    def select_by_index(self, index: Any) -> ColumnAccessor:
+        """
+        Return a ColumnAccessor composed of the columns
+        specified by index.
+
+        Parameters
+        ----------
+        key : integer, integer slice, or list-like of integers
+
+        Returns
+        -------
+        ColumnAccessor
+        """
+        if pd.api.types.is_integer(index):
+            index = (index,)
+        data = {k: v for k in self._data if k[0] in index}
+        return self.__class__(
+            data, multiindex=self.multiindex, level_names=self.level_names,
+        )
+
+    def set_by_label(self, key: Any, value: Any, validate: bool = True):
+        """
+        Add (or modify) column by name.
+
+        Parameters
+        ----------
+        key
+            name of the column
+        value : column-like
+            The value to insert into the column.
+        validate : bool
+            If True, the provided value will be coerced to a column and
+            validated before setting (Default value = True).
+        """
+        raise NotImplementedError
+
+    def _select_by_label_list_like(self, key: Any) -> ColumnAccessor:
+        indices = []
+        for k in key:
+            try:
+                key_indices = self._name_index_map[k]
+            except KeyError:
+                raise KeyError(k)
+            if len(key_indices) > 1:
+                raise ValueError(
+                    "_select_by_label_list_like not supported with duplicate "
+                    "keys."
+                )
+            indices.extend(key_indices)
+        return self.select_by_index(indices)
+
+    def _select_by_label_slice(self, key: slice) -> ColumnAccessor:
+        raise NotImplementedError
+
+    def _select_by_label_with_wildcard(self, key: Any) -> ColumnAccessor:
+        raise NotImplementedError
+
+    def rename_levels(
+        self, mapper: Union[Mapping[Any, Any], Callable], level: Optional[int]
+    ) -> ColumnAccessor:
+        """
+        Rename the specified levels of the given ColumnAccessor
+
+        Parameters
+        ----------
+        self : ColumnAccessor of a given dataframe
+
+        mapper : dict-like or function transformations to apply to
+            the column label values depending on selected ``level``.
+
+            If dict-like, only replace the specified level of the
+            ColumnAccessor's keys (that match the mapper's keys) with
+            mapper's values
+
+            If callable, the function is applied only to the specified level
+            of the ColumnAccessor's keys.
+
+        level : int
+            In case of RangeIndex, only supported level is [0, None].
+            In case of a MultiColumn, only the column labels in the specified
+            level of the ColumnAccessor's keys will be transformed.
+
+        Returns
+        -------
+        A new ColumnAccessor with values in the keys replaced according
+        to the given mapper and level.
+
+        """
+        if self.multiindex:
+
+            def rename_column(x):
+                x = list(x)
+                if isinstance(mapper, Mapping):
+                    x[level] = mapper.get(x[level], x[level])
+                else:
+                    x[level] = mapper(x[level])
+                x = tuple(x)
+                return x
+
+            if level is None:
+                raise NotImplementedError(
+                    "Renaming columns with a MultiIndex and level=None is"
+                    "not supported"
+                )
+            new_names = map(rename_column, self.keys())
+            ca = ColumnAccessor(
+                dict(zip(new_names, self.values())),
+                level_names=self.level_names,
+                multiindex=self.multiindex,
+            )
+
+        else:
+            if level is None:
+                level = 0
+            if level != 0:
+                raise IndexError(
+                    f"Too many levels: Index has only 1 level, not {level+1}"
+                )
+            if isinstance(mapper, Mapping):
+                new_names = (
+                    mapper.get(col_name, col_name) for col_name in self.keys()
+                )
+            else:
+                new_names = (mapper(col_name) for col_name in self.keys())
+            ca = ColumnAccessor(
+                dict(zip(new_names, self.values())),
+                level_names=self.level_names,
+                multiindex=self.multiindex,
+            )
+
+        return self.__class__(ca)
 
 
 class MultiIndex(Frame, BaseIndex):
@@ -137,7 +400,7 @@ class MultiIndex(Frame, BaseIndex):
             else:
                 level = cudf.DataFrame({column_name: levels[i]})
 
-            source_data[column_name] = libcudf.copying.gather(level, col)[0][
+            source_data[_MultiIndexColumnName((i, column_name))] = libcudf.copying.gather(level, col)[0][
                 column_name
             ]
 
@@ -147,26 +410,33 @@ class MultiIndex(Frame, BaseIndex):
         self._name = None
         self.names = names
 
+    # TODO: This is inefficient but TBD if it is a bottleneck.
     @property
     def names(self):
-        return self._names
+        return [name[1] for name in self._data.keys()]
 
     @names.setter
     def names(self, value):
         value = [None] * self.nlevels if value is None else value
 
-        if len(value) == len(set(value)):
-            # IMPORTANT: if the provided names are unique,
-            # we reconstruct self._data with the names as keys.
-            # If they are not unique, the keys of self._data
-            # and self._names will be different, which can lead
-            # to unexpected behaviour in some cases. This is
-            # definitely buggy, but we can't disallow non-unique
-            # names either...
-            self._data = self._data.__class__._create_unsafe(
-                dict(zip(value, self._data.values())),
-                level_names=self._data.level_names,
-            )
+        # At least one of of _levels or _data will be non-null
+        num_levels = (
+            len(self._levels)
+            if self._levels is not None else len(self._data)
+        )
+
+        if len(value) != num_levels:
+            raise ValueError(
+                "Length of names must match number of levels in MultiIndex.")
+
+        value = [_MultiIndexColumnName((i, name))
+                 if not isinstance(name, _MultiIndexColumnName)
+                 else name
+                 for i, name in zip(range(len(value)), value)]
+        self._data = self._data.__class__._create_unsafe(
+            dict(zip(value, self._data.values())),
+            level_names=self._data.level_names,
+        )
         self._names = pd.core.indexes.frozen.FrozenList(value)
 
     def rename(self, names, inplace=False):
@@ -534,10 +804,11 @@ class MultiIndex(Frame, BaseIndex):
             label will be returned as per the index.
         """
 
-        if level in self._data.names:
+        # TODO: This is potentially inefficient computing self.names twice.
+        if level in self.names:
             return level
         else:
-            return self._data.names[level]
+            return self.names[level]
 
     def isin(self, values, level=None):
         """Return a boolean array where the index values are in values.
@@ -898,7 +1169,13 @@ class MultiIndex(Frame, BaseIndex):
         # TODO: Currently this function makes a shallow copy, which is
         # incorrect. We want to make a deep copy, otherwise further
         # modifications of the resulting DataFrame will affect the MultiIndex.
-        df = cudf.DataFrame._from_data(data=self._data)
+        cols = [col[1] if col[1] is not None else i
+                for i, col in enumerate(self._data.names)]
+        # Note: This code assumes that in the case of duplicate levels pandas
+        # will keep the later one in the order when converting to a DataFrame.
+        # That appears to be empirically true, but is not documented anywhere.
+        df = cudf.DataFrame._from_data(
+            data=dict(zip(cols, self._data.values())))
         if index:
             df = df.set_index(self)
         if name is not None:
@@ -1109,6 +1386,7 @@ class MultiIndex(Frame, BaseIndex):
                     ('NJ', 'Precip')],
                    names=['state', 'observation'])
         """
+        # breakpoint()
         obj = cls.__new__(cls)
         super(cls, obj).__init__()
 
@@ -1124,9 +1402,9 @@ class MultiIndex(Frame, BaseIndex):
             source_data.columns = names
         obj._name = None
         obj._data = source_data._data
-        obj.names = names
         obj._codes = None
         obj._levels = None
+        obj.names = names
         return obj
 
     @classmethod
