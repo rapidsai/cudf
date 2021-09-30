@@ -35,8 +35,11 @@ def get_frame_row_type(fr):
     fields = []
     offset = 0
     for name, info in dtype.fields.items():
-        # *info* may have 3 element
-        [elemdtype, _] = info[:2]
+        # *info* consists of the element dtype, its offset from the beginning
+        # of the record, and an optional "title" containing metadata.
+        # We ignore the offset in info because its value assumes no masking;
+        # instead, we compute the correct offset based on the masked type.
+        elemdtype = info[0]
         title = info[2] if len(info) == 3 else None
         ty = numpy_support.from_dtype(elemdtype)
         infos = {
@@ -53,6 +56,7 @@ def get_frame_row_type(fr):
         # at the end, offset will represent the total size
         offset = int(math.ceil(offset / 8.0) * 8.0)
 
+    # Numba requires that structures are aligned for the CUDA target
     _is_aligned_struct = True
     return Record(fields, offset, _is_aligned_struct)
 
@@ -131,7 +135,7 @@ def _kernel(retval, {input_columns}, {input_offsets}, size):
 {masked_input_initializers}
 {row_initializers}
 
-        # pass the abstract row into the udf
+        # pass the assembled row into the udf
         ret = f_(row)
 
         # pack up the return values and set them
