@@ -33,7 +33,7 @@ template <size_type block_size,
           typename LeftIter,
           typename RightIter,
           typename Filter,
-          bool has_validity>
+          bool has_nulls>
 __launch_bounds__(block_size) __global__
   void copy_if_else_kernel(LeftIter lhs,
                            RightIter rhs,
@@ -64,17 +64,14 @@ __launch_bounds__(block_size) __global__
   size_type warp_cur = warp_begin + warp_id;
   size_type index    = tid;
   while (warp_cur <= warp_end) {
-    bool valid = false;
-    if (index >= begin && index < end) {
-      auto value = filter(index) ? lhs[index] : rhs[index];
-      valid      = !has_validity || value.has_value();
-      if (valid) { out.element<T>(index) = static_cast<T>(value.value()); }
-    }
+    auto const opt_value =
+      (index < end) ? (filter(index) ? lhs[index] : rhs[index]) : thrust::nullopt;
+    if (not has_nulls or opt_value) { out.element<T>(index) = static_cast<T>(opt_value.value()); }
 
     // update validity
-    if (has_validity) {
+    if (has_nulls) {
       // the final validity mask for this warp
-      int warp_mask = __ballot_sync(0xFFFF'FFFF, valid);
+      int warp_mask = __ballot_sync(0xFFFF'FFFF, opt_value.has_value());
       // only one guy in the warp needs to update the mask and count
       if (lane_id == 0) {
         out.set_mask_word(warp_cur, warp_mask);
@@ -87,7 +84,7 @@ __launch_bounds__(block_size) __global__
     index += block_size * gridDim.x;
   }
 
-  if (has_validity) {
+  if (has_nulls) {
     // sum all null counts across all warps
     size_type block_valid_count =
       single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_count);
