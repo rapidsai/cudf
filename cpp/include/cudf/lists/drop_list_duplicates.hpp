@@ -29,32 +29,26 @@ namespace lists {
  * @file
  */
 
-/*
- * @brief Flag to specify which entry to keep when removing the duplicate entries from a repeated
- * sequence.
- */
-enum class keep_policy {
-  UNDEFINED,  ///< An arbitrary entry at an unknown position in the repeated sequence will be kept.
-  FIRST,      ///< Keep the first entry (all duplicate entries after it will be removed).
-  LAST        ///< Keep the last entry (all duplicate entries before it will be removed).
-};
-
 /**
  * @brief Create new lists columns by extracting the key list entries and their corresponding value
  * entries from the given lists columns such that only the unique list entries in the `keys` column
  * will be copied.
  *
- * In some cases, there is only a need to remove duplicates entries from one input lists column. In
- * such situations, the input values lists column can be ignored.
- *
- * If the `values` lists column is given, the users are responsible to have the keys-values columns
- * having the same number of entries in each row. Otherwise, the results will be undefined.
- *
  * Given a pair of keys-values lists columns, each list entry in the keys column corresponds to a
  * list entry in the values column (i.e., the lists at each row index in both keys and values
  * columns have the same size). The entries in both columns are copied into an output pair of keys
- * and values lists columns (respectively), in a way such that the repeated key entries (and their
+ * and values lists columns (respectively), in a way such that the duplicate key entries (and their
  * corresponding value entries) are dropped out to keep only the entries with unique keys.
+ *
+ * In some cases, there is only a need to remove duplicates entries from one input lists column. In
+ * such situations, the input values lists column can be ignored. If the `values` lists column is
+ * given, the users are responsible to have the keys-values columns having the same number of
+ * entries in each row. Otherwise, the results will be undefined.
+ *
+ * When generating unique entries for the output, depending on the value of @p keep_option:
+ * - KEEP_FIRST: only the first of a sequence of duplicate entries is copied
+ * - KEEP_LAST: only the last of a sequence of duplicate entries is copied
+ * - KEEP_ANY_ONE: one entry at an undefined position in the sequence of duplicate entries is copied
  *
  * The order of entries within each list of the output lists columns are not guaranteed to be
  * preserved as in the input. In the current implementation, entries in the output keys lists are
@@ -69,25 +63,29 @@ enum class keep_policy {
  * @param nulls_equal Flag to specify whether null key entries should be considered equal.
  * @param nans_equal Flag to specify whether NaN key entries should be considered as equal value
  *        (only applicable for floating point data column).
- * @param keep_entry Flag to specify which entry will be kept when removing duplicate entries in the
- *        repeated sequence. This is only relevant when the values lists column is given.
+ * @param keep_option Flag to specify which entry will be kept when copying unique entries from
+ *        the duplicate entries. This is only relevant when the values lists column is given.
  * @param mr Device resource used to allocate memory.
  *
  * @code{.pseudo}
- * input  = { {1, 1, 2, 1, 3}, {4}, NULL, {}, {NULL, NULL, NULL, 5, 6, 6, 6, 5} }
- * output = { {1, 2, 3}, {4}, NULL, {}, {5, 6, NULL} }
+ * keys   = { {1,   1,   2,   3},   {4},   NULL, {}, {NULL, NULL, NULL, 5,   6,   6,   6,   5} }
+ * values = { {"a", "b", "c", "d"}, {"e"}, NULL, {}, {"NA", "NA", "NA", "f", "g", "h", "i", "j"} }
+ *
+ * [out_keys, out_values] = drop_list_duplicates(keys, values)
+ * out_keys   = { {1, 2, 3}, {4}, NULL, {}, {5, 6, NULL} }
+ * out_values = { {"a", "c", "d"}, {"e"}, NULL, {}, {"f", "g", "NA"} }
  * @endcode
  *
- * @return A pair of pointers storing to the columns resulted from removing duplicate key entries
+ * @return A pair of pointers storing the columns resulted from copying unique key entries
  *         and their corresponding values entries from the input lists columns. If the input values
- *         column is missing, its corresponding output will be a null pointer.
+ *         column is missing, its corresponding output pointer will be null.
  */
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates(
   lists_column_view const& keys,
   std::optional<lists_column_view> const& values,
   null_equality nulls_equal           = null_equality::EQUAL,
   nan_equality nans_equal             = nan_equality::UNEQUAL,
-  keep_policy keep_entry              = keep_policy::UNDEFINED,
+  duplicate_keep_option keep_option   = duplicate_keep_option::KEEP_ANY_ONE,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
