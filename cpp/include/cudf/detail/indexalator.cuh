@@ -525,7 +525,7 @@ struct indexalator_factory {
       iter = indexalator_factory::make_input_iterator(input);
     }
 
-    __device__ thrust::pair<size_type, bool> operator()(size_type i) const
+    __device__ thrust::pair<size_type, bool> operator()(size_type) const
     {
       return {*iter, is_null};
     }
@@ -593,7 +593,7 @@ struct indexalator_factory {
       iter = indexalator_factory::make_input_iterator(input);
     }
 
-    __device__ thrust::optional<size_type> operator()(size_type i) const
+    __device__ thrust::optional<size_type> operator()(size_type) const
     {
       return is_null ? thrust::nullopt : thrust::make_optional(*iter);
     }
