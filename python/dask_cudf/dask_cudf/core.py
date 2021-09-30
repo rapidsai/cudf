@@ -298,15 +298,15 @@ class DataFrame(_Frame, dd.core.DataFrame):
             return _parallel_var(self, meta, skipna, split_every, out)
 
     def repartition(self, *args, **kwargs):
-        """ Wraps dask.dataframe DataFrame.repartition method.
+        """Wraps dask.dataframe DataFrame.repartition method.
         Uses DataFrame.shuffle if `columns=` is specified.
         """
         # TODO: Remove this function in future(0.17 release)
         columns = kwargs.pop("columns", None)
         if columns:
             warnings.warn(
-                "The column argument will be removed from repartition in "
-                " future versions of dask_cudf. Use DataFrame.shuffle().",
+                "The columns argument will be removed from repartition in "
+                "future versions of dask_cudf. Use DataFrame.shuffle().",
                 DeprecationWarning,
             )
             warnings.warn(

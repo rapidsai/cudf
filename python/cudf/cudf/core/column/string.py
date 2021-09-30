@@ -4595,7 +4595,7 @@ class StringMethods(ColumnMethods):
         This function requires about 21x the number of character bytes
         in the input strings column as working memory.
 
-        ``ser.str.subword_tokenize`` will be depreciated in future versions.
+        ``Series.str.subword_tokenize`` will be deprecated in future versions.
         Use ``cudf.core.subword_tokenizer.SubwordTokenizer`` instead.
 
         Parameters
@@ -4669,14 +4669,13 @@ class StringMethods(ColumnMethods):
         array([[0, 0, 2],
                [1, 0, 1]], dtype=uint32)
         """
-        warning_message = (
-            "`ser.str.subword_tokenize` API will be depreciated"
-            " in future versions of cudf.\n"
-            "Use `cudf.core.subword_tokenizer.SubwordTokenizer` "
-            "instead"
+        warnings.warn(
+            "`Series.str.subword_tokenize` will be deprecated "
+            "in future versions of cudf.\n"
+            "Use `cudf.core.subword_tokenizer.SubwordTokenizer` instead.",
+            FutureWarning,
         )
 
-        warnings.warn(warning_message, FutureWarning)
         tokens, masks, metadata = libstrings.subword_tokenize_vocab_file(
             self._column,
             hash_file,
