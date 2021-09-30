@@ -353,8 +353,8 @@ TYPED_TEST(Sort, WithSlicedStructColumn)
   // clang-format on
   auto struct_col_view{struct_col->view()};
   table_view input{{struct_col_view}};
-  auto sliced_columns = cudf::split(struct_col_view, std::vector<size_type>{3});
-  auto sliced_tables  = cudf::split(input, std::vector<size_type>{3});
+  auto sliced_columns = cudf::split(struct_col_view, {3});
+  auto sliced_tables  = cudf::split(input, {3});
   std::vector<order> column_order{order::ASCENDING};
   /*
         asce_null_first   sliced[3:]
@@ -414,9 +414,9 @@ TYPED_TEST(Sort, SlicedColumns)
   auto col1 = cudf::test::strings_column_wrapper{names.begin(), names.end(), string_valids.begin()};
   // clang-format on
   table_view input{{col1, col2}};
-  auto sliced_columns1 = cudf::split(col1, std::vector<size_type>{3});
-  auto sliced_columns2 = cudf::split(col1, std::vector<size_type>{3});
-  auto sliced_tables   = cudf::split(input, std::vector<size_type>{3});
+  auto sliced_columns1 = cudf::split(col1, {3});
+  auto sliced_columns2 = cudf::split(col1, {3});
+  auto sliced_tables   = cudf::split(input, {3});
   std::vector<order> column_order{order::ASCENDING, order::ASCENDING};
 
   // normal

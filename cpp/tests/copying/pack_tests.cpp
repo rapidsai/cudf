@@ -491,7 +491,7 @@ TEST_F(PackUnpackTest, NestedSliced)
     cudf::test::structs_column_wrapper e({_a, _b, _c}, {1, 1, 1, 0, 1, 1, 1, 0});
     cudf::test::structs_column_wrapper s({a, b, c, d, e}, {1, 1, 0, 1, 1, 1, 1, 1});
 
-    auto split = cudf::split(s, std::vector<cudf::size_type>{2, 5});
+    auto split = cudf::split(s, {2, 5});
 
     this->run_test(cudf::table_view({split[0]}));
     this->run_test(cudf::table_view({split[1]}));
@@ -535,7 +535,7 @@ TEST_F(PackUnpackTest, SlicedEmpty)
 
   cudf::table_view t({a, b, c, d});
 
-  auto sliced = cudf::split(t, std::vector<cudf::size_type>{0});
+  auto sliced = cudf::split(t, {0});
   this->run_test(sliced[0]);
 }
 

@@ -173,19 +173,19 @@ TEST_F(SortListsInt, Sliced)
   using T = int;
   LCW<T> l1{{3, 2, 1, 4}, {7, 5, 6}, {8, 9}, {10}};
 
-  auto sliced_list = cudf::slice(l1, std::vector<cudf::size_type>{0, 4})[0];
+  auto sliced_list = cudf::slice(l1, {0, 4})[0];
   auto results     = sort_lists(lists_column_view{sliced_list}, {}, {});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), LCW<T>{{1, 2, 3, 4}, {5, 6, 7}, {8, 9}, {10}});
 
-  sliced_list = cudf::slice(l1, std::vector<cudf::size_type>{1, 4})[0];
+  sliced_list = cudf::slice(l1, {1, 4})[0];
   results     = sort_lists(lists_column_view{sliced_list}, {}, {});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), LCW<T>{{5, 6, 7}, {8, 9}, {10}});
 
-  sliced_list = cudf::slice(l1, std::vector<cudf::size_type>{1, 2})[0];
+  sliced_list = cudf::slice(l1, {1, 2})[0];
   results     = sort_lists(lists_column_view{sliced_list}, {}, {});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), LCW<T>{{5, 6, 7}});
 
-  sliced_list = cudf::slice(l1, std::vector<cudf::size_type>{0, 2})[0];
+  sliced_list = cudf::slice(l1, {0, 2})[0];
   results     = sort_lists(lists_column_view{sliced_list}, {}, {});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), LCW<T>{{1, 2, 3, 4}, {5, 6, 7}});
 }

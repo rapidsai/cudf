@@ -309,26 +309,26 @@ TYPED_TEST(ConcatenateListElementsTypedTest, SlicedColumnsInputNoNull)
                                      ListsCol{{12, 13, 14, 15}, {16}, {17}}};
 
   {
-    auto const col     = cudf::slice(col_original, std::vector<cudf::size_type>{0, 3})[0];
+    auto const col     = cudf::slice(col_original, {0, 3})[0];
     auto const results = cudf::lists::concatenate_list_elements(col);
     auto const expected =
       ListsCol{{1, 2, 3, 2, 3}, {3, 4, 5, 6, 5, 6, 7}, {7, 7, 7, 7, 8, 1, 0, 1}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, verbosity);
   }
   {
-    auto const col      = cudf::slice(col_original, std::vector<cudf::size_type>{1, 4})[0];
+    auto const col      = cudf::slice(col_original, {1, 4})[0];
     auto const results  = cudf::lists::concatenate_list_elements(col);
     auto const expected = ListsCol{{3, 4, 5, 6, 5, 6, 7}, {7, 7, 7, 7, 8, 1, 0, 1}, {9, 10, 11}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, verbosity);
   }
   {
-    auto const col      = cudf::slice(col_original, std::vector<cudf::size_type>{2, 5})[0];
+    auto const col      = cudf::slice(col_original, {2, 5})[0];
     auto const results  = cudf::lists::concatenate_list_elements(col);
     auto const expected = ListsCol{{7, 7, 7, 7, 8, 1, 0, 1}, {9, 10, 11}, {}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, verbosity);
   }
   {
-    auto const col      = cudf::slice(col_original, std::vector<cudf::size_type>{3, 6})[0];
+    auto const col      = cudf::slice(col_original, {3, 6})[0];
     auto const results  = cudf::lists::concatenate_list_elements(col);
     auto const expected = ListsCol{{9, 10, 11}, {}, {12, 13, 14, 15, 16, 17}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, verbosity);
@@ -351,7 +351,7 @@ TYPED_TEST(ConcatenateListElementsTypedTest, SlicedColumnsInputWithNulls)
   auto const col_original = build_lists_col(row0, row1, row2, row3, row4, row5);
 
   {
-    auto const col     = cudf::slice(col_original, std::vector<cudf::size_type>{0, 3})[0];
+    auto const col     = cudf::slice(col_original, {0, 3})[0];
     auto const results = cudf::lists::concatenate_list_elements(col);
     auto const expected =
       ListsCol{ListsCol{{null, 2, 3, 2, 3}, null_at(0)},
@@ -360,7 +360,7 @@ TYPED_TEST(ConcatenateListElementsTypedTest, SlicedColumnsInputWithNulls)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, verbosity);
   }
   {
-    auto const col     = cudf::slice(col_original, std::vector<cudf::size_type>{1, 4})[0];
+    auto const col     = cudf::slice(col_original, {1, 4})[0];
     auto const results = cudf::lists::concatenate_list_elements(col);
     auto const expected =
       ListsCol{ListsCol{{3, null, null, 6, 5, 6, null, 7, null}, nulls_at({1, 2, 6, 8})},
@@ -369,14 +369,14 @@ TYPED_TEST(ConcatenateListElementsTypedTest, SlicedColumnsInputWithNulls)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, verbosity);
   }
   {
-    auto const col     = cudf::slice(col_original, std::vector<cudf::size_type>{2, 5})[0];
+    auto const col     = cudf::slice(col_original, {2, 5})[0];
     auto const results = cudf::lists::concatenate_list_elements(col);
     auto const expected =
       ListsCol{ListsCol{{7, 7, 7, 7, 8, null, 0, 1}, null_at(5)}, ListsCol{9, 10, 11}, ListsCol{}};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, verbosity);
   }
   {
-    auto const col     = cudf::slice(col_original, std::vector<cudf::size_type>{3, 6})[0];
+    auto const col     = cudf::slice(col_original, {3, 6})[0];
     auto const results = cudf::lists::concatenate_list_elements(col);
     auto const expected =
       ListsCol{ListsCol{9, 10, 11}, ListsCol{}, ListsCol{{12, null, 14, 15, 16, 17}, null_at(1)}};
@@ -406,7 +406,7 @@ TEST_F(ConcatenateListElementsTest, SlicedStringsColumnsInputWithNulls)
   auto const col_original = build_lists_col(row0, row1, row2, row3);
 
   {
-    auto const col      = cudf::slice(col_original, std::vector<cudf::size_type>{0, 2})[0];
+    auto const col      = cudf::slice(col_original, {0, 2})[0];
     auto const results  = cudf::lists::concatenate_list_elements(col);
     auto const expected = StrListsCol{StrListsCol{{"Tomato",
                                                    "" /*NULL*/,
@@ -432,7 +432,7 @@ TEST_F(ConcatenateListElementsTest, SlicedStringsColumnsInputWithNulls)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, verbosity);
   }
   {
-    auto const col      = cudf::slice(col_original, std::vector<cudf::size_type>{1, 3})[0];
+    auto const col      = cudf::slice(col_original, {1, 3})[0];
     auto const results  = cudf::lists::concatenate_list_elements(col);
     auto const expected = StrListsCol{StrListsCol{{"Banana",
                                                    "" /*NULL*/,
@@ -456,7 +456,7 @@ TEST_F(ConcatenateListElementsTest, SlicedStringsColumnsInputWithNulls)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, verbosity);
   }
   {
-    auto const col      = cudf::slice(col_original, std::vector<cudf::size_type>{2, 4})[0];
+    auto const col      = cudf::slice(col_original, {2, 4})[0];
     auto const results  = cudf::lists::concatenate_list_elements(col);
     auto const expected = StrListsCol{StrListsCol{{"Coconut",
                                                    "Orange",
@@ -476,7 +476,7 @@ TEST_F(ConcatenateListElementsTest, SlicedStringsColumnsInputWithNulls)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *results, verbosity);
   }
   {
-    auto const col     = cudf::slice(col_original, std::vector<cudf::size_type>{2, 4})[0];
+    auto const col     = cudf::slice(col_original, {2, 4})[0];
     auto const results = cudf::lists::concatenate_list_elements(
       col, cudf::lists::concatenate_null_policy::NULLIFY_OUTPUT_ROW);
     auto const expected = StrListsCol{{StrListsCol{{"Coconut",

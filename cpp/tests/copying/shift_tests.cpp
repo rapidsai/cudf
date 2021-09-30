@@ -221,7 +221,7 @@ TEST_F(ShiftTestNonFixedWidth, StringsShiftTest)
     cudf::test::strings_column_wrapper({"ccc", "ddddddé", "", "xx", "xx"}, {1, 1, 0, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_left, *results);
 
-  auto sliced = cudf::slice(input, std::vector<cudf::size_type>{1, 4}).front();
+  auto sliced = cudf::slice(input, {1, 4}).front();
 
   results           = cudf::shift(sliced, 1, fill);
   auto sliced_right = cudf::test::strings_column_wrapper({"xx", "bb", "ccc"});

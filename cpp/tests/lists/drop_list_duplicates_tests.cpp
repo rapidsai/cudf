@@ -274,10 +274,10 @@ TYPED_TEST(DropListDuplicatesTypedTest, NonNullInputTests)
   // Sliced list column.
   auto const lists_original =
     ListsCol{{1, 2, 3, 2, 3, 2, 3, 2, 3}, {3, 2, 1, 4, 1}, {5}, {10, 8, 9}, {6, 7}};
-  auto const lists1 = cudf::slice(lists_original, std::vector<cudf::size_type>{0, 5})[0];
-  auto const lists2 = cudf::slice(lists_original, std::vector<cudf::size_type>{1, 5})[0];
-  auto const lists3 = cudf::slice(lists_original, std::vector<cudf::size_type>{1, 3})[0];
-  auto const lists4 = cudf::slice(lists_original, std::vector<cudf::size_type>{0, 3})[0];
+  auto const lists1 = cudf::slice(lists_original, {0, 5})[0];
+  auto const lists2 = cudf::slice(lists_original, {1, 5})[0];
+  auto const lists3 = cudf::slice(lists_original, {1, 3})[0];
+  auto const lists4 = cudf::slice(lists_original, {0, 3})[0];
 
   {
     auto const expected = ListsCol{{1, 2, 3}, {1, 2, 3, 4}, {5}, {8, 9, 10}, {6, 7}};
@@ -431,10 +431,9 @@ TYPED_TEST(DropListDuplicatesTypedTest, InputListsOfStructsNoNull)
       cudf::make_lists_column(3, IntsCol{0, 8, 16, 24}.release(), get_structs().release(), 0, {});
     auto const expected_original = cudf::make_lists_column(
       3, IntsCol{0, 5, 11, 17}.release(), get_structs_expected().release(), 0, {});
-    auto const lists = cudf::slice(lists_original->view(), std::vector<cudf::size_type>{1, 3})[0];
-    auto const expected =
-      cudf::slice(expected_original->view(), std::vector<cudf::size_type>{1, 3})[0];
-    auto const results = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
+    auto const lists    = cudf::slice(lists_original->view(), {1, 3})[0];
+    auto const expected = cudf::slice(expected_original->view(), {1, 3})[0];
+    auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 }
@@ -534,10 +533,9 @@ TYPED_TEST(DropListDuplicatesTypedTest, InputListsOfStructsHaveNull)
       cudf::make_lists_column(3, IntsCol{0, 8, 16, 24}.release(), get_structs().release(), 0, {});
     auto const expected_original = cudf::make_lists_column(
       3, IntsCol{0, 6, 12, 20}.release(), get_structs_expected().release(), 0, {});
-    auto const lists = cudf::slice(lists_original->view(), std::vector<cudf::size_type>{1, 3})[0];
-    auto const expected =
-      cudf::slice(expected_original->view(), std::vector<cudf::size_type>{1, 3})[0];
-    auto const results = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
+    auto const lists    = cudf::slice(lists_original->view(), {1, 3})[0];
+    auto const expected = cudf::slice(expected_original->view(), {1, 3})[0];
+    auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
   }
 }

@@ -530,8 +530,7 @@ TEST_F(OrcWriterTest, SlicedTable)
   expected_metadata.column_metadata[4].set_name("lists");
   expected_metadata.column_metadata[5].set_name("structs");
 
-  auto expected_slice =
-    cudf::slice(expected, std::vector<cudf::size_type>{2, static_cast<cudf::size_type>(num_rows)});
+  auto expected_slice = cudf::slice(expected, {2, static_cast<cudf::size_type>(num_rows)});
 
   auto filepath = temp_env->get_temp_filepath("SlicedTable.orc");
   cudf_io::orc_writer_options out_opts =

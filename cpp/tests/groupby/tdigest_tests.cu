@@ -520,8 +520,8 @@ TEST_F(TDigestMergeTest, Simple)
                keys->mutable_view().template end<int>(),
                0);
 
-  auto split_values = cudf::split(*values, std::vector<cudf::size_type>{250000, 500000});
-  auto split_keys   = cudf::split(*keys, std::vector<cudf::size_type>{250000, 500000});
+  auto split_values = cudf::split(*values, {250000, 500000});
+  auto split_keys   = cudf::split(*keys, {250000, 500000});
 
   int const delta = 1000;
 

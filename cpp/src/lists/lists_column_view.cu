@@ -61,7 +61,7 @@ column_view lists_column_view::get_sliced_child(rmm::cuda_stream_view stream) co
   // I need to do a split and return the front.
   if (size() < offsets().size() - 1) {
     size_type child_offset = cudf::detail::get_value<size_type>(offsets(), size(), stream);
-    return cudf::detail::slice(child(), std::vector<size_type>{0, child_offset}, stream).front();
+    return cudf::detail::slice(child(), {0, child_offset}, stream).front();
   }
 
   // otherwise just return the child directly

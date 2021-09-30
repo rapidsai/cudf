@@ -401,7 +401,7 @@ TYPED_TEST(TypedSuperimposeTest, NestedStruct_ChildNullable_ParentNullable)
 
 cudf::column_view slice_off_first_and_last_rows(cudf::column_view const& col)
 {
-  return cudf::slice(col, std::vector<cudf::size_type>{1, col.size() - 1})[0];
+  return cudf::slice(col, {1, col.size() - 1})[0];
 }
 
 void mark_row_as_null(cudf::mutable_column_view const& col, size_type row_index)

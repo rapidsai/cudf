@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include <initializer_list>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/device_vector.hpp>

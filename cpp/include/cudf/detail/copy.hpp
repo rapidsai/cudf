@@ -24,6 +24,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <initializer_list>
+#include <type_traits>
+
 namespace cudf {
 namespace detail {
 /**
@@ -75,6 +78,9 @@ ColumnView slice(ColumnView const& input, cudf::size_type begin, cudf::size_type
 std::vector<column_view> slice(column_view const& input,
                                host_span<size_type const> indices,
                                rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+std::vector<column_view> slice(column_view const& input,
+                               std::initializer_list<size_type> indices,
+                               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @copydoc cudf::slice(table_view const&, host_span<size_type const>)
@@ -83,6 +89,9 @@ std::vector<column_view> slice(column_view const& input,
  */
 std::vector<table_view> slice(table_view const& input,
                               host_span<size_type const> indices,
+                              rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+std::vector<table_view> slice(table_view const& input,
+                              std::initializer_list<size_type> indices,
                               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
@@ -93,6 +102,9 @@ std::vector<table_view> slice(table_view const& input,
 std::vector<column_view> split(column_view const& input,
                                host_span<size_type const> splits,
                                rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+std::vector<column_view> split(column_view const& input,
+                               std::initializer_list<size_type> splits,
+                               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @copydoc cudf::split(table_view const&, host_span<size_type const>)
@@ -101,6 +113,9 @@ std::vector<column_view> split(column_view const& input,
  */
 std::vector<table_view> split(table_view const& input,
                               host_span<size_type const> splits,
+                              rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+std::vector<table_view> split(table_view const& input,
+                              std::initializer_list<size_type> splits,
                               rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**

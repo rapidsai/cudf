@@ -338,7 +338,7 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnNoNullWithScalarRepeatTime
 
   // Sliced the first half of the column.
   {
-    auto const sliced_strs = cudf::slice(strs, std::vector<cudf::size_type>{0, 3})[0];
+    auto const sliced_strs = cudf::slice(strs, {0, 3})[0];
     auto const results = cudf::strings::repeat_strings(cudf::strings_column_view(sliced_strs), 2);
     auto const expected_strs = strs_col{"0a0b0c0a0b0c", "abcxyzabcxyz", "xyzéééxyzééé"};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
@@ -346,7 +346,7 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnNoNullWithScalarRepeatTime
 
   // Sliced the middle of the column.
   {
-    auto const sliced_strs = cudf::slice(strs, std::vector<cudf::size_type>{1, 3})[0];
+    auto const sliced_strs = cudf::slice(strs, {1, 3})[0];
     auto const results = cudf::strings::repeat_strings(cudf::strings_column_view(sliced_strs), 2);
     auto const expected_strs = strs_col{"abcxyzabcxyz", "xyzéééxyzééé"};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
@@ -354,7 +354,7 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnNoNullWithScalarRepeatTime
 
   // Sliced the second half of the column.
   {
-    auto const sliced_strs = cudf::slice(strs, std::vector<cudf::size_type>{2, 5})[0];
+    auto const sliced_strs = cudf::slice(strs, {2, 5})[0];
     auto const results = cudf::strings::repeat_strings(cudf::strings_column_view(sliced_strs), 2);
     auto const expected_strs = strs_col{"xyzéééxyzééé", "áááááá", "íííí"};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
@@ -370,8 +370,8 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnNoNullWithColumnRepeatTime
 
   // Sliced the first half of the column.
   {
-    auto const sliced_strs    = cudf::slice(strs, std::vector<cudf::size_type>{0, 3})[0];
-    auto const sliced_rtimes  = cudf::slice(repeat_times, std::vector<cudf::size_type>{0, 3})[0];
+    auto const sliced_strs    = cudf::slice(strs, {0, 3})[0];
+    auto const sliced_rtimes  = cudf::slice(repeat_times, {0, 3})[0];
     auto const sliced_strs_cv = cudf::strings_column_view(sliced_strs);
     auto const expected_strs  = strs_col{"0a0b0c", "abcxyzabcxyz", "xyzéééxyzéééxyzééé"};
 
@@ -390,8 +390,8 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnNoNullWithColumnRepeatTime
 
   // Sliced the middle of the column.
   {
-    auto const sliced_strs    = cudf::slice(strs, std::vector<cudf::size_type>{1, 3})[0];
-    auto const sliced_rtimes  = cudf::slice(repeat_times, std::vector<cudf::size_type>{1, 3})[0];
+    auto const sliced_strs    = cudf::slice(strs, {1, 3})[0];
+    auto const sliced_rtimes  = cudf::slice(repeat_times, {1, 3})[0];
     auto const sliced_strs_cv = cudf::strings_column_view(sliced_strs);
     auto const expected_strs  = strs_col{"abcxyzabcxyz", "xyzéééxyzéééxyzééé"};
 
@@ -410,8 +410,8 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnNoNullWithColumnRepeatTime
 
   // Sliced the second half of the column.
   {
-    auto const sliced_strs    = cudf::slice(strs, std::vector<cudf::size_type>{2, 5})[0];
-    auto const sliced_rtimes  = cudf::slice(repeat_times, std::vector<cudf::size_type>{2, 5})[0];
+    auto const sliced_strs    = cudf::slice(strs, {2, 5})[0];
+    auto const sliced_rtimes  = cudf::slice(repeat_times, {2, 5})[0];
     auto const sliced_strs_cv = cudf::strings_column_view(sliced_strs);
     auto const expected_strs = strs_col{"xyzéééxyzéééxyzééé", "áááááá", "íííííí"};
 
@@ -577,7 +577,7 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnWithNullsWithScalarRepeatT
 
   // Sliced the first half of the column.
   {
-    auto const sliced_strs = cudf::slice(strs, std::vector<cudf::size_type>{0, 3})[0];
+    auto const sliced_strs = cudf::slice(strs, {0, 3})[0];
     auto const results = cudf::strings::repeat_strings(cudf::strings_column_view(sliced_strs), 2);
     auto const expected_strs = strs_col{{"0a0b0c0a0b0c", "" /*NULL*/, "abcxyzabcxyz"}, null_at(1)};
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_strs, *results, verbosity);
@@ -585,7 +585,7 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnWithNullsWithScalarRepeatT
 
   // Sliced the middle of the column.
   {
-    auto const sliced_strs = cudf::slice(strs, std::vector<cudf::size_type>{2, 7})[0];
+    auto const sliced_strs = cudf::slice(strs, {2, 7})[0];
     auto const results = cudf::strings::repeat_strings(cudf::strings_column_view(sliced_strs), 2);
     auto const expected_strs = strs_col{
       {"abcxyzabcxyz", "" /*NULL*/, "xyzéééxyzééé", "" /*NULL*/, "áááááá"}, nulls_at({1, 3})};
@@ -594,7 +594,7 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnWithNullsWithScalarRepeatT
 
   // Sliced the second half of the column.
   {
-    auto const sliced_strs = cudf::slice(strs, std::vector<cudf::size_type>{6, 10})[0];
+    auto const sliced_strs = cudf::slice(strs, {6, 10})[0];
     auto const results = cudf::strings::repeat_strings(cudf::strings_column_view(sliced_strs), 2);
     auto const expected_strs = strs_col{"áááááá", "íííí", "", "Hello WorldHello World"};
 
@@ -624,8 +624,8 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnWithNullsWithColumnRepeatT
 
   // Sliced the first half of the column.
   {
-    auto const sliced_strs    = cudf::slice(strs, std::vector<cudf::size_type>{0, 3})[0];
-    auto const sliced_rtimes  = cudf::slice(repeat_times, std::vector<cudf::size_type>{0, 3})[0];
+    auto const sliced_strs    = cudf::slice(strs, {0, 3})[0];
+    auto const sliced_rtimes  = cudf::slice(repeat_times, {0, 3})[0];
     auto const sliced_strs_cv = cudf::strings_column_view(sliced_strs);
     auto const expected_strs  = strs_col{{"0a0b0c", "" /*NULL*/, "" /*NULL*/}, nulls_at({1, 2})};
 
@@ -644,8 +644,8 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnWithNullsWithColumnRepeatT
 
   // Sliced the middle of the column.
   {
-    auto const sliced_strs    = cudf::slice(strs, std::vector<cudf::size_type>{2, 7})[0];
-    auto const sliced_rtimes  = cudf::slice(repeat_times, std::vector<cudf::size_type>{2, 7})[0];
+    auto const sliced_strs    = cudf::slice(strs, {2, 7})[0];
+    auto const sliced_rtimes  = cudf::slice(repeat_times, {2, 7})[0];
     auto const sliced_strs_cv = cudf::strings_column_view(sliced_strs);
     auto const expected_strs  = strs_col{
       {"" /*NULL*/, "" /*NULL*/, "" /*NULL*/, "" /*NULL*/, "áááááá"}, nulls_at({0, 1, 2, 3})};
@@ -665,8 +665,8 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnWithNullsWithColumnRepeatT
 
   // Sliced the second half of the column, output has nulls.
   {
-    auto const sliced_strs    = cudf::slice(strs, std::vector<cudf::size_type>{6, 10})[0];
-    auto const sliced_rtimes  = cudf::slice(repeat_times, std::vector<cudf::size_type>{6, 10})[0];
+    auto const sliced_strs    = cudf::slice(strs, {6, 10})[0];
+    auto const sliced_rtimes  = cudf::slice(repeat_times, {6, 10})[0];
     auto const sliced_strs_cv = cudf::strings_column_view(sliced_strs);
     auto const expected_strs  = strs_col{{"áááááá", "" /*NULL*/, "", ""}, null_at(1)};
 
@@ -686,8 +686,8 @@ TYPED_TEST(RepeatStringsTypedTest, SlicedStringsColumnWithNullsWithColumnRepeatT
   // Sliced the second half of the column, output does not have null.
   // Since the input has nulls, the output column is nullable (but doesn't have nulls).
   {
-    auto const sliced_strs    = cudf::slice(strs, std::vector<cudf::size_type>{8, 10})[0];
-    auto const sliced_rtimes  = cudf::slice(repeat_times, std::vector<cudf::size_type>{8, 10})[0];
+    auto const sliced_strs    = cudf::slice(strs, {8, 10})[0];
+    auto const sliced_rtimes  = cudf::slice(repeat_times, {8, 10})[0];
     auto const sliced_strs_cv = cudf::strings_column_view(sliced_strs);
     auto const expected_strs  = strs_col{"", ""};
 

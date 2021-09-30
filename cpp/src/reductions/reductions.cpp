@@ -69,7 +69,7 @@ struct reduce_dispatch_functor {
       case aggregation::MEDIAN: {
         auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream, mr);
         auto valid_sorted_indices =
-          split(*sorted_indices, std::vector<size_type>{col.size() - col.null_count()}, stream)[0];
+          split(*sorted_indices, {col.size() - col.null_count()}, stream)[0];
         auto col_ptr =
           quantile(col, {0.5}, interpolation::LINEAR, valid_sorted_indices, true, stream, mr);
         return get_element(*col_ptr, 0, stream, mr);
@@ -80,7 +80,7 @@ struct reduce_dispatch_functor {
                      "Reduction quantile accepts only one quantile value");
         auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream, mr);
         auto valid_sorted_indices =
-          split(*sorted_indices, std::vector<size_type>{col.size() - col.null_count()}, stream)[0];
+          split(*sorted_indices, {col.size() - col.null_count()}, stream)[0];
 
         auto col_ptr = quantile(col,
                                 quantile_agg->_quantiles,

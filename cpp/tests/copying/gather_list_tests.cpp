@@ -346,7 +346,7 @@ TYPED_TEST(GatherTestListTyped, GatherSliced)
       {{50, 50, 50, 50}, {6, 13}},
       {{70, 70, 70, 70}, {80}},
     };
-    auto split_a = cudf::split(a, std::vector<cudf::size_type>{3});
+    auto split_a = cudf::split(a, {3});
     cudf::table_view tbl0({split_a[0]});
     cudf::table_view tbl1({split_a[1]});
 
@@ -388,7 +388,7 @@ TYPED_TEST(GatherTestListTyped, GatherSliced)
       {{{{{10, 20}, valids}}, {LCW<T>{30}}, {{40, 50}, {60, 70, 80}}}, valids},
       {{{{10, 20, 30}}, {LCW<T>{30}}, {{{20, 30}, valids}, {62, 72, 82}}}, valids}};
 
-    auto sliced = cudf::slice(list, std::vector<cudf::size_type>{0, 1, 2, 5, 5, 7});
+    auto sliced = cudf::slice(list, {0, 1, 2, 5, 5, 7});
 
     // gather from slice 0
     {

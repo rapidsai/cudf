@@ -409,6 +409,7 @@ std::unique_ptr<column> shift(
  * @return Vector of views of `input` indicated by the ranges in `indices`.
  */
 std::vector<column_view> slice(column_view const& input, host_span<size_type const> indices);
+std::vector<column_view> slice(column_view const& input, std::initializer_list<size_type> indices);
 
 /**
  * @brief Slices a `table_view` into a set of `table_view`s according to a set of indices.
@@ -443,6 +444,7 @@ std::vector<column_view> slice(column_view const& input, host_span<size_type con
  * @return Vector of views of `input` indicated by the ranges in `indices`.
  */
 std::vector<table_view> slice(table_view const& input, host_span<size_type const> indices);
+std::vector<table_view> slice(table_view const& input, std::initializer_list<size_type> indices);
 
 /**
  * @brief Splits a `column_view` into a set of `column_view`s according to a set of indices
@@ -477,6 +479,7 @@ std::vector<table_view> slice(table_view const& input, host_span<size_type const
  * @return The set of requested views of `input` indicated by the `splits`.
  */
 std::vector<column_view> split(column_view const& input, host_span<size_type const> splits);
+std::vector<column_view> split(column_view const& input, std::initializer_list<size_type> indices);
 
 /**
  * @brief Splits a `table_view` into a set of `table_view`s according to a set of indices
@@ -513,6 +516,7 @@ std::vector<column_view> split(column_view const& input, host_span<size_type con
  * @return The set of requested views of `input` indicated by the `splits`.
  */
 std::vector<table_view> split(table_view const& input, host_span<size_type const> splits);
+std::vector<table_view> split(table_view const& input, std::initializer_list<size_type> indices);
 
 /**
  * @brief Column data in a serialized format

@@ -603,10 +603,10 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedColumnsInputNoNull)
   using ListsCol = cudf::test::lists_column_wrapper<TypeParam>;
 
   auto const col      = ListsCol{{1, 2, 3}, {2, 3}, {3, 4, 5, 6}, {5, 6}, {}, {7}}.release();
-  auto const col1     = cudf::slice(col->view(), std::vector<cudf::size_type>{0, 3})[0];
-  auto const col2     = cudf::slice(col->view(), std::vector<cudf::size_type>{1, 4})[0];
-  auto const col3     = cudf::slice(col->view(), std::vector<cudf::size_type>{2, 5})[0];
-  auto const col4     = cudf::slice(col->view(), std::vector<cudf::size_type>{3, 6})[0];
+  auto const col1     = cudf::slice(col->view(), {0, 3})[0];
+  auto const col2     = cudf::slice(col->view(), {1, 4})[0];
+  auto const col3     = cudf::slice(col->view(), {2, 5})[0];
+  auto const col4     = cudf::slice(col->view(), {3, 6})[0];
   auto const expected = ListsCol{
     ListsCol{1, 2, 3},
     ListsCol{2, 3},
@@ -637,11 +637,11 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedColumnsInputWithNulls)
                              ListsCol{8, 9, 10}},
                             nulls_at({1, 3, 4})}
                      .release();
-  auto const col1     = cudf::slice(col->view(), std::vector<cudf::size_type>{0, 3})[0];
-  auto const col2     = cudf::slice(col->view(), std::vector<cudf::size_type>{1, 4})[0];
-  auto const col3     = cudf::slice(col->view(), std::vector<cudf::size_type>{2, 5})[0];
-  auto const col4     = cudf::slice(col->view(), std::vector<cudf::size_type>{3, 6})[0];
-  auto const col5     = cudf::slice(col->view(), std::vector<cudf::size_type>{4, 7})[0];
+  auto const col1     = cudf::slice(col->view(), {0, 3})[0];
+  auto const col2     = cudf::slice(col->view(), {1, 4})[0];
+  auto const col3     = cudf::slice(col->view(), {2, 5})[0];
+  auto const col4     = cudf::slice(col->view(), {3, 6})[0];
+  auto const col5     = cudf::slice(col->view(), {4, 7})[0];
   auto const expected = ListsCol{{ListsCol{{null, 2, 3}, null_at(0)},
                                   ListsCol{}, /*NULL*/
                                   ListsCol{{3, null, 5, 6}, null_at(1)},
@@ -669,10 +669,10 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedColumnsInputNullableChild)
 
   auto const col =
     ListsCol{{1, 2, 3}, ListsCol{{null, 3}, null_at(0)}, {3, 4, 5, 6}, {5, 6}, {}, {7}}.release();
-  auto const col1     = cudf::slice(col->view(), std::vector<cudf::size_type>{0, 3})[0];
-  auto const col2     = cudf::slice(col->view(), std::vector<cudf::size_type>{1, 4})[0];
-  auto const col3     = cudf::slice(col->view(), std::vector<cudf::size_type>{2, 5})[0];
-  auto const col4     = cudf::slice(col->view(), std::vector<cudf::size_type>{3, 6})[0];
+  auto const col1     = cudf::slice(col->view(), {0, 3})[0];
+  auto const col2     = cudf::slice(col->view(), {1, 4})[0];
+  auto const col3     = cudf::slice(col->view(), {2, 5})[0];
+  auto const col4     = cudf::slice(col->view(), {3, 6})[0];
   auto const expected = ListsCol{
     ListsCol{1, 2, 3},
     ListsCol{{null, 3}, null_at(0)},
@@ -762,8 +762,8 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedInputListsOfListsNoNull)
     ListsCol{ListsCol{11, 11, 11}, ListsCol{22}, ListsCol{33, 33, 33}}  // don't care
   };
 
-  auto const col1 = cudf::slice(col1_original, std::vector<cudf::size_type>{2, 5})[0];
-  auto const col2 = cudf::slice(col2_original, std::vector<cudf::size_type>{0, 3})[0];
+  auto const col1 = cudf::slice(col1_original, {2, 5})[0];
+  auto const col2 = cudf::slice(col2_original, {0, 3})[0];
   auto const expected =
     ListsCol{ListsCol{ListsCol{1, 2, 3}, ListsCol{4, 5, 6}},
              ListsCol{ListsCol{11, 12, 13}, ListsCol{14, 15, 16}},
@@ -815,8 +815,8 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedInputListsOfListsWithNulls)
              ListsCol{{22, null, null}, nulls_at({1, 2})}}  // don't care
   };
 
-  auto const col1 = cudf::slice(col1_original, std::vector<cudf::size_type>{3, 6})[0];
-  auto const col2 = cudf::slice(col2_original, std::vector<cudf::size_type>{2, 5})[0];
+  auto const col1 = cudf::slice(col1_original, {3, 6})[0];
+  auto const col2 = cudf::slice(col2_original, {2, 5})[0];
   auto const expected =
     ListsCol{
       {ListsCol{ListsCol{{null, 2, 3}, null_at(0)}, ListsCol{{4, null, null}, nulls_at({1, 2})}},
@@ -946,8 +946,8 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedInputListsOfStructsNoNull)
   auto const expected = cudf::make_lists_column(
     6, IntCol{0, 1, 4, 6, 7, 9, 10}.release(), structs_expected.release(), 0, {});
 
-  auto const col1    = cudf::slice(col1_original->view(), std::vector<cudf::size_type>{1, 4})[0];
-  auto const col2    = cudf::slice(col2_original->view(), std::vector<cudf::size_type>{0, 3})[0];
+  auto const col1    = cudf::slice(col1_original->view(), {1, 4})[0];
+  auto const col2    = cudf::slice(col2_original->view(), {0, 3})[0];
   auto const results = cudf::interleave_columns(TView{{col1, col2}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *results, verbosity);
 }
@@ -993,8 +993,8 @@ TYPED_TEST(ListsColumnsInterleaveTypedTest, SlicedInputListsOfStructsWithNulls)
   auto const col2_original =
     cudf::make_lists_column(4, IntCol{0, 1, 4, 5, 6}.release(), structs2.release(), 0, {});
 
-  auto const col1     = cudf::slice(col1_original->view(), std::vector<cudf::size_type>{1, 4})[0];
-  auto const col2     = cudf::slice(col2_original->view(), std::vector<cudf::size_type>{1, 4})[0];
+  auto const col1     = cudf::slice(col1_original->view(), {1, 4})[0];
+  auto const col2     = cudf::slice(col2_original->view(), {1, 4})[0];
   auto const expected = cudf::make_lists_column(
     6, IntCol{0, 1, 4, 6, 7, 9, 10}.release(), structs_expected.release(), 0, {});
   auto const results = cudf::interleave_columns(TView{{col1, col2}});
@@ -1015,10 +1015,10 @@ TEST_F(ListsColumnsInterleaveTest, SlicedStringsColumnsInputWithNulls)
        StrListsCol{{"Deer" /*NULL*/, "Snake" /*NULL*/, "Horse" /*NULL*/}, all_nulls()}}, /*NULL*/
       null_at(5)}
       .release();
-  auto const col1 = cudf::slice(col->view(), std::vector<cudf::size_type>{0, 3})[0];
-  auto const col2 = cudf::slice(col->view(), std::vector<cudf::size_type>{1, 4})[0];
-  auto const col3 = cudf::slice(col->view(), std::vector<cudf::size_type>{2, 5})[0];
-  auto const col4 = cudf::slice(col->view(), std::vector<cudf::size_type>{3, 6})[0];
+  auto const col1 = cudf::slice(col->view(), {0, 3})[0];
+  auto const col2 = cudf::slice(col->view(), {1, 4})[0];
+  auto const col3 = cudf::slice(col->view(), {2, 5})[0];
+  auto const col4 = cudf::slice(col->view(), {3, 6})[0];
   auto const expected =
     StrListsCol{
       {StrListsCol{{"Tomato", "" /*NULL*/, "Apple"}, null_at(1)},
@@ -1304,8 +1304,8 @@ TYPED_TEST(StructsColumnsInterleaveTypedTest, SlicedColumnsInputNoNull)
     return StructsCol{{child1, child2, child3}};
   }();
 
-  auto const structs1 = cudf::slice(structs1_original, std::vector<cudf::size_type>{2, 5})[0];
-  auto const structs2 = cudf::slice(structs2_original, std::vector<cudf::size_type>{1, 4})[0];
+  auto const structs1 = cudf::slice(structs1_original, {2, 5})[0];
+  auto const structs2 = cudf::slice(structs2_original, {1, 4})[0];
   auto const results  = cudf::interleave_columns(TView{{structs1, structs2}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *results, verbosity);
 }
@@ -1363,9 +1363,9 @@ TYPED_TEST(StructsColumnsInterleaveTypedTest, SlicedColumnsInputWithNulls)
     return StructsCol{{child1, child2, child3}, nulls_at({0, 5, 13})};
   }();
 
-  auto const structs1 = cudf::slice(structs1_original, std::vector<cudf::size_type>{2, 7})[0];
-  auto const structs2 = cudf::slice(structs2_original, std::vector<cudf::size_type>{0, 5})[0];
-  auto const structs3 = cudf::slice(structs3_original, std::vector<cudf::size_type>{3, 8})[0];
+  auto const structs1 = cudf::slice(structs1_original, {2, 7})[0];
+  auto const structs2 = cudf::slice(structs2_original, {0, 5})[0];
+  auto const structs3 = cudf::slice(structs3_original, {3, 8})[0];
   auto const results  = cudf::interleave_columns(TView{{structs1, structs2, structs3}});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *results, verbosity);
 }

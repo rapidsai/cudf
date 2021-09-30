@@ -193,17 +193,17 @@ TYPED_TEST(ColumnViewShallowTests, shallow_hash_slice)
   auto col_view = cudf::column_view{*col};
   // column_view, sliced[0, size)  = same hash (for split too)
   {
-    auto col_sliced = cudf::slice(col_view, std::vector<cudf::size_type>{0, col_view.size()});
+    auto col_sliced = cudf::slice(col_view, {0, col_view.size()});
     EXPECT_EQ(shallow_hash(col_view), shallow_hash(col_sliced[0]));
-    auto col_split = cudf::split(col_view, std::vector<cudf::size_type>{0});
+    auto col_split = cudf::split(col_view, {0});
     EXPECT_NE(shallow_hash(col_view), shallow_hash(col_split[0]));
     EXPECT_EQ(shallow_hash(col_view), shallow_hash(col_split[1]));
   }
   // column_view, sliced[n:]       = diff hash (for split too)
   {
-    auto col_sliced = cudf::slice(col_view, std::vector<cudf::size_type>{1, col_view.size()});
+    auto col_sliced = cudf::slice(col_view, {1, col_view.size()});
     EXPECT_NE(shallow_hash(col_view), shallow_hash(col_sliced[0]));
-    auto col_split = cudf::split(col_view, std::vector<cudf::size_type>{1});
+    auto col_split = cudf::split(col_view, {1});
     EXPECT_NE(shallow_hash(col_view), shallow_hash(col_split[0]));
     EXPECT_NE(shallow_hash(col_view), shallow_hash(col_split[1]));
   }
@@ -364,17 +364,17 @@ TYPED_TEST(ColumnViewShallowTests, is_shallow_equivalent_slice)
   auto col_view = cudf::column_view{*col};
   // column_view, sliced[0, size)  = same hash (for split too)
   {
-    auto col_sliced = cudf::slice(col_view, std::vector<cudf::size_type>{0, col_view.size()});
+    auto col_sliced = cudf::slice(col_view, {0, col_view.size()});
     EXPECT_TRUE(is_shallow_equivalent(col_view, col_sliced[0]));
-    auto col_split = cudf::split(col_view, std::vector<cudf::size_type>{0});
+    auto col_split = cudf::split(col_view, {0});
     EXPECT_FALSE(is_shallow_equivalent(col_view, col_split[0]));
     EXPECT_TRUE(is_shallow_equivalent(col_view, col_split[1]));
   }
   // column_view, sliced[n:]       = diff hash (for split too)
   {
-    auto col_sliced = cudf::slice(col_view, std::vector<cudf::size_type>{1, col_view.size()});
+    auto col_sliced = cudf::slice(col_view, {1, col_view.size()});
     EXPECT_FALSE(is_shallow_equivalent(col_view, col_sliced[0]));
-    auto col_split = cudf::split(col_view, std::vector<cudf::size_type>{1});
+    auto col_split = cudf::split(col_view, {1});
     EXPECT_FALSE(is_shallow_equivalent(col_view, col_split[0]));
     EXPECT_FALSE(is_shallow_equivalent(col_view, col_split[1]));
   }

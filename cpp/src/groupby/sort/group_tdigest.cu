@@ -712,14 +712,13 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
       std::vector<table_view> unmerged_tdigests;
       unmerged_tdigests.reserve(num_tdigests);
       auto offset_iter = std::next(h_inner_offsets.begin(), tdigest_start);
-      std::transform(
-        offset_iter,
-        offset_iter + num_tdigests,
-        std::next(offset_iter),
-        std::back_inserter(unmerged_tdigests),
-        [&](auto start, auto end) {
-          return cudf::detail::slice(tdigests_unsliced, std::vector<size_type>{start, end}, stream);
-        });
+      std::transform(offset_iter,
+                     offset_iter + num_tdigests,
+                     std::next(offset_iter),
+                     std::back_inserter(unmerged_tdigests),
+                     [&](auto start, auto end) {
+                       return cudf::detail::slice(tdigests_unsliced, {start, end}, stream);
+                     });
 
       // merge
       return cudf::detail::merge(unmerged_tdigests, {0}, {order::ASCENDING}, {}, stream, mr);

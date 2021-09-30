@@ -231,8 +231,8 @@ TYPED_TEST(GroupbyM2TypedTest, SlicedColumnsInput)
     },
     nulls_at({10, 11})};
 
-  auto const keys = cudf::slice(keys_original, std::vector<cudf::size_type>{10, 24})[0];
-  auto const vals = cudf::slice(vals_original, std::vector<cudf::size_type>{10, 24})[0];
+  auto const keys = cudf::slice(keys_original, {10, 24})[0];
+  auto const vals = cudf::slice(vals_original, {10, 24})[0];
 
   auto const [out_keys, out_M2s] = compute_M2(keys, vals);
   auto const expected_keys       = keys_col<T>{1, 2, 3, 4};

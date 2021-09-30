@@ -494,8 +494,7 @@ TEST_P(ToArrowTestSlice, SliceTest)
   auto start           = std::get<0>(GetParam());
   auto end             = std::get<1>(GetParam());
 
-  auto sliced_cudf_table =
-    cudf::slice(cudf_table_view, std::vector<cudf::size_type>{start, end})[0];
+  auto sliced_cudf_table    = cudf::slice(cudf_table_view, {start, end})[0];
   auto expected_arrow_table = arrow_table->Slice(start, end - start);
   auto struct_meta          = cudf::column_metadata{"f"};
   struct_meta.children_meta = {{"integral"}, {"string"}};

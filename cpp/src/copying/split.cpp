@@ -19,6 +19,8 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/utilities/error.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
+
 #include <algorithm>
 
 namespace cudf {
@@ -63,6 +65,20 @@ std::vector<cudf::table_view> split(cudf::table_view const& input,
   return split(input, input.column(0).size(), splits, stream);
 }
 
+std::vector<column_view> split(column_view const& input,
+                               std::initializer_list<size_type> splits,
+                               rmm::cuda_stream_view stream)
+{
+  return split(input, host_span<size_type const>(splits.begin(), splits.size()), stream);
+}
+
+std::vector<table_view> split(table_view const& input,
+                              std::initializer_list<size_type> splits,
+                              rmm::cuda_stream_view stream)
+{
+  return detail::split(input, host_span<size_type const>(splits.begin(), splits.size()), stream);
+}
+
 }  // namespace detail
 
 std::vector<cudf::column_view> split(cudf::column_view const& input,
@@ -74,6 +90,18 @@ std::vector<cudf::column_view> split(cudf::column_view const& input,
 
 std::vector<cudf::table_view> split(cudf::table_view const& input,
                                     host_span<size_type const> splits)
+{
+  CUDF_FUNC_RANGE();
+  return detail::split(input, splits, rmm::cuda_stream_default);
+}
+
+std::vector<column_view> split(column_view const& input, std::initializer_list<size_type> splits)
+{
+  CUDF_FUNC_RANGE();
+  return detail::split(input, splits, rmm::cuda_stream_default);
+}
+
+std::vector<table_view> split(table_view const& input, std::initializer_list<size_type> splits)
 {
   CUDF_FUNC_RANGE();
   return detail::split(input, splits, rmm::cuda_stream_default);

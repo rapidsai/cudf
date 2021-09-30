@@ -192,7 +192,7 @@ TYPED_TEST(TypedStructGatherTest, TestSlicedStructsColumnGatherNoNulls)
     return structs_column_wrapper{{child1, child2}};
   }();
 
-  auto const structs    = cudf::slice(structs_original, std::vector<cudf::size_type>{4, 10})[0];
+  auto const structs    = cudf::slice(structs_original, {4, 10})[0];
   auto const gather_map = fixed_width_column_wrapper<int32_t>{1, 5, 3};
   auto const result     = cudf::gather(cudf::table_view{{structs}}, gather_map)->get_column(0);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.view(), expected);
@@ -229,7 +229,7 @@ TYPED_TEST(TypedStructGatherTest, TestSlicedStructsColumnGatherWithNulls)
     return structs_column_wrapper{{child1, child2}, null_at(3)};
   }();
 
-  auto const structs    = cudf::slice(structs_original, std::vector<cudf::size_type>{4, 10})[0];
+  auto const structs    = cudf::slice(structs_original, {4, 10})[0];
   auto const gather_map = fixed_width_column_wrapper<int32_t>{1, 5, 4, 2};
   auto const result     = cudf::gather(cudf::table_view{{structs}}, gather_map)->get_column(0);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.view(), expected);
