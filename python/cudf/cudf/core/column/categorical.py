@@ -24,20 +24,19 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import ColumnLike, Dtype, ScalarLike
+from cudf.api.types import is_categorical_dtype, is_interval_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils.dtypes import (
-    is_categorical_dtype,
-    is_interval_dtype,
     is_mixed_with_object_dtype,
     min_signed_type,
     min_unsigned_type,
 )
 
 if TYPE_CHECKING:
-    from cudf._typing import SeriesOrIndex
+    from cudf._typing import SeriesOrIndex, SeriesOrSingleColumnIndex
     from cudf.core.column import (
         ColumnBase,
         DatetimeColumn,
@@ -104,7 +103,7 @@ class CategoricalAccessor(ColumnMethods):
 
     _column: CategoricalColumn
 
-    def __init__(self, parent: SeriesOrIndex):
+    def __init__(self, parent: SeriesOrSingleColumnIndex):
         if not is_categorical_dtype(parent.dtype):
             raise AttributeError(
                 "Can only use .cat accessor with a 'category' dtype"
@@ -802,7 +801,7 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def __setitem__(self, key, value):
-        if cudf.utils.dtypes.is_scalar(
+        if cudf.api.types.is_scalar(
             value
         ) and cudf._lib.scalar._is_null_host_scalar(value):
             to_add_categories = 0
@@ -817,7 +816,7 @@ class CategoricalColumn(column.ColumnBase):
                 "category, set the categories first"
             )
 
-        if cudf.utils.dtypes.is_scalar(value):
+        if cudf.api.types.is_scalar(value):
             value = self._encode(value) if value is not None else value
         else:
             value = cudf.core.column.as_column(value).astype(self.dtype)

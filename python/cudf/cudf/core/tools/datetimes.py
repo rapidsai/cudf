@@ -15,9 +15,9 @@ from cudf import _lib as libcudf
 from cudf._lib.strings.convert.convert_integers import (
     is_integer as cpp_is_integer,
 )
+from cudf.api.types import is_integer, is_scalar
 from cudf.core import column
 from cudf.core.index import as_index
-from cudf.utils.dtypes import is_integer, is_scalar
 
 _unit_dtype_map = {
     "ns": "datetime64[ns]",

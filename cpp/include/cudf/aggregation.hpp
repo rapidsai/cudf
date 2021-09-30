@@ -87,7 +87,9 @@ class aggregation {
     CUDA,            ///< CUDA UDF based reduction
     MERGE_LISTS,     ///< merge multiple lists values into one list
     MERGE_SETS,      ///< merge multiple lists values into one list then drop duplicate entries
-    MERGE_M2         ///< merge partial values of M2 aggregation
+    MERGE_M2,        ///< merge partial values of M2 aggregation
+    TDIGEST,         ///< create a tdigest from a set of input values
+    MERGE_TDIGEST    ///< create a tdigest by merging multiple tdigests together
   };
 
   aggregation() = delete;
@@ -118,6 +120,7 @@ class rolling_aggregation : public virtual aggregation {
 
  protected:
   rolling_aggregation() {}
+  rolling_aggregation(aggregation::Kind a) : aggregation{a} {}
 };
 
 /**
@@ -203,6 +206,8 @@ std::unique_ptr<Base> make_m2_aggregation();
  *
  * @param ddof Delta degrees of freedom. The divisor used in calculation of
  *             `variance` is `N - ddof`, where `N` is the population size.
+ *
+ * @throw cudf::logic_error if input type is chrono or compound types.
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_variance_aggregation(size_type ddof = 1);
@@ -212,6 +217,8 @@ std::unique_ptr<Base> make_variance_aggregation(size_type ddof = 1);
  *
  * @param ddof Delta degrees of freedom. The divisor used in calculation of
  *             `std` is `N - ddof`, where `N` is the population size.
+ *
+ * @throw cudf::logic_error if input type is chrono or compound types.
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_std_aggregation(size_type ddof = 1);
@@ -487,6 +494,81 @@ std::unique_ptr<Base> make_merge_sets_aggregation(null_equality nulls_equal = nu
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_merge_m2_aggregation();
+
+/**
+ * @brief Factory to create a TDIGEST aggregation
+ *
+ * Produces a tdigest (https://arxiv.org/pdf/1902.04023.pdf) column from input values.
+ * The input aggregation values are expected to be fixed-width numeric types.
+ *
+ * The tdigest column produced is of the following structure:
+ *
+ * struct {
+ *   // centroids for the digest
+ *   list {
+ *    struct {
+ *      double    // mean
+ *      double    // weight
+ *    },
+ *    ...
+ *   }
+ *   // these are from the input stream, not the centroids. they are used
+ *   // during the percentile_approx computation near the beginning or
+ *   // end of the quantiles
+ *   double       // min
+ *   double       // max
+ * }
+ *
+ * Each output row is a single tdigest.  The length of the row is the "size" of the
+ * tdigest, each element of which represents a weighted centroid (mean, weight).
+ *
+ * @param max_centroids Parameter controlling compression level and accuracy on subsequent
+ * queries on the output tdigest data.  `max_centroids` places an upper bound on the size of
+ * the computed tdigests: A value of 1000 will result in a tdigest containing no
+ * more than 1000 centroids (32 bytes each). Higher result in more accurate tdigest information.
+ *
+ * @returns A TDIGEST aggregation object.
+ */
+template <typename Base>
+std::unique_ptr<Base> make_tdigest_aggregation(int max_centroids = 1000);
+
+/**
+ * @brief Factory to create a MERGE_TDIGEST aggregation
+ *
+ * Merges the results from a previous aggregation resulting from a `make_tdigest_aggregation`
+ * or `make_merge_tdigest_aggregation` to produce a new a tdigest
+ * (https://arxiv.org/pdf/1902.04023.pdf) column.
+ *
+ * The tdigest column produced is of the following structure:
+ *
+ * struct {
+ *   // centroids for the digest
+ *   list {
+ *    struct {
+ *      double    // mean
+ *      double    // weight
+ *    },
+ *    ...
+ *   }
+ *   // these are from the input stream, not the centroids. they are used
+ *   // during the percentile_approx computation near the beginning or
+ *   // end of the quantiles
+ *   double       // min
+ *   double       // max
+ * }
+ *
+ * Each output row is a single tdigest.  The length of the row is the "size" of the
+ * tdigest, each element of which represents a weighted centroid (mean, weight).
+ *
+ * @param max_centroids Parameter controlling compression level and accuracy on subsequent
+ * queries on the output tdigest data.  `max_centroids` places an upper bound on the size of
+ * the computed tdigests: A value of 1000 will result in a tdigest containing no
+ * more than 1000 centroids (32 bytes each). Higher result in more accurate tdigest information.
+ *
+ * @returns A MERGE_TDIGEST aggregation object.
+ */
+template <typename Base>
+std::unique_ptr<Base> make_merge_tdigest_aggregation(int max_centroids = 1000);
 
 /** @} */  // end of group
 }  // namespace cudf

@@ -362,9 +362,7 @@ struct dispatch_from_integers_fn {
                                std::move(offsets_column),
                                std::move(chars_column),
                                integers.null_count(),
-                               std::move(null_mask),
-                               stream,
-                               mr);
+                               std::move(null_mask));
   }
 
   // non-integral types throw an exception

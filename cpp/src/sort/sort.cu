@@ -26,7 +26,7 @@
 
 namespace cudf {
 namespace detail {
-std::unique_ptr<column> sorted_order(table_view input,
+std::unique_ptr<column> sorted_order(table_view const& input,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,
                                      rmm::cuda_stream_view stream,
@@ -75,7 +75,7 @@ struct inplace_column_sort_fn {
   }
 };
 
-std::unique_ptr<table> sort(table_view input,
+std::unique_ptr<table> sort(table_view const& input,
                             std::vector<order> const& column_order,
                             std::vector<null_order> const& null_precedence,
                             rmm::cuda_stream_view stream,
@@ -101,7 +101,7 @@ std::unique_ptr<table> sort(table_view input,
 
 }  // namespace detail
 
-std::unique_ptr<column> sorted_order(table_view input,
+std::unique_ptr<column> sorted_order(table_view const& input,
                                      std::vector<order> const& column_order,
                                      std::vector<null_order> const& null_precedence,
                                      rmm::mr::device_memory_resource* mr)
@@ -110,7 +110,7 @@ std::unique_ptr<column> sorted_order(table_view input,
   return detail::sorted_order(input, column_order, null_precedence, rmm::cuda_stream_default, mr);
 }
 
-std::unique_ptr<table> sort(table_view input,
+std::unique_ptr<table> sort(table_view const& input,
                             std::vector<order> const& column_order,
                             std::vector<null_order> const& null_precedence,
                             rmm::mr::device_memory_resource* mr)

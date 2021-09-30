@@ -33,7 +33,7 @@ from cudf._lib.cpp.types cimport (
     size_type,
 )
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport Table, table_view_from_table
 from cudf._lib.types cimport (
     underlying_type_t_null_order,
     underlying_type_t_order,
@@ -63,9 +63,7 @@ def count_elements(Column col):
 
 
 def explode_outer(Table tbl, int explode_column_idx, bool ignore_index=False):
-    cdef table_view c_table_view = (
-        tbl.data_view() if ignore_index else tbl.view()
-    )
+    cdef table_view c_table_view = table_view_from_table(tbl, ignore_index)
     cdef size_type c_explode_column_idx = explode_column_idx
 
     cdef unique_ptr[table] c_result
@@ -168,7 +166,7 @@ def contains_scalar(Column col, object py_search_key):
 def concatenate_rows(Table tbl):
     cdef unique_ptr[column] c_result
 
-    cdef table_view c_table_view = tbl.view()
+    cdef table_view c_table_view = table_view_from_table(tbl)
 
     with nogil:
         c_result = move(cpp_concatenate_rows(

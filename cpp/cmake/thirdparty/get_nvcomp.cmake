@@ -14,25 +14,26 @@
 # limitations under the License.
 #=============================================================================
 
-function(find_and_configure_cudf VERSION)
-    CPMFindPackage(NAME cudf
-        VERSION         ${VERSION}
-        GIT_REPOSITORY  https://github.com/rapidsai/cudf.git
-        GIT_TAG         branch-${VERSION}
-        GIT_SHALLOW     TRUE
-        SOURCE_SUBDIR   cpp
-        OPTIONS         "BUILD_TESTS OFF"
-                        "BUILD_BENCHMARKS OFF")
-    if(cudf_ADDED)
-        set(cudf_ADDED TRUE PARENT_SCOPE)
+function(find_and_configure_nvcomp VERSION)
+
+    # Find or install nvcomp
+    rapids_cpm_find(nvcomp ${VERSION}
+        GLOBAL_TARGETS     nvcomp::nvcomp
+        CPM_ARGS
+            GITHUB_REPOSITORY  NVIDIA/nvcomp
+            GIT_TAG            aa003db89e052e4ce408910ff17e1054b7c43b7d
+            OPTIONS            "BUILD_STATIC ON"
+                               "BUILD_TESTS OFF"
+                               "BUILD_BENCHMARKS OFF"
+                               "BUILD_EXAMPLES OFF"
+    )
+
+    if(NOT TARGET nvcomp::nvcomp)
+        add_library(nvcomp::nvcomp ALIAS nvcomp)
     endif()
+
 endfunction()
 
-set(CUDA_KAFKA_MIN_VERSION_cudf "${CUDA_KAFKA_VERSION_MAJOR}.${CUDA_KAFKA_VERSION_MINOR}.${CUDA_KAFKA_VERSION_PATCH}")
-find_and_configure_cudf(${CUDA_KAFKA_MIN_VERSION_cudf})
+set(CUDF_MIN_VERSION_nvCOMP 2.1.0)
 
-if(cudf_ADDED)
-    # Since we are building cudf as part of ourselves we need
-    # to enable the CUDA language in the top-most scope
-    enable_language(CUDA)
-endif()
+find_and_configure_nvcomp(${CUDF_MIN_VERSION_nvCOMP})

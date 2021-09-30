@@ -26,6 +26,7 @@
 #include <cudf/lists/contains.hpp>
 #include <cudf/lists/count_elements.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
+#include <cudf/lists/drop_list_duplicates.hpp>
 #include <cudf/lists/extract.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/lists/sorting.hpp>
@@ -288,6 +289,25 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_scan(JNIEnv *env, jclass,
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_approxPercentile(JNIEnv *env, jclass clazz,
+                                                                        jlong input_column,
+                                                                        jlong percentiles_column) {
+  JNI_NULL_CHECK(env, input_column, "input_column native handle is null", 0);
+  JNI_NULL_CHECK(env, percentiles_column, "percentiles_column native handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *n_input_column = reinterpret_cast<cudf::column_view *>(input_column);
+    std::unique_ptr<cudf::structs_column_view> input_view =
+        std::make_unique<cudf::structs_column_view>(*n_input_column);
+    cudf::column_view *n_percentiles_column =
+        reinterpret_cast<cudf::column_view *>(percentiles_column);
+    std::unique_ptr<cudf::column> result =
+        cudf::percentile_approx(*input_view, *n_percentiles_column);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_quantile(JNIEnv *env, jclass clazz,
                                                                 jlong input_column,
                                                                 jint quantile_method,
@@ -390,6 +410,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_extractListElement(JNIEnv
     cudf::lists_column_view lcv(*cv);
 
     std::unique_ptr<cudf::column> ret = cudf::lists::extract_list_element(lcv, index);
+    return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicates(JNIEnv *env, jclass,
+                                                                          jlong column_view) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view const *cv = reinterpret_cast<cudf::column_view const *>(column_view);
+    cudf::lists_column_view lcv(*cv);
+
+    std::unique_ptr<cudf::column> ret = cudf::lists::drop_list_duplicates(lcv);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);

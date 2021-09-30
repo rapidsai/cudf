@@ -14,25 +14,24 @@
 # limitations under the License.
 #=============================================================================
 
-function(find_and_configure_cucollections)
+function(find_and_configure_gtest)
+    include(${rapids-cmake-dir}/cpm/gtest.cmake)
 
-    if(TARGET cuco::cuco)
-        return()
+    # Find or install GoogleTest
+    rapids_cpm_gtest(BUILD_EXPORT_SET cudf-testing-exports
+                     INSTALL_EXPORT_SET cudf-testing-exports)
+
+    if(GTest_ADDED)
+        rapids_export(BUILD GTest
+          VERSION ${GTest_VERSION}
+          EXPORT_SET GTestTargets
+          GLOBAL_TARGETS gtest gmock gtest_main gmock_main
+          NAMESPACE GTest::)
+
+        include("${rapids-cmake-dir}/export/find_package_root.cmake")
+        rapids_export_find_package_root(BUILD GTest [=[${CMAKE_CURRENT_LIST_DIR}]=] cudf-testing-exports)
     endif()
 
-    # Find or install cuCollections
-    CPMFindPackage(NAME   cuco
-        GITHUB_REPOSITORY NVIDIA/cuCollections
-        GIT_TAG           0d602ae21ea4f38d23ed816aa948453d97b2ee4e
-        OPTIONS           "BUILD_TESTS OFF"
-                          "BUILD_BENCHMARKS OFF"
-                          "BUILD_EXAMPLES OFF"
-    )
-
-    set(CUCO_INCLUDE_DIR "${cuco_SOURCE_DIR}/include" PARENT_SCOPE)
-
-    # Make sure consumers of cudf can also see cuco::cuco target
-    fix_cmake_global_defaults(cuco::cuco)
 endfunction()
 
-find_and_configure_cucollections()
+find_and_configure_gtest()

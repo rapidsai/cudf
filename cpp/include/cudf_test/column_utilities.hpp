@@ -38,6 +38,8 @@ enum class debug_output_level {
   QUIET             // no debug output
 };
 
+constexpr size_type default_ulp = 4;
+
 /**
  * @brief Verifies the property equality of two columns.
  *
@@ -93,12 +95,15 @@ bool expect_columns_equal(cudf::column_view const& lhs,
  * @param lhs The first column
  * @param rhs The second column
  * @param verbosity Level of debug output verbosity
+ * @param fp_ulps # of ulps of tolerance to allow when comparing
+ * floating point values
  *
  * @returns True if the columns (and their properties) are equivalent, false otherwise
  */
 bool expect_columns_equivalent(cudf::column_view const& lhs,
                                cudf::column_view const& rhs,
-                               debug_output_level verbosity = debug_output_level::FIRST_ERROR);
+                               debug_output_level verbosity = debug_output_level::FIRST_ERROR,
+                               size_type fp_ulps            = cudf::test::default_ulp);
 
 /**
  * @brief Verifies the bitwise equality of two device memory buffers.

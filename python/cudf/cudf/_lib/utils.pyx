@@ -1,5 +1,6 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
+import numpy as np
 import pyarrow as pa
 
 import cudf
@@ -22,18 +23,17 @@ try:
 except ImportError:
     import json
 
-from cudf.utils.dtypes import (
-    cudf_dtypes_to_pandas_dtypes,
+from cudf.api.types import (
     is_categorical_dtype,
     is_decimal_dtype,
     is_list_dtype,
     is_struct_dtype,
-    np_to_pa_dtype,
 )
+from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes, np_to_pa_dtype
 
 PARQUET_META_TYPE_MAP = {
     str(cudf_dtype): str(pandas_dtype)
-    for cudf_dtype, pandas_dtype in cudf_dtypes_to_pandas_dtypes.items()
+    for cudf_dtype, pandas_dtype in np_dtypes_to_pandas_dtypes.items()
 }
 
 
@@ -42,22 +42,6 @@ cdef vector[column_view] make_column_views(object columns):
     views.reserve(len(columns))
     for col in columns:
         views.push_back((<Column> col).view())
-    return views
-
-
-cdef vector[table_view] make_table_views(object tables):
-    cdef vector[table_view] views
-    views.reserve(len(tables))
-    for tbl in tables:
-        views.push_back((<Table> tbl).view())
-    return views
-
-
-cdef vector[table_view] make_table_data_views(object tables):
-    cdef vector[table_view] views
-    views.reserve(len(tables))
-    for tbl in tables:
-        views.push_back((<Table> tbl).data_view())
     return views
 
 
@@ -98,7 +82,14 @@ cpdef generate_pandas_metadata(Table table, index):
         ):
             types.append(col.dtype.to_arrow())
         else:
-            types.append(np_to_pa_dtype(col.dtype))
+            # A boolean element takes 8 bits in cudf and 1 bit in
+            # pyarrow. To make sure the cudf format is interperable
+            # in arrow, we use `int8` type when converting from a
+            # cudf boolean array.
+            if col.dtype.type == np.bool_:
+                types.append(pa.int8())
+            else:
+                types.append(np_to_pa_dtype(col.dtype))
 
     # Indexes
     if index is not False:
@@ -142,7 +133,15 @@ cpdef generate_pandas_metadata(Table table, index):
                 elif is_list_dtype(idx):
                     types.append(col.dtype.to_arrow())
                 else:
-                    types.append(np_to_pa_dtype(idx.dtype))
+                    # A boolean element takes 8 bits in cudf and 1 bit in
+                    # pyarrow. To make sure the cudf format is interperable
+                    # in arrow, we use `int8` type when converting from a
+                    # cudf boolean array.
+                    if idx.dtype.type == np.bool_:
+                        types.append(pa.int8())
+                    else:
+                        types.append(np_to_pa_dtype(idx.dtype))
+
                 index_levels.append(idx)
             col_names.append(name)
             index_descriptors.append(descr)
@@ -235,7 +234,7 @@ cdef data_from_unique_ptr(
     cdef vector[unique_ptr[column]] c_columns = move(c_tbl.get().release())
     cdef vector[unique_ptr[column]].iterator it = c_columns.begin()
 
-    cdef int i
+    cdef size_t i
 
     columns = [Column.from_unique_ptr(move(dereference(it+i)))
                for i in range(c_columns.size())]
@@ -251,7 +250,7 @@ cdef data_from_unique_ptr(
         # Frame factories we may want to look for a less dissonant approach
         # that does not impose performance penalties. The same applies to
         # data_from_table_view below.
-        cudf.Index._from_data(
+        cudf.core.index._index_from_data(
             {
                 name: columns[i]
                 for i, name in enumerate(index_names)
@@ -301,7 +300,8 @@ cdef data_from_table_view(
                 )
             )
             column_idx += 1
-        index = cudf.Index._from_data(dict(zip(index_names, index_columns)))
+        index = cudf.core.index._index_from_data(
+            dict(zip(index_names, index_columns)))
 
     # Construct the data dict
     cdef size_type source_column_idx = 0

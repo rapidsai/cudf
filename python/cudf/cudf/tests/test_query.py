@@ -141,7 +141,7 @@ def test_query_splitted_combine():
 
     # Should equal to just querying the original GDF
     expect = gdf.query(expr).to_pandas()
-    assert_eq(got, expect)
+    assert_eq(got, expect, check_index_type=True)
 
 
 def test_query_empty_frames():

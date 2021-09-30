@@ -270,9 +270,7 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
                                    std::move(offsets),
                                    std::move(output_chars),
                                    input.size() - valid_counter.value(stream),
-                                   std::move(valid_bits),
-                                   stream,
-                                   mr);
+                                   std::move(valid_bits));
 }
 
 template <>
