@@ -1981,9 +1981,6 @@ class Frame:
         result._copy_type_metadata(self)
         return result
 
-    def _reverse(self):
-        return self.__class__._from_data(*libcudf.copying.reverse(self))
-
     def _fill(self, fill_values, begin, end, inplace):
         col_and_fill = zip(self._columns, fill_values)
 
