@@ -497,7 +497,13 @@ def find_common_type(dtypes):
     # Early exit for categoricals since they're not hashable and therefore
     # can't be put in a set.
     if any(cudf.api.types.is_categorical_dtype(dtype) for dtype in dtypes):
-        if all(cudf.api.types.is_categorical_dtype(dtype) for dtype in dtypes):
+        if all(
+            (
+                cudf.api.types.is_categorical_dtype(dtype)
+                and (not dtype.ordered if hasattr(dtype, "ordered") else True)
+            )
+            for dtype in dtypes
+        ):
             if len(set(dtype._categories.dtype for dtype in dtypes)) == 1:
                 return cudf.CategoricalDtype(
                     cudf.core.column.concat_columns(
@@ -506,7 +512,7 @@ def find_common_type(dtypes):
                 )
             else:
                 raise ValueError(
-                    "Only categories of the same underlying type "
+                    "Only unordered categories of the same underlying type "
                     "may be coerced to a common type."
                 )
         else:

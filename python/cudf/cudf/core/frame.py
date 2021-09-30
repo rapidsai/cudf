@@ -592,14 +592,13 @@ class Frame(libcudf.table.Table):
             another array. Note that ``copy=False`` does not *ensure* that
             ``to_cupy()`` is no-copy. Rather, ``copy=True`` ensure that
             a copy is made, even if not strictly necessary.
+        na_value : Any, default None
+            The value to use for missing values. The default value depends on
+            dtype and the dtypes of the DataFrame columns.
 
         Returns
         -------
         cupy.ndarray
-
-        Notes
-        -----
-        The na_value parameter is not currently supported.
         """
         return self._to_array(
             (lambda col: col.values.copy())
@@ -622,19 +621,17 @@ class Frame(libcudf.table.Table):
         ----------
         dtype : str or numpy.dtype, optional
             The dtype to pass to :meth:`numpy.asarray`.
-        copy : bool, default False
+        copy : bool, default True
             Whether to ensure that the returned value is not a view on
-            another array. Note that ``copy=False`` does not *ensure* that
-            ``to_cupy()`` is no-copy. Rather, ``copy=True`` ensure that
-            a copy is made, even if not strictly necessary.
+            another array. This parameter must be ``True`` since cuDF must copy
+            device memory to host to provide a numpy array.
+        na_value : Any, default None
+            The value to use for missing values. The default value depends on
+            dtype and the dtypes of the DataFrame columns.
 
         Returns
         -------
         numpy.ndarray
-
-        Notes
-        -----
-        The na_value parameter is not currently supported.
         """
         if not copy:
             raise ValueError(
