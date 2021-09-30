@@ -129,7 +129,6 @@ def set_missing_values(col, col_array):
 
 def _gpu_buffer_to_cupy(_buffer, _dtype):
     _k = _DtypeKind
-    print(f'buffer dtype: {_dtype[0]}')
     if _dtype[0] in (_k.INT, _k.UINT, _k.FLOAT, _k.CATEGORICAL):
         x = cp.fromDlpack(_buffer.__dlpack__())
     elif _dtype[0] == _k.BOOL: 
@@ -242,7 +241,7 @@ class _CuDFBuffer:
         """
         Buffer size in bytes.
         """
-        return self._x.data.mem.size
+        return self._x.size * self._x.dtype.itemsize
 
     @property
     def ptr(self) -> int:
@@ -577,25 +576,6 @@ class _CuDFColumn:
 
         return buffer, dtype
 
-    def _unpackbits(self, myarray, bitorder="big"):
-    
-        bitorder_op = {"big": '(myarray[i / 8] >> (7 - i % 8)) & 1;', 
-                        "little": '(myarray[i / 8] >> (i % 8)) & 1;'}
-        operation = bitorder_op.get(bitorder, None)
-        if operation == None:
-            raise KeyError(f"bitorder must be either 'big' or 'little' not '{bitorder}'")
-        _unpackbits_kernel = _core.ElementwiseKernel(
-        'raw uint8 myarray', 'T unpacked',
-        'unpacked = '+ operation,
-        'unpackbits_kernel'
-        )
-
-        if myarray.dtype != cp.uint8:
-            raise TypeError('Expected an input array of unsigned byte data type')
-
-        unpacked = cp.ndarray((myarray.size * 8), dtype=cp.uint8)
-        return _unpackbits_kernel(myarray, unpacked)
-
     def _get_validity_buffer(self) -> Tuple[_CuDFBuffer, Any]:
         """
         Return the buffer containing the mask values indicating missing data and
@@ -607,7 +587,7 @@ class _CuDFColumn:
         null, invalid = self.describe_null
         if null == 3:
             _k = _DtypeKind
-            bitmask = self._unpackbits(cp.asarray(self._col._column.mask), bitorder='little')[:len(self._col)]
+            bitmask = cp.asarray(self._col._column._get_mask_as_column().to_gpu_array(), dtype=cp.uint8)
             buffer = _CuDFBuffer(bitmask)
             dtype = (_k.UINT, 8, "C", "=")
             return buffer, dtype
@@ -629,32 +609,33 @@ class _CuDFColumn:
         Raises RuntimeError if the data buffer does not have an associated
         offsets buffer.
         """
-        _k = _DtypeKind
-        if self.dtype[0] == _k.STRING:
-            # For each string, we need to manually determine the next offset
-            values = self._col.to_numpy()
-            ptr = 0
-            offsets = [ptr]
-            for v in values:
-                # For missing values (in this case, `np.nan` values), we don't increment the pointer)
-                if type(v) == str:
-                    b = v.encode(encoding="utf-8")
-                    ptr += len(b)
+        # _k = _DtypeKind
+        # if self.dtype[0] == _k.STRING:
+        #     # For each string, we need to manually determine the next offset
+        #     values = self._col.to_numpy()
+        #     ptr = 0
+        #     offsets = [ptr]
+        #     for v in values:
+        #         # For missing values (in this case, `np.nan` values), we don't increment the pointer)
+        #         if type(v) == str:
+        #             b = v.encode(encoding="utf-8")
+        #             ptr += len(b)
 
-                offsets.append(ptr)
+        #         offsets.append(ptr)
 
-            # Convert the list of offsets to a NumPy array of signed 64-bit integers (note: Arrow allows the offsets array to be either `int32` or `int64`; here, we default to the latter)
-            buf = cp.asarray(offsets, dtype="int64")
+        #     # Convert the list of offsets to a NumPy array of signed 64-bit integers (note: Arrow allows the offsets array to be either `int32` or `int64`; here, we default to the latter)
+        #     buf = cp.asarray(offsets, dtype="int64")
 
-            # Convert the offsets to a Pandas "buffer" using the NumPy array as the backing store
-            buffer = _CuDFBuffer(buf)
+        #     # Convert the offsets to a Pandas "buffer" using the NumPy array as the backing store
+        #     buffer = _CuDFBuffer(buf)
 
-            # Assemble the buffer dtype info
-            dtype = (_k.INT, 64, 'l', "=")  # note: currently only support native endianness
-        else:
-            raise RuntimeError("This column has a fixed-length dtype so does not have an offsets buffer")
+        #     # Assemble the buffer dtype info
+        #     dtype = (_k.INT, 64, 'l', "=")  # note: currently only support native endianness
+        # else:
+        #     raise RuntimeError("This column has a fixed-length dtype so does not have an offsets buffer")
 
-        return buffer, dtype
+        # return buffer, dtype
+        pass
 
 class _CuDFDataFrame:
     """
@@ -720,7 +701,7 @@ class _CuDFDataFrame:
             raise ValueError("`names` is not a sequence")
 
         return _CuDFDataFrame(self._df.loc[:, names], self._nan_as_null,
-                                self.allow_copy)
+                                self._allow_copy)
 
     def get_chunks(self, n_chunks : Optional[int] = None) -> Iterable['_CuDFDataFrame']:
         """
