@@ -16,9 +16,7 @@
 
 #pragma once
 
-#include <limits>
-
-#include <cuda/std/chrono>
+#include <cudf/wrappers/durations.hpp>
 
 /**
  * @file timestamps.hpp
@@ -42,33 +40,37 @@ using timestamp = time_point<Duration>;
  */
 
 /**
- * @brief Type alias representing an int32_t duration of days since the unix
- * epoch.
+ * @brief Type alias representing a cudf::duration_D (int32_t) since the unix epoch.
  */
-using timestamp_D =
-  detail::timestamp<cuda::std::chrono::duration<int32_t, cuda::std::ratio<86400>>>;
+using timestamp_D = detail::timestamp<cudf::duration_D>;
 /**
- * @brief Type alias representing an int64_t duration of seconds since the
- * unix epoch.
+ * @brief Type alias representing a cudf::duration_h (int32_t) since the unix epoch.
  */
-using timestamp_s = detail::timestamp<cuda::std::chrono::duration<int64_t, cuda::std::ratio<1>>>;
+using timestamp_h = detail::timestamp<cudf::duration_h>;
 /**
- * @brief Type alias representing an int64_t duration of milliseconds since
- * the unix epoch.
+ * @brief Type alias representing a cudf::duration_m (int32_t) since the unix epoch.
  */
-using timestamp_ms = detail::timestamp<cuda::std::chrono::duration<int64_t, cuda::std::milli>>;
+using timestamp_m = detail::timestamp<cudf::duration_m>;
 /**
- * @brief Type alias representing an int64_t duration of microseconds since
- * the unix epoch.
+ * @brief Type alias representing a cudf::duration_s (int64_t) since the unix epoch.
  */
-using timestamp_us = detail::timestamp<cuda::std::chrono::duration<int64_t, cuda::std::micro>>;
+using timestamp_s = detail::timestamp<cudf::duration_s>;
 /**
- * @brief Type alias representing an int64_t duration of nanoseconds since
- * the unix epoch.
+ * @brief Type alias representing a cudf::duration_ms (int64_t) since the unix epoch.
  */
-using timestamp_ns = detail::timestamp<cuda::std::chrono::duration<int64_t, cuda::std::nano>>;
+using timestamp_ms = detail::timestamp<cudf::duration_ms>;
+/**
+ * @brief Type alias representing a cudf::duration_us (int64_t) since the unix epoch.
+ */
+using timestamp_us = detail::timestamp<cudf::duration_us>;
+/**
+ * @brief Type alias representing a cudf::duration_ns (int64_t) since the unix epoch.
+ */
+using timestamp_ns = detail::timestamp<cudf::duration_ns>;
 
 static_assert(sizeof(timestamp_D) == sizeof(typename timestamp_D::rep), "");
+static_assert(sizeof(timestamp_h) == sizeof(typename timestamp_h::rep), "");
+static_assert(sizeof(timestamp_m) == sizeof(typename timestamp_m::rep), "");
 static_assert(sizeof(timestamp_s) == sizeof(typename timestamp_s::rep), "");
 static_assert(sizeof(timestamp_ms) == sizeof(typename timestamp_ms::rep), "");
 static_assert(sizeof(timestamp_us) == sizeof(typename timestamp_us::rep), "");
@@ -95,6 +97,8 @@ namespace std {
   }
 
 TIMESTAMP_LIMITS(cudf::timestamp_D);
+TIMESTAMP_LIMITS(cudf::timestamp_h);
+TIMESTAMP_LIMITS(cudf::timestamp_m);
 TIMESTAMP_LIMITS(cudf::timestamp_s);
 TIMESTAMP_LIMITS(cudf::timestamp_ms);
 TIMESTAMP_LIMITS(cudf::timestamp_us);
