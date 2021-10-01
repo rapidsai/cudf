@@ -4399,7 +4399,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         sort=False,
         lsuffix=None,
         rsuffix=None,
-        method="hash",
+        method=None,
         indicator=False,
         suffixes=("_x", "_y"),
     ):
@@ -4444,8 +4444,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         suffixes: Tuple[str, str], defaults to ('_x', '_y')
             Suffixes applied to overlapping column names on the left and right
             sides
-        method : {‘hash’, ‘sort’}, default ‘hash’
-            The implementation method to be used for the operation.
+        method :
+            This parameter is unused. It is deprecated and will be removed in a
+            future version.
 
         Returns
         -------
@@ -4507,6 +4508,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         else:
             lsuffix, rsuffix = suffixes
 
+        if method is not None:
+            warnings.warn(
+                "The 'method' argument is deprecated and will be removed "
+                "in a future version of cudf.",
+                FutureWarning,
+            )
+
         # Compute merge
         gdf_result = super()._merge(
             right,
@@ -4517,7 +4525,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             right_index=right_index,
             how=how,
             sort=sort,
-            method=method,
             indicator=indicator,
             suffixes=suffixes,
         )
@@ -4532,7 +4539,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         lsuffix="",
         rsuffix="",
         sort=False,
-        method="hash",
+        method=None,
     ):
         """Join columns with other DataFrame on index or on a key column.
 
@@ -4546,6 +4553,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             column names when avoiding conflicts.
         sort : bool
             Set to True to ensure sorted ordering.
+        method :
+            This parameter is unused. It is deprecated and will be removed in a
+            future version.
 
         Returns
         -------
@@ -4559,6 +4569,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         - *on* is not supported yet due to lack of multi-index support.
         """
 
+        if method is not None:
+            warnings.warn(
+                "The 'method' argument is deprecated and will be removed "
+                "in a future version of cudf.",
+                FutureWarning,
+            )
+
         lhs = self
         rhs = other
 
@@ -4568,7 +4585,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             right_index=True,
             how=how,
             suffixes=(lsuffix, rsuffix),
-            method=method,
             sort=sort,
         )
         df.index.name = (

@@ -4651,7 +4651,6 @@ class Series(SingleColumnFrame, Serializable):
             right_index=right_index,
             how=how,
             sort=sort,
-            method=method,
             indicator=False,
             suffixes=suffixes,
         )
