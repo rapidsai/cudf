@@ -547,7 +547,7 @@ class NumericalColumn(NumericalBaseColumn):
         if isinstance(dtype, CategoricalDtype):
             return column.build_categorical_column(
                 categories=dtype.categories._values,
-                codes=as_column(self.base_data, dtype=self.dtype),
+                codes=build_column(self.base_data, dtype=self.dtype),
                 mask=self.base_mask,
                 ordered=dtype.ordered,
                 size=self.size,

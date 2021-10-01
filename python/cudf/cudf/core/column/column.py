@@ -1707,12 +1707,6 @@ def as_column(
         if dtype is not None:
             data = data.astype(dtype)
 
-    elif type(arbitrary) is Buffer:
-        if dtype is None:
-            raise TypeError("dtype cannot be None if 'arbitrary' is a Buffer")
-
-        data = build_column(arbitrary, dtype=dtype)
-
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         desc = arbitrary.__cuda_array_interface__
         current_dtype = np.dtype(desc["typestr"])
@@ -1883,9 +1877,7 @@ def as_column(
             buffer = Buffer(arbitrary.view("|u1"))
             mask = None
             if nan_as_null is None or nan_as_null is True:
-                data = as_column(
-                    buffer, dtype=arbitrary.dtype, nan_as_null=nan_as_null
-                )
+                data = build_column(buffer, dtype=arbitrary.dtype)
                 data = data._make_copy_with_na_as_null()
                 mask = data.mask
 
@@ -1903,9 +1895,7 @@ def as_column(
             buffer = Buffer(arbitrary.view("|u1"))
             mask = None
             if nan_as_null is None or nan_as_null is True:
-                data = as_column(
-                    buffer, dtype=arbitrary.dtype, nan_as_null=nan_as_null
-                )
+                data = build_column(buffer, dtype=arbitrary.dtype)
                 data = data._make_copy_with_na_as_null()
                 mask = data.mask
 
@@ -1993,7 +1983,7 @@ def as_column(
         cudf_dtype = arbitrary._data.dtype
 
         data = Buffer(arbitrary._data.view("|u1"))
-        data = as_column(data, dtype=cudf_dtype)
+        data = build_column(data, dtype=cudf_dtype)
 
         mask = arbitrary._mask
         mask = bools_to_mask(as_column(mask).unary_operator("not"))

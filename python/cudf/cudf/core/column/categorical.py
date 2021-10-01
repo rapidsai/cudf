@@ -713,7 +713,9 @@ class CategoricalColumn(column.ColumnBase):
                 data=None,
                 dtype=dtype,
                 mask=mask,
-                children=(column.as_column(data.base_data, dtype=data.dtype),),
+                children=(
+                    column.build_column(data.base_data, dtype=data.dtype),
+                ),
             ),
         )
 
@@ -859,7 +861,7 @@ class CategoricalColumn(column.ColumnBase):
         codes = self.codes.slice(start, stop, stride)
         return cudf.core.column.build_categorical_column(
             categories=self.categories,
-            codes=cudf.core.column.as_column(
+            codes=cudf.core.column.build_column(
                 codes.base_data, dtype=codes.dtype
             ),
             mask=codes.base_mask,
@@ -910,7 +912,7 @@ class CategoricalColumn(column.ColumnBase):
         codes, inds = self.as_numerical.sort_by_values(ascending, na_position)
         col = column.build_categorical_column(
             categories=self.dtype.categories._values,
-            codes=column.as_column(codes.base_data, dtype=codes.dtype),
+            codes=column.build_column(codes.base_data, dtype=codes.dtype),
             mask=codes.base_mask,
             size=codes.size,
             ordered=self.dtype.ordered,
@@ -1001,7 +1003,7 @@ class CategoricalColumn(column.ColumnBase):
         codes = self.as_numerical.unique()
         return column.build_categorical_column(
             categories=self.categories,
-            codes=column.as_column(codes.base_data, dtype=codes.dtype),
+            codes=column.build_column(codes.base_data, dtype=codes.dtype),
             mask=codes.base_mask,
             offset=codes.offset,
             size=codes.size,
@@ -1123,7 +1125,7 @@ class CategoricalColumn(column.ColumnBase):
 
         return column.build_categorical_column(
             categories=new_cats["cats"],
-            codes=column.as_column(output.base_data, dtype=output.dtype),
+            codes=column.build_column(output.base_data, dtype=output.dtype),
             mask=output.base_mask,
             offset=output.offset,
             size=output.size,
@@ -1205,7 +1207,7 @@ class CategoricalColumn(column.ColumnBase):
 
         result = column.build_categorical_column(
             categories=self.dtype.categories._values,
-            codes=column.as_column(result.base_data, dtype=result.dtype),
+            codes=column.build_column(result.base_data, dtype=result.dtype),
             offset=result.offset,
             size=result.size,
             mask=result.base_mask,
@@ -1301,7 +1303,7 @@ class CategoricalColumn(column.ColumnBase):
 
             return column.build_categorical_column(
                 categories=copied_cat,
-                codes=column.as_column(
+                codes=column.build_column(
                     copied_col.base_data, dtype=copied_col.dtype
                 ),
                 offset=copied_col.offset,
@@ -1312,7 +1314,7 @@ class CategoricalColumn(column.ColumnBase):
         else:
             return column.build_categorical_column(
                 categories=self.dtype.categories._values,
-                codes=column.as_column(
+                codes=column.build_column(
                     self.codes.base_data, dtype=self.codes.dtype
                 ),
                 mask=self.base_mask,
@@ -1374,7 +1376,9 @@ class CategoricalColumn(column.ColumnBase):
 
         return column.build_categorical_column(
             categories=column.as_column(cats),
-            codes=column.as_column(codes_col.base_data, dtype=codes_col.dtype),
+            codes=column.build_column(
+                codes_col.base_data, dtype=codes_col.dtype
+            ),
             mask=codes_col.base_mask,
             size=codes_col.size,
             offset=codes_col.offset,
@@ -1386,7 +1390,7 @@ class CategoricalColumn(column.ColumnBase):
         if isinstance(dtype, CategoricalDtype):
             return column.build_categorical_column(
                 categories=dtype.categories._values,
-                codes=column.as_column(
+                codes=column.build_column(
                     self.codes.base_data, dtype=self.codes.dtype
                 ),
                 mask=self.codes.base_mask,
@@ -1522,7 +1526,9 @@ class CategoricalColumn(column.ColumnBase):
         # codes can't have masks, so take mask out before moving in
         return column.build_categorical_column(
             categories=new_cats,
-            codes=column.as_column(new_codes.base_data, dtype=new_codes.dtype),
+            codes=column.build_column(
+                new_codes.base_data, dtype=new_codes.dtype
+            ),
             mask=new_codes.base_mask,
             size=new_codes.size,
             offset=new_codes.offset,
@@ -1609,7 +1615,7 @@ def pandas_categorical_as_column(
 
     return column.build_categorical_column(
         categories=categorical.categories,
-        codes=column.as_column(codes.base_data, dtype=codes.dtype),
+        codes=column.build_column(codes.base_data, codes.dtype),
         size=codes.size,
         mask=mask,
         ordered=categorical.ordered,

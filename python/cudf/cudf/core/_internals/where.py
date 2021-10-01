@@ -308,7 +308,7 @@ def where(
                 ):
                     result = cudf.core.column.build_categorical_column(
                         categories=frame._data[column_name].categories,
-                        codes=cudf.core.column.as_column(
+                        codes=cudf.core.column.build_column(
                             result.base_data, dtype=result.dtype
                         ),
                         mask=result.base_mask,
@@ -367,7 +367,7 @@ def where(
                     cudf.core.column.CategoricalColumn,
                     frame._data[frame.name],
                 ).categories,
-                codes=cudf.core.column.as_column(
+                codes=cudf.core.column.build_column(
                     result.base_data, dtype=result.dtype
                 ),
                 mask=result.base_mask,
