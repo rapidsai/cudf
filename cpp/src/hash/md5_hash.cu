@@ -183,15 +183,17 @@ struct MD5Hash {
   {
     // 64 bytes are processed in each hash step
     constexpr int md5_chunk_size = 64;
-    // 8 bytes for the total message length, appended to the end of the last chunk processed
-    constexpr int message_length_size = 8;
-    // 1 byte for the end of the message flag
-    constexpr int end_of_message_size = 1;
+    // Add a one bit flag (10000000) to signal the end of the message
+    uint8_t constexpr end_of_message = 0x80;
+    // The message length is appended to the end of the last chunk processed
+    uint64_t const message_length_in_bits = hash_state->message_length * 8;
 
-    auto const padding_begin = thrust::fill_n(
-      thrust::seq, hash_state->buffer + hash_state->buffer_length, end_of_message_size, 0x80);
-    auto const buffer_end  = hash_state->buffer + md5_chunk_size;
-    auto const message_end = buffer_end - message_length_size;
+    auto const padding_begin = thrust::fill_n(thrust::seq,
+                                              hash_state->buffer + hash_state->buffer_length,
+                                              sizeof(end_of_message),
+                                              end_of_message);
+    auto const buffer_end    = hash_state->buffer + md5_chunk_size;
+    auto const message_end   = buffer_end - sizeof(message_length_in_bits);
 
     if (padding_begin <= message_end) {
       // The message size fits in this hash step. Pad up to the point where the message size
@@ -206,9 +208,7 @@ struct MD5Hash {
       thrust::fill(thrust::seq, hash_state->buffer, message_end, 0x00);
     }
 
-    uint64_t const message_length_in_bits = hash_state->message_length * 8;
-    memcpy(
-      message_end, reinterpret_cast<char const*>(&message_length_in_bits), message_length_size);
+    memcpy(message_end, &message_length_in_bits, sizeof(message_length_in_bits));
     md5_hash_step(hash_state);
 
     for (int i = 0; i < 4; ++i)
