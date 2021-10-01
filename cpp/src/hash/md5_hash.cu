@@ -65,7 +65,7 @@ void CUDA_DEVICE_CALLABLE md5_hash_step(md5_intermediate_data* hash_state)
     }
 
     uint32_t buffer_element_as_int;
-    std::memcpy(&buffer_element_as_int, hash_state->buffer + g * 4, 4);
+    memcpy(&buffer_element_as_int, hash_state->buffer + g * 4, 4);
     F = F + A + md5_hash_constants[j] + buffer_element_as_int;
     A = D;
     D = C;
@@ -83,6 +83,9 @@ void CUDA_DEVICE_CALLABLE md5_hash_step(md5_intermediate_data* hash_state)
 
 /**
  * @brief Core MD5 element processing function
+ *
+ * This accepts arbitrary data, handles it as bytes, and calls the hash step
+ * when the buffer is filled up to message_chunk_size bytes.
  */
 template <typename TKey>
 void CUDA_DEVICE_CALLABLE md5_process(TKey const& key, md5_intermediate_data* hash_state)
@@ -93,22 +96,29 @@ void CUDA_DEVICE_CALLABLE md5_process(TKey const& key, md5_intermediate_data* ha
 
   // 64 bytes are processed in each hash step
   uint32_t constexpr md5_chunk_size = 64;
+
   if (hash_state->buffer_length + len < md5_chunk_size) {
-    std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
+    // The buffer will not be filled by this data. We copy the new data into
+    // the buffer but do not trigger a hash step yet.
+    memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
     hash_state->buffer_length += len;
   } else {
+    // The buffer will be filled by this data. Copy a chunk of the data to fill
+    // the buffer and trigger a hash step.
     uint32_t copylen = md5_chunk_size - hash_state->buffer_length;
-
-    std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
+    memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
     md5_hash_step(hash_state);
 
+    // Take buffer-sized chunks of the data and do a hash step on each chunk.
     while (len > md5_chunk_size + copylen) {
-      std::memcpy(hash_state->buffer, data + copylen, md5_chunk_size);
+      memcpy(hash_state->buffer, data + copylen, md5_chunk_size);
       md5_hash_step(hash_state);
       copylen += md5_chunk_size;
     }
 
-    std::memcpy(hash_state->buffer, data + copylen, len - copylen);
+    // The remaining data chunk does not fill the buffer. We copy the data into
+    // the buffer but do not trigger a hash step yet.
+    memcpy(hash_state->buffer, data + copylen, len - copylen);
     hash_state->buffer_length = len - copylen;
   }
 }
