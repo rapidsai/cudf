@@ -84,7 +84,7 @@ def test_series_unique():
         arr = np.random.randint(low=-1, high=10, size=size)
         mask = arr != -1
         sr = cudf.Series.from_masked_array(arr, cudf.Series(mask).as_mask())
-        assert set(arr[mask]) == set(sr.unique().to_array())
+        assert set(arr[mask]) == set(sr.unique().dropna().to_numpy())
         assert len(set(arr[mask])) == sr.nunique()
 
 
@@ -239,12 +239,12 @@ def test_kurtosis(data, null_flag):
         pdata.iloc[[0, 2]] = None
 
     got = data.kurtosis()
-    got = got if np.isscalar(got) else got.to_array()
+    got = got if np.isscalar(got) else got.to_numpy()
     expected = pdata.kurtosis()
     np.testing.assert_array_almost_equal(got, expected)
 
     got = data.kurt()
-    got = got if np.isscalar(got) else got.to_array()
+    got = got if np.isscalar(got) else got.to_numpy()
     expected = pdata.kurt()
     np.testing.assert_array_almost_equal(got, expected)
 
@@ -281,7 +281,7 @@ def test_skew(data, null_flag):
 
     got = data.skew()
     expected = pdata.skew()
-    got = got if np.isscalar(got) else got.to_array()
+    got = got if np.isscalar(got) else got.to_numpy()
     np.testing.assert_array_almost_equal(got, expected)
 
     with pytest.raises(NotImplementedError):
@@ -338,7 +338,7 @@ def test_series_pct_change(data, periods, fill_method):
         got = cs.pct_change(periods=periods, fill_method=fill_method)
         expected = ps.pct_change(periods=periods, fill_method=fill_method)
         np.testing.assert_array_almost_equal(
-            got.to_array(fillna="pandas"), expected
+            got.to_numpy(na_value=np.nan), expected
         )
 
 
