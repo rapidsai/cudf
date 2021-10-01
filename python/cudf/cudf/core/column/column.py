@@ -169,10 +169,7 @@ class ColumnBase(Column, Serializable):
             return False
         if check_dtypes and (self.dtype != other.dtype):
             return False
-        return self._null_equals(other).all()
-
-    def _null_equals(self, other: ColumnBase) -> ColumnBase:
-        return self.binary_operator("NULL_EQUALS", other)
+        return self.binary_operator("NULL_EQUALS", other).all()
 
     def all(self, skipna: bool = True) -> bool:
         # If all entries are null the result is True, including when the column
