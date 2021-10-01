@@ -15,10 +15,14 @@
  */
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/hashing.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/lists/lists_column_device_view.cuh>
+#include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -87,11 +91,10 @@ void CUDA_DEVICE_CALLABLE md5_hash_step(md5_intermediate_data* hash_state)
  * This accepts arbitrary data, handles it as bytes, and calls the hash step
  * when the buffer is filled up to message_chunk_size bytes.
  */
-template <typename TKey>
-void CUDA_DEVICE_CALLABLE md5_process(TKey const& key, md5_intermediate_data* hash_state)
+void CUDA_DEVICE_CALLABLE md5_process(uint8_t const* data,
+                                      uint32_t len,
+                                      md5_intermediate_data* hash_state)
 {
-  uint32_t constexpr len = sizeof(TKey);
-  uint8_t const* data    = reinterpret_cast<uint8_t const*>(&key);
   hash_state->message_length += len;
 
   // 64 bytes are processed in each hash step
@@ -123,6 +126,14 @@ void CUDA_DEVICE_CALLABLE md5_process(TKey const& key, md5_intermediate_data* ha
   }
 }
 
+template <typename T>
+void CUDA_DEVICE_CALLABLE md5_process_fixed_width(T const& key, md5_intermediate_data* hash_state)
+{
+  uint8_t const* data    = reinterpret_cast<uint8_t const*>(&key);
+  uint32_t constexpr len = sizeof(T);
+  md5_process(data, len, hash_state);
+}
+
 // MD5 supported leaf data type check
 bool md5_type_check(data_type dt)
 {
@@ -130,91 +141,66 @@ bool md5_type_check(data_type dt)
 }
 
 struct MD5ListHasher {
-  template <typename T, std::enable_if_t<is_chrono<T>()>* = nullptr>
-  void __device__ operator()(column_device_view,
-                             size_type,
-                             size_type,
-                             md5_intermediate_data*) const
-  {
-    cudf_assert(false && "MD5 Unsupported chrono type column");
-  }
-
-  template <typename T, std::enable_if_t<!is_fixed_width<T>()>* = nullptr>
-  void __device__ operator()(column_device_view,
-                             size_type,
-                             size_type,
-                             md5_intermediate_data*) const
-  {
-    cudf_assert(false && "MD5 Unsupported non-fixed-width type column");
-  }
-
-  template <typename T, std::enable_if_t<is_floating_point<T>()>* = nullptr>
-  void __device__ operator()(column_device_view data_col,
-                             size_type offset_begin,
-                             size_type offset_end,
-                             md5_intermediate_data* hash_state) const
-  {
-    for (int i = offset_begin; i < offset_end; i++) {
-      if (!data_col.is_null(i)) {
-        md5_process(normalize_nans_and_zeros_helper<T>(data_col.element<T>(i)), hash_state);
-      }
-    }
-  }
-
-  template <
-    typename T,
-    std::enable_if_t<is_fixed_width<T>() && !is_floating_point<T>() && !is_chrono<T>()>* = nullptr>
+  template <typename T,
+            CUDF_ENABLE_IF((is_fixed_width<T>() && !is_chrono<T>()) ||
+                           std::is_same_v<T, string_view>)>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view data_col,
                                        size_type offset_begin,
                                        size_type offset_end,
                                        md5_intermediate_data* hash_state) const
   {
-    for (int i = offset_begin; i < offset_end; i++) {
-      if (!data_col.is_null(i)) md5_process(data_col.element<T>(i), hash_state);
+    for (size_type i = offset_begin; i < offset_end; i++) {
+      if (!data_col.is_null(i)) {
+        auto const key = data_col.element<T>(i);
+        if constexpr (is_floating_point<T>()) {
+          md5_process_fixed_width(normalize_nans_and_zeros_helper<T>(key), hash_state);
+        } else if constexpr (is_fixed_width<T>() && !is_chrono<T>()) {
+          md5_process_fixed_width(key, hash_state);
+        } else if constexpr (std::is_same_v<T, string_view>) {
+          uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
+          uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
+          md5_process(data, len, hash_state);
+        } else {
+          cudf_assert(false && "Unsupported type for hash function.");
+        }
+      }
     }
+    /*
+    auto const begin     = data_col.optional_begin<T>(cudf::contains_nulls::YES{});
+    auto const row_begin = begin + offset_begin;
+    auto const row_end   = begin + offset_end;
+    for (auto it = row_begin; it != row_end; it++) {
+      auto const element = *it;
+      if (element) {
+        if constexpr (is_floating_point<T>()) {
+          md5_process_fixed_width(normalize_nans_and_zeros_helper<T>(*element), hash_state);
+        } else if constexpr (is_fixed_width<T>() && !is_chrono<T>()) {
+          md5_process_fixed_width(*element, hash_state);
+        } else if constexpr (std::is_same_v<T, string_view>) {
+          string_view const key = *element;
+          uint32_t const len    = static_cast<uint32_t>(key.size_bytes());
+          uint8_t const* data   = reinterpret_cast<uint8_t const*>(key.data());
+          md5_process(data, len, hash_state);
+        } else {
+          cudf_assert(false && "Unsupported type for hash function.");
+        }
+      }
+    }
+    */
+  }
+
+  template <typename T,
+            CUDF_ENABLE_IF((!is_fixed_width<T>() || is_chrono<T>()) &&
+                           !std::is_same_v<T, string_view>)>
+  void CUDA_DEVICE_CALLABLE
+  operator()(column_device_view, size_type, size_type, md5_intermediate_data*) const
+  {
+    cudf_assert(false && "Unsupported type for hash function.");
   }
 };
 
-template <>
-void CUDA_DEVICE_CALLABLE
-MD5ListHasher::operator()<string_view>(column_device_view data_col,
-                                       size_type offset_begin,
-                                       size_type offset_end,
-                                       md5_intermediate_data* hash_state) const
-{
-  for (int i = offset_begin; i < offset_end; i++) {
-    if (!data_col.is_null(i)) {
-      string_view key     = data_col.element<string_view>(i);
-      uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
-      uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
-
-      hash_state->message_length += len;
-
-      // 64 bytes are processed in each hash step
-      uint32_t constexpr md5_chunk_size = 64;
-      if (hash_state->buffer_length + len < md5_chunk_size) {
-        std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
-        hash_state->buffer_length += len;
-      } else {
-        uint32_t copylen = md5_chunk_size - hash_state->buffer_length;
-        std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
-        md5_hash_step(hash_state);
-
-        while (len > md5_chunk_size + copylen) {
-          std::memcpy(hash_state->buffer, data + copylen, md5_chunk_size);
-          md5_hash_step(hash_state);
-          copylen += md5_chunk_size;
-        }
-
-        std::memcpy(hash_state->buffer, data + copylen, len - copylen);
-        hash_state->buffer_length = len - copylen;
-      }
-    }
-  }
-}
-
 struct MD5Hash {
-  void __device__ finalize(md5_intermediate_data* hash_state, char* result_location) const
+  void CUDA_DEVICE_CALLABLE finalize(md5_intermediate_data* hash_state, char* result_location) const
   {
     auto const full_length = (static_cast<uint64_t>(hash_state->message_length)) << 3;
     thrust::fill_n(thrust::seq, hash_state->buffer + hash_state->buffer_length, 1, 0x80);
@@ -246,92 +232,62 @@ struct MD5Hash {
                 message_length_size);
     md5_hash_step(hash_state);
 
-#pragma unroll
     for (int i = 0; i < 4; ++i)
       uint32ToLowercaseHexString(hash_state->hash_value[i], result_location + (8 * i));
   }
 
-  template <typename T, std::enable_if_t<is_chrono<T>()>* = nullptr>
-  void __device__ operator()(column_device_view, size_type, md5_intermediate_data*) const
-  {
-    cudf_assert(false && "MD5 Unsupported chrono type column");
-  }
-
-  template <typename T, std::enable_if_t<!is_fixed_width<T>()>* = nullptr>
-  void __device__ operator()(column_device_view, size_type, md5_intermediate_data*) const
-  {
-    cudf_assert(false && "MD5 Unsupported non-fixed-width type column");
-  }
-
-  template <typename T, std::enable_if_t<is_floating_point<T>()>* = nullptr>
-  void __device__ operator()(column_device_view col,
-                             size_type row_index,
-                             md5_intermediate_data* hash_state) const
-  {
-    md5_process(normalize_nans_and_zeros_helper<T>(col.element<T>(row_index)), hash_state);
-  }
-
-  template <
-    typename T,
-    std::enable_if_t<is_fixed_width<T>() && !is_floating_point<T>() && !is_chrono<T>()>* = nullptr>
+  template <typename T,
+            CUDF_ENABLE_IF((is_fixed_width<T>() && !is_chrono<T>()) ||
+                           std::is_same_v<T, string_view>)>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
                                        size_type row_index,
                                        md5_intermediate_data* hash_state) const
   {
-    md5_process(col.element<T>(row_index), hash_state);
+    auto const key = col.element<T>(row_index);
+    if constexpr (is_floating_point<T>()) {
+      md5_process_fixed_width(normalize_nans_and_zeros_helper<T>(key), hash_state);
+    } else if constexpr (is_fixed_width<T>() && !is_chrono<T>()) {
+      md5_process_fixed_width(key, hash_state);
+    } else if constexpr (std::is_same_v<T, string_view>) {
+      uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
+      uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
+      md5_process(data, len, hash_state);
+    } else {
+      cudf_assert(false && "Unsupported type for hash function.");
+    }
+  }
+
+  template <typename T,
+            CUDF_ENABLE_IF((!is_fixed_width<T>() || is_chrono<T>()) &&
+                           !std::is_same_v<T, string_view>)>
+  void CUDA_DEVICE_CALLABLE operator()(column_device_view, size_type, md5_intermediate_data*) const
+  {
+    cudf_assert(false && "Unsupported type for hash function.");
   }
 };
-
-template <>
-void CUDA_DEVICE_CALLABLE MD5Hash::operator()<string_view>(column_device_view col,
-                                                           size_type row_index,
-                                                           md5_intermediate_data* hash_state) const
-{
-  string_view key     = col.element<string_view>(row_index);
-  uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
-  uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
-
-  hash_state->message_length += len;
-
-  uint32_t constexpr md5_chunk_size = 64;
-  if (hash_state->buffer_length + len < md5_chunk_size) {
-    std::memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
-    hash_state->buffer_length += len;
-  } else {
-    uint32_t copylen = md5_chunk_size - hash_state->buffer_length;
-    std::memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
-    md5_hash_step(hash_state);
-
-    while (len > md5_chunk_size + copylen) {
-      std::memcpy(hash_state->buffer, data + copylen, md5_chunk_size);
-      md5_hash_step(hash_state);
-      copylen += md5_chunk_size;
-    }
-
-    std::memcpy(hash_state->buffer, data + copylen, len - copylen);
-    hash_state->buffer_length = len - copylen;
-  }
-}
 
 template <>
 void CUDA_DEVICE_CALLABLE MD5Hash::operator()<list_view>(column_device_view col,
                                                          size_type row_index,
                                                          md5_intermediate_data* hash_state) const
 {
-  static constexpr size_type offsets_column_index{0};
-  static constexpr size_type data_column_index{1};
+  /*
+  // I want to get a lists_column_device_view but that is not constructible on device.
+  auto const lists_col = lists_column_device_view(col);
+  auto const data      = lists_col.child();
+  auto const offsets      = lists_col.offsets();
+  */
 
-  column_device_view offsets = col.child(offsets_column_index);
-  column_device_view data    = col.child(data_column_index);
+  // Alternative that works, but reimplements getters from lists_column_device_view:
+  auto const data    = col.child(lists_column_view::child_column_index);
+  auto const offsets = col.child(lists_column_view::offsets_column_index);
 
   if (data.type().id() == type_id::LIST) cudf_assert(false && "Nested list unsupported");
 
-  cudf::type_dispatcher(data.type(),
-                        MD5ListHasher{},
-                        data,
-                        offsets.element<size_type>(row_index),
-                        offsets.element<size_type>(row_index + 1),
-                        hash_state);
+  auto const offset_begin = offsets.element<size_type>(row_index);
+  auto const offset_end   = offsets.element<size_type>(row_index + 1);
+
+  cudf::type_dispatcher(data.type(), MD5ListHasher{}, data, offset_begin, offset_end, hash_state);
 }
 
 }  // namespace
@@ -342,29 +298,32 @@ std::unique_ptr<column> md5_hash(table_view const& input,
 {
   if (input.num_columns() == 0 || input.num_rows() == 0) {
     // Return the MD5 hash of a zero-length input.
-    const string_scalar string_128bit("d41d8cd98f00b204e9orig98ecf8427e");
-    auto output = make_column_from_scalar(string_128bit, input.num_rows(), stream, mr);
-    return output;
+    string_scalar const string_128bit("d41d8cd98f00b204e9orig98ecf8427e");
+    return make_column_from_scalar(string_128bit, input.num_rows(), stream, mr);
   }
 
   // Accepts string and fixed width columns, or single layer list columns holding those types
-  CUDF_EXPECTS(
-    std::all_of(input.begin(),
-                input.end(),
-                [](auto col) {
-                  return md5_type_check(col.type()) ||
-                         (col.type().id() == type_id::LIST && md5_type_check(col.child(1).type()));
-                }),
-    "MD5 unsupported column type");
+  CUDF_EXPECTS(std::all_of(input.begin(),
+                           input.end(),
+                           [](auto const& col) {
+                             if (col.type().id() == type_id::LIST) {
+                               return md5_type_check(lists_column_view(col).child().type());
+                             }
+                             return md5_type_check(col.type());
+                           }),
+               "Unsupported column type for hash function.");
 
+  // Digest size in bytes
+  auto constexpr digest_size = 32;
   // Result column allocation and creation
-  auto begin = thrust::make_constant_iterator(32);
+  auto begin = thrust::make_constant_iterator(digest_size);
   auto offsets_column =
     cudf::strings::detail::make_offsets_child_column(begin, begin + input.num_rows(), stream, mr);
 
-  auto chars_column = strings::detail::create_chars_child_column(input.num_rows() * 32, stream, mr);
-  auto chars_view   = chars_column->mutable_view();
-  auto d_chars      = chars_view.data<char>();
+  auto chars_column =
+    strings::detail::create_chars_child_column(input.num_rows() * digest_size, stream, mr);
+  auto chars_view = chars_column->mutable_view();
+  auto d_chars    = chars_view.data<char>();
 
   rmm::device_buffer null_mask{0, stream, mr};
 
@@ -377,17 +336,13 @@ std::unique_ptr<column> md5_hash(table_view const& input,
                    [d_chars, device_input = *device_input] __device__(auto row_index) {
                      md5_intermediate_data hash_state;
                      MD5Hash hasher = MD5Hash{};
-                     for (int col_index = 0; col_index < device_input.num_columns(); col_index++) {
-                       if (device_input.column(col_index).is_valid(row_index)) {
+                     for (auto const& col : device_input) {
+                       if (col.is_valid(row_index)) {
                          cudf::type_dispatcher<dispatch_storage_type>(
-                           device_input.column(col_index).type(),
-                           hasher,
-                           device_input.column(col_index),
-                           row_index,
-                           &hash_state);
+                           col.type(), hasher, col, row_index, &hash_state);
                        }
                      }
-                     hasher.finalize(&hash_state, d_chars + (row_index * 32));
+                     hasher.finalize(&hash_state, d_chars + (row_index * digest_size));
                    });
 
   return make_strings_column(
