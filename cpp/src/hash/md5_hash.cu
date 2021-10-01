@@ -135,16 +135,10 @@ template <typename T>
 void CUDA_DEVICE_CALLABLE md5_process(T const& key, md5_intermediate_data* hash_state)
 {
   if constexpr (is_fixed_width<T>() && !is_chrono<T>()) {
-    if constexpr (is_floating_point<T>()) {
-      T const normalized_key = normalize_nans_and_zeros_helper<T>(key);
-      uint8_t const* data    = reinterpret_cast<uint8_t const*>(&normalized_key);
-      uint32_t constexpr len = sizeof(T);
-      md5_process_bytes(data, len, hash_state);
-    } else {
-      uint8_t const* data    = reinterpret_cast<uint8_t const*>(&key);
-      uint32_t constexpr len = sizeof(T);
-      md5_process_bytes(data, len, hash_state);
-    }
+    T const normalized_key = normalize_nans_and_zeros_helper<T>(key);
+    uint8_t const* data    = reinterpret_cast<uint8_t const*>(&normalized_key);
+    uint32_t constexpr len = sizeof(T);
+    md5_process_bytes(data, len, hash_state);
   } else if constexpr (std::is_same_v<T, string_view>) {
     uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
     uint32_t len        = static_cast<uint32_t>(key.size_bytes());

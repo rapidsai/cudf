@@ -31,16 +31,17 @@ namespace detail {
 /**
  * Normalization of floating point NANs and zeros helper
  */
-template <typename T, std::enable_if_t<std::is_floating_point<T>::value>* = nullptr>
-T CUDA_DEVICE_CALLABLE normalize_nans_and_zeros_helper(T key)
+template <typename T>
+T CUDA_DEVICE_CALLABLE normalize_nans_and_zeros_helper(T const& key)
 {
-  if (isnan(key)) {
-    return std::numeric_limits<T>::quiet_NaN();
-  } else if (key == T{0.0}) {
-    return T{0.0};
-  } else {
-    return key;
+  if constexpr (is_floating_point<T>()) {
+    if (isnan(key)) {
+      return std::numeric_limits<T>::quiet_NaN();
+    } else if (key == T{0.0}) {
+      return T{0.0};
+    }
   }
+  return key;
 }
 
 /**
