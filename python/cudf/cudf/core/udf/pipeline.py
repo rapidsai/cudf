@@ -4,7 +4,7 @@ import cachetools
 import numpy as np
 from numba import cuda
 from numba.np import numpy_support
-from numba.types import Record, Tuple, boolean, int64, void
+from numba.types import Record, Tuple, boolean, int64, void, Dummy
 from nvtx import annotate
 
 from cudf.core.udf.api import Masked, pack_return
@@ -107,8 +107,9 @@ def construct_signature(df, return_type):
     offsets = []
     sig = [return_type]
     for col in df._data.values():
-        sig.append(masked_array_type_from_col(col))
-        offsets.append(int64)
+        if col.dtype != np.dtype('object'):
+            sig.append(masked_array_type_from_col(col))
+            offsets.append(int64)
 
     # return_type + data,masks + offsets + size
     sig = void(*(sig + offsets + [int64]))
@@ -194,13 +195,24 @@ def _define_function(fr, row_type, scalar_return=False):
     """
 
     # Create argument list for kernel
-    input_columns = ", ".join([f"input_col_{i}" for i in range(len(fr._data))])
-    input_offsets = ", ".join([f"offset_{i}" for i in range(len(fr._data))])
+    fr = {name: col for name, col in fr._data.items() if col.dtype != 'object'}
+
+    input_col_list = []
+    input_off_list = []
+    for i, col in enumerate(fr.values()):
+        if col.dtype.kind == 'O':
+            continue
+        input_col_list.append(f"input_col_{i}")
+        input_off_list.append(f"offset_{i}")
+
+    input_columns = ", ".join(input_col_list)
+    input_offsets = ", ".join(input_off_list)
 
     # Generate the initializers for each device function argument
     initializers = []
     row_initializers = []
-    for i, (colname, col) in enumerate(fr._data.items()):
+    for i, (colname, col) in enumerate(fr.items()):
+
         idx = str(i)
         if col.mask is not None:
             template = masked_input_initializer_template

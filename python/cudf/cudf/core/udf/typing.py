@@ -30,9 +30,15 @@ class MaskedType(types.Type):
     def __init__(self, value):
         # MaskedType in Numba shall be parameterized
         # with a value type
-        if not isinstance(value, (types.Number, types.Boolean)):
-            raise TypeError("value_type must be a numeric scalar type")
-        self.value_type = value
+        if isinstance(value, (types.Number, types.Boolean)):
+            self.value_type = value
+        else:
+            # Unsupported Dtype
+            self.value_type = types.Dummy(
+                "\n\n\n Unsupported MaskedType. If you are seeing this, "
+                "you are likely trying to use a column of unsupported"
+                f" dtype in a UDF. Unsupported type: {value} \n\n\n"
+            )
         super().__init__(name=f"Masked{self.value_type}")
 
     def __hash__(self):
@@ -246,6 +252,7 @@ class MaskedScalarScalarOp(AbstractTemplate):
         """
         # In the case of op(Masked, scalar), we resolve the type between
         # the Masked value_type and the scalar's type directly
+        to_resolve_types = None
         if isinstance(args[0], MaskedType) and isinstance(
             args[1], (types.Number, types.Boolean)
         ):
@@ -254,6 +261,8 @@ class MaskedScalarScalarOp(AbstractTemplate):
             args[1], MaskedType
         ):
             to_resolve_types = (args[1].value_type, args[0])
+        if to_resolve_types is None:
+            return None
         return_type = self.context.resolve_function_type(
             self.key, to_resolve_types, kws
         ).return_type

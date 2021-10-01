@@ -1464,13 +1464,14 @@ class Frame(libcudf.table.Table):
         launch_args = [(ans_col, ans_mask)]
         offsets = []
         for col in self._data.values():
-            data = col.data
-            mask = col.mask
-            if mask is None:
-                launch_args.append(data)
-            else:
-                launch_args.append((data, mask))
-            offsets.append(col.offset)
+            if col.dtype != np.dtype('object'):
+                data = col.data
+                mask = col.mask
+                if mask is None:
+                    launch_args.append(data)
+                else:
+                    launch_args.append((data, mask))
+                offsets.append(col.offset)
         launch_args += offsets
         launch_args.append(len(self))  # size
         kernel.forall(len(self))(*launch_args)
