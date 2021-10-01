@@ -187,7 +187,6 @@ struct MD5ListHasher {
 struct MD5Hash {
   void CUDA_DEVICE_CALLABLE finalize(md5_intermediate_data* hash_state, char* result_location) const
   {
-    auto const full_length = (static_cast<uint64_t>(hash_state->message_length)) << 3;
     thrust::fill_n(thrust::seq, hash_state->buffer + hash_state->buffer_length, 1, 0x80);
 
     // 64 bytes are processed in each hash step
@@ -212,6 +211,7 @@ struct MD5Hash {
       thrust::fill_n(thrust::seq, hash_state->buffer, md5_chunk_size - message_length_size, 0x00);
     }
 
+    uint64_t const full_length = hash_state->message_length * 8;
     memcpy(hash_state->buffer + md5_chunk_size - message_length_size,
            reinterpret_cast<uint8_t const*>(&full_length),
            message_length_size);
