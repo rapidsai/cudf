@@ -188,31 +188,29 @@ struct MD5Hash {
     // The message length is appended to the end of the last chunk processed
     uint64_t const message_length_in_bits = hash_state->message_length * 8;
 
-    auto const padding_begin = thrust::fill_n(thrust::seq,
-                                              hash_state->buffer + hash_state->buffer_length,
-                                              sizeof(end_of_message),
-                                              end_of_message);
-    auto const buffer_end    = hash_state->buffer + md5_chunk_size;
-    auto const message_end   = buffer_end - sizeof(message_length_in_bits);
+    auto padding_begin     = thrust::fill_n(thrust::seq,
+                                        hash_state->buffer + hash_state->buffer_length,
+                                        sizeof(end_of_message),
+                                        end_of_message);
+    auto const buffer_end  = hash_state->buffer + md5_chunk_size;
+    auto const message_end = buffer_end - sizeof(message_length_in_bits);
 
-    if (padding_begin <= message_end) {
-      // The message size fits in this hash step. Pad up to the point where the message size
-      // goes with zeros.
-      thrust::fill(thrust::seq, padding_begin, message_end, 0x00);
-    } else {
+    if (padding_begin > message_end) {
       // The message size will be processed in a separate hash step. Pad the remainder of the buffer
       // with zeros for this hash step.
       thrust::fill(thrust::seq, padding_begin, buffer_end, 0x00);
       md5_hash_step(hash_state);
-      // Pad up to the point where the message size goes with zeros.
-      thrust::fill(thrust::seq, hash_state->buffer, message_end, 0x00);
+      padding_begin = hash_state->buffer;
     }
+    // Pad up to the point where the message size goes with zeros.
+    thrust::fill(thrust::seq, padding_begin, message_end, 0x00);
 
     memcpy(message_end, &message_length_in_bits, sizeof(message_length_in_bits));
     md5_hash_step(hash_state);
 
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < 4; ++i) {
       uint32ToLowercaseHexString(hash_state->hash_value[i], result_location + (8 * i));
+    }
   }
 
   template <typename T,
