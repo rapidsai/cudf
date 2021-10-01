@@ -67,7 +67,8 @@ std::unique_ptr<column> rolling_window(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc   rolling_window(
+ * @brief  @copybrief rolling_window
+ * @details  @copydetails rolling_window(
  *            column_view const& input,
  *            size_type preceding_window,
  *            size_type following_window,
@@ -206,7 +207,8 @@ std::unique_ptr<column> grouped_rolling_window(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc   grouped_rolling_window(
+ * @brief  @copybrief grouped_rolling_window
+ * @details @copydetails grouped_rolling_window(
  *            table_view const& group_keys,
  *            column_view const& input,
  *            size_type preceding_window,
@@ -225,7 +227,8 @@ std::unique_ptr<column> grouped_rolling_window(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc   grouped_rolling_window(
+ * @brief  @copybrief grouped_rolling_window
+ * @details @copydetails grouped_rolling_window(
  *            table_view const& group_keys,
  *            column_view const& input,
  *            size_type preceding_window,
@@ -249,7 +252,8 @@ std::unique_ptr<column> grouped_rolling_window(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc   grouped_rolling_window(
+ * @brief  @copybrief grouped_rolling_window
+ * @details @copydetails grouped_rolling_window(
  *            table_view const& group_keys,
  *            column_view const& input,
  *            column_view const& default_outputs,
@@ -368,7 +372,7 @@ std::unique_ptr<column> grouped_time_range_rolling_window(
  * @brief  Applies a grouping-aware, timestamp-based rolling window function to the values in a
  *         column,.
  *
- * @copydetails  std::unique_ptr<column> grouped_time_range_rolling_window(
+ * @details @copydetails grouped_time_range_rolling_window(
  *                table_view const& group_keys,
  *                column_view const& timestamp_column,
  *                cudf::order const& timestamp_order,
