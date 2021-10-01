@@ -163,6 +163,11 @@ class orc_column_view {
       parent->add_child(_index);
       _parent_index = parent->index();
     }
+
+    if (_type_kind == TypeKind::MAP) {
+      auto const struct_col = col.child(lists_column_view::child_column_index);
+      CUDF_EXPECTS(struct_col.num_children() == 2, "MAP column must have two child columns");
+    }
   }
 
   void add_child(uint32_t child_idx) { children.emplace_back(child_idx); }
@@ -215,6 +220,7 @@ class orc_column_view {
   auto parent_index() const noexcept { return _parent_index.value(); }
   auto child_begin() const noexcept { return children.cbegin(); }
   auto child_end() const noexcept { return children.cend(); }
+  auto num_children() const noexcept { return children.size(); }
 
   auto type_width() const noexcept { return _type_width; }
   auto size() const noexcept { return cudf_column.size(); }
@@ -1366,7 +1372,7 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
   std::vector<rmm::device_uvector<bitmask_type>> pd_masks;
   for (auto const& col : orc_table.columns) {
     // Leaf columns don't need pushdown masks
-    if (col.orc_kind() != LIST && col.orc_kind() != STRUCT) {
+    if (col.num_children() == 0) {
       mask_ptrs.emplace_back(nullptr);
       continue;
     }
@@ -1397,10 +1403,10 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
                           thrust::bit_and<bitmask_type>());
       }
     }
-    if (col.orc_kind() == LIST) {
+    if (col.orc_kind() == LIST or col.orc_kind() == MAP) {
       // Need a new pushdown mask unless both the parent and current colmn are not nullable
       auto const child_col = orc_table.column(col.child_begin()[0]);
-      // pushdown mask applies to child column; use the child column size
+      // pushdown mask applies to child column(s); use the child column size
       pd_masks.emplace_back(num_bitmask_words(child_col.size()), stream);
       mask_ptrs.emplace_back(pd_masks.back().data());
       pushdown_lists_null_mask(col, orc_table.d_columns, parent_pd_mask, pd_masks.back(), stream);
@@ -1979,12 +1985,10 @@ void writer::impl::write(table_view const& table)
         schema_type.scale     = static_cast<uint32_t>(column.scale());
         schema_type.precision = column.precision();
       }
-      if (column.orc_kind() == STRUCT or column.orc_kind() == LIST) {
-        std::transform(column.child_begin(),
-                       column.child_end(),
-                       std::back_inserter(schema_type.subtypes),
-                       [&](auto const& child_idx) { return orc_table.column(child_idx).id(); });
-      }
+      std::transform(column.child_begin(),
+                     column.child_end(),
+                     std::back_inserter(schema_type.subtypes),
+                     [&](auto const& child_idx) { return orc_table.column(child_idx).id(); });
       if (column.orc_kind() == STRUCT) {
         std::transform(column.child_begin(),
                        column.child_end(),

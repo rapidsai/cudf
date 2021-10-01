@@ -134,7 +134,7 @@ def test_orc_reader_trailing_nulls(datadir):
         pytest.skip(".orc file is not found: %s" % e)
 
     expect = orcfile.read().to_pandas().fillna(0)
-    got = cudf.read_orc(path, engine="cudf").fillna(0)
+    got = cudf.read_orc(path).fillna(0)
 
     # PANDAS uses NaN to represent invalid data, which forces float dtype
     # For comparison, we can replace NaN with 0 and cast to the cuDF dtype
@@ -157,7 +157,7 @@ def test_orc_reader_datetimestamp(datadir, inputfile, use_index):
         pytest.skip(".orc file is not found: %s" % e)
 
     pdf = orcfile.read().to_pandas(date_as_object=False)
-    gdf = cudf.read_orc(path, engine="cudf", use_index=use_index)
+    gdf = cudf.read_orc(path, use_index=use_index)
 
     assert_eq(pdf, gdf, check_categorical=False)
 
@@ -170,7 +170,7 @@ def test_orc_reader_strings(datadir):
         pytest.skip(".orc file is not found: %s" % e)
 
     expect = orcfile.read(columns=["string1"])
-    got = cudf.read_orc(path, engine="cudf", columns=["string1"])
+    got = cudf.read_orc(path, columns=["string1"])
 
     assert_eq(expect, got, check_categorical=False)
 
@@ -291,9 +291,7 @@ def test_orc_read_rows(datadir, skiprows, num_rows):
         pytest.skip(".orc file is not found: %s" % e)
 
     pdf = orcfile.read().to_pandas()
-    gdf = cudf.read_orc(
-        path, engine="cudf", skiprows=skiprows, num_rows=num_rows
-    )
+    gdf = cudf.read_orc(path, skiprows=skiprows, num_rows=num_rows)
 
     # Slice rows out of the whole dataframe for comparison as PyArrow doesn't
     # have an API to read a subsection of rows from the file
@@ -335,7 +333,7 @@ def test_orc_reader_uncompressed_block(datadir):
         pytest.skip(".orc file is not found: %s" % e)
 
     expect = orcfile.read().to_pandas()
-    got = cudf.read_orc(path, engine="cudf")
+    got = cudf.read_orc(path)
 
     assert_eq(expect, got, check_categorical=False)
 
@@ -351,7 +349,7 @@ def test_orc_reader_nodata_block(datadir):
             print(type(excpr).__name__)
 
     expect = orcfile.read().to_pandas()
-    got = cudf.read_orc(path, engine="cudf", num_rows=1)
+    got = cudf.read_orc(path, num_rows=1)
 
     assert_eq(expect, got, check_categorical=False)
 
