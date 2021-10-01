@@ -356,7 +356,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             # Setting `final_columns` to self._index so
             # that the resulting `transpose` will be have
             # columns set to `final_columns`
-            self._index = final_columns
+            self._index = as_index(final_columns)
 
             transpose = self.T
         else:
@@ -967,36 +967,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 return cudf_func(*args, **kwargs)
         else:
             return NotImplemented
-
-    @property
-    def values(self):
-        """
-        Return a CuPy representation of the DataFrame.
-
-        Only the values in the DataFrame will be returned, the axes labels will
-        be removed.
-
-        Returns
-        -------
-        out: cupy.ndarray
-            The values of the DataFrame.
-        """
-        return cupy.asarray(self.as_gpu_matrix())
-
-    def __array__(self, dtype=None):
-        raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not "
-            "allowed, To explicitly construct a GPU matrix, consider using "
-            ".as_gpu_matrix()\nTo explicitly construct a host "
-            "matrix, consider using .as_matrix()"
-        )
-
-    def __arrow_array__(self, type=None):
-        raise TypeError(
-            "Implicit conversion to a host PyArrow Table via __arrow_array__ "
-            "is not allowed, To explicitly construct a PyArrow Table, "
-            "consider using .to_arrow()"
-        )
 
     def _get_numeric_data(self):
         """ Return a dataframe with only numeric data types """
@@ -2740,7 +2710,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if isinstance(
             columns, (Series, cudf.Index, cudf.core.column.ColumnBase)
         ):
-            columns = pd.Index(columns.to_array(), tupleize_cols=is_multiindex)
+            columns = pd.Index(columns.to_numpy(), tupleize_cols=is_multiindex)
         elif not isinstance(columns, pd.Index):
             columns = pd.Index(columns, tupleize_cols=is_multiindex)
 
@@ -3724,21 +3694,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             return out.copy(deep=copy)
 
     def as_gpu_matrix(self, columns=None, order="F"):
-        """Convert to a matrix in device memory.
-
-        Parameters
-        ----------
-        columns : sequence of str
-            List of a column names to be extracted.  The order is preserved.
-            If None is specified, all columns are used.
-        order : 'F' or 'C'
-            Optional argument to determine whether to return a column major
-            (Fortran) matrix or a row major (C) matrix.
-
-        Returns
-        -------
-        A (nrow x ncol) numba device ndarray
-        """
+        warnings.warn(
+            "The as_gpu_matrix method will be removed in a future cuDF "
+            "release. Consider using `to_cupy` instead.",
+            DeprecationWarning,
+        )
         if columns is None:
             columns = self._data.names
 
@@ -3782,18 +3742,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         return cuda.as_cuda_array(matrix).view(dtype)
 
     def as_matrix(self, columns=None):
-        """Convert to a matrix in host memory.
-
-        Parameters
-        ----------
-        columns : sequence of str
-            List of a column names to be extracted.  The order is preserved.
-            If None is specified, all columns are used.
-
-        Returns
-        -------
-        A (nrow x ncol) numpy ndarray in "F" order.
-        """
+        warnings.warn(
+            "The as_matrix method will be removed in a future cuDF "
+            "release. Consider using `to_numpy` instead.",
+            DeprecationWarning,
+        )
         return self.as_gpu_matrix(columns=columns).copy_to_host()
 
     def one_hot_encoding(
@@ -4399,7 +4352,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         sort=False,
         lsuffix=None,
         rsuffix=None,
-        method="hash",
+        method=None,
         indicator=False,
         suffixes=("_x", "_y"),
     ):
@@ -4444,8 +4397,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         suffixes: Tuple[str, str], defaults to ('_x', '_y')
             Suffixes applied to overlapping column names on the left and right
             sides
-        method : {‘hash’, ‘sort’}, default ‘hash’
-            The implementation method to be used for the operation.
+        method :
+            This parameter is unused. It is deprecated and will be removed in a
+            future version.
 
         Returns
         -------
@@ -4507,6 +4461,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         else:
             lsuffix, rsuffix = suffixes
 
+        if method is not None:
+            warnings.warn(
+                "The 'method' argument is deprecated and will be removed "
+                "in a future version of cudf.",
+                FutureWarning,
+            )
+
         # Compute merge
         gdf_result = super()._merge(
             right,
@@ -4517,7 +4478,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             right_index=right_index,
             how=how,
             sort=sort,
-            method=method,
             indicator=indicator,
             suffixes=suffixes,
         )
@@ -4532,7 +4492,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         lsuffix="",
         rsuffix="",
         sort=False,
-        method="hash",
+        method=None,
     ):
         """Join columns with other DataFrame on index or on a key column.
 
@@ -4546,6 +4506,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             column names when avoiding conflicts.
         sort : bool
             Set to True to ensure sorted ordering.
+        method :
+            This parameter is unused. It is deprecated and will be removed in a
+            future version.
 
         Returns
         -------
@@ -4559,6 +4522,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         - *on* is not supported yet due to lack of multi-index support.
         """
 
+        if method is not None:
+            warnings.warn(
+                "The 'method' argument is deprecated and will be removed "
+                "in a future version of cudf.",
+                FutureWarning,
+            )
+
         lhs = self
         rhs = other
 
@@ -4568,7 +4538,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             right_index=True,
             how=how,
             suffixes=(lsuffix, rsuffix),
-            method=method,
             sort=sort,
         )
         df.index.name = (
@@ -4865,12 +4834,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         Available only using cuda 11.1+ due to particular required
         runtime compilation features
         """
-
-        # libcudacxx tuples are not compatible with nvrtc 11.0
-        runtime = cuda.cudadrv.runtime.Runtime()
-        mjr, mnr = runtime.get_version()
-        if mjr < 11 or (mjr == 11 and mnr < 1):
-            raise RuntimeError("DataFrame.apply requires CUDA 11.1+")
 
         for dtype in self.dtypes:
             if (
@@ -5744,9 +5707,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         dtype = np.dtype(members)
         ret = np.recarray(len(self), dtype=dtype)
         if index:
-            ret["index"] = self.index.to_array()
+            ret["index"] = self.index.to_numpy()
         for col in self._data.names:
-            ret[col] = self[col].to_array()
+            ret[col] = self[col].to_numpy()
         return ret
 
     @classmethod

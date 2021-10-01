@@ -299,7 +299,8 @@ __inline__ __device__ T decode_value(char const* begin,
   return cudf::io::parse_numeric<T, base>(begin, end, opts);
 }
 
-template <typename T>
+template <typename T,
+          std::enable_if_t<!cudf::is_timestamp<T>() and !cudf::is_duration<T>()>* = nullptr>
 __inline__ __device__ T decode_value(char const* begin,
                                      char const* end,
                                      parse_options_view const& opts)
@@ -307,80 +308,21 @@ __inline__ __device__ T decode_value(char const* begin,
   return cudf::io::parse_numeric<T>(begin, end, opts);
 }
 
-template <>
-__inline__ __device__ cudf::timestamp_D decode_value(char const* begin,
-                                                     char const* end,
-                                                     parse_options_view const& opts)
+template <typename T, std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
+__inline__ __device__ T decode_value(char const* begin,
+                                     char const* end,
+                                     parse_options_view const& opts)
 {
-  return timestamp_D{cudf::duration_D{to_date(begin, end, opts.dayfirst)}};
+  return to_timestamp<T>(begin, end, opts.dayfirst);
 }
 
-template <>
-__inline__ __device__ cudf::timestamp_s decode_value(char const* begin,
-                                                     char const* end,
-                                                     parse_options_view const& opts)
+template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
+__inline__ __device__ T decode_value(char const* begin,
+                                     char const* end,
+                                     parse_options_view const& opts)
 {
-  auto milli = to_date_time(begin, end, opts.dayfirst);
-  if (milli == -1) {
-    return timestamp_s{cudf::duration_s{to_non_negative_integer<int64_t>(begin, end)}};
-  } else {
-    return timestamp_s{cudf::duration_s{milli / 1000}};
-  }
+  return to_duration<T>(begin, end);
 }
-
-template <>
-__inline__ __device__ cudf::timestamp_ms decode_value(char const* begin,
-                                                      char const* end,
-                                                      parse_options_view const& opts)
-{
-  auto milli = to_date_time(begin, end, opts.dayfirst);
-  if (milli == -1) {
-    return timestamp_ms{cudf::duration_ms{to_non_negative_integer<int64_t>(begin, end)}};
-  } else {
-    return timestamp_ms{cudf::duration_ms{milli}};
-  }
-}
-
-template <>
-__inline__ __device__ cudf::timestamp_us decode_value(char const* begin,
-                                                      char const* end,
-                                                      parse_options_view const& opts)
-{
-  auto milli = to_date_time(begin, end, opts.dayfirst);
-  if (milli == -1) {
-    return timestamp_us{cudf::duration_us{to_non_negative_integer<int64_t>(begin, end)}};
-  } else {
-    return timestamp_us{cudf::duration_us{milli * 1000}};
-  }
-}
-
-template <>
-__inline__ __device__ cudf::timestamp_ns decode_value(char const* begin,
-                                                      char const* end,
-                                                      parse_options_view const& opts)
-{
-  auto milli = to_date_time(begin, end, opts.dayfirst);
-  if (milli == -1) {
-    return timestamp_ns{cudf::duration_ns{to_non_negative_integer<int64_t>(begin, end)}};
-  } else {
-    return timestamp_ns{cudf::duration_ns{milli * 1000000}};
-  }
-}
-
-#ifndef DURATION_DECODE_VALUE
-#define DURATION_DECODE_VALUE(Type)                                     \
-  template <>                                                           \
-  __inline__ __device__ Type decode_value(                              \
-    const char* begin, const char* end, parse_options_view const& opts) \
-  {                                                                     \
-    return Type{to_time_delta<Type>(begin, end)};                       \
-  }
-#endif
-DURATION_DECODE_VALUE(duration_D)
-DURATION_DECODE_VALUE(duration_s)
-DURATION_DECODE_VALUE(duration_ms)
-DURATION_DECODE_VALUE(duration_us)
-DURATION_DECODE_VALUE(duration_ns)
 
 // The purpose of this is merely to allow compilation ONLY
 // TODO : make this work for csv
