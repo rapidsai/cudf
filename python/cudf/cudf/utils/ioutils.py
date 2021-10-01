@@ -390,6 +390,12 @@ compression : {{ 'snappy', None }}, default None
     Name of the compression to use. Use None for no compression.
 enable_statistics: boolean, default True
     Enable writing column statistics.
+stripe_size_bytes: integer, default 67108864 (64MB)
+    Maximum size of each stripe of the output
+stripe_size_rows: integer, default 1000000
+    Maximum number of rows of each stripe of the output
+row_index_stride: integer, default 10000
+    Row index stride (maximum number of rows in each row group)
 
 
 Notes

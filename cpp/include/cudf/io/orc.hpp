@@ -386,7 +386,7 @@ class orc_writer_options {
   compression_type _compression = compression_type::AUTO;
   // Enable writing column statistics
   bool _enable_statistics = true;
-  // Maximum size of each stripes (unless smaller than a single row group)
+  // Maximum size of each stripe (unless smaller than a single row group)
   size_t _stripe_size_bytes = 64 * 1024 * 1024;
   // Maximum number of rows in stripe (unless smaller than a single row group)
   size_type _stripe_size_rows = 1000000;
@@ -687,7 +687,7 @@ class chunked_orc_writer_options {
   compression_type _compression = compression_type::AUTO;
   // Enable writing column statistics
   bool _enable_statistics = true;
-  // Maximum size of each stripes (unless smaller than a single row group)
+  // Maximum size of each stripe (unless smaller than a single row group)
   size_t _stripe_size_bytes = 64 * 1024 * 1024;
   // Maximum number of rows in stripe (unless smaller than a single row group)
   size_type _stripe_size_rows = 1000000;
