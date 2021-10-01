@@ -136,9 +136,9 @@ void CUDA_DEVICE_CALLABLE md5_process(T const& key, md5_intermediate_data* hash_
 {
   if constexpr (is_fixed_width<T>() && !is_chrono<T>()) {
     if constexpr (is_floating_point<T>()) {
-      auto const normalized_key = normalize_nans_and_zeros_helper<T>(key);
-      uint8_t const* data       = reinterpret_cast<uint8_t const*>(&normalized_key);
-      uint32_t constexpr len    = sizeof(T);
+      T const normalized_key = normalize_nans_and_zeros_helper<T>(key);
+      uint8_t const* data    = reinterpret_cast<uint8_t const*>(&normalized_key);
+      uint32_t constexpr len = sizeof(T);
       md5_process_bytes(data, len, hash_state);
     } else {
       uint8_t const* data    = reinterpret_cast<uint8_t const*>(&key);
@@ -153,6 +153,7 @@ void CUDA_DEVICE_CALLABLE md5_process(T const& key, md5_intermediate_data* hash_
     cudf_assert(false && "Unsupported type for hash function.");
   }
 }
+
 // MD5 supported leaf data type check
 bool md5_type_check(data_type dt)
 {
@@ -211,9 +212,9 @@ struct MD5Hash {
       thrust::fill_n(thrust::seq, hash_state->buffer, md5_chunk_size - message_length_size, 0x00);
     }
 
-    std::memcpy(hash_state->buffer + md5_chunk_size - message_length_size,
-                reinterpret_cast<uint8_t const*>(&full_length),
-                message_length_size);
+    memcpy(hash_state->buffer + md5_chunk_size - message_length_size,
+           reinterpret_cast<uint8_t const*>(&full_length),
+           message_length_size);
     md5_hash_step(hash_state);
 
     for (int i = 0; i < 4; ++i)
