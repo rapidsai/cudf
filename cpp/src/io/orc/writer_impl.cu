@@ -1484,7 +1484,13 @@ orc_table_view make_orc_table_view(table_view const& table,
     append_orc_column(table.column(col_idx), nullptr, table_meta.column_metadata[col_idx]);
   }
 
-  CUDF_FAIL("stop");
+  std::vector<TypeKind> type_kinds;
+  type_kinds.reserve(orc_columns.size());
+  std::transform(
+    orc_columns.cbegin(), orc_columns.cend(), std::back_inserter(type_kinds), [](auto& orc_column) {
+      return orc_column.orc_kind();
+    });
+  auto const d_type_kinds = cudf::detail::make_device_uvector_async(type_kinds, stream);
 
   rmm::device_uvector<orc_column_device_view> d_orc_columns(orc_columns.size(), stream);
   using stack_value_type = thrust::pair<column_device_view const*, thrust::optional<uint32_t>>;
@@ -1493,6 +1499,7 @@ orc_table_view make_orc_table_view(table_view const& table,
   // pre-order append ORC device columns
   cudf::detail::device_single_thread(
     [d_orc_cols         = device_span<orc_column_device_view>{d_orc_columns},
+     d_type_kinds       = device_span<TypeKind const>{d_type_kinds},
      d_table            = d_table,
      stack_storage      = stack_storage.data(),
      stack_storage_size = stack_storage.size()] __device__() {
@@ -1510,6 +1517,11 @@ orc_table_view make_orc_table_view(table_view const& table,
         auto [col, parent] = stack.pop();
         d_orc_cols[idx]    = orc_column_device_view{*col, parent};
 
+        if (d_type_kinds[idx] == TypeKind::MAP) {
+          // Skip to the list child - do not include the child column, just grandchildren columns
+          col = &col->children()[lists_column_view::child_column_index];
+        }
+
         if (col->type().id() == type_id::LIST) {
           stack.push({&col->children()[lists_column_view::child_column_index], idx});
         } else if (col->type().id() == type_id::STRUCT) {
@@ -1520,7 +1532,7 @@ orc_table_view make_orc_table_view(table_view const& table,
                              stack.push({&c, idx});
                            });
         }
-        idx++;
+        ++idx;
       }
     },
     stream);
