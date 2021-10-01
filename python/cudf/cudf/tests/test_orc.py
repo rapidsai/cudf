@@ -570,7 +570,7 @@ def test_orc_reader_tzif_timestamps(datadir):
         pytest.skip(".orc file is not found: %s" % e)
 
     pdf = orcfile.read().to_pandas()
-    gdf = cudf.read_orc(path, engine="cudf").to_pandas()
+    gdf = cudf.read_orc(path).to_pandas()
 
     assert_eq(pdf, gdf)
 
@@ -704,7 +704,7 @@ def test_orc_reader_gmt_timestamps(datadir):
         pytest.skip(".orc file is not found: %s" % e)
 
     pdf = orcfile.read().to_pandas()
-    gdf = cudf.read_orc(path, engine="cudf").to_pandas()
+    gdf = cudf.read_orc(path).to_pandas()
     assert_eq(pdf, gdf)
 
 
@@ -803,9 +803,7 @@ def test_orc_reader_multiple_files(datadir, num_rows):
     df_2 = pd.read_orc(path)
     df = pd.concat([df_1, df_2], ignore_index=True)
 
-    gdf = cudf.read_orc(
-        [path, path], engine="cudf", num_rows=num_rows
-    ).to_pandas()
+    gdf = cudf.read_orc([path, path], num_rows=num_rows).to_pandas()
 
     # Slice rows out of the whole dataframe for comparison as PyArrow doesn't
     # have an API to read a subsection of rows from the file
@@ -821,13 +819,13 @@ def test_orc_reader_multi_file_single_stripe(datadir):
 
     # should raise an exception
     with pytest.raises(ValueError):
-        cudf.read_orc([path, path], engine="cudf", stripes=[0])
+        cudf.read_orc([path, path], stripes=[0])
 
 
 def test_orc_reader_multi_file_multi_stripe(datadir):
 
     path = datadir / "TestOrcFile.testStripeLevelStats.orc"
-    gdf = cudf.read_orc([path, path], engine="cudf", stripes=[[0, 1], [2]])
+    gdf = cudf.read_orc([path, path], stripes=[[0, 1], [2]])
     pdf = pd.read_orc(path)
     assert_eq(pdf, gdf)
 
@@ -1197,9 +1195,7 @@ def test_orc_reader_decimal(datadir, data):
         pytest.skip(".orc file is not found: %s" % e)
 
     pdf = orcfile.read().to_pandas()
-    gdf = cudf.read_orc(
-        path, engine="cudf", decimal_cols_as_float=data
-    ).to_pandas()
+    gdf = cudf.read_orc(path, decimal_cols_as_float=data).to_pandas()
 
     # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
     # This is because cuDF returns as float64
@@ -1217,9 +1213,7 @@ def test_orc_reader_decimal_invalid_column(datadir, data):
         pytest.skip(".orc file is not found: %s" % e)
 
     pdf = orcfile.read().to_pandas()
-    gdf = cudf.read_orc(
-        path, engine="cudf", decimal_cols_as_float=data
-    ).to_pandas()
+    gdf = cudf.read_orc(path, decimal_cols_as_float=data).to_pandas()
 
     # Since the `decimal_cols_as_float` column name
     # is invalid, this should be a decimal
