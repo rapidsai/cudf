@@ -165,6 +165,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
     # Access the Parquet user_data json to find the index
     index_col = None
+    is_range_index = False
     cdef map[string, string] user_data = c_out_table.metadata.user_data
     json_str = user_data[b'pandas'].decode('utf-8')
     meta = None
@@ -176,7 +177,6 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                     index_col[0]['kind'] == 'range':
                 is_range_index = True
             else:
-                is_range_index = False
                 index_col_names = OrderedDict()
                 for idx_col in index_col:
                     for c in meta['columns']:

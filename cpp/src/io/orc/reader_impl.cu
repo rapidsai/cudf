@@ -24,6 +24,7 @@
 #include "timezone.cuh"
 
 #include <io/comp/gpuinflate.h>
+#include <io/utilities/time_utils.cuh>
 #include "orc.h"
 
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -89,20 +90,6 @@ constexpr type_id to_type_id(const orc::SchemaType& schema,
   }
 
   return type_id::EMPTY;
-}
-
-/**
- * @brief Function that translates cuDF time unit to ORC clock frequency
- */
-constexpr int32_t to_clockrate(type_id timestamp_type_id)
-{
-  switch (timestamp_type_id) {
-    case type_id::TIMESTAMP_SECONDS: return 1;
-    case type_id::TIMESTAMP_MILLISECONDS: return 1000;
-    case type_id::TIMESTAMP_MICROSECONDS: return 1000000;
-    case type_id::TIMESTAMP_NANOSECONDS: return 1000000000;
-    default: return 0;
-  }
 }
 
 constexpr std::pair<gpu::StreamIndexType, uint32_t> get_index_type_and_pos(
@@ -822,8 +809,8 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
     }
   }
 
-  thrust::counting_iterator<int, thrust::host_space_tag> col_idx_it(0);
-  thrust::counting_iterator<int, thrust::host_space_tag> stripe_idx_it(0);
+  thrust::counting_iterator<int> col_idx_it(0);
+  thrust::counting_iterator<int> stripe_idx_it(0);
 
   if (is_mask_updated) {
     // Update chunks with pointers to column data which might have been changed.
@@ -892,8 +879,8 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
 {
   const auto num_stripes = chunks.size().first;
   const auto num_columns = chunks.size().second;
-  thrust::counting_iterator<int, thrust::host_space_tag> col_idx_it(0);
-  thrust::counting_iterator<int, thrust::host_space_tag> stripe_idx_it(0);
+  thrust::counting_iterator<int> col_idx_it(0);
+  thrust::counting_iterator<int> stripe_idx_it(0);
 
   // Update chunks with pointers to column data
   std::for_each(stripe_idx_it, stripe_idx_it + num_stripes, [&](auto stripe_idx) {
