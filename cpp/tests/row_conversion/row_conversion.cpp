@@ -185,13 +185,6 @@ TEST_F(ColumnToRowTests, Non2Power)
     auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
 
     for (int j = 0; j < old_tbl->num_columns(); ++j) {
-      printf("testing column %d\n", j);
-      if (j == 65) {
-        printf("old\n");
-        cudf::test::print(old_tbl->get_column(j));
-        printf("new\n");
-        cudf::test::print(new_tbl->get_column(j));
-      }
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(old_tbl->get_column(j), new_tbl->get_column(j));
     }
 
