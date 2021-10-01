@@ -4504,7 +4504,8 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             Suffixes applied to overlapping column names on the left and right
             sides
         method :
-            This parameter is unused.
+            This parameter is unused. It is deprecated and will be removed in a
+            future version.
 
         Returns
         -------
@@ -4566,6 +4567,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         else:
             lsuffix, rsuffix = suffixes
 
+        if method is not None:
+            warnings.warn(
+                "The 'method' argument is deprecated and will be removed "
+                "in a future version of cudf.",
+                FutureWarning,
+            )
+
         # Compute merge
         gdf_result = super()._merge(
             right,
@@ -4605,7 +4613,8 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         sort : bool
             Set to True to ensure sorted ordering.
         method :
-            This parameter is unused.
+            This parameter is unused. It is deprecated and will be removed in a
+            future version.
 
         Returns
         -------
@@ -4618,6 +4627,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         - *other* must be a single DataFrame for now.
         - *on* is not supported yet due to lack of multi-index support.
         """
+
+        if method is not None:
+            warnings.warn(
+                "The 'method' argument is deprecated and will be removed "
+                "in a future version of cudf.",
+                FutureWarning,
+            )
 
         lhs = self
         rhs = other
