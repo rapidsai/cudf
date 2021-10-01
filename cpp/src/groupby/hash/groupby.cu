@@ -170,8 +170,8 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   size_type const map_size;
   Map const& map;
   bitmask_type const* __restrict__ row_bitmask;
-  rmm::mr::device_memory_resource* mr;
   rmm::cuda_stream_view stream;
+  rmm::mr::device_memory_resource* mr;
 
  public:
   using cudf::detail::aggregation_finalizer::visit;

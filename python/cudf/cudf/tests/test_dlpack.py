@@ -126,7 +126,7 @@ def test_to_dlpack_cupy_1d(data_1d):
     expectation = data_size_expectation_builder(data_1d, False)
     with expectation:
         gs = cudf.Series(data_1d, nan_as_null=False)
-        cudf_host_array = gs.to_array(fillna="pandas")
+        cudf_host_array = gs.to_numpy(na_value=np.nan)
         dlt = gs._column.to_dlpack()
 
         cupy_array = cupy.fromDlpack(dlt)
@@ -155,7 +155,7 @@ def test_from_dlpack_cupy_1d(data_1d):
     dlt = cupy_array.toDlpack()
 
     gs = cudf.from_dlpack(dlt)
-    cudf_host_array = gs.to_array(fillna="pandas")
+    cudf_host_array = gs.to_numpy(na_value=np.nan)
 
     assert_eq(cudf_host_array, cupy_host_array)
 
@@ -190,7 +190,7 @@ def test_to_dlpack_cupy_1d_null(data_1d):
 
     with expectation:
         gs = cudf.Series(data_1d)
-        cudf_host_array = gs.to_array(fillna="pandas")
+        cudf_host_array = gs.to_numpy(na_value=np.nan)
         dlt = gs._column.to_dlpack()
 
         cupy_array = cupy.fromDlpack(dlt)

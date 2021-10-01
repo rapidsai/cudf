@@ -4,6 +4,7 @@ from __future__ import annotations, division, print_function
 
 import math
 import pickle
+import warnings
 from numbers import Number
 from typing import (
     Any,
@@ -601,6 +602,23 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         name = kwargs.get("name")
         super().__init__({name: data})
 
+    @classmethod
+    def deserialize(cls, header, frames):
+        if "index_column" in header:
+            warnings.warn(
+                "Index objects serialized in cudf version "
+                "21.10 or older will no longer be deserializable "
+                "after version 21.12. Please load and resave any "
+                "pickles before upgrading to version 22.02.",
+                DeprecationWarning,
+            )
+            header["columns"] = [header.pop("index_column")]
+            header["column_names"] = pickle.dumps(
+                [pickle.loads(header["name"])]
+            )
+
+        return super().deserialize(header, frames)
+
     def drop_duplicates(self, keep="first"):
         """
         Return Index with duplicate values removed
@@ -852,8 +870,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         # Not sorted and not unique. Return a boolean mask
         mask = cupy.full(self._data.nrows, False)
-        true_inds = sort_inds.slice(lower_bound, upper_bound).to_gpu_array()
-        mask[cupy.array(true_inds)] = True
+        true_inds = sort_inds.slice(lower_bound, upper_bound).values
+        mask[true_inds] = True
         return mask
 
     def __sizeof__(self):
@@ -1597,6 +1615,27 @@ class DatetimeIndex(GenericIndex):
         res = extract_quarter(self._values)
         return Int8Index(res, dtype="int8")
 
+    def isocalendar(self):
+        """
+        Returns a DataFrame with the year, week, and day
+        calculated according to the ISO 8601 standard.
+
+        Returns
+        -------
+        DataFrame
+        with columns year, week and day
+
+        Examples
+        --------
+        >>> gIndex = cudf.DatetimeIndex(["2020-05-31 08:00:00",
+        ...    "1999-12-31 18:40:00"])
+        >>> gIndex.isocalendar()
+                             year  week  day
+        2020-05-31 08:00:00  2020    22    7
+        1999-12-31 18:40:00  1999    52    5
+        """
+        return cudf.core.tools.datetimes._to_iso_calendar(self)
+
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
         return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
@@ -2108,7 +2147,9 @@ class StringIndex(GenericIndex):
         super().__init__(values, **kwargs)
 
     def to_pandas(self):
-        return pd.Index(self.to_array(), name=self.name, dtype="object")
+        return pd.Index(
+            self.to_numpy(na_value=None), name=self.name, dtype="object"
+        )
 
     def take(self, indices):
         return self._values[indices]
