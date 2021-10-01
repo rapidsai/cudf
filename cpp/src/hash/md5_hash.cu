@@ -206,8 +206,9 @@ struct MD5Hash {
       thrust::fill(thrust::seq, hash_state->buffer, message_end, 0x00);
     }
 
-    uint64_t const full_length = hash_state->message_length * 8;
-    memcpy(message_end, reinterpret_cast<char const*>(&full_length), message_length_size);
+    uint64_t const message_length_in_bits = hash_state->message_length * 8;
+    memcpy(
+      message_end, reinterpret_cast<char const*>(&message_length_in_bits), message_length_size);
     md5_hash_step(hash_state);
 
     for (int i = 0; i < 4; ++i)
