@@ -230,12 +230,12 @@ std::unique_ptr<Base> make_median_aggregation();
 /**
  * @brief Factory to create a QUANTILE aggregation
  *
- * @param q The desired quantiles
- * @param i The desired interpolation
+ * @param quantiles The desired quantiles
+ * @param interp The desired interpolation
  */
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_quantile_aggregation(std::vector<double> const& q,
-                                                interpolation i = interpolation::LINEAR);
+std::unique_ptr<Base> make_quantile_aggregation(std::vector<double> const& quantiles,
+                                                interpolation interp = interpolation::LINEAR);
 
 /**
  * @brief Factory to create an `argmax` aggregation
