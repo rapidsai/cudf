@@ -44,6 +44,15 @@ def run_masked_udf_series(func_psr, func_gsr, data, **kwargs):
     assert_eq(expect, obtain, **kwargs)
 
 
+def run_masked_udf_series(func_psr, func_gsr, data, **kwargs):
+    gsr = data
+    psr = data.to_pandas(nullable=True)
+
+    expect = psr.apply(func_psr)
+    obtain = gsr.apply(func_gsr)
+    assert_eq(expect, obtain, **kwargs)
+
+
 @pytest.mark.parametrize("op", arith_ops)
 def test_arith_masked_vs_masked(op):
     # This test should test all the typing

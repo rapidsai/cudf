@@ -192,7 +192,6 @@ def _define_function(fr, row_type, scalar_return=False):
     if `*args` is a singular argument. Thus we are forced to write the right
     funtions dynamically at runtime and define them using `exec`.
     """
-
     # Create argument list for kernel
     input_columns = ", ".join([f"input_col_{i}" for i in range(len(fr._data))])
     input_offsets = ", ".join([f"offset_{i}" for i in range(len(fr._data))])
@@ -266,7 +265,7 @@ def compile_or_get(df, f):
 
     # precompile the user udf to get the right return type.
     # could be a MaskedType or a scalar type.
-    numba_return_type = get_udf_return_type(f, df)
+    numba_return_type = get_udf_return_type(f, frame_dtypes)
 
     _is_scalar_return = not isinstance(numba_return_type, MaskedType)
     scalar_return_type = (
