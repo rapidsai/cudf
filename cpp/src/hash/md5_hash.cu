@@ -181,34 +181,33 @@ struct MD5ListHasher {
 struct MD5Hash {
   void CUDA_DEVICE_CALLABLE finalize(md5_intermediate_data* hash_state, char* result_location) const
   {
-    thrust::fill_n(thrust::seq, hash_state->buffer + hash_state->buffer_length, 1, 0x80);
-
     // 64 bytes are processed in each hash step
     constexpr int md5_chunk_size = 64;
     // 8 bytes for the total message length, appended to the end of the last chunk processed
     constexpr int message_length_size = 8;
     // 1 byte for the end of the message flag
     constexpr int end_of_message_size = 1;
-    if (hash_state->buffer_length + message_length_size + end_of_message_size <= md5_chunk_size) {
-      thrust::fill_n(
-        thrust::seq,
-        hash_state->buffer + hash_state->buffer_length + 1,
-        (md5_chunk_size - message_length_size - end_of_message_size - hash_state->buffer_length),
-        0x00);
-    } else {
-      thrust::fill_n(thrust::seq,
-                     hash_state->buffer + hash_state->buffer_length + 1,
-                     (md5_chunk_size - hash_state->buffer_length),
-                     0x00);
-      md5_hash_step(hash_state);
 
-      thrust::fill_n(thrust::seq, hash_state->buffer, md5_chunk_size - message_length_size, 0x00);
+    auto const padding_begin = thrust::fill_n(
+      thrust::seq, hash_state->buffer + hash_state->buffer_length, end_of_message_size, 0x80);
+    auto const buffer_end  = hash_state->buffer + md5_chunk_size;
+    auto const message_end = buffer_end - message_length_size;
+
+    if (padding_begin <= message_end) {
+      // The message size fits in this hash step. Pad up to the point where the message size
+      // goes with zeros.
+      thrust::fill(thrust::seq, padding_begin, message_end, 0x00);
+    } else {
+      // The message size will be processed in a separate hash step. Pad the remainder of the buffer
+      // with zeros for this hash step.
+      thrust::fill(thrust::seq, padding_begin, buffer_end, 0x00);
+      md5_hash_step(hash_state);
+      // Pad up to the point where the message size goes with zeros.
+      thrust::fill(thrust::seq, hash_state->buffer, message_end, 0x00);
     }
 
     uint64_t const full_length = hash_state->message_length * 8;
-    memcpy(hash_state->buffer + md5_chunk_size - message_length_size,
-           reinterpret_cast<char const*>(&full_length),
-           message_length_size);
+    memcpy(message_end, reinterpret_cast<char const*>(&full_length), message_length_size);
     md5_hash_step(hash_state);
 
     for (int i = 0; i < 4; ++i)
