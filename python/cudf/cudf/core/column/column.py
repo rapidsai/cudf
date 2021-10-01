@@ -403,10 +403,9 @@ class ColumnBase(Column, Serializable):
     def nullmask(self) -> Buffer:
         """The gpu buffer for the null-mask
         """
-        if self.nullable:
-            return self.mask_array_view
-        else:
+        if not self.nullable:
             raise ValueError("Column has no null mask")
+        return self.mask_array_view
 
     def copy(self: T, deep: bool = True) -> T:
         """Columns are immutable, so a deep copy produces a copy of the
@@ -471,6 +470,7 @@ class ColumnBase(Column, Serializable):
                     + f" total bytes into {dtype} with size {dtype.itemsize}"
                 )
 
+            # This assertion prevents mypy errors below.
             assert self.base_data is not None
             new_buf_ptr = (
                 self.base_data.ptr + self.offset * self.dtype.itemsize
@@ -742,9 +742,7 @@ class ColumnBase(Column, Serializable):
             # typecasting fails
             return full(len(self), False, dtype="bool")
 
-        res = lhs._obtain_isin_result(rhs)
-
-        return res
+        return lhs._obtain_isin_result(rhs)
 
     def _process_values_for_isin(
         self, values: Sequence
@@ -786,8 +784,7 @@ class ColumnBase(Column, Serializable):
         )
         res = ldf.merge(rdf, on="x", how="left").sort_values(by="orig_order")
         res = res.drop_duplicates(subset="orig_order", ignore_index=True)
-        res = res._data["bool"].fillna(False)
-        return res
+        return res._data["bool"].fillna(False)
 
     def as_mask(self) -> Buffer:
         """Convert booleans to bitmask
