@@ -1661,9 +1661,7 @@ class MultiIndex(Frame, BaseIndex):
             # the range is returned.
             return slice(lower_bound, upper_bound)
 
-        true_inds = cupy.array(
-            sort_inds.slice(lower_bound, upper_bound).to_gpu_array()
-        )
+        true_inds = sort_inds.slice(lower_bound, upper_bound).values
         true_inds = _maybe_indices_to_slice(true_inds)
         if isinstance(true_inds, slice):
             return true_inds

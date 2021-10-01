@@ -1012,8 +1012,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         # Not sorted and not unique. Return a boolean mask
         mask = cupy.full(self._data.nrows, False)
-        true_inds = sort_inds.slice(lower_bound, upper_bound).to_gpu_array()
-        mask[cupy.array(true_inds)] = True
+        true_inds = sort_inds.slice(lower_bound, upper_bound).values
+        mask[true_inds] = True
         return mask
 
     def __sizeof__(self):
@@ -2289,7 +2289,9 @@ class StringIndex(GenericIndex):
         super().__init__(values, **kwargs)
 
     def to_pandas(self):
-        return pd.Index(self.to_array(), name=self.name, dtype="object")
+        return pd.Index(
+            self.to_numpy(na_value=None), name=self.name, dtype="object"
+        )
 
     def take(self, indices):
         return self._values[indices]
