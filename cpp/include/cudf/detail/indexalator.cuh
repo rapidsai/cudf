@@ -484,7 +484,7 @@ struct indexalator_factory {
   /**
    * @brief An index accessor that returns a validity flag along with the index value.
    *
-   * This is suitable as a `pair_iterator`.
+   * This is suitable as a `pair_iterator` for calling functions like `copy_if_else`.
    */
   struct nullable_index_accessor {
     input_indexalator iter;
