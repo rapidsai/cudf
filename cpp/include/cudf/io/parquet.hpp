@@ -632,6 +632,8 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(
  * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
  * into a single metadata blob.
  *
+ * @ingroup io_writers
+ *
  * @param[in] metadata_list List of input file metadata.
  * @return A parquet-compatible blob that contains the data for all row groups in the list.
  */
@@ -821,18 +823,6 @@ class chunked_parquet_writer_options_builder {
    */
   chunked_parquet_writer_options&& build() { return std::move(options); }
 };
-
-/**
- * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
- * into a single metadata blob
- *
- * @ingroup io_writers
- *
- * @param[in] metadata_list List of input file metadata
- * @return A parquet-compatible blob that contains the data for all rowgroups in the list
- */
-std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
-  const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
 
 /**
  * @brief chunked parquet writer class to handle options and write tables in chunks.
