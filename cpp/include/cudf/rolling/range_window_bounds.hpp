@@ -38,10 +38,10 @@ struct range_window_bounds {
   /**
    * @brief Factory method to construct a bounded window boundary.
    *
-   * @param scalar_ Finite window boundary
+   * @param boundary Finite window boundary
    *
    */
-  static range_window_bounds get(scalar const& scalar_);
+  static range_window_bounds get(scalar const& boundary);
 
   /**
    * @brief Factory method to construct an unbounded window boundary.

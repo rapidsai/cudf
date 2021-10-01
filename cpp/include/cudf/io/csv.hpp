@@ -449,9 +449,12 @@ class csv_reader_options {
   /**
    * @brief Sets indexes of columns to read.
    *
-   * @param col_ind Vector of column indices that are needed.
+   * @param col_indices Vector of column indices that are needed.
    */
-  void set_use_cols_indexes(std::vector<int> col_ind) { _use_cols_indexes = std::move(col_ind); }
+  void set_use_cols_indexes(std::vector<int> col_indices)
+  {
+    _use_cols_indexes = std::move(col_indices);
+  }
 
   /**
    * @brief Sets number of rows to read.
@@ -603,9 +606,12 @@ class csv_reader_options {
   /**
    * @brief Sets indexes of columns to read as datetime.
    *
-   * @param col_ind Vector of column indices to infer as datetime.
+   * @param col_indices Vector of column indices to infer as datetime.
    */
-  void set_parse_dates(std::vector<int> col_ind) { _parse_dates_indexes = std::move(col_ind); }
+  void set_parse_dates(std::vector<int> col_indices)
+  {
+    _parse_dates_indexes = std::move(col_indices);
+  }
 
   /**
    * @brief Sets names of columns to parse as hexadecimal
@@ -620,9 +626,9 @@ class csv_reader_options {
   /**
    * @brief Sets indexes of columns to parse as hexadecimal
    *
-   * @param col_ind Vector of column indices to parse as hexadecimal
+   * @param col_indices Vector of column indices to parse as hexadecimal
    */
-  void set_parse_hex(std::vector<int> col_ind) { _parse_hex_indexes = std::move(col_ind); }
+  void set_parse_hex(std::vector<int> col_indices) { _parse_hex_indexes = std::move(col_indices); }
 
   /**
    * @brief Sets per-column types
@@ -810,12 +816,12 @@ class csv_reader_options_builder {
   /**
    * @brief Sets indexes of columns to read.
    *
-   * @param col_ind Vector of column indices that are needed.
+   * @param col_indices Vector of column indices that are needed.
    * @return this for chaining.
    */
-  csv_reader_options_builder& use_cols_indexes(std::vector<int> col_ind)
+  csv_reader_options_builder& use_cols_indexes(std::vector<int> col_indices)
   {
-    options._use_cols_indexes = std::move(col_ind);
+    options._use_cols_indexes = std::move(col_indices);
     return *this;
   }
 
@@ -1026,12 +1032,12 @@ class csv_reader_options_builder {
   /**
    * @brief Sets indexes of columns to read as datetime.
    *
-   * @param col_ind Vector of column indices to read as datetime
+   * @param col_indices Vector of column indices to read as datetime
    * @return this for chaining.
    */
-  csv_reader_options_builder& parse_dates(std::vector<int> col_ind)
+  csv_reader_options_builder& parse_dates(std::vector<int> col_indices)
   {
-    options._parse_dates_indexes = std::move(col_ind);
+    options._parse_dates_indexes = std::move(col_indices);
     return *this;
   }
 
@@ -1050,12 +1056,12 @@ class csv_reader_options_builder {
   /**
    * @brief Sets indexes of columns to parse as hexadecimal.
    *
-   * @param col_ind Vector of column indices to parse as hexadecimal
+   * @param col_indices Vector of column indices to parse as hexadecimal
    * @return this for chaining.
    */
-  csv_reader_options_builder& parse_hex(std::vector<int> col_ind)
+  csv_reader_options_builder& parse_hex(std::vector<int> col_indices)
   {
-    options._parse_hex_indexes = std::move(col_ind);
+    options._parse_hex_indexes = std::move(col_indices);
     return *this;
   }
 
