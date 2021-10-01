@@ -23,7 +23,7 @@
 
 #include <io/comp/io_uncomp.h>
 #include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/type_conversion.cuh>
+#include <io/utilities/type_conversion.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -597,7 +597,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
 /**
  * @brief Read an entire set or a subset of data from the source
  *
- * @param[in] options reader options with Number of bytes offset from the start, 
+ * @param[in] options reader options with Number of bytes offset from the start,
  * Bytes to read; use `0` for all remaining data
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
