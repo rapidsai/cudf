@@ -565,7 +565,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @throws cudf::logic_error if column datatype and Element type mismatch.
    */
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  CUDA_HOST_DEVICE_CALLABLE auto optional_begin(contains_nulls::DYNAMIC, bool has_nulls) const
+  auto optional_begin(contains_nulls::DYNAMIC, bool has_nulls) const
   {
     return const_optional_iterator<T, contains_nulls::DYNAMIC>{
       count_it{0}, detail::optional_accessor<T, contains_nulls::DYNAMIC>{*this, has_nulls}};
@@ -605,7 +605,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @throws cudf::logic_error if column datatype and Element type mismatch.
    */
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  CUDA_HOST_DEVICE_CALLABLE auto optional_begin(contains_nulls::YES) const
+  auto optional_begin(contains_nulls::YES) const
   {
     return const_optional_iterator<T, contains_nulls::YES>{
       count_it{0}, detail::optional_accessor<T, contains_nulls::YES>{*this}};
@@ -644,7 +644,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @throws cudf::logic_error if column datatype and Element type mismatch.
    */
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
-  CUDA_HOST_DEVICE_CALLABLE auto optional_begin(contains_nulls::NO) const
+  auto optional_begin(contains_nulls::NO) const
   {
     return const_optional_iterator<T, contains_nulls::NO>{
       count_it{0}, detail::optional_accessor<T, contains_nulls::NO>{*this}};
@@ -1250,12 +1250,9 @@ struct optional_accessor {
    * @brief constructor
    * @param[in] _col column device view of cudf column
    */
-  CUDA_HOST_DEVICE_CALLABLE optional_accessor(column_device_view const& _col) : col{_col}
+  optional_accessor(column_device_view const& _col) : col{_col}
   {
-#ifndef __CUDA_ARCH__
-    CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()),
-                 "Data types do not match.");
-#endif
+    CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()), "the data type mismatch");
   }
 
   CUDA_DEVICE_CALLABLE
@@ -1278,14 +1275,11 @@ struct optional_accessor<T, contains_nulls::DYNAMIC> {
    * @brief constructor
    * @param[in] _col column device view of cudf column
    */
-  CUDA_HOST_DEVICE_CALLABLE optional_accessor(column_device_view const& _col, bool with_nulls)
+  optional_accessor(column_device_view const& _col, bool with_nulls)
     : col{_col}, has_nulls{with_nulls}
   {
-#ifndef __CUDA_ARCH__
-    CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()),
-                 "Data types do not match.");
+    CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()), "the data type mismatch");
     if (with_nulls) { CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column."); }
-#endif
   }
 
   CUDA_DEVICE_CALLABLE
