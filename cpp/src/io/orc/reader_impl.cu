@@ -24,6 +24,7 @@
 #include "timezone.cuh"
 
 #include <io/comp/gpuinflate.h>
+#include <io/utilities/time_utils.cuh>
 #include "orc.h"
 
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -89,20 +90,6 @@ constexpr type_id to_type_id(const orc::SchemaType& schema,
   }
 
   return type_id::EMPTY;
-}
-
-/**
- * @brief Function that translates cuDF time unit to ORC clock frequency
- */
-constexpr int32_t to_clockrate(type_id timestamp_type_id)
-{
-  switch (timestamp_type_id) {
-    case type_id::TIMESTAMP_SECONDS: return 1;
-    case type_id::TIMESTAMP_MILLISECONDS: return 1000;
-    case type_id::TIMESTAMP_MICROSECONDS: return 1000000;
-    case type_id::TIMESTAMP_NANOSECONDS: return 1000000000;
-    default: return 0;
-  }
 }
 
 constexpr std::pair<gpu::StreamIndexType, uint32_t> get_index_type_and_pos(
