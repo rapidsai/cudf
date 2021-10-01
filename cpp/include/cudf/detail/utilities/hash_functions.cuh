@@ -29,10 +29,10 @@ namespace cudf {
 namespace detail {
 
 /**
- * Normalization of floating point NANs and zeros helper
+ * Normalization of floating point NaNs and zeros, passthrough for all other values.
  */
 template <typename T>
-T CUDA_DEVICE_CALLABLE normalize_nans_and_zeros_helper(T const& key)
+T CUDA_DEVICE_CALLABLE normalize_nans_and_zeros(T const& key)
 {
   if constexpr (is_floating_point<T>()) {
     if (isnan(key)) {

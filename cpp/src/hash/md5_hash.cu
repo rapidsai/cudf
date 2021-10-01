@@ -126,6 +126,21 @@ void CUDA_DEVICE_CALLABLE md5_process_bytes(char const* data,
   }
 }
 
+template <typename Key>
+auto CUDA_DEVICE_CALLABLE get_data(Key const& k)
+{
+  if constexpr (is_fixed_width<Key>() && !is_chrono<Key>()) {
+    return thrust::make_pair(reinterpret_cast<char const*>(&k), sizeof(Key));
+  } else {
+    cudf_assert(false && "Unsupported type.");
+  }
+}
+
+auto CUDA_DEVICE_CALLABLE get_data(string_view const& s)
+{
+  return thrust::make_pair(s.data(), s.size_bytes());
+}
+
 /**
  * @brief MD5 typed element processor.
  *
@@ -134,24 +149,9 @@ void CUDA_DEVICE_CALLABLE md5_process_bytes(char const* data,
 template <typename T>
 void CUDA_DEVICE_CALLABLE md5_process(T const& key, md5_intermediate_data* hash_state)
 {
-  if constexpr (is_fixed_width<T>() && !is_chrono<T>()) {
-    T const normalized_key = normalize_nans_and_zeros_helper<T>(key);
-    char const* data       = reinterpret_cast<char const*>(&normalized_key);
-    uint32_t constexpr len = sizeof(T);
-    md5_process_bytes(data, len, hash_state);
-  } else if constexpr (std::is_same_v<T, string_view>) {
-    char const* data = reinterpret_cast<char const*>(key.data());
-    uint32_t len     = static_cast<uint32_t>(key.size_bytes());
-    md5_process_bytes(data, len, hash_state);
-  } else {
-    cudf_assert(false && "Unsupported type for hash function.");
-  }
-}
-
-// MD5 supported leaf data type check
-bool md5_type_check(data_type dt)
-{
-  return !is_chrono(dt) && (is_fixed_width(dt) || (dt.id() == type_id::STRING));
+  auto const normalized_key = normalize_nans_and_zeros(key);
+  auto const [data, size]   = get_data(normalized_key);
+  md5_process_bytes(data, size, hash_state);
 }
 
 struct MD5ListHasher {
@@ -250,6 +250,12 @@ void CUDA_DEVICE_CALLABLE MD5Hash::operator()<list_view>(column_device_view col,
   cudf::type_dispatcher(data.type(), MD5ListHasher{}, data, offset_begin, offset_end, hash_state);
 }
 
+// MD5 supported leaf data type check
+constexpr inline bool md5_leaf_type_check(data_type dt)
+{
+  return (is_fixed_width(dt) && !is_chrono(dt)) || dt.id() == type_id::STRING;
+}
+
 }  // namespace
 
 std::unique_ptr<column> md5_hash(table_view const& input,
@@ -267,9 +273,9 @@ std::unique_ptr<column> md5_hash(table_view const& input,
                            input.end(),
                            [](auto const& col) {
                              if (col.type().id() == type_id::LIST) {
-                               return md5_type_check(lists_column_view(col).child().type());
+                               return md5_leaf_type_check(lists_column_view(col).child().type());
                              }
-                             return md5_type_check(col.type());
+                             return md5_leaf_type_check(col.type());
                            }),
                "Unsupported column type for hash function.");
 
