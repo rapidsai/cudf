@@ -766,10 +766,10 @@ class orc_chunked_writer {
   /**
    * @brief Constructor with chunked writer options
    *
-   * @param[in] op options used to write table
+   * @param[in] options options used to write table
    * @param[in] mr Device memory resource to use for device memory allocation
    */
-  orc_chunked_writer(chunked_orc_writer_options const& op,
+  orc_chunked_writer(chunked_orc_writer_options const& options,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**

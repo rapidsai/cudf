@@ -533,6 +533,3 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& values,
 }  // namespace detail
 }  // namespace groupby
 }  // namespace cudf
-/** @endinternal
- *
- */

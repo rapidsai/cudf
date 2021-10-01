@@ -864,11 +864,11 @@ class parquet_chunked_writer {
   /**
    * @brief Constructor with chunked writer options
    *
-   * @param[in] op options used to write table
+   * @param[in] options options used to write table
    * @param[in] mr Device memory resource to use for device memory allocation
    */
   parquet_chunked_writer(
-    chunked_parquet_writer_options const& op,
+    chunked_parquet_writer_options const& options,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**

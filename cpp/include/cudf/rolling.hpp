@@ -54,6 +54,7 @@ namespace cudf {
  * @param[in] min_periods Minimum number of observations in window required to have a value,
  *                        otherwise element `i` is null.
  * @param[in] agg The rolling window aggregation type (SUM, MAX, MIN, etc.)
+ * @param[in] mr Device memory resource used to allocate the returned column's device memory
  *
  * @returns   A nullable output column containing the rolling window results
  */
