@@ -68,6 +68,7 @@ std::unique_ptr<column> string_null_min_max(
  *
  * @param lhs         The left operand string scalar
  * @param rhs         The right operand string column
+ * @param op          The binary operator
  * @param output_type The desired data type of the output column
  * @param stream      CUDA stream used for device memory operations and kernel launches.
  * @param mr          Device memory resource used to allocate the returned column's device memory
@@ -94,6 +95,7 @@ std::unique_ptr<column> binary_operation(
  *
  * @param lhs         The left operand string column
  * @param rhs         The right operand string scalar
+ * @param op          The binary operator
  * @param output_type The desired data type of the output column
  * @param stream      CUDA stream used for device memory operations and kernel launches.
  * @param mr          Device memory resource used to allocate the returned column's device memory
@@ -119,6 +121,7 @@ std::unique_ptr<column> binary_operation(
  *
  * @param lhs         The left operand string column
  * @param rhs         The right operand string column
+ * @param op          The binary operator enum
  * @param output_type The desired data type of the output column
  * @param stream      CUDA stream used for device memory operations and kernel launches.
  * @param mr          Device memory resource used to allocate the returned column's device memory
