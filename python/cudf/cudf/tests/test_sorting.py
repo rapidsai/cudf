@@ -94,10 +94,10 @@ def test_series_argsort(nelem, dtype, asc):
     res = sr.argsort(ascending=asc)
 
     if asc:
-        expected = np.argsort(sr.to_array(), kind="mergesort")
+        expected = np.argsort(sr.to_numpy(), kind="mergesort")
     else:
-        expected = np.argsort(sr.to_array() * -1, kind="mergesort")
-    np.testing.assert_array_equal(expected, res.to_array())
+        expected = np.argsort(sr.to_numpy() * -1, kind="mergesort")
+    np.testing.assert_array_equal(expected, res.to_numpy())
 
 
 @pytest.mark.parametrize(
@@ -165,8 +165,8 @@ def test_dataframe_nlargest(nelem, n):
 
     # Check
     inds = np.argsort(aa)
-    assert_eq(res["a"].to_array(), aa[inds][-n:][::-1])
-    assert_eq(res["b"].to_array(), bb[inds][-n:][::-1])
+    assert_eq(res["a"].to_numpy(), aa[inds][-n:][::-1])
+    assert_eq(res["b"].to_numpy(), bb[inds][-n:][::-1])
     assert_eq(res.index.values, inds[-n:][::-1])
 
 
@@ -180,8 +180,8 @@ def test_dataframe_nsmallest(nelem, n):
 
     # Check
     inds = np.argsort(-aa)
-    assert_eq(res["a"].to_array(), aa[inds][-n:][::-1])
-    assert_eq(res["b"].to_array(), bb[inds][-n:][::-1])
+    assert_eq(res["a"].to_numpy(), aa[inds][-n:][::-1])
+    assert_eq(res["b"].to_numpy(), bb[inds][-n:][::-1])
     assert_eq(res.index.values, inds[-n:][::-1])
 
 
