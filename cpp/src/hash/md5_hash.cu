@@ -91,7 +91,7 @@ void CUDA_DEVICE_CALLABLE md5_hash_step(md5_intermediate_data* hash_state)
  * This accepts arbitrary data, handles it as bytes, and calls the hash step
  * when the buffer is filled up to message_chunk_size bytes.
  */
-void CUDA_DEVICE_CALLABLE md5_process_bytes(uint8_t const* data,
+void CUDA_DEVICE_CALLABLE md5_process_bytes(char const* data,
                                             uint32_t len,
                                             md5_intermediate_data* hash_state)
 {
@@ -136,12 +136,12 @@ void CUDA_DEVICE_CALLABLE md5_process(T const& key, md5_intermediate_data* hash_
 {
   if constexpr (is_fixed_width<T>() && !is_chrono<T>()) {
     T const normalized_key = normalize_nans_and_zeros_helper<T>(key);
-    uint8_t const* data    = reinterpret_cast<uint8_t const*>(&normalized_key);
+    char const* data       = reinterpret_cast<char const*>(&normalized_key);
     uint32_t constexpr len = sizeof(T);
     md5_process_bytes(data, len, hash_state);
   } else if constexpr (std::is_same_v<T, string_view>) {
-    uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
-    uint32_t len        = static_cast<uint32_t>(key.size_bytes());
+    char const* data = reinterpret_cast<char const*>(key.data());
+    uint32_t len     = static_cast<uint32_t>(key.size_bytes());
     md5_process_bytes(data, len, hash_state);
   } else {
     cudf_assert(false && "Unsupported type for hash function.");
@@ -207,7 +207,7 @@ struct MD5Hash {
 
     uint64_t const full_length = hash_state->message_length * 8;
     memcpy(hash_state->buffer + md5_chunk_size - message_length_size,
-           reinterpret_cast<uint8_t const*>(&full_length),
+           reinterpret_cast<char const*>(&full_length),
            message_length_size);
     md5_hash_step(hash_state);
 
