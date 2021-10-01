@@ -59,7 +59,7 @@ class data_sink {
   /**
    * @brief Create a wrapped custom user data sink
    *
-   * @param[in] User-provided data sink (typically custom class)
+   * @param[in] user_sink User-provided data sink (typically custom class)
    *
    * The data sink returned here is not the one passed by the user. It is an internal
    * class that wraps the user pointer.  The principle is to allow the user to declare

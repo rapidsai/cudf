@@ -425,7 +425,7 @@ class csv_reader_options {
   /**
    * @brief Sets prefix to be used for column ID.
    *
-   * @param String used as prefix in for each column name.
+   * @param pfx String used as prefix in for each column name.
    */
   void set_prefix(std::string pfx) { _prefix = pfx; }
 
@@ -456,7 +456,7 @@ class csv_reader_options {
   /**
    * @brief Sets number of rows to read.
    *
-   * @param val Number of rows to read.
+   * @param nrows Number of rows to read.
    */
   void set_nrows(size_type nrows)
   {
@@ -472,7 +472,7 @@ class csv_reader_options {
   /**
    * @brief Sets number of rows to skip from start.
    *
-   * @param val Number of rows to skip.
+   * @param skip Number of rows to skip.
    */
   void set_skiprows(size_type skip)
   {
@@ -603,7 +603,7 @@ class csv_reader_options {
   /**
    * @brief Sets indexes of columns to read as datetime.
    *
-   * @param col_names Vector of column indices to infer as datetime.
+   * @param col_ind Vector of column indices to infer as datetime.
    */
   void set_parse_dates(std::vector<int> col_ind) { _parse_dates_indexes = std::move(col_ind); }
 
@@ -620,7 +620,7 @@ class csv_reader_options {
   /**
    * @brief Sets indexes of columns to parse as hexadecimal
    *
-   * @param col_names Vector of column indices to parse as hexadecimal
+   * @param col_ind Vector of column indices to parse as hexadecimal
    */
   void set_parse_hex(std::vector<int> col_ind) { _parse_hex_indexes = std::move(col_ind); }
 
@@ -774,7 +774,7 @@ class csv_reader_options_builder {
   /**
    * @brief Sets prefix to be used for column ID.
    *
-   * @param String used as prefix in for each column name.
+   * @param pfx String used as prefix in for each column name.
    * @return this for chaining.
    */
   csv_reader_options_builder& prefix(std::string pfx)
@@ -822,7 +822,7 @@ class csv_reader_options_builder {
   /**
    * @brief Sets number of rows to read.
    *
-   * @param val Number of rows to read.
+   * @param rows Number of rows to read.
    * @return this for chaining.
    */
   csv_reader_options_builder& nrows(size_type rows)
@@ -834,7 +834,7 @@ class csv_reader_options_builder {
   /**
    * @brief Sets number of rows to skip from start.
    *
-   * @param val Number of rows to skip.
+   * @param skip Number of rows to skip.
    * @return this for chaining.
    */
   csv_reader_options_builder& skiprows(size_type skip)

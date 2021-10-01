@@ -79,7 +79,7 @@ std::unique_ptr<column> quantile(
  * @param q               Desired quantiles in range [0, 1].
  * @param interp          Strategy used to select between the two rows on either
                           side of the desired quantile.
- * @param sorted          Indicates if the input has been pre-sorted.
+ * @param is_input_sorted Indicates if the input has been pre-sorted.
  * @param column_order    The desired sort order for each column.
  * @param null_precedence The desired order of null compared to other elements.
  *

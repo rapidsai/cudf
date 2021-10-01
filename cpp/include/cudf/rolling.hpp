@@ -48,7 +48,7 @@ namespace cudf {
  *   it is suggested to convert integer column types (especially low-precision integers)
  *   to `FLOAT32` or `FLOAT64` before doing a rolling `MEAN`.
  *
- * @param[in] input_col The input column
+ * @param[in] input The input column
  * @param[in] preceding_window The static rolling window size in the backward direction.
  * @param[in] following_window The static rolling window size in the forward direction.
  * @param[in] min_periods Minimum number of observations in window required to have a value,
@@ -544,7 +544,7 @@ std::unique_ptr<column> grouped_range_rolling_window(
  *
  * @throws cudf::logic_error if window column type is not INT32
  *
- * @param[in] input_col The input column
+ * @param[in] input The input column
  * @param[in] preceding_window A non-nullable column of INT32 window sizes in the forward direction.
  *                             `preceding_window[i]` specifies preceding window size for
  *                             element `i`.

@@ -233,8 +233,8 @@ std::unique_ptr<cudf::table> left_join(
  * @throw cudf::logic_error if number of elements in `left_keys` or `right_keys`
  * mismatch.
  *
- * @param[in] left The left table
- * @param[in] right The right table
+ * @param[in] left_keys The left table
+ * @param[in] right_keys The right table
  * @param[in] compare_nulls controls whether null join-key values
  * should match or not.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory

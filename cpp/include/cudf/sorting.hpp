@@ -81,7 +81,7 @@ std::unique_ptr<column> stable_sorted_order(
  * @brief Checks whether the rows of a `table` are sorted in a lexicographical
  *        order.
  *
- * @param[in] in                table whose rows need to be compared for ordering
+ * @param[in] table                table whose rows need to be compared for ordering
  * @param[in] column_order      The expected sort order for each column. Size
  *                              must be equal to `in.num_columns()` or empty. If
  *                              empty, it is expected all columns are in
