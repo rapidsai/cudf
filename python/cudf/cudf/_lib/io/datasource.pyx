@@ -1,11 +1,10 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 from libcpp.memory cimport shared_ptr
-from libcpp.utility cimport move
 from pyarrow.includes.libarrow cimport CRandomAccessFile
 from pyarrow.lib cimport NativeFile
 
-from cudf._lib.cpp.io.types cimport arrow_io_source, datasource, source_info
+from cudf._lib.cpp.io.types cimport arrow_io_source, datasource
 
 
 cdef class Datasource:
