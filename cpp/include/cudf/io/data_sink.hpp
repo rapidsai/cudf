@@ -21,6 +21,7 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <future>
 #include <memory>
 #include <string>
 #include <vector>
@@ -130,6 +131,13 @@ class data_sink {
    * @param stream CUDA stream to use
    */
   virtual void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream)
+  {
+    CUDF_FAIL("data_sink classes that support device_write must override it.");
+  }
+
+  virtual std::future<void> device_write_async(void const* gpu_data,
+                                               size_t size,
+                                               rmm::cuda_stream_view stream)
   {
     CUDF_FAIL("data_sink classes that support device_write must override it.");
   }

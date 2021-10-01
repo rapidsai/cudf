@@ -233,14 +233,52 @@ size_t cufile_input_impl::read(size_t offset,
 }
 
 cufile_output_impl::cufile_output_impl(std::string const& filepath)
-  : shim{cufile_shim::instance()}, cf_file(shim, filepath, O_CREAT | O_RDWR | O_DIRECT, 0664)
+  : shim{cufile_shim::instance()},
+    cf_file(shim, filepath, O_CREAT | O_RDWR | O_DIRECT, 0664),
+    pool(16)
 {
 }
 
 void cufile_output_impl::write(void const* data, size_t offset, size_t size)
 {
-  CUDF_EXPECTS(shim->write(cf_file.handle(), data, size, offset, 0) != -1,
-               "cuFile error writing to a file");
+  write_async(data, offset, size).wait();
+}
+
+std::future<void> cufile_output_impl::write_async(void const* data, size_t offset, size_t size)
+{
+  int device;
+  cudaGetDevice(&device);
+
+  auto write_slice = [=](void const* src, size_t size, size_t offset) -> void {
+    cudaSetDevice(device);
+    auto write_size = shim->write(cf_file.handle(), src, size, offset, 0);
+    CUDF_EXPECTS(write_size != -1 and write_size == static_cast<decltype(write_size)>(size),
+                 "cuFile error writing to a file");
+  };
+
+  auto source = static_cast<uint8_t const*>(data);
+  std::vector<std::future<bool>> slice_tasks;
+  constexpr size_t max_slice_bytes = 4 * 1024 * 1024;
+  size_t n_slices                  = util::div_rounding_up_safe(size, max_slice_bytes);
+  size_t slice_size                = max_slice_bytes;
+  size_t slice_offset              = 0;
+  for (size_t t = 0; t < n_slices; ++t) {
+    void const* src_slice = source + slice_offset;
+
+    if (t == n_slices - 1) { slice_size = size % max_slice_bytes; }
+    slice_tasks.push_back(pool.submit(write_slice, src_slice, slice_size, offset + slice_offset));
+
+    slice_offset += slice_size;
+  }
+  auto waiter = [](decltype(slice_tasks) slice_tasks) -> void {
+    for (auto& task : slice_tasks) {
+      task.wait();
+    }
+  };
+  // The future returned from this function is deferred, not async becasue we want to avoid creating
+  // threads for each write_async call. This overhead is significant in case of multiple small
+  // writes.
+  return std::async(std::launch::deferred, waiter, std::move(slice_tasks));
 }
 #endif
 
