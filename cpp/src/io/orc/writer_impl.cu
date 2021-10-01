@@ -80,7 +80,7 @@ orc::CompressionKind to_orc_compression(compression_type compression)
 /**
  * @brief Function that translates GDF dtype to ORC datatype
  */
-constexpr orc::TypeKind to_orc_type(cudf::type_id id)
+constexpr orc::TypeKind to_orc_type(cudf::type_id id, bool list_column_as_map)
 {
   switch (id) {
     case cudf::type_id::INT8: return TypeKind::BYTE;
@@ -98,7 +98,7 @@ constexpr orc::TypeKind to_orc_type(cudf::type_id id)
     case cudf::type_id::STRING: return TypeKind::STRING;
     case cudf::type_id::DECIMAL32:
     case cudf::type_id::DECIMAL64: return TypeKind::DECIMAL;
-    case cudf::type_id::LIST: return TypeKind::LIST;
+    case cudf::type_id::LIST: return list_column_as_map ? TypeKind::MAP : TypeKind::LIST;
     case cudf::type_id::STRUCT: return TypeKind::STRUCT;
     default: return TypeKind::INVALID_TYPE_KIND;
   }
@@ -151,11 +151,11 @@ class orc_column_view {
       _str_idx{str_idx},
       _is_child{parent != nullptr},
       _type_width{cudf::is_fixed_width(col.type()) ? cudf::size_of(col.type()) : 0},
-      _scale{(to_orc_type(col.type().id()) == TypeKind::DECIMAL) ? -col.type().scale()
-                                                                 : to_clockscale(col.type().id())},
+      _type_kind{to_orc_type(col.type().id(), metadata.is_map())},
+      _scale{(_type_kind == TypeKind::DECIMAL) ? -col.type().scale()
+                                               : to_clockscale(col.type().id())},
       _precision{metadata.is_decimal_precision_set() ? metadata.get_decimal_precision()
                                                      : orc_precision(col.type().id())},
-      _type_kind{to_orc_type(col.type().id())},
       name{metadata.get_name()}
   {
     if (metadata.is_nullability_defined()) { nullable_from_metadata = metadata.nullable(); }
@@ -241,14 +241,14 @@ class orc_column_view {
   int _str_idx;
   bool _is_child = false;
 
-  size_t _type_width = 0;
-  int32_t _scale     = 0;
-  int32_t _precision = 0;
-
   // ORC-related members
   TypeKind _type_kind               = INVALID_TYPE_KIND;
   ColumnEncodingKind _encoding_kind = INVALID_ENCODING_KIND;
   std::string name;
+
+  size_t _type_width = 0;
+  int32_t _scale     = 0;
+  int32_t _precision = 0;
 
   // String dictionary-related members
   size_t _dict_stride                        = 0;
@@ -604,6 +604,7 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
         column.set_orc_encoding(DIRECT_V2);
         break;
       case TypeKind::LIST:
+      case TypeKind::MAP:
         // no data stream, only lengths
         add_RLE_stream(gpu::CI_DATA2, LENGTH, TypeKind::INT);
         column.set_orc_encoding(DIRECT_V2);
@@ -1150,7 +1151,6 @@ void writer::impl::write_index_stream(int32_t stripe_id,
   row_group_index_info present;
   row_group_index_info data;
   row_group_index_info data2;
-  auto kind            = TypeKind::STRUCT;
   auto const column_id = stream_id - 1;
 
   auto find_record = [=, &strm_desc](gpu::encoder_chunk_streams const& stream,
@@ -1183,6 +1183,7 @@ void writer::impl::write_index_stream(int32_t stripe_id,
     }
   };
 
+  auto kind = TypeKind::STRUCT;
   // TBD: Not sure we need an empty index stream for column 0
   if (stream_id != 0) {
     const auto& strm = enc_streams[column_id][0];
@@ -1462,20 +1463,28 @@ orc_table_view make_orc_table_view(table_view const& table,
         orc_columns.emplace_back(new_col_idx, str_idx, parent_col, col, col_meta);
         if (orc_columns[new_col_idx].is_string()) { str_col_indexes.push_back(new_col_idx); }
 
-        if (col.type().id() == type_id::LIST) {
+        if (orc_columns[new_col_idx].orc_kind() == TypeKind::LIST) {
           append_orc_column(col.child(lists_column_view::child_column_index),
                             &orc_columns[new_col_idx],
                             col_meta.child(lists_column_view::child_column_index));
-        } else if (col.type().id() == type_id::STRUCT) {
+        } else if (orc_columns[new_col_idx].orc_kind() == TypeKind::STRUCT) {
           for (auto child_idx = 0; child_idx != col.num_children(); ++child_idx)
             append_orc_column(
               col.child(child_idx), &orc_columns[new_col_idx], col_meta.child(child_idx));
+        } else if (orc_columns[new_col_idx].orc_kind() == TypeKind::MAP) {
+          auto const struct_col = col.child(lists_column_view::child_column_index);
+          for (auto child_idx = 0; child_idx != struct_col.num_children(); ++child_idx) {
+            append_orc_column(
+              struct_col.child(child_idx), &orc_columns[new_col_idx], col_meta.child(child_idx));
+          }
         }
       };
 
   for (auto col_idx = 0; col_idx < table.num_columns(); ++col_idx) {
     append_orc_column(table.column(col_idx), nullptr, table_meta.column_metadata[col_idx]);
   }
+
+  CUDF_FAIL("stop");
 
   rmm::device_uvector<orc_column_device_view> d_orc_columns(orc_columns.size(), stream);
   using stack_value_type = thrust::pair<column_device_view const*, thrust::optional<uint32_t>>;
