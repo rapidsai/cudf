@@ -24,12 +24,9 @@ import ctypes
 from typing import Any, Optional, Tuple, Dict, Iterable, Sequence
 
 import cudf
+from cudf.core.column import as_column
 import numpy as np
 import cupy as cp
-from cupy import _core
-import pandas._testing as tm
-import cudf.testing as testcase
-import pytest
 
 
 # A typing protocol could be added later to let Mypy validate code using
@@ -304,7 +301,7 @@ class _CuDFColumn:
                                       "yet".format(type(column)))
 
         # Store the column as a private attribute
-        self._col = column
+        self._col = as_column(column)
         self._nan_as_null = nan_as_null
         self._allow_copy = allow_copy
 
@@ -386,9 +383,9 @@ class _CuDFColumn:
             # Not a NumPy/CuPy dtype. Check if it's a categorical maybe
             if isinstance(dtype, cudf.CategoricalDtype):
                 kind = _k.CATEGORICAL
-                # Codes and categorical values dtypes are different.
+                # Codes and categories' dtypes are different.
                 # We use codes' dtype as these are stored in the buffer. 
-                dtype = self._col.cat.codes.dtype
+                dtype = self._col.codes.dtype
             else:
                 raise ValueError(f"Data type {dtype} not supported by exchange"
                                  "protocol")
@@ -428,9 +425,9 @@ class _CuDFColumn:
         is_dictionary = True
         # NOTE: this shows the children approach is better, transforming
         # `categories` to a "mapping" dict is inefficient
-        codes = self._col.cat.codes  # ndarray, length `self.size`
+        codes = self._col.codes  # ndarray, length `self.size`
         # categories.values is ndarray of length n_categories
-        categories = self._col.cat.categories
+        categories = self._col.categories
         mapping = {ix: val for ix, val in enumerate(categories.values_host)}
         return ordered, is_dictionary, mapping
 
@@ -551,7 +548,7 @@ class _CuDFColumn:
                 allow_copy=self._allow_copy)
             dtype = self.dtype
         elif self.dtype[0] == _k.CATEGORICAL:
-            codes = self._col.cat.codes
+            codes = self._col.codes
             buffer = _CuDFBuffer(
                 cp.asarray(codes.fillna(invalid)),
                 allow_copy=self._allow_copy)
@@ -587,7 +584,7 @@ class _CuDFColumn:
         null, invalid = self.describe_null
         if null == 3:
             _k = _DtypeKind
-            bitmask = cp.asarray(self._col._column._get_mask_as_column().to_gpu_array(), dtype=cp.uint8)
+            bitmask = cp.asarray(self._col._get_mask_as_column().to_gpu_array(), dtype=cp.uint8)
             buffer = _CuDFBuffer(bitmask)
             dtype = (_k.UINT, 8, "C", "=")
             return buffer, dtype
