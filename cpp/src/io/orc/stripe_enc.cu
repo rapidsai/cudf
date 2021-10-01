@@ -766,7 +766,7 @@ __global__ void __launch_bounds__(block_size)
   auto const column = *s->chunk.column;
   while (s->cur_row < s->chunk.num_rows || s->numvals + s->numlengths != 0) {
     // Fetch non-null values
-    if (s->chunk.type_kind != LIST && !s->stream.data_ptrs[CI_DATA]) {
+    if (s->chunk.type_kind != LIST && s->chunk.type_kind != MAP && !s->stream.data_ptrs[CI_DATA]) {
       // Pass-through
       __syncthreads();
       if (!t) {
@@ -847,7 +847,8 @@ __global__ void __launch_bounds__(block_size)
             // Reusing the lengths array for the scale stream
             // Note: can be written in a faster manner, given that all values are equal
           case DECIMAL: s->lengths.u32[nz_idx] = zigzag(s->chunk.scale); break;
-          case LIST: {
+          case LIST:
+          case MAP: {
             auto const& offsets = column.child(lists_column_view::offsets_column_index);
             // Compute list length from the offsets
             s->lengths.u32[nz_idx] = offsets.element<size_type>(row + 1 + column.offset()) -
@@ -887,7 +888,7 @@ __global__ void __launch_bounds__(block_size)
         s->nnz += nz;
         s->numvals += nz;
         s->numlengths += (s->chunk.type_kind == TIMESTAMP || s->chunk.type_kind == DECIMAL ||
-                          s->chunk.type_kind == LIST ||
+                          s->chunk.type_kind == LIST || s->chunk.type_kind == MAP ||
                           (s->chunk.type_kind == STRING && s->chunk.encoding_kind != DICTIONARY_V2))
                            ? nz
                            : 0;
@@ -964,6 +965,7 @@ __global__ void __launch_bounds__(block_size)
             break;
           case DECIMAL:
           case LIST:
+          case MAP:
           case STRING:
             n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
               s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u32);

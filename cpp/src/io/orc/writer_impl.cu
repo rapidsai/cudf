@@ -1469,19 +1469,18 @@ orc_table_view make_orc_table_view(table_view const& table,
         orc_columns.emplace_back(new_col_idx, str_idx, parent_col, col, col_meta);
         if (orc_columns[new_col_idx].is_string()) { str_col_indexes.push_back(new_col_idx); }
 
-        if (orc_columns[new_col_idx].orc_kind() == TypeKind::LIST) {
+        auto const kind = orc_columns[new_col_idx].orc_kind();
+        if (kind == TypeKind::LIST) {
           append_orc_column(col.child(lists_column_view::child_column_index),
                             &orc_columns[new_col_idx],
                             col_meta.child(lists_column_view::child_column_index));
-        } else if (orc_columns[new_col_idx].orc_kind() == TypeKind::STRUCT) {
-          for (auto child_idx = 0; child_idx != col.num_children(); ++child_idx)
+        } else if (kind == TypeKind::STRUCT or kind == TypeKind::MAP) {
+          // MAP: skip to the list child - include grandchildren columns instead of child
+          auto const column =
+            kind == TypeKind::MAP ? col.child(lists_column_view::child_column_index) : col;
+          for (auto child_idx = 0; child_idx != column.num_children(); ++child_idx) {
             append_orc_column(
-              col.child(child_idx), &orc_columns[new_col_idx], col_meta.child(child_idx));
-        } else if (orc_columns[new_col_idx].orc_kind() == TypeKind::MAP) {
-          auto const struct_col = col.child(lists_column_view::child_column_index);
-          for (auto child_idx = 0; child_idx != struct_col.num_children(); ++child_idx) {
-            append_orc_column(
-              struct_col.child(child_idx), &orc_columns[new_col_idx], col_meta.child(child_idx));
+              column.child(child_idx), &orc_columns[new_col_idx], col_meta.child(child_idx));
           }
         }
       };
