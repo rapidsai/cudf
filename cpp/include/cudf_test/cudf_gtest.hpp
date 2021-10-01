@@ -21,7 +21,7 @@
 #endif
 
 /**
- * @file GTest.hpp
+ * @file cudf_gtest.hpp
  * @brief Work around for GTests emulation of variadic templates in
  * ::Testing::Types.
  *

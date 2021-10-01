@@ -46,7 +46,7 @@ struct range_window_bounds {
   /**
    * @brief Factory method to construct an unbounded window boundary.
    *
-   * @param @type The datatype of the window boundary
+   * @param type type The datatype of the window boundary
    */
   static range_window_bounds unbounded(data_type type);
 

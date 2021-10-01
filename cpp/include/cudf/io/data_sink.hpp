@@ -78,8 +78,6 @@ class data_sink {
    *
    * @param[in] data Pointer to the buffer to be written into the sink object
    * @param[in] size Number of bytes to write
-   *
-   * @return void
    */
   virtual void host_write(void const* data, size_t size) = 0;
 
