@@ -62,7 +62,7 @@ from cudf.core.dtypes import (
     ListDtype,
     StructDtype,
 )
-from cudf.utils import ioutils, utils
+from cudf.utils import utils
 from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
     get_time_unit,
@@ -798,12 +798,6 @@ class ColumnBase(Column, Serializable):
             raise ValueError("Column must have no nulls.")
 
         return bools_to_mask(self)
-
-    @ioutils.doc_to_dlpack()
-    def to_dlpack(self):
-        """{docstring}"""
-
-        return cudf.io.dlpack.to_dlpack(self)
 
     @property
     def is_unique(self) -> bool:
