@@ -152,6 +152,7 @@ struct hash_join::hash_join_impl {
    *
    * @param build The build table, from which the hash table is built.
    * @param compare_nulls Controls whether null join-key values should match or not.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   hash_join_impl(cudf::table_view const& build,
                  null_equality compare_nulls,

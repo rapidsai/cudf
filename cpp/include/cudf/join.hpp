@@ -678,6 +678,7 @@ class hash_join {
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join.
+ * @param output_size Optional value which allows users to specify the exact output size.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -723,6 +724,7 @@ conditional_inner_join(
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join.
+ * @param output_size Optional value which allows users to specify the exact output size.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
@@ -803,6 +805,7 @@ conditional_full_join(table_view const& left,
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join.
+ * @param output_size Optional value which allows users to specify the exact output size.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A vector `left_indices` that can be used to construct the result of
@@ -841,6 +844,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
  * @param left The left table
  * @param right The right table
  * @param binary_predicate The condition on which to join.
+ * @param output_size Optional value which allows users to specify the exact output size.
  * @param mr Device memory resource used to allocate the returned table and columns' device memory
  *
  * @return A vector `left_indices` that can be used to construct the result of

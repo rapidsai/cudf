@@ -41,7 +41,7 @@ struct range_window_bounds {
    * @param value Finite window boundary
    *
    */
-  static range_window_bounds get(scalar const&);
+  static range_window_bounds get(scalar const& scalar_);
 
   /**
    * @brief Factory method to construct an unbounded window boundary.

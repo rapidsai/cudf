@@ -23,7 +23,7 @@
 /**
  * @file cudf_gtest.hpp
  * @brief Work around for GTests emulation of variadic templates in
- * ::Testing::Types.
+ * `::Testing::Types`.
  *
  * @note Instead of including `gtest/gtest.h`, all libcudf test files should
  * include `cudf_gtest.hpp` instead.

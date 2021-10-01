@@ -182,7 +182,8 @@ std::unique_ptr<column> slice_strings(
  * r =          ['nvidia.com',     null, '',               '',  '..goo',           'apache.org']
  * @endcode
  *
- * @throw cudf::logic_error if the number of rows in @p strings and @delimiter_strings do not match.
+ * @throw cudf::logic_error if the number of rows in @p strings and @p delimiter_strings do not
+ * match.
  *
  * @param strings Strings instance for this operation.
  * @param delimiter_strings UTF-8 encoded string for each row.

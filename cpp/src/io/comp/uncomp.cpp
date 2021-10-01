@@ -417,7 +417,7 @@ std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int
  * @brief Uncompresses the input data and stores the allocated result into
  * a vector.
  *
- * @param[in] h_data Pointer to the csv data in host memory
+ * @param[in] data Pointer to the csv data in host memory
  * @param[in] compression String describing the compression type
  *
  * @return Vector containing the output uncompressed data
