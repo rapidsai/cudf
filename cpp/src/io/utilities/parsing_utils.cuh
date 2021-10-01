@@ -499,7 +499,7 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quote
  * @brief Excludes the prefix from the input range if the string starts with the prefix.
  *
  * @tparam N length on the prefix, plus one
- * @param begin[in, out] Pointer to the first element of the string
+ * @param[in, out] begin Pointer to the first element of the string
  * @param end Pointer to the first element after the string
  * @param prefix String we're searching for at the start of the input range
  */

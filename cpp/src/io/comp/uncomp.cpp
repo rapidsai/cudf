@@ -246,9 +246,9 @@ int cpu_inflate(uint8_t* uncomp_data, size_t* destLen, const uint8_t* comp_data,
  * Optimized for the case where the initial size is the uncompressed
  * size truncated to 32-bit, and grows the buffer in 1GB increments.
  *
- * @param dst[out] Destination vector
- * @param comp_data[in] Raw compressed data
- * @param comp_len[in] Compressed data size
+ * @param[out] dst Destination vector
+ * @param[in] comp_data Raw compressed data
+ * @param[in] comp_len Compressed data size
  */
 int cpu_inflate_vector(std::vector<char>& dst, const uint8_t* comp_data, size_t comp_len)
 {
@@ -287,9 +287,9 @@ int cpu_inflate_vector(std::vector<char>& dst, const uint8_t* comp_data, size_t 
  * The result is allocated and stored in a vector.
  * If the function call fails, the output vector is empty.
  *
- * @param src[in] Pointer to the compressed data in system memory
- * @param src_size[in] The size of the compressed data, in bytes
- * @param stream_type[in] Type of compression of the input data
+ * @param[in] src Pointer to the compressed data in system memory
+ * @param[in] src_size The size of the compressed data, in bytes
+ * @param[in] stream_type Type of compression of the input data
  *
  * @return Vector containing the uncompressed output
  */
@@ -563,7 +563,7 @@ class HostDecompressor_SNAPPY : public HostDecompressor {
 /**
  * @Brief CPU decompression class
  *
- * @param stream_type[in] compression method (IO_UNCOMP_STREAM_TYPE_XXX)
+ * @param[in] stream_type compression method (IO_UNCOMP_STREAM_TYPE_XXX)
  *
  * @returns corresponding HostDecompressor class, nullptr if failure
  */

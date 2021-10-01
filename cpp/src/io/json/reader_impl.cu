@@ -597,8 +597,8 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
 /**
  * @brief Read an entire set or a subset of data from the source
  *
- * @param[in] range_offset Number of bytes offset from the start
- * @param[in] range_size Bytes to read; use `0` for all remaining data
+ * @param[in] options reader options with Number of bytes offset from the start, 
+ * Bytes to read; use `0` for all remaining data
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return Table and its metadata

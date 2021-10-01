@@ -368,9 +368,9 @@ OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
 /**
  * @Brief ORC block decompression
  *
- * @param srcBytes[in] compressed data
- * @param srcLen[in] length of compressed data
- * @param dstLen[out] length of uncompressed data
+ * @param[in] srcBytes compressed data
+ * @param[in] srcLen length of compressed data
+ * @param[out] dstLen length of uncompressed data
  *
  * @returns pointer to uncompressed data, nullptr if error
  */
