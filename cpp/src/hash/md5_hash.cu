@@ -17,12 +17,12 @@
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
-#include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
+#include <hash/hash_constants.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -91,9 +91,9 @@ void CUDA_DEVICE_CALLABLE md5_hash_step(md5_intermediate_data* hash_state)
  * This accepts arbitrary data, handles it as bytes, and calls the hash step
  * when the buffer is filled up to message_chunk_size bytes.
  */
-void CUDA_DEVICE_CALLABLE md5_process(uint8_t const* data,
-                                      uint32_t len,
-                                      md5_intermediate_data* hash_state)
+void CUDA_DEVICE_CALLABLE md5_process_bytes(uint8_t const* data,
+                                            uint32_t len,
+                                            md5_intermediate_data* hash_state)
 {
   hash_state->message_length += len;
 
@@ -126,14 +126,33 @@ void CUDA_DEVICE_CALLABLE md5_process(uint8_t const* data,
   }
 }
 
+/**
+ * @brief MD5 typed element processor.
+ *
+ * This accepts typed data, normalizes it, and performs processing on raw bytes.
+ */
 template <typename T>
-void CUDA_DEVICE_CALLABLE md5_process_fixed_width(T const& key, md5_intermediate_data* hash_state)
+void CUDA_DEVICE_CALLABLE md5_process(T const& key, md5_intermediate_data* hash_state)
 {
-  uint8_t const* data    = reinterpret_cast<uint8_t const*>(&key);
-  uint32_t constexpr len = sizeof(T);
-  md5_process(data, len, hash_state);
+  if constexpr (is_fixed_width<T>() && !is_chrono<T>()) {
+    if constexpr (is_floating_point<T>()) {
+      auto const normalized_key = normalize_nans_and_zeros_helper<T>(key);
+      uint8_t const* data       = reinterpret_cast<uint8_t const*>(&normalized_key);
+      uint32_t constexpr len    = sizeof(T);
+      md5_process_bytes(data, len, hash_state);
+    } else {
+      uint8_t const* data    = reinterpret_cast<uint8_t const*>(&key);
+      uint32_t constexpr len = sizeof(T);
+      md5_process_bytes(data, len, hash_state);
+    }
+  } else if constexpr (std::is_same_v<T, string_view>) {
+    uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
+    uint32_t len        = static_cast<uint32_t>(key.size_bytes());
+    md5_process_bytes(data, len, hash_state);
+  } else {
+    cudf_assert(false && "Unsupported type for hash function.");
+  }
 }
-
 // MD5 supported leaf data type check
 bool md5_type_check(data_type dt)
 {
@@ -150,43 +169,8 @@ struct MD5ListHasher {
                                        md5_intermediate_data* hash_state) const
   {
     for (size_type i = offset_begin; i < offset_end; i++) {
-      if (!data_col.is_null(i)) {
-        auto const key = data_col.element<T>(i);
-        if constexpr (is_floating_point<T>()) {
-          md5_process_fixed_width(normalize_nans_and_zeros_helper<T>(key), hash_state);
-        } else if constexpr (is_fixed_width<T>() && !is_chrono<T>()) {
-          md5_process_fixed_width(key, hash_state);
-        } else if constexpr (std::is_same_v<T, string_view>) {
-          uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
-          uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
-          md5_process(data, len, hash_state);
-        } else {
-          cudf_assert(false && "Unsupported type for hash function.");
-        }
-      }
+      if (data_col.is_valid(i)) { md5_process(data_col.element<T>(i), hash_state); }
     }
-    /*
-    auto const begin     = data_col.optional_begin<T>(cudf::contains_nulls::YES{});
-    auto const row_begin = begin + offset_begin;
-    auto const row_end   = begin + offset_end;
-    for (auto it = row_begin; it != row_end; it++) {
-      auto const element = *it;
-      if (element) {
-        if constexpr (is_floating_point<T>()) {
-          md5_process_fixed_width(normalize_nans_and_zeros_helper<T>(*element), hash_state);
-        } else if constexpr (is_fixed_width<T>() && !is_chrono<T>()) {
-          md5_process_fixed_width(*element, hash_state);
-        } else if constexpr (std::is_same_v<T, string_view>) {
-          string_view const key = *element;
-          uint32_t const len    = static_cast<uint32_t>(key.size_bytes());
-          uint8_t const* data   = reinterpret_cast<uint8_t const*>(key.data());
-          md5_process(data, len, hash_state);
-        } else {
-          cudf_assert(false && "Unsupported type for hash function.");
-        }
-      }
-    }
-    */
   }
 
   template <typename T,
@@ -243,18 +227,7 @@ struct MD5Hash {
                                        size_type row_index,
                                        md5_intermediate_data* hash_state) const
   {
-    auto const key = col.element<T>(row_index);
-    if constexpr (is_floating_point<T>()) {
-      md5_process_fixed_width(normalize_nans_and_zeros_helper<T>(key), hash_state);
-    } else if constexpr (is_fixed_width<T>() && !is_chrono<T>()) {
-      md5_process_fixed_width(key, hash_state);
-    } else if constexpr (std::is_same_v<T, string_view>) {
-      uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
-      uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
-      md5_process(data, len, hash_state);
-    } else {
-      cudf_assert(false && "Unsupported type for hash function.");
-    }
+    md5_process(col.element<T>(row_index), hash_state);
   }
 
   template <typename T,
@@ -271,14 +244,6 @@ void CUDA_DEVICE_CALLABLE MD5Hash::operator()<list_view>(column_device_view col,
                                                          size_type row_index,
                                                          md5_intermediate_data* hash_state) const
 {
-  /*
-  // I want to get a lists_column_device_view but that is not constructible on device.
-  auto const lists_col = lists_column_device_view(col);
-  auto const data      = lists_col.child();
-  auto const offsets      = lists_col.offsets();
-  */
-
-  // Alternative that works, but reimplements getters from lists_column_device_view:
   auto const data    = col.child(lists_column_view::child_column_index);
   auto const offsets = col.child(lists_column_view::offsets_column_index);
 
