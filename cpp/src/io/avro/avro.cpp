@@ -55,7 +55,7 @@ std::string container::get_encoded()
 }
 
 /**
- * @Brief AVRO file metadata parser
+ * @brief AVRO file metadata parser
  *
  * @param[out] md parsed avro file metadata
  * @param[in] max_num_rows maximum number of rows
@@ -188,7 +188,7 @@ enum {
 };
 
 /**
- * @Brief AVRO JSON schema parser
+ * @brief AVRO JSON schema parser
  *
  * @param[out] schema parsed avro schema
  * @param[in] json_str avro schema (JSON string)
@@ -354,7 +354,7 @@ bool schema_parser::parse(std::vector<schema_entry>& schema, const std::string& 
 }
 
 /**
- * @Brief Parse a string
+ * @brief Parse a string
  *
  * @returns parsed string, consuming the terminating quote
  */

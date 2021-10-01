@@ -196,7 +196,7 @@ void ProtobufReader::read(Metadata& s, size_t maxlen)
 }
 
 /**
- * @Brief Add a single rowIndexEntry, negative input values treated as not present
+ * @brief Add a single rowIndexEntry, negative input values treated as not present
  */
 void ProtobufWriter::put_row_index_entry(int32_t present_blk,
                                          int32_t present_ofs,
@@ -366,7 +366,7 @@ OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize)
 }
 
 /**
- * @Brief ORC block decompression
+ * @brief ORC block decompression
  *
  * @param[in] srcBytes compressed data
  * @param[in] srcLen length of compressed data

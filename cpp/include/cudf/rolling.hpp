@@ -66,7 +66,7 @@ std::unique_ptr<column> rolling_window(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc std::unique_ptr<column> rolling_window(
+ * @copydoc   rolling_window(
  *            column_view const& input,
  *            size_type preceding_window,
  *            size_type following_window,
@@ -204,7 +204,7 @@ std::unique_ptr<column> grouped_rolling_window(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc std::unique_ptr<column> grouped_rolling_window(
+ * @copydoc   grouped_rolling_window(
  *            table_view const& group_keys,
  *            column_view const& input,
  *            size_type preceding_window,
@@ -223,7 +223,7 @@ std::unique_ptr<column> grouped_rolling_window(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc std::unique_ptr<column> grouped_rolling_window(
+ * @copydoc   grouped_rolling_window(
  *            table_view const& group_keys,
  *            column_view const& input,
  *            size_type preceding_window,
@@ -247,7 +247,7 @@ std::unique_ptr<column> grouped_rolling_window(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc std::unique_ptr<column> grouped_rolling_window(
+ * @copydoc   grouped_rolling_window(
  *            table_view const& group_keys,
  *            column_view const& input,
  *            column_view const& default_outputs,

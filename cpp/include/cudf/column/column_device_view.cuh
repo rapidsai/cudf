@@ -1274,6 +1274,7 @@ struct optional_accessor<T, contains_nulls::DYNAMIC> {
   /**
    * @brief constructor
    * @param[in] _col column device view of cudf column
+   * @param[in] with_nulls Indicates if @p _col has nulls
    */
   optional_accessor(column_device_view const& _col, bool with_nulls)
     : col{_col}, has_nulls{with_nulls}

@@ -241,7 +241,7 @@ int cpu_inflate(uint8_t* uncomp_data, size_t* destLen, const uint8_t* comp_data,
 }
 
 /**
- * @Brief Uncompresses a raw DEFLATE stream to a char vector.
+ * @brief Uncompresses a raw DEFLATE stream to a char vector.
  * The vector will be grown to match the uncompressed size
  * Optimized for the case where the initial size is the uncompressed
  * size truncated to 32-bit, and grows the buffer in 1GB increments.
@@ -282,7 +282,7 @@ int cpu_inflate_vector(std::vector<char>& dst, const uint8_t* comp_data, size_t 
 }
 
 /**
- * @Brief Uncompresses a gzip/zip/bzip2/xz file stored in system memory.
+ * @brief Uncompresses a gzip/zip/bzip2/xz file stored in system memory.
  *
  * The result is allocated and stored in a vector.
  * If the function call fails, the output vector is empty.
@@ -439,7 +439,7 @@ std::vector<char> get_uncompressed_data(host_span<char const> const data,
 }
 
 /**
- * @Brief ZLIB host decompressor class
+ * @brief ZLIB host decompressor class
  */
 class HostDecompressor_ZLIB : public HostDecompressor {
  public:
@@ -467,7 +467,7 @@ class HostDecompressor_ZLIB : public HostDecompressor {
 };
 
 /**
- * @Brief SNAPPY host decompressor class
+ * @brief SNAPPY host decompressor class
  */
 class HostDecompressor_SNAPPY : public HostDecompressor {
  public:
@@ -561,7 +561,7 @@ class HostDecompressor_SNAPPY : public HostDecompressor {
 };
 
 /**
- * @Brief CPU decompression class
+ * @brief CPU decompression class
  *
  * @param[in] stream_type compression method (IO_UNCOMP_STREAM_TYPE_XXX)
  *
