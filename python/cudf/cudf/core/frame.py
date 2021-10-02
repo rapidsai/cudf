@@ -5077,7 +5077,7 @@ class Frame(libcudf.table.Table):
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
         axis : int or string
-            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            Only ``0`` is supported for series, ``1`` or ``columns`` supported
             for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
@@ -5148,7 +5148,7 @@ class Frame(libcudf.table.Table):
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
         axis : int or string
-            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            Only ``0`` is supported for series, ``1`` or ``columns`` supported
             for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
@@ -5227,7 +5227,7 @@ class Frame(libcudf.table.Table):
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
         axis : int or string
-            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            Only ``0`` is supported for series, ``1`` or ``columns`` supported
             for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
@@ -5309,7 +5309,7 @@ class Frame(libcudf.table.Table):
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
         axis : int or string
-            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            Only ``0`` is supported for series, ``1`` or ``columns`` supported
             for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
@@ -5392,7 +5392,7 @@ class Frame(libcudf.table.Table):
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
         axis : int or string
-            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            Only ``0`` is supported for series, ``1`` or ``columns`` supported
             for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
@@ -5476,7 +5476,7 @@ class Frame(libcudf.table.Table):
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
         axis : int or string
-            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            Only ``0`` is supported for series, ``1`` or ``columns`` supported
             for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
@@ -5560,7 +5560,7 @@ class Frame(libcudf.table.Table):
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
         axis : int or string
-            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            Only ``0`` is supported for series, ``1`` or ``columns`` supported
             for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
@@ -5630,7 +5630,7 @@ class Frame(libcudf.table.Table):
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
         axis : int or string
-            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            Only ``0`` is supported for series, ``1`` or ``columns`` supported
             for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
@@ -5712,7 +5712,7 @@ class Frame(libcudf.table.Table):
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
         axis : int or string
-            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            Only ``0`` is supported for series, ``1`` or ``columns`` supported
             for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
@@ -5791,7 +5791,7 @@ class Frame(libcudf.table.Table):
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
         axis : int or string
-            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            Only ``0`` is supported for series, ``1`` or ``columns`` supported
             for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
@@ -5871,7 +5871,7 @@ class Frame(libcudf.table.Table):
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
         axis : int or string
-            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            Only ``0`` is supported for series, ``1`` or ``columns`` supported
             for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
@@ -5950,7 +5950,7 @@ class Frame(libcudf.table.Table):
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
         axis : int or string
-            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            Only ``0`` is supported for series, ``1`` or ``columns`` supported
             for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
@@ -6047,7 +6047,7 @@ class Frame(libcudf.table.Table):
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
         axis : int or string
-            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            Only ``0`` is supported for series, ``1`` or ``columns`` supported
             for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
@@ -6135,7 +6135,7 @@ class Frame(libcudf.table.Table):
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
         axis : int or string
-            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            Only ``0`` is supported for series, ``1`` or ``columns`` supported
             for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
