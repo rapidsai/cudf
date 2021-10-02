@@ -6333,35 +6333,40 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         return super()._explode(column, ignore_index)
 
-    def _dataframe_binop(
-        self, other, axis="columns", level=None, fill_value=None, binop=None
-    ):
+
+def make_binop_func(op):
+    wrapped_func = getattr(Frame, op)
+
+    @functools.wraps(wrapped_func)
+    def wrapper(self, other, axis="columns", level=None, fill_value=None):
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
+        return wrapped_func(self, other, axis, level, fill_value)
 
-        return getattr(super(), binop)(other, axis, level, fill_value)
+    return wrapper
 
-    for binop in [
-        "add",
-        "radd",
-        "subtract",
-        "sub",
-        "rsub",
-        "multiply",
-        "mul",
-        "rmul",
-        "mod",
-        "rmod",
-        "pow",
-        "rpow",
-        "floordiv",
-        "rfloordiv",
-        "truediv",
-        "div",
-        "rtruediv",
-        "rdiv",
-    ]:
-        vars()[binop] = functools.partialmethod(_dataframe_binop, binop=binop)
+
+for binop in [
+    "add",
+    "radd",
+    "subtract",
+    "sub",
+    "rsub",
+    "multiply",
+    "mul",
+    "rmul",
+    "mod",
+    "rmod",
+    "pow",
+    "rpow",
+    "floordiv",
+    "rfloordiv",
+    "truediv",
+    "div",
+    "rtruediv",
+    "rdiv",
+]:
+    setattr(DataFrame, binop, make_binop_func(binop))
 
 
 def from_pandas(obj, nan_as_null=None):

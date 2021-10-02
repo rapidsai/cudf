@@ -4141,27 +4141,40 @@ class Series(SingleColumnFrame, Serializable):
 
         return getattr(super(), binop)(other, axis, level, fill_value)
 
-    for binop in (
-        "add",
-        "radd",
-        "subtract",
-        "sub",
-        "rsub",
-        "multiply",
-        "mul",
-        "rmul",
-        "mod",
-        "rmod",
-        "pow",
-        "rpow",
-        "floordiv",
-        "rfloordiv",
-        "truediv",
-        "div",
-        "rtruediv",
-        "rdiv",
-    ):
-        vars()[binop] = functools.partialmethod(_series_binop, binop=binop)
+
+def make_binop_func(op):
+    wrapped_func = getattr(Frame, op)
+
+    @functools.wraps(wrapped_func)
+    def wrapper(self, other, level=None, fill_value=None, axis=0):
+        if axis not in (1, "columns"):
+            raise NotImplementedError("Only axis=1 supported at this time.")
+        return wrapped_func(self, other, axis, level, fill_value)
+
+    return wrapper
+
+
+for binop in (
+    "add",
+    "radd",
+    "subtract",
+    "sub",
+    "rsub",
+    "multiply",
+    "mul",
+    "rmul",
+    "mod",
+    "rmod",
+    "pow",
+    "rpow",
+    "floordiv",
+    "rfloordiv",
+    "truediv",
+    "div",
+    "rtruediv",
+    "rdiv",
+):
+    setattr(Series, binop, make_binop_func(binop))
 
 
 class DatetimeProperties(object):
