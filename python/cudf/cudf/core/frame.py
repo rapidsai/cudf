@@ -5063,7 +5063,7 @@ class Frame(libcudf.table.Table):
             self._index,
         )
 
-    def add(self, other, axis, level, fill_value):
+    def add(self, other, axis, level=None, fill_value=None):
         """
         Get Addition of dataframe or series and other, element-wise (binary
         operator `add`).
@@ -5076,6 +5076,9 @@ class Frame(libcudf.table.Table):
 
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
+        axis : int or string
+            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
             for successful DataFrame alignment, with this value before
@@ -5125,18 +5128,14 @@ class Frame(libcudf.table.Table):
         e    <NA>
         dtype: int64
         """
-
-        print(self)
-        print(other)
-
         if level is not None:
             raise NotImplementedError("level parameter is not supported yet.")
 
         return self._binaryop(other, "add", fill_value)
 
-    def radd(self, other, axis, level, fill_value):
+    def radd(self, other, axis, level=None, fill_value=None):
         """
-        Get Addition of dataframe and other, element-wise (binary
+        Get Addition of dataframe or series and other, element-wise (binary
         operator `radd`).
 
         Equivalent to ``other + frame``, but with support to substitute a
@@ -5148,6 +5147,9 @@ class Frame(libcudf.table.Table):
 
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
+        axis : int or string
+            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
             for successful DataFrame alignment, with this value before
@@ -5210,12 +5212,12 @@ class Frame(libcudf.table.Table):
 
         return self._binaryop(other, "add", fill_value, reflect=True)
 
-    def subtract(self, other, axis, level, fill_value):
+    def subtract(self, other, axis, level=None, fill_value=None):
         """
-        Get Subtraction of dataframe and other, element-wise (binary
+        Get Subtraction of dataframe or series and other, element-wise (binary
         operator `sub`).
 
-        Equivalent to ``dataframe - other``, but with support to substitute a
+        Equivalent to ``frame - other``, but with support to substitute a
         fill_value for missing data in one of the inputs. With reverse
         version, `rsub`.
 
@@ -5224,6 +5226,9 @@ class Frame(libcudf.table.Table):
 
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
+        axis : int or string
+            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
             for successful DataFrame alignment, with this value before
@@ -5289,7 +5294,7 @@ class Frame(libcudf.table.Table):
 
     sub = subtract
 
-    def rsub(self, other, axis, level, fill_value):
+    def rsub(self, other, axis, level=None, fill_value=None):
         """
         Get Subtraction of dataframe or series and other, element-wise (binary
         operator `rsub`).
@@ -5303,6 +5308,9 @@ class Frame(libcudf.table.Table):
 
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
+        axis : int or string
+            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
             for successful DataFrame alignment, with this value before
@@ -5369,7 +5377,7 @@ class Frame(libcudf.table.Table):
 
         return self._binaryop(other, "sub", fill_value, reflect=True)
 
-    def multiply(self, other, axis, level, fill_value):
+    def multiply(self, other, axis, level=None, fill_value=None):
         """
         Get Multiplication of dataframe or series and other, element-wise
         (binary operator `mul`).
@@ -5383,6 +5391,9 @@ class Frame(libcudf.table.Table):
 
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
+        axis : int or string
+            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
             for successful DataFrame alignment, with this value before
@@ -5450,7 +5461,7 @@ class Frame(libcudf.table.Table):
 
     mul = multiply
 
-    def rmul(self, other, axis, level, fill_value):
+    def rmul(self, other, axis, level=None, fill_value=None):
         """
         Get Multiplication of dataframe or series and other, element-wise 
         (binary operator `rmul`).
@@ -5464,6 +5475,9 @@ class Frame(libcudf.table.Table):
 
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
+        axis : int or string
+            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
             for successful DataFrame alignment, with this value before
@@ -5531,7 +5545,7 @@ class Frame(libcudf.table.Table):
 
         return self._binaryop(other, "mul", fill_value, reflect=True)
 
-    def mod(self, other, axis, level, fill_value):
+    def mod(self, other, axis, level=None, fill_value=None):
         """
         Get Modulo division of dataframe or series and other, element-wise
         (binary operator `mod`).
@@ -5545,6 +5559,9 @@ class Frame(libcudf.table.Table):
 
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
+        axis : int or string
+            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
             for successful DataFrame alignment, with this value before
@@ -5598,7 +5615,7 @@ class Frame(libcudf.table.Table):
 
         return self._binaryop(other, "mod", fill_value)
 
-    def rmod(self, other, axis, level, fill_value):
+    def rmod(self, other, axis, level=None, fill_value=None):
         """
         Get Modulo division of dataframe or series and other, element-wise
         (binary operator `rmod`).
@@ -5612,6 +5629,9 @@ class Frame(libcudf.table.Table):
 
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
+        axis : int or string
+            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
             for successful DataFrame alignment, with this value before
@@ -5677,7 +5697,7 @@ class Frame(libcudf.table.Table):
 
         return self._binaryop(other, "mod", fill_value, reflect=True)
 
-    def pow(self, other, axis, level, fill_value):
+    def pow(self, other, axis, level=None, fill_value=None):
         """
         Get Exponential power of dataframe series and other, element-wise
         (binary operator `pow`).
@@ -5691,6 +5711,9 @@ class Frame(libcudf.table.Table):
 
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
+        axis : int or string
+            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
             for successful DataFrame alignment, with this value before
@@ -5753,7 +5776,7 @@ class Frame(libcudf.table.Table):
 
         return self._binaryop(other, "pow", fill_value)
 
-    def rpow(self, other, axis, level, fill_value):
+    def rpow(self, other, axis, level=None, fill_value=None):
         """
         Get Exponential power of dataframe or series and other, element-wise
         (binary operator `pow`).
@@ -5767,6 +5790,9 @@ class Frame(libcudf.table.Table):
 
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
+        axis : int or string
+            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
             for successful DataFrame alignment, with this value before
@@ -5830,7 +5856,7 @@ class Frame(libcudf.table.Table):
 
         return self._binaryop(other, "pow", fill_value, reflect=True)
 
-    def floordiv(self, other, axis, level, fill_value):
+    def floordiv(self, other, axis, level=None, fill_value=None):
         """
         Get Integer division of dataframe or series and other, element-wise
         (binary operator `floordiv`).
@@ -5844,6 +5870,9 @@ class Frame(libcudf.table.Table):
 
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
+        axis : int or string
+            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
             for successful DataFrame alignment, with this value before
@@ -5906,7 +5935,7 @@ class Frame(libcudf.table.Table):
 
         return self._binaryop(other, "floordiv", fill_value)
 
-    def rfloordiv(self, other, axis, level, fill_value):
+    def rfloordiv(self, other, axis, level=None, fill_value=None):
         """
         Get Integer division of dataframe or series and other, element-wise
         (binary operator `rfloordiv`).
@@ -5920,6 +5949,9 @@ class Frame(libcudf.table.Table):
 
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
+        axis : int or string
+            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
             for successful DataFrame alignment, with this value before
@@ -6000,7 +6032,7 @@ class Frame(libcudf.table.Table):
 
         return self._binaryop(other, "floordiv", fill_value, reflect=True)
 
-    def truediv(self, other, axis, level, fill_value):
+    def truediv(self, other, axis, level=None, fill_value=None):
         """
         Get Floating division of dataframe or series and other, element-wise
         (binary operator `truediv`).
@@ -6014,6 +6046,9 @@ class Frame(libcudf.table.Table):
 
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
+        axis : int or string
+            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
             for successful DataFrame alignment, with this value before
@@ -6085,7 +6120,7 @@ class Frame(libcudf.table.Table):
     # Alias for truediv
     div = truediv
 
-    def rtruediv(self, other, axis, level, fill_value):
+    def rtruediv(self, other, axis, level=None, fill_value=None):
         """
         Get Floating division of dataframe or series and other, element-wise
         (binary operator `rtruediv`).
@@ -6099,6 +6134,9 @@ class Frame(libcudf.table.Table):
 
         other : scalar, sequence, Series, or DataFrame
             Any single or multiple element data structure, or list-like object.
+        axis : int or string
+            Only ``0`` is supported for Series, ``1`` or ``columns`` supported
+            for dataframe
         fill_value  : float or None, default None
             Fill existing missing (NaN) values, and any new element needed
             for successful DataFrame alignment, with this value before
