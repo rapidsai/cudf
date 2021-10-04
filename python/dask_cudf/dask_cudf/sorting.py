@@ -25,7 +25,9 @@ def set_index_post(df, index_name, drop, column_dtype):
 def _set_partitions_pre(s, divisions):
     partitions = divisions.searchsorted(s, side="right") - 1
     partitions[partitions < 0] = 0
-    partitions[partitions >= len(divisions) - 1] = len(divisions) - 2
+    partitions[
+        divisions.tail(1).searchsorted(s, side="right").astype("bool")
+    ] = (len(divisions) - 2)
     return partitions
 
 
