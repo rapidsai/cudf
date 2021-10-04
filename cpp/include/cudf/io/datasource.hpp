@@ -340,7 +340,6 @@ class arrow_io_source : public datasource {
    *
    * @param Apache Arrow Filesystem URI
    */
-
   explicit arrow_io_source(std::string_view arrow_uri)
   {
     const std::string uri_start_delimiter = "//";
