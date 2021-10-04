@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -557,9 +557,15 @@ public class HostColumnVectorCore implements AutoCloseable {
       boolean neededCleanup = false;
       if (data != null || valid != null || offsets != null) {
         try {
-          ColumnVector.closeBuffers(data);
-          ColumnVector.closeBuffers(offsets);
-          ColumnVector.closeBuffers(valid);
+          if (data != null) {
+            data.close();
+          }
+          if (offsets != null) {
+            offsets.close();
+          }
+          if (valid != null) {
+            valid.close();
+          }
         } finally {
           // Always mark the resource as freed even if an exception is thrown.
           // We cannot know how far it progressed before the exception, and

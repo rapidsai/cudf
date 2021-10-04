@@ -283,6 +283,7 @@ std::unique_ptr<column> gather_list_leaf(
 /**
  * @copydoc cudf::lists::segmented_gather(lists_column_view const& source_column,
  *                                        lists_column_view const& gather_map_list,
+ *                                        out_of_bounds_policy bounds_policy,
  *                                        rmm::mr::device_memory_resource* mr)
  *
  * @param stream CUDA stream on which to execute kernels
@@ -290,6 +291,7 @@ std::unique_ptr<column> gather_list_leaf(
 std::unique_ptr<column> segmented_gather(
   lists_column_view const& source_column,
   lists_column_view const& gather_map_list,
+  out_of_bounds_policy bounds_policy  = out_of_bounds_policy::DONT_CHECK,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

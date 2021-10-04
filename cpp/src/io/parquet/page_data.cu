@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -627,6 +627,8 @@ inline __device__ void gpuStoreOutput(uint2* dst,
  */
 inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s* s, int src_pos, int64_t* dst)
 {
+  using cuda::std::chrono::duration_cast;
+
   const uint8_t* src8;
   uint32_t dict_pos, dict_size = s->dict_size, ofs;
   int64_t ts;
@@ -646,7 +648,7 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s* s, int src
   ofs <<= 3;    // bytes -> bits
   if (dict_pos + 4 < dict_size) {
     uint3 v;
-    int64_t nanos, secs, days;
+    int64_t nanos, days;
     v.x = *reinterpret_cast<const uint32_t*>(src8 + dict_pos + 0);
     v.y = *reinterpret_cast<const uint32_t*>(src8 + dict_pos + 4);
     v.z = *reinterpret_cast<const uint32_t*>(src8 + dict_pos + 8);
@@ -661,13 +663,15 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s* s, int src
     nanos |= v.x;
     // Convert from Julian day at noon to UTC seconds
     days = static_cast<int32_t>(v.z);
-    secs = (days - 2440588) *
-           (24 * 60 * 60);  // TBD: Should be noon instead of midnight, but this matches pyarrow
-    if (s->col.ts_clock_rate)
-      ts = (secs * s->col.ts_clock_rate) +
-           nanos / (1000000000 / s->col.ts_clock_rate);  // Output to desired clock rate
-    else
-      ts = (secs * 1000000000) + nanos;
+    cudf::duration_D d{
+      days - 2440588};  // TBD: Should be noon instead of midnight, but this matches pyarrow
+    if (s->col.ts_clock_rate) {
+      int64_t secs = duration_cast<cudf::duration_s>(d).count() +
+                     duration_cast<cudf::duration_s>(cudf::duration_ns{nanos}).count();
+      ts = secs * s->col.ts_clock_rate;  // Output to desired clock rate
+    } else {
+      ts = duration_cast<cudf::duration_ns>(d).count() + nanos;
+    }
   } else {
     ts = 0;
   }
@@ -999,11 +1003,14 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
         case INT64:
           if (s->col.ts_clock_rate) {
             int32_t units = 0;
-            if (s->col.converted_type == TIME_MICROS || s->col.converted_type == TIMESTAMP_MICROS)
-              units = 1000000;
+            if (s->col.converted_type == TIME_MICROS || s->col.converted_type == TIMESTAMP_MICROS) {
+              units = cudf::timestamp_us::period::den;
+            }
+
             else if (s->col.converted_type == TIME_MILLIS ||
-                     s->col.converted_type == TIMESTAMP_MILLIS)
-              units = 1000;
+                     s->col.converted_type == TIMESTAMP_MILLIS) {
+              units = cudf::timestamp_ms::period::den;
+            }
             if (units && units != s->col.ts_clock_rate)
               s->ts_scale = (s->col.ts_clock_rate < units) ? -(units / s->col.ts_clock_rate)
                                                            : (s->col.ts_clock_rate / units);

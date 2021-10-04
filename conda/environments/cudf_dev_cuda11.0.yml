@@ -19,6 +19,7 @@ dependencies:
   - pandas>=1.0,<1.4.0dev0
   - pyarrow=5.0.0=*cuda
   - fastavro>=0.22.9
+  - python-snappy>=0.6.0
   - notebook>=0.5.0
   - cython>=0.29,<0.30
   - fsspec>=0.6.0
@@ -39,8 +40,8 @@ dependencies:
   - mypy=0.782
   - typing_extensions
   - pre_commit
-  - dask>=2021.6.0
-  - distributed>=2021.6.0
+  - dask>=2021.09.1
+  - distributed>=2021.09.1
   - streamz
   - arrow-cpp=5.0.0
   - dlpack>=0.5,<0.6.0a0
@@ -55,7 +56,7 @@ dependencies:
   - protobuf
   - nvtx>=0.2.1
   - cachetools
-  - transformers
+  - transformers<=4.10.3
   - pydata-sphinx-theme
   - pip:
       - git+https://github.com/dask/dask.git@main
