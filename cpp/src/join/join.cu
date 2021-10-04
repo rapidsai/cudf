@@ -16,6 +16,7 @@
 #include <join/hash_join.cuh>
 #include <join/join_common_utils.hpp>
 
+#include <cudf/detail/gather.cuh>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
