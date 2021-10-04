@@ -5003,7 +5003,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             tpb=tpb,
         )
 
-    def hash_columns(self, columns=None):
+    def hash_columns(self, columns=None, method="murmur3"):
         """Hash the given *columns* and return a new device array
 
         Parameters
@@ -5011,7 +5011,19 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         columns : sequence of str; optional
             Sequence of column names. If columns is *None* (unspecified),
             all columns in the frame are used.
+        method : {'murmur3', 'md5'}, default 'murmur3'
+            Hash function to use:
+            * murmur3: MurmurHash3 hash function.
+            * md5: MD5 hash function.
+
+        Returns
+        -------
+        Series
+            Hash values for each row.
         """
+        if method not in {"murmur3", "md5"}:
+            raise ValueError(f"Unsupported hash function: {method}")
+
         if columns is None:
             table_to_hash = self
         else:
