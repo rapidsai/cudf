@@ -123,7 +123,7 @@ cdef cppclass iobase_data_sink(data_sink):
 
 
 cdef update_struct_field_names(
-    Table table,
+    table,
     vector[column_name_info]& schema_info
 ):
     for i, (name, col) in enumerate(table._data.items()):

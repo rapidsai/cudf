@@ -1,8 +1,11 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 import numpy as np
+from numba.np import numpy_support
 
 import cudf
+from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
+from cudf.core.buffer import Buffer
 from cudf.utils import cudautils
 
 from libc.stdint cimport uintptr_t
@@ -13,25 +16,19 @@ from libcpp.utility cimport move
 
 from rmm._lib.device_buffer cimport DeviceBuffer, device_buffer
 
+cimport cudf._lib.cpp.transform as libcudf_transform
 from cudf._lib.column cimport Column
-from cudf._lib.table cimport Table, table_view_from_table
-
-from cudf.core.buffer import Buffer
-
-from cudf._lib.cpp.types cimport bitmask_type, data_type, size_type, type_id
-
-from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
-
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
+from cudf._lib.cpp.types cimport bitmask_type, data_type, size_type, type_id
 from cudf._lib.types cimport underlying_type_t_type_id
-from cudf._lib.utils cimport data_from_table_view, data_from_unique_ptr
-
-from numba.np import numpy_support
-
-cimport cudf._lib.cpp.transform as libcudf_transform
+from cudf._lib.utils cimport (
+    data_from_unique_ptr,
+    table_view_from_table,
+    data_from_table_view
+)
 
 
 def bools_to_mask(Column col):
@@ -126,7 +123,7 @@ def transform(Column input, op):
     return Column.from_unique_ptr(move(c_output))
 
 
-def masked_udf(Table incols, op, output_type):
+def masked_udf(incols, op, output_type):
     cdef table_view data_view = table_view_from_table(
         incols, ignore_index=True)
     cdef string c_str = op.encode("UTF-8")
@@ -150,7 +147,7 @@ def masked_udf(Table incols, op, output_type):
     return Column.from_unique_ptr(move(c_output))
 
 
-def table_encode(Table input):
+def table_encode(input):
     cdef table_view c_input = table_view_from_table(
         input, ignore_index=True)
     cdef pair[unique_ptr[table], unique_ptr[column]] c_result

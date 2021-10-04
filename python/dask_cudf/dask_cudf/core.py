@@ -420,7 +420,7 @@ class Series(_Frame, dd.core.Series):
 
 
 class Index(Series, dd.core.Index):
-    _partition_type = cudf.Index
+    _partition_type = cudf.Index  # type: ignore
 
 
 def _naive_var(ddf, meta, skipna, ddof, split_every, out):

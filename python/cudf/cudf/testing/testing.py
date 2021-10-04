@@ -222,8 +222,8 @@ def assert_column_equal(
             left = left.astype(left.categories.dtype)
             right = right.astype(right.categories.dtype)
     if not columns_equal:
-        msg1 = f"{left.to_array()}"
-        msg2 = f"{right.to_array()}"
+        msg1 = f"{left.values_host}"
+        msg2 = f"{right.values_host}"
         try:
             diff = left.apply_boolean_mask(left != right).size
             diff = diff * 100.0 / left.size
