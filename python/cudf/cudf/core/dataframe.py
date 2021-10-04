@@ -6343,6 +6343,18 @@ def make_binop_func(op):
             raise NotImplementedError("Only axis=1 supported at this time.")
         return wrapped_func(self, other, axis, level, fill_value)
 
+    # The above has wrapped binary op function from `Frame` with `wrapper`,
+    # copied module level attributes to wrapper (`__docs__` etc.) and set
+    # `__wrapped__` attribute of `wrapper` to `Frame` binop. Since this wrapper
+    # reordered the function arguments, we need to make sure the function
+    # signature in sphinx also matches. `inspect.signature` tells that
+    # if a function has `__wrapped__` attribute defined, the signature of that
+    # will overwrite the signature from the original function. Below utilizes
+    # this rule to make sure sphinx is rendering the right argument list for
+    # the function.
+    wrapper.__wrapped__ = (
+        lambda self, other, axis="columns", level=None, fill_value=None: None
+    )
     return wrapper
 
 
