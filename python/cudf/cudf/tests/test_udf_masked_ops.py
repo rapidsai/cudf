@@ -498,3 +498,24 @@ def test_masked_udf_nested_function_support(op):
         return inner_gpu(x, y)
 
     run_masked_udf_test(outer, outer_gpu, data, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]},
+        {"a": [1, 2, 3], "c": [4, 5, 6], "b": [7, 8, 9]},
+        pytest.param(
+            {"a": [1, 2, 3], "b": [4, 5, 6], "c": ["a", "b", "c"]},
+            marks=pytest.mark.xfail(
+                reason="Until cudf/9359 is merged, this will fail"
+            ),
+        ),
+    ],
+)
+def test_masked_udf_subset_selection(data):
+    def func(row):
+        return row["a"] + row["b"]
+
+    data = cudf.DataFrame(data)
+    run_masked_udf_test(func, func, data)

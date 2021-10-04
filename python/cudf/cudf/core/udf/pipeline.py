@@ -262,6 +262,7 @@ def compile_or_get(df, f):
     cache_key = (
         *cudautils.make_cache_key(f, frame_dtypes),
         *(col.mask is None for col in df._data.values()),
+        *df._data.keys(),
     )
     if precompiled.get(cache_key) is not None:
         kernel, scalar_return_type = precompiled[cache_key]
