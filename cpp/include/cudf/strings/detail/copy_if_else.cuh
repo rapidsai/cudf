@@ -47,8 +47,8 @@ namespace detail {
  * @param rhs_begin Strings of second set of data. Used when filter_fn returns false.
  * @param filter_fn Called to determine which iterator (lhs or rhs) to retrieve an entry for a
  * specific row.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 template <typename StringPairIterLeft, typename StringPairIterRight, typename Filter>

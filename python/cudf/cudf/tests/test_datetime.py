@@ -140,24 +140,24 @@ def test_datetime_series_binops_numpy(lhs_dtype, rhs_dtype):
     gdf_data_2 = Series(pd_data_2).astype(rhs_dtype)
     np_data_1 = np.array(pd_data_1).astype(lhs_dtype)
     np_data_2 = np.array(pd_data_2).astype(rhs_dtype)
-    np.testing.assert_equal(np_data_1, gdf_data_1.to_array())
-    np.testing.assert_equal(np_data_2, gdf_data_2.to_array())
+    np.testing.assert_equal(np_data_1, gdf_data_1.to_numpy())
+    np.testing.assert_equal(np_data_2, gdf_data_2.to_numpy())
     np.testing.assert_equal(
-        np.less(np_data_1, np_data_2), (gdf_data_1 < gdf_data_2).to_array()
+        np.less(np_data_1, np_data_2), (gdf_data_1 < gdf_data_2).to_numpy()
     )
     np.testing.assert_equal(
-        np.greater(np_data_1, np_data_2), (gdf_data_1 > gdf_data_2).to_array()
+        np.greater(np_data_1, np_data_2), (gdf_data_1 > gdf_data_2).to_numpy()
     )
     np.testing.assert_equal(
-        np.equal(np_data_1, np_data_2), (gdf_data_1 == gdf_data_2).to_array()
+        np.equal(np_data_1, np_data_2), (gdf_data_1 == gdf_data_2).to_numpy()
     )
     np.testing.assert_equal(
         np.less_equal(np_data_1, np_data_2),
-        (gdf_data_1 <= gdf_data_2).to_array(),
+        (gdf_data_1 <= gdf_data_2).to_numpy(),
     )
     np.testing.assert_equal(
         np.greater_equal(np_data_1, np_data_2),
-        (gdf_data_1 >= gdf_data_2).to_array(),
+        (gdf_data_1 >= gdf_data_2).to_numpy(),
     )
 
 
@@ -268,7 +268,7 @@ def test_typecast_from_datetime(data, dtype):
     np_casted = np_data.astype(dtype)
     gdf_casted = gdf_data.astype(dtype)
 
-    np.testing.assert_equal(np_casted, gdf_casted.to_array())
+    np.testing.assert_equal(np_casted, gdf_casted.to_numpy())
 
 
 @pytest.mark.parametrize("data", [data1(), data2()])
@@ -284,7 +284,7 @@ def test_typecast_from_datetime_to_int64_to_datetime(data, dtype):
     np_casted = np_data.astype(np.int64).astype(dtype)
     gdf_casted = gdf_data.astype(np.int64).astype(dtype)
 
-    np.testing.assert_equal(np_casted, gdf_casted.to_array())
+    np.testing.assert_equal(np_casted, gdf_casted.to_numpy())
 
 
 @pytest.mark.parametrize("data", [timeseries_us_data()])
@@ -296,7 +296,7 @@ def test_typecast_to_different_datetime_resolutions(data, dtype):
     pd_data = pd.Series(data.copy())
     np_data = np.array(pd_data).astype(dtype)
     gdf_series = Series(pd_data).astype(dtype)
-    np.testing.assert_equal(np_data, gdf_series.to_array())
+    np.testing.assert_equal(np_data, gdf_series.to_numpy())
 
 
 @pytest.mark.parametrize(
@@ -331,7 +331,7 @@ def test_typecast_to_datetime(data, from_dtype, to_dtype):
     np_casted = np_data.astype(to_dtype)
     gdf_casted = gdf_data.astype(to_dtype)
 
-    np.testing.assert_equal(np_casted, gdf_casted.to_array())
+    np.testing.assert_equal(np_casted, gdf_casted.to_numpy())
 
 
 @pytest.mark.parametrize("data", [numerical_data()])
@@ -347,7 +347,7 @@ def test_typecast_to_from_datetime(data, from_dtype, to_dtype):
     np_casted = np_data.astype(to_dtype).astype(from_dtype)
     gdf_casted = gdf_data.astype(to_dtype).astype(from_dtype)
 
-    np.testing.assert_equal(np_casted, gdf_casted.to_array())
+    np.testing.assert_equal(np_casted, gdf_casted.to_numpy())
 
 
 @pytest.mark.parametrize("data", [numerical_data()])
@@ -361,12 +361,12 @@ def test_typecast_to_from_datetime(data, from_dtype, to_dtype):
 )
 def test_typecast_from_datetime_to_datetime(data, from_dtype, to_dtype):
     np_data = data.astype(from_dtype)
-    gdf_col = Series(np_data)._column
+    ser = Series(np_data)
 
     np_casted = np_data.astype(to_dtype)
-    gdf_casted = gdf_col.astype(to_dtype)
+    ser_casted = ser.astype(to_dtype)
 
-    np.testing.assert_equal(np_casted, gdf_casted.to_array())
+    np.testing.assert_equal(np_casted, ser_casted.to_numpy())
 
 
 @pytest.mark.parametrize("data", [numerical_data()])
