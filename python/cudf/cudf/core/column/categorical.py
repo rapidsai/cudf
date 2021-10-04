@@ -426,7 +426,7 @@ class CategoricalAccessor(ColumnMethods):
         # ensure all the removals are in the current categories
         # list. If not, raise an error to match Pandas behavior
         if not removals_mask.all():
-            vals = removals[~removals_mask].to_array()
+            vals = removals[~removals_mask].to_numpy()
             raise ValueError(f"removals must all be in old categories: {vals}")
 
         new_categories = cats[~cats.isin(removals)]._column
@@ -1012,11 +1012,11 @@ class CategoricalColumn(column.ColumnBase):
         return self.categories.find_first_value(value)
 
     def _decode(self, value: int) -> ScalarLike:
-        if value == self.default_na_value():
+        if value == self._default_na_value():
             return None
         return self.categories.element_indexing(value)
 
-    def default_na_value(self) -> ScalarLike:
+    def _default_na_value(self) -> ScalarLike:
         return -1
 
     def find_and_replace(
@@ -1175,7 +1175,7 @@ class CategoricalColumn(column.ColumnBase):
             fill_is_scalar = np.isscalar(fill_value)
 
             if fill_is_scalar:
-                if fill_value == self.default_na_value():
+                if fill_value == self._default_na_value():
                     fill_value = self.codes.dtype.type(fill_value)
                 else:
                     try:
@@ -1578,7 +1578,7 @@ def _create_empty_categorical_column(
         categories=column.as_column(dtype.categories),
         codes=column.as_column(
             cudf.utils.utils.scalar_broadcast_to(
-                categorical_column.default_na_value(),
+                categorical_column._default_na_value(),
                 categorical_column.size,
                 categorical_column.codes.dtype,
             )
