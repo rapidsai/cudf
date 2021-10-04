@@ -4147,8 +4147,8 @@ def make_binop_func(op):
 
     @functools.wraps(wrapped_func)
     def wrapper(self, other, level=None, fill_value=None, axis=0):
-        if axis not in (1, "columns"):
-            raise NotImplementedError("Only axis=1 supported at this time.")
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
         return wrapped_func(self, other, axis, level, fill_value)
 
     return wrapper
