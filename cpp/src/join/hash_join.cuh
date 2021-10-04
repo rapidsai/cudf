@@ -16,8 +16,6 @@
 #pragma once
 
 #include <cudf/detail/concatenate.cuh>
-#include <cudf/detail/gather.cuh>
-#include <cudf/detail/gather.hpp>
 #include <join/join_common_utils.cuh>
 #include <join/join_common_utils.hpp>
 #include <join/join_kernels.cuh>

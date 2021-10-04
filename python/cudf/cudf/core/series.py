@@ -3341,6 +3341,94 @@ class Series(SingleColumnFrame, Serializable):
         return codes
 
     # UDF related
+    def apply(self, func, convert_dtype=True, args=(), **kwargs):
+        """
+        Apply a scalar function to the values of a Series.
+
+        Similar to `pandas.Series.apply. Applies a user
+        defined function elementwise over a series.
+
+        Parameters
+        ----------
+        func : function
+            Scalar Python function to apply.
+        convert_dtype : bool, default True
+            In cuDF, this parameter is always True. Because
+            cuDF does not support arbitrary object dtypes,
+            the result will always be the common type as determined
+            by numba based on the function logic and argument types.
+            See examples for details.
+        args : tuple
+            Not supported
+        **kwargs
+            Not supported
+
+        Notes
+        -----
+        UDFs are cached in memory to avoid recompilation. The first
+        call to the UDF will incur compilation overhead.
+
+        Examples
+        --------
+
+        Apply a basic function to a series
+        >>> sr = cudf.Series([1,2,3])
+        >>> def f(x):
+        ...     return x + 1
+        >>> sr.apply(f)
+        0    2
+        1    3
+        2    4
+        dtype: int64
+
+        Apply a basic function to a series with nulls
+        >>> sr = cudf.Series([1,cudf.NA,3])
+        >>> def f(x):
+        ...     return x + 1
+        >>> sr.apply(f)
+        0       2
+        1    <NA>
+        2       4
+        dtype: int64
+
+        Use a function that does something conditionally,
+        based on if the value is or is not null
+        >>> sr = cudf.Series([1,cudf.NA,3])
+        >>> def f(x):
+        ...     if x is cudf.NA:
+        ...         return 42
+        ...     else:
+        ...         return x - 1
+        >>> sr.apply(f)
+        0     0
+        1    42
+        2     2
+        dtype: int64
+
+        Results will be upcast to the common dtype required
+        as derived from the UDFs logic. Note that this means
+        the common type will be returned even if such data
+        is passed that would not result in any values of that
+        dtype.
+
+        >>> sr = cudf.Series([1,cudf.NA,3])
+        >>> def f(x):
+        ...     return x + 1.5
+        >>> sr.apply(f)
+        0     2.5
+        1    <NA>
+        2     4.5
+        dtype: float64
+
+
+
+        """
+        if args or kwargs:
+            raise ValueError(
+                "UDFs using *args or **kwargs are not yet supported."
+            )
+
+        return super()._apply(func)
 
     def applymap(self, udf, out_dtype=None):
         """Apply an elementwise function to transform the values in the Column.
