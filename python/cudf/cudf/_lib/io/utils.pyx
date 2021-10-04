@@ -35,6 +35,7 @@ from cudf.api.types import is_struct_dtype
 cdef source_info make_source_info(list src) except*:
     if not src:
         raise ValueError("Need to pass at least one source")
+
     cdef const unsigned char[::1] c_buffer
     cdef vector[host_buffer] c_host_buffers
     cdef vector[string] c_files
