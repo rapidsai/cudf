@@ -119,18 +119,70 @@ TYPED_TEST(groupby_correlation_test, null_keys_and_values)
   using V = TypeParam;
   using R = cudf::detail::target_type_t<V, aggregation::CORRELATION>;
 
+  // clang-format off
   fixed_width_column_wrapper<K> keys({1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
                                      {1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
-  fixed_width_column_wrapper<V> val0({9, 1, 1, 2, 2, 3, 3, -1, 1, 4, 4},
+  fixed_width_column_wrapper<V> val0({9, 1, 1, 2, 2, 3, 3,-1, 1, 4, 4},
                                      {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
-  fixed_width_column_wrapper<V> val1({1, 1, 1, 2, 0, 3, 3, -1, 0, 2, 2});
+  fixed_width_column_wrapper<V> val1({1, 1, 1, 2, 0, 3, 3,-1, 0, 2, 2});
+  // clang-format on
   auto vals = structs{{val0, val1}};
 
-  //                                        { 1, 1,     2, 2, 2,   3, 3,       4}
   fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_nulls());
-  //                                        { 3, 6,     1, 4, 9,   2, 8,       3}
   fixed_width_column_wrapper<R> expect_vals(
     {1.0, 0.6, std::numeric_limits<double>::quiet_NaN(), 0.}, {1, 1, 1, 0});
+
+  auto agg =
+    cudf::make_correlation_aggregation<groupby_aggregation>(cudf::correlation_type::PEARSON);
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), force_use_sort_impl::YES);
+}
+
+TYPED_TEST(groupby_correlation_test, null_values_same)
+{
+  using V = TypeParam;
+  using R = cudf::detail::target_type_t<V, aggregation::CORRELATION>;
+
+  // clang-format off
+  fixed_width_column_wrapper<K> keys({1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
+                                     {1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
+  fixed_width_column_wrapper<V> val0({9, 1, 1, 2, 2, 3, 3,-1, 1, 4, 4},
+                                     {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+  fixed_width_column_wrapper<V> val1({1, 1, 1, 2, 0, 3, 3,-1, 0, 2, 2},
+                                     {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+  // clang-format on
+  auto vals = structs{{val0, val1}};
+
+  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_nulls());
+  fixed_width_column_wrapper<R> expect_vals(
+    {1.0, 0.6, std::numeric_limits<double>::quiet_NaN(), 0.}, {1, 1, 1, 0});
+
+  auto agg =
+    cudf::make_correlation_aggregation<groupby_aggregation>(cudf::correlation_type::PEARSON);
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), force_use_sort_impl::YES);
+}
+
+// keys=[1, 1, 1, 2, 2, 2, 2,   3, N, 3, 4]
+// val0=[N, 2, 3, 1, N, 3, 4,   1,-1, 1, 4]
+// val1=[N, 2, 3, 2,-1, 6,-6/1, 1,-1, 0, N]
+// corr=[    1.0,       -0.5/0, NAN,     NAN]
+TYPED_TEST(groupby_correlation_test, null_values_different)
+{
+  using V = TypeParam;
+  using R = cudf::detail::target_type_t<V, aggregation::CORRELATION>;
+
+  // clang-format off
+  fixed_width_column_wrapper<K> keys({1, 2, 3, 1, 2, 2, 1, 3, 3, 2, 4},
+                                     {1, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1});
+  fixed_width_column_wrapper<V> val0({9, 1, 1, 2, 2, 3, 3,-1, 1, 4, 4},
+                                     {0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1});
+  fixed_width_column_wrapper<V> val1({1, 2, 1, 2,-1, 6, 3,-1, 0, 1, 2},
+                                     {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0});
+  // clang-format on
+  auto vals = structs{{val0, val1}};
+
+  fixed_width_column_wrapper<K> expect_keys({1, 2, 3, 4}, no_nulls());
+  fixed_width_column_wrapper<R> expect_vals({1.0, 0., std::numeric_limits<double>::quiet_NaN(), 0.},
+                                            {1, 1, 1, 0});
 
   auto agg =
     cudf::make_correlation_aggregation<groupby_aggregation>(cudf::correlation_type::PEARSON);
