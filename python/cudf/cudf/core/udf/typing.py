@@ -33,7 +33,10 @@ class MaskedType(types.Type):
         if isinstance(value, (types.Number, types.Boolean)):
             self.value_type = value
         else:
-            # Unsupported Dtype
+            # Unsupported Dtype. Numba tends to print out the type info
+            # for whatever operands and operation failed to type and then
+            # output its own error message. Putting the message in the repr
+            # then is one way of getting the true cause to the user
             self.value_type = types.Dummy(
                 "\n\n\n Unsupported MaskedType. If you are seeing this, "
                 "you are likely trying to use a column of unsupported"
