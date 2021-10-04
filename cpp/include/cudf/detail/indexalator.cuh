@@ -502,17 +502,32 @@ struct indexalator_factory {
       iter = make_input_iterator(col);
     }
 
+    __device__ thrust::pair<size_type, bool> operator()(size_type i) const
+    {
+      return {iter[i], (has_nulls ? bit_is_set(null_mask, i + offset) : true)};
+    }
+  };
+
+  /**
+   * @brief An index accessor that returns a validity flag along with the index value.
+   *
+   * This is suitable as a `pair_iterator`.
+   */
+  struct scalar_nullable_index_accessor {
+    input_indexalator iter;
+    bool const is_null;
+
     /**
      * @brief Create an accessor from a scalar.
      */
-    nullable_index_accessor(scalar const& input) : has_nulls{!input.is_valid()}
+    scalar_nullable_index_accessor(scalar const& input) : is_null{!input.is_valid()}
     {
       iter = indexalator_factory::make_input_iterator(input);
     }
 
-    __device__ thrust::pair<size_type, bool> operator()(size_type i) const
+    __device__ thrust::pair<size_type, bool> operator()(size_type) const
     {
-      return {iter[i], (has_nulls ? bit_is_set(null_mask, i + offset) : true)};
+      return {*iter, is_null};
     }
   };
 
@@ -530,7 +545,75 @@ struct indexalator_factory {
   static auto make_input_pair_iterator(scalar const& input)
   {
     return thrust::make_transform_iterator(thrust::make_constant_iterator<size_type>(0),
-                                           nullable_index_accessor{input});
+                                           scalar_nullable_index_accessor{input});
+  }
+
+  /**
+   * @brief An index accessor that returns an index value if corresponding validity flag is true.
+   *
+   * This is suitable as an `optional_iterator`.
+   */
+  struct optional_index_accessor {
+    input_indexalator iter;
+    bitmask_type const* null_mask{};
+    size_type const offset{};
+    bool const has_nulls{};
+
+    /**
+     * @brief Create an accessor from a column_view.
+     */
+    optional_index_accessor(column_view const& col, bool has_nulls = false)
+      : null_mask{col.null_mask()}, offset{col.offset()}, has_nulls{has_nulls}
+    {
+      if (has_nulls) { CUDF_EXPECTS(col.nullable(), "Unexpected non-nullable column."); }
+      iter = make_input_iterator(col);
+    }
+
+    __device__ thrust::optional<size_type> operator()(size_type i) const
+    {
+      return has_nulls && !bit_is_set(null_mask, i + offset) ? thrust::nullopt
+                                                             : thrust::make_optional(iter[i]);
+    }
+  };
+
+  /**
+   * @brief An index accessor that returns an index value if corresponding validity flag is true.
+   *
+   * This is suitable as an `optional_iterator`.
+   */
+  struct scalar_optional_index_accessor {
+    input_indexalator iter;
+    bool const is_null;
+
+    /**
+     * @brief Create an accessor from a scalar.
+     */
+    scalar_optional_index_accessor(scalar const& input) : is_null{!input.is_valid()}
+    {
+      iter = indexalator_factory::make_input_iterator(input);
+    }
+
+    __device__ thrust::optional<size_type> operator()(size_type) const
+    {
+      return is_null ? thrust::nullopt : thrust::make_optional(*iter);
+    }
+  };
+
+  /**
+   * @brief Create an index iterator with a nullable index accessor.
+   */
+  static auto make_input_optional_iterator(column_view const& col)
+  {
+    return make_counting_transform_iterator(0, optional_index_accessor{col, col.has_nulls()});
+  }
+
+  /**
+   * @brief Create an index iterator with a nullable index accessor for a scalar.
+   */
+  static auto make_input_optional_iterator(scalar const& input)
+  {
+    return thrust::make_transform_iterator(thrust::make_constant_iterator<size_type>(0),
+                                           scalar_optional_index_accessor{input});
   }
 };
 

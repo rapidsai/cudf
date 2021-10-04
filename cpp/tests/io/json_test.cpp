@@ -365,6 +365,7 @@ TEST_F(JsonReaderTest, Durations)
     std::ofstream outfile(filepath, std::ofstream::out);
     outfile << "[-2]\n[-1]\n[0]\n";
     outfile << "[1 days]\n[0 days 23:01:00]\n[0 days 00:00:00.000000123]\n";
+    outfile << "[0:0:0.000123]\n[0:0:0.000123000]\n[00:00:00.100000001]\n";
     outfile << "[-2147483648]\n[2147483647]\n";
   }
 
@@ -388,6 +389,9 @@ TEST_F(JsonReaderTest, Durations)
                                                         1L * 60 * 60 * 24 * 1000000000L,
                                                         (23 * 60 + 1) * 60 * 1000000000L,
                                                         123L,
+                                                        123000L,
+                                                        123000L,
+                                                        100000001L,
                                                         -2147483648L,
                                                         2147483647L},
                                                        validity});

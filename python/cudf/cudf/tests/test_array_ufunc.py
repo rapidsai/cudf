@@ -31,7 +31,7 @@ def test_ufunc_cudf_non_nullseries(np_ar_tup, func):
     s_1, s_2 = cudf.Series(x), cudf.Series(y)
     expect = func(x, y)
     got = func(s_1, s_2)
-    assert_eq(expect, got.to_array())
+    assert_eq(expect, got.to_numpy())
 
 
 @pytest.mark.parametrize(
@@ -45,7 +45,7 @@ def test_ufunc_cudf_series_bitwise(func):
     s_1, s_2 = cudf.Series(x), cudf.Series(y)
     expect = func(x, y)
     got = func(s_1, s_2)
-    assert_eq(expect, got.to_array())
+    assert_eq(expect, got.to_numpy())
 
 
 @pytest.mark.parametrize(
@@ -67,16 +67,16 @@ def test_ufunc_cudf_null_series(np_ar_tup, func):
     s_1, s_2 = cudf.Series(x), cudf.Series(y)
     expect = func(x, y)
     got = func(s_1, s_2)
-    assert_eq(expect, got.fillna(np.nan).to_array())
+    assert_eq(expect, got.fillna(np.nan).to_numpy())
 
     scalar = 0.5
     expect = func(x, scalar)
     got = func(s_1, scalar)
-    assert_eq(expect, got.fillna(np.nan).to_array())
+    assert_eq(expect, got.fillna(np.nan).to_numpy())
 
     expect = func(scalar, x)
     got = func(scalar, s_1)
-    assert_eq(expect, got.fillna(np.nan).to_array())
+    assert_eq(expect, got.fillna(np.nan).to_numpy())
 
 
 @pytest.mark.xfail(
@@ -93,16 +93,16 @@ def test_ufunc_cudf_null_series_comparison_ops(np_ar_tup, func):
     s_1, s_2 = cudf.Series(x), cudf.Series(y)
     expect = func(x, y)
     got = func(s_1, s_2)
-    assert_eq(expect, got.fillna(np.nan).to_array())
+    assert_eq(expect, got.fillna(np.nan).to_numpy())
 
     scalar = 0.5
     expect = func(x, scalar)
     got = func(s_1, scalar)
-    assert_eq(expect, got.fillna(np.nan).to_array())
+    assert_eq(expect, got.fillna(np.nan).to_numpy())
 
     expect = func(scalar, x)
     got = func(scalar, s_1)
-    assert_eq(expect, got.fillna(np.nan).to_array())
+    assert_eq(expect, got.fillna(np.nan).to_numpy())
 
 
 @pytest.mark.parametrize(
@@ -115,7 +115,7 @@ def test_ufunc_cudf_series_cupy_array(np_ar_tup, func):
     cudf_s = cudf.Series(x)
     cupy_ar = cp.array(y)
     got = func(cudf_s, cupy_ar)
-    assert_eq(expect, got.to_array())
+    assert_eq(expect, got.to_numpy())
 
 
 @pytest.mark.parametrize(

@@ -34,7 +34,9 @@ def get_frame_row_type(fr):
 
     fields = []
     offset = 0
-    for name, info in dtype.fields.items():
+
+    sizes = [val[0].itemsize for val in dtype.fields.values()]
+    for i, (name, info) in enumerate(dtype.fields.items()):
         # *info* consists of the element dtype, its offset from the beginning
         # of the record, and an optional "title" containing metadata.
         # We ignore the offset in info because its value assumes no masking;
@@ -52,9 +54,11 @@ def get_frame_row_type(fr):
         # increment offset by itemsize plus one byte for validity
         offset += elemdtype.itemsize + 1
 
-        # round up to the nearest multiple of 8
-        # at the end, offset will represent the total size
-        offset = int(math.ceil(offset / 8.0) * 8.0)
+        # Align the next member of the struct to be a multiple of the
+        # memory access size, per PTX ISA 7.4/5.4.5
+        if i < len(sizes) - 1:
+            next_itemsize = sizes[i + 1]
+            offset = int(math.ceil(offset / next_itemsize) * next_itemsize)
 
     # Numba requires that structures are aligned for the CUDA target
     _is_aligned_struct = True
@@ -193,7 +197,6 @@ def _define_function(fr, row_type, scalar_return=False):
     if `*args` is a singular argument. Thus we are forced to write the right
     funtions dynamically at runtime and define them using `exec`.
     """
-
     # Create argument list for kernel
     fr = {name: col for name, col in fr._data.items() if col.dtype != 'object'}
 
