@@ -34,7 +34,7 @@ def test_array_func_cudf_series(np_ar, func):
     if np.isscalar(expect):
         assert_eq(expect, got)
     else:
-        assert_eq(expect, got.to_array())
+        assert_eq(expect, got.to_numpy())
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)

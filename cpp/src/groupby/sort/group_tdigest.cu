@@ -299,6 +299,8 @@ __global__ void generate_cluster_limits_kernel(int delta_,
         nearest_w_index       = last_inserted_index + 1;
         auto [r, i, adjusted] = cumulative_weight(nearest_w_index);
         adjusted_next_limit   = max(next_limit, adjusted);
+        (void)r;
+        (void)i;
       }
       cluster_wl[group_num_clusters[group_index]] = adjusted_next_limit;
       last_inserted_index                         = nearest_w_index;
@@ -469,6 +471,7 @@ std::unique_ptr<column> compute_tdigests(int delta,
      group_cumulative_weight] __device__(size_type value_index) -> size_type {
       auto [group_index, relative_value_index, cumulative_weight] =
         group_cumulative_weight(value_index);
+      (void)relative_value_index;
 
       // compute start of cluster weight limits for this group
       double const* weight_limits = group_cluster_wl + group_cluster_offsets[group_index];
@@ -532,10 +535,12 @@ struct get_scalar_minmax {
 
   __device__ thrust::tuple<double, double> operator()(size_type group_index)
   {
-    // note: .element<T>() is taking care of fixed-point conversions for us.
-    return {static_cast<double>(col.element<T>(group_offsets[group_index])),
-            static_cast<double>(
-              col.element<T>(group_offsets[group_index] + (group_valid_counts[group_index] - 1)))};
+    auto const valid_count = group_valid_counts[group_index];
+    return valid_count > 0
+             ? thrust::make_tuple(
+                 static_cast<double>(col.element<T>(group_offsets[group_index])),
+                 static_cast<double>(col.element<T>(group_offsets[group_index] + valid_count - 1)))
+             : thrust::make_tuple(0.0, 0.0);
   }
 };
 
@@ -601,15 +606,9 @@ struct typed_group_tdigest {
 
   template <
     typename T,
+    typename... Args,
     typename std::enable_if_t<!cudf::is_numeric<T>() && !cudf::is_fixed_point<T>()>* = nullptr>
-  std::unique_ptr<column> operator()(column_view const& col,
-                                     cudf::device_span<size_type const> group_offsets,
-                                     cudf::device_span<size_type const> group_labels,
-                                     cudf::device_span<size_type const> group_valid_counts,
-                                     size_type num_groups,
-                                     int delta,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+  std::unique_ptr<column> operator()(Args&&...)
   {
     CUDF_FAIL("Non-numeric type in group_tdigest");
   }

@@ -22,6 +22,7 @@
 #include "reader_impl.hpp"
 
 #include <io/comp/gpuinflate.h>
+#include <io/utilities/time_utils.cuh>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
@@ -181,24 +182,6 @@ type_id to_type_id(SchemaElement const& schema,
 }
 
 /**
- * @brief Function that translates cuDF time unit to Parquet clock frequency
- */
-constexpr int32_t to_clockrate(type_id timestamp_type_id)
-{
-  switch (timestamp_type_id) {
-    case type_id::DURATION_SECONDS: return 1;
-    case type_id::DURATION_MILLISECONDS: return 1000;
-    case type_id::DURATION_MICROSECONDS: return 1000000;
-    case type_id::DURATION_NANOSECONDS: return 1000000000;
-    case type_id::TIMESTAMP_SECONDS: return 1;
-    case type_id::TIMESTAMP_MILLISECONDS: return 1000;
-    case type_id::TIMESTAMP_MICROSECONDS: return 1000000;
-    case type_id::TIMESTAMP_NANOSECONDS: return 1000000000;
-    default: return 0;
-  }
-}
-
-/**
  * @brief Function that returns the required the number of bits to store a value
  */
 template <typename T = uint8_t>
@@ -207,6 +190,11 @@ T required_bits(uint32_t max_level)
   return static_cast<T>(CompactProtocolReader::NumRequiredBits(max_level));
 }
 
+/**
+ * @brief Converts cuDF units to Parquet units.
+ *
+ * @return A tuple of Parquet type width, Parquet clock rate and Parquet decimal type.
+ */
 std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
                                                      type_id timestamp_type_id,
                                                      parquet::Type physical,

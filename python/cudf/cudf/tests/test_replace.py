@@ -68,7 +68,7 @@ def test_series_replace():
     a2 = np.array([5, 1, 2, 3, 4])
     sr1 = cudf.Series(a1)
     sr2 = sr1.replace(0, 5)
-    assert_eq(a2, sr2.to_array())
+    assert_eq(a2, sr2.to_numpy())
 
     # Categorical
     psr3 = pd.Series(["one", "two", "three"], dtype="category")
@@ -85,35 +85,35 @@ def test_series_replace():
     # List input
     a6 = np.array([5, 6, 2, 3, 4])
     sr6 = sr1.replace([0, 1], [5, 6])
-    assert_eq(a6, sr6.to_array())
+    assert_eq(a6, sr6.to_numpy())
 
     with pytest.raises(TypeError):
         sr1.replace([0, 1], [5.5, 6.5])
 
     # Series input
     a8 = np.array([5, 5, 5, 3, 4])
-    sr8 = sr1.replace(sr1[:3].to_array(), 5)
-    assert_eq(a8, sr8.to_array())
+    sr8 = sr1.replace(sr1[:3].to_numpy(), 5)
+    assert_eq(a8, sr8.to_numpy())
 
     # large input containing null
     sr9 = cudf.Series(list(range(400)) + [None])
     sr10 = sr9.replace([22, 323, 27, 0], None)
     assert sr10.null_count == 5
-    assert len(sr10.to_array()) == (401 - 5)
+    assert len(sr10.dropna().to_numpy()) == (401 - 5)
 
     sr11 = sr9.replace([22, 323, 27, 0], -1)
     assert sr11.null_count == 1
-    assert len(sr11.to_array()) == (401 - 1)
+    assert len(sr11.dropna().to_numpy()) == (401 - 1)
 
     # large input not containing nulls
     sr9 = sr9.fillna(-11)
     sr12 = sr9.replace([22, 323, 27, 0], None)
     assert sr12.null_count == 4
-    assert len(sr12.to_array()) == (401 - 4)
+    assert len(sr12.dropna().to_numpy()) == (401 - 4)
 
     sr13 = sr9.replace([22, 323, 27, 0], -1)
     assert sr13.null_count == 0
-    assert len(sr13.to_array()) == 401
+    assert len(sr13.to_numpy()) == 401
 
 
 def test_series_replace_with_nulls():
@@ -123,12 +123,12 @@ def test_series_replace_with_nulls():
     a2 = np.array([-10, 1, 2, 3, 4])
     sr1 = cudf.Series(a1)
     sr2 = sr1.replace(0, None).fillna(-10)
-    assert_eq(a2, sr2.to_array())
+    assert_eq(a2, sr2.to_numpy())
 
     # List input
     a6 = np.array([-10, 6, 2, 3, 4])
     sr6 = sr1.replace([0, 1], [None, 6]).fillna(-10)
-    assert_eq(a6, sr6.to_array())
+    assert_eq(a6, sr6.to_numpy())
 
     sr1 = cudf.Series([0, 1, 2, 3, 4, None])
     with pytest.raises(TypeError):
@@ -137,11 +137,11 @@ def test_series_replace_with_nulls():
     # Series input
     a8 = np.array([-10, -10, -10, 3, 4, -10])
     sr8 = sr1.replace(cudf.Series([-10] * 3, index=sr1[:3]), None).fillna(-10)
-    assert_eq(a8, sr8.to_array())
+    assert_eq(a8, sr8.to_numpy())
 
     a9 = np.array([-10, 6, 2, 3, 4, -10])
     sr9 = sr1.replace([0, 1], [None, 6]).fillna(-10)
-    assert_eq(a9, sr9.to_array())
+    assert_eq(a9, sr9.to_numpy())
 
 
 @pytest.mark.parametrize(

@@ -59,19 +59,6 @@ class BaseIndex(Serializable):
     def __getitem__(self, key):
         raise NotImplementedError()
 
-    def serialize(self):
-        header = {}
-        header["index_column"] = {}
-        # store metadata values of index separately
-        # Indexes: Numerical/DateTime/String are often GPU backed
-        header["index_column"], frames = self._values.serialize()
-
-        header["name"] = pickle.dumps(self.name)
-        header["dtype"] = pickle.dumps(self.dtype)
-        header["type-serialized"] = pickle.dumps(type(self))
-        header["frame_count"] = len(frames)
-        return header, frames
-
     def __contains__(self, item):
         return item in self._values
 
@@ -122,13 +109,10 @@ class BaseIndex(Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-        h = header["index_column"]
-        idx_typ = pickle.loads(header["type-serialized"])
-        name = pickle.loads(header["name"])
-
-        col_typ = pickle.loads(h["type-serialized"])
-        index = col_typ.deserialize(h, frames[: header["frame_count"]])
-        return idx_typ(index, name=name)
+        # Dispatch deserialization to the appropriate index type in case
+        # deserialization is ever attempted with the base class directly.
+        idx_type = pickle.loads(header["type-serialized"])
+        return idx_type.deserialize(header, frames)
 
     @property
     def names(self):
@@ -814,22 +798,8 @@ class BaseIndex(Serializable):
             self.copy(deep=copy)._values.astype(dtype), name=self.name
         )
 
+    # TODO: This method is deprecated and can be removed.
     def to_array(self, fillna=None):
-        """Get a dense numpy array for the data.
-
-        Parameters
-        ----------
-        fillna : str or None
-            Defaults to None, which will skip null values.
-            If it equals "pandas", null values are filled with NaNs.
-            Non integral dtype is promoted to np.float64.
-
-        Notes
-        -----
-
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-        """
         return self._values.to_array(fillna=fillna)
 
     def to_series(self, index=None, name=None):
