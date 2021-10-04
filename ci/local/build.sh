@@ -80,7 +80,7 @@ BUILD_SCRIPT=${REPO_PATH_IN_CONTAINER}/ci/gpu/build.sh
 if [ -f \${PREBUILD_SCRIPT} ]; then
     source \${PREBUILD_SCRIPT}
 fi
-yes | source \${BUILD_SCRIPT}
+source \${BUILD_SCRIPT}
 "
 
 if (( CONTAINER_SHELL_ONLY == 0 )); then
@@ -131,7 +131,7 @@ DOCKER_MAJOR=$(docker -v|sed 's/[^[0-9]*\([0-9]*\).*/\1/')
 GPU_OPTS="--gpus device=${NVIDIA_VISIBLE_DEVICES}"
 if [ "$DOCKER_MAJOR" -lt 19 ]
 then
-    GPU_OPTS="--runtime=nvidia -e NVIDIA_VISIBLE_DEVICES='${NVIDIA_VISIBLE_DEVICES}'"
+    GPU_OPTS="--gpus=all -e NVIDIA_VISIBLE_DEVICES='${NVIDIA_VISIBLE_DEVICES}'"
 fi
 
 docker run --rm -it ${GPU_OPTS} \
