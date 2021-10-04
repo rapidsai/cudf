@@ -120,8 +120,6 @@ cdef csv_reader_options make_csv_reader_options(
     object prefix,
     object index_col,
 ) except *:
-    if isinstance(datasource, NativeFile):
-        datasource = NativeFileDatasource(datasource)
     cdef source_info c_source_info = make_source_info([datasource])
     cdef compression_type c_compression
     cdef size_type c_header
@@ -410,6 +408,8 @@ def read_csv(
         datasource = datasource.read().encode()
     elif isinstance(datasource, str) and not os.path.isfile(datasource):
         datasource = datasource.encode()
+    elif isinstance(datasource, NativeFile):
+        datasource = NativeFileDatasource(datasource)
 
     validate_args(delimiter, sep, delim_whitespace, decimal, thousands,
                   nrows, skipfooter, byte_range, skiprows)

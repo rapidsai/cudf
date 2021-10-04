@@ -20,7 +20,7 @@ cdef class NativeFileDatasource(Datasource):
         cdef shared_ptr[CRandomAccessFile] ra_src
 
         ra_src = native_file.get_random_access_file()
-        self.c_datasource = arrow_io_source(ra_src)
+        self.c_datasource.reset(new arrow_io_source(ra_src))
 
     cdef datasource* get_datasource(self) nogil:
-        return <datasource *> &(self.c_datasource)
+        return <datasource *> (self.c_datasource.get())
