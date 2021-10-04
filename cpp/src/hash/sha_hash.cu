@@ -237,26 +237,23 @@ struct HasherDispatcher {
     cudf_assert(false && "Unsupported type for hash function.");
   }
 
-  template <typename T, typename std::enable_if_t<is_floating_point<T>()>* = nullptr>
+  template <typename T,
+            typename std::enable_if_t<is_fixed_width<T>() && !is_chrono<T>()>* = nullptr>
   void CUDA_DEVICE_CALLABLE operator()(size_type row_index)
   {
     T const& key = col.element<T>(row_index);
-    if (isnan(key)) {
-      T nan = std::numeric_limits<T>::quiet_NaN();
-      hasher->process_fixed_width(nan);
-    } else if (key == T{0.0}) {
-      hasher->process_fixed_width(T{0.0});
+    if constexpr (is_floating_point<T>()) {
+      if (isnan(key)) {
+        T nan = std::numeric_limits<T>::quiet_NaN();
+        hasher->process_fixed_width(nan);
+      } else if (key == T{0.0}) {
+        hasher->process_fixed_width(T{0.0});
+      } else {
+        hasher->process_fixed_width(key);
+      }
     } else {
       hasher->process_fixed_width(key);
     }
-  }
-
-  template <typename T,
-            typename std::enable_if_t<is_fixed_width<T>() && !is_floating_point<T>() &&
-                                      !is_chrono<T>()>* = nullptr>
-  void CUDA_DEVICE_CALLABLE operator()(size_type row_index)
-  {
-    hasher->process_fixed_width(col.element<T>(row_index));
   }
 
   template <typename T, typename std::enable_if_t<std::is_same_v<T, string_view>>* = nullptr>
