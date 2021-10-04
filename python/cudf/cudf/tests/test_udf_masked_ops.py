@@ -2,6 +2,7 @@ import operator
 
 import pandas as pd
 import pytest
+from numba import cuda
 
 import cudf
 from cudf.testing._utils import NUMERIC_TYPES, assert_eq
@@ -452,3 +453,48 @@ def test_series_masked_is_null_conditional():
     data = cudf.Series([1, cudf.NA, 3, cudf.NA])
 
     run_masked_udf_series(func_psr, func_gsr, data, check_dtype=False)
+
+
+@pytest.mark.parametrize("op", arith_ops + comparison_ops)
+def test_masked_udf_lambda_support(op):
+    func = lambda row: op(row["a"], row["b"])  # noqa: E731
+
+    data = cudf.DataFrame(
+        {"a": [1, cudf.NA, 3, cudf.NA], "b": [1, 2, cudf.NA, cudf.NA]}
+    )
+
+    run_masked_udf_test(func, func, data, check_dtype=False)
+
+
+@pytest.mark.parametrize("op", arith_ops + comparison_ops)
+def test_masked_udf_nested_function_support(op):
+    """
+    Nested functions need to be explicitly jitted by the user
+    for numba to recognize them. Unfortunately the object
+    representing the jitted function can not itself be used in
+    pandas udfs.
+    """
+
+    def inner(x, y):
+        return op(x, y)
+
+    def outer(row):
+        x = row["a"]
+        y = row["b"]
+        return inner(x, y)
+
+    data = cudf.DataFrame(
+        {"a": [1, cudf.NA, 3, cudf.NA], "b": [1, 2, cudf.NA, cudf.NA]}
+    )
+
+    with pytest.raises(AttributeError):
+        run_masked_udf_test(outer, outer, data, check_dtype=False)
+
+    inner_gpu = cuda.jit(device=True)(inner)
+
+    def outer_gpu(row):
+        x = row["a"]
+        y = row["b"]
+        return inner_gpu(x, y)
+
+    run_masked_udf_test(outer, outer_gpu, data, check_dtype=False)
