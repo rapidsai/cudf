@@ -17,11 +17,12 @@
 #include <join/hash_join.cuh>
 #include <structs/utilities.hpp>
 
+#include <cudf/copying.hpp>
 #include <cudf/detail/concatenate.cuh>
-#include <cudf/detail/gather.cuh>
-#include <cudf/detail/gather.hpp>
+#include <cudf/detail/null_mask.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 

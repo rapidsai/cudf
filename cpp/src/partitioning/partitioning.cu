@@ -17,7 +17,6 @@
 #include <cub/cub.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/gather.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/scatter.cuh>
 #include <cudf/detail/utilities/cuda.cuh>

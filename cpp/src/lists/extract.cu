@@ -16,10 +16,11 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/lists/extract.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/transform.h>
 
@@ -97,9 +98,9 @@ std::unique_ptr<column> extract_list_element(lists_column_view lists_column,
 
   // call gather on the child column
   auto result = cudf::detail::gather(table_view({child_column}),
-                                     d_gather_map,
-                                     d_gather_map + gather_map->size(),
+                                     gather_map->view(),
                                      out_of_bounds_policy::NULLIFY,  // nullify-out-of-bounds
+                                     cudf::detail::negative_index_policy::NOT_ALLOWED,
                                      stream,
                                      mr)
                   ->release();
