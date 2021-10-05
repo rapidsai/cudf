@@ -1090,7 +1090,7 @@ def test_concat_join_series(ignore_index, sort, join, axis):
     ps2 = s2.to_pandas()
     ps3 = s3.to_pandas()
     ps4 = s4.to_pandas()
-    # import pdb;pdb.set_trace()
+
     expected = pd.concat(
         [ps1, ps2, ps3, ps4],
         sort=sort,
