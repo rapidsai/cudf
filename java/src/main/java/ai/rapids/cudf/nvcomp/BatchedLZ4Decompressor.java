@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,214 +16,195 @@
 
 package ai.rapids.cudf.nvcomp;
 
+import ai.rapids.cudf.CloseableArray;
 import ai.rapids.cudf.Cuda;
 import ai.rapids.cudf.BaseDeviceMemoryBuffer;
 import ai.rapids.cudf.DeviceMemoryBuffer;
-import ai.rapids.cudf.MemoryCleaner;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import ai.rapids.cudf.HostMemoryBuffer;
+import ai.rapids.cudf.NvtxColor;
+import ai.rapids.cudf.NvtxRange;
+
+import java.util.Arrays;
 
 /** LZ4 decompressor that operates on multiple input buffers in a batch */
 public class BatchedLZ4Decompressor {
-  private static final Logger log = LoggerFactory.getLogger(Decompressor.class);
-
-  /**
-   * Get the metadata associated with a batch of compressed buffers
-   * @param inputs compressed buffers that will be decompressed
-   * @param stream CUDA stream to use
-   * @return opaque metadata object
-   */
-  public static BatchedMetadata getMetadata(BaseDeviceMemoryBuffer[] inputs, Cuda.Stream stream) {
-    long[] inputAddrs = new long[inputs.length];
-    long[] inputSizes = new long[inputs.length];
-    for (int i = 0; i < inputs.length; ++i) {
-      BaseDeviceMemoryBuffer buffer = inputs[i];
-      inputAddrs[i] = buffer.getAddress();
-      inputSizes[i] = buffer.getLength();
-    }
-    return new BatchedMetadata(NvcompJni.batchedLZ4DecompressGetMetadata(
-        inputAddrs, inputSizes, stream.getStream()));
-  }
-
-  /**
-   * Get the amount of temporary storage required to decompress a batch of buffers
-   * @param metadata metadata retrieved from the compressed buffers
-   * @return amount in bytes of temporary storage space required to decompress the buffer batch
-   */
-  public static long getTempSize(BatchedMetadata metadata) {
-    return NvcompJni.batchedLZ4DecompressGetTempSize(metadata.getMetadata());
-  }
-
-  /**
-   * Get the amount of ouptut storage required to decopmress a batch of buffers
-   * @param metadata   metadata retrieved from the compressed buffers
-   * @param numOutputs number of buffers in the batch
-   * @return amount in bytes of temporary storage space required to decompress the buffer batch
-   */
-  public static long[] getOutputSizes(BatchedMetadata metadata, int numOutputs) {
-    return NvcompJni.batchedLZ4DecompressGetOutputSize(metadata.getMetadata(), numOutputs);
-  }
-
   /**
    * Asynchronously decompress a batch of buffers
-   * @param inputs     buffers to decompress
-   * @param tempBuffer temporary buffer
-   * @param metadata   metadata retrieved from the compressed buffers
-   * @param outputs    output buffers that will contain the compressed results
+   * @param chunkSize  maximum uncompressed block size, must match value used during compression
+   * @param origInputs buffers to decompress, will be closed by this operation
+   * @param outputs    output buffers that will contain the compressed results, each must be sized
+   *                   to the exact decompressed size of the corresponding input
    * @param stream     CUDA stream to use
    */
-  public static void decompressAsync(BaseDeviceMemoryBuffer[] inputs,
-                                     BaseDeviceMemoryBuffer tempBuffer, BatchedMetadata metadata,
-                                     BaseDeviceMemoryBuffer[] outputs, Cuda.Stream stream) {
-    int numBuffers = inputs.length;
-    if (outputs.length != numBuffers) {
-      throw new IllegalArgumentException("buffer count mismatch, " + numBuffers + " inputs and " +
-          outputs.length + " outputs");
-    }
+  public static void decompressAsync(int chunkSize,
+                                     BaseDeviceMemoryBuffer[] origInputs,
+                                     BaseDeviceMemoryBuffer[] outputs,
+                                     Cuda.Stream stream) {
+    try (CloseableArray<BaseDeviceMemoryBuffer> inputs =
+             CloseableArray.wrap(Arrays.copyOf(origInputs, origInputs.length))) {
+      BatchedLZ4Compressor.validateChunkSize(chunkSize);
+      if (origInputs.length != outputs.length) {
+        throw new IllegalArgumentException("number of inputs must match number of outputs");
+      }
+      final int numInputs = inputs.size();
+      if (numInputs == 0) {
+        return;
+      }
 
-    long[] inputAddrs = new long[numBuffers];
-    long[] inputSizes = new long[numBuffers];
-    for (int i = 0; i < numBuffers; ++i) {
-      BaseDeviceMemoryBuffer buffer = inputs[i];
-      inputAddrs[i] = buffer.getAddress();
-      inputSizes[i] = buffer.getLength();
-    }
+      int[] chunksPerInput = new int[numInputs];
+      long totalChunks = 0;
+      for (int i = 0; i < numInputs; i++) {
+        // use output size to determine number of chunks in the input, as the output buffer
+        // must be exactly sized to the uncompressed data
+        BaseDeviceMemoryBuffer buffer = outputs[i];
+        int numBufferChunks = getNumChunksInBuffer(chunkSize, buffer);
+        chunksPerInput[i] = numBufferChunks;
+        totalChunks += numBufferChunks;
+      }
 
-    long[] outputAddrs = new long[numBuffers];
-    long[] outputSizes = new long[numBuffers];
-    for (int i = 0; i < numBuffers; ++i) {
-      BaseDeviceMemoryBuffer buffer = outputs[i];
-      outputAddrs[i] = buffer.getAddress();
-      outputSizes[i] = buffer.getLength();
+      final long tempBufferSize = NvcompJni.batchedLZ4DecompressGetTempSize(totalChunks, chunkSize);
+      try (DeviceMemoryBuffer devAddrsSizes =
+               buildAddrsSizesBuffer(chunkSize, totalChunks, inputs.getArray(), chunksPerInput,
+                   outputs, stream);
+           DeviceMemoryBuffer devTemp = DeviceMemoryBuffer.allocate(tempBufferSize)) {
+        // buffer containing addresses and sizes contains five vectors of longs in this order:
+        // - compressed chunk input addresses
+        // - chunk output buffer addresses
+        // - compressed chunk sizes
+        // - uncompressed chunk sizes
+        final long inputAddrsPtr = devAddrsSizes.getAddress();
+        final long outputAddrsPtr = inputAddrsPtr + totalChunks * 8;
+        final long inputSizesPtr = outputAddrsPtr + totalChunks * 8;
+        final long outputSizesPtr = inputSizesPtr + totalChunks * 8;
+        NvcompJni.batchedLZ4DecompressAsync(
+            inputAddrsPtr,
+            inputSizesPtr,
+            outputSizesPtr,
+            totalChunks,
+            devTemp.getAddress(),
+            devTemp.getLength(),
+            outputAddrsPtr,
+            stream.getStream());
+      }
     }
+  }
 
-    NvcompJni.batchedLZ4DecompressAsync(inputAddrs, inputSizes,
-        tempBuffer.getAddress(), tempBuffer.getLength(), metadata.getMetadata(),
-        outputAddrs, outputSizes, stream.getStream());
+  private static int getNumChunksInBuffer(int chunkSize, BaseDeviceMemoryBuffer buffer) {
+    return (int) ((buffer.getLength() + chunkSize - 1) / chunkSize);
   }
 
   /**
-   * Asynchronously decompress a batch of buffers
-   * @param inputs buffers to decompress
-   * @param stream CUDA stream to use
-   * @return output buffers containing compressed data corresponding to the input buffers
+   * Build a device memory buffer containing four vectors of longs in the following order:
+   * <ul>
+   *   <li>compressed chunk input addresses</li>
+   *   <li>uncompressed chunk output addresses</li>
+   *   <li>compressed chunk sizes</li>
+   *   <li>uncompressed chunk sizes</li>
+   * </ul>
+   * Each vector contains as many longs as the number of chunks being decompressed
+   * @param chunkSize maximum uncompressed size of a chunk
+   * @param totalChunks total number of chunks to be decompressed
+   * @param inputs device buffers containing the compressed data
+   * @param chunksPerInput number of compressed chunks per input buffer
+   * @param outputs device buffers that will hold the uncompressed output
+   * @return device buffer containing address and size vectors
    */
-  public static DeviceMemoryBuffer[] decompressAsync(BaseDeviceMemoryBuffer[] inputs,
-                                                     Cuda.Stream stream) {
-    int numBuffers = inputs.length;
-    long[] inputAddrs = new long[numBuffers];
-    long[] inputSizes = new long[numBuffers];
-    for (int i = 0; i < numBuffers; ++i) {
-      BaseDeviceMemoryBuffer buffer = inputs[i];
-      inputAddrs[i] = buffer.getAddress();
-      inputSizes[i] = buffer.getLength();
-    }
-
-    long metadata = NvcompJni.batchedLZ4DecompressGetMetadata(inputAddrs, inputSizes,
-            stream.getStream());
-    try {
-      long[] outputSizes = NvcompJni.batchedLZ4DecompressGetOutputSize(metadata, numBuffers);
-      long[] outputAddrs = new long[numBuffers];
-      DeviceMemoryBuffer[] outputs = new DeviceMemoryBuffer[numBuffers];
-      try {
-        for (int i = 0; i < numBuffers; ++i) {
-          DeviceMemoryBuffer buffer = DeviceMemoryBuffer.allocate(outputSizes[i]);
-          outputs[i] = buffer;
-          outputAddrs[i] = buffer.getAddress();
-        }
-
-        long tempSize = NvcompJni.batchedLZ4DecompressGetTempSize(metadata);
-        try (DeviceMemoryBuffer tempBuffer = DeviceMemoryBuffer.allocate(tempSize)) {
-          NvcompJni.batchedLZ4DecompressAsync(inputAddrs, inputSizes,
-                  tempBuffer.getAddress(), tempBuffer.getLength(), metadata,
-                  outputAddrs, outputSizes, stream.getStream());
-        }
-      } catch (Throwable t) {
-        for (DeviceMemoryBuffer buffer : outputs) {
-          if (buffer != null) {
-            buffer.close();
+  private static DeviceMemoryBuffer buildAddrsSizesBuffer(int chunkSize,
+                                                          long totalChunks,
+                                                          BaseDeviceMemoryBuffer[] inputs,
+                                                          int[] chunksPerInput,
+                                                          BaseDeviceMemoryBuffer[] outputs,
+                                                          Cuda.Stream stream) {
+    final long totalBufferSize = totalChunks * 8L * 5 + totalChunks * 4L * 1;
+    try (NvtxRange range = new NvtxRange("buildAddrSizesBuffer", NvtxColor.YELLOW)) {
+      try (HostMemoryBuffer metadata = fetchMetadata(totalChunks, inputs, chunksPerInput, stream);
+           HostMemoryBuffer hostAddrsSizes = HostMemoryBuffer.allocate(totalBufferSize);
+           DeviceMemoryBuffer devAddrsSizes = DeviceMemoryBuffer.allocate(totalBufferSize)) {
+        // Build four long vectors in the AddrsSizes buffer:
+        // - compressed input address (one per chunk)
+        // - uncompressed output address (one per chunk)
+        // - compressed input size (one per chunk)
+        // - uncompressed input size (one per chunk)
+        final long srcAddrsOffset = 0;
+        final long destAddrsOffset = srcAddrsOffset + totalChunks * 8L;
+        final long srcSizesOffset = destAddrsOffset + totalChunks * 8L;
+        final long destSizesOffset = srcSizesOffset + totalChunks * 8L;
+        long chunkIdx = 0;
+        for (int inputIdx = 0; inputIdx < inputs.length; inputIdx++) {
+          final BaseDeviceMemoryBuffer input = inputs[inputIdx];
+          final BaseDeviceMemoryBuffer output = outputs[inputIdx];
+          final int numChunksInInput = chunksPerInput[inputIdx];
+          long srcAddr = input.getAddress() +
+              BatchedLZ4Compressor.METADATA_BYTES_PER_CHUNK * numChunksInInput;
+          long destAddr = output.getAddress();
+          final long chunkIdxEnd = chunkIdx + numChunksInInput;
+          while (chunkIdx < chunkIdxEnd) {
+            final long srcChunkSize = metadata.getLong(chunkIdx * 8);
+            final long destChunkSize = (chunkIdx < chunkIdxEnd - 1) ? chunkSize
+                : output.getAddress() + output.getLength() - destAddr;
+            hostAddrsSizes.setLong(srcAddrsOffset + chunkIdx * 8, srcAddr);
+            hostAddrsSizes.setLong(destAddrsOffset + chunkIdx * 8, destAddr);
+            hostAddrsSizes.setLong(srcSizesOffset + chunkIdx * 8, srcChunkSize);
+            hostAddrsSizes.setLong(destSizesOffset + chunkIdx * 8, destChunkSize);
+            srcAddr += srcChunkSize;
+            destAddr += destChunkSize;
+            ++chunkIdx;
           }
         }
-        throw t;
+        devAddrsSizes.copyFromHostBuffer(hostAddrsSizes, stream);
+        devAddrsSizes.incRefCount();
+        return devAddrsSizes;
       }
-
-      return outputs;
-    } finally {
-      NvcompJni.batchedLZ4DecompressDestroyMetadata(metadata);
     }
   }
 
-  /** Opaque metadata object for batched LZ4 decompression */
-  public static class BatchedMetadata implements AutoCloseable {
-    private final BatchedMetadataCleaner cleaner;
-    private final long id;
-    private boolean closed = false;
-
-    BatchedMetadata(long metadata) {
-      this.cleaner = new BatchedMetadataCleaner(metadata);
-      this.id = cleaner.id;
-      MemoryCleaner.register(this, cleaner);
-      cleaner.addRef();
-    }
-
-    long getMetadata() {
-      return cleaner.metadata;
-    }
-
-    public boolean isLZ4Metadata() {
-      return NvcompJni.isLZ4Metadata(getMetadata());
-    }
-
-    @Override
-    public synchronized void close() {
-      if (!closed) {
-        cleaner.delRef();
-        cleaner.clean(false);
-        closed = true;
-      } else {
-        cleaner.logRefCountDebug("double free " + this);
-        throw new IllegalStateException("Close called too many times " + this);
-      }
-    }
-
-    @Override
-    public String toString() {
-      return "LZ4 BATCHED METADATA (ID: " + id + " " +
-          Long.toHexString(cleaner.metadata) + ")";
-    }
-
-    private static class BatchedMetadataCleaner extends MemoryCleaner.Cleaner {
-      private long metadata;
-
-      BatchedMetadataCleaner(long metadata) {
-        this.metadata = metadata;
-      }
-
-      @Override
-      protected synchronized boolean cleanImpl(boolean logErrorIfNotClean) {
-        boolean neededCleanup = false;
-        long address = metadata;
-        if (metadata != 0) {
-          try {
-            NvcompJni.batchedLZ4DecompressDestroyMetadata(metadata);
-          } finally {
-            // Always mark the resource as freed even if an exception is thrown.
-            // We cannot know how far it progressed before the exception, and
-            // therefore it is unsafe to retry.
-            metadata = 0;
-          }
-          neededCleanup = true;
+  /**
+   * Fetch the metadata at the front of each input in a single, contiguous host buffer.
+   * @param totalChunks total number of compressed chunks
+   * @param inputs buffers containing the compressed data
+   * @param chunksPerInput number of compressed chunks for the corresponding input
+   * @param stream CUDA stream to use
+   * @return host buffer containing all of the metadata
+   */
+  private static HostMemoryBuffer fetchMetadata(long totalChunks,
+                                                BaseDeviceMemoryBuffer[] inputs,
+                                                int[] chunksPerInput,
+                                                Cuda.Stream stream) {
+    try (NvtxRange range = new NvtxRange("fetchMetadata", NvtxColor.PURPLE)) {
+      // one long per chunk containing the compressed size
+      final long totalMetadataSize = totalChunks * 8L;
+      // one copy descriptor per input consisting of input addr, output addr, and size
+      final long addrsSizesBufferSize = inputs.length * 8L * 3;
+      try (HostMemoryBuffer hostMetadata = HostMemoryBuffer.allocate(totalMetadataSize);
+           DeviceMemoryBuffer devMetadata = DeviceMemoryBuffer.allocate(totalMetadataSize);
+           HostMemoryBuffer hostAddrsSizes = HostMemoryBuffer.allocate(addrsSizesBufferSize);
+           DeviceMemoryBuffer devAddrsSizes = DeviceMemoryBuffer.allocate(addrsSizesBufferSize)) {
+        // Setup a multi-buffer copy descriptor in AddrsSizes buffer.
+        // AddrsSizes buffer will hold three consecutive long vectors:
+        // - src copy address (one long per input)
+        // - dest copy address (one long per input)
+        // - copy size in bytes (one long per input)
+        final long srcAddrsOffset = 0;
+        final long destAddrsOffset = srcAddrsOffset + inputs.length * 8L;
+        final long sizesOffset = destAddrsOffset + inputs.length * 8L;
+        long destCopyAddr = devMetadata.getAddress();
+        for (int inputIdx = 0; inputIdx < inputs.length; inputIdx++) {
+          final BaseDeviceMemoryBuffer input = inputs[inputIdx];
+          final long copySize = chunksPerInput[inputIdx] * 8L;
+          hostAddrsSizes.setLong(srcAddrsOffset + inputIdx * 8L, input.getAddress());
+          hostAddrsSizes.setLong(destAddrsOffset + inputIdx * 8L, destCopyAddr);
+          hostAddrsSizes.setLong(sizesOffset + inputIdx * 8L, copySize);
+          destCopyAddr += copySize;
         }
-        if (neededCleanup && logErrorIfNotClean) {
-          log.error("LZ4 BATCHED METADATA WAS LEAKED (Address: " + Long.toHexString(address) + ")");
-          logRefCountDebug("Leaked event");
+        try (NvtxRange copyRange = new NvtxRange("multi-buffer-copy", NvtxColor.CYAN)) {
+          devAddrsSizes.copyFromMemoryBufferAsync(0, hostAddrsSizes, 0, addrsSizesBufferSize, stream);
+          final long descrBaseAddr = devAddrsSizes.getAddress();
+          Cuda.multiBufferCopyAsync(inputs.length, descrBaseAddr + srcAddrsOffset,
+              descrBaseAddr + destAddrsOffset, descrBaseAddr + sizesOffset, stream);
+          hostMetadata.copyFromDeviceBuffer(devMetadata, stream);
+          hostMetadata.incRefCount();
         }
-        return neededCleanup;
-      }
-
-      @Override
-      public boolean isClean() {
-        return metadata != 0;
+        return hostMetadata;
       }
     }
   }

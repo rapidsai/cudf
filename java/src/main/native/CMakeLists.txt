@@ -184,11 +184,21 @@ endif()
 ###################################################################################################
 # - nvcomp ----------------------------------------------------------------------------------------
 
-include(ConfigureNvcomp)
-if(NVCOMP_FOUND)
-    message(STATUS "nvcomp compression library found in ${NVCOMP_ROOT}")
+find_path(NVCOMP_INCLUDE "nvcomp"
+    HINTS "${CUDF_CPP_BUILD_DIR}/_deps/nvcomp-src/include"
+          "$ENV{CONDA_PREFIX}/include")
+
+message(STATUS "NVCOMP: NVCOMP_INCLUDE set to ${NVCOMP_INCLUDE}")
+
+set(CUDF_JNI_NVCOMP_LIBNAME "libnvcomp.a")
+find_library(NVCOMP_LIBRARY ${CUDF_JNI_NVCOMP_LIBNAME} REQUIRED
+  HINTS "${CUDF_CPP_BUILD_DIR}/lib"
+	"$ENV{CONDA_PREFIX}/lib")
+
+if(NOT NVCOMP_LIBRARY)
+  message(FATAL_ERROR "nvcomp static library not found.")
 else()
-    message(FATAL_ERROR "nvcomp compression library not found.")
+  message(STATUS "NVCOMP: NVCOMP_LIBRARY set to ${NVCOMP_LIBRARY}")
 endif()
 
 ###################################################################################################
@@ -218,7 +228,8 @@ add_library(cudfjni SHARED
     src/RmmJni.cpp
     src/ScalarJni.cpp
     src/TableJni.cpp
-    src/map_lookup.cu)
+    src/map_lookup.cu
+    src/check_output_sizes.cu)
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
@@ -229,7 +240,7 @@ target_include_directories(cudfjni
       "${CUB_INCLUDE}"
       "${LIBCUDACXX_INCLUDE}"
       "${CUDAToolkit_INCLUDE_DIRS}"
-      "${NVCOMP_INCLUDE_DIR}"
+      "${NVCOMP_INCLUDE}"
       "${CMAKE_BINARY_DIR}/include"
       "${CMAKE_SOURCE_DIR}/include"
       "${SPDLOG_INCLUDE}"
@@ -293,7 +304,7 @@ target_compile_definitions(cudfjni PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni PRIVATE nvcomp ${CUDF_LIB} ${ARROW_LIBRARY})
+target_link_libraries(cudfjni PRIVATE ${NVCOMP_LIBRARY} ${CUDF_LIB} ${ARROW_LIBRARY})
 
 ###################################################################################################
 # - cudart options --------------------------------------------------------------------------------
