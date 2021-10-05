@@ -23,7 +23,6 @@ from cudf._lib.cpp.io.json cimport (
 )
 from cudf._lib.cpp.types cimport data_type, size_type, type_id
 from cudf._lib.io.utils cimport make_source_info
-from cudf._lib.table cimport Table
 from cudf._lib.types cimport dtype_to_data_type
 from cudf._lib.utils cimport data_from_unique_ptr
 
