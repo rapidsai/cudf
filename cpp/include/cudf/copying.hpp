@@ -411,7 +411,6 @@ std::unique_ptr<column> shift(
 std::vector<column_view> slice(column_view const& input, host_span<size_type const> indices);
 /**
  * @ingroup copy_slice
- *
  * @copydoc cudf::slice(column_view const&, host_span<size_type const>)
  */
 std::vector<column_view> slice(column_view const& input, std::initializer_list<size_type> indices);
