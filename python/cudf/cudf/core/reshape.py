@@ -10,7 +10,7 @@ import cudf
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
 
-def _align_objs(objs, how="outer", ignore_index=False):
+def _align_objs(objs, how="outer", sort=None):
     """Align a set of Series or Dataframe objects.
 
     Parameters
@@ -18,16 +18,18 @@ def _align_objs(objs, how="outer", ignore_index=False):
     objs : list of DataFrame, Series, or Index
     how : How to handle indexes on other axis (or axes),
     similar to join in concat
+    sort : Whether to sort the resulting Index
     Returns
     -------
-    A bool for if indexes have matched and a set of
-    reindexed and aligned objects ready for concatenation
+    A list of reindexed and aligned objects
+    ready for concatenation
     """
     # Check if multiindex then check if indexes match. GenericIndex
     # returns ndarray tuple of bools requiring additional filter.
     # Then check for duplicate index value.
     i_objs = iter(objs)
     first = next(i_objs)
+
     not_matching_index = any(
         not first.index.equals(rest.index) for rest in i_objs
     )
@@ -41,37 +43,54 @@ def _align_objs(objs, how="outer", ignore_index=False):
 
         if how == "inner":
             final_index = _get_combined_index(
-                [obj.index for obj in objs], intersect=True
+                [obj.index for obj in objs], intersect=True, sort=sort
             )
         else:
             final_index = _get_combined_index(
-                [obj.index for obj in objs], intersect=False
+                [obj.index for obj in objs], intersect=False, sort=sort
             )
 
         final_index.name = name
-        return [obj.reindex(final_index) for obj in objs], False
+        return [
+            obj.reindex(final_index)
+            if not final_index.equals(obj.index)
+            else obj
+            for obj in objs
+        ]
     else:
-        return objs, True
+        # This check uses `sort is not False` rather than just `sort=True`
+        # to differentiate between a user-provided `False` value and the
+        # default `None`. This is necessary for pandas compatibility, even
+        # though `True` and `False` are the only valid options from the user.
+        if sort:
+            if not first.index.is_monotonic_increasing:
+                final_index = first.index.sort_values()
+                return [obj.reindex(final_index) for obj in objs]
+        return objs
 
 
-def _get_combined_index(
-    indexes, intersect: bool = False, sort: bool = False, copy: bool = False,
-):
+def _get_combined_index(indexes, intersect: bool = False, sort=None):
     if len(indexes) == 0:
         index = cudf.Index([])
     elif len(indexes) == 1:
         index = indexes[0]
     elif intersect:
+        sort = True
         index = indexes[0]
         for other in indexes[1:]:
-            index = index.intersection(other)
+            # Don't sort for every intersection,
+            # let the sorting happen in the end.
+            index = index.intersection(other, sort=False)
     else:
         index = indexes[0]
+        if sort is False:
+            sort = False
+        elif sort is None:
+            sort = False if isinstance(index, cudf.StringIndex) else True
+        else:
+            sort = True
         for other in indexes[1:]:
-            index = index.union(
-                other,
-                sort=False if isinstance(index, cudf.StringIndex) else None,
-            )
+            index = index.union(other, sort=False)
 
     if sort:
         try:
@@ -79,9 +98,6 @@ def _get_combined_index(
                 index = index.sort_values()
         except TypeError:
             pass
-
-    if copy:
-        index = index.copy()  # type: ignore
 
     return index
 
@@ -301,11 +317,12 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         if len(objs) == 0:
             return df
 
-        objs, match_index = _align_objs(
-            objs, how=join, ignore_index=ignore_index
-        )
+        # Don't need to align indices of all `objs` since we
+        # would anyway return an empty dataframe below
+        if not empty_inner:
+            objs = _align_objs(objs, how=join, sort=sort)
+            df.index = objs[0].index
 
-        df.index = objs[0].index
         for o in objs:
             for name, col in o._data.items():
                 if name in df._data:
@@ -314,7 +331,15 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                         f"doesn't support having multiple columns with "
                         f"same names yet."
                     )
-                df[name] = col
+                if empty_inner:
+                    # if join is inner and it contains an empty df
+                    # we return an empty df, hence creating an empty
+                    # column with dtype metadata retained.
+                    df[name] = cudf.core.column.column_empty_like(
+                        col, newsize=0
+                    )
+                else:
+                    df[name] = col
 
         result_columns = objs[0].columns.append(
             [obj.columns for obj in objs[1:]]
@@ -331,17 +356,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             # we return an empty df
             return df.head(0)
 
-        # This check uses `sort is not False` rather than just `sort=True`
-        # to differentiate between a user-provided `False` value and the
-        # default `None`. This is necessary for pandas compatibility, even
-        # though `True` and `False` are the only valid options from the user.
-        if not match_index and sort is not False:
-            return df.sort_index()
-
-        if sort or join == "inner":
-            return df.sort_index()
-        else:
-            return df
+        return df
 
     # If we get here, we are always concatenating along axis 0 (the rows).
     typ = list(typs)[0]
