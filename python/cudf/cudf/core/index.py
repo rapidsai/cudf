@@ -547,7 +547,7 @@ class RangeIndex(BaseIndex):
         return np.clip(round_method(idx), 0, idx_int_upper_bound, dtype=int)
 
     def _union(self, other, sort=None):
-        if isinstance(other, RangeIndex) and sort is None:
+        if isinstance(other, RangeIndex):
             start_s, step_s = self.start, self.step
             end_s = self.start + self.step * (len(self) - 1)
             start_o, step_o = other.start, other.step
@@ -564,33 +564,41 @@ class RangeIndex(BaseIndex):
                 step_o = step_s
             start_r = min(start_s, start_o)
             end_r = max(end_s, end_o)
+            result = None
             if step_o == step_s:
                 if (
                     (start_s - start_o) % step_s == 0
                     and (start_s - end_o) <= step_s
                     and (start_o - end_s) <= step_s
                 ):
-                    return type(self)(start_r, end_r + step_s, step_s)
-                if (
+                    result = type(self)(start_r, end_r + step_s, step_s)
+                elif (
                     (step_s % 2 == 0)
                     and (abs(start_s - start_o) <= step_s / 2)
                     and (abs(end_s - end_o) <= step_s / 2)
                 ):
-                    return type(self)(start_r, end_r + step_s / 2, step_s / 2)
+                    result = type(self)(
+                        start_r, end_r + step_s / 2, step_s / 2
+                    )
             elif step_o % step_s == 0:
                 if (
                     (start_o - start_s) % step_s == 0
                     and (start_o + step_s >= start_s)
                     and (end_o - step_s <= end_s)
                 ):
-                    return type(self)(start_r, end_r + step_s, step_s)
+                    result = type(self)(start_r, end_r + step_s, step_s)
             elif step_s % step_o == 0:
                 if (
                     (start_s - start_o) % step_o == 0
                     and (start_s + step_o >= start_o)
                     and (end_s - step_o <= end_o)
                 ):
-                    return type(self)(start_r, end_r + step_o, step_o)
+                    result = type(self)(start_r, end_r + step_o, step_o)
+            if result is not None:
+                if sort is None and not result.is_monotonic_increasing:
+                    return result.sort_values()
+                else:
+                    return result
 
         return Int64Index(self._values)._union(other, sort=sort)
 
