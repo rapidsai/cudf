@@ -17,12 +17,14 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/sequence.hpp>
 #include <cudf/lists/detail/gather.cuh>
 #include <cudf/lists/extract.hpp>
 
 #include <limits>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
+#include "cudf/scalar/scalar_factories.hpp"
 
 #include <thrust/copy.h>
 #include <thrust/iterator/constant_iterator.h>
@@ -79,10 +81,8 @@ std::unique_ptr<cudf::column> make_index_child(size_type index,
 {
   auto index_child =  // [index, index, index, ..., index]
     make_numeric_column(data_type{type_id::INT32}, num_rows, mask_state::UNALLOCATED, stream);
-  thrust::copy_n(rmm::exec_policy(stream),
-                 thrust::make_constant_iterator(size_type{index}),
-                 num_rows,
-                 index_child->mutable_view().begin<size_type>());
+  thrust::fill_n(
+    rmm::exec_policy(stream), index_child->mutable_view().begin<size_type>(), num_rows, index);
   return index_child;
 }
 
@@ -95,13 +95,8 @@ std::unique_ptr<cudf::column> make_index_child(size_type index,
  */
 std::unique_ptr<cudf::column> make_index_offsets(size_type num_lists, rmm::cuda_stream_view stream)
 {
-  auto index_offsets =  // [0, 1, 2, 3, ... num_lists + 1]
-    make_numeric_column(data_type{type_id::INT32}, num_lists + 1, mask_state::UNALLOCATED, stream);
-  thrust::copy_n(rmm::exec_policy(stream),
-                 cudf::detail::make_counting_transform_iterator(0, thrust::identity<size_type>{}),
-                 num_lists + 1,
-                 index_offsets->mutable_view().begin<size_type>());
-  return index_offsets;
+  return cudf::detail::sequence(
+    num_lists + 1, cudf::scalar_type_t<size_type>(0, true, stream), stream);
 }
 
 }  // namespace
