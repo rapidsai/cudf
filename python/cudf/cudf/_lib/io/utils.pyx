@@ -27,7 +27,7 @@ import io
 import os
 
 import cudf
-from cudf.utils.dtypes import is_struct_dtype
+from cudf.api.types import is_struct_dtype
 
 
 # Converts the Python source input to libcudf++ IO source_info
@@ -123,7 +123,7 @@ cdef cppclass iobase_data_sink(data_sink):
 
 
 cdef update_struct_field_names(
-    Table table,
+    table,
     vector[column_name_info]& schema_info
 ):
     for i, (name, col) in enumerate(table._data.items()):

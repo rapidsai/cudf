@@ -10,15 +10,13 @@ import pandas as pd
 
 import cudf
 from cudf._typing import DtypeObj
-from cudf.api.types import is_dtype_equal, is_integer
+from cudf.api.types import is_dtype_equal, is_integer, is_list_like, is_scalar
 from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.utils import ioutils
 from cudf.utils.dtypes import (
-    is_list_like,
     is_mixed_with_object_dtype,
-    is_scalar,
     numeric_normalize_types,
 )
 from cudf.utils.utils import cached_property
@@ -46,6 +44,14 @@ class BaseIndex(Serializable):
     def copy(self, deep: bool = True) -> BaseIndex:
         raise NotImplementedError
 
+    def __len__(self):
+        raise NotImplementedError
+
+    @property
+    def size(self):
+        # The size of an index is always its length irrespective of dimension.
+        return len(self)
+
     @property
     def values(self):
         return self._values.values
@@ -55,19 +61,6 @@ class BaseIndex(Serializable):
 
     def __getitem__(self, key):
         raise NotImplementedError()
-
-    def serialize(self):
-        header = {}
-        header["index_column"] = {}
-        # store metadata values of index separately
-        # Indexes: Numerical/DateTime/String are often GPU backed
-        header["index_column"], frames = self._values.serialize()
-
-        header["name"] = pickle.dumps(self.name)
-        header["dtype"] = pickle.dumps(self.dtype)
-        header["type-serialized"] = pickle.dumps(type(self))
-        header["frame_count"] = len(frames)
-        return header, frames
 
     def __contains__(self, item):
         return item in self._values
@@ -119,13 +112,10 @@ class BaseIndex(Serializable):
 
     @classmethod
     def deserialize(cls, header, frames):
-        h = header["index_column"]
-        idx_typ = pickle.loads(header["type-serialized"])
-        name = pickle.loads(header["name"])
-
-        col_typ = pickle.loads(h["type-serialized"])
-        index = col_typ.deserialize(h, frames[: header["frame_count"]])
-        return idx_typ(index, name=name)
+        # Dispatch deserialization to the appropriate index type in case
+        # deserialization is ever attempted with the base class directly.
+        idx_type = pickle.loads(header["type-serialized"])
+        return idx_type.deserialize(header, frames)
 
     @property
     def names(self):
@@ -163,6 +153,38 @@ class BaseIndex(Serializable):
             )
         else:
             return self
+
+    @property
+    def is_monotonic(self):
+        """Return boolean if values in the object are monotonic_increasing.
+
+        This property is an alias for :attr:`is_monotonic_increasing`.
+
+        Returns
+        -------
+        bool
+        """
+        return self.is_monotonic_increasing
+
+    @property
+    def is_monotonic_increasing(self):
+        """Return boolean if values in the object are monotonically increasing.
+
+        Returns
+        -------
+        bool
+        """
+        raise NotImplementedError
+
+    @property
+    def is_monotonic_decreasing(self):
+        """Return boolean if values in the object are monotonically decreasing.
+
+        Returns
+        -------
+        bool
+        """
+        raise NotImplementedError
 
     @property
     def nlevels(self):
@@ -517,7 +539,7 @@ class BaseIndex(Serializable):
             if self.dtype != other.dtype:
                 difference = difference.astype(self.dtype)
 
-        if sort is None:
+        if sort is None and len(other):
             return difference.sort_values()
 
         return difference
@@ -779,22 +801,8 @@ class BaseIndex(Serializable):
             self.copy(deep=copy)._values.astype(dtype), name=self.name
         )
 
+    # TODO: This method is deprecated and can be removed.
     def to_array(self, fillna=None):
-        """Get a dense numpy array for the data.
-
-        Parameters
-        ----------
-        fillna : str or None
-            Defaults to None, which will skip null values.
-            If it equals "pandas", null values are filled with NaNs.
-            Non integral dtype is promoted to np.float64.
-
-        Notes
-        -----
-
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-        """
         return self._values.to_array(fillna=fillna)
 
     def to_series(self, index=None, name=None):
@@ -821,7 +829,7 @@ class BaseIndex(Serializable):
             name=self.name if name is None else name,
         )
 
-    def get_slice_bound(self, label, side, kind):
+    def get_slice_bound(self, label, side, kind=None):
         """
         Calculate slice bound that corresponds to given label.
         Returns leftmost (one-past-the-rightmost if ``side=='right'``) position

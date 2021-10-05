@@ -1,4 +1,5 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+
 import collections
 import pickle
 import warnings
@@ -8,11 +9,10 @@ from nvtx import annotate
 
 import cudf
 from cudf._lib import groupby as libgroupby
-from cudf._lib.table import Table
 from cudf._typing import DataFrameOrSeries
+from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import arange
-from cudf.utils.dtypes import is_list_like
 from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
@@ -501,9 +501,9 @@ class GroupBy(Serializable):
         chunk_results = [function(chk) for chk in chunks]
 
         if not len(chunk_results):
-            return self.obj.__class__()
+            return self.obj.head(0)
 
-        if cudf.utils.dtypes.is_scalar(chunk_results[0]):
+        if cudf.api.types.is_scalar(chunk_results[0]):
             result = cudf.Series(chunk_results, index=group_names)
             result.index.names = self.grouping.names
         elif isinstance(chunk_results[0], cudf.Series):
@@ -630,7 +630,7 @@ class GroupBy(Serializable):
         .. code-block:: python
 
             Results:
-                 cat  val                 avg
+               cat  val                 avg
             0    1   16
             1    1   45
             2    1   62                41.0
@@ -713,8 +713,8 @@ class GroupBy(Serializable):
         2   24.0     90
         3   26.0     80
         >>> gdf.groupby('Score').describe()
-            Speed
-            count   mean   std    min    25%    50%    75%     max
+             Speed
+             count   mean   std    min    25%    50%    75%     max
         Score
         30        1  370.0  <NA>  370.0  370.0  370.0  370.0  370.0
         50        1  380.0  <NA>  380.0  380.0  380.0  380.0  380.0
@@ -865,7 +865,9 @@ class GroupBy(Serializable):
         """
         value_columns = self.grouping.values
         result = self.obj.__class__._from_data(
-            self._groupby.replace_nulls(Table(value_columns._data), method)
+            self._groupby.replace_nulls(
+                cudf.core.frame.Frame(value_columns._data), method
+            )
         )
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(value_columns)
@@ -946,13 +948,13 @@ class GroupBy(Serializable):
                 >>> df = pd.DataFrame({'k': [1, 1, 2], 'v': [2, None, 4]})
                 >>> gdf = cudf.from_pandas(df)
                 >>> df.groupby('k').fillna({'v': 4}) # pandas
-                        v
+                       v
                 k
                 1 0  2.0
-                    1  4.0
+                  1  4.0
                 2 2  4.0
                 >>> gdf.groupby('k').fillna({'v': 4}) # cudf
-                        v
+                     v
                 0  2.0
                 1  4.0
                 2  4.0
@@ -980,7 +982,9 @@ class GroupBy(Serializable):
             return getattr(self, method, limit)()
 
         value_columns = self.grouping.values
-        _, (data, index), _ = self._groupby.groups(Table(value_columns._data))
+        _, (data, index), _ = self._groupby.groups(
+            cudf.core.frame.Frame(value_columns._data)
+        )
 
         grouped = self.obj.__class__._from_data(data, index)
         result = grouped.fillna(
@@ -1038,7 +1042,9 @@ class GroupBy(Serializable):
             fill_value = [fill_value] * len(value_columns._data)
 
         result = self.obj.__class__._from_data(
-            *self._groupby.shift(Table(value_columns), periods, fill_value)
+            *self._groupby.shift(
+                cudf.core.frame.Frame(value_columns), periods, fill_value
+            )
         )
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(value_columns)
@@ -1051,7 +1057,7 @@ class GroupBy(Serializable):
         """
         sorted_order_column = arange(0, result._data.nrows)
         _, (order, _), _ = self._groupby.groups(
-            Table({"sorted_order_column": sorted_order_column})
+            cudf.core.frame.Frame({"sorted_order_column": sorted_order_column})
         )
         gather_map = order["sorted_order_column"].argsort()
         result = result.take(gather_map)
@@ -1127,9 +1133,9 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
                     Max Speed
     Animal Type
     Falcon Captive      390.0
-        Wild         350.0
+           Wild         350.0
     Parrot Captive       30.0
-        Wild          20.0
+           Wild          20.0
     >>> df.groupby(level=0).mean()
             Max Speed
     Animal
@@ -1334,12 +1340,9 @@ class _Grouping(Serializable):
         if nkeys == 0:
             return cudf.core.index.as_index([], name=None)
         elif nkeys > 1:
-            return cudf.MultiIndex(
-                source_data=cudf.DataFrame(
-                    dict(zip(range(nkeys), self._key_columns))
-                ),
-                names=self.names,
-            )
+            return cudf.MultiIndex._from_data(
+                dict(zip(range(nkeys), self._key_columns))
+            )._set_names(self.names)
         else:
             return cudf.core.index.as_index(
                 self._key_columns[0], name=self.names[0]

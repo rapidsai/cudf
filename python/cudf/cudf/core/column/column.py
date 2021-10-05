@@ -130,6 +130,12 @@ class ColumnBase(Column, Serializable):
         """
         Return a numpy representation of the Column.
         """
+        if len(self) == 0:
+            return np.array([], dtype=self.dtype)
+
+        if self.has_nulls:
+            raise ValueError("Column must have no nulls.")
+
         return self.data_array_view.copy_to_host()
 
     @property
@@ -138,7 +144,7 @@ class ColumnBase(Column, Serializable):
         Return a CuPy representation of the Column.
         """
         if len(self) == 0:
-            return cupy.asarray([], dtype=self.dtype)
+            return cupy.array([], dtype=self.dtype)
 
         if self.has_nulls:
             raise ValueError("Column must have no nulls.")
@@ -231,7 +237,7 @@ class ColumnBase(Column, Serializable):
         ]
         """
         return libcudf.interop.to_arrow(
-            libcudf.table.Table(
+            cudf.core.frame.Frame(
                 cudf.core.column_accessor.ColumnAccessor({"None": self})
             ),
             [["None"]],
@@ -319,9 +325,11 @@ class ColumnBase(Column, Serializable):
     def _memory_usage(self, **kwargs) -> int:
         return self.__sizeof__()
 
-    def default_na_value(self) -> Any:
+    def _default_na_value(self) -> Any:
         raise NotImplementedError()
 
+    # TODO: This method is decpreated and can be removed when the associated
+    # Frame methods are removed.
     def to_gpu_array(self, fillna=None) -> "cuda.devicearray.DeviceNDArray":
         """Get a dense numba device array for the data.
 
@@ -337,10 +345,12 @@ class ColumnBase(Column, Serializable):
         output size could be smaller.
         """
         if fillna:
-            return self.fillna(self.default_na_value()).data_array_view
+            return self.fillna(self._default_na_value()).data_array_view
         else:
             return self.dropna(drop_nan=False).data_array_view
 
+    # TODO: This method is decpreated and can be removed when the associated
+    # Frame methods are removed.
     def to_array(self, fillna=None) -> np.ndarray:
         """Get a dense numpy array for the data.
 
@@ -852,8 +862,13 @@ class ColumnBase(Column, Serializable):
         side : {'left', 'right'}
         kind : {'ix', 'loc', 'getitem'}
         """
-        assert kind in ["ix", "loc", "getitem", None]
-        if side not in ("left", "right"):
+        if kind not in {"ix", "loc", "getitem", None}:
+            raise ValueError(
+                f"Invalid value for ``kind`` parameter,"
+                f" must be either one of the following: "
+                f"{'ix', 'loc', 'getitem', None}, but found: {kind}"
+            )
+        if side not in {"left", "right"}:
             raise ValueError(
                 "Invalid value for side kwarg,"
                 " must be either 'left' or 'right': %s" % (side,)
@@ -2084,10 +2099,7 @@ def as_column(
                             data
                         )
                     np_type = np.dtype(dtype).type
-                    if np_type == np.bool_:
-                        pa_type = pa.bool_()
-                    else:
-                        pa_type = np_to_pa_dtype(np.dtype(dtype))
+                    pa_type = np_to_pa_dtype(np.dtype(dtype))
                 data = as_column(
                     pa.array(
                         arbitrary,

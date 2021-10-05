@@ -4,12 +4,12 @@ from cudf.utils.gpu_utils import validate_setup
 validate_setup()
 
 import cupy
-from numba import cuda
+from numba import config as numba_config, cuda
 
 import rmm
 
 from cudf.api.types import dtype
-from cudf import core, datasets, testing
+from cudf import api, core, datasets, testing
 from cudf._version import get_versions
 from cudf.api.extensions import (
     register_dataframe_accessor,
@@ -96,12 +96,21 @@ from cudf.io import (
     read_json,
     read_orc,
     read_parquet,
+    read_text,
 )
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import set_allocator
 
 cuda.set_memory_manager(rmm.RMMNumbaManager)
 cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
+
+try:
+    # Numba 0.54: Disable low occupancy warnings
+    numba_config.CUDA_LOW_OCCUPANCY_WARNINGS = 0
+except AttributeError:
+    # Numba < 0.54: No occupancy warnings
+    pass
+del numba_config
 
 __version__ = get_versions()["version"]
 del get_versions

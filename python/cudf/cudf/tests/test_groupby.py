@@ -14,7 +14,7 @@ import rmm
 
 import cudf
 from cudf import DataFrame, Series
-from cudf.core._compat import PANDAS_GE_110
+from cudf.core._compat import PANDAS_GE_110, PANDAS_GE_130, PANDAS_LT_140
 from cudf.testing._utils import (
     DATETIME_TYPES,
     SIGNED_TYPES,
@@ -196,7 +196,7 @@ def test_groupby_as_index_multiindex(pdf, gdf, as_index):
     else:
         # column names don't match - check just the values
         for gcol, pcol in zip(gdf, pdf):
-            assert_array_equal(gdf[gcol].to_array(), pdf[pcol].values)
+            assert_array_equal(gdf[gcol].to_numpy(), pdf[pcol].values)
 
 
 def test_groupby_default(pdf, gdf):
@@ -244,7 +244,7 @@ def test_groupby_cats():
     df["vals"] = np.random.random(len(df))
 
     cats = df["cats"].values_host
-    vals = df["vals"].to_array()
+    vals = df["vals"].to_numpy()
 
     grouped = df.groupby(["cats"], as_index=False).mean()
 
@@ -369,6 +369,10 @@ def test_groupby_2keys_agg(nelem, func):
     # TODO: Replace the above line with the one below once
     # https://github.com/pandas-dev/pandas/issues/40685 is resolved.
     # "func", ["min", "max", "idxmin", "idxmax", "count", "sum"],
+)
+@pytest.mark.xfail(
+    condition=PANDAS_GE_130 and PANDAS_LT_140,
+    reason="https://github.com/pandas-dev/pandas/issues/43209",
 )
 def test_groupby_agg_decimal(num_groups, nelem_per_group, func):
     # The number of digits after the decimal to use.
@@ -1303,6 +1307,10 @@ def test_groupby_nth(n, by):
     assert_groupby_results_equal(expect, got, check_dtype=False)
 
 
+@pytest.mark.xfail(
+    condition=PANDAS_GE_130 and PANDAS_LT_140,
+    reason="https://github.com/pandas-dev/pandas/issues/43209",
+)
 def test_raise_data_error():
 
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": ["a", "b", "c", "d"]})
@@ -1650,6 +1658,7 @@ def test_groupby_apply_no_keys(pdf):
     assert_groupby_results_equal(
         pdf.groupby([]).apply(lambda x: x.max()),
         gdf.groupby([]).apply(lambda x: x.max()),
+        check_index_type=False,  # Int64Index v/s Float64Index
     )
 
 
@@ -1946,9 +1955,6 @@ def test_groupby_fillna_multi_value(nelem):
 
     got = gdf.groupby(key_col).fillna(value=fill_values)
 
-    # In this specific case, Pandas returns the rows in grouped order.
-    # Cudf returns columns in orginal order.
-    expect.index = expect.index.get_level_values(1)
     assert_groupby_results_equal(expect[value_cols], got[value_cols])
 
 

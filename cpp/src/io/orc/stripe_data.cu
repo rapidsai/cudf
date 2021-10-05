@@ -17,6 +17,7 @@
 #include <cub/cub.cuh>
 #include <io/utilities/block_utils.cuh>
 #include <rmm/cuda_stream_view.hpp>
+
 #include "orc_common.h"
 #include "orc_gpu.h"
 
@@ -1572,9 +1573,10 @@ __global__ void __launch_bounds__(block_size)
       __syncthreads();
       // Account for skipped values
       if (num_rowgroups > 0 && !s->is_string) {
-        uint32_t run_pos = (s->chunk.type_kind == DECIMAL || s->chunk.type_kind == LIST)
-                             ? s->top.data.index.run_pos[CI_DATA2]
-                             : s->top.data.index.run_pos[CI_DATA];
+        uint32_t run_pos =
+          (s->chunk.type_kind == DECIMAL || s->chunk.type_kind == LIST || s->chunk.type_kind == MAP)
+            ? s->top.data.index.run_pos[CI_DATA2]
+            : s->top.data.index.run_pos[CI_DATA];
         numvals =
           min(numvals + run_pos, (s->chunk.type_kind == BOOLEAN) ? blockDim.x * 2 : blockDim.x);
       }
@@ -1587,7 +1589,7 @@ __global__ void __launch_bounds__(block_size)
           numvals = Integer_RLEv2(&s->bs, &s->u.rlev2, s->vals.i32, numvals, t);
         }
         __syncthreads();
-      } else if (s->chunk.type_kind == LIST) {
+      } else if (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP) {
         if (is_rlev1(s->chunk.encoding_kind)) {
           numvals = Integer_RLEv1<uint64_t>(&s->bs2, &s->u.rlev1, s->vals.u64, numvals, t);
         } else {
@@ -1676,15 +1678,17 @@ __global__ void __launch_bounds__(block_size)
       } else {
         vals_skipped = 0;
         if (num_rowgroups > 0) {
-          uint32_t run_pos = (s->chunk.type_kind == LIST) ? s->top.data.index.run_pos[CI_DATA2]
-                                                          : s->top.data.index.run_pos[CI_DATA];
+          uint32_t run_pos = (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP)
+                               ? s->top.data.index.run_pos[CI_DATA2]
+                               : s->top.data.index.run_pos[CI_DATA];
           if (run_pos) {
             vals_skipped = min(numvals, run_pos);
             numvals -= vals_skipped;
             __syncthreads();
             if (t == 0) {
-              (s->chunk.type_kind == LIST) ? s->top.data.index.run_pos[CI_DATA2] = 0
-                                           : s->top.data.index.run_pos[CI_DATA]  = 0;
+              (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP)
+                ? s->top.data.index.run_pos[CI_DATA2] = 0
+                : s->top.data.index.run_pos[CI_DATA]  = 0;
             }
           }
         }
@@ -1720,6 +1724,7 @@ __global__ void __launch_bounds__(block_size)
             case DECIMAL:
               static_cast<uint64_t*>(data_out)[row] = s->vals.u64[t + vals_skipped];
               break;
+            case MAP:
             case LIST: {
               // Since the offsets column in cudf is `size_type`,
               // If the limit exceeds then value will be 0, which is Fail.
@@ -1740,9 +1745,10 @@ __global__ void __launch_bounds__(block_size)
               break;
             case DATE:
               if (s->chunk.dtype_len == 8) {
-                // Convert from days to milliseconds by multiplying by 24*3600*1000
+                cudf::duration_D days{s->vals.i32[t + vals_skipped]};
+                // Convert from days to milliseconds
                 static_cast<int64_t*>(data_out)[row] =
-                  86400000ll * (int64_t)s->vals.i32[t + vals_skipped];
+                  cuda::std::chrono::duration_cast<cudf::duration_ms>(days).count();
               } else {
                 static_cast<uint32_t*>(data_out)[row] = s->vals.u32[t + vals_skipped];
               }
@@ -1783,20 +1789,24 @@ __global__ void __launch_bounds__(block_size)
                 seconds += get_gmt_offset(tz_table.ttimes, tz_table.offsets, seconds);
               }
               if (seconds < 0 && nanos != 0) { seconds -= 1; }
-              if (s->chunk.ts_clock_rate)
+              if (s->chunk.ts_clock_rate) {
+                duration_ns d_ns{nanos};
+                d_ns += duration_s{seconds};
                 static_cast<int64_t*>(data_out)[row] =
-                  seconds * s->chunk.ts_clock_rate +
-                  (nanos + (499999999 / s->chunk.ts_clock_rate)) /
-                    (1000000000 / s->chunk.ts_clock_rate);  // Output to desired clock rate
-              else
-                static_cast<int64_t*>(data_out)[row] = seconds * 1000000000 + nanos;
+                  d_ns.count() * s->chunk.ts_clock_rate /
+                  duration_ns::period::den;  // Output to desired clock rate
+              } else {
+                cudf::duration_s d{seconds};
+                static_cast<int64_t*>(data_out)[row] =
+                  cuda::std::chrono::duration_cast<cudf::duration_ns>(d).count() + nanos;
+              }
               break;
             }
           }
         }
       }
       // Aggregate num of elements for the chunk
-      if (s->chunk.type_kind == LIST) {
+      if (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP) {
         list_child_elements = block_reduce(temp_storage.blk_uint64).Sum(list_child_elements);
       }
       __syncthreads();
@@ -1813,14 +1823,16 @@ __global__ void __launch_bounds__(block_size)
     __syncthreads();
     if (t == 0) {
       s->top.data.cur_row += s->top.data.nrows;
-      if (s->chunk.type_kind == LIST) { s->num_child_rows += list_child_elements; }
+      if (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP) {
+        s->num_child_rows += list_child_elements;
+      }
       if (s->is_string && !is_dictionary(s->chunk.encoding_kind) && s->top.data.max_vals > 0) {
         s->chunk.dictionary_start += s->vals.u32[s->top.data.max_vals - 1];
       }
     }
     __syncthreads();
   }
-  if (t == 0 and s->chunk.type_kind == LIST) {
+  if (t == 0 and (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP)) {
     if (num_rowgroups > 0) {
       row_groups[blockIdx.y][blockIdx.x].num_child_rows = s->num_child_rows;
     }

@@ -4,6 +4,7 @@ from __future__ import annotations, division, print_function
 
 import math
 import pickle
+import warnings
 from numbers import Number
 from typing import (
     Any,
@@ -27,8 +28,13 @@ import cudf
 from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
-from cudf._lib.table import Table
-from cudf.api.types import _is_scalar_or_zero_d_array, is_string_dtype
+from cudf.api.types import (
+    _is_non_decimal_numeric_dtype,
+    _is_scalar_or_zero_d_array,
+    is_categorical_dtype,
+    is_interval_dtype,
+    is_string_dtype,
+)
 from cudf.core._base_index import BaseIndex
 from cudf.core.column import (
     CategoricalColumn,
@@ -46,12 +52,7 @@ from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
 from cudf.core.frame import Frame, SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import (
-    _is_non_decimal_numeric_dtype,
-    find_common_type,
-    is_categorical_dtype,
-    is_interval_dtype,
-)
+from cudf.utils.dtypes import find_common_type
 from cudf.utils.utils import cached_property, search_range
 
 T = TypeVar("T", bound="Frame")
@@ -59,7 +60,7 @@ T = TypeVar("T", bound="Frame")
 
 def _lexsorted_equal_range(
     idx: Union[GenericIndex, cudf.MultiIndex],
-    key_as_table: Table,
+    key_as_table: Frame,
     is_sorted: bool,
 ) -> Tuple[int, int, Optional[ColumnBase]]:
     """Get equal range for key in lexicographically sorted index. If index
@@ -348,17 +349,6 @@ class RangeIndex(BaseIndex):
         """
         return cudf.dtype(np.int64)
 
-    @property
-    def is_contiguous(self):
-        """
-        Returns if the index is contiguous.
-        """
-        return self._step == 1
-
-    @property
-    def size(self):
-        return len(self)
-
     def find_label_range(self, first=None, last=None):
         """Find subrange in the ``RangeIndex``, marked by their positions, that
         starts greater or equal to ``first`` and ends less or equal to ``last``
@@ -416,18 +406,10 @@ class RangeIndex(BaseIndex):
 
     @property
     def is_monotonic_increasing(self):
-        """
-        Return if the index is monotonic increasing
-        (only equal or increasing) values.
-        """
         return self._step > 0 or len(self) <= 1
 
     @property
     def is_monotonic_decreasing(self):
-        """
-        Return if the index is monotonic decreasing
-        (only equal or decreasing) values.
-        """
         return self._step < 0 or len(self) <= 1
 
     def get_slice_bound(self, label, side, kind=None):
@@ -618,6 +600,23 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         name = kwargs.get("name")
         super().__init__({name: data})
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        if "index_column" in header:
+            warnings.warn(
+                "Index objects serialized in cudf version "
+                "21.10 or older will no longer be deserializable "
+                "after version 21.12. Please load and resave any "
+                "pickles before upgrading to version 22.02.",
+                DeprecationWarning,
+            )
+            header["columns"] = [header.pop("index_column")]
+            header["column_names"] = pickle.dumps(
+                [pickle.loads(header["name"])]
+            )
+
+        return super().deserialize(header, frames)
 
     def drop_duplicates(self, keep="first"):
         """
@@ -825,7 +824,9 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 "is specified."
             )
 
-        key_as_table = Table({"None": as_column(key, length=1)})
+        key_as_table = cudf.core.frame.Frame(
+            {"None": as_column(key, length=1)}
+        )
         lower_bound, upper_bound, sort_inds = _lexsorted_equal_range(
             self, key_as_table, is_sorted
         )
@@ -870,8 +871,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         # Not sorted and not unique. Return a boolean mask
         mask = cupy.full(self._data.nrows, False)
-        true_inds = sort_inds.slice(lower_bound, upper_bound).to_gpu_array()
-        mask[cupy.array(true_inds)] = True
+        true_inds = sort_inds.slice(lower_bound, upper_bound).values
+        mask[true_inds] = True
         return mask
 
     def __sizeof__(self):
@@ -990,7 +991,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             end += 1
         return begin, end
 
-    def get_slice_bound(self, label, side, kind):
+    def get_slice_bound(self, label, side, kind=None):
         return self._values.get_slice_bound(label, side, kind)
 
 
@@ -1615,6 +1616,27 @@ class DatetimeIndex(GenericIndex):
         res = extract_quarter(self._values)
         return Int8Index(res, dtype="int8")
 
+    def isocalendar(self):
+        """
+        Returns a DataFrame with the year, week, and day
+        calculated according to the ISO 8601 standard.
+
+        Returns
+        -------
+        DataFrame
+        with columns year, week and day
+
+        Examples
+        --------
+        >>> gIndex = cudf.DatetimeIndex(["2020-05-31 08:00:00",
+        ...    "1999-12-31 18:40:00"])
+        >>> gIndex.isocalendar()
+                             year  week  day
+        2020-05-31 08:00:00  2020    22    7
+        1999-12-31 18:40:00  1999    52    5
+        """
+        return cudf.core.tools.datetimes._to_iso_calendar(self)
+
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
         return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
@@ -2126,7 +2148,9 @@ class StringIndex(GenericIndex):
         super().__init__(values, **kwargs)
 
     def to_pandas(self):
-        return pd.Index(self.to_array(), name=self.name, dtype="object")
+        return pd.Index(
+            self.to_numpy(na_value=None), name=self.name, dtype="object"
+        )
 
     def take(self, indices):
         return self._values[indices]
@@ -2203,7 +2227,7 @@ def as_index(arbitrary, **kwargs) -> BaseIndex:
     elif isinstance(arbitrary, pd.MultiIndex):
         return cudf.MultiIndex.from_pandas(arbitrary)
     elif isinstance(arbitrary, cudf.DataFrame):
-        return cudf.MultiIndex(source_data=arbitrary)
+        return cudf.MultiIndex.from_frame(arbitrary)
     return as_index(
         column.as_column(arbitrary, dtype=kwargs.get("dtype", None)), **kwargs
     )

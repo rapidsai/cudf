@@ -23,7 +23,6 @@ from cudf._lib.cpp.io.json cimport (
 )
 from cudf._lib.cpp.types cimport data_type, size_type, type_id
 from cudf._lib.io.utils cimport make_source_info
-from cudf._lib.table cimport Table
 from cudf._lib.types cimport dtype_to_data_type
 from cudf._lib.utils cimport data_from_unique_ptr
 
@@ -117,7 +116,7 @@ cpdef read_json(object filepaths_or_buffers,
                                 column_names=column_names)
 
 cdef data_type _get_cudf_data_type_from_dtype(object dtype) except +:
-    if cudf.utils.dtypes.is_categorical_dtype(dtype):
+    if cudf.api.types.is_categorical_dtype(dtype):
         raise NotImplementedError(
             "CategoricalDtype as dtype is not yet "
             "supported in JSON reader"
