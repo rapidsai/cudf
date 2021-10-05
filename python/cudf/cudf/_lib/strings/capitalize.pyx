@@ -8,8 +8,8 @@ from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.strings.capitalize cimport (
     capitalize as cpp_capitalize,
+    is_title as cpp_is_title,
     title as cpp_title,
-    is_title as cpp_is_title
 )
 
 
