@@ -48,7 +48,7 @@ static void BM_extract(benchmark::State& state, int groups)
   });
 
   std::string pattern;
-  while (static_cast<int>(pattern.size()) < groups) {
+  while (groups--) {
     pattern += "(\\d+) ";
   }
 
@@ -87,5 +87,5 @@ static void generate_bench_args(benchmark::internal::Benchmark* b)
     ->Unit(benchmark::kMillisecond);
 
 STRINGS_BENCHMARK_DEFINE(small, 2)
-STRINGS_BENCHMARK_DEFINE(medium, 10)
-STRINGS_BENCHMARK_DEFINE(large, 30)
+STRINGS_BENCHMARK_DEFINE(medium, 4)
+STRINGS_BENCHMARK_DEFINE(large, 8)
