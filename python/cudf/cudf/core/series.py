@@ -378,7 +378,7 @@ class Series(SingleColumnFrame, Serializable):
                 "21.10 or older will no longer be deserializable "
                 "after version 21.12. Please load and resave any "
                 "pickles before upgrading to version 22.02.",
-                DeprecationWarning,
+                FutureWarning,
             )
             header["columns"] = [header.pop("column")]
             header["column_names"] = pickle.dumps(
@@ -788,57 +788,9 @@ class Series(SingleColumnFrame, Serializable):
         return cudf.DataFrame({col: self._column}, index=self.index)
 
     def set_mask(self, mask, null_count=None):
-        """Create new Series by setting a mask array.
-
-        This will override the existing mask.  The returned Series will
-        reference the same data buffer as this Series.
-
-        Parameters
-        ----------
-        mask : 1D array-like
-            The null-mask.  Valid values are marked as ``1``; otherwise ``0``.
-            The mask bit given the data index ``idx`` is computed as::
-
-                (mask[idx // 8] >> (idx % 8)) & 1
-        null_count : int, optional
-            The number of null values.
-            If None, it is calculated automatically.
-
-        Returns
-        -------
-        Series
-            A new series with the applied mask.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([1, 2, 3, 4, 5])
-        >>> ref_array = cudf.Series([10, None, 11, None, 16])
-        >>> series
-        0    1
-        1    2
-        2    3
-        3    4
-        4    5
-        dtype: int64
-        >>> ref_array
-        0      10
-        1    <NA>
-        2      11
-        3    <NA>
-        4      16
-        dtype: int64
-        >>> series.set_mask(ref_array._column.mask)
-        0       1
-        1    <NA>
-        2       3
-        3    <NA>
-        4       5
-        dtype: int64
-        """
         warnings.warn(
             "Series.set_mask is deprecated and will be removed in the future.",
-            DeprecationWarning,
+            FutureWarning,
         )
         return self._from_data(
             {self.name: self._column.set_mask(mask)}, self._index
@@ -2527,43 +2479,13 @@ class Series(SingleColumnFrame, Serializable):
             value=value, method=method, axis=axis, inplace=inplace, limit=limit
         )
 
+    # TODO: When this method is removed we can also remove ColumnBase.to_array.
     def to_array(self, fillna=None):
-        """Get a dense numpy array for the data.
-
-        Parameters
-        ----------
-        fillna : str or None
-            Defaults to None, which will skip null values.
-            If it equals "pandas", null values are filled with NaNs.
-            Non integral dtype is promoted to np.float64.
-
-        Returns
-        -------
-        numpy.ndarray
-            A numpy array representation of the elements in the Series.
-
-        Notes
-        -----
-        If ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([10, 11, 12, 13, 14])
-        >>> series
-        0    10
-        1    11
-        2    12
-        3    13
-        4    14
-        dtype: int64
-        >>> array = series.to_array()
-        >>> array
-        array([10, 11, 12, 13, 14])
-        >>> type(array)
-        <class 'numpy.ndarray'>
-        """
+        warnings.warn(
+            "The to_array method will be removed in a future cuDF "
+            "release. Consider using `to_numpy` instead.",
+            DeprecationWarning,
+        )
         return self._column.to_array(fillna=fillna)
 
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
@@ -3249,7 +3171,7 @@ class Series(SingleColumnFrame, Serializable):
     def reverse(self):
         warnings.warn(
             "Series.reverse is deprecated and will be removed in the future.",
-            DeprecationWarning,
+            FutureWarning,
         )
         rinds = column.arange((self._column.size - 1), -1, -1, dtype=np.int32)
         return self._from_data(
@@ -3373,9 +3295,9 @@ class Series(SingleColumnFrame, Serializable):
         """
 
         warnings.warn(
-            "Series.label_encoding is deprecated and will be removed in the future.\
-                 Consider using cuML's LabelEncoder instead",
-            DeprecationWarning,
+            "Series.label_encoding is deprecated and will be removed in the "
+            "future. Consider using cuML's LabelEncoder instead.",
+            FutureWarning,
         )
 
         def _return_sentinel_series():
@@ -3419,6 +3341,94 @@ class Series(SingleColumnFrame, Serializable):
         return codes
 
     # UDF related
+    def apply(self, func, convert_dtype=True, args=(), **kwargs):
+        """
+        Apply a scalar function to the values of a Series.
+
+        Similar to `pandas.Series.apply. Applies a user
+        defined function elementwise over a series.
+
+        Parameters
+        ----------
+        func : function
+            Scalar Python function to apply.
+        convert_dtype : bool, default True
+            In cuDF, this parameter is always True. Because
+            cuDF does not support arbitrary object dtypes,
+            the result will always be the common type as determined
+            by numba based on the function logic and argument types.
+            See examples for details.
+        args : tuple
+            Not supported
+        **kwargs
+            Not supported
+
+        Notes
+        -----
+        UDFs are cached in memory to avoid recompilation. The first
+        call to the UDF will incur compilation overhead.
+
+        Examples
+        --------
+
+        Apply a basic function to a series
+        >>> sr = cudf.Series([1,2,3])
+        >>> def f(x):
+        ...     return x + 1
+        >>> sr.apply(f)
+        0    2
+        1    3
+        2    4
+        dtype: int64
+
+        Apply a basic function to a series with nulls
+        >>> sr = cudf.Series([1,cudf.NA,3])
+        >>> def f(x):
+        ...     return x + 1
+        >>> sr.apply(f)
+        0       2
+        1    <NA>
+        2       4
+        dtype: int64
+
+        Use a function that does something conditionally,
+        based on if the value is or is not null
+        >>> sr = cudf.Series([1,cudf.NA,3])
+        >>> def f(x):
+        ...     if x is cudf.NA:
+        ...         return 42
+        ...     else:
+        ...         return x - 1
+        >>> sr.apply(f)
+        0     0
+        1    42
+        2     2
+        dtype: int64
+
+        Results will be upcast to the common dtype required
+        as derived from the UDFs logic. Note that this means
+        the common type will be returned even if such data
+        is passed that would not result in any values of that
+        dtype.
+
+        >>> sr = cudf.Series([1,cudf.NA,3])
+        >>> def f(x):
+        ...     return x + 1.5
+        >>> sr.apply(f)
+        0     2.5
+        1    <NA>
+        2     4.5
+        dtype: float64
+
+
+
+        """
+        if args or kwargs:
+            raise ValueError(
+                "UDFs using *args or **kwargs are not yet supported."
+            )
+
+        return super()._apply(func)
 
     def applymap(self, udf, out_dtype=None):
         """Apply an elementwise function to transform the values in the Column.
@@ -4259,7 +4269,7 @@ class Series(SingleColumnFrame, Serializable):
             )
             data = (
                 [self.count(), self.mean(), self.std(), self.min()]
-                + self.quantile(percentiles).to_array(fillna="pandas").tolist()
+                + self.quantile(percentiles).to_numpy(na_value=np.nan).tolist()
                 + [self.max()]
             )
             data = _format_stats_values(data)
@@ -4285,7 +4295,7 @@ class Series(SingleColumnFrame, Serializable):
                 ]
                 + self.quantile(percentiles)
                 .astype("str")
-                .to_array(fillna="pandas")
+                .to_numpy(na_value=None)
                 .tolist()
                 + [str(pd.Timedelta(self.max()))]
             )
@@ -4337,7 +4347,7 @@ class Series(SingleColumnFrame, Serializable):
                 ]
                 + self.quantile(percentiles)
                 .astype("str")
-                .to_array(fillna="pandas")
+                .to_numpy(na_value=None)
                 .tolist()
                 + [str(pd.Timestamp((self.max()).astype("datetime64[ns]")))]
             )
@@ -4651,7 +4661,6 @@ class Series(SingleColumnFrame, Serializable):
             right_index=right_index,
             how=how,
             sort=sort,
-            method=method,
             indicator=False,
             suffixes=suffixes,
         )
