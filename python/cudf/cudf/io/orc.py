@@ -287,6 +287,7 @@ def read_orc(
     use_index=True,
     decimal_cols_as_float=None,
     timestamp_type=None,
+    use_python_file_object=None,
     **kwargs,
 ):
     """{docstring}"""
@@ -311,6 +312,14 @@ def read_orc(
                 "A list of stripes must be provided for each input source"
             )
 
+    # Set `use_python_file_object`.
+    # By default, we will use an Arrow-backed PythonFile object
+    # whenever we are performing partial IO, and are not filtering.
+    if use_python_file_object is None:
+        use_python_file_object = bool(
+            (stripes or columns or num_rows) and not filters
+        )
+
     filepaths_or_buffers = []
     for source in filepath_or_buffer:
         if ioutils.is_directory(source, **kwargs):
@@ -321,7 +330,10 @@ def read_orc(
             source = fs.sep.join([source, "*.orc"])
 
         tmp_source, compression = ioutils.get_filepath_or_buffer(
-            path_or_data=source, compression=None, **kwargs,
+            path_or_data=source,
+            compression=None,
+            use_python_file_object=use_python_file_object,
+            **kwargs,
         )
         if compression is not None:
             raise ValueError(
