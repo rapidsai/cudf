@@ -331,6 +331,39 @@ TYPED_TEST(ListsExtractColumnIndicesTypedTest, ExtractElement)
   }
 }
 
+TYPED_TEST(ListsExtractColumnIndicesTypedTest, FailureCases)
+{
+  using namespace cudf;
+  using namespace cudf::lists;
+  using namespace cudf::test;
+  using namespace cudf::test::iterators;
+  using LCW     = lists_column_wrapper<TypeParam, int32_t>;
+  using indices = fixed_width_column_wrapper<offset_type>;
+
+  {
+    // Non-empty input, with mismatched size of indices.
+    auto input_column =
+      LCW({LCW{3, 2, 1}, LCW{}, LCW{30, 20, 10, 50}, LCW{100, 120}, LCW{0}, LCW{}}, null_at(1));
+    auto input = lists_column_view(input_column);
+
+    EXPECT_THROW(extract_list_element(input, indices{0, 1, 2}), cudf::logic_error);
+  }
+  {
+    // Non-empty input, with empty indices.
+    auto input_column =
+      LCW({LCW{3, 2, 1}, LCW{}, LCW{30, 20, 10, 50}, LCW{100, 120}, LCW{0}, LCW{}}, null_at(1));
+    auto input = lists_column_view(input_column);
+
+    EXPECT_THROW(extract_list_element(input, indices{}), cudf::logic_error);
+  }
+  {
+    // Empty input, with mismatched size of indices.
+    auto input_column = LCW{};
+    auto input        = lists_column_view(input_column);
+    EXPECT_THROW(extract_list_element(input, indices{0, 1, 2}), cudf::logic_error);
+  }
+}
+
 TEST_F(ListsExtractColumnIndicesTest, ExtractStrings)
 {
   using namespace cudf;

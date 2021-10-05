@@ -99,6 +99,7 @@ std::unique_ptr<column> extract_list_element(
  * row.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return Column of extracted elements.
+ * @throws cudf::logic_error If the sizes of `lists_column` and `indices` do not match.
  */
 std::unique_ptr<column> extract_list_element(
   lists_column_view const& lists_column,
