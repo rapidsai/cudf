@@ -69,6 +69,8 @@ class Frame:
     """
 
     _data: "ColumnAccessor"
+    # TODO: Once all dependence on Frame having an index is removed, this
+    # attribute should be moved to IndexedFrame.
     _index: Optional[cudf.core.index.BaseIndex]
 
     def __init__(self, data=None, index=None):

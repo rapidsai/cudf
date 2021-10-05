@@ -52,6 +52,7 @@ from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import DataFrameGroupBy
 from cudf.core.index import BaseIndex, RangeIndex, as_index
+from cudf.core.indexed_frame import IndexedFrame
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
@@ -81,7 +82,7 @@ _cupy_nan_methods_map = {
 }
 
 
-class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
+class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     """
     A GPU Dataframe object.
 

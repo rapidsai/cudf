@@ -52,6 +52,7 @@ from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import BaseIndex, RangeIndex, as_index
+from cudf.core.indexed_frame import IndexedFrame
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils import cudautils, docutils
@@ -68,7 +69,7 @@ from cudf.utils.utils import (
 )
 
 
-class Series(SingleColumnFrame, Serializable):
+class Series(SingleColumnFrame, IndexedFrame, Serializable):
     """
     One-dimensional GPU array (including time series).
 
