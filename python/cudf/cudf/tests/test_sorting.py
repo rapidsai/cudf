@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf.core import DataFrame, Series
+from cudf import DataFrame, Series
 from cudf.core.column import NumericalColumn
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -94,10 +94,10 @@ def test_series_argsort(nelem, dtype, asc):
     res = sr.argsort(ascending=asc)
 
     if asc:
-        expected = np.argsort(sr.to_array(), kind="mergesort")
+        expected = np.argsort(sr.to_numpy(), kind="mergesort")
     else:
-        expected = np.argsort(sr.to_array() * -1, kind="mergesort")
-    np.testing.assert_array_equal(expected, res.to_array())
+        expected = np.argsort(sr.to_numpy() * -1, kind="mergesort")
+    np.testing.assert_array_equal(expected, res.to_numpy())
 
 
 @pytest.mark.parametrize(
@@ -106,12 +106,12 @@ def test_series_argsort(nelem, dtype, asc):
 def test_series_sort_index(nelem, asc):
     np.random.seed(0)
     sr = Series((100 * np.random.random(nelem)))
-    orig = sr.to_array()
-    got = sr.sort_values().sort_index(ascending=asc).to_array()
-    if not asc:
-        # Reverse the array for descending sort
-        got = got[::-1]
-    np.testing.assert_array_equal(orig, got)
+    psr = sr.to_pandas()
+
+    expected = psr.sort_index(ascending=asc)
+    got = sr.sort_index(ascending=asc)
+
+    assert_eq(expected, got)
 
 
 @pytest.mark.parametrize("data", [[0, 1, 1, 2, 2, 2, 3, 3], [0], [1, 2, 3]])
@@ -165,8 +165,8 @@ def test_dataframe_nlargest(nelem, n):
 
     # Check
     inds = np.argsort(aa)
-    assert_eq(res["a"].to_array(), aa[inds][-n:][::-1])
-    assert_eq(res["b"].to_array(), bb[inds][-n:][::-1])
+    assert_eq(res["a"].to_numpy(), aa[inds][-n:][::-1])
+    assert_eq(res["b"].to_numpy(), bb[inds][-n:][::-1])
     assert_eq(res.index.values, inds[-n:][::-1])
 
 
@@ -180,8 +180,8 @@ def test_dataframe_nsmallest(nelem, n):
 
     # Check
     inds = np.argsort(-aa)
-    assert_eq(res["a"].to_array(), aa[inds][-n:][::-1])
-    assert_eq(res["b"].to_array(), bb[inds][-n:][::-1])
+    assert_eq(res["a"].to_numpy(), aa[inds][-n:][::-1])
+    assert_eq(res["b"].to_numpy(), bb[inds][-n:][::-1])
     assert_eq(res.index.values, inds[-n:][::-1])
 
 

@@ -18,6 +18,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
+#include <io/utilities/time_utils.cuh>
 
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
@@ -36,22 +37,22 @@ struct timezone_table_view {
   cudf::device_span<int32_t const> offsets;
 };
 
-static constexpr int64_t day_seconds = 24 * 60 * 60;
 // Cycle in which the time offsets repeat
-static constexpr uint32_t cycle_years = 400;
+static constexpr int32_t cycle_years = 400;
 // Number of seconds in 400 years
-static constexpr int64_t cycle_seconds = (365 * 400 + (100 - 3)) * day_seconds;
+static constexpr int64_t cycle_seconds =
+  cuda::std::chrono::duration_cast<duration_s>(duration_D{365 * cycle_years + (100 - 3)}).count();
 // Two entries per year, over the length of the cycle
 static constexpr uint32_t cycle_entry_cnt = 2 * cycle_years;
 
 /**
  * @brief Returns the GMT offset for a given date and given timezone table.
  *
- * @param ttimes Transition times; trailing @ref `cycle_entry_cnt` entires are used for all times
+ * @param ttimes Transition times; trailing `cycle_entry_cnt` entires are used for all times
  * beyond the one covered by the TZif file
  * @param offsets Time offsets in specific intervals; trailing `cycle_entry_cnt` entires are used
  * for all times beyond the one covered by the TZif file
- * @param count Number of elements in @ref ttimes and @ref offsets
+ * @param count Number of elements in @p ttimes and @p offsets
  * @param ts ORC timestamp
  *
  * @return GMT offset

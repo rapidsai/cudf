@@ -24,11 +24,11 @@ def assert_df(g, p):
 
 def assert_df2(g, p):
     assert g.index.dtype == p.index.dtype
-    np.testing.assert_equal(g.index.to_array(), p.index)
+    np.testing.assert_equal(g.index.to_numpy(), p.index)
     assert tuple(g.columns) == tuple(p.columns)
     for k in g.columns:
         assert g[k].dtype == p[k].dtype
-        np.testing.assert_equal(g[k].to_array(), p[k])
+        np.testing.assert_equal(g[k].to_numpy(), p[k])
 
 
 # most tests are similar to pandas drop_duplicates

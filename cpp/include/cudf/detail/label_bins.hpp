@@ -39,8 +39,8 @@ namespace detail {
 
 /**
  * @copydoc cudf::label_bins(column_view const& input, column_view const& left_edges, inclusive
- * left_inclusive, column_view const& right_edges, inclusive right_inclusive, null_order
- * edge_null_precedence null_order::BEFORE, rmm::mr::device_memory_resource* mr)
+ * left_inclusive, column_view const& right_edges, inclusive right_inclusive, rmm::cuda_stream_view,
+ * rmm::mr::device_memory_resource* mr)
  *
  * @param stream Stream view on which to allocate resources and queue execution.
  */

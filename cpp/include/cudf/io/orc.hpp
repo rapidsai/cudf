@@ -192,7 +192,7 @@ class orc_reader_options {
   /**
    * @brief Enable/Disable use of numpy-compatible dtypes
    *
-   * @param rows Boolean value to enable/disable.
+   * @param use Boolean value to enable/disable.
    */
   void enable_use_np_dtypes(bool use) { _use_np_dtypes = use; }
 
@@ -295,7 +295,7 @@ class orc_reader_options_builder {
   /**
    * @brief Enable/Disable use of numpy-compatible dtypes.
    *
-   * @param rows Boolean value to enable/disable.
+   * @param use Boolean value to enable/disable.
    * @return this for chaining.
    */
   orc_reader_options_builder& use_np_dtypes(bool use)
@@ -346,12 +346,9 @@ class orc_reader_options_builder {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  ...
- *  std::string filepath = "dataset.orc";
- *  cudf::orc_reader_options options =
- * cudf::orc_reader_options::builder(cudf::source_info(filepath));
- *  ...
- *  auto result = cudf::read_orc(options);
+ *  auto source  = cudf::io::source_info("dataset.orc");
+ *  auto options = cudf::io::orc_reader_options::builder(source);
+ *  auto result  = cudf::io::read_orc(options);
  * @endcode
  *
  * Note: Support for reading files with struct columns is currently experimental, the output may not
@@ -392,7 +389,7 @@ class orc_writer_options {
   // Set of columns to output
   table_view _table;
   // Optional associated metadata
-  const table_metadata* _metadata = nullptr;
+  const table_input_metadata* _metadata = nullptr;
 
   friend orc_writer_options_builder;
 
@@ -448,7 +445,7 @@ class orc_writer_options {
   /**
    * @brief Returns associated metadata.
    */
-  table_metadata const* get_metadata() const { return _metadata; }
+  table_input_metadata const* get_metadata() const { return _metadata; }
 
   // Setters
 
@@ -478,7 +475,7 @@ class orc_writer_options {
    *
    * @param meta Associated metadata.
    */
-  void set_metadata(table_metadata* meta) { _metadata = meta; }
+  void set_metadata(table_input_metadata const* meta) { _metadata = meta; }
 };
 
 class orc_writer_options_builder {
@@ -505,7 +502,7 @@ class orc_writer_options_builder {
   /**
    * @brief Sets compression type.
    *
-   * @param compression The compression type to use.
+   * @param comp The compression type to use.
    * @return this for chaining.
    */
   orc_writer_options_builder& compression(compression_type comp)
@@ -544,7 +541,7 @@ class orc_writer_options_builder {
    * @param meta Associated metadata.
    * @return this for chaining.
    */
-  orc_writer_options_builder& metadata(table_metadata* meta)
+  orc_writer_options_builder& metadata(table_input_metadata const* meta)
   {
     options._metadata = meta;
     return *this;
@@ -568,13 +565,13 @@ class orc_writer_options_builder {
  *
  * The following code snippet demonstrates how to write columns to a file:
  * @code
- *  ...
- *  std::string filepath = "dataset.orc";
- *  cudf::orc_writer_options options = cudf::orc_writer_options::builder(cudf::sink_info(filepath),
- * table->view());
- *  ...
- *  cudf::write_orc(options);
+ *  auto destination = cudf::io::sink_info("dataset.orc");
+ *  auto options     = cudf::io::orc_writer_options::builder(destination, table->view());
+ *  cudf::io::write_orc(options);
  * @endcode
+ *
+ * Note: Support for writing tables with struct columns is currently experimental, the output may
+ * not be as reliable as writing for other datatypes.
  *
  * @param options Settings for controlling reading behavior.
  * @param mr Device memory resource to use for device memory allocation.
@@ -598,7 +595,7 @@ class chunked_orc_writer_options {
   // Enable writing column statistics
   bool _enable_statistics = true;
   // Optional associated metadata
-  const table_metadata_with_nullability* _metadata = nullptr;
+  const table_input_metadata* _metadata = nullptr;
 
   friend chunked_orc_writer_options_builder;
 
@@ -644,7 +641,7 @@ class chunked_orc_writer_options {
   /**
    * @brief Returns associated metadata.
    */
-  table_metadata_with_nullability const* get_metadata() const { return _metadata; }
+  table_input_metadata const* get_metadata() const { return _metadata; }
 
   // Setters
 
@@ -667,7 +664,7 @@ class chunked_orc_writer_options {
    *
    * @param meta Associated metadata.
    */
-  void metadata(table_metadata_with_nullability* meta) { _metadata = meta; }
+  void metadata(table_input_metadata const* meta) { _metadata = meta; }
 };
 
 class chunked_orc_writer_options_builder {
@@ -718,7 +715,7 @@ class chunked_orc_writer_options_builder {
    * @param meta Associated metadata.
    * @return this for chaining.
    */
-  chunked_orc_writer_options_builder& metadata(table_metadata_with_nullability* meta)
+  chunked_orc_writer_options_builder& metadata(table_input_metadata const* meta)
   {
     options._metadata = meta;
     return *this;
@@ -769,10 +766,10 @@ class orc_chunked_writer {
   /**
    * @brief Constructor with chunked writer options
    *
-   * @param[in] op options used to write table
+   * @param[in] options options used to write table
    * @param[in] mr Device memory resource to use for device memory allocation
    */
-  orc_chunked_writer(chunked_orc_writer_options const& op,
+  orc_chunked_writer(chunked_orc_writer_options const& options,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**

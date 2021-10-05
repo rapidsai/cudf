@@ -11,6 +11,7 @@ import numpy as np
 import rmm
 from rmm import DeviceBuffer
 
+import cudf
 from cudf.core.abc import Serializable
 
 
@@ -159,7 +160,7 @@ def _buffer_data_from_array_interface(array_interface):
     ptr = array_interface["data"][0]
     if ptr is None:
         ptr = 0
-    itemsize = np.dtype(array_interface["typestr"]).itemsize
+    itemsize = cudf.dtype(array_interface["typestr"]).itemsize
     shape = (
         array_interface["shape"] if len(array_interface["shape"]) > 0 else (1,)
     )
@@ -170,7 +171,7 @@ def _buffer_data_from_array_interface(array_interface):
 def confirm_1d_contiguous(array_interface):
     strides = array_interface["strides"]
     shape = array_interface["shape"]
-    itemsize = np.dtype(array_interface["typestr"]).itemsize
+    itemsize = cudf.dtype(array_interface["typestr"]).itemsize
     typestr = array_interface["typestr"]
     if typestr not in ("|i1", "|u1"):
         raise TypeError("Buffer data must be of uint8 type")

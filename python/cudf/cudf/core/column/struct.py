@@ -5,10 +5,10 @@ import pyarrow as pa
 
 import cudf
 from cudf._typing import Dtype
+from cudf.api.types import is_struct_dtype
 from cudf.core.column import ColumnBase, build_struct_column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import StructDtype
-from cudf.utils.dtypes import is_struct_dtype
 
 
 class StructColumn(ColumnBase):
@@ -87,7 +87,7 @@ class StructColumn(ColumnBase):
                 field: value
                 for field, value in zip(self.dtype.fields, result.values())
             }
-        return result._rename_fields(self.dtype.fields.keys())
+        return result
 
     def __setitem__(self, key, value):
         if isinstance(value, dict):

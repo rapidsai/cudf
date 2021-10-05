@@ -102,7 +102,6 @@ class avro_reader_options {
    * @brief Sets number of rows to skip.
    *
    * @param val Number of rows to skip from start.
-   * @return this for chaining.
    */
   void set_skip_rows(size_type val) { _skip_rows = val; }
 
@@ -110,7 +109,6 @@ class avro_reader_options {
    * @brief Sets number of rows to read.
    *
    * @param val Number of rows to read after skip.
-   * @return this for chaining.
    */
   void set_num_rows(size_type val) { _num_rows = val; }
 
@@ -195,12 +193,9 @@ class avro_reader_options_builder {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  ...
- *  std::string filepath = "dataset.avro";
- *  cudf::avro_reader_options options =
- * cudf::avro_reader_options::builder(cudf::source_info(filepath));
- *  ...
- *  auto result = cudf::read_avro(options);
+ *  auto source  = cudf::io::source_info("dataset.avro");
+ *  auto options = cudf::io::avro_reader_options::builder(source);
+ *  auto result  = cudf::io::read_avro(options);
  * @endcode
  *
  * @param options Settings for controlling reading behavior.

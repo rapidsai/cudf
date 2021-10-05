@@ -176,7 +176,7 @@ def test_categorical_index():
     assert_eq(pdf.index, gdf1.index)
     assert_eq(
         pdf.index.codes,
-        gdf1.index.codes.astype(pdf.index.codes.dtype).to_array(),
+        gdf1.index.codes.astype(pdf.index.codes.dtype).to_numpy(),
     )
 
     assert isinstance(gdf2.index, CategoricalIndex)
@@ -184,7 +184,7 @@ def test_categorical_index():
     assert_eq(pdf.index, gdf2.index)
     assert_eq(
         pdf.index.codes,
-        gdf2.index.codes.astype(pdf.index.codes.dtype).to_array(),
+        gdf2.index.codes.astype(pdf.index.codes.dtype).to_numpy(),
     )
 
 
@@ -223,7 +223,7 @@ def test_pandas_as_index():
         pdf_category_index.codes,
         gdf_category_index.codes.astype(
             pdf_category_index.codes.dtype
-        ).to_array(),
+        ).to_numpy(),
     )
 
 
@@ -291,7 +291,7 @@ def test_set_index_as_property():
     # Check set_index(Series)
     cdf.index = cdf["b"]
 
-    assert_eq(cdf.index._values.to_array(), col2)
+    assert_eq(cdf.index.to_numpy(), col2)
 
     with pytest.raises(ValueError):
         cdf.index = [list(range(10))]
@@ -459,14 +459,14 @@ def test_index_copy_deep(idx, deep):
 def test_index_isna(idx):
     pidx = pd.Index(idx, name="idx")
     gidx = cudf.core.index.Int64Index(idx, name="idx")
-    assert_eq(gidx.isna().to_array(), pidx.isna())
+    assert_eq(gidx.isna().to_numpy(), pidx.isna())
 
 
 @pytest.mark.parametrize("idx", [[1, None, 3, None, 5]])
 def test_index_notna(idx):
     pidx = pd.Index(idx, name="idx")
     gidx = cudf.core.index.Int64Index(idx, name="idx")
-    assert_eq(gidx.notna().to_array(), pidx.notna())
+    assert_eq(gidx.notna().to_numpy(), pidx.notna())
 
 
 def test_rangeindex_slice_attr_name():
@@ -550,7 +550,15 @@ def test_empty_df_head_tail_index(n):
             None,
         ),
         (pd.Index(range(5)), pd.Index(range(4)) > 0, None, ValueError),
-        (pd.Index(range(5)), pd.Index(range(5)) > 1, 10, None),
+        pytest.param(
+            pd.Index(range(5)),
+            pd.Index(range(5)) > 1,
+            10,
+            None,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/43240"
+            ),
+        ),
         (
             pd.Index(np.arange(10)),
             (pd.Index(np.arange(10)) % 3) == 0,
@@ -666,18 +674,13 @@ def test_index_where(data, condition, other, error):
             got = gs.where(gs_condition, other=gs_other)
             np.testing.assert_array_equal(
                 expect.codes,
-                got.codes.astype(expect.codes.dtype).fillna(-1).to_array(),
+                got.codes.astype(expect.codes.dtype).fillna(-1).to_numpy(),
             )
             assert_eq(expect.categories, got.categories)
         else:
             assert_eq(
-                ps.where(ps_condition, other=ps_other)
-                .fillna(gs._columns[0].default_na_value())
-                .values,
-                gs.where(gs_condition, other=gs_other)
-                .to_pandas()
-                .fillna(gs._columns[0].default_na_value())
-                .values,
+                ps.where(ps_condition, other=ps_other),
+                gs.where(gs_condition, other=gs_other).to_pandas(),
             )
     else:
         assert_exceptions_equal(
@@ -1866,7 +1869,9 @@ def test_index_fillna(data, fill_value):
     pdi = pd.Index(data)
     gdi = cudf.Index(data)
 
-    assert_eq(pdi.fillna(fill_value), gdi.fillna(fill_value))
+    assert_eq(
+        pdi.fillna(fill_value), gdi.fillna(fill_value), exact=False
+    )  # Int64Index v/s Float64Index
 
 
 @pytest.mark.parametrize(
@@ -2084,6 +2089,35 @@ def test_get_loc_single_unique_numeric(idx, key, method):
         or (key == 0 and method in "ffill")
         # Get key after the last element is KeyError
         or (key == 7 and method in "bfill")
+    ):
+        assert_exceptions_equal(
+            lfunc=pi.get_loc,
+            rfunc=gi.get_loc,
+            lfunc_args_and_kwargs=([], {"key": key, "method": method}),
+            rfunc_args_and_kwargs=([], {"key": key, "method": method}),
+        )
+    else:
+        expected = pi.get_loc(key, method=method)
+        got = gi.get_loc(key, method=method)
+
+        assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "idx", [pd.RangeIndex(3, 100, 4)],
+)
+@pytest.mark.parametrize("key", list(range(1, 110, 3)))
+@pytest.mark.parametrize("method", [None, "ffill"])
+def test_get_loc_rangeindex(idx, key, method):
+    pi = idx
+    gi = cudf.from_pandas(pi)
+
+    if (
+        (key not in pi and method is None)
+        # Get key before the first element is KeyError
+        or (key < pi.start and method in "ffill")
+        # Get key after the last element is KeyError
+        or (key >= pi.stop and method in "bfill")
     ):
         assert_exceptions_equal(
             lfunc=pi.get_loc,

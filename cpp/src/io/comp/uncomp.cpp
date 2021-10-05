@@ -241,14 +241,14 @@ int cpu_inflate(uint8_t* uncomp_data, size_t* destLen, const uint8_t* comp_data,
 }
 
 /**
- * @Brief Uncompresses a raw DEFLATE stream to a char vector.
+ * @brief Uncompresses a raw DEFLATE stream to a char vector.
  * The vector will be grown to match the uncompressed size
  * Optimized for the case where the initial size is the uncompressed
  * size truncated to 32-bit, and grows the buffer in 1GB increments.
  *
- * @param dst[out] Destination vector
- * @param comp_data[in] Raw compressed data
- * @param comp_len[in] Compressed data size
+ * @param[out] dst Destination vector
+ * @param[in] comp_data Raw compressed data
+ * @param[in] comp_len Compressed data size
  */
 int cpu_inflate_vector(std::vector<char>& dst, const uint8_t* comp_data, size_t comp_len)
 {
@@ -282,14 +282,14 @@ int cpu_inflate_vector(std::vector<char>& dst, const uint8_t* comp_data, size_t 
 }
 
 /**
- * @Brief Uncompresses a gzip/zip/bzip2/xz file stored in system memory.
+ * @brief Uncompresses a gzip/zip/bzip2/xz file stored in system memory.
  *
  * The result is allocated and stored in a vector.
  * If the function call fails, the output vector is empty.
  *
- * @param src[in] Pointer to the compressed data in system memory
- * @param src_size[in] The size of the compressed data, in bytes
- * @param stream_type[in] Type of compression of the input data
+ * @param[in] src Pointer to the compressed data in system memory
+ * @param[in] src_size The size of the compressed data, in bytes
+ * @param[in] stream_type Type of compression of the input data
  *
  * @return Vector containing the uncompressed output
  */
@@ -369,6 +369,7 @@ std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int
       // Unsupported format
       break;
   }
+
   CUDF_EXPECTS(comp_data != nullptr, "Unsupported compressed stream type");
   CUDF_EXPECTS(comp_len > 0, "Unsupported compressed stream type");
 
@@ -416,29 +417,29 @@ std::vector<char> io_uncompress_single_h2d(const void* src, size_t src_size, int
  * @brief Uncompresses the input data and stores the allocated result into
  * a vector.
  *
- * @param[in] h_data Pointer to the csv data in host memory
+ * @param[in] data Pointer to the csv data in host memory
  * @param[in] compression String describing the compression type
  *
  * @return Vector containing the output uncompressed data
  */
 std::vector<char> get_uncompressed_data(host_span<char const> const data,
-                                        std::string const& compression)
+                                        compression_type compression)
 {
-  int comp_type = IO_UNCOMP_STREAM_TYPE_INFER;
-  if (compression == "gzip")
-    comp_type = IO_UNCOMP_STREAM_TYPE_GZIP;
-  else if (compression == "zip")
-    comp_type = IO_UNCOMP_STREAM_TYPE_ZIP;
-  else if (compression == "bz2")
-    comp_type = IO_UNCOMP_STREAM_TYPE_BZIP2;
-  else if (compression == "xz")
-    comp_type = IO_UNCOMP_STREAM_TYPE_XZ;
+  auto const comp_type = [compression]() {
+    switch (compression) {
+      case compression_type::GZIP: return IO_UNCOMP_STREAM_TYPE_GZIP;
+      case compression_type::ZIP: return IO_UNCOMP_STREAM_TYPE_ZIP;
+      case compression_type::BZIP2: return IO_UNCOMP_STREAM_TYPE_BZIP2;
+      case compression_type::XZ: return IO_UNCOMP_STREAM_TYPE_XZ;
+      default: return IO_UNCOMP_STREAM_TYPE_INFER;
+    }
+  }();
 
   return io_uncompress_single_h2d(data.data(), data.size(), comp_type);
 }
 
 /**
- * @Brief ZLIB host decompressor class
+ * @brief ZLIB host decompressor class
  */
 class HostDecompressor_ZLIB : public HostDecompressor {
  public:
@@ -466,7 +467,7 @@ class HostDecompressor_ZLIB : public HostDecompressor {
 };
 
 /**
- * @Brief SNAPPY host decompressor class
+ * @brief SNAPPY host decompressor class
  */
 class HostDecompressor_SNAPPY : public HostDecompressor {
  public:
@@ -560,9 +561,9 @@ class HostDecompressor_SNAPPY : public HostDecompressor {
 };
 
 /**
- * @Brief CPU decompression class
+ * @brief CPU decompression class
  *
- * @param stream_type[in] compression method (IO_UNCOMP_STREAM_TYPE_XXX)
+ * @param[in] stream_type compression method (IO_UNCOMP_STREAM_TYPE_XXX)
  *
  * @returns corresponding HostDecompressor class, nullptr if failure
  */

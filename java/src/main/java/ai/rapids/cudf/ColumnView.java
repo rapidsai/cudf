@@ -101,11 +101,39 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
         || !nullCount.isPresent();
   }
 
+  /**
+   * Create a new column view based off of data already on the device. Ref count on the buffers
+   * is not incremented and none of the underlying buffers are owned by this view. The returned
+   * ColumnView is only valid as long as the underlying buffers remain valid. If the buffers are
+   * closed before this ColumnView is closed, it will result in undefined behavior.
+   *
+   * If ownership is needed, call {@link ColumnView#copyToColumnVector}
+   *
+   * @param type           the type of the vector
+   * @param rows           the number of rows in this vector.
+   * @param nullCount      the number of nulls in the dataset.
+   * @param dataBuffer     a host buffer required for nested types including strings and string
+   *                       categories. The ownership doesn't change on this buffer
+   * @param validityBuffer an optional validity buffer. Must be provided if nullCount != 0.
+   *                       The ownership doesn't change on this buffer
+   * @param offsetBuffer   The offsetbuffer for columns that need an offset buffer
+   */
+  public ColumnView(DType type, long rows, Optional<Long> nullCount,
+                    BaseDeviceMemoryBuffer dataBuffer,
+                    BaseDeviceMemoryBuffer validityBuffer, BaseDeviceMemoryBuffer offsetBuffer) {
+    this(type, (int) rows, nullCount.orElse(UNKNOWN_NULL_COUNT).intValue(),
+        dataBuffer, validityBuffer, offsetBuffer, null);
+    assert (!type.isNestedType());
+    assert (nullCount.isPresent() && nullCount.get() <= Integer.MAX_VALUE)
+        || !nullCount.isPresent();
+  }
+
   private ColumnView(DType type, long rows, int nullCount,
                      BaseDeviceMemoryBuffer dataBuffer, BaseDeviceMemoryBuffer validityBuffer,
                      BaseDeviceMemoryBuffer offsetBuffer, ColumnView[] children) {
     this(ColumnVector.initViewHandle(type, (int) rows, nullCount, dataBuffer, validityBuffer,
-        offsetBuffer, Arrays.stream(children).mapToLong(c -> c.getNativeView()).toArray()));
+        offsetBuffer, children == null ? new long[]{} :
+            Arrays.stream(children).mapToLong(c -> c.getNativeView()).toArray()));
   }
 
   /** Creates a ColumnVector from a column view handle
@@ -138,6 +166,32 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   public final DType getType() {
     return type;
+  }
+
+  /**
+   * Returns the child column views for this view
+   * Please note that it is the responsibility of the caller to close these views.
+   * @return an array of child column views
+   */
+  public final ColumnView[] getChildColumnViews() {
+    int numChildren = getNumChildren();
+    if (!getType().isNestedType()) {
+      return null;
+    }
+    ColumnView[] views = new ColumnView[numChildren];
+    try {
+      for (int i = 0; i < numChildren; i++) {
+        views[i] = getChildColumnView(i);
+      }
+      return views;
+    } catch(Throwable t) {
+      for (ColumnView v: views) {
+        if (v != null) {
+          v.close();
+        }
+      }
+      throw t;
+    }
   }
 
   /**
@@ -1370,11 +1424,38 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Calculate various percentiles of this ColumnVector, which must contain centroids produced by
+   * a t-digest aggregation.
+   *
+   * @param percentiles Required percentiles [0,1]
+   * @return Column containing the approximate percentile values as a list of doubles, in
+   *         the same order as the input percentiles
+   */
+  public final ColumnVector approxPercentile(double[] percentiles) {
+    try (ColumnVector cv = ColumnVector.fromDoubles(percentiles)) {
+      return approxPercentile(cv);
+    }
+  }
+
+  /**
+   * Calculate various percentiles of this ColumnVector, which must contain centroids produced by
+   * a t-digest aggregation.
+   *
+   * @param percentiles Column containing percentiles [0,1]
+   * @return Column containing the approximate percentile values as a list of doubles, in
+   *         the same order as the input percentiles
+   */
+  public final ColumnVector approxPercentile(ColumnVector percentiles) {
+    return new ColumnVector(approxPercentile(getNativeView(), percentiles.getNativeView()));
+  }
+
+  /**
    * Calculate various quantiles of this ColumnVector.  It is assumed that this is already sorted
    * in the desired order.
    * @param method   the method used to calculate the quantiles
    * @param quantiles the quantile values [0,1]
-   * @return the quantiles as doubles, in the same order passed in. The type can be changed in future
+   * @return Column containing the approximate percentile values as a list of doubles, in
+   *         the same order as the input percentiles
    */
   public final ColumnVector quantile(QuantileMethod method, double[] quantiles) {
     return new ColumnVector(quantile(getNativeView(), method.nativeId, quantiles));
@@ -2104,6 +2185,10 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   public final ColumnVector extractListElement(int index) {
     assert type.equals(DType.LIST) : "A column of type LIST is required for .extractListElement()";
     return new ColumnVector(extractListElement(getNativeView(), index));
+  }
+
+  public final ColumnVector dropListDuplicates() {
+    return new ColumnVector(dropListDuplicates(getNativeView()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -3435,6 +3520,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long extractListElement(long nativeView, int index);
 
+  private static native long dropListDuplicates(long nativeView);
+
   /**
    * Native method for list lookup
    * @param nativeView the column view handle of the list
@@ -3483,6 +3570,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *         by the upper method.
    */
   private static native long upperStrings(long cudfViewHandle);
+
+  /**
+   * Native method to compute approx percentiles.
+   * @param cudfColumnHandle T-Digest column
+   * @param percentilesHandle Percentiles
+   * @return native handle of the resulting cudf column, used to construct the Java column
+   *         by the approxPercentile method.
+   */
+  private static native long approxPercentile(long cudfColumnHandle, long percentilesHandle) throws CudfException;
 
   private static native long quantile(long cudfColumnHandle, int quantileMethod, double[] quantiles) throws CudfException;
 

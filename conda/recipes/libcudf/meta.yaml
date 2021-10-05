@@ -37,7 +37,7 @@ requirements:
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
-    - arrow-cpp 4.0.1 *cuda
+    - arrow-cpp 5.0.0 *cuda
     - arrow-cpp-proc * cuda
     - dlpack>=0.5,<0.6.0a0
   run:
@@ -53,8 +53,7 @@ test:
     - test -f $PREFIX/include/cudf/aggregation.hpp
     - test -f $PREFIX/include/cudf/ast/detail/expression_parser.hpp
     - test -f $PREFIX/include/cudf/ast/detail/operators.hpp
-    - test -f $PREFIX/include/cudf/ast/nodes.hpp
-    - test -f $PREFIX/include/cudf/ast/operators.hpp
+    - test -f $PREFIX/include/cudf/ast/expressions.hpp
     - test -f $PREFIX/include/cudf/binaryop.hpp
     - test -f $PREFIX/include/cudf/labeling/label_bins.hpp
     - test -f $PREFIX/include/cudf/column/column_factories.hpp
@@ -94,6 +93,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/sequence.hpp
     - test -f $PREFIX/include/cudf/detail/sorting.hpp
     - test -f $PREFIX/include/cudf/detail/stream_compaction.hpp
+    - test -f $PREFIX/include/cudf/detail/tdigest/tdigest.hpp
     - test -f $PREFIX/include/cudf/detail/transform.hpp
     - test -f $PREFIX/include/cudf/detail/transpose.hpp
     - test -f $PREFIX/include/cudf/detail/unary.hpp
@@ -119,10 +119,9 @@ test:
     - test -f $PREFIX/include/cudf/hashing.hpp
     - test -f $PREFIX/include/cudf/interop.hpp
     - test -f $PREFIX/include/cudf/io/avro.hpp
+    - test -f $PREFIX/include/cudf/io/csv.hpp
     - test -f $PREFIX/include/cudf/io/data_sink.hpp
     - test -f $PREFIX/include/cudf/io/datasource.hpp
-    - test -f $PREFIX/include/cudf/io/orc_metadata.hpp
-    - test -f $PREFIX/include/cudf/io/csv.hpp
     - test -f $PREFIX/include/cudf/io/detail/avro.hpp
     - test -f $PREFIX/include/cudf/io/detail/csv.hpp
     - test -f $PREFIX/include/cudf/io/detail/json.hpp
@@ -130,8 +129,15 @@ test:
     - test -f $PREFIX/include/cudf/io/detail/parquet.hpp
     - test -f $PREFIX/include/cudf/io/detail/utils.hpp
     - test -f $PREFIX/include/cudf/io/json.hpp
+    - test -f $PREFIX/include/cudf/io/orc_metadata.hpp
     - test -f $PREFIX/include/cudf/io/orc.hpp
     - test -f $PREFIX/include/cudf/io/parquet.hpp
+    - test -f $PREFIX/include/cudf/io/text/data_chunk_source_factories.hpp
+    - test -f $PREFIX/include/cudf/io/text/data_chunk_source.hpp
+    - test -f $PREFIX/include/cudf/io/text/detail/multistate.hpp
+    - test -f $PREFIX/include/cudf/io/text/detail/tile_state.hpp
+    - test -f $PREFIX/include/cudf/io/text/detail/trie.hpp
+    - test -f $PREFIX/include/cudf/io/text/multibyte_split.hpp
     - test -f $PREFIX/include/cudf/io/types.hpp
     - test -f $PREFIX/include/cudf/ipc.hpp
     - test -f $PREFIX/include/cudf/join.hpp
@@ -233,6 +239,7 @@ test:
     - test -f $PREFIX/include/cudf_test/cudf_gtest.hpp
     - test -f $PREFIX/include/cudf_test/cxxopts.hpp
     - test -f $PREFIX/include/cudf_test/file_utilities.hpp
+    - test -f $PREFIX/include/cudf_test/io_metadata_utilities.hpp
     - test -f $PREFIX/include/cudf_test/iterator_utilities.hpp
     - test -f $PREFIX/include/cudf_test/table_utilities.hpp
     - test -f $PREFIX/include/cudf_test/timestamp_utilities.cuh

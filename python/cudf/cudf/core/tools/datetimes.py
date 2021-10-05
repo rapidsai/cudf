@@ -4,6 +4,7 @@ import warnings
 from typing import Sequence, Union
 
 import numpy as np
+import pandas as pd
 from pandas.core.tools.datetimes import _unit_map
 
 import cudf
@@ -11,9 +12,9 @@ from cudf import _lib as libcudf
 from cudf._lib.strings.convert.convert_integers import (
     is_integer as cpp_is_integer,
 )
+from cudf.api.types import is_integer, is_scalar
 from cudf.core import column
 from cudf.core.index import as_index
-from cudf.utils.dtypes import is_integer, is_scalar
 
 _unit_dtype_map = {
     "ns": "datetime64[ns]",
@@ -123,6 +124,9 @@ def to_datetime(
     if yearfirst:
         raise NotImplementedError("yearfirst support is not yet implemented")
 
+    if format is not None and "%f" in format:
+        format = format.replace("%f", "%9f")
+
     try:
         if isinstance(arg, cudf.DataFrame):
             # we require at least Ymd
@@ -218,8 +222,8 @@ def to_datetime(
                 format=format,
             )
             return as_index(col, name=arg.name)
-        elif isinstance(arg, cudf.Series):
-            col = arg._column
+        elif isinstance(arg, (cudf.Series, pd.Series)):
+            col = column.as_column(arg)
             col = _process_col(
                 col=col,
                 unit=unit,
@@ -495,7 +499,7 @@ class DateOffset:
                     dtype = "int16"
                 else:
                     unit = self._UNITS_TO_CODES[k]
-                    dtype = np.dtype(f"timedelta64[{unit}]")
+                    dtype = cudf.dtype(f"timedelta64[{unit}]")
                 scalars[k] = cudf.Scalar(v, dtype=dtype)
 
         self._scalars = scalars
@@ -649,3 +653,23 @@ def _isin_datetimelike(
 
     res = lhs._obtain_isin_result(rhs)
     return res
+
+
+def _to_iso_calendar(arg):
+    formats = ["%G", "%V", "%u"]
+    if not isinstance(arg, (cudf.Index, cudf.core.series.DatetimeProperties)):
+        raise AttributeError(
+            "Can only use .isocalendar accessor with series or index"
+        )
+    if isinstance(arg, cudf.Index):
+        iso_params = [
+            arg._column.as_string_column(arg._values.dtype, fmt)
+            for fmt in formats
+        ]
+        index = arg._column
+    elif isinstance(arg.series, cudf.Series):
+        iso_params = [arg.strftime(fmt) for fmt in formats]
+        index = arg.series.index
+
+    data = dict(zip(["year", "week", "day"], iso_params))
+    return cudf.DataFrame(data, index=index, dtype=np.int32)

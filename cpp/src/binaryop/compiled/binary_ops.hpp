@@ -29,26 +29,6 @@ class column_device_view;
 class mutable_column_device_view;
 
 namespace binops {
-namespace detail {
-/**
- * @brief Computes output valid mask for op between a column and a scalar
- */
-rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
-                                             scalar const& s,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr);
-}  // namespace detail
-
-/**
- * @brief Does the binop need to know if an operand is null/invalid to perform special
- * processing?
- */
-inline bool is_null_dependent(binary_operator op)
-{
-  return op == binary_operator::NULL_EQUALS || op == binary_operator::NULL_MIN ||
-         op == binary_operator::NULL_MAX;
-}
-
 namespace compiled {
 
 std::unique_ptr<column> string_null_min_max(
@@ -88,9 +68,10 @@ std::unique_ptr<column> string_null_min_max(
  *
  * @param lhs         The left operand string scalar
  * @param rhs         The right operand string column
+ * @param op          The binary operator
  * @param output_type The desired data type of the output column
- * @param mr          Device memory resource used to allocate the returned column's device memory
  * @param stream      CUDA stream used for device memory operations and kernel launches.
+ * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(
@@ -114,9 +95,10 @@ std::unique_ptr<column> binary_operation(
  *
  * @param lhs         The left operand string column
  * @param rhs         The right operand string scalar
+ * @param op          The binary operator
  * @param output_type The desired data type of the output column
- * @param mr          Device memory resource used to allocate the returned column's device memory
  * @param stream      CUDA stream used for device memory operations and kernel launches.
+ * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(
@@ -132,17 +114,17 @@ std::unique_ptr<column> binary_operation(
  *
  * @note The sizes of @p lhs and @p rhs should be the same
  *
- * The output contains the result of op(lhs[i], rhs[i]) for all 0 <= i <
- * lhs.size()
+ * The output contains the result of op(lhs[i], rhs[i]) for all 0 <= i < lhs.size()
  *
  * Regardless of the operator, the validity of the output value is the logical
  * AND of the validity of the two operands
  *
  * @param lhs         The left operand string column
  * @param rhs         The right operand string column
+ * @param op          The binary operator enum
  * @param output_type The desired data type of the output column
- * @param mr          Device memory resource used to allocate the returned column's device memory
  * @param stream      CUDA stream used for device memory operations and kernel launches.
+ * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> Output column
  */
 std::unique_ptr<column> binary_operation(

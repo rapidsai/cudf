@@ -117,13 +117,8 @@ std::unique_ptr<column> join_strings(strings_column_view const& strings,
       if ((idx + 1) < d_strings.size()) d_buffer = detail::copy_string(d_buffer, d_separator);
     });
 
-  return make_strings_column(1,
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+  return make_strings_column(
+    1, std::move(offsets_column), std::move(chars_column), null_count, std::move(null_mask));
 }
 
 }  // namespace detail

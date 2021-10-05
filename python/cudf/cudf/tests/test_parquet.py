@@ -13,8 +13,9 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from fsspec.core import get_fs_token_paths
 from packaging import version
-from pyarrow import parquet as pq
+from pyarrow import fs as pa_fs, parquet as pq
 
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
@@ -678,6 +679,33 @@ def test_parquet_reader_filepath_or_buffer(parquet_path_or_buf, src):
     assert_eq(expect, got)
 
 
+def test_parquet_reader_arrow_nativefile(parquet_path_or_buf):
+    # Check that we can read a file opened with the
+    # Arrow FileSystem inferface
+    expect = cudf.read_parquet(parquet_path_or_buf("filepath"))
+    fs, path = pa_fs.FileSystem.from_uri(parquet_path_or_buf("filepath"))
+    with fs.open_input_file(path) as fil:
+        got = cudf.read_parquet(fil)
+
+    assert_eq(expect, got)
+
+
+def test_parquet_reader_use_python_file_object(parquet_path_or_buf):
+    # Check that the non-default `use_python_file_object=True`
+    # option works as expected
+    expect = cudf.read_parquet(parquet_path_or_buf("filepath"))
+    fs, _, paths = get_fs_token_paths(parquet_path_or_buf("filepath"))
+
+    # Pass open fsspec file
+    with fs.open(paths[0], mode="rb") as fil:
+        got1 = cudf.read_parquet(fil, use_python_file_object=True)
+    assert_eq(expect, got1)
+
+    # Pass path only
+    got2 = cudf.read_parquet(paths[0], use_python_file_object=True)
+    assert_eq(expect, got2)
+
+
 def create_parquet_source(df, src_type, fname):
     if src_type == "filepath":
         df.to_parquet(fname, engine="pyarrow")
@@ -1137,6 +1165,84 @@ def test_parquet_reader_struct_basic(tmpdir, data):
     pa.parquet.write_table(expect, fname)
     assert os.path.exists(fname)
     got = cudf.read_parquet(fname)
+    assert expect.equals(got.to_arrow())
+
+
+def select_columns_params():
+    dfs = [
+        # struct
+        (
+            [
+                {"a": 1, "b": 2},
+                {"a": 10, "b": 20},
+                {"a": None, "b": 22},
+                {"a": None, "b": None},
+                {"a": 15, "b": None},
+            ],
+            [["struct"], ["struct.a"], ["struct.b"], ["c"]],
+        ),
+        # struct-of-list
+        (
+            [
+                {"a": 1, "b": 2, "c": [1, 2, 3]},
+                {"a": 10, "b": 20, "c": [4, 5]},
+                {"a": None, "b": 22, "c": [6]},
+                {"a": None, "b": None, "c": None},
+                {"a": 15, "b": None, "c": [-1, -2]},
+                None,
+                {"a": 100, "b": 200, "c": [-10, None, -20]},
+            ],
+            [
+                ["struct"],
+                ["struct.c"],
+                ["struct.c.list"],
+                ["struct.c.list.item"],
+                ["struct.b", "struct.c"],
+                ["struct.b", "struct.d", "struct.c"],
+            ],
+        ),
+        # list-of-struct
+        (
+            [
+                [{"a": 1, "b": 2}, {"a": 2, "b": 3}, {"a": 4, "b": 5}],
+                None,
+                [{"a": 10, "b": 20}],
+                [{"a": 100, "b": 200}, {"a": None, "b": 300}, None],
+            ],
+            [
+                ["struct"],
+                ["struct.list"],
+                ["struct.list.item"],
+                ["struct.list.item.a", "struct.list.item.b"],
+                ["struct.list.item.c"],
+            ],
+        ),
+        # struct with "." in field names
+        (
+            [
+                {"a.b": 1, "b.a": 2},
+                {"a.b": 10, "b.a": 20},
+                {"a.b": None, "b.a": 22},
+                {"a.b": None, "b.a": None},
+                {"a.b": 15, "b.a": None},
+            ],
+            [["struct"], ["struct.a"], ["struct.b.a"]],
+        ),
+    ]
+    for df_col_pair in dfs:
+        for cols in df_col_pair[1]:
+            yield df_col_pair[0], cols
+
+
+@pytest.mark.parametrize("data, columns", select_columns_params())
+def test_parquet_reader_struct_select_columns(tmpdir, data, columns):
+    table = pa.Table.from_pydict({"struct": data})
+    buff = BytesIO()
+
+    pa.parquet.write_table(table, buff)
+
+    expect = pq.ParquetFile(buff).read(columns=columns)
+    got = cudf.read_parquet(buff, columns=columns)
     assert expect.equals(got.to_arrow())
 
 
@@ -1860,26 +1966,18 @@ def test_parquet_writer_list_statistics(tmpdir):
             ]
         },
         # List of Structs
-        pytest.param(
-            {
-                "family": [
-                    [
-                        None,
-                        {"human?": True, "deets": {"weight": 2.4, "age": 27}},
-                    ],
-                    [
-                        {"human?": None, "deets": {"weight": 5.3, "age": 25}},
-                        {"human?": False, "deets": {"weight": 8.0, "age": 31}},
-                        {"human?": False, "deets": None},
-                    ],
-                    [],
-                    [{"human?": None, "deets": {"weight": 6.9, "age": None}}],
-                ]
-            },
-            marks=pytest.mark.xfail(
-                reason="https://github.com/rapidsai/cudf/issues/7561"
-            ),
-        ),
+        {
+            "family": [
+                [None, {"human?": True, "deets": {"weight": 2.4, "age": 27}}],
+                [
+                    {"human?": None, "deets": {"weight": 5.3, "age": 25}},
+                    {"human?": False, "deets": {"weight": 8.0, "age": 31}},
+                    {"human?": False, "deets": None},
+                ],
+                [],
+                [{"human?": None, "deets": {"weight": 6.9, "age": None}}],
+            ]
+        },
         # Struct of Lists
         pytest.param(
             {
@@ -1966,6 +2064,7 @@ def test_parquet_writer_nulls_pandas_read(tmpdir, pdf):
     gdf = cudf.from_pandas(pdf)
 
     num_rows = len(gdf)
+
     if num_rows > 0:
         for col in gdf.columns:
             gdf[col][random.randint(0, num_rows - 1)] = None
@@ -1977,3 +2076,29 @@ def test_parquet_writer_nulls_pandas_read(tmpdir, pdf):
     got = pd.read_parquet(fname)
     nullable = True if num_rows > 0 else False
     assert_eq(gdf.to_pandas(nullable=nullable), got)
+
+
+def test_parquet_decimal_precision(tmpdir):
+    df = cudf.DataFrame({"val": ["3.5", "4.2"]}).astype(
+        cudf.Decimal64Dtype(5, 2)
+    )
+    assert df.val.dtype.precision == 5
+
+    fname = tmpdir.join("decimal_test.parquet")
+    df.to_parquet(fname)
+    df = cudf.read_parquet(fname)
+    assert df.val.dtype.precision == 5
+
+
+def test_parquet_decimal_precision_empty(tmpdir):
+    df = (
+        cudf.DataFrame({"val": ["3.5", "4.2"]})
+        .astype(cudf.Decimal64Dtype(5, 2))
+        .iloc[:0]
+    )
+    assert df.val.dtype.precision == 5
+
+    fname = tmpdir.join("decimal_test.parquet")
+    df.to_parquet(fname)
+    df = cudf.read_parquet(fname)
+    assert df.val.dtype.precision == 5

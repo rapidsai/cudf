@@ -1,6 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import math
 from operator import getitem
+from typing import Set
 
 import numpy as np
 import pandas as pd
@@ -15,6 +16,8 @@ from dask.dataframe.core import (
 )
 from dask.dataframe.groupby import DataFrameGroupBy, SeriesGroupBy
 from dask.highlevelgraph import HighLevelGraph
+
+import cudf
 
 
 class CudfDataFrameGroupBy(DataFrameGroupBy):
@@ -76,12 +79,23 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         }
         if (
             isinstance(self.obj, DaskDataFrame)
-            and isinstance(self.index, (str, list))
+            and (
+                isinstance(self.index, str)
+                or (
+                    isinstance(self.index, list)
+                    and all(isinstance(x, str) for x in self.index)
+                )
+            )
             and _is_supported(arg, _supported)
         ):
+            if isinstance(self._meta.grouping.keys, cudf.MultiIndex):
+                keys = self._meta.grouping.keys.names
+            else:
+                keys = self._meta.grouping.keys.name
+
             return groupby_agg(
                 self.obj,
-                self.index,
+                keys,
                 arg,
                 split_every=split_every,
                 split_out=split_out,
@@ -185,34 +199,8 @@ def groupby_agg(
         in `dask.dataframe`, because it allows the cudf backend to
         perform multiple aggregations at once.
     """
-
-    # Deal with default split_out and split_every params
-    if split_every is False:
-        split_every = ddf.npartitions
-    split_every = split_every or 8
-    split_out = split_out or 1
-
-    # Standardize `gb_cols` and `columns` lists
-    aggs = _redirect_aggs(aggs_in.copy())
-    if isinstance(gb_cols, str):
-        gb_cols = [gb_cols]
-    columns = [c for c in ddf.columns if c not in gb_cols]
-    str_cols_out = False
-    if isinstance(aggs, dict):
-        # Use `str_cols_out` to specify if the output columns
-        # will have str (rather than MultiIndex/tuple) names.
-        # This happens when all values in the `aggs` dict are
-        # strings (no lists)
-        str_cols_out = True
-        for col in aggs:
-            if isinstance(aggs[col], str) or callable(aggs[col]):
-                aggs[col] = [aggs[col]]
-            else:
-                str_cols_out = False
-            if col in gb_cols:
-                columns.append(col)
-
     # Assert that aggregations are supported
+    aggs = _redirect_aggs(aggs_in)
     _supported = {
         "count",
         "mean",
@@ -231,9 +219,38 @@ def groupby_agg(
             f"Aggregations must be specified with dict or list syntax."
         )
 
-    # Always convert aggs to dict for consistency
+    # Deal with default split_out and split_every params
+    if split_every is False:
+        split_every = ddf.npartitions
+    split_every = split_every or 8
+    split_out = split_out or 1
+
+    # Standardize `gb_cols`, `columns`, and `aggs`
+    if isinstance(gb_cols, str):
+        gb_cols = [gb_cols]
+    columns = [c for c in ddf.columns if c not in gb_cols]
     if isinstance(aggs, list):
         aggs = {col: aggs for col in columns}
+
+    # Assert if our output will have a MultiIndex; this will be the case if
+    # any value in the `aggs` dict is not a string (i.e. multiple/named
+    # aggregations per column)
+    str_cols_out = True
+    aggs_renames = {}
+    for col in aggs:
+        if isinstance(aggs[col], str) or callable(aggs[col]):
+            aggs[col] = [aggs[col]]
+        elif isinstance(aggs[col], dict):
+            str_cols_out = False
+            col_aggs = []
+            for k, v in aggs[col].items():
+                aggs_renames[col, v] = k
+                col_aggs.append(v)
+            aggs[col] = col_aggs
+        else:
+            str_cols_out = False
+        if col in gb_cols:
+            columns.append(col)
 
     # Begin graph construction
     dsk = {}
@@ -301,6 +318,13 @@ def groupby_agg(
         for col in aggs:
             _aggs[col] = _aggs[col][0]
     _meta = ddf._meta.groupby(gb_cols, as_index=as_index).agg(_aggs)
+    if aggs_renames:
+        col_array = []
+        agg_array = []
+        for col, agg in _meta.columns:
+            col_array.append(col)
+            agg_array.append(aggs_renames.get((col, agg), agg))
+        _meta.columns = pd.MultiIndex.from_arrays([col_array, agg_array])
     for s in range(split_out):
         dsk[(gb_agg_name, s)] = (
             _finalize_gb_agg,
@@ -313,6 +337,7 @@ def groupby_agg(
             sort,
             sep,
             str_cols_out,
+            aggs_renames,
         )
 
     divisions = [None] * (split_out + 1)
@@ -337,6 +362,10 @@ def _redirect_aggs(arg):
         for col in arg:
             if isinstance(arg[col], list):
                 new_arg[col] = [redirects.get(agg, agg) for agg in arg[col]]
+            elif isinstance(arg[col], dict):
+                new_arg[col] = {
+                    k: redirects.get(v, v) for k, v in arg[col].items()
+                }
             else:
                 new_arg[col] = redirects.get(arg[col], arg[col])
         return new_arg
@@ -350,10 +379,12 @@ def _is_supported(arg, supported: set):
     """
     if isinstance(arg, (list, dict)):
         if isinstance(arg, dict):
-            _global_set = set()
+            _global_set: Set[str] = set()
             for col in arg:
                 if isinstance(arg[col], list):
                     _global_set = _global_set.union(set(arg[col]))
+                elif isinstance(arg[col], dict):
+                    _global_set = _global_set.union(set(arg[col].values()))
                 else:
                     _global_set.add(arg[col])
         else:
@@ -447,10 +478,8 @@ def _tree_node_agg(dfs, gb_cols, split_out, dropna, sort, sep):
         agg = col.split(sep)[-1]
         if agg in ("count", "sum"):
             agg_dict[col] = ["sum"]
-        elif agg in ("min", "max"):
+        elif agg in ("min", "max", "collect"):
             agg_dict[col] = [agg]
-        elif agg == "collect":
-            agg_dict[col] = ["collect"]
         else:
             raise ValueError(f"Unexpected aggregation: {agg}")
 
@@ -495,6 +524,7 @@ def _finalize_gb_agg(
     sort,
     sep,
     str_cols_out,
+    aggs_renames,
 ):
     """ Final aggregation task.
 
@@ -551,7 +581,7 @@ def _finalize_gb_agg(
         else:
             name, agg = col.split(sep)
             col_array.append(name)
-            agg_array.append(agg)
+            agg_array.append(aggs_renames.get((name, agg), agg))
     if str_cols_out:
         gb.columns = col_array
     else:

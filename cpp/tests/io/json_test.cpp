@@ -365,6 +365,7 @@ TEST_F(JsonReaderTest, Durations)
     std::ofstream outfile(filepath, std::ofstream::out);
     outfile << "[-2]\n[-1]\n[0]\n";
     outfile << "[1 days]\n[0 days 23:01:00]\n[0 days 00:00:00.000000123]\n";
+    outfile << "[0:0:0.000123]\n[0:0:0.000123000]\n[00:00:00.100000001]\n";
     outfile << "[-2147483648]\n[2147483647]\n";
   }
 
@@ -388,6 +389,9 @@ TEST_F(JsonReaderTest, Durations)
                                                         1L * 60 * 60 * 24 * 1000000000L,
                                                         (23 * 60 + 1) * 60 * 1000000000L,
                                                         123L,
+                                                        123000L,
+                                                        123000L,
+                                                        100000001L,
                                                         -2147483648L,
                                                         2147483647L},
                                                        validity});
@@ -886,6 +890,29 @@ TEST_F(JsonReaderTest, JsonLinesMultipleFileInputs)
                                  int64_wrapper{{11, 22, 33, 44}, validity});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(result.tbl->get_column(1),
                                  float64_wrapper{{1.1, 2.2, 3.3, 4.4}, validity});
+}
+
+TEST_F(JsonReaderTest, BadDtypeParams)
+{
+  std::string buffer = "[1,2,3,4]";
+
+  cudf_io::json_reader_options options_vec =
+    cudf_io::json_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+      .lines(true)
+      .dtypes({dtype<int8_t>()});
+
+  // should throw because there are four columns and only one dtype
+  EXPECT_THROW(cudf_io::read_json(options_vec), cudf::logic_error);
+
+  cudf_io::json_reader_options options_map =
+    cudf_io::json_reader_options::builder(cudf_io::source_info{buffer.c_str(), buffer.size()})
+      .lines(true)
+      .dtypes(std::map<std::string, cudf::data_type>{{"0", dtype<int8_t>()},
+                                                     {"1", dtype<int8_t>()},
+                                                     {"2", dtype<int8_t>()},
+                                                     {"wrong_name", dtype<int8_t>()}});
+  // should throw because one of the columns is not in the dtype map
+  EXPECT_THROW(cudf_io::read_json(options_map), cudf::logic_error);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
-from cudf.core import DataFrame
+from cudf import DataFrame
 from cudf.testing._utils import assert_eq
 
 
@@ -52,11 +52,11 @@ def test_from_pandas_ex1():
     df = DataFrame.from_pandas(pdf)
 
     assert tuple(df.columns) == tuple(pdf.columns)
-    assert np.all(df["a"].to_array() == pdf["a"])
-    matches = df["b"].to_array(fillna="pandas") == pdf["b"]
+    assert np.all(df["a"].to_numpy() == pdf["a"])
+    matches = df["b"].to_numpy(na_value=np.nan) == pdf["b"]
     # the 3d element is False due to (nan == nan) == False
     assert np.all(matches == [True, True, False, True])
-    assert np.isnan(df["b"].to_array(fillna="pandas")[2])
+    assert np.isnan(df["b"].to_numpy(na_value=np.nan)[2])
     assert np.isnan(pdf["b"][2])
 
 

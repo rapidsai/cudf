@@ -27,18 +27,18 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast, strings as libstrings
 from cudf._lib.column import Column
-from cudf.core.buffer import Buffer
-from cudf.core.column import column, datetime
-from cudf.core.column.methods import ColumnMethods, ParentType
-from cudf.utils import utils
-from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import (
-    can_convert_to_column,
+from cudf.api.types import (
     is_integer,
     is_list_dtype,
     is_scalar,
     is_string_dtype,
 )
+from cudf.core.buffer import Buffer
+from cudf.core.column import column, datetime
+from cudf.core.column.methods import ColumnMethods, ParentType
+from cudf.utils import utils
+from cudf.utils.docutils import copy_docstring
+from cudf.utils.dtypes import can_convert_to_column
 
 
 def str_to_boolean(column: StringColumn):
@@ -53,47 +53,47 @@ if TYPE_CHECKING:
 
 
 _str_to_numeric_typecast_functions = {
-    np.dtype("int8"): str_cast.stoi8,
-    np.dtype("int16"): str_cast.stoi16,
-    np.dtype("int32"): str_cast.stoi,
-    np.dtype("int64"): str_cast.stol,
-    np.dtype("uint8"): str_cast.stoui8,
-    np.dtype("uint16"): str_cast.stoui16,
-    np.dtype("uint32"): str_cast.stoui,
-    np.dtype("uint64"): str_cast.stoul,
-    np.dtype("float32"): str_cast.stof,
-    np.dtype("float64"): str_cast.stod,
-    np.dtype("bool"): str_to_boolean,
+    cudf.dtype("int8"): str_cast.stoi8,
+    cudf.dtype("int16"): str_cast.stoi16,
+    cudf.dtype("int32"): str_cast.stoi,
+    cudf.dtype("int64"): str_cast.stol,
+    cudf.dtype("uint8"): str_cast.stoui8,
+    cudf.dtype("uint16"): str_cast.stoui16,
+    cudf.dtype("uint32"): str_cast.stoui,
+    cudf.dtype("uint64"): str_cast.stoul,
+    cudf.dtype("float32"): str_cast.stof,
+    cudf.dtype("float64"): str_cast.stod,
+    cudf.dtype("bool"): str_to_boolean,
 }
 
 _numeric_to_str_typecast_functions = {
-    np.dtype("int8"): str_cast.i8tos,
-    np.dtype("int16"): str_cast.i16tos,
-    np.dtype("int32"): str_cast.itos,
-    np.dtype("int64"): str_cast.ltos,
-    np.dtype("uint8"): str_cast.ui8tos,
-    np.dtype("uint16"): str_cast.ui16tos,
-    np.dtype("uint32"): str_cast.uitos,
-    np.dtype("uint64"): str_cast.ultos,
-    np.dtype("float32"): str_cast.ftos,
-    np.dtype("float64"): str_cast.dtos,
-    np.dtype("bool"): str_cast.from_booleans,
+    cudf.dtype("int8"): str_cast.i8tos,
+    cudf.dtype("int16"): str_cast.i16tos,
+    cudf.dtype("int32"): str_cast.itos,
+    cudf.dtype("int64"): str_cast.ltos,
+    cudf.dtype("uint8"): str_cast.ui8tos,
+    cudf.dtype("uint16"): str_cast.ui16tos,
+    cudf.dtype("uint32"): str_cast.uitos,
+    cudf.dtype("uint64"): str_cast.ultos,
+    cudf.dtype("float32"): str_cast.ftos,
+    cudf.dtype("float64"): str_cast.dtos,
+    cudf.dtype("bool"): str_cast.from_booleans,
 }
 
 _datetime_to_str_typecast_functions = {
     # TODO: support Date32 UNIX days
-    # np.dtype("datetime64[D]"): str_cast.int2timestamp,
-    np.dtype("datetime64[s]"): str_cast.int2timestamp,
-    np.dtype("datetime64[ms]"): str_cast.int2timestamp,
-    np.dtype("datetime64[us]"): str_cast.int2timestamp,
-    np.dtype("datetime64[ns]"): str_cast.int2timestamp,
+    # cudf.dtype("datetime64[D]"): str_cast.int2timestamp,
+    cudf.dtype("datetime64[s]"): str_cast.int2timestamp,
+    cudf.dtype("datetime64[ms]"): str_cast.int2timestamp,
+    cudf.dtype("datetime64[us]"): str_cast.int2timestamp,
+    cudf.dtype("datetime64[ns]"): str_cast.int2timestamp,
 }
 
 _timedelta_to_str_typecast_functions = {
-    np.dtype("timedelta64[s]"): str_cast.int2timedelta,
-    np.dtype("timedelta64[ms]"): str_cast.int2timedelta,
-    np.dtype("timedelta64[us]"): str_cast.int2timedelta,
-    np.dtype("timedelta64[ns]"): str_cast.int2timedelta,
+    cudf.dtype("timedelta64[s]"): str_cast.int2timedelta,
+    cudf.dtype("timedelta64[ms]"): str_cast.int2timedelta,
+    cudf.dtype("timedelta64[us]"): str_cast.int2timedelta,
+    cudf.dtype("timedelta64[ns]"): str_cast.int2timedelta,
 }
 
 
@@ -352,7 +352,9 @@ class StringMethods(ColumnMethods):
 
         if len(data) == 1 and data.null_count == 1:
             data = [""]
-        out = self._return_or_inplace(data)
+        # We only want to keep the index if we are adding something to each
+        # row, not if we are joining all the rows into a single string.
+        out = self._return_or_inplace(data, retain_index=others is not None)
         if len(out) == 1 and others is None:
             if isinstance(out, cudf.Series):
                 out = out.iloc[0]
@@ -4593,7 +4595,7 @@ class StringMethods(ColumnMethods):
         This function requires about 21x the number of character bytes
         in the input strings column as working memory.
 
-        ``ser.str.subword_tokenize`` will be depreciated in future versions.
+        ``Series.str.subword_tokenize`` is deprecated and will be removed.
         Use ``cudf.core.subword_tokenizer.SubwordTokenizer`` instead.
 
         Parameters
@@ -4667,14 +4669,13 @@ class StringMethods(ColumnMethods):
         array([[0, 0, 2],
                [1, 0, 1]], dtype=uint32)
         """
-        warning_message = (
-            "`ser.str.subword_tokenize` API will be depreciated"
-            " in future versions of cudf.\n"
-            "Use `cudf.core.subword_tokenizer.SubwordTokenizer` "
-            "instead"
+        warnings.warn(
+            "`Series.str.subword_tokenize` is deprecated and will be removed "
+            "in future versions of cudf. Use "
+            "`cudf.core.subword_tokenizer.SubwordTokenizer` instead.",
+            FutureWarning,
         )
 
-        warnings.warn(warning_message, FutureWarning)
         tokens, masks, metadata = libstrings.subword_tokenize_vocab_file(
             self._column,
             hash_file,
@@ -4949,7 +4950,7 @@ class StringColumn(column.ColumnBase):
         null_count: int = None,
         children: Tuple["column.ColumnBase", ...] = (),
     ):
-        dtype = np.dtype("object")
+        dtype = cudf.dtype("object")
 
         if size is None:
             for child in children:
@@ -5116,7 +5117,7 @@ class StringColumn(column.ColumnBase):
     def as_numerical_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
-        out_dtype = np.dtype(dtype)
+        out_dtype = cudf.dtype(dtype)
 
         if out_dtype.kind in {"i", "u"}:
             if not libstrings.is_integer(self).all():
@@ -5158,7 +5159,7 @@ class StringColumn(column.ColumnBase):
     def as_datetime_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.DatetimeColumn":
-        out_dtype = np.dtype(dtype)
+        out_dtype = cudf.dtype(dtype)
 
         # infer on host from the first not na element
         # or return all null column if all values
@@ -5182,7 +5183,7 @@ class StringColumn(column.ColumnBase):
     def as_timedelta_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.TimeDeltaColumn":
-        out_dtype = np.dtype(dtype)
+        out_dtype = cudf.dtype(dtype)
         format = "%D days %H:%M:%S"
         return self._as_datetime_or_timedelta_column(out_dtype, format)
 
@@ -5208,10 +5209,10 @@ class StringColumn(column.ColumnBase):
         """
         Return a CuPy representation of the StringColumn.
         """
-        raise NotImplementedError(
-            "String Arrays is not yet implemented in cudf"
-        )
+        raise TypeError("String Arrays is not yet implemented in cudf")
 
+    # TODO: This method is deprecated and should be removed when the associated
+    # Frame methods are removed.
     def to_array(self, fillna: bool = None) -> np.ndarray:
         """Get a dense numpy array for the data.
 
@@ -5294,7 +5295,7 @@ class StringColumn(column.ColumnBase):
         return col
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
-        to_dtype = np.dtype(to_dtype)
+        to_dtype = cudf.dtype(to_dtype)
 
         if self.dtype == to_dtype:
             return True
@@ -5407,7 +5408,7 @@ class StringColumn(column.ColumnBase):
         else:
             raise TypeError(f"cannot broadcast {type(other)}")
 
-    def default_na_value(self) -> ScalarLike:
+    def _default_na_value(self) -> ScalarLike:
         return None
 
     def binary_operator(
@@ -5441,7 +5442,7 @@ class StringColumn(column.ColumnBase):
             raise ValueError(
                 "Can not produce a view of a string column with nulls"
             )
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
         str_byte_offset = self.base_children[0].element_indexing(self.offset)
         str_end_byte_offset = self.base_children[0].element_indexing(
             self.offset + self.size

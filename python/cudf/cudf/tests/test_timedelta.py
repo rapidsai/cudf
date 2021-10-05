@@ -167,17 +167,15 @@ def test_timedelta_from_pandas(data, dtype):
     ],
 )
 @pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
-@pytest.mark.parametrize("fillna", [None, "pandas"])
-def test_timedelta_series_to_array(data, dtype, fillna):
+def test_timedelta_series_to_numpy(data, dtype):
     gsr = cudf.Series(data, dtype=dtype)
 
     expected = np.array(
         cp.asnumpy(data) if isinstance(data, cp.ndarray) else data, dtype=dtype
     )
-    if fillna is None:
-        expected = expected[~np.isnan(expected)]
+    expected = expected[~np.isnan(expected)]
 
-    actual = gsr.to_array(fillna=fillna)
+    actual = gsr.dropna().to_numpy()
 
     np.testing.assert_array_equal(expected, actual)
 
@@ -1289,14 +1287,27 @@ def test_timedelta_datetime_cast_invalid():
     psr = sr.to_pandas()
 
     assert_exceptions_equal(
-        psr.astype, sr.astype, (["datetime64[ns]"],), (["datetime64[ns]"],)
+        psr.astype,
+        sr.astype,
+        (["datetime64[ns]"],),
+        (["datetime64[ns]"],),
+        expected_error_message=re.escape(
+            "cannot astype a timedelta from timedelta64[ns] to datetime64[ns]"
+        ),
     )
 
     sr = cudf.Series([1, 2, 3], dtype="datetime64[ns]")
     psr = sr.to_pandas()
 
     assert_exceptions_equal(
-        psr.astype, sr.astype, (["timedelta64[ns]"],), (["timedelta64[ns]"],)
+        psr.astype,
+        sr.astype,
+        (["timedelta64[ns]"],),
+        (["timedelta64[ns]"],),
+        expected_error_message=re.escape(
+            "cannot astype a datetimelike from "
+            "datetime64[ns] to timedelta64[ns]"
+        ),
     )
 
 
@@ -1386,3 +1397,12 @@ def test_timedelta_reductions(data, op, dtype):
         assert True
     else:
         assert_eq(expected.to_numpy(), actual)
+
+
+def test_error_values():
+    s = cudf.Series([1, 2, 3], dtype="timedelta64[ns]")
+    with pytest.raises(
+        NotImplementedError,
+        match="TimeDelta Arrays is not yet implemented in cudf",
+    ):
+        s.values

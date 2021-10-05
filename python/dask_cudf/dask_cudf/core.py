@@ -27,7 +27,7 @@ import cudf
 from cudf import _lib as libcudf
 
 from dask_cudf import sorting
-from dask_cudf.accessors import ListMethods
+from dask_cudf.accessors import ListMethods, StructMethods
 
 DASK_VERSION = LooseVersion(dask.__version__)
 
@@ -169,7 +169,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             or isinstance(divisions, (cudf.DataFrame, cudf.Series))
             or (
                 isinstance(other, str)
-                and cudf.utils.dtypes.is_string_dtype(self[other].dtype)
+                and cudf.api.types.is_string_dtype(self[other].dtype)
             )
         ):
 
@@ -298,16 +298,16 @@ class DataFrame(_Frame, dd.core.DataFrame):
             return _parallel_var(self, meta, skipna, split_every, out)
 
     def repartition(self, *args, **kwargs):
-        """ Wraps dask.dataframe DataFrame.repartition method.
+        """Wraps dask.dataframe DataFrame.repartition method.
         Uses DataFrame.shuffle if `columns=` is specified.
         """
         # TODO: Remove this function in future(0.17 release)
         columns = kwargs.pop("columns", None)
         if columns:
             warnings.warn(
-                "The column argument will be removed from repartition in "
-                " future versions of dask_cudf. Use DataFrame.shuffle().",
-                DeprecationWarning,
+                "The columns argument will be removed from repartition in "
+                "future versions of dask_cudf. Use DataFrame.shuffle().",
+                FutureWarning,
             )
             warnings.warn(
                 "Rearranging data by column hash. Divisions will lost. "
@@ -414,9 +414,13 @@ class Series(_Frame, dd.core.Series):
     def list(self):
         return ListMethods(self)
 
+    @property
+    def struct(self):
+        return StructMethods(self)
+
 
 class Index(Series, dd.core.Index):
-    _partition_type = cudf.Index
+    _partition_type = cudf.Index  # type: ignore
 
 
 def _naive_var(ddf, meta, skipna, ddof, split_every, out):

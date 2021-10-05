@@ -20,6 +20,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/aggregation.hpp>
@@ -138,19 +139,6 @@ class GroupedRollingTest : public cudf::test::BaseFixture {
 
     auto reference = create_reference_output(
       op, input, expected_grouping, preceding_window, following_window, min_periods);
-
-#ifndef NDEBUG
-    std::cout << "input:\n";
-    cudf::test::print(input, std::cout, ", ");
-    std::cout << "\n";
-    std::cout << "output:\n";
-    cudf::test::print(*output, std::cout, ", ");
-    std::cout << "\n";
-    std::cout << "reference:\n";
-    cudf::test::print(*reference, std::cout, ", ");
-    std::cout << "\n";
-    std::cout << "\n";
-#endif
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, *reference);
   }
@@ -708,19 +696,6 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
                                              preceding_window_in_days,
                                              following_window_in_days,
                                              min_periods);
-
-#ifndef NDEBUG
-    std::cout << "input:\n";
-    cudf::test::print(input, std::cout, ", ");
-    std::cout << "\n";
-    std::cout << "output:\n";
-    cudf::test::print(*output, std::cout, ", ");
-    std::cout << "\n";
-    std::cout << "reference:\n";
-    cudf::test::print(*reference, std::cout, ", ");
-    std::cout << "\n";
-    std::cout << "\n";
-#endif
 
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(*output, *reference);
   }
@@ -2438,4 +2413,37 @@ TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingAndFollowingWindowMultiGr
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
                                  fixed_width_column_wrapper<cudf::size_type>{
                                    {3, 3, 3, 3, 3, 4, 4, 4, 4, 4}, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}});
+}
+
+TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingAndFollowingStructGroup)
+{
+  // Test that grouping on STRUCT keys produces is possible.
+
+  using cudf::test::iterators::no_nulls;
+  using cudf::test::iterators::nulls_at;
+  using T        = TypeParam;
+  using numerics = fixed_width_column_wrapper<T>;
+  using result_t = fixed_width_column_wrapper<cudf::size_type>;
+
+  auto const grp_col = [] {
+    auto grp_col_inner = numerics{0, 0, 0, 0, 0, 1, 1, 1, 1, 1};
+    return cudf::test::structs_column_wrapper{{grp_col_inner}};
+  }();
+
+  auto const agg_col = numerics{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nulls_at({0, 3, 5})};
+
+  auto const grouping_keys       = cudf::table_view{{grp_col}};
+  auto const unbounded_preceding = cudf::window_bounds::unbounded();
+  auto const unbounded_following = cudf::window_bounds::unbounded();
+  auto const min_periods         = 1L;
+  auto const output =
+    cudf::grouped_rolling_window(grouping_keys,
+                                 agg_col,
+                                 unbounded_preceding,
+                                 unbounded_following,
+                                 min_periods,
+                                 *cudf::make_count_aggregation<cudf::rolling_aggregation>());
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(output->view(),
+                                 result_t{{3, 3, 3, 3, 3, 4, 4, 4, 4, 4}, no_nulls()});
 }

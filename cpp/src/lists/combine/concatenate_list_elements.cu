@@ -17,7 +17,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/valid_if.cuh>
@@ -117,10 +117,10 @@ generate_list_offsets_and_validities(column_view const& input,
   auto out_offsets = make_numeric_column(
     data_type{type_id::INT32}, num_rows + 1, mask_state::UNALLOCATED, stream, mr);
 
-  auto const lists_of_lists_dv_ptr = column_device_view::create(input);
-  auto const lists_dv_ptr          = column_device_view::create(lists_column_view(input).child());
-  auto const d_out_offsets         = out_offsets->mutable_view().template begin<offset_type>();
-  auto const d_row_offsets         = lists_column_view(input).offsets_begin();
+  auto const lists_of_lists_dv_ptr = column_device_view::create(input, stream);
+  auto const lists_dv_ptr   = column_device_view::create(lists_column_view(input).child(), stream);
+  auto const d_out_offsets  = out_offsets->mutable_view().template begin<offset_type>();
+  auto const d_row_offsets  = lists_column_view(input).offsets_begin();
   auto const d_list_offsets = lists_column_view(lists_column_view(input).child()).offsets_begin();
 
   // The array of int8_t stores validities for the output list elements.
@@ -202,9 +202,9 @@ std::unique_ptr<column> gather_list_entries(column_view const& input,
     });
 
   auto result = cudf::detail::gather(table_view{{entry_col}},
-                                     gather_map.begin(),
-                                     gather_map.end(),
+                                     gather_map,
                                      out_of_bounds_policy::DONT_CHECK,
+                                     cudf::detail::negative_index_policy::NOT_ALLOWED,
                                      stream,
                                      mr);
   return std::move(result->release()[0]);

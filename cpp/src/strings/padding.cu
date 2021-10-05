@@ -138,9 +138,7 @@ std::unique_ptr<column> pad(
                              std::move(offsets_column),
                              std::move(chars_column),
                              strings.null_count(),
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 //
@@ -194,9 +192,7 @@ std::unique_ptr<column> zfill(
                              std::move(offsets_column),
                              std::move(chars_column),
                              strings.null_count(),
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail

@@ -6,7 +6,8 @@ from itertools import product
 import numpy as np
 import pytest
 
-from cudf.core import DataFrame, Series
+import cudf
+from cudf import DataFrame, Series
 
 
 def _random_float(nelem, dtype):
@@ -18,7 +19,7 @@ def _random_int(nelem, dtype):
 
 
 def _random(nelem, dtype):
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
     if dtype.kind in {"i", "u"}:
         return _random_int(nelem, dtype)
     elif dtype.kind == "f":
@@ -43,7 +44,7 @@ def test_label_encode(nelem, dtype):
 
     # label encode series
     ncol = df["cats"].label_encoding(cats=vals)
-    arr = ncol.to_array()
+    arr = ncol.to_numpy()
 
     # verify labels of new column
     for i in range(arr.size):
@@ -74,7 +75,7 @@ def test_label_encode_drop_one():
 
     # label encode series
     ncol = df["cats"].label_encoding(cats=vals, dtype="float32")
-    arr = ncol.to_array()
+    arr = ncol.to_numpy()
 
     # verify labels of new column
 
@@ -109,7 +110,7 @@ def test_label_encode_float_output():
         na_sentinel=np.nan,
     )
 
-    got = df2["cats_labels"].to_array(fillna="pandas")
+    got = df2["cats_labels"].to_numpy(na_value=np.nan)
 
     handcoded = np.array([encoder.get(v, np.nan) for v in arr])
     np.testing.assert_equal(got, handcoded)
