@@ -1865,6 +1865,31 @@ class StringMethods(ColumnMethods):
         """
         return self._return_or_inplace(libstrings.title(self._column))
 
+    def istitle(self) -> SeriesOrIndex:
+        """
+        Check whether each string is title formatted.
+        The first letter after a space is uppercase and the rest
+        are lowercase.
+
+        Equivalent to `str.istitle()
+        <https://docs.python.org/3/library/stdtypes.html#str.istitle>`_.
+
+        Returns : Series or Index of object
+
+        Examples
+        --------
+        >>> import cudf
+        >>> data = ['leopard', 'Golden Eagle', 'SNAKE', ''])
+        >>> s = cudf.Series(data)
+        >>> s.str.istitle()
+        0    False
+        1     True
+        2    False
+        3    False
+        dtype: object
+        """
+        return self._return_or_inplace(libstrings.is_title(self._column))
+
     def filter_alphanum(
         self, repl: str = None, keep: bool = True
     ) -> SeriesOrIndex:
