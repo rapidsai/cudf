@@ -44,8 +44,8 @@ namespace {
  *
  * @param input lhs for `copy_if_else`
  * @param replacement_iter rhs for `copy_if_else`
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return Always returns column of type INT32 (size_type)
  */
 template <typename ReplacementIter>

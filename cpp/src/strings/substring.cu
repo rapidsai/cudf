@@ -192,8 +192,8 @@ struct substring_from_fn {
  * @param null_count Number of nulls for the output column.
  * @param starts Start positions index iterator.
  * @param stops Stop positions index iterator.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  */
 std::unique_ptr<column> compute_substrings_from_fn(column_device_view const& d_column,
                                                    size_type null_count,

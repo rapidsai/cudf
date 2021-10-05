@@ -296,6 +296,7 @@ def read_parquet(
     num_rows=None,
     strings_to_categorical=False,
     use_pandas_metadata=True,
+    use_python_file_object=False,
     *args,
     **kwargs,
 ):
@@ -340,16 +341,19 @@ def read_parquet(
     # local filesystem object. We can also do it without a
     # file-system object for `AbstractBufferedFile` buffers
     byte_ranges, footers, file_sizes = None, None, None
-    need_byte_ranges = fs is not None and not ioutils._is_local_filesystem(fs)
-    if need_byte_ranges or (
-        filepath_or_buffer
-        and isinstance(
-            filepath_or_buffer[0], fsspec.spec.AbstractBufferedFile,
+    if not use_python_file_object:
+        need_byte_ranges = fs is not None and not ioutils._is_local_filesystem(
+            fs
         )
-    ):
-        byte_ranges, footers, file_sizes = _get_byte_ranges(
-            filepath_or_buffer, row_groups, columns, fs,
-        )
+        if need_byte_ranges or (
+            filepath_or_buffer
+            and isinstance(
+                filepath_or_buffer[0], fsspec.spec.AbstractBufferedFile,
+            )
+        ):
+            byte_ranges, footers, file_sizes = _get_byte_ranges(
+                filepath_or_buffer, row_groups, columns, fs,
+            )
 
     filepaths_or_buffers = []
     for i, source in enumerate(filepath_or_buffer):
@@ -371,6 +375,7 @@ def read_parquet(
             footer=footers[i] if footers else None,
             file_size=file_sizes[i] if file_sizes else None,
             add_par1_magic=True,
+            use_python_file_object=use_python_file_object,
             **kwargs,
         )
 

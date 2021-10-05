@@ -40,14 +40,6 @@ def test_null_series(nrows, dtype):
     psrepr = psrepr.replace("NaN", "<NA>")
     psrepr = psrepr.replace("NaT", "<NA>")
     psrepr = psrepr.replace("None", "<NA>")
-    if (
-        dtype.startswith("int")
-        or dtype.startswith("uint")
-        or dtype.startswith("long")
-    ):
-        psrepr = psrepr.replace(
-            str(sr._column.default_na_value()) + "\n", "<NA>\n"
-        )
     if "UInt" in psrepr:
         psrepr = psrepr.replace("UInt", "uint")
     elif "Int" in psrepr:

@@ -130,7 +130,6 @@ masked_input_initializer_template = """\
 def _define_function(df, scalar_return=False):
     # Create argument list for kernel
     input_columns = ", ".join([f"input_col_{i}" for i in range(len(df._data))])
-
     input_offsets = ", ".join([f"offset_{i}" for i in range(len(df._data))])
 
     # Create argument list to pass to device function
@@ -177,15 +176,17 @@ def compile_or_get(df, f):
     """
 
     # check to see if we already compiled this function
+    frame_dtypes = tuple(col.dtype for col in df._data.values())
     cache_key = (
-        *cudautils.make_cache_key(f, tuple(df.dtypes)),
+        *cudautils.make_cache_key(f, frame_dtypes),
         *(col.mask is None for col in df._data.values()),
     )
     if precompiled.get(cache_key) is not None:
         kernel, scalar_return_type = precompiled[cache_key]
         return kernel, scalar_return_type
 
-    numba_return_type = get_udf_return_type(f, df.dtypes)
+    numba_return_type = get_udf_return_type(f, frame_dtypes)
+
     _is_scalar_return = not isinstance(numba_return_type, MaskedType)
     scalar_return_type = (
         numba_return_type
