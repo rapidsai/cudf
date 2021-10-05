@@ -141,7 +141,20 @@ class cufile_output : public cufile_io_base {
    * @param offset Number of bytes from the start
    * @param size Number of bytes to write
    */
-  virtual void write(void const* data, size_t offset, size_t size)                    = 0;
+  virtual void write(void const* data, size_t offset, size_t size) = 0;
+
+  /**
+   * @brief Asynchronously writes the data from a device buffer into a file.
+   *
+   * It is the caller's responsibility to not invalidate `data` until the result from this function
+   * is synchronized.
+   *
+   * @throws cudf::logic_error on cuFile error
+   *
+   * @param data Pointer to the buffer to be written into the output file
+   * @param offset Number of bytes from the start
+   * @param size Number of bytes to write
+   */
   virtual std::future<void> write_async(void const* data, size_t offset, size_t size) = 0;
 };
 
