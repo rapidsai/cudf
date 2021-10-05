@@ -1,4 +1,5 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
+"""Base class for Frame types that only have a single column."""
 
 from __future__ import annotations
 
@@ -67,7 +68,7 @@ class SingleColumnFrame(Frame):
 
     @property
     def name(self):
-        """The name of this object."""
+        """Get the name of this object."""
         return next(iter(self._data.names))
 
     @name.setter
@@ -76,22 +77,18 @@ class SingleColumnFrame(Frame):
 
     @property
     def ndim(self):
-        """Dimension of the data (always 1)."""
+        """Get the dimensionality (always 1 for single-columned frames)."""
         return 1
 
     @property
     def shape(self):
-        """Returns a tuple representing the dimensionality of the Index.
-        """
+        """Get a tuple representing the dimensionality of the Index."""
         return (len(self),)
 
     def __iter__(self):
-        """
-        Iterating over a GPU object is not effecient and hence not supported.
-
-        Consider using ``.to_arrow()``, ``.to_pandas()`` or ``.values_host``
-        if you wish to iterate over the values.
-        """
+        # Iterating over a GPU object is not efficient and hence not supported.
+        # Consider using ``.to_arrow()``, ``.to_pandas()`` or ``.values_host``
+        # if you wish to iterate over the values.
         cudf.utils.utils.raise_iteration_error(obj=self)
 
     def __bool__(self):
@@ -113,11 +110,11 @@ class SingleColumnFrame(Frame):
         self._data[self.name] = value
 
     @property
-    def values(self):
+    def values(self):  # noqa: D102
         return self._column.values
 
     @property
-    def values_host(self):
+    def values_host(self):  # noqa: D102
         return self._column.values_host
 
     def to_cupy(
@@ -125,7 +122,7 @@ class SingleColumnFrame(Frame):
         dtype: Union[Dtype, None] = None,
         copy: bool = True,
         na_value=None,
-    ) -> cupy.ndarray:
+    ) -> cupy.ndarray:  # noqa: D102
         return super().to_cupy(dtype, copy, na_value).flatten()
 
     def to_numpy(
@@ -133,10 +130,10 @@ class SingleColumnFrame(Frame):
         dtype: Union[Dtype, None] = None,
         copy: bool = True,
         na_value=None,
-    ) -> np.ndarray:
+    ) -> np.ndarray:  # noqa: D102
         return super().to_numpy(dtype, copy, na_value).flatten()
 
-    def tolist(self):
+    def tolist(self):  # noqa: D102
 
         raise TypeError(
             "cuDF does not support conversion to host memory "
@@ -148,7 +145,7 @@ class SingleColumnFrame(Frame):
 
     # TODO: When this method is removed we can also remove
     # ColumnBase.to_gpu_array.
-    def to_gpu_array(self, fillna=None):
+    def to_gpu_array(self, fillna=None):  # noqa: D102
         warnings.warn(
             "The to_gpu_array method will be removed in a future cuDF "
             "release. Consider using `to_cupy` instead.",
@@ -264,7 +261,7 @@ class SingleColumnFrame(Frame):
         return self._column.__cuda_array_interface__
 
     def factorize(self, na_sentinel=-1):
-        """Encode the input values as integer labels
+        """Encode the input values as integer labels.
 
         Parameters
         ----------
