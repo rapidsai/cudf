@@ -405,14 +405,14 @@ std::unique_ptr<column> shift(
  * the range [0, input.size()).
  *
  * @param input View of column to slice
- * @param indices A vector of indices used to take slices of `input`.
+ * @param indices Indices used to take slices of `input`.
  * @return Vector of views of `input` indicated by the ranges in `indices`.
  */
 std::vector<column_view> slice(column_view const& input, host_span<size_type const> indices);
 /**
- * @copydoc cudf::slice(column_view const&, host_span<size_type const>)
+ * @ingroup copy_slice
  *
- * @param indices Indices used to take slices of `input`.
+ * @copydoc cudf::slice(column_view const&, host_span<size_type const>)
  */
 std::vector<column_view> slice(column_view const& input, std::initializer_list<size_type> indices);
 
@@ -445,14 +445,13 @@ std::vector<column_view> slice(column_view const& input, std::initializer_list<s
  * the range [0, input.size()).
  *
  * @param input View of table to slice
- * @param indices A vector of indices used to take slices of `input`.
+ * @param indices Indices used to take slices of `input`.
  * @return Vector of views of `input` indicated by the ranges in `indices`.
  */
 std::vector<table_view> slice(table_view const& input, host_span<size_type const> indices);
 /**
+ * @ingroup copy_slice
  * @copydoc cudf::slice(table_view const&, host_span<size_type const>)
- *
- * @param indices Indices used to take slices of `input`.
  */
 std::vector<table_view> slice(table_view const& input, std::initializer_list<size_type> indices);
 
@@ -485,14 +484,13 @@ std::vector<table_view> slice(table_view const& input, std::initializer_list<siz
  * @throws cudf::logic_error When the values in the `splits` are 'strictly decreasing'.
  *
  * @param input View of column to split
- * @param splits A vector of indices where the view will be split
+ * @param splits Indices where the view will be split
  * @return The set of requested views of `input` indicated by the `splits`.
  */
 std::vector<column_view> split(column_view const& input, host_span<size_type const> splits);
 /**
+ * @ingroup copy_split
  * @copydoc cudf::split(column_view const&, host_span<size_type const>)
- *
- * @param splits Indices where the view will be split
  */
 std::vector<column_view> split(column_view const& input, std::initializer_list<size_type> splits);
 
@@ -527,14 +525,13 @@ std::vector<column_view> split(column_view const& input, std::initializer_list<s
  * @throws cudf::logic_error When the values in the `splits` are 'strictly decreasing'.
  *
  * @param input View of a table to split
- * @param splits A vector of indices where the view will be split
+ * @param splits Indices where the view will be split
  * @return The set of requested views of `input` indicated by the `splits`.
  */
 std::vector<table_view> split(table_view const& input, host_span<size_type const> splits);
 /**
+ * @ingroup copy_split
  * @copydoc cudf::split(table_view const&, host_span<size_type const>)
- *
- * @param splits Indices where the view will be split
  */
 std::vector<table_view> split(table_view const& input, std::initializer_list<size_type> splits);
 
