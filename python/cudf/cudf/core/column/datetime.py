@@ -495,11 +495,7 @@ class DatetimeColumn(column.ColumnBase):
         out_col = cudf._lib.replace.replace(
             self,
             column.build_column(
-                Buffer(
-                    np.array([na_value], dtype=self.dtype).view(
-                        "|u1"
-                    )
-                ),
+                Buffer(np.array([na_value], dtype=self.dtype).view("|u1")),
                 dtype=self.dtype,
             ),
             null,
