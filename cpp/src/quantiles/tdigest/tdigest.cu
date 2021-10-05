@@ -17,6 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/tdigest/tdigest.hpp>
+#include <cudf/detail/tdigest/tdigest_column_view.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/lists_column_view.hpp>
@@ -171,18 +172,14 @@ std::unique_ptr<column> compute_approx_percentiles(structs_column_view const& in
                                                    rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
 {
-  lists_column_view lcv(input.child(centroid_column_index));
-  column_view min_col = input.child(min_column_index);
-  column_view max_col = input.child(max_column_index);
+  tdigest_column_view tdv(input);
 
   // offsets, representing the size of each tdigest
-  auto offsets = lcv.offsets();
+  auto offsets = tdv.centroids().offsets();
 
-  // extract means and weights
-  auto data = lcv.parent().child(lists_column_view::child_column_index);
-  structs_column_view tdigest(data);
-  auto mean   = tdigest.child(mean_column_index);
-  auto weight = tdigest.child(weight_column_index);
+  // means and weights internal to the digests
+  auto mean   = tdv.means();
+  auto weight = tdv.weights();
 
   // compute summed weights
   auto cumulative_weights = cudf::make_fixed_width_column(data_type{type_id::FLOAT64},
@@ -227,6 +224,9 @@ std::unique_ptr<column> compute_approx_percentiles(structs_column_view const& in
   auto centroids = cudf::detail::make_counting_transform_iterator(
     0, make_centroid{mean.begin<double>(), weight.begin<double>()});
 
+  column_view min_col = tdv.min_column();
+  column_view max_col = tdv.max_column();
+
   constexpr size_type block_size = 256;
   cudf::detail::grid_1d const grid(percentiles.size() * input.size(), block_size);
   compute_percentiles_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
@@ -239,32 +239,6 @@ std::unique_ptr<column> compute_approx_percentiles(structs_column_view const& in
     result->mutable_view().begin<double>());
 
   return result;
-}
-
-void check_is_valid_tdigest_column(column_view const& col)
-{
-  // sanity check that this is actually tdigest data
-  CUDF_EXPECTS(col.type().id() == type_id::STRUCT, "Encountered invalid tdigest column");
-  CUDF_EXPECTS(col.size() > 0, "tdigest columns must have > 0 rows");
-  CUDF_EXPECTS(col.offset() == 0, "Encountered a sliced tdigest column");
-  CUDF_EXPECTS(col.nullable() == false, "Encountered nullable tdigest column");
-
-  structs_column_view scv(col);
-  CUDF_EXPECTS(scv.num_children() == 3, "Encountered invalid tdigest column");
-  CUDF_EXPECTS(scv.child(min_column_index).type().id() == type_id::FLOAT64,
-               "Encountered invalid tdigest column");
-  CUDF_EXPECTS(scv.child(max_column_index).type().id() == type_id::FLOAT64,
-               "Encountered invalid tdigest column");
-
-  lists_column_view lcv(scv.child(centroid_column_index));
-  auto data = lcv.child();
-  CUDF_EXPECTS(data.type().id() == type_id::STRUCT, "Encountered invalid tdigest column");
-  CUDF_EXPECTS(data.num_children() == 2,
-               "Encountered tdigest column with an invalid number of children");
-  auto mean = data.child(mean_column_index);
-  CUDF_EXPECTS(mean.type().id() == type_id::FLOAT64, "Encountered invalid tdigest mean column");
-  auto weight = data.child(weight_column_index);
-  CUDF_EXPECTS(weight.type().id() == type_id::FLOAT64, "Encountered invalid tdigest weight column");
 }
 
 std::unique_ptr<column> make_empty_tdigest_column(rmm::cuda_stream_view stream,
@@ -316,7 +290,7 @@ std::unique_ptr<column> percentile_approx(structs_column_view const& input,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
-  tdigest::check_is_valid_tdigest_column(input);
+  tdigest::tdigest_column_view tdv(input);
   CUDF_EXPECTS(percentiles.type().id() == type_id::FLOAT64,
                "percentile_approx expects float64 percentile inputs");
 
@@ -341,20 +315,20 @@ std::unique_ptr<column> percentile_approx(structs_column_view const& input,
 
   // if any of the input digests are empty, nullify the corresponding output rows (values will be
   // uninitialized)
-  auto [bitmask, null_count] = [stream, mr, input]() {
-    lists_column_view lcv(input.child(tdigest::centroid_column_index));
-    auto iter = cudf::detail::make_counting_transform_iterator(
-      0, [offsets = lcv.offsets().begin<offset_type>()] __device__(size_type index) {
+  auto [bitmask, null_count] = [stream, mr, &tdv]() {
+    auto offsets = tdv.centroids().offsets();
+    auto iter    = cudf::detail::make_counting_transform_iterator(
+      0, [offsets = offsets.begin<offset_type>()] __device__(size_type index) {
         return offsets[index + 1] - offsets[index] == 0 ? 1 : 0;
       });
-    auto const null_count = thrust::reduce(rmm::exec_policy(stream), iter, iter + input.size(), 0);
+    auto const null_count = thrust::reduce(rmm::exec_policy(stream), iter, iter + tdv.size(), 0);
     if (null_count == 0) {
       return std::pair<rmm::device_buffer, size_type>{rmm::device_buffer{}, null_count};
     }
     return cudf::detail::valid_if(
       thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(0) + input.size(),
-      [offsets = lcv.offsets().begin<offset_type>()] __device__(size_type index) {
+      thrust::make_counting_iterator(0) + tdv.size(),
+      [offsets = offsets.begin<offset_type>()] __device__(size_type index) {
         return offsets[index + 1] - offsets[index] == 0 ? 0 : 1;
       },
       stream,

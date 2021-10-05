@@ -18,6 +18,7 @@
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
+#include <cudf/detail/tdigest/tdigest_column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 
@@ -72,12 +73,9 @@ struct tdigest_gen {
 void tdigest_sample_compare(column_view const& result,
                             std::vector<expected_value> const& h_expected)
 {
-  cudf::detail::tdigest::check_is_valid_tdigest_column(result);
-  cudf::structs_column_view scv(result);
-  cudf::lists_column_view lcv(scv.child(cudf::detail::tdigest::centroid_column_index));
-  cudf::structs_column_view tdigests(lcv.child());
-  column_view result_mean   = tdigests.child(cudf::detail::tdigest::mean_column_index);
-  column_view result_weight = tdigests.child(cudf::detail::tdigest::weight_column_index);
+  cudf::detail::tdigest::tdigest_column_view tdv(result);
+  column_view result_mean   = tdv.means();
+  column_view result_weight = tdv.weights();
 
   auto expected_mean = cudf::make_fixed_width_column(
     data_type{type_id::FLOAT64}, h_expected.size(), mask_state::UNALLOCATED);
@@ -113,46 +111,66 @@ void tdigest_sample_compare(column_view const& result,
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_weight, *sampled_result_weight);
 }
 
-template <typename T>
-std::unique_ptr<column> make_expected_tdigest(column_view const& mean,
-                                              column_view const& weight,
-                                              T min,
-                                              T max)
+struct expected_tdigest {
+  column_view mean;
+  column_view weight;
+  double min, max;
+};
+
+std::unique_ptr<column> make_expected_tdigest_column(std::vector<expected_tdigest> const& groups)
 {
-  std::vector<std::unique_ptr<column>> inner_children;
-  inner_children.push_back(std::make_unique<cudf::column>(mean));
-  inner_children.push_back(std::make_unique<cudf::column>(weight));
-  // tdigest struct
-  auto tdigests = cudf::make_structs_column(mean.size(), std::move(inner_children), 0, {});
+  std::vector<std::unique_ptr<column>> tdigests;
 
-  std::vector<offset_type> h_offsets{0, mean.size()};
-  auto offsets =
-    cudf::make_fixed_width_column(data_type{type_id::INT32}, 2, mask_state::UNALLOCATED);
-  cudaMemcpy(offsets->mutable_view().begin<offset_type>(),
-             h_offsets.data(),
-             sizeof(offset_type) * 2,
-             cudaMemcpyHostToDevice);
+  // make an individual digest
+  auto make_digest = [&](expected_tdigest const& tdigest) {
+    std::vector<std::unique_ptr<column>> inner_children;
+    inner_children.push_back(std::make_unique<cudf::column>(tdigest.mean));
+    inner_children.push_back(std::make_unique<cudf::column>(tdigest.weight));
+    // tdigest struct
+    auto tdigests =
+      cudf::make_structs_column(tdigest.mean.size(), std::move(inner_children), 0, {});
 
-  auto list = cudf::make_lists_column(1, std::move(offsets), std::move(tdigests), 0, {});
+    std::vector<offset_type> h_offsets{0, tdigest.mean.size()};
+    auto offsets =
+      cudf::make_fixed_width_column(data_type{type_id::INT32}, 2, mask_state::UNALLOCATED);
+    cudaMemcpy(offsets->mutable_view().begin<offset_type>(),
+               h_offsets.data(),
+               sizeof(offset_type) * 2,
+               cudaMemcpyHostToDevice);
 
-  auto min_col =
-    cudf::make_fixed_width_column(data_type{type_id::FLOAT64}, 1, mask_state::UNALLOCATED);
-  thrust::fill(rmm::exec_policy(rmm::cuda_stream_default),
-               min_col->mutable_view().begin<double>(),
-               min_col->mutable_view().end<double>(),
-               static_cast<double>(min));
-  auto max_col =
-    cudf::make_fixed_width_column(data_type{type_id::FLOAT64}, 1, mask_state::UNALLOCATED);
-  thrust::fill(rmm::exec_policy(rmm::cuda_stream_default),
-               max_col->mutable_view().begin<double>(),
-               max_col->mutable_view().end<double>(),
-               static_cast<double>(max));
+    auto list = cudf::make_lists_column(1, std::move(offsets), std::move(tdigests), 0, {});
 
-  std::vector<std::unique_ptr<column>> children;
-  children.push_back(std::move(list));
-  children.push_back(std::move(min_col));
-  children.push_back(std::move(max_col));
-  return make_structs_column(1, std::move(children), 0, {});
+    auto min_col =
+      cudf::make_fixed_width_column(data_type{type_id::FLOAT64}, 1, mask_state::UNALLOCATED);
+    thrust::fill(rmm::exec_policy(rmm::cuda_stream_default),
+                 min_col->mutable_view().begin<double>(),
+                 min_col->mutable_view().end<double>(),
+                 tdigest.min);
+    auto max_col =
+      cudf::make_fixed_width_column(data_type{type_id::FLOAT64}, 1, mask_state::UNALLOCATED);
+    thrust::fill(rmm::exec_policy(rmm::cuda_stream_default),
+                 max_col->mutable_view().begin<double>(),
+                 max_col->mutable_view().end<double>(),
+                 tdigest.max);
+
+    std::vector<std::unique_ptr<column>> children;
+    children.push_back(std::move(list));
+    children.push_back(std::move(min_col));
+    children.push_back(std::move(max_col));
+    return make_structs_column(1, std::move(children), 0, {});
+  };
+
+  // build the individual digests
+  std::transform(groups.begin(), groups.end(), std::back_inserter(tdigests), make_digest);
+
+  // concatenate them
+  std::vector<column_view> views;
+  std::transform(tdigests.begin(),
+                 tdigests.end(),
+                 std::back_inserter(views),
+                 [](std::unique_ptr<column> const& c) { return c->view(); });
+
+  return cudf::concatenate(views);
 }
 
 TYPED_TEST(TDigestAllTypes, Simple)
@@ -172,7 +190,10 @@ TYPED_TEST(TDigestAllTypes, Simple)
   auto mean        = cudf::cast(raw_mean, data_type{type_id::FLOAT64});
   double const min = 1;
   double const max = 126;
-  auto expected = make_expected_tdigest<T>(*mean, weight, static_cast<T>(min), static_cast<T>(max));
+  auto expected    = make_expected_tdigest_column({{*mean,
+                                                 weight,
+                                                 static_cast<double>(static_cast<T>(min)),
+                                                 static_cast<double>(static_cast<T>(max))}});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }
@@ -195,7 +216,10 @@ TYPED_TEST(TDigestAllTypes, SimpleWithNulls)
   auto mean        = cudf::cast(raw_mean, data_type{type_id::FLOAT64});
   double const min = 1;
   double const max = 122;
-  auto expected = make_expected_tdigest<T>(*mean, weight, static_cast<T>(min), static_cast<T>(max));
+  auto expected    = make_expected_tdigest_column({{*mean,
+                                                 weight,
+                                                 static_cast<double>(static_cast<T>(min)),
+                                                 static_cast<double>(static_cast<T>(max))}});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, *expected);
 }
@@ -287,6 +311,30 @@ TYPED_TEST(TDigestAllTypes, LargeGroups)
 
 struct TDigestTest : public cudf::test::BaseFixture {
 };
+
+TEST_F(TDigestTest, EmptyMixed)
+{
+  cudf::test::fixed_width_column_wrapper<double> values{{123456.78, 10.0, 20.0, 30.0},
+                                                        {1, 0, 1, 0}};
+  cudf::test::strings_column_wrapper keys{"b", "a", "c", "d"};
+
+  auto const delta = 1000;
+  cudf::table_view t({keys});
+  cudf::groupby::groupby gb(t);
+  std::vector<cudf::groupby::aggregation_request> requests;
+  std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
+  aggregations.push_back(cudf::make_tdigest_aggregation<cudf::groupby_aggregation>(delta));
+  requests.push_back({values, std::move(aggregations)});
+  auto result = gb.aggregate(requests);
+
+  using FCW     = cudf::test::fixed_width_column_wrapper<double>;
+  auto expected = make_expected_tdigest_column({{FCW{}, FCW{}, 0, 0},
+                                                {FCW{123456.78}, FCW{1.0}, 123456.78, 123456.78},
+                                                {FCW{20.0}, FCW{1.0}, 20.0, 20.0},
+                                                {FCW{}, FCW{}, 0, 0}});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result.second[0].results[0], *expected);
+}
 
 TEST_F(TDigestTest, LargeInputDouble)
 {
@@ -578,6 +626,77 @@ TEST_F(TDigestMergeTest, Simple)
 
     tdigest_sample_compare(*result.second[0].results[0], expected);
   }
+}
+
+TEST_F(TDigestMergeTest, Empty)
+{
+  // 3 empty tdigests all in the same group
+  auto a = cudf::detail::tdigest::make_empty_tdigest_column();
+  auto b = cudf::detail::tdigest::make_empty_tdigest_column();
+  auto c = cudf::detail::tdigest::make_empty_tdigest_column();
+  std::vector<column_view> cols;
+  cols.push_back(*a);
+  cols.push_back(*b);
+  cols.push_back(*c);
+  auto values = cudf::concatenate(cols);
+  cudf::test::fixed_width_column_wrapper<int> keys{0, 0, 0};
+
+  auto const delta = 1000;
+  cudf::table_view t({keys});
+  cudf::groupby::groupby gb(t);
+  std::vector<cudf::groupby::aggregation_request> requests;
+  std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
+  aggregations.push_back(cudf::make_merge_tdigest_aggregation<cudf::groupby_aggregation>(delta));
+  requests.push_back({*values, std::move(aggregations)});
+  auto result = gb.aggregate(requests);
+
+  auto expected = cudf::detail::tdigest::make_empty_tdigest_column();
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *result.second[0].results[0]);
+}
+
+TEST_F(TDigestMergeTest, EmptyGroups)
+{
+  cudf::test::fixed_width_column_wrapper<double> values_b{126, 15, 1, 99, 67, 55, 2};
+  cudf::test::fixed_width_column_wrapper<double> values_d{100, 200, 300, 400, 500, 600, 700};
+  cudf::test::fixed_width_column_wrapper<int> keys{0, 0, 0, 0, 0, 0, 0};
+  int const delta = 1000;
+
+  auto a = cudf::detail::tdigest::make_empty_tdigest_column();
+  auto b = cudf::type_dispatcher(
+    static_cast<column_view>(values_b).type(), tdigest_gen{}, keys, values_b, delta);
+  auto c = cudf::detail::tdigest::make_empty_tdigest_column();
+  auto d = cudf::type_dispatcher(
+    static_cast<column_view>(values_d).type(), tdigest_gen{}, keys, values_d, delta);
+  auto e = cudf::detail::tdigest::make_empty_tdigest_column();
+
+  std::vector<column_view> cols;
+  cols.push_back(*a);
+  cols.push_back(*b);
+  cols.push_back(*c);
+  cols.push_back(*d);
+  cols.push_back(*e);
+  auto values = cudf::concatenate(cols);
+
+  cudf::test::fixed_width_column_wrapper<int> merge_keys{0, 0, 1, 0, 2};
+
+  cudf::table_view t({merge_keys});
+  cudf::groupby::groupby gb(t);
+  std::vector<cudf::groupby::aggregation_request> requests;
+  std::vector<std::unique_ptr<cudf::groupby_aggregation>> aggregations;
+  aggregations.push_back(cudf::make_merge_tdigest_aggregation<cudf::groupby_aggregation>(delta));
+  requests.push_back({*values, std::move(aggregations)});
+  auto result = gb.aggregate(requests);
+
+  using FCW = cudf::test::fixed_width_column_wrapper<double>;
+  cudf::test::fixed_width_column_wrapper<double> expected_means{
+    1, 2, 15, 55, 67, 99, 100, 126, 200, 300, 400, 500, 600, 700};
+  cudf::test::fixed_width_column_wrapper<double> expected_weights{
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  auto expected = make_expected_tdigest_column(
+    {{expected_means, expected_weights, 1, 700}, {FCW{}, FCW{}, 0, 0}, {FCW{}, FCW{}, 0, 0}});
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *result.second[0].results[0]);
 }
 
 }  // namespace test

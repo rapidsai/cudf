@@ -23,43 +23,6 @@ namespace detail {
 
 namespace tdigest {
 
-// mean and weight column indices within tdigest inner struct columns
-constexpr size_type mean_column_index   = 0;
-constexpr size_type weight_column_index = 1;
-
-// min and max column indices within tdigest outer struct columns
-constexpr size_type centroid_column_index = 0;
-constexpr size_type min_column_index      = 1;
-constexpr size_type max_column_index      = 2;
-
-/**
- * @brief Verifies that the input column is a valid tdigest column.
- *
- * struct {
- *   // centroids for the digest
- *   list {
- *    struct {
- *      double    // mean
- *      double    // weight
- *    },
- *    ...
- *   }
- *   // these are from the input stream, not the centroids. they are used
- *   // during the percentile_approx computation near the beginning or
- *   // end of the quantiles
- *   double       // min
- *   double       // max
- * }
- *
- * Each output row is a single tdigest.  The length of the row is the "size" of the
- * tdigest, each element of which represents a weighted centroid (mean, weight).
- *
- * @param col    Column to be checkeed
- *
- * @throws cudf::logic error if the column is not a valid tdigest column.
- */
-void check_is_valid_tdigest_column(column_view const& col);
-
 /**
  * @brief Create an empty tdigest column.
  *
