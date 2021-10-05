@@ -106,8 +106,8 @@ std::unique_ptr<column> make_dictionary_column(std::unique_ptr<column> keys_colu
  *
  * @throw cudf::logic_error if keys_column contains nulls
  *
- * @param keys Column of unique, ordered values to use as the new dictionary column's keys.
- * @param indices Indices values and null-mask to use for the new dictionary column.
+ * @param keys_column Column of unique, ordered values to use as the new dictionary column's keys.
+ * @param indices_column Indices values and null-mask to use for the new dictionary column.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New dictionary column.
