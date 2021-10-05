@@ -1386,6 +1386,23 @@ def test_string_char_case(case_op, data):
     assert_eq(gs.str.isempty(), ps == "")
 
 
+def test_string_is_title():
+    data = [
+        "leopard",
+        "Golden Eagle",
+        "SNAKE",
+        "",
+        "!A",
+        "hello World",
+        "A B C",
+        "Art of War",
+    ]
+    gs = cudf.Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(gs.str.istitle(), ps.str.istitle())
+
+
 @pytest.mark.parametrize(
     "data",
     [
