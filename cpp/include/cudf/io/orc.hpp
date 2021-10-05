@@ -865,7 +865,7 @@ class chunked_orc_writer_options_builder {
    * @param val maximum stripe size
    * @return this for chaining.
    */
-  chunked_orc_writer_options_builder& enable_statistics(size_t val)
+  chunked_orc_writer_options_builder& stripe_size_bytes(size_t val)
   {
     options.set_stripe_size_bytes(val);
     return *this;
@@ -877,7 +877,7 @@ class chunked_orc_writer_options_builder {
    * @param val maximum number or rows
    * @return this for chaining.
    */
-  chunked_orc_writer_options_builder& enable_statistics(size_type val)
+  chunked_orc_writer_options_builder& stripe_size_rows(size_type val)
   {
     options.set_stripe_size_rows(val);
     return *this;
