@@ -1789,17 +1789,27 @@ __global__ void __launch_bounds__(block_size)
                 seconds += get_gmt_offset(tz_table.ttimes, tz_table.offsets, seconds);
               }
               if (seconds < 0 && nanos != 0) { seconds -= 1; }
-              if (s->chunk.ts_clock_rate) {
-                duration_ns d_ns{nanos};
-                d_ns += duration_s{seconds};
-                static_cast<int64_t*>(data_out)[row] =
-                  d_ns.count() * s->chunk.ts_clock_rate /
-                  duration_ns::period::den;  // Output to desired clock rate
-              } else {
-                cudf::duration_s d{seconds};
-                static_cast<int64_t*>(data_out)[row] =
-                  cuda::std::chrono::duration_cast<cudf::duration_ns>(d).count() + nanos;
+
+              duration_ns d_ns{nanos};
+              d_ns += duration_s{seconds};
+
+              int64_t res;
+              switch (s->chunk.timestamp_type_id) {
+                case type_id::TIMESTAMP_SECONDS: {
+                  res = cuda::std::chrono::duration_cast<duration_s>(d_ns).count();
+                  break;
+                }
+                case type_id::TIMESTAMP_MILLISECONDS: {
+                  res = cuda::std::chrono::duration_cast<duration_ms>(d_ns).count();
+                  break;
+                }
+                case type_id::TIMESTAMP_MICROSECONDS: {
+                  res = cuda::std::chrono::duration_cast<duration_us>(d_ns).count();
+                  break;
+                }
+                default: res = d_ns.count();  // nanoseconds if not specified
               }
+              static_cast<int64_t*>(data_out)[row] = res;
               break;
             }
           }

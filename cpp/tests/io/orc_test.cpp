@@ -1103,9 +1103,7 @@ TEST_F(OrcReaderTest, MultipleInputs)
 
 TEST_F(OrcReaderTest, SimpleTimestamps)
 {
-  int64_t num_rows = 100;
-
-  auto int_data = random_values<int64_t>(num_rows);
+  auto int_data = random_values<int64_t>(5);
   auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
   column_wrapper<int64_t> const intcol{int_data.begin(), int_data.end(), validity};
