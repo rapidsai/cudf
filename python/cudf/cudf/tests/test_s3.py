@@ -308,7 +308,9 @@ def test_read_json(s3_base, s3so):
     assert_eq(expect, got)
 
 
-def test_read_orc(s3_base, s3so, datadir):
+@pytest.mark.parametrize("use_python_file_object", [False, True])
+@pytest.mark.parametrize("columns", [None, ["string1"]])
+def test_read_orc(s3_base, s3so, datadir, use_python_file_object, columns):
     source_file = str(datadir / "orc" / "TestOrcFile.testSnappy.orc")
     fname = "test_orc_reader.orc"
     bname = "orc"
@@ -319,9 +321,14 @@ def test_read_orc(s3_base, s3so, datadir):
 
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         got = cudf.read_orc(
-            "s3://{}/{}".format(bname, fname), storage_options=s3so
+            "s3://{}/{}".format(bname, fname),
+            columns=columns,
+            storage_options=s3so,
+            use_python_file_object=use_python_file_object,
         )
 
+    if columns:
+        expect = expect[columns]
     assert_eq(expect, got)
 
 
