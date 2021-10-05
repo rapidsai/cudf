@@ -1043,12 +1043,12 @@ TYPED_TEST(ReductionTest, UniqueCount)
 }
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_CASE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProductZeroScale)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionProductZeroScale)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -1072,7 +1072,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProductZeroScale)
   EXPECT_EQ(result_fp, _24);
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProduct)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionProduct)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1092,7 +1092,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProduct)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProductWithNulls)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionProductWithNulls)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1112,7 +1112,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProductWithNulls)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSum)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSum)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1133,7 +1133,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSum)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumAlternate)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSumAlternate)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -1157,7 +1157,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumAlternate)
   EXPECT_EQ(result_scalar->fixed_point_value(), TEN);
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumFractional)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSumFractional)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1177,7 +1177,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumFractional)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumLarge)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSumLarge)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1200,7 +1200,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumLarge)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMin)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMin)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1220,7 +1220,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMin)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMinLarge)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMinLarge)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1241,7 +1241,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMinLarge)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMax)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMax)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1261,7 +1261,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMax)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMaxLarge)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMaxLarge)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1282,7 +1282,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMaxLarge)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionNUnique)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionNUnique)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1301,7 +1301,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionNUnique)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumOfSquares)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionSumOfSquares)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1321,7 +1321,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionSumOfSquares)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMedianOddNumberOfElements)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMedianOddNumberOfElements)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1341,7 +1341,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMedianOddNumberOfElements)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMedianEvenNumberOfElements)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionMedianEvenNumberOfElements)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1361,7 +1361,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionMedianEvenNumberOfElements
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionQuantile)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionQuantile)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1376,14 +1376,14 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionQuantile)
     for (auto const i : {0, 1, 2, 3, 4}) {
       auto const expected = decimalXX{scaled_integer<RepType>{i + 1, scale}};
       auto const result   = cudf::reduce(
-        column, cudf::make_quantile_aggregation({i / 4.0}, cudf::interpolation::LINEAR), out_type);
+          column, cudf::make_quantile_aggregation({i / 4.0}, cudf::interpolation::LINEAR), out_type);
       auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
       EXPECT_EQ(result_scalar->fixed_point_value(), expected);
     }
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReductionNthElement)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReductionNthElement)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1399,11 +1399,71 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointReductionNthElement)
     for (auto const i : {0, 1, 2, 3}) {
       auto const expected = decimalXX{scaled_integer<RepType>{values[i], scale}};
       auto const result   = cudf::reduce(
-        column, cudf::make_nth_element_aggregation(i, cudf::null_policy::INCLUDE), out_type);
+          column, cudf::make_nth_element_aggregation(i, cudf::null_policy::INCLUDE), out_type);
       auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
       EXPECT_EQ(result_scalar->fixed_point_value(), expected);
     }
   }
+}
+
+struct Decimal128Only : public cudf::test::BaseFixture {
+};
+
+TEST_F(Decimal128Only, Decimal128ProductReduction)
+{
+  using namespace numeric;
+  using RepType    = cudf::device_storage_type_t<decimal128>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (auto const i : {0, -1, -2, -3}) {
+    auto const scale    = scale_type{i};
+    auto const column   = fp_wrapper{{2, 2, 2, 2, 2, 2, 2, 2, 2}, scale};
+    auto const expected = decimal128{scaled_integer<RepType>{512, scale_type{i * 9}}};
+
+    auto const out_type      = cudf::data_type{cudf::type_id::DECIMAL128, scale};
+    auto const result        = cudf::reduce(column, cudf::make_product_aggregation(), out_type);
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimal128>*>(result.get());
+
+    EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+  }
+}
+
+TEST_F(Decimal128Only, Decimal128ProductReduction2)
+{
+  using namespace numeric;
+  using RepType    = cudf::device_storage_type_t<decimal128>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  for (auto const i : {0, -1, -2, -3, -4, -5, -6}) {
+    auto const scale    = scale_type{i};
+    auto const column   = fp_wrapper{{1, 2, 3, 4, 5, 6}, scale};
+    auto const expected = decimal128{scaled_integer<RepType>{720, scale_type{i * 6}}};
+
+    auto const out_type      = cudf::data_type{cudf::type_id::DECIMAL128, scale};
+    auto const result        = cudf::reduce(column, cudf::make_product_aggregation(), out_type);
+    auto const result_scalar = static_cast<cudf::scalar_type_t<decimal128>*>(result.get());
+
+    EXPECT_EQ(result_scalar->fixed_point_value(), expected);
+  }
+}
+
+TEST_F(Decimal128Only, Decimal128ProductReduction3)
+{
+  using namespace numeric;
+  using RepType    = cudf::device_storage_type_t<decimal128>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const values   = std::vector(127, -2);
+  auto const scale    = scale_type{0};
+  auto const column   = fp_wrapper{values.cbegin(), values.cend(), scale};
+  auto const lowest   = cuda::std::numeric_limits<RepType>::lowest();
+  auto const expected = decimal128{scaled_integer<RepType>{lowest, scale}};
+
+  auto const out_type      = cudf::data_type{cudf::type_id::DECIMAL128, scale};
+  auto const result        = cudf::reduce(column, cudf::make_product_aggregation(), out_type);
+  auto const result_scalar = static_cast<cudf::scalar_type_t<decimal128>*>(result.get());
+
+  EXPECT_EQ(result_scalar->fixed_point_value(), expected);
 }
 
 TYPED_TEST(ReductionTest, NthElement)

@@ -18,6 +18,7 @@
 #include <cudf/detail/utilities/assert.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
+#include <cudf/utilities/traits.hpp>
 
 namespace cudf {
 namespace detail {
@@ -152,7 +153,10 @@ select_quantile(ValueAccessor get_value, size_type size, double q, interpolation
   }
 }
 
-template <typename Result, typename Iterator>
+template <typename Result,
+          typename Iterator,
+          typename std::enable_if_t<not cudf::is_fixed_point<Result>()>* =
+            nullptr>  // TODO revisit if this is needed
 CUDA_HOST_DEVICE_CALLABLE Result
 select_quantile_data(Iterator begin, size_type size, double q, interpolation interp)
 {

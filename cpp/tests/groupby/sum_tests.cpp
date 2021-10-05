@@ -157,18 +157,19 @@ TYPED_TEST(groupby_sum_test, dictionary)
 }
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_CASE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, GroupBySortSumDecimalAsValue)
+TYPED_TEST(FixedPointTestAllReps, GroupBySortSumDecimalAsValue)
 {
   using namespace numeric;
-  using decimalXX    = TypeParam;
-  using RepType      = cudf::device_storage_type_t<decimalXX>;
-  using fp_wrapper   = cudf::test::fixed_point_column_wrapper<RepType>;
-  using fp64_wrapper = cudf::test::fixed_point_column_wrapper<int64_t>;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+  using SumType    = std::conditional_t<std::is_same_v<decimal128, TypeParam>, __int128_t, int64_t>;
+  using fp64_wrapper = cudf::test::fixed_point_column_wrapper<SumType>;
   using K            = int32_t;
 
   for (auto const i : {2, 1, 0, -1, -2}) {
@@ -192,13 +193,14 @@ TYPED_TEST(FixedPointTestBothReps, GroupBySortSumDecimalAsValue)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, GroupByHashSumDecimalAsValue)
+TYPED_TEST(FixedPointTestAllReps, GroupByHashSumDecimalAsValue)
 {
   using namespace numeric;
-  using decimalXX    = TypeParam;
-  using RepType      = cudf::device_storage_type_t<decimalXX>;
-  using fp_wrapper   = cudf::test::fixed_point_column_wrapper<RepType>;
-  using fp64_wrapper = cudf::test::fixed_point_column_wrapper<int64_t>;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+  using SumType    = std::conditional_t<std::is_same_v<decimal128, TypeParam>, __int128_t, int64_t>;
+  using fp64_wrapper = cudf::test::fixed_point_column_wrapper<SumType>;
   using K            = int32_t;
 
   for (auto const i : {2, 1, 0, -1, -2}) {

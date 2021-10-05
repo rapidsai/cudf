@@ -139,9 +139,11 @@ struct update_target_element<
   {
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
-    using Target = target_type_t<Source, aggregation::MIN>;
-    atomicMin(&target.element<Target>(target_index),
-              static_cast<Target>(source.element<Source>(source_index)));
+    if constexpr (not std::is_same_v<Source, __int128_t>) {
+      using Target = target_type_t<Source, aggregation::MIN>;
+      atomicMin(&target.element<Target>(target_index),
+                static_cast<Target>(source.element<Source>(source_index)));
+    }
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -164,8 +166,10 @@ struct update_target_element<Source,
     using DeviceTarget = device_storage_type_t<Target>;
     using DeviceSource = device_storage_type_t<Source>;
 
-    atomicMin(&target.element<DeviceTarget>(target_index),
-              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+    if constexpr (not std::is_same_v<DeviceSource, __int128_t>) {
+      atomicMin(&target.element<DeviceTarget>(target_index),
+                static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+    }
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -185,9 +189,11 @@ struct update_target_element<
   {
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
-    using Target = target_type_t<Source, aggregation::MAX>;
-    atomicMax(&target.element<Target>(target_index),
-              static_cast<Target>(source.element<Source>(source_index)));
+    if constexpr (not std::is_same_v<Source, __int128_t>) {
+      using Target = target_type_t<Source, aggregation::MAX>;
+      atomicMax(&target.element<Target>(target_index),
+                static_cast<Target>(source.element<Source>(source_index)));
+    }
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -210,8 +216,10 @@ struct update_target_element<Source,
     using DeviceTarget = device_storage_type_t<Target>;
     using DeviceSource = device_storage_type_t<Source>;
 
-    atomicMax(&target.element<DeviceTarget>(target_index),
-              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+    if constexpr (not std::is_same_v<DeviceSource, __int128_t>) {
+      atomicMax(&target.element<DeviceTarget>(target_index),
+                static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+    }
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -231,9 +239,11 @@ struct update_target_element<
   {
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
-    using Target = target_type_t<Source, aggregation::SUM>;
-    atomicAdd(&target.element<Target>(target_index),
-              static_cast<Target>(source.element<Source>(source_index)));
+    if constexpr (not std::is_same_v<Source, __int128_t>) {
+      using Target = target_type_t<Source, aggregation::SUM>;
+      atomicAdd(&target.element<Target>(target_index),
+                static_cast<Target>(source.element<Source>(source_index)));
+    }
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -256,8 +266,10 @@ struct update_target_element<Source,
     using DeviceTarget = device_storage_type_t<Target>;
     using DeviceSource = device_storage_type_t<Source>;
 
-    atomicAdd(&target.element<DeviceTarget>(target_index),
-              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+    if constexpr (not std::is_same_v<DeviceSource, __int128_t>) {
+      atomicAdd(&target.element<DeviceTarget>(target_index),
+                static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+    }
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -581,9 +593,7 @@ struct identity_initializer {
   template <typename T, aggregation::Kind k>
   static constexpr bool is_supported()
   {
-    // Note: !is_fixed_point<T>() means that aggregations for fixed_point should happen on the
-    //       underlying type (see device_storage_type_t), not that fixed_point is not supported
-    return cudf::is_fixed_width<T>() && !is_fixed_point<T>() and
+    return cudf::is_fixed_width<T>() and
            (k == aggregation::SUM or k == aggregation::MIN or k == aggregation::MAX or
             k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL or
             k == aggregation::ARGMAX or k == aggregation::ARGMIN or
@@ -596,7 +606,8 @@ struct identity_initializer {
   std::enable_if_t<not std::is_same<corresponding_operator_t<k>, void>::value, T>
   identity_from_operator()
   {
-    return corresponding_operator_t<k>::template identity<T>();
+    using DeviceType = device_storage_type_t<T>;
+    return corresponding_operator_t<k>::template identity<DeviceType>();
   }
 
   template <typename T, aggregation::Kind k>
@@ -613,9 +624,11 @@ struct identity_initializer {
       if constexpr (cudf::is_timestamp<T>())
         return k == aggregation::ARGMAX ? T{typename T::duration(ARGMAX_SENTINEL)}
                                         : T{typename T::duration(ARGMIN_SENTINEL)};
-      else
-        return k == aggregation::ARGMAX ? static_cast<T>(ARGMAX_SENTINEL)
-                                        : static_cast<T>(ARGMIN_SENTINEL);
+      else {
+        using DeviceType = device_storage_type_t<T>;
+        return k == aggregation::ARGMAX ? static_cast<DeviceType>(ARGMAX_SENTINEL)
+                                        : static_cast<DeviceType>(ARGMIN_SENTINEL);
+      }
     }
     return identity_from_operator<T, k>();
   }
@@ -625,7 +638,11 @@ struct identity_initializer {
   std::enable_if_t<is_supported<T, k>(), void> operator()(mutable_column_view const& col,
                                                           rmm::cuda_stream_view stream)
   {
-    thrust::fill(rmm::exec_policy(stream), col.begin<T>(), col.end<T>(), get_identity<T, k>());
+    using DeviceType = device_storage_type_t<T>;
+    thrust::fill(rmm::exec_policy(stream),
+                 col.begin<DeviceType>(),
+                 col.end<DeviceType>(),
+                 get_identity<DeviceType, k>());
   }
 
   template <typename T, aggregation::Kind k>

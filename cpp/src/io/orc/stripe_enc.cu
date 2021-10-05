@@ -116,6 +116,13 @@ static inline __device__ uint64_t zigzag(int64_t v)
   return ((v ^ -s) * 2) + s;
 }
 
+static inline __device__ uint64_t zigzag(__int128_t v)
+{
+  // TODO
+  int64_t s = (v < 0) ? 1 : 0;
+  return ((v ^ -s) * 2) + s;
+}
+
 static inline __device__ uint32_t CountLeadingBytes32(uint32_t v) { return __clz(v) >> 3; }
 static inline __device__ uint32_t CountLeadingBytes64(uint64_t v) { return __clzll(v) >> 3; }
 
@@ -940,9 +947,11 @@ __global__ void __launch_bounds__(block_size)
             break;
           case DECIMAL: {
             if (is_value_valid) {
-              uint64_t const zz_val = (column.type().id() == type_id::DECIMAL32)
-                                        ? zigzag(column.element<int32_t>(row))
-                                        : zigzag(column.element<int64_t>(row));
+              auto const id = column.type().id();
+              uint64_t const zz_val =
+                id == type_id::DECIMAL32   ? zigzag(column.element<int32_t>(row))
+                : id == type_id::DECIMAL64 ? zigzag(column.element<int64_t>(row))
+                                           : zigzag(column.element<__int128_t>(row));
               auto const offset =
                 (row == s->chunk.start_row) ? 0 : s->chunk.decimal_offsets[row - 1];
               StoreVarint(s->stream.data_ptrs[CI_DATA] + offset, zz_val);

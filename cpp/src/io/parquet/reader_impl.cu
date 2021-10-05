@@ -215,7 +215,7 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
 
   int8_t converted_type = converted;
   if (converted_type == parquet::DECIMAL && column_type_id != type_id::FLOAT64 &&
-      column_type_id != type_id::DECIMAL32 && column_type_id != type_id::DECIMAL64) {
+      not cudf::is_fixed_point(column_type_id)) {
     converted_type = parquet::UNKNOWN;  // Not converting to float64 or decimal
   }
   return std::make_tuple(type_width, clock_rate, converted_type);
@@ -752,9 +752,9 @@ class aggregate_metadata {
           // Check if the path exists in our selected_columns and if not, add it.
           auto const& name_to_find = path[depth];
           auto found_col           = std::find_if(
-            array_to_find_in->begin(),
-            array_to_find_in->end(),
-            [&name_to_find](column_name_info const& col) { return col.name == name_to_find; });
+                      array_to_find_in->begin(),
+                      array_to_find_in->end(),
+                      [&name_to_find](column_name_info const& col) { return col.name == name_to_find; });
           if (found_col == array_to_find_in->end()) {
             auto& col        = array_to_find_in->emplace_back(name_to_find);
             array_to_find_in = &col.children;

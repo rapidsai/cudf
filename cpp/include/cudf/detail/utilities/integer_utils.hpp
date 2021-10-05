@@ -22,6 +22,8 @@
  * @file Utility code involving integer arithmetic
  */
 
+#include <cudf/fixed_point/temporary.hpp>
+
 #include <cmath>
 #include <cstdlib>
 #include <stdexcept>
@@ -151,17 +153,11 @@ constexpr inline bool is_a_power_of_two(I val) noexcept
  * @return Absolute value if value type is signed.
  */
 template <typename T>
-std::enable_if_t<std::is_signed<T>::value, T> constexpr inline absolute_value(T value)
+constexpr inline auto absolute_value(T value) -> T
 {
-  return std::abs(value);
-}
-// Unsigned type just returns itself.
-template <typename T>
-std::enable_if_t<!std::is_signed<T>::value, T> constexpr inline absolute_value(T value)
-{
+  if constexpr (cuda::std::is_signed<T>()) return numeric::detail::abs(value);
   return value;
 }
 
 }  // namespace util
-
 }  // namespace cudf
