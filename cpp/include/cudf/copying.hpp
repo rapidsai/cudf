@@ -489,7 +489,12 @@ std::vector<table_view> slice(table_view const& input, std::initializer_list<siz
  * @return The set of requested views of `input` indicated by the `splits`.
  */
 std::vector<column_view> split(column_view const& input, host_span<size_type const> splits);
-std::vector<column_view> split(column_view const& input, std::initializer_list<size_type> indices);
+/**
+ * @copydoc cudf::split(column_view const&, host_span<size_type const>)
+ *
+ * @param splits Indices where the view will be split
+ */
+std::vector<column_view> split(column_view const& input, std::initializer_list<size_type> splits);
 
 /**
  * @brief Splits a `table_view` into a set of `table_view`s according to a set of indices
@@ -526,7 +531,12 @@ std::vector<column_view> split(column_view const& input, std::initializer_list<s
  * @return The set of requested views of `input` indicated by the `splits`.
  */
 std::vector<table_view> split(table_view const& input, host_span<size_type const> splits);
-std::vector<table_view> split(table_view const& input, std::initializer_list<size_type> indices);
+/**
+ * @copydoc cudf::split(table_view const&, host_span<size_type const>)
+ *
+ * @param splits Indices where the view will be split
+ */
+std::vector<table_view> split(table_view const& input, std::initializer_list<size_type> splits);
 
 /**
  * @brief Column data in a serialized format
