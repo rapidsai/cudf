@@ -16,14 +16,13 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.table cimport Table
 from cudf._lib.utils cimport data_from_unique_ptr
 
 
 def partition(Column source_strings,
               object py_delimiter):
     """
-    Returns a Table by splitting the `source_strings`
+    Returns data by splitting the `source_strings`
     column at the first occurrence of the specified `py_delimiter`.
     """
 

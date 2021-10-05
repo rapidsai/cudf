@@ -26,13 +26,14 @@
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/binaryop.hpp>
-#include <cudf/detail/gather.cuh>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/replace.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -167,7 +168,6 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
   cudf::detail::result_cache* sparse_results;
   cudf::detail::result_cache* dense_results;
   device_span<size_type const> gather_map;
-  size_type const map_size;
   Map const& map;
   bitmask_type const* __restrict__ row_bitmask;
   rmm::cuda_stream_view stream;
@@ -181,7 +181,6 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
                               cudf::detail::result_cache* sparse_results,
                               cudf::detail::result_cache* dense_results,
                               device_span<size_type const> gather_map,
-                              size_type map_size,
                               Map const& map,
                               bitmask_type const* row_bitmask,
                               rmm::cuda_stream_view stream,
@@ -191,7 +190,6 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
       sparse_results(sparse_results),
       dense_results(dense_results),
       gather_map(gather_map),
-      map_size(map_size),
       map(map),
       row_bitmask(row_bitmask),
       stream(stream),
@@ -203,11 +201,12 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
 
   auto to_dense_agg_result(cudf::aggregation const& agg)
   {
-    auto s                  = sparse_results->get_result(col_idx, agg);
+    auto s = sparse_results->get_result(col_idx, agg);
+
     auto dense_result_table = cudf::detail::gather(table_view({std::move(s)}),
-                                                   gather_map.begin(),
-                                                   gather_map.begin() + map_size,
+                                                   gather_map,
                                                    out_of_bounds_policy::DONT_CHECK,
+                                                   cudf::detail::negative_index_policy::NOT_ALLOWED,
                                                    stream,
                                                    mr);
     return std::move(dense_result_table->release()[0]);
@@ -385,7 +384,7 @@ void sparse_to_dense_results(table_view const& keys,
                              cudf::detail::result_cache* sparse_results,
                              cudf::detail::result_cache* dense_results,
                              device_span<size_type const> gather_map,
-                             size_type map_size,
+                             // size_type map_size,
                              Map const& map,
                              bool keys_have_nulls,
                              null_policy include_null_keys,
@@ -403,16 +402,8 @@ void sparse_to_dense_results(table_view const& keys,
 
     // Given an aggregation, this will get the result from sparse_results and
     // convert and return dense, compacted result
-    auto finalizer = hash_compound_agg_finalizer<Map>(i,
-                                                      col,
-                                                      sparse_results,
-                                                      dense_results,
-                                                      gather_map,
-                                                      map_size,
-                                                      map,
-                                                      row_bitmask_ptr,
-                                                      stream,
-                                                      mr);
+    auto finalizer = hash_compound_agg_finalizer<Map>(
+      i, col, sparse_results, dense_results, gather_map, map, row_bitmask_ptr, stream, mr);
     for (auto&& agg : agg_v) {
       agg->finalize(finalizer);
     }
@@ -613,15 +604,18 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
                           &sparse_results,
                           cache,
                           gather_map,
-                          gather_map.size(),
                           *map,
                           keys_have_nulls,
                           include_null_keys,
                           stream,
                           mr);
 
-  return cudf::detail::gather(
-    keys, gather_map.begin(), gather_map.end(), out_of_bounds_policy::DONT_CHECK, stream, mr);
+  return cudf::detail::gather(keys,
+                              gather_map,
+                              out_of_bounds_policy::DONT_CHECK,
+                              cudf::detail::negative_index_policy::NOT_ALLOWED,
+                              stream,
+                              mr);
 }
 
 }  // namespace

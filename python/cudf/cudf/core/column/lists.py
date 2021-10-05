@@ -17,7 +17,6 @@ from cudf._lib.lists import (
     extract_element,
     sort_lists,
 )
-from cudf._lib.table import Table
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_list_dtype
 from cudf.core.buffer import Buffer
@@ -141,7 +140,9 @@ class ListColumn(ColumnBase):
 
         if isinstance(other.dtype, ListDtype):
             if binop == "add":
-                return concatenate_rows(Table({0: self, 1: other}))
+                return concatenate_rows(
+                    cudf.core.frame.Frame({0: self, 1: other})
+                )
             else:
                 raise NotImplementedError(
                     "Lists concatenation for this operation is not yet"
