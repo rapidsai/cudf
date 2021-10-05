@@ -91,6 +91,7 @@ std::unique_ptr<table> gather(
  * ```
  *
  * @param source_table Table that will be reversed
+ * @param mr Device memory resource used to allocate the returned table's device memory
  */
 std::unique_ptr<table> reverse(
   table_view const& source_table,
@@ -106,6 +107,7 @@ std::unique_ptr<table> reverse(
  * ```
  *
  * @param source_column Column that will be reversed
+ * @param mr Device memory resource used to allocate the returned table's device memory
  */
 std::unique_ptr<column> reverse(
   column_view const& source_column,
@@ -638,7 +640,7 @@ packed_columns pack(cudf::table_view const& input,
  * construct a `packed_columns` or `packed_table` structure.  The caller is responsible for
  * guaranteeing that that all of the columns in the table point into `contiguous_buffer`.
  *
- * @param input View of the table to pack
+ * @param table View of the table to pack
  * @param contiguous_buffer A contiguous buffer of device memory which contains the data referenced
  * by the columns in `table`
  * @param buffer_size The size of `contiguous_buffer`.

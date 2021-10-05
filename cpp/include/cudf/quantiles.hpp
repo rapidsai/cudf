@@ -46,7 +46,8 @@ namespace cudf {
  *                            ignored.
  * @param[in] exact           If true, returns doubles.
  *                            If false, returns same type as input.
-
+ * @param[in] mr              Device memory resource used to allocate the returned column's device
+ memory
  * @returns Column of specified quantiles, with nulls for indeterminable values.
  */
 
@@ -79,10 +80,12 @@ std::unique_ptr<column> quantile(
  * @param q               Desired quantiles in range [0, 1].
  * @param interp          Strategy used to select between the two rows on either
                           side of the desired quantile.
- * @param sorted          Indicates if the input has been pre-sorted.
+ * @param is_input_sorted Indicates if the input has been pre-sorted.
  * @param column_order    The desired sort order for each column.
  * @param null_precedence The desired order of null compared to other elements.
+ * @param mr              Device memory resource used to allocate the returned table's device memory
  *
+ * @returns Table of specified quantiles, with nulls for indeterminable values.
  * @throws cudf::logic_error if `interp` is an arithmetic interpolation strategy
  * @throws cudf::logic_error if `input` is empty
  */
