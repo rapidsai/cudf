@@ -5,9 +5,9 @@ from __future__ import annotations
 
 from nvtx import annotate
 
-import cudf
 from cudf.api.types import is_list_like
 from cudf.core.frame import Frame
+from cudf.core.multiindex import MultiIndex
 
 
 class IndexedFrame(Frame):
@@ -124,25 +124,24 @@ class IndexedFrame(Frame):
 
         if axis in (0, "index"):
             idx = self.index
-            if isinstance(idx, cudf.MultiIndex):
-                if level is None:
-                    midx_data = idx.to_frame(index=False)
-                else:
+            if isinstance(idx, MultiIndex):
+                if level is not None:
                     # Pandas doesn't handle na_position in case of MultiIndex.
                     na_position = "first" if ascending is True else "last"
                     labels = [
                         idx._get_level_label(lvl)
                         for lvl in (level if is_list_like(level) else (level,))
                     ]
-                    # TODO: We should be able to accomplish what we need here
-                    # with a Frame (or IndexedFrame), not a DataFrame.
-                    midx_data = cudf.DataFrame._from_data(
-                        idx._data.select_by_label(labels)
-                    )
+                    # Explicitly construct a Frame rather than using type(self)
+                    # to avoid constructing a SingleColumnFrame (e.g. Series).
+                    idx = Frame._from_data(idx._data.select_by_label(labels))
 
-                inds = midx_data.argsort(
+                inds = idx._get_sorted_inds(
                     ascending=ascending, na_position=na_position
                 )
+                # TODO: This line is abusing the fact that take accepts a
+                # column, not just user-facing objects. We will want to
+                # refactor that in the future.
                 out = self.take(inds)
             elif (ascending and idx.is_monotonic_increasing) or (
                 not ascending and idx.is_monotonic_decreasing
