@@ -1634,7 +1634,7 @@ class MultiIndex(Frame, BaseIndex):
 
         # Handle partial key search. If length of `key` is less than `nlevels`,
         # Only search levels up to `len(key)` level.
-        key_as_table = libcudf.table.Table(
+        key_as_table = cudf.core.frame.Frame(
             {i: column.as_column(k, length=1) for i, k in enumerate(key)}
         )
         partial_index = self.__class__._from_data(
