@@ -409,6 +409,11 @@ std::unique_ptr<column> shift(
  * @return Vector of views of `input` indicated by the ranges in `indices`.
  */
 std::vector<column_view> slice(column_view const& input, host_span<size_type const> indices);
+/**
+ * @copydoc cudf::slice(column_view const&, host_span<size_type const>)
+ *
+ * @param indices Indices used to take slices of `input`.
+ */
 std::vector<column_view> slice(column_view const& input, std::initializer_list<size_type> indices);
 
 /**
@@ -444,6 +449,11 @@ std::vector<column_view> slice(column_view const& input, std::initializer_list<s
  * @return Vector of views of `input` indicated by the ranges in `indices`.
  */
 std::vector<table_view> slice(table_view const& input, host_span<size_type const> indices);
+/**
+ * @copydoc cudf::slice(table_view const&, host_span<size_type const>)
+ *
+ * @param indices Indices used to take slices of `input`.
+ */
 std::vector<table_view> slice(table_view const& input, std::initializer_list<size_type> indices);
 
 /**
