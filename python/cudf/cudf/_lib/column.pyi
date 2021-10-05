@@ -21,6 +21,7 @@ class Column:
     _null_count: int
     _children: Tuple[ColumnBase, ...]
     _base_children: Tuple[ColumnBase, ...]
+    _distinct_count: int
 
     def __init__(
         self,
