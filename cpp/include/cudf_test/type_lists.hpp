@@ -32,7 +32,7 @@
 #include <type_traits>
 
 /**
- * @filename type_lists.hpp
+ * @file type_lists.hpp
  * @brief Provides centralized type lists for use in Google Test
  * type-parameterized tests.
  *

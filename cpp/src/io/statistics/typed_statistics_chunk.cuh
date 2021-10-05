@@ -15,7 +15,7 @@
  */
 
 /**
- * @file typed_statistics_chunk
+ * @file typed_statistics_chunk.cuh
  * @brief Templated wrapper to generalize statistics chunk reduction and aggregation
  * across different leaf column types
  */
