@@ -587,6 +587,21 @@ TEST_F(RoundTests, Int64AtBoundaryHalfUp)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected5, result5->view());
 }
 
+TEST_F(RoundTests, FixedPoint128HalfUp)
+{
+  using namespace numeric;
+  using RepType    = cudf::device_storage_type_t<decimal128>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  {
+    auto const input    = fp_wrapper{{-160714515306}, scale_type{-13}};
+    auto const expected = fp_wrapper{{-16071451531}, scale_type{-12}};
+    auto const result   = cudf::round(input, 12, cudf::rounding_method::HALF_UP);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+}
+
 TEST_F(RoundTests, FixedPointAtBoundaryTestHalfUp)
 {
   using namespace numeric;
