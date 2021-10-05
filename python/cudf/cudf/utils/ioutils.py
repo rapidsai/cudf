@@ -887,7 +887,7 @@ index_col : int, string or False, default None
 use_python_file_object : boolean, default True
     If True, Arrow-backed PythonFile objects will be used in place of fsspec
     AbstractBufferedFile objects at IO time. This option is likely to improve
-    performance when making small reads from larger parquet files.
+    performance when making small reads from larger CSV files.
 
 Returns
 -------
