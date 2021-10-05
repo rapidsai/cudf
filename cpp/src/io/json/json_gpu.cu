@@ -142,9 +142,7 @@ __inline__ __device__ T decode_value(char const* begin,
 }
 
 template <typename T, std::enable_if_t<cudf::is_duration<T>()>* = nullptr>
-__inline__ __device__ T decode_value(char const* begin,
-                                     char const* end,
-                                     parse_options_view const& opts)
+__inline__ __device__ T decode_value(char const* begin, char const* end, parse_options_view const&)
 {
   return to_duration<T>(begin, end);
 }
