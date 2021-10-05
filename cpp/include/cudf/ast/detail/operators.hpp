@@ -806,7 +806,7 @@ struct operator_functor<ast_operator::CAST_TO_INT64, false> {
   static constexpr auto arity{1};
 
   template <typename InputT, std::enable_if_t<can_cast_v<InputT, int64_t>>* = nullptr>
-  CUDA_HOST_CALLABLE auto operator()(InputT input) -> int64_t
+  CUDA_DEVICE_CALLABLE auto operator()(InputT input) -> int64_t
   {
     return static_cast<int64_t>(input);
   }
