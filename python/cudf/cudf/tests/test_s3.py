@@ -130,13 +130,25 @@ def test_read_csv(s3_base, s3so, pdf, bytes_per_thread):
     fname = "test_csv_reader.csv"
     bname = "csv"
     buffer = pdf.to_csv(index=False)
+
+    # Use fsspec file object
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         got = cudf.read_csv(
             "s3://{}/{}".format(bname, fname),
             storage_options=s3so,
             bytes_per_thread=bytes_per_thread,
+            use_python_file_object=False,
         )
+    assert_eq(pdf, got)
 
+    # Use Arrow PythonFile object
+    with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
+        got = cudf.read_csv(
+            "s3://{}/{}".format(bname, fname),
+            storage_options=s3so,
+            bytes_per_thread=bytes_per_thread,
+            use_python_file_object=True,
+        )
     assert_eq(pdf, got)
 
 
@@ -161,17 +173,33 @@ def test_read_csv_byte_range(s3_base, s3so, pdf, bytes_per_thread):
     fname = "test_csv_reader_byte_range.csv"
     bname = "csv"
     buffer = pdf.to_csv(index=False)
+    expect = pdf.iloc[-2:].reset_index(drop=True)
+
+    # Use fsspec file object
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         got = cudf.read_csv(
             "s3://{}/{}".format(bname, fname),
             storage_options=s3so,
             byte_range=(74, 73),
             bytes_per_thread=bytes_per_thread,
-            header=False,
+            header=None,
             names=["Integer", "Float", "Integer2", "String", "Boolean"],
+            use_python_file_object=False,
         )
+    assert_eq(expect, got)
 
-    assert_eq(pdf.iloc[-2:].reset_index(drop=True), got)
+    # Use Arrow PythonFile object
+    with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
+        got = cudf.read_csv(
+            "s3://{}/{}".format(bname, fname),
+            storage_options=s3so,
+            byte_range=(74, 73),
+            bytes_per_thread=bytes_per_thread,
+            header=None,
+            names=["Integer", "Float", "Integer2", "String", "Boolean"],
+            use_python_file_object=True,
+        )
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("chunksize", [None, 3])

@@ -884,6 +884,10 @@ prefix : str, default None
 index_col : int, string or False, default None
     Column to use as the row labels of the DataFrame. Passing `index_col=False`
     explicitly disables index column inference and discards the last column.
+use_python_file_object : boolean, default True
+    If True, Arrow-backed PythonFile objects will be used in place of fsspec
+    AbstractBufferedFile objects at IO time. This option is likely to improve
+    performance when making small reads from larger parquet files.
 
 Returns
 -------
@@ -1513,7 +1517,6 @@ def _fsspec_data_transfer(
     bytes_per_thread=256_000_000,
     max_gap=64_000,
     mode="rb",
-    clip_local_buffer=False,
     **kwargs,
 ):
 
@@ -1572,14 +1575,6 @@ def _fsspec_data_transfer(
         _read_byte_ranges(
             path_or_fob, byte_ranges, buf, fs=fs, **kwargs,
         )
-
-    if clip_local_buffer:
-        # If we only need the populated byte range
-        # (e.g. a csv byte-range read) then clip parts
-        # of the local buffer that are outside this range
-        start = byte_ranges[0][0]
-        end = byte_ranges[-1][0] + byte_ranges[-1][1]
-        return buf[start:end].tobytes()
 
     return buf.tobytes()
 
