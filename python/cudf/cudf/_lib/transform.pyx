@@ -25,9 +25,9 @@ from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport bitmask_type, data_type, size_type, type_id
 from cudf._lib.types cimport underlying_type_t_type_id
 from cudf._lib.utils cimport (
+    data_from_table_view,
     data_from_unique_ptr,
     table_view_from_table,
-    data_from_table_view
 )
 
 
