@@ -310,7 +310,7 @@ std::unique_ptr<table> scatter(table_view const& source,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(scatter_map.size() <= std::numeric_limits<size_type>::max(),
+  CUDF_EXPECTS(scatter_map.size() <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
                "invalid scatter map size");
   auto map_col = column_view(data_type{type_to_id<size_type>()},
                              static_cast<size_type>(scatter_map.size()),
