@@ -5415,9 +5415,7 @@ def _drop_rows_by_labels(
     if isinstance(level, int) and level >= obj.index.nlevels:
         raise ValueError("Param level out of bounds.")
 
-    if not isinstance(
-        labels, cudf.core._single_column_frame.SingleColumnFrame
-    ):
+    if not isinstance(labels, cudf.core.single_column_frame.SingleColumnFrame):
         labels = as_column(labels)
 
     if isinstance(obj._index, cudf.MultiIndex):

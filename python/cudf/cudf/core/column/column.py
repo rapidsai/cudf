@@ -81,7 +81,7 @@ class ColumnBase(Column, Serializable):
         """
         Converts a Column to Frame
         """
-        return cudf.core._single_column_frame.SingleColumnFrame(
+        return cudf.core.single_column_frame.SingleColumnFrame(
             {None: self.copy(deep=False)}
         )
 
