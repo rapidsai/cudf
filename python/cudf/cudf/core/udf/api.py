@@ -14,3 +14,11 @@ class Masked:
     def __init__(self, value, valid):
         self.value = value
         self.valid = valid
+
+
+def pack_return(masked_or_scalar):
+    # Blank function to give us something for the typing and
+    # lowering to grab onto. Just a dummy function for us to
+    # call within kernels that will get replaced later by the
+    # lowered implementation
+    pass

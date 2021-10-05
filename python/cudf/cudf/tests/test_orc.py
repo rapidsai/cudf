@@ -5,6 +5,7 @@ import decimal
 import os
 import random
 from io import BytesIO
+from string import ascii_lowercase
 
 import numpy as np
 import pandas as pd
@@ -1432,3 +1433,73 @@ def test_orc_writer_lists_empty_rg(data):
 
     pdf_out = pa.orc.ORCFile(buffer).read().to_pandas()
     assert_eq(pdf_in, pdf_out)
+
+
+def test_statistics_sum_overflow():
+    maxint64 = np.iinfo(np.int64).max
+    minint64 = np.iinfo(np.int64).min
+
+    buff = BytesIO()
+    with po.Writer(
+        buff, po.Struct(a=po.BigInt(), b=po.BigInt(), c=po.BigInt())
+    ) as writer:
+        writer.write((maxint64, minint64, minint64))
+        writer.write((1, -1, 1))
+
+    file_stats, stripe_stats = cudf.io.orc.read_orc_statistics([buff])
+    assert file_stats[0]["a"].get("sum") is None
+    assert file_stats[0]["b"].get("sum") is None
+    assert file_stats[0]["c"].get("sum") == minint64 + 1
+
+    assert stripe_stats[0]["a"].get("sum") is None
+    assert stripe_stats[0]["b"].get("sum") is None
+    assert stripe_stats[0]["c"].get("sum") == minint64 + 1
+
+
+def test_empty_statistics():
+    buff = BytesIO()
+    orc_schema = po.Struct(
+        a=po.BigInt(),
+        b=po.Double(),
+        c=po.String(),
+        d=po.Decimal(11, 2),
+        e=po.Date(),
+        f=po.Timestamp(),
+        g=po.Boolean(),
+        h=po.Binary(),
+        i=po.BigInt(),
+        # One column with non null value, else cudf/pyorc readers crash
+    )
+    data = tuple([None] * (len(orc_schema.fields) - 1) + [1])
+    with po.Writer(buff, orc_schema) as writer:
+        writer.write(data)
+
+    got = cudf.io.orc.read_orc_statistics([buff])
+
+    # Check for both file and stripe stats
+    for stats in got:
+        # Similar expected stats for the first 6 columns in this case
+        for col_name in ascii_lowercase[:6]:
+            assert stats[0][col_name].get("number_of_values") == 0
+            assert stats[0][col_name].get("has_null") is True
+            assert stats[0][col_name].get("minimum") is None
+            assert stats[0][col_name].get("maximum") is None
+        for col_name in ascii_lowercase[:3]:
+            assert stats[0][col_name].get("sum") == 0
+        # Sum for decimal column is a string
+        assert stats[0]["d"].get("sum") == "0"
+
+        assert stats[0]["g"].get("number_of_values") == 0
+        assert stats[0]["g"].get("has_null") is True
+        assert stats[0]["g"].get("true_count") == 0
+        assert stats[0]["g"].get("false_count") == 0
+
+        assert stats[0]["h"].get("number_of_values") == 0
+        assert stats[0]["h"].get("has_null") is True
+        assert stats[0]["h"].get("sum") == 0
+
+        assert stats[0]["i"].get("number_of_values") == 1
+        assert stats[0]["i"].get("has_null") is False
+        assert stats[0]["i"].get("minimum") == 1
+        assert stats[0]["i"].get("maximum") == 1
+        assert stats[0]["i"].get("sum") == 1

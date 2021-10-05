@@ -331,21 +331,6 @@ class Series(SingleColumnFrame, Serializable):
         """
         return cls(s, nan_as_null=nan_as_null)
 
-    def serialize(self):
-        header = {}
-        frames = []
-        header["type-serialized"] = pickle.dumps(type(self))
-        header["index"], index_frames = self._index.serialize()
-        header["index_frame_count"] = len(index_frames)
-        frames.extend(index_frames)
-
-        header["column"], column_frames = self._column.serialize()
-        header["column_frame_count"] = len(column_frames)
-        frames.extend(column_frames)
-
-        header["name"] = pickle.dumps(self.name)
-        return header, frames
-
     @property
     def dt(self):
         """
@@ -374,20 +359,42 @@ class Series(SingleColumnFrame, Serializable):
                 "Can only use .dt accessor with datetimelike values"
             )
 
+    def serialize(self):
+        header, frames = super().serialize()
+
+        header["index"], index_frames = self._index.serialize()
+        header["index_frame_count"] = len(index_frames)
+        # For backwards compatibility with older versions of cuDF, index
+        # columns are placed before data columns.
+        frames = index_frames + frames
+
+        return header, frames
+
     @classmethod
     def deserialize(cls, header, frames):
+        if "column" in header:
+            warnings.warn(
+                "Series objects serialized in cudf version "
+                "21.10 or older will no longer be deserializable "
+                "after version 21.12. Please load and resave any "
+                "pickles before upgrading to version 22.02.",
+                DeprecationWarning,
+            )
+            header["columns"] = [header.pop("column")]
+            header["column_names"] = pickle.dumps(
+                [pickle.loads(header["name"])]
+            )
+
         index_nframes = header["index_frame_count"]
+        obj = super().deserialize(
+            header, frames[header["index_frame_count"] :]
+        )
+
         idx_typ = pickle.loads(header["index"]["type-serialized"])
         index = idx_typ.deserialize(header["index"], frames[:index_nframes])
-        name = pickle.loads(header["name"])
+        obj._index = index
 
-        frames = frames[index_nframes:]
-
-        column_nframes = header["column_frame_count"]
-        col_typ = pickle.loads(header["column"]["type-serialized"])
-        column = col_typ.deserialize(header["column"], frames[:column_nframes])
-
-        return cls._from_data({name: column}, index=index)
+        return obj
 
     def _get_columns_by_label(self, labels, downcast=False):
         """Return the column specified by `labels`
@@ -738,25 +745,6 @@ class Series(SingleColumnFrame, Serializable):
         index = index if isinstance(index, BaseIndex) else as_index(index)
         return self._from_data(self._data, index, self.name)
 
-    def as_index(self):
-        """Returns a new Series with a RangeIndex.
-
-        Examples
-        ----------
-        >>> s = cudf.Series([1,2,3], index=['a','b','c'])
-        >>> s
-        a    1
-        b    2
-        c    3
-        dtype: int64
-        >>> s.as_index()
-        0    1
-        1    2
-        2    3
-        dtype: int64
-        """
-        return self.set_index(RangeIndex(len(self)))
-
     def to_frame(self, name=None):
         """Convert Series into a DataFrame
 
@@ -800,57 +788,8 @@ class Series(SingleColumnFrame, Serializable):
         return cudf.DataFrame({col: self._column}, index=self.index)
 
     def set_mask(self, mask, null_count=None):
-        """Create new Series by setting a mask array.
-
-        This will override the existing mask.  The returned Series will
-        reference the same data buffer as this Series.
-
-        Parameters
-        ----------
-        mask : 1D array-like
-            The null-mask.  Valid values are marked as ``1``; otherwise ``0``.
-            The mask bit given the data index ``idx`` is computed as::
-
-                (mask[idx // 8] >> (idx % 8)) & 1
-        null_count : int, optional
-            The number of null values.
-            If None, it is calculated automatically.
-
-        Returns
-        -------
-        Series
-            A new series with the applied mask.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([1, 2, 3, 4, 5])
-        >>> ref_array = cudf.Series([10, None, 11, None, 16])
-        >>> series
-        0    1
-        1    2
-        2    3
-        3    4
-        4    5
-        dtype: int64
-        >>> ref_array
-        0      10
-        1    <NA>
-        2      11
-        3    <NA>
-        4      16
-        dtype: int64
-        >>> series.set_mask(ref_array._column.mask)
-        0       1
-        1    <NA>
-        2       3
-        3    <NA>
-        4       5
-        dtype: int64
-        """
         warnings.warn(
-            "Series.set_mask is deprecated and will be removed "
-            "in the future.",
+            "Series.set_mask is deprecated and will be removed in the future.",
             DeprecationWarning,
         )
         return self._from_data(
@@ -2540,43 +2479,13 @@ class Series(SingleColumnFrame, Serializable):
             value=value, method=method, axis=axis, inplace=inplace, limit=limit
         )
 
+    # TODO: When this method is removed we can also remove ColumnBase.to_array.
     def to_array(self, fillna=None):
-        """Get a dense numpy array for the data.
-
-        Parameters
-        ----------
-        fillna : str or None
-            Defaults to None, which will skip null values.
-            If it equals "pandas", null values are filled with NaNs.
-            Non integral dtype is promoted to np.float64.
-
-        Returns
-        -------
-        numpy.ndarray
-            A numpy array representation of the elements in the Series.
-
-        Notes
-        -----
-        If ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([10, 11, 12, 13, 14])
-        >>> series
-        0    10
-        1    11
-        2    12
-        3    13
-        4    14
-        dtype: int64
-        >>> array = series.to_array()
-        >>> array
-        array([10, 11, 12, 13, 14])
-        >>> type(array)
-        <class 'numpy.ndarray'>
-        """
+        warnings.warn(
+            "The to_array method will be removed in a future cuDF "
+            "release. Consider using `to_numpy` instead.",
+            DeprecationWarning,
+        )
         return self._column.to_array(fillna=fillna)
 
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
@@ -2912,81 +2821,10 @@ class Series(SingleColumnFrame, Serializable):
         """
         return self._sort(ascending=ascending, na_position=na_position)[1]
 
-    def sort_index(
-        self,
-        axis=0,
-        level=None,
-        ascending=True,
-        inplace=False,
-        kind=None,
-        na_position="last",
-        sort_remaining=True,
-        ignore_index=False,
-    ):
-        """
-        Sort by the index.
-
-        Parameters
-        ----------
-        axis : {0 or ‘index’, 1 or ‘columns’}, default 0
-            Axis to direct sorting. This can only be 0 for Series.
-        level : int or level name or list of ints or list of level names
-            If not None, sort on values in specified index level(s).
-            This is only useful in the case of MultiIndex.
-        ascending : bool, default True
-            Sort ascending vs. descending.
-        inplace : bool, default False
-            If True, perform operation in-place.
-        kind : sorting method such as `quick sort` and others.
-            Not yet supported.
-        na_position : {‘first’, ‘last’}, default ‘last’
-            Puts NaNs at the beginning if first; last puts NaNs at the end.
-        sort_remaining : bool, default True
-            Not yet supported
-        ignore_index : bool, default False
-            if True, index will be replaced with RangeIndex.
-
-        Returns
-        -------
-        Series
-            The original Series sorted by the labels.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series(['a', 'b', 'c', 'd'], index=[3, 2, 1, 4])
-        >>> series
-        3    a
-        2    b
-        1    c
-        4    d
-        dtype: object
-        >>> series.sort_index()
-        1    c
-        2    b
-        3    a
-        4    d
-        dtype: object
-
-        Sort Descending
-
-        >>> series.sort_index(ascending=False)
-        4    d
-        3    a
-        2    b
-        1    c
-        dtype: object
-        """
-        return super()._sort_index(
-            axis=axis,
-            level=level,
-            ascending=ascending,
-            inplace=inplace,
-            kind=kind,
-            na_position=na_position,
-            sort_remaining=sort_remaining,
-            ignore_index=ignore_index,
-        )
+    def sort_index(self, axis=0, *args, **kwargs):
+        if axis not in (0, "index"):
+            raise ValueError("Only axis=0 is valid for Series.")
+        return super().sort_index(axis=axis, *args, **kwargs)
 
     def sort_values(
         self,
@@ -3217,170 +3055,14 @@ class Series(SingleColumnFrame, Serializable):
         sr_inds = self._from_data({self.name: col_inds}, self._index)
         return sr_keys, sr_inds
 
-    def replace(
-        self,
-        to_replace=None,
-        value=None,
-        inplace=False,
-        limit=None,
-        regex=False,
-        method=None,
-    ):
-        """
-        Replace values given in ``to_replace`` with ``value``.
-
-        Parameters
-        ----------
-        to_replace : numeric, str or list-like
-            Value(s) to replace.
-
-            * numeric or str:
-                - values equal to ``to_replace`` will be replaced
-                  with ``value``
-            * list of numeric or str:
-                - If ``value`` is also list-like, ``to_replace`` and
-                  ``value`` must be of same length.
-            * dict:
-                - Dicts can be used to specify different replacement values
-                  for different existing values. For example, {'a': 'b',
-                  'y': 'z'} replaces the value ‘a’ with ‘b’ and
-                  ‘y’ with ‘z’.
-                  To use a dict in this way the ``value`` parameter should
-                  be ``None``.
-        value : scalar, dict, list-like, str, default None
-            Value to replace any values matching ``to_replace`` with.
-        inplace : bool, default False
-            If True, in place.
-
-        See also
-        --------
-        Series.fillna
-
-        Raises
-        ------
-        TypeError
-            - If ``to_replace`` is not a scalar, array-like, dict, or None
-            - If ``to_replace`` is a dict and value is not a list, dict,
-              or Series
-        ValueError
-            - If a list is passed to ``to_replace`` and ``value`` but they
-              are not the same length.
-
-        Returns
-        -------
-        result : Series
-            Series after replacement. The mask and index are preserved.
-
-        Notes
-        -----
-        Parameters that are currently not supported are: `limit`, `regex`,
-        `method`
-
-        Examples
-        --------
-
-        Scalar ``to_replace`` and ``value``
-
-        >>> import cudf
-        >>> s = cudf.Series([0, 1, 2, 3, 4])
-        >>> s
-        0    0
-        1    1
-        2    2
-        3    3
-        4    4
-        dtype: int64
-        >>> s.replace(0, 5)
-        0    5
-        1    1
-        2    2
-        3    3
-        4    4
-        dtype: int64
-
-        List-like ``to_replace``
-
-        >>> s.replace([1, 2], 10)
-        0     0
-        1    10
-        2    10
-        3     3
-        4     4
-        dtype: int64
-
-        dict-like ``to_replace``
-
-        >>> s.replace({1:5, 3:50})
-        0     0
-        1     5
-        2     2
-        3    50
-        4     4
-        dtype: int64
-        >>> s = cudf.Series(['b', 'a', 'a', 'b', 'a'])
-        >>> s
-        0     b
-        1     a
-        2     a
-        3     b
-        4     a
-        dtype: object
-        >>> s.replace({'a': None})
-        0       b
-        1    <NA>
-        2    <NA>
-        3       b
-        4    <NA>
-        dtype: object
-
-        If there is a mimatch in types of the values in
-        ``to_replace`` & ``value`` with the actual series, then
-        cudf exhibits different behaviour with respect to pandas
-        and the pairs are ignored silently:
-
-        >>> s = cudf.Series(['b', 'a', 'a', 'b', 'a'])
-        >>> s
-        0    b
-        1    a
-        2    a
-        3    b
-        4    a
-        dtype: object
-        >>> s.replace('a', 1)
-        0    b
-        1    a
-        2    a
-        3    b
-        4    a
-        dtype: object
-        >>> s.replace(['a', 'c'], [1, 2])
-        0    b
-        1    a
-        2    a
-        3    b
-        4    a
-        dtype: object
-        """
-        if limit is not None:
-            raise NotImplementedError("limit parameter is not implemented yet")
-
-        if regex:
-            raise NotImplementedError("regex parameter is not implemented yet")
-
-        if method not in ("pad", None):
-            raise NotImplementedError(
-                "method parameter is not implemented yet"
-            )
-
+    def replace(self, to_replace=None, value=None, *args, **kwargs):
         if is_dict_like(to_replace) and value is not None:
             raise ValueError(
                 "Series.replace cannot use dict-like to_replace and non-None "
                 "value"
             )
 
-        result = super().replace(to_replace=to_replace, replacement=value)
-
-        return self._mimic_inplace(result, inplace=inplace)
+        return super().replace(to_replace, value, *args, **kwargs)
 
     def update(self, other):
         """
@@ -3487,35 +3169,10 @@ class Series(SingleColumnFrame, Serializable):
         self.mask(mask, other, inplace=True)
 
     def reverse(self):
-        """
-        Reverse the Series
-
-        Returns
-        -------
-        Series
-            A reversed Series.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([1, 2, 3, 4, 5, 6])
-        >>> series
-        0    1
-        1    2
-        2    3
-        3    4
-        4    5
-        5    6
-        dtype: int64
-        >>> series.reverse()
-        5    6
-        4    5
-        3    4
-        2    3
-        1    2
-        0    1
-        dtype: int64
-        """
+        warnings.warn(
+            "Series.reverse is deprecated and will be removed in the future.",
+            DeprecationWarning,
+        )
         rinds = column.arange((self._column.size - 1), -1, -1, dtype=np.int32)
         return self._from_data(
             {self.name: self._column[rinds]}, self.index._values[rinds]
@@ -3637,6 +3294,12 @@ class Series(SingleColumnFrame, Serializable):
         dtype: int8
         """
 
+        warnings.warn(
+            "Series.label_encoding is deprecated and will be removed in the future.\
+                 Consider using cuML's LabelEncoder instead",
+            DeprecationWarning,
+        )
+
         def _return_sentinel_series():
             return Series(
                 cudf.core.column.full(
@@ -3678,6 +3341,94 @@ class Series(SingleColumnFrame, Serializable):
         return codes
 
     # UDF related
+    def apply(self, func, convert_dtype=True, args=(), **kwargs):
+        """
+        Apply a scalar function to the values of a Series.
+
+        Similar to `pandas.Series.apply. Applies a user
+        defined function elementwise over a series.
+
+        Parameters
+        ----------
+        func : function
+            Scalar Python function to apply.
+        convert_dtype : bool, default True
+            In cuDF, this parameter is always True. Because
+            cuDF does not support arbitrary object dtypes,
+            the result will always be the common type as determined
+            by numba based on the function logic and argument types.
+            See examples for details.
+        args : tuple
+            Not supported
+        **kwargs
+            Not supported
+
+        Notes
+        -----
+        UDFs are cached in memory to avoid recompilation. The first
+        call to the UDF will incur compilation overhead.
+
+        Examples
+        --------
+
+        Apply a basic function to a series
+        >>> sr = cudf.Series([1,2,3])
+        >>> def f(x):
+        ...     return x + 1
+        >>> sr.apply(f)
+        0    2
+        1    3
+        2    4
+        dtype: int64
+
+        Apply a basic function to a series with nulls
+        >>> sr = cudf.Series([1,cudf.NA,3])
+        >>> def f(x):
+        ...     return x + 1
+        >>> sr.apply(f)
+        0       2
+        1    <NA>
+        2       4
+        dtype: int64
+
+        Use a function that does something conditionally,
+        based on if the value is or is not null
+        >>> sr = cudf.Series([1,cudf.NA,3])
+        >>> def f(x):
+        ...     if x is cudf.NA:
+        ...         return 42
+        ...     else:
+        ...         return x - 1
+        >>> sr.apply(f)
+        0     0
+        1    42
+        2     2
+        dtype: int64
+
+        Results will be upcast to the common dtype required
+        as derived from the UDFs logic. Note that this means
+        the common type will be returned even if such data
+        is passed that would not result in any values of that
+        dtype.
+
+        >>> sr = cudf.Series([1,cudf.NA,3])
+        >>> def f(x):
+        ...     return x + 1.5
+        >>> sr.apply(f)
+        0     2.5
+        1    <NA>
+        2     4.5
+        dtype: float64
+
+
+
+        """
+        if args or kwargs:
+            raise ValueError(
+                "UDFs using *args or **kwargs are not yet supported."
+            )
+
+        return super()._apply(func)
 
     def applymap(self, udf, out_dtype=None):
         """Apply an elementwise function to transform the values in the Column.
@@ -3889,39 +3640,9 @@ class Series(SingleColumnFrame, Serializable):
         return Series(val_counts.index.sort_values(), name=self.name)
 
     def round(self, decimals=0, how="half_even"):
-        """
-        Round each value in a Series to the given number of decimals.
-
-        Parameters
-        ----------
-        decimals : int, default 0
-            Number of decimal places to round to. If decimals is negative,
-            it specifies the number of positions to the left of the decimal
-            point.
-        how : str, optional
-            Type of rounding. Can be either "half_even" (default)
-            of "half_up" rounding.
-
-        Returns
-        -------
-        Series
-            Rounded values of the Series.
-
-        Examples
-        --------
-        >>> s = cudf.Series([0.1, 1.4, 2.9])
-        >>> s.round()
-        0    0.0
-        1    1.0
-        2    3.0
-        dtype: float64
-        """
-        return Series(
-            self._column.round(decimals=decimals, how=how),
-            name=self.name,
-            index=self.index,
-            dtype=self.dtype,
-        )
+        if not isinstance(decimals, int):
+            raise ValueError("decimals must be an int")
+        return super().round(decimals, how)
 
     def cov(self, other, min_periods=None):
         """
@@ -4548,7 +4269,7 @@ class Series(SingleColumnFrame, Serializable):
             )
             data = (
                 [self.count(), self.mean(), self.std(), self.min()]
-                + self.quantile(percentiles).to_array(fillna="pandas").tolist()
+                + self.quantile(percentiles).to_numpy(na_value=np.nan).tolist()
                 + [self.max()]
             )
             data = _format_stats_values(data)
@@ -4574,7 +4295,7 @@ class Series(SingleColumnFrame, Serializable):
                 ]
                 + self.quantile(percentiles)
                 .astype("str")
-                .to_array(fillna="pandas")
+                .to_numpy(na_value=None)
                 .tolist()
                 + [str(pd.Timedelta(self.max()))]
             )
@@ -4626,7 +4347,7 @@ class Series(SingleColumnFrame, Serializable):
                 ]
                 + self.quantile(percentiles)
                 .astype("str")
-                .to_array(fillna="pandas")
+                .to_numpy(na_value=None)
                 .tolist()
                 + [str(pd.Timestamp((self.max()).astype("datetime64[ns]")))]
             )
@@ -4940,7 +4661,6 @@ class Series(SingleColumnFrame, Serializable):
             right_index=right_index,
             how=how,
             sort=sort,
-            method=method,
             indicator=False,
             suffixes=suffixes,
         )
@@ -5503,6 +5223,49 @@ class DatetimeProperties(object):
             {None: res}, index=self.series._index, name=self.series.name,
         )
 
+    def isocalendar(self):
+        """
+        Returns a DataFrame with the year, week, and day
+        calculated according to the ISO 8601 standard.
+
+        Returns
+        -------
+        DataFrame
+        with columns year, week and day
+
+        Examples
+        --------
+        >>> ser = cudf.Series(pd.date_range(start="2021-07-25",
+        ... end="2021-07-30"))
+        >>> ser.dt.isocalendar()
+           year  week  day
+        0  2021    29    7
+        1  2021    30    1
+        2  2021    30    2
+        3  2021    30    3
+        4  2021    30    4
+        5  2021    30    5
+        >>> ser.dt.isocalendar().week
+        0    29
+        1    30
+        2    30
+        3    30
+        4    30
+        5    30
+        Name: week, dtype: object
+
+        >>> serIndex = cudf.to_datetime(pd.Series(["2010-01-01", pd.NaT]))
+        >>> serIndex.dt.isocalendar()
+            year  week  day
+        0  2009    53     5
+        1  <NA>  <NA>  <NA>
+        >>> serIndex.dt.isocalendar().year
+        0    2009
+        1    <NA>
+        Name: year, dtype: object
+        """
+        return cudf.core.tools.datetimes._to_iso_calendar(self)
+
     @property
     def is_month_start(self):
         """
@@ -5806,9 +5569,8 @@ class DatetimeProperties(object):
         Notes
         -----
 
-        The following date format identifiers are not yet supported: ``%a``,
-        ``%A``, ``%w``, ``%b``, ``%B``, ``%U``, ``%W``, ``%c``, ``%x``,
-        ``%X``, ``%G``, ``%u``, ``%V``
+        The following date format identifiers are not yet
+        supported: ``%c``, ``%x``,``%X``
 
         Examples
         --------
@@ -5847,19 +5609,9 @@ class DatetimeProperties(object):
         # once https://github.com/rapidsai/cudf/issues/5991
         # is implemented
         not_implemented_formats = {
-            "%a",
-            "%A",
-            "%w",
-            "%b",
-            "%B",
-            "%U",
-            "%W",
             "%c",
             "%x",
             "%X",
-            "%G",
-            "%u",
-            "%V",
         }
         for d_format in not_implemented_formats:
             if d_format in date_format:
@@ -5869,7 +5621,6 @@ class DatetimeProperties(object):
                     f"https://github.com/rapidsai/cudf/issues/5991 "
                     f"for tracking purposes."
                 )
-
         str_col = self.series._column.as_string_column(
             dtype="str", format=date_format
         )
