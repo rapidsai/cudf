@@ -165,7 +165,9 @@ def to_numeric(arg, errors="raise", downcast=None):
     if isinstance(arg, (cudf.Series, pd.Series)):
         return cudf.Series(col)
     else:
-        col = col.fillna(col.default_na_value())
+        if col.has_nulls:
+            # To match pandas, always return a floating type filled with nan.
+            col = col.astype(float).fillna(np.nan)
         return col.values
 
 

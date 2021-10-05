@@ -28,7 +28,6 @@ import cudf
 from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
-from cudf._lib.table import Table
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
@@ -61,7 +60,7 @@ T = TypeVar("T", bound="Frame")
 
 def _lexsorted_equal_range(
     idx: Union[GenericIndex, cudf.MultiIndex],
-    key_as_table: Table,
+    key_as_table: Frame,
     is_sorted: bool,
 ) -> Tuple[int, int, Optional[ColumnBase]]:
     """Get equal range for key in lexicographically sorted index. If index
@@ -825,7 +824,9 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 "is specified."
             )
 
-        key_as_table = Table({"None": as_column(key, length=1)})
+        key_as_table = cudf.core.frame.Frame(
+            {"None": as_column(key, length=1)}
+        )
         lower_bound, upper_bound, sort_inds = _lexsorted_equal_range(
             self, key_as_table, is_sorted
         )
@@ -870,8 +871,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         # Not sorted and not unique. Return a boolean mask
         mask = cupy.full(self._data.nrows, False)
-        true_inds = sort_inds.slice(lower_bound, upper_bound).to_gpu_array()
-        mask[cupy.array(true_inds)] = True
+        true_inds = sort_inds.slice(lower_bound, upper_bound).values
+        mask[true_inds] = True
         return mask
 
     def __sizeof__(self):
@@ -1615,6 +1616,27 @@ class DatetimeIndex(GenericIndex):
         res = extract_quarter(self._values)
         return Int8Index(res, dtype="int8")
 
+    def isocalendar(self):
+        """
+        Returns a DataFrame with the year, week, and day
+        calculated according to the ISO 8601 standard.
+
+        Returns
+        -------
+        DataFrame
+        with columns year, week and day
+
+        Examples
+        --------
+        >>> gIndex = cudf.DatetimeIndex(["2020-05-31 08:00:00",
+        ...    "1999-12-31 18:40:00"])
+        >>> gIndex.isocalendar()
+                             year  week  day
+        2020-05-31 08:00:00  2020    22    7
+        1999-12-31 18:40:00  1999    52    5
+        """
+        return cudf.core.tools.datetimes._to_iso_calendar(self)
+
     def to_pandas(self):
         nanos = self._values.astype("datetime64[ns]")
         return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
@@ -2126,7 +2148,9 @@ class StringIndex(GenericIndex):
         super().__init__(values, **kwargs)
 
     def to_pandas(self):
-        return pd.Index(self.to_array(), name=self.name, dtype="object")
+        return pd.Index(
+            self.to_numpy(na_value=None), name=self.name, dtype="object"
+        )
 
     def take(self, indices):
         return self._values[indices]

@@ -1613,7 +1613,7 @@ class MultiIndex(Frame, BaseIndex):
 
         # Handle partial key search. If length of `key` is less than `nlevels`,
         # Only search levels up to `len(key)` level.
-        key_as_table = libcudf.table.Table(
+        key_as_table = cudf.core.frame.Frame(
             {i: column.as_column(k, length=1) for i, k in enumerate(key)}
         )
         partial_index = self.__class__._from_data(
@@ -1640,9 +1640,7 @@ class MultiIndex(Frame, BaseIndex):
             # the range is returned.
             return slice(lower_bound, upper_bound)
 
-        true_inds = cupy.array(
-            sort_inds.slice(lower_bound, upper_bound).to_gpu_array()
-        )
+        true_inds = sort_inds.slice(lower_bound, upper_bound).values
         true_inds = _maybe_indices_to_slice(true_inds)
         if isinstance(true_inds, slice):
             return true_inds

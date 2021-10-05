@@ -288,7 +288,7 @@ class NumericalColumn(NumericalBaseColumn):
 
         return lhs, rhs
 
-    def default_na_value(self) -> ScalarLike:
+    def _default_na_value(self) -> ScalarLike:
         """Returns the default NA value for this column
         """
         dkind = self.dtype.kind

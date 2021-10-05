@@ -684,7 +684,7 @@ TEST(RankScanTest, ExclusiveScan)
 
   CUDF_EXPECT_THROW_MESSAGE(
     scan(vals, make_dense_rank_aggregation(), scan_type::EXCLUSIVE, null_policy::INCLUDE),
-    "Unsupported rank aggregation operator for exclusive scan");
+    "Unsupported dense rank aggregation operator for exclusive scan");
   CUDF_EXPECT_THROW_MESSAGE(
     scan(vals, make_rank_aggregation(), scan_type::EXCLUSIVE, null_policy::INCLUDE),
     "Unsupported rank aggregation operator for exclusive scan");
