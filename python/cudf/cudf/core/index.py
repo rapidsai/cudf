@@ -36,6 +36,7 @@ from cudf.api.types import (
     is_string_dtype,
 )
 from cudf.core._base_index import BaseIndex
+from cudf.core._single_column_frame import SingleColumnFrame
 from cudf.core.column import (
     CategoricalColumn,
     ColumnBase,
@@ -50,7 +51,7 @@ from cudf.core.column import (
 from cudf.core.column.column import as_column, concat_columns
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
-from cudf.core.frame import Frame, SingleColumnFrame
+from cudf.core.frame import Frame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type
 from cudf.utils.utils import cached_property, search_range

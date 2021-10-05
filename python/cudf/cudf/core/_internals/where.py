@@ -8,9 +8,10 @@ import pandas as pd
 
 import cudf
 from cudf._typing import ColumnLike, ScalarLike
+from cudf.core._single_column_frame import SingleColumnFrame
 from cudf.core.column import ColumnBase
 from cudf.core.dataframe import DataFrame
-from cudf.core.frame import Frame, SingleColumnFrame
+from cudf.core.frame import Frame
 from cudf.core.index import Index
 from cudf.core.series import Series
 

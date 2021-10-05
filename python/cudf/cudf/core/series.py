@@ -31,6 +31,7 @@ from cudf.api.types import (
     is_scalar,
     is_struct_dtype,
 )
+from cudf.core._single_column_frame import SingleColumnFrame
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     DatetimeColumn,
@@ -49,7 +50,7 @@ from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame, SingleColumnFrame, _drop_rows_by_labels
+from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import BaseIndex, RangeIndex, as_index
 from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
