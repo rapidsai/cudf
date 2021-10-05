@@ -23,7 +23,7 @@
 
 #include <io/comp/io_uncomp.h>
 #include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/type_conversion.cuh>
+#include <io/utilities/type_conversion.hpp>
 
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>

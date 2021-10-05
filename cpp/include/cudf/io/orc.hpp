@@ -192,7 +192,7 @@ class orc_reader_options {
   /**
    * @brief Enable/Disable use of numpy-compatible dtypes
    *
-   * @param rows Boolean value to enable/disable.
+   * @param use Boolean value to enable/disable.
    */
   void enable_use_np_dtypes(bool use) { _use_np_dtypes = use; }
 
@@ -295,7 +295,7 @@ class orc_reader_options_builder {
   /**
    * @brief Enable/Disable use of numpy-compatible dtypes.
    *
-   * @param rows Boolean value to enable/disable.
+   * @param use Boolean value to enable/disable.
    * @return this for chaining.
    */
   orc_reader_options_builder& use_np_dtypes(bool use)
@@ -502,7 +502,7 @@ class orc_writer_options_builder {
   /**
    * @brief Sets compression type.
    *
-   * @param compression The compression type to use.
+   * @param comp The compression type to use.
    * @return this for chaining.
    */
   orc_writer_options_builder& compression(compression_type comp)
@@ -766,10 +766,10 @@ class orc_chunked_writer {
   /**
    * @brief Constructor with chunked writer options
    *
-   * @param[in] op options used to write table
+   * @param[in] options options used to write table
    * @param[in] mr Device memory resource to use for device memory allocation
    */
-  orc_chunked_writer(chunked_orc_writer_options const& op,
+  orc_chunked_writer(chunked_orc_writer_options const& options,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**
