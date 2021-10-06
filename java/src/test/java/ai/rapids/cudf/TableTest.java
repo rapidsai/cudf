@@ -51,6 +51,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static ai.rapids.cudf.ColumnWriterOptions.mapColumn;
 import static ai.rapids.cudf.ParquetWriterOptions.listBuilder;
@@ -7211,17 +7212,18 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void fixedWidthRowsRoundTrip() {
-    try (Table t = new TestBuilder()
-        .column(3l, 9l, 4l, 2l, 20l, null)
-        .column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d, null)
-        .column(5, 1, 0, 2, 7, null)
-        .column(true, false, false, true, false, null)
-        .column(1.0f, 3.5f, 5.9f, 7.1f, 9.8f, null)
-        .column(new Byte[]{2, 3, 4, 5, 9, null})
-        .decimal32Column(-3, RoundingMode.UNNECESSARY, 5.0d, 9.5d, 0.9d, 7.23d, 2.8d, null)
-        .decimal64Column(-8, 3L, 9L, 4L, 2L, 20L, null)
-        .build()) {
+  void fixedWidthRowsRoundTripWide() {
+    TestBuilder tb = new TestBuilder();
+    IntStream.range(0, 10).forEach(i -> tb.column(3l, 9l, 4l, 2l, 20l, null));
+    IntStream.range(0, 10).forEach(i -> tb.column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d, null));
+    IntStream.range(0, 10).forEach(i -> tb.column(5, 1, 0, 2, 7, null));
+    IntStream.range(0, 10).forEach(i -> tb.column(true, false, false, true, false, null));
+    IntStream.range(0, 10).forEach(i -> tb.column(1.0f, 3.5f, 5.9f, 7.1f, 9.8f, null));
+    IntStream.range(0, 10).forEach(i -> tb.column(new Byte[]{2, 3, 4, 5, 9, null}));
+    IntStream.range(0, 10).forEach(i -> tb.decimal32Column(-3, RoundingMode.UNNECESSARY, 5.0d,
+        9.5d, 0.9d, 7.23d, 2.8d, null));
+    IntStream.range(0, 10).forEach(i -> tb.decimal64Column(-8, 3L, 9L, 4L, 2L, 20L, null));
+    try (Table t = tb.build()) {
       ColumnVector[] rows = t.convertToRows();
       try {
         // We didn't overflow
@@ -7237,6 +7239,43 @@ public class TableTest extends CudfTestBase {
           types[i] = t.getColumn(i).getType();
         }
         try (Table backAgain = Table.convertFromRows(cv, types)) {
+          assertTablesAreEqual(t, backAgain);
+        }
+      } finally {
+        for (ColumnVector cv : rows) {
+          cv.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void fixedWidthRowsRoundTrip() {
+    try (Table t = new TestBuilder()
+        .column(3l, 9l, 4l, 2l, 20l, null)
+        .column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d, null)
+        .column(5, 1, 0, 2, 7, null)
+        .column(true, false, false, true, false, null)
+        .column(1.0f, 3.5f, 5.9f, 7.1f, 9.8f, null)
+        .column(new Byte[]{2, 3, 4, 5, 9, null})
+        .decimal32Column(-3, RoundingMode.UNNECESSARY, 5.0d, 9.5d, 0.9d, 7.23d, 2.8d, null)
+        .decimal64Column(-8, 3L, 9L, 4L, 2L, 20L, null)
+        .build()) {
+      ColumnVector[] rows = t.convertToRowsFixedWidthOptimized();
+      try {
+        // We didn't overflow
+        assert rows.length == 1;
+        ColumnVector cv = rows[0];
+        assert cv.getRowCount() == t.getRowCount();
+//        try (HostColumnVector hcv = cv.copyToHost()) {
+//          hcv.getChildColumnView(0).getDataBuffer().printBuffer(8);
+//        }
+
+        DType[] types = new DType[t.getNumberOfColumns()];
+        for (int i = 0; i < t.getNumberOfColumns(); i++) {
+          types[i] = t.getColumn(i).getType();
+        }
+        try (Table backAgain = Table.convertFromRowsFixedWidthOptimized(cv, types)) {
           assertTablesAreEqual(t, backAgain);
         }
       } finally {

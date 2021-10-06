@@ -645,7 +645,11 @@ public final class Table implements AutoCloseable {
 
   private static native long[] convertToRows(long nativeHandle);
 
+  private static native long[] convertToRowsFixedWidthOptimized(long nativeHandle);
+
   private static native long[] convertFromRows(long nativeColumnView, int[] types, int[] scale);
+
+  private static native long[] convertFromRowsFixedWidthOptimized(long nativeColumnView, int[] types, int[] scale);
 
   private static native long[] repeatStaticCount(long tableHandle, int count);
 
@@ -2730,6 +2734,15 @@ public final class Table implements AutoCloseable {
     return ret;
   }
 
+  public ColumnVector[] convertToRowsFixedWidthOptimized() {
+    long[] ptrs = convertToRowsFixedWidthOptimized(nativeHandle);
+    ColumnVector[] ret = new ColumnVector[ptrs.length];
+    for (int i = 0; i < ptrs.length; i++) {
+      ret[i] = new ColumnVector(ptrs[i]);
+    }
+    return ret;
+  }
+
   /**
    * Convert a column of list of bytes that is formatted like the output from `convertToRows`
    * and convert it back to a table.
@@ -2748,6 +2761,26 @@ public final class Table implements AutoCloseable {
 
     }
     return new Table(convertFromRows(vec.getNativeView(), types, scale));
+  }
+
+  /**
+   * Convert a column of list of bytes that is formatted like the output from `convertToRows`
+   * and convert it back to a table.
+   * @param vec the row data to process.
+   * @param schema the types of each column.
+   * @return the parsed table.
+   */
+  public static Table convertFromRowsFixedWidthOptimized(ColumnView vec, DType ... schema) {
+    // TODO at some point we need a schema that support nesting so we can support nested types
+    // TODO we will need scale at some point very soon too
+    int[] types = new int[schema.length];
+    int[] scale = new int[schema.length];
+    for (int i = 0; i < schema.length; i++) {
+      types[i] = schema[i].typeId.nativeId;
+      scale[i] = schema[i].getScale();
+
+    }
+    return new Table(convertFromRowsFixedWidthOptimized(vec.getNativeView(), types, scale));
   }
 
   /**
