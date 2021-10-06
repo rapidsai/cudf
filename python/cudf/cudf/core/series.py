@@ -282,9 +282,7 @@ class Series(SingleColumnFrame, Serializable):
         index: Optional[BaseIndex] = None,
         name: Any = None,
     ) -> Series:
-        """
-        Construct the Series from a ColumnAccessor
-        """
+        """Construct the Series from a Mapping."""
         out: Series = super()._from_data(data, index, name)
         if index is None:
             out._index = RangeIndex(out._data.nrows)
@@ -4616,9 +4614,7 @@ class DatetimeProperties(object):
         """
         res = libcudf.datetime.is_leap_year(self.series._column).fillna(False)
         return Series._from_data(
-            ColumnAccessor({None: res}),
-            index=self.series._index,
-            name=self.series.name,
+            {None: res}, index=self.series._index, name=self.series.name,
         )
 
     @property
@@ -4748,9 +4744,7 @@ class DatetimeProperties(object):
         """
         res = libcudf.datetime.days_in_month(self.series._column)
         return Series._from_data(
-            ColumnAccessor({None: res}),
-            index=self.series._index,
-            name=self.series.name,
+            {None: res}, index=self.series._index, name=self.series.name,
         )
 
     @property
@@ -4793,9 +4787,7 @@ class DatetimeProperties(object):
         """  # noqa: E501
         last_day = libcudf.datetime.last_day_of_month(self.series._column)
         last_day = Series._from_data(
-            ColumnAccessor({None: last_day}),
-            index=self.series._index,
-            name=self.series.name,
+            {None: last_day}, index=self.series._index, name=self.series.name,
         )
         return (self.day == last_day.dt.day).fillna(False)
 

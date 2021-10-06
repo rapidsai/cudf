@@ -48,7 +48,6 @@ from cudf.core.column import (
     column_empty,
     concat_columns,
 )
-from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import DataFrameGroupBy
 from cudf.core.index import BaseIndex, RangeIndex, as_index
@@ -220,7 +219,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             else:
                 self._index = as_index(index)
             if columns is not None:
-                self._data = ColumnAccessor(
+                self._data = self.__class__._accessor_type(
                     {
                         k: column.column_empty(
                             len(self), dtype="object", masked=True
@@ -1619,8 +1618,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             return NotImplemented
 
         return self._from_data(
-            ColumnAccessor(type(self)._colwise_binop(operands, fn)),
-            index=lhs._index,
+            type(self)._colwise_binop(operands, fn), index=lhs._index,
         )
 
     def update(
@@ -1928,7 +1926,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if len(columns) != len(data):
             raise ValueError("Duplicate column names are not allowed")
 
-        self._data = ColumnAccessor(
+        self._data = self.__class__._accessor_type(
             data, multiindex=is_multiindex, level_names=columns.names,
         )
 
@@ -2051,7 +2049,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         }
 
         result = self.__class__._from_data(
-            data=cudf.core.column_accessor.ColumnAccessor(
+            data=self.__class__._accessor_type(
                 cols,
                 multiindex=self._data.multiindex,
                 level_names=self._data.level_names,
@@ -6040,11 +6038,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             names=self._data.names, children=self._data.columns, size=len(self)
         )
         return cudf.Series._from_data(
-            cudf.core.column_accessor.ColumnAccessor(
-                {name: col.copy(deep=True)}
-            ),
-            index=self.index,
-            name=name,
+            {name: col.copy(deep=True)}, index=self.index, name=name,
         )
 
     def keys(self):

@@ -69,13 +69,14 @@ class Frame:
         A Frame representing the (optional) index columns.
     """
 
-    _data: "ColumnAccessor"
+    _data: ColumnAccessor
     _index: Optional[cudf.core.index.BaseIndex]
+    _accessor_type = ColumnAccessor
 
     def __init__(self, data=None, index=None):
         if data is None:
             data = {}
-        self._data = cudf.core.column_accessor.ColumnAccessor(data)
+        self._data = self.__class__._accessor_type(data)
         self._index = index
 
     @property
@@ -2116,7 +2117,7 @@ class Frame:
         }
 
         return self.__class__._from_data(
-            data=cudf.core.column_accessor.ColumnAccessor(
+            data=self.__class__._accessor_type(
                 cols,
                 multiindex=self._data.multiindex,
                 level_names=self._data.level_names,
