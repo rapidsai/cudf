@@ -5164,7 +5164,7 @@ class Frame(libcudf.table.Table):
         Examples
         --------
 
-        **dataframe**
+        **DataFrame**
 
         >>> import cudf
         >>> df = cudf.DataFrame({'angles': [0, 3, 4],
