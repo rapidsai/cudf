@@ -60,7 +60,7 @@ def hash(source_table, str method, object initial_hash=None,
     cdef table_view c_source_view = table_view_from_table(
         source_table, ignore_index=True)
     cdef unique_ptr[column] c_result
-    cdef libcudf_types.hash_id c_hash_id
+    cdef libcudf_types.hash_id c_hash_function
     if method == "murmur3":
         c_hash_function = libcudf_types.hash_id.HASH_MURMUR3
     elif method == "md5":
