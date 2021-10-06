@@ -43,9 +43,9 @@ struct scalar_as_column_device_view {
   template <typename T, std::enable_if_t<(is_fixed_width<T>())>* = nullptr>
   return_type operator()(scalar const& s,
                          rmm::cuda_stream_view stream,
-                         rmm::mr::device_memory_resource* mr)
+                         rmm::mr::device_memory_resource*)
   {
-    auto h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
+    auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
     auto col_v =
       column_view(s.type(), 1, h_scalar_type_view.data(), (bitmask_type const*)s.validity_data());
     return std::pair{column_device_view::create(col_v, stream), std::unique_ptr<column>(nullptr)};
@@ -63,8 +63,8 @@ scalar_as_column_device_view::operator()<cudf::string_view>(scalar const& s,
                                                             rmm::cuda_stream_view stream,
                                                             rmm::mr::device_memory_resource* mr)
 {
-  using T                 = cudf::string_view;
-  auto h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
+  using T                  = cudf::string_view;
+  auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
 
   // build offsets column from the string size
   auto offsets_transformer_itr =
@@ -119,11 +119,10 @@ struct compare_functor {
 
   // This is used to compare a scalar and a column value
   template <typename LhsViewT = LhsDeviceViewT, typename RhsViewT = RhsDeviceViewT>
-  CUDA_DEVICE_CALLABLE
-    typename std::enable_if_t<std::is_same<LhsViewT, column_device_view>::value &&
-                                !std::is_same<RhsViewT, column_device_view>::value,
-                              OutT>
-    operator()(cudf::size_type i) const
+  CUDA_DEVICE_CALLABLE typename std::enable_if_t<std::is_same_v<LhsViewT, column_device_view> &&
+                                                   !std::is_same_v<RhsViewT, column_device_view>,
+                                                 OutT>
+  operator()(cudf::size_type i) const
   {
     return cfunc_(lhs_dev_view_.is_valid(i),
                   rhs_dev_view_.is_valid(),
@@ -134,11 +133,10 @@ struct compare_functor {
 
   // This is used to compare a scalar and a column value
   template <typename LhsViewT = LhsDeviceViewT, typename RhsViewT = RhsDeviceViewT>
-  CUDA_DEVICE_CALLABLE
-    typename std::enable_if_t<!std::is_same<LhsViewT, column_device_view>::value &&
-                                std::is_same<RhsViewT, column_device_view>::value,
-                              OutT>
-    operator()(cudf::size_type i) const
+  CUDA_DEVICE_CALLABLE typename std::enable_if_t<!std::is_same_v<LhsViewT, column_device_view> &&
+                                                   std::is_same_v<RhsViewT, column_device_view>,
+                                                 OutT>
+  operator()(cudf::size_type i) const
   {
     return cfunc_(lhs_dev_view_.is_valid(),
                   rhs_dev_view_.is_valid(i),
@@ -149,11 +147,10 @@ struct compare_functor {
 
   // This is used to compare 2 column values
   template <typename LhsViewT = LhsDeviceViewT, typename RhsViewT = RhsDeviceViewT>
-  CUDA_DEVICE_CALLABLE
-    typename std::enable_if_t<std::is_same<LhsViewT, column_device_view>::value &&
-                                std::is_same<RhsViewT, column_device_view>::value,
-                              OutT>
-    operator()(cudf::size_type i) const
+  CUDA_DEVICE_CALLABLE typename std::enable_if_t<std::is_same_v<LhsViewT, column_device_view> &&
+                                                   std::is_same_v<RhsViewT, column_device_view>,
+                                                 OutT>
+  operator()(cudf::size_type i) const
   {
     return cfunc_(lhs_dev_view_.is_valid(i),
                   rhs_dev_view_.is_valid(i),
@@ -204,7 +201,6 @@ struct null_considering_binop {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
-    std::unique_ptr<column> out;
     // Create device views for inputs
     auto const lhs_dev_view = get_device_view(lhs);
     auto const rhs_dev_view = get_device_view(rhs);

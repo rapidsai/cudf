@@ -1,16 +1,21 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
+import numpy as np
 import pyarrow as pa
 
 import cudf
 
+from cython.operator cimport dereference
 from libc.stdint cimport uint8_t
+from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
+from libcpp.utility cimport move
 from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
-from cudf._lib.cpp.column.column cimport column_view
+from cudf._lib.cpp.column.column cimport column, column_view
 from cudf._lib.cpp.table.table cimport table_view
+from cudf._lib.cpp.types cimport size_type
 from cudf._lib.table cimport Table
 
 try:
@@ -18,18 +23,17 @@ try:
 except ImportError:
     import json
 
-from cudf.utils.dtypes import (
-    cudf_dtypes_to_pandas_dtypes,
+from cudf.api.types import (
     is_categorical_dtype,
     is_decimal_dtype,
     is_list_dtype,
     is_struct_dtype,
-    np_to_pa_dtype,
 )
+from cudf.utils.dtypes import np_dtypes_to_pandas_dtypes, np_to_pa_dtype
 
 PARQUET_META_TYPE_MAP = {
     str(cudf_dtype): str(pandas_dtype)
-    for cudf_dtype, pandas_dtype in cudf_dtypes_to_pandas_dtypes.items()
+    for cudf_dtype, pandas_dtype in np_dtypes_to_pandas_dtypes.items()
 }
 
 
@@ -38,22 +42,6 @@ cdef vector[column_view] make_column_views(object columns):
     views.reserve(len(columns))
     for col in columns:
         views.push_back((<Column> col).view())
-    return views
-
-
-cdef vector[table_view] make_table_views(object tables):
-    cdef vector[table_view] views
-    views.reserve(len(tables))
-    for tbl in tables:
-        views.push_back((<Table> tbl).view())
-    return views
-
-
-cdef vector[table_view] make_table_data_views(object tables):
-    cdef vector[table_view] views
-    views.reserve(len(tables))
-    for tbl in tables:
-        views.push_back((<Table> tbl).data_view())
     return views
 
 
@@ -94,7 +82,14 @@ cpdef generate_pandas_metadata(Table table, index):
         ):
             types.append(col.dtype.to_arrow())
         else:
-            types.append(np_to_pa_dtype(col.dtype))
+            # A boolean element takes 8 bits in cudf and 1 bit in
+            # pyarrow. To make sure the cudf format is interperable
+            # in arrow, we use `int8` type when converting from a
+            # cudf boolean array.
+            if col.dtype.type == np.bool_:
+                types.append(pa.int8())
+            else:
+                types.append(np_to_pa_dtype(col.dtype))
 
     # Indexes
     if index is not False:
@@ -138,7 +133,15 @@ cpdef generate_pandas_metadata(Table table, index):
                 elif is_list_dtype(idx):
                     types.append(col.dtype.to_arrow())
                 else:
-                    types.append(np_to_pa_dtype(idx.dtype))
+                    # A boolean element takes 8 bits in cudf and 1 bit in
+                    # pyarrow. To make sure the cudf format is interperable
+                    # in arrow, we use `int8` type when converting from a
+                    # cudf boolean array.
+                    if idx.dtype.type == np.bool_:
+                        types.append(pa.int8())
+                    else:
+                        types.append(np_to_pa_dtype(idx.dtype))
+
                 index_levels.append(idx)
             col_names.append(name)
             index_descriptors.append(descr)
@@ -192,3 +195,125 @@ def _index_level_name(index_name, level, column_names):
         return index_name
     else:
         return f"__index_level_{level}__"
+
+
+cdef data_from_unique_ptr(
+    unique_ptr[table] c_tbl, column_names, index_names=None
+):
+    """Convert a libcudf table into a dict with an index.
+
+    This method is intended to provide the bridge between the columns returned
+    from calls to libcudf APIs and the cuDF Python Table objects, which require
+    named columns and a separate index.
+
+    Since cuDF Python has an independent representation of a table as a
+    collection of columns, this function simply returns a dict of columns
+    suitable for conversion into data to be passed to cuDF constructors.
+    This method returns the columns of the table in the order they are
+    stored in libcudf, but calling code is responsible for partitioning and
+    labeling them as needed.
+
+    Parameters
+    ----------
+    c_tbl : unique_ptr[cudf::table]
+        The libcudf table whose columns will be extracted
+    column_names : iterable
+        The keys associated with the columns in the output data.
+    index_names : iterable, optional
+        If provided, an iterable of strings that will be used to label the
+        corresponding first set of columns into a (Multi)Index. If this
+        argument is omitted, all columns are assumed to be part of the output
+        table and no index is constructed.
+
+
+    Returns
+    -------
+    tuple(Dict[str, Column], Optional[Index])
+        A dict of the columns in the output table.
+    """
+    cdef vector[unique_ptr[column]] c_columns = move(c_tbl.get().release())
+    cdef vector[unique_ptr[column]].iterator it = c_columns.begin()
+
+    cdef int i
+
+    columns = [Column.from_unique_ptr(move(dereference(it+i)))
+               for i in range(c_columns.size())]
+
+    # First construct the index, if any
+    index = (
+        # TODO: For performance, the _from_data methods of Frame types assume
+        # that the passed index object is already an Index because cudf.Index
+        # and cudf.as_index are expensive. As a result, this function is
+        # currently somewhat inconsistent in returning a dict of columns for
+        # the data while actually constructing the Index object here (instead
+        # of just returning a dict for that as well). As we clean up the
+        # Frame factories we may want to look for a less dissonant approach
+        # that does not impose performance penalties. The same applies to
+        # data_from_table_view below.
+        cudf.core.index._index_from_data(
+            {
+                name: columns[i]
+                for i, name in enumerate(index_names)
+            }
+        )
+        if index_names is not None
+        else None
+    )
+    n_index_columns = len(index_names) if index_names is not None else 0
+    data = {
+        name: columns[i + n_index_columns]
+        for i, name in enumerate(column_names)
+    }
+    return data, index
+
+
+cdef data_from_table_view(
+    table_view tv,
+    object owner,
+    object column_names,
+    object index_names=None
+):
+    """
+    Given a ``cudf::table_view``, constructs a ``cudf.Table`` from it,
+    along with referencing an ``owner`` Python object that owns the memory
+    lifetime. If ``owner`` is a ``cudf.Table``, we reach inside of it and
+    reach inside of each ``cudf.Column`` to make the owner of each newly
+    created ``Buffer`` underneath the ``cudf.Column`` objects of the
+    created ``cudf.Table`` the respective ``Buffer`` from the relevant
+    ``cudf.Column`` of the ``owner`` ``cudf.Table``.
+    """
+    cdef size_type column_idx = 0
+    table_owner = isinstance(owner, Table)
+
+    # First construct the index, if any
+    index = None
+    if index_names is not None:
+        index_columns = []
+        for _ in index_names:
+            column_owner = owner
+            if table_owner:
+                column_owner = owner._index._columns[column_idx]
+            index_columns.append(
+                Column.from_column_view(
+                    tv.column(column_idx),
+                    column_owner
+                )
+            )
+            column_idx += 1
+        index = cudf.core.index._index_from_data(
+            dict(zip(index_names, index_columns)))
+
+    # Construct the data dict
+    cdef size_type source_column_idx = 0
+    data_columns = []
+    for _ in column_names:
+        column_owner = owner
+        if table_owner:
+            column_owner = owner._columns[source_column_idx]
+        data_columns.append(
+            Column.from_column_view(tv.column(column_idx), column_owner)
+        )
+        column_idx += 1
+        source_column_idx += 1
+
+    return dict(zip(column_names, data_columns)), index

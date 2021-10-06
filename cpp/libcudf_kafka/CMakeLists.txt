@@ -1,5 +1,5 @@
 #=============================================================================
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,9 +13,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #=============================================================================
-cmake_minimum_required(VERSION 3.18 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.20.1 FATAL_ERROR)
 
-project(CUDA_KAFKA VERSION 21.08.03 LANGUAGES CXX)
+file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-21.10/RAPIDS.cmake
+     ${CMAKE_BINARY_DIR}/RAPIDS.cmake)
+include(${CMAKE_BINARY_DIR}/RAPIDS.cmake)
+
+include(rapids-cmake)
+include(rapids-cpm)
+include(rapids-cuda)
+include(rapids-export)
+include(rapids-find)
+
+project(CUDA_KAFKA VERSION 21.10.00 LANGUAGES CXX)
+
+# Set a default build type if none was specified
+rapids_cmake_build_type(Release)
 
 ###################################################################################################
 # - Build options
@@ -26,19 +39,15 @@ message(VERBOSE "CUDF_KAFKA: Build gtests: ${BUILD_TESTS}")
 ###################################################################################################
 # - Dependencies
 
-# CPM
-include(../cmake/thirdparty/CUDF_GetCPM.cmake)
-
-# libcudf
-include(cmake/thirdparty/CUDF_KAFKA_GetCUDF.cmake)
-
-# librdkafka
-include(cmake/thirdparty/CUDF_KAFKA_GetRDKafka.cmake)
+# add third party dependencies using CPM
+rapids_cpm_init()
+include(cmake/thirdparty/get_cudf.cmake)
+include(cmake/thirdparty/get_rdkafka.cmake)
 
 # # GTests if enabled
 if (BUILD_TESTS)
     # GoogleTest
-    include(../cmake/thirdparty/CUDF_GetGTest.cmake)
+    include(../cmake/thirdparty/get_gtest.cmake)
 
     # include CTest module -- automatically calls enable_testing()
     include(CTest)
@@ -46,32 +55,46 @@ if (BUILD_TESTS)
 endif()
 
 ###################################################################################################
-# - include paths ---------------------------------------------------------------------------------
+# - library target --------------------------------------------------------------------------------
+add_library(cudf_kafka SHARED
+    src/kafka_consumer.cpp)
 
-include_directories("${CMAKE_BINARY_DIR}/include"
-                    "${CMAKE_SOURCE_DIR}/include"
-                    "${CMAKE_SOURCE_DIR}/src")
+###################################################################################################
+# - include paths ---------------------------------------------------------------------------------
+target_include_directories(cudf_kafka
+                PUBLIC
+                    "$<BUILD_INTERFACE:${CUDA_KAFKA_SOURCE_DIR}/include>"
+                    "$<INSTALL_INTERFACE:include>")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
+target_link_libraries(cudf_kafka PUBLIC cudf::cudf RDKAFKA::RDKAFKA)
 
-link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
-                 "${CMAKE_BINARY_DIR}/lib"
-                 "${CMAKE_BINARY_DIR}")
-
-###################################################################################################
-# - library target --------------------------------------------------------------------------------
-
-add_library(cudf_kafka SHARED
-    src/kafka_consumer.cpp
-)
+set_target_properties(cudf_kafka
+    PROPERTIES BUILD_RPATH                         "\$ORIGIN"
+               INSTALL_RPATH                       "\$ORIGIN"
+               # set target compile options
+               CXX_STANDARD                        17
+               CXX_STANDARD_REQUIRED               ON)
 
 ###################################################################################################
 # - cudf_kafka Install ----------------------------------------------------------------------------
-target_link_libraries(cudf_kafka cudf::cudf RDKAFKA::RDKAFKA)
-
+rapids_cmake_install_lib_dir(lib_dir)
 install(TARGETS cudf_kafka
-        DESTINATION lib)
+        DESTINATION ${lib_dir}
+        EXPORT cudf_kafka-exports)
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
         DESTINATION include)
+
+rapids_export(INSTALL cudf_kafka
+    EXPORT_SET cudf_kafka-exports
+    GLOBAL_TARGETS cudf_kafka
+    NAMESPACE cudf_kafka::
+    )
+
+rapids_export(BUILD cudf_kafka
+    EXPORT_SET cudf_kafka-exports
+    GLOBAL_TARGETS cudf_kafka
+    NAMESPACE cudf_kafka::
+    )

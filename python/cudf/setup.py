@@ -35,7 +35,7 @@ install_requires = [
     "fastavro>=0.22.9",
     "fsspec>=0.6.0",
     "numpy",
-    "pandas>=1.0,<1.3.0dev0",
+    "pandas>=1.0,<1.4.0dev0",
     "typing_extensions",
     "protobuf",
     "nvtx>=0.2.1",
@@ -51,7 +51,7 @@ extras_require = {
         "hypothesis" "mimesis",
         "pyorc",
         "msgpack",
-        "transformers",
+        "transformers<=4.10.3",
     ]
 }
 

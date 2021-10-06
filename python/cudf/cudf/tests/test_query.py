@@ -11,7 +11,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core import DataFrame
+from cudf import DataFrame
 from cudf.testing._utils import assert_eq
 from cudf.utils import queryutils
 
@@ -141,7 +141,7 @@ def test_query_splitted_combine():
 
     # Should equal to just querying the original GDF
     expect = gdf.query(expr).to_pandas()
-    assert_eq(got, expect)
+    assert_eq(got, expect, check_index_type=True)
 
 
 def test_query_empty_frames():

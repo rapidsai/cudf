@@ -18,15 +18,15 @@ except ImportError:
 import numpy as np
 from cython.operator import dereference
 
-from cudf.utils.dtypes import (
+from cudf.api.types import (
     is_categorical_dtype,
     is_decimal_dtype,
     is_list_dtype,
     is_struct_dtype,
-    np_to_pa_dtype,
 )
+from cudf.utils.dtypes import np_to_pa_dtype
 
-from cudf._lib.utils cimport get_column_names
+from cudf._lib.utils cimport data_from_unique_ptr, get_column_names
 
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 
@@ -45,15 +45,14 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.io.parquet cimport (
     chunked_parquet_writer_options,
     chunked_parquet_writer_options_builder,
-    column_in_metadata,
     merge_rowgroup_metadata as parquet_merge_metadata,
     parquet_chunked_writer as cpp_parquet_chunked_writer,
     parquet_reader_options,
     parquet_writer_options,
     read_parquet as parquet_reader,
-    table_input_metadata,
     write_parquet as parquet_writer,
 )
+from cudf._lib.cpp.io.types cimport column_in_metadata, table_input_metadata
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type
@@ -62,7 +61,7 @@ from cudf._lib.io.utils cimport (
     make_source_info,
     update_struct_field_names,
 )
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport Table, table_view_from_table
 
 
 cdef class BufferArrayFromVector:
@@ -178,31 +177,20 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                     for c in meta['columns']:
                         if c['field_name'] == idx_col:
                             index_col_names[idx_col] = c['name']
-    df = cudf.DataFrame._from_table(
-        Table.from_unique_ptr(
-            move(c_out_table.tbl),
-            column_names=column_names
-        )
-    )
+    df = cudf.DataFrame._from_data(*data_from_unique_ptr(
+        move(c_out_table.tbl),
+        column_names=column_names
+    ))
 
     update_struct_field_names(df, c_out_table.metadata.schema_info)
 
-    if df.empty and meta is not None:
-        cols_dtype_map = {}
-        for col in meta['columns']:
-            cols_dtype_map[col['name']] = col['numpy_type']
-
-        if not column_names:
-            column_names = [o['name'] for o in meta['columns']]
-            if not is_range_index and index_col in cols_dtype_map:
-                column_names.remove(index_col)
-
-        for col in column_names:
-            meta_dtype = cols_dtype_map.get(col, None)
-            df._data[col] = cudf.core.column.column_empty(
-                row_count=0,
-                dtype=np.dtype(meta_dtype)
-            )
+    # update the decimal precision of each column
+    if meta is not None:
+        for col, col_meta in zip(column_names, meta["columns"]):
+            if isinstance(df._data[col].dtype, cudf.Decimal64Dtype):
+                df._data[col].dtype.precision = (
+                    col_meta["metadata"]["precision"]
+                )
 
     # Set the index column
     if index_col is not None and len(index_col) > 0:
@@ -246,7 +234,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                     idx = idx[skiprows:]
                 if num_rows is not None:
                     idx = idx[:num_rows]
-            df.index = idx
+            df._index = idx
         elif set(index_col).issubset(column_names):
             index_data = df[index_col]
             actual_index_names = list(index_col_names.values())
@@ -261,7 +249,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                     names=actual_index_names
                 )
             df.drop(columns=index_col, inplace=True)
-            df.index = idx
+            df._index = idx
         else:
             if use_pandas_metadata:
                 df.index.names = index_col
@@ -295,7 +283,7 @@ cpdef write_parquet(
     if index is True or (
         index is None and not isinstance(table._index, cudf.RangeIndex)
     ):
-        tv = table.view()
+        tv = table_view_from_table(table)
         tbl_meta = make_unique[table_input_metadata](tv)
         for level, idx_name in enumerate(table._index.names):
             tbl_meta.get().column_metadata[level].set_name(
@@ -305,7 +293,7 @@ cpdef write_parquet(
             )
         num_index_cols_meta = len(table._index.names)
     else:
-        tv = table.data_view()
+        tv = table_view_from_table(table, ignore_index=True)
         tbl_meta = make_unique[table_input_metadata](tv)
         num_index_cols_meta = 0
 
@@ -391,9 +379,9 @@ cdef class ParquetWriter:
         if self.index is not False and (
             table._index.name is not None or
                 isinstance(table._index, cudf.core.multiindex.MultiIndex)):
-            tv = table.view()
+            tv = table_view_from_table(table)
         else:
-            tv = table.data_view()
+            tv = table_view_from_table(table, ignore_index=True)
 
         with nogil:
             self.writer.get()[0].write(tv)
@@ -431,10 +419,11 @@ cdef class ParquetWriter:
 
         # Set the table_metadata
         num_index_cols_meta = 0
-        self.tbl_meta = make_unique[table_input_metadata](table.data_view())
+        self.tbl_meta = make_unique[table_input_metadata](
+            table_view_from_table(table, ignore_index=True))
         if self.index is not False:
             if isinstance(table._index, cudf.core.multiindex.MultiIndex):
-                tv = table.view()
+                tv = table_view_from_table(table)
                 self.tbl_meta = make_unique[table_input_metadata](tv)
                 for level, idx_name in enumerate(table._index.names):
                     self.tbl_meta.get().column_metadata[level].set_name(
@@ -443,7 +432,7 @@ cdef class ParquetWriter:
                 num_index_cols_meta = len(table._index.names)
             else:
                 if table._index.name is not None:
-                    tv = table.view()
+                    tv = table_view_from_table(table)
                     self.tbl_meta = make_unique[table_input_metadata](tv)
                     self.tbl_meta.get().column_metadata[0].set_name(
                         str.encode(table._index.name)

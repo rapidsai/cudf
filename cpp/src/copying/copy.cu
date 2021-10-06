@@ -21,7 +21,6 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/scatter.cuh>
-#include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/traits.hpp>
 
@@ -44,14 +43,14 @@ struct copy_if_else_functor_impl {
  * @brief Functor to fetch a device-view for the specified scalar/column_view.
  */
 struct get_iterable_device_view {
-  template <typename T, CUDF_ENABLE_IF(std::is_same<T, cudf::column_view>::value)>
-  auto operator()(T const& input)
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, cudf::column_view>)>
+  auto operator()(T const& input, rmm::cuda_stream_view stream)
   {
-    return cudf::column_device_view::create(input);
+    return cudf::column_device_view::create(input, stream);
   }
 
-  template <typename T, CUDF_ENABLE_IF(std::is_same<T, cudf::scalar>::value)>
-  auto operator()(T const& input)
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, cudf::scalar>)>
+  auto operator()(T const& input, rmm::cuda_stream_view)
   {
     return &input;
   }
@@ -69,8 +68,8 @@ struct copy_if_else_functor_impl<T, std::enable_if_t<is_rep_layout_compatible<T>
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    auto p_lhs      = get_iterable_device_view{}(lhs_h);
-    auto p_rhs      = get_iterable_device_view{}(rhs_h);
+    auto p_lhs      = get_iterable_device_view{}(lhs_h, stream);
+    auto p_rhs      = get_iterable_device_view{}(rhs_h, stream);
     auto const& lhs = *p_lhs;
     auto const& rhs = *p_rhs;
 
@@ -116,8 +115,8 @@ struct copy_if_else_functor_impl<string_view> {
   {
     using T = string_view;
 
-    auto p_lhs      = get_iterable_device_view{}(lhs_h);
-    auto p_rhs      = get_iterable_device_view{}(rhs_h);
+    auto p_lhs      = get_iterable_device_view{}(lhs_h, stream);
+    auto p_rhs      = get_iterable_device_view{}(rhs_h, stream);
     auto const& lhs = *p_lhs;
     auto const& rhs = *p_rhs;
 

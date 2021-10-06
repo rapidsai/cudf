@@ -58,6 +58,7 @@ struct reader_column_meta {
 
   std::vector<column_validity_info>
     parent_column_data;  // consists of parent column valid_map and null count
+  std::vector<size_type> parent_column_index;
 
   std::vector<uint32_t> child_start_row;  // start row of child columns [stripe][column]
   std::vector<uint32_t>
@@ -175,7 +176,8 @@ class reader::impl {
    */
   column_buffer&& assemble_buffer(const int32_t orc_col_id,
                                   std::vector<std::vector<column_buffer>>& col_buffers,
-                                  const size_t level);
+                                  const size_t level,
+                                  rmm::cuda_stream_view stream);
 
   /**
    * @brief Create columns and respective schema information from the buffer.

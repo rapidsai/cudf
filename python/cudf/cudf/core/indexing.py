@@ -12,20 +12,20 @@ from cudf._lib.concat import concat_columns
 from cudf._lib.scalar import _is_null_host_scalar
 from cudf._typing import ColumnLike, DataFrameOrSeries, ScalarLike
 from cudf.api.types import (
+    _is_non_decimal_numeric_dtype,
+    _is_scalar_or_zero_d_array,
     is_bool_dtype,
+    is_categorical_dtype,
     is_integer,
     is_integer_dtype,
+    is_list_like,
     is_numeric_dtype,
+    is_scalar,
 )
 from cudf.core.column.column import as_column
 from cudf.utils.dtypes import (
-    _is_non_decimal_numeric_dtype,
-    _is_scalar_or_zero_d_array,
     find_common_type,
-    is_categorical_dtype,
     is_column_like,
-    is_list_like,
-    is_scalar,
     to_cudf_compatible_scalar,
 )
 
@@ -98,8 +98,9 @@ class _SeriesIlocIndexer(object):
             or _is_null_host_scalar(data)
         ):
             return data
-        index = self._sr.index.take(arg)
-        return self._sr._copy_construct(data=data, index=index)
+        return self._sr._from_data(
+            {self._sr.name: data}, index=cudf.Index(self._sr.index.take(arg))
+        )
 
     def __setitem__(self, key, value):
         from cudf.core.column import column
@@ -431,7 +432,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             )
 
         try:
-            columns = self._get_column_selection(key[1])
+            columns_df = self._get_column_selection(key[1])
         except KeyError:
             if not self._df.empty and isinstance(key[0], slice):
                 pos_range = get_label_range_or_mask(
@@ -456,8 +457,27 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 )
             self._df._data.insert(key[1], new_col)
         else:
-            for col in columns:
-                self._df[col].loc[key[0]] = value
+            if isinstance(value, (cp.ndarray, np.ndarray)):
+                value_df = cudf.DataFrame(value)
+                if value_df.shape[1] != columns_df.shape[1]:
+                    if value_df.shape[1] == 1:
+                        value_cols = (
+                            value_df._data.columns * columns_df.shape[1]
+                        )
+                    else:
+                        raise ValueError(
+                            f"shape mismatch: value array of shape "
+                            f"{value_df.shape} could not be "
+                            f"broadcast to indexing result of shape "
+                            f"{columns_df.shape}"
+                        )
+                else:
+                    value_cols = value_df._data.columns
+                for i, col in enumerate(columns_df._column_names):
+                    self._df[col].loc[key[0]] = value_cols[i]
+            else:
+                for col in columns_df._column_names:
+                    self._df[col].loc[key[0]] = value
 
     def _get_column_selection(self, arg):
         return self._df._get_columns_by_label(arg)
@@ -542,7 +562,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
 
 def _normalize_dtypes(df):
-    if len(df.columns) > 0:
+    if df._num_columns > 0:
         dtypes = df.dtypes.values.tolist()
         normalized_dtype = np.result_type(*dtypes)
         for name, col in df._data.items():

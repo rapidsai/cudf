@@ -44,8 +44,8 @@ namespace detail {
 template <typename ColumnView>
 ColumnView slice(ColumnView const& input, cudf::size_type begin, cudf::size_type end)
 {
-  static_assert(std::is_same<ColumnView, cudf::column_view>::value or
-                  std::is_same<ColumnView, cudf::mutable_column_view>::value,
+  static_assert(std::is_same_v<ColumnView, cudf::column_view> or
+                  std::is_same_v<ColumnView, cudf::mutable_column_view>,
                 "slice can be performed only on column_view and mutable_column_view");
   CUDF_EXPECTS(begin >= 0, "Invalid beginning of range.");
   CUDF_EXPECTS(end >= begin, "Invalid end of range.");
@@ -74,6 +74,15 @@ ColumnView slice(ColumnView const& input, cudf::size_type begin, cudf::size_type
 std::vector<column_view> slice(column_view const& input,
                                std::vector<size_type> const& indices,
                                rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+
+/**
+ * @copydoc cudf::slice(table_view const&,std::vector<size_type> const&)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::vector<table_view> slice(table_view const& input,
+                              std::vector<size_type> const& indices,
+                              rmm::cuda_stream_view stream = rmm::cuda_stream_default);
 
 /**
  * @copydoc cudf::shift(column_view const&,size_type,scalar const&,

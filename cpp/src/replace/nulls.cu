@@ -270,9 +270,7 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
                                    std::move(offsets),
                                    std::move(output_chars),
                                    input.size() - valid_counter.value(stream),
-                                   std::move(valid_bits),
-                                   stream,
-                                   mr);
+                                   std::move(valid_bits));
 }
 
 template <>
@@ -289,8 +287,8 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
 
 template <typename T>
 struct replace_nulls_functor {
-  T* value_it;
-  replace_nulls_functor(T* _value_it) : value_it(_value_it) {}
+  T const* value_it;
+  replace_nulls_functor(T const* _value_it) : value_it(_value_it) {}
   __device__ T operator()(T input, bool is_valid) { return is_valid ? input : *value_it; }
 };
 
@@ -312,7 +310,7 @@ struct replace_nulls_scalar_kernel_forwarder {
     auto output_view = output->mutable_view();
 
     using ScalarType = cudf::scalar_type_t<col_type>;
-    auto s1          = static_cast<ScalarType const&>(replacement);
+    auto& s1         = static_cast<ScalarType const&>(replacement);
     auto device_in   = cudf::column_device_view::create(input);
 
     auto func = replace_nulls_functor<col_type>{s1.data()};

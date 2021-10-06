@@ -132,9 +132,8 @@ struct list_child_constructor {
    */
   template <typename T>
   struct is_supported_child_type {
-    static const bool value = cudf::is_fixed_width<T>() || std::is_same<T, string_view>::value ||
-                              std::is_same<T, list_view>::value ||
-                              std::is_same<T, struct_view>::value;
+    static const bool value = cudf::is_fixed_width<T>() || std::is_same_v<T, string_view> ||
+                              std::is_same_v<T, list_view> || std::is_same_v<T, struct_view>;
   };
 
  public:
@@ -207,7 +206,7 @@ struct list_child_constructor {
    * @brief Implementation for list child columns that contain strings.
    */
   template <typename T>
-  std::enable_if_t<std::is_same<T, string_view>::value, std::unique_ptr<column>> operator()(
+  std::enable_if_t<std::is_same_v<T, string_view>, std::unique_ptr<column>> operator()(
     rmm::device_uvector<unbound_list_view> const& list_vector,
     cudf::column_view const& list_offsets,
     cudf::lists_column_view const& source_lists_column_view,
@@ -280,17 +279,15 @@ struct list_child_constructor {
     return cudf::make_strings_column(num_child_rows,
                                      std::move(string_offsets),
                                      std::move(string_chars),
-                                     child_null_mask.second,            // Null count.
-                                     std::move(child_null_mask.first),  // Null mask.
-                                     stream,
-                                     mr);
+                                     child_null_mask.second,  // Null count.
+                                     std::move(child_null_mask.first));
   }
 
   /**
    * @brief (Recursively) Constructs a child column that is itself a list column.
    */
   template <typename T>
-  std::enable_if_t<std::is_same<T, list_view>::value, std::unique_ptr<column>> operator()(
+  std::enable_if_t<std::is_same_v<T, list_view>, std::unique_ptr<column>> operator()(
     rmm::device_uvector<unbound_list_view> const& list_vector,
     cudf::column_view const& list_offsets,
     cudf::lists_column_view const& source_lists_column_view,
@@ -385,7 +382,7 @@ struct list_child_constructor {
    * @brief (Recursively) constructs child columns that are structs.
    */
   template <typename T>
-  std::enable_if_t<std::is_same<T, struct_view>::value, std::unique_ptr<column>> operator()(
+  std::enable_if_t<std::is_same_v<T, struct_view>, std::unique_ptr<column>> operator()(
     rmm::device_uvector<unbound_list_view> const& list_vector,
     cudf::column_view const& list_offsets,
     cudf::lists_column_view const& source_lists_column_view,

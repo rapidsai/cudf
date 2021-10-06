@@ -775,13 +775,8 @@ def test_string_index_duplicate_str_cat(data, others, sep, na_rep, name):
     # in `.str.cat`
     # https://github.com/rapidsai/cudf/issues/5862
 
-    # TODO: Replace ``pd.Index(expect.to_series().sort_values())`` with
-    # ``expect.sort_values()`` once the below issue is fixed
-    # https://github.com/pandas-dev/pandas/issues/35584
     assert_eq(
-        pd.Index(expect.to_series().sort_values())
-        if not isinstance(expect, str)
-        else expect,
+        expect.sort_values() if not isinstance(expect, str) else expect,
         got.sort_values() if not isinstance(got, str) else got,
         exact=False,
     )
@@ -850,6 +845,32 @@ def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
         expect = ps.str.contains(pat, flags=flags, na=na, regex=regex)
         got = gs.str.contains(pat, flags=flags, na=na, regex=regex)
         assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data", [["hello", "world", None, "", "!"]],
+)
+@pytest.mark.parametrize(
+    "repeats",
+    [
+        2,
+        0,
+        -3,
+        [5, 4, 3, 2, 6],
+        [5, None, 3, 2, 6],
+        [0, 0, 0, 0, 0],
+        [-1, -2, -3, -4, -5],
+        [None, None, None, None, None],
+    ],
+)
+def test_string_repeat(data, repeats):
+    ps = pd.Series(data)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.str.repeat(repeats)
+    got = gs.str.repeat(repeats)
+
+    assert_eq(expect, got)
 
 
 # Pandas isn't respect the `n` parameter so ignoring it in test parameters

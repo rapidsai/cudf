@@ -24,7 +24,8 @@ from cudf._lib.cpp.types cimport (
     null_policy,
     size_type,
 )
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport Table, table_view_from_table
+from cudf._lib.utils cimport data_from_unique_ptr
 
 
 def drop_nulls(Table source_table, how="any", keys=None, thresh=None):
@@ -67,7 +68,7 @@ def drop_nulls(Table source_table, how="any", keys=None, thresh=None):
         c_keep_threshold = 1
 
     cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = source_table.view()
+    cdef table_view source_table_view = table_view_from_table(source_table)
 
     with nogil:
         c_result = move(
@@ -78,7 +79,7 @@ def drop_nulls(Table source_table, how="any", keys=None, thresh=None):
             )
         )
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
         index_names=(
@@ -104,7 +105,7 @@ def apply_boolean_mask(Table source_table, Column boolean_mask):
     assert pd.api.types.is_bool_dtype(boolean_mask.dtype)
 
     cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = source_table.view()
+    cdef table_view source_table_view = table_view_from_table(source_table)
     cdef column_view boolean_mask_view = boolean_mask.view()
 
     with nogil:
@@ -115,7 +116,7 @@ def apply_boolean_mask(Table source_table, Column boolean_mask):
             )
         )
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
         index_names=(
@@ -176,11 +177,9 @@ def drop_duplicates(Table source_table,
         else null_equality.UNEQUAL
     )
     cdef unique_ptr[table] c_result
-    cdef table_view source_table_view
-    if ignore_index:
-        source_table_view = source_table.data_view()
-    else:
-        source_table_view = source_table.view()
+    cdef table_view source_table_view = table_view_from_table(
+        source_table, ignore_index
+    )
 
     with nogil:
         c_result = move(
@@ -192,7 +191,7 @@ def drop_duplicates(Table source_table,
             )
         )
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
         index_names=(

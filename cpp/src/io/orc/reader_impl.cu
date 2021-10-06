@@ -38,6 +38,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <nvcomp/snappy.h>
+
 #include <algorithm>
 #include <array>
 
@@ -79,6 +81,8 @@ constexpr type_id to_type_id(const orc::SchemaType& schema,
       // There isn't a (DAYS -> np.dtype) mapping
       return (use_np_dtypes) ? type_id::TIMESTAMP_MILLISECONDS : type_id::TIMESTAMP_DAYS;
     case orc::DECIMAL: return (decimals_as_float64) ? type_id::FLOAT64 : type_id::DECIMAL64;
+    // Need to update once cuDF plans to support map type
+    case orc::MAP:
     case orc::LIST: return type_id::LIST;
     case orc::STRUCT: return type_id::STRUCT;
     default: break;
@@ -176,7 +180,6 @@ size_t gather_stream_info(const size_t stripe_index,
                           const orc::StripeInformation* stripeinfo,
                           const orc::StripeFooter* stripefooter,
                           const std::vector<int>& orc2gdf,
-                          const std::vector<orc_column_meta>& gdf2orc,
                           const std::vector<orc::SchemaType> types,
                           bool use_index,
                           size_t* num_dictionary_entries,
@@ -269,6 +272,7 @@ class aggregate_orc_metadata {
   size_type const num_rows;
   size_type const num_columns;
   size_type const num_stripes;
+  bool row_grp_idx_present = true;
 
   /**
    * @brief Create a metadata object from each element in the source vector
@@ -368,6 +372,8 @@ class aggregate_orc_metadata {
     return per_file_metadata[source_idx].get_column_name(column_idx);
   }
 
+  auto is_row_grp_idx_present() const { return row_grp_idx_present; }
+
   std::vector<cudf::io::orc::metadata::stripe_source_mapping> select_stripes(
     std::vector<std::vector<size_type>> const& user_specified_stripes,
     size_type& row_start,
@@ -457,6 +463,7 @@ class aggregate_orc_metadata {
           ProtobufReader(sf_data, sf_length)
             .read(per_file_metadata[mapping.source_idx].stripefooters[i]);
           mapping.stripe_info[i].second = &per_file_metadata[mapping.source_idx].stripefooters[i];
+          if (stripe->indexLength == 0) { row_grp_idx_present = false; }
         }
       }
     }
@@ -487,20 +494,15 @@ class aggregate_orc_metadata {
     const int col_id = selection[level].size() - 1;
     if (types[id].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
 
-    switch (types[id].kind) {
-      case orc::LIST:
-      case orc::STRUCT: {
-        has_nested_column = true;
-        for (const auto child_id : types[id].subtypes) {
-          // Since nested column needs to be processed before its child can be processed,
-          // child column is being added to next level
-          add_column(
-            selection, types, level + 1, child_id, has_timestamp_column, has_nested_column);
-        }
-        selection[level][col_id].num_children = types[id].subtypes.size();
-      } break;
-
-      default: break;
+    if (types[id].kind == orc::MAP or types[id].kind == orc::LIST or
+        types[id].kind == orc::STRUCT) {
+      has_nested_column = true;
+      for (const auto child_id : types[id].subtypes) {
+        // Since nested column needs to be processed before its child can be processed,
+        // child column is being added to next level
+        add_column(selection, types, level + 1, child_id, has_timestamp_column, has_nested_column);
+      }
+      selection[level][col_id].num_children = types[id].subtypes.size();
     }
   }
 
@@ -549,6 +551,68 @@ class aggregate_orc_metadata {
   }
 };
 
+void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
+                       device_span<gpu_inflate_status_s> comp_stat,
+                       size_t max_uncomp_page_size,
+                       rmm::cuda_stream_view stream)
+{
+  size_t num_blocks = comp_in.size();
+  size_t temp_size;
+
+  auto status =
+    nvcompBatchedSnappyDecompressGetTempSize(num_blocks, max_uncomp_page_size, &temp_size);
+  CUDF_EXPECTS(nvcompStatus_t::nvcompSuccess == status,
+               "Unable to get scratch size for snappy decompression");
+
+  rmm::device_buffer scratch(temp_size, stream);
+  rmm::device_uvector<void const*> compressed_data_ptrs(num_blocks, stream);
+  rmm::device_uvector<size_t> compressed_data_sizes(num_blocks, stream);
+  rmm::device_uvector<void*> uncompressed_data_ptrs(num_blocks, stream);
+  rmm::device_uvector<size_t> uncompressed_data_sizes(num_blocks, stream);
+
+  rmm::device_uvector<size_t> actual_uncompressed_data_sizes(num_blocks, stream);
+  rmm::device_uvector<nvcompStatus_t> statuses(num_blocks, stream);
+
+  // Prepare the vectors
+  auto comp_it = thrust::make_zip_iterator(compressed_data_ptrs.begin(),
+                                           compressed_data_sizes.begin(),
+                                           uncompressed_data_ptrs.begin(),
+                                           uncompressed_data_sizes.data());
+  thrust::transform(rmm::exec_policy(stream),
+                    comp_in.begin(),
+                    comp_in.end(),
+                    comp_it,
+                    [] __device__(gpu_inflate_input_s in) {
+                      return thrust::make_tuple(in.srcDevice, in.srcSize, in.dstDevice, in.dstSize);
+                    });
+
+  status = nvcompBatchedSnappyDecompressAsync(compressed_data_ptrs.data(),
+                                              compressed_data_sizes.data(),
+                                              uncompressed_data_sizes.data(),
+                                              actual_uncompressed_data_sizes.data(),
+                                              num_blocks,
+                                              scratch.data(),
+                                              scratch.size(),
+                                              uncompressed_data_ptrs.data(),
+                                              statuses.data(),
+                                              stream.value());
+  CUDF_EXPECTS(nvcompStatus_t::nvcompSuccess == status, "unable to perform snappy decompression");
+
+  CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
+                             statuses.begin(),
+                             statuses.end(),
+                             thrust::make_constant_iterator(nvcompStatus_t::nvcompSuccess)),
+               "Error during snappy decompression");
+  thrust::for_each_n(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0),
+    num_blocks,
+    [=, actual_uncomp_sizes = actual_uncompressed_data_sizes.data()] __device__(auto i) {
+      comp_stat[i].bytes_written = actual_uncomp_sizes[i];
+      comp_stat[i].status        = 0;
+    });
+}
+
 rmm::device_buffer reader::impl::decompress_stripe_data(
   cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
   const std::vector<rmm::device_buffer>& stripe_data,
@@ -592,9 +656,10 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
   rmm::device_uvector<gpu_inflate_status_s> inflate_out(num_compressed_blocks, stream);
 
   // Parse again to populate the decompression input/output buffers
-  size_t decomp_offset      = 0;
-  uint32_t start_pos        = 0;
-  uint32_t start_pos_uncomp = (uint32_t)num_compressed_blocks;
+  size_t decomp_offset           = 0;
+  uint32_t max_uncomp_block_size = 0;
+  uint32_t start_pos             = 0;
+  uint32_t start_pos_uncomp      = (uint32_t)num_compressed_blocks;
   for (size_t i = 0; i < compinfo.size(); ++i) {
     auto dst_base                 = static_cast<uint8_t*>(decomp_data.data());
     compinfo[i].uncompressed_data = dst_base + decomp_offset;
@@ -606,6 +671,8 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
     decomp_offset += compinfo[i].max_uncompressed_size;
     start_pos += compinfo[i].num_compressed_blocks;
     start_pos_uncomp += compinfo[i].num_uncompressed_blocks;
+    max_uncomp_block_size =
+      std::max(max_uncomp_block_size, compinfo[i].max_uncompressed_block_size);
   }
   compinfo.host_to_device(stream);
   gpu::ParseCompressedStripeData(compinfo.device_ptr(),
@@ -616,13 +683,24 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
 
   // Dispatch batches of blocks to decompress
   if (num_compressed_blocks > 0) {
+    auto env_use_nvcomp = std::getenv("LIBCUDF_USE_NVCOMP");
+    bool use_nvcomp     = env_use_nvcomp != nullptr ? std::atoi(env_use_nvcomp) : 0;
     switch (decompressor->GetKind()) {
       case orc::ZLIB:
         CUDA_TRY(
           gpuinflate(inflate_in.data(), inflate_out.data(), num_compressed_blocks, 0, stream));
         break;
       case orc::SNAPPY:
-        CUDA_TRY(gpu_unsnap(inflate_in.data(), inflate_out.data(), num_compressed_blocks, stream));
+        if (use_nvcomp) {
+          device_span<gpu_inflate_input_s> inflate_in_view{inflate_in.data(),
+                                                           num_compressed_blocks};
+          device_span<gpu_inflate_status_s> inflate_out_view{inflate_out.data(),
+                                                             num_compressed_blocks};
+          snappy_decompress(inflate_in_view, inflate_out_view, max_uncomp_block_size, stream);
+        } else {
+          CUDA_TRY(
+            gpu_unsnap(inflate_in.data(), inflate_out.data(), num_compressed_blocks, stream));
+        }
         break;
       default: CUDF_EXPECTS(false, "Unexpected decompression dispatch"); break;
     }
@@ -759,6 +837,49 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
   }
 }
 
+/**
+ * @brief Compute the per-stripe prefix sum of null count, for each struct column in the current
+ * layer.
+ */
+void scan_null_counts(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc> const& chunks,
+                      cudf::host_span<rmm::device_uvector<uint32_t>> prefix_sums,
+                      rmm::cuda_stream_view stream)
+{
+  auto const num_stripes = chunks.size().first;
+  if (num_stripes == 0) return;
+
+  auto const num_columns = chunks.size().second;
+  std::vector<thrust::pair<size_type, cudf::device_span<uint32_t>>> prefix_sums_to_update;
+  for (auto col_idx = 0ul; col_idx < num_columns; ++col_idx) {
+    // Null counts sums are only needed for children of struct columns
+    if (chunks[0][col_idx].type_kind == STRUCT) {
+      prefix_sums_to_update.emplace_back(col_idx, prefix_sums[col_idx]);
+    }
+  }
+  auto const d_prefix_sums_to_update =
+    cudf::detail::make_device_uvector_async(prefix_sums_to_update, stream);
+
+  thrust::for_each(rmm::exec_policy(stream),
+                   d_prefix_sums_to_update.begin(),
+                   d_prefix_sums_to_update.end(),
+                   [chunks = cudf::detail::device_2dspan<gpu::ColumnDesc const>{chunks}] __device__(
+                     auto const& idx_psums) {
+                     auto const col_idx = idx_psums.first;
+                     auto const psums   = idx_psums.second;
+
+                     thrust::transform(
+                       thrust::seq,
+                       thrust::make_counting_iterator(0),
+                       thrust::make_counting_iterator(0) + psums.size(),
+                       psums.begin(),
+                       [&](auto stripe_idx) { return chunks[stripe_idx][col_idx].null_count; });
+
+                     thrust::inclusive_scan(thrust::seq, psums.begin(), psums.end(), psums.begin());
+                   });
+  // `prefix_sums_to_update` goes out of scope, copy has to be done before we return
+  stream.synchronize();
+}
+
 void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks,
                                       size_t num_dicts,
                                       size_t skip_rows,
@@ -817,8 +938,6 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
                       [&](auto null_count, auto const stripe_idx) {
                         return null_count + chunks[stripe_idx][col_idx].null_count;
                       });
-    // Add parent null count in case this is a child column of a struct
-    out_buffers[col_idx].null_count() += chunks[0][col_idx].parent_validity_info.null_count;
   });
 }
 
@@ -841,6 +960,7 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
   num_child_rows.resize(_selected_columns[level + 1].size());
   std::fill(num_child_rows.begin(), num_child_rows.end(), 0);
   parent_column_data.resize(number_of_child_chunks);
+  _col_meta.parent_column_index.resize(number_of_child_chunks);
   _col_meta.child_start_row.resize(number_of_child_chunks);
   _col_meta.num_child_rows_per_stripe.resize(number_of_child_chunks);
   _col_meta.rwgrp_meta.resize(num_of_rowgroups * num_child_cols);
@@ -899,7 +1019,8 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
     auto num_rows          = out_buffers[parent_col_idx].size;
 
     for (uint32_t id = 0; id < p_col.num_children; id++) {
-      const auto child_col_idx = index + id;
+      const auto child_col_idx                     = index + id;
+      _col_meta.parent_column_index[child_col_idx] = parent_col_idx;
       if (type == type_id::STRUCT) {
         parent_column_data[child_col_idx] = {parent_valid_map, parent_null_count};
         // Number of rows in child will remain same as parent in case of struct column
@@ -911,6 +1032,8 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
     index += p_col.num_children;
   });
 }
+
+std::string get_map_child_col_name(size_t const idx) { return (idx == 0) ? "key" : "value"; }
 
 std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_id,
                                                           column_name_info& schema_info,
@@ -926,9 +1049,10 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
   int32_t scale = 0;
   std::vector<std::unique_ptr<column>> child_columns;
   std::unique_ptr<column> out_col = nullptr;
+  auto kind                       = _metadata->get_col_type(orc_col_id).kind;
 
-  switch (type) {
-    case type_id::LIST:
+  switch (kind) {
+    case orc::LIST:
       schema_info.children.emplace_back("offsets");
       schema_info.children.emplace_back("");
       out_col = make_lists_column(
@@ -939,10 +1063,30 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
         0,
         rmm::device_buffer{0, stream},
         stream);
-
       break;
+    case orc::MAP: {
+      schema_info.children.emplace_back("offsets");
+      schema_info.children.emplace_back("struct");
+      const auto child_column_ids = _metadata->get_col_type(orc_col_id).subtypes;
+      for (size_t idx = 0; idx < _metadata->get_col_type(orc_col_id).subtypes.size(); idx++) {
+        auto& children_schema = schema_info.children.back().children;
+        children_schema.emplace_back("");
+        child_columns.push_back(create_empty_column(
+          child_column_ids[idx], schema_info.children.back().children.back(), stream));
+        auto name                 = get_map_child_col_name(idx);
+        children_schema[idx].name = name;
+      }
+      auto struct_col =
+        make_structs_column(0, std::move(child_columns), 0, rmm::device_buffer{0, stream}, stream);
+      out_col = make_lists_column(0,
+                                  make_empty_column(data_type(type_id::INT32)),
+                                  std::move(struct_col),
+                                  0,
+                                  rmm::device_buffer{0, stream},
+                                  stream);
+    } break;
 
-    case type_id::STRUCT:
+    case orc::STRUCT:
       for (const auto col : _metadata->get_col_type(orc_col_id).subtypes) {
         schema_info.children.emplace_back("");
         child_columns.push_back(create_empty_column(col, schema_info.children.back(), stream));
@@ -951,8 +1095,10 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
         make_structs_column(0, std::move(child_columns), 0, rmm::device_buffer{0, stream}, stream);
       break;
 
-    case type_id::DECIMAL64:
-      scale   = -static_cast<int32_t>(_metadata->get_types()[orc_col_id].scale.value_or(0));
+    case orc::DECIMAL:
+      if (type == type_id::DECIMAL64) {
+        scale = -static_cast<int32_t>(_metadata->get_types()[orc_col_id].scale.value_or(0));
+      }
       out_col = make_empty_column(data_type(type, scale));
       break;
 
@@ -965,20 +1111,40 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
 // Adds child column buffers to parent column
 column_buffer&& reader::impl::assemble_buffer(const int32_t orc_col_id,
                                               std::vector<std::vector<column_buffer>>& col_buffers,
-                                              const size_t level)
+                                              const size_t level,
+                                              rmm::cuda_stream_view stream)
 {
   auto const col_id = _col_meta.orc_col_map[level][orc_col_id];
   auto& col_buffer  = col_buffers[level][col_id];
 
   col_buffer.name = _metadata->get_column_name(0, orc_col_id);
-  switch (col_buffer.type.id()) {
-    case type_id::LIST:
-    case type_id::STRUCT:
+  auto kind       = _metadata->get_col_type(orc_col_id).kind;
+  switch (kind) {
+    case orc::LIST:
+    case orc::STRUCT:
       for (auto const& col : _metadata->get_col_type(orc_col_id).subtypes) {
-        col_buffer.children.emplace_back(assemble_buffer(col, col_buffers, level + 1));
+        col_buffer.children.emplace_back(assemble_buffer(col, col_buffers, level + 1, stream));
       }
 
       break;
+    case orc::MAP: {
+      std::vector<column_buffer> child_col_buffers;
+      // Get child buffers
+      for (size_t idx = 0; idx < _metadata->get_col_type(orc_col_id).subtypes.size(); idx++) {
+        auto name = get_map_child_col_name(idx);
+        auto col  = _metadata->get_col_type(orc_col_id).subtypes[idx];
+        child_col_buffers.emplace_back(assemble_buffer(col, col_buffers, level + 1, stream));
+        child_col_buffers.back().name = name;
+      }
+      // Create a struct buffer
+      auto num_rows = child_col_buffers[0].size;
+      auto struct_buffer =
+        column_buffer(cudf::data_type(type_id::STRUCT), num_rows, false, stream, _mr);
+      struct_buffer.children = std::move(child_col_buffers);
+      struct_buffer.name     = "struct";
+
+      col_buffer.children.emplace_back(std::move(struct_buffer));
+    } break;
 
     default: break;
   }
@@ -997,7 +1163,7 @@ void reader::impl::create_columns(std::vector<std::vector<column_buffer>>&& col_
                  std::back_inserter(out_columns),
                  [&](auto const col_meta) {
                    schema_info.emplace_back("");
-                   auto col_buffer = assemble_buffer(col_meta.id, col_buffers, 0);
+                   auto col_buffer = assemble_buffer(col_meta.id, col_buffers, 0, stream);
                    return make_column(col_buffer, &schema_info.back(), stream, _mr);
                  });
 }
@@ -1042,6 +1208,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   std::vector<std::vector<column_buffer>> out_buffers(_selected_columns.size());
   std::vector<column_name_info> schema_info;
   std::vector<std::vector<rmm::device_buffer>> lvl_stripe_data(_selected_columns.size());
+  std::vector<std::vector<rmm::device_uvector<uint32_t>>> null_count_prefix_sums;
   table_metadata out_metadata;
 
   // There are no columns in the table
@@ -1057,6 +1224,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     // Association between each ORC column and its cudf::column
     _col_meta.orc_col_map.emplace_back(_metadata->get_num_cols(), -1);
     std::vector<orc_column_meta> nested_col;
+    bool is_data_empty = false;
 
     // Get a list of column data types
     std::vector<data_type> column_types;
@@ -1084,6 +1252,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
       // Map each ORC column to its column
       _col_meta.orc_col_map[level][col.id] = column_types.size() - 1;
+      // TODO: Once MAP type is supported in cuDF, update this for MAP as well
       if (col_type == type_id::LIST or col_type == type_id::STRUCT) nested_col.emplace_back(col);
     }
 
@@ -1113,6 +1282,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
       const bool use_index =
         (_use_index == true) &&
+        // Do stripes have row group index
+        _metadata->is_row_grp_idx_present() &&
         // Only use if we don't have much work with complete columns & stripes
         // TODO: Consider nrows, gpu, and tune the threshold
         (num_rows > _metadata->get_row_index_stride() && !(_metadata->get_row_index_stride() & 7) &&
@@ -1123,6 +1294,14 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
       // Logically view streams as columns
       std::vector<orc_stream_info> stream_info;
+
+      null_count_prefix_sums.emplace_back();
+      null_count_prefix_sums.back().reserve(_selected_columns[level].size());
+      std::generate_n(
+        std::back_inserter(null_count_prefix_sums.back()), _selected_columns[level].size(), [&]() {
+          return cudf::detail::make_zeroed_device_uvector_async<uint32_t>(total_num_stripes,
+                                                                          stream);
+        });
 
       // Tracker for eventually deallocating compressed and uncompressed data
       auto& stripe_data = lvl_stripe_data[level];
@@ -1144,7 +1323,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                                           stripe_info,
                                                           stripe_footer,
                                                           _col_meta.orc_col_map[level],
-                                                          selected_columns,
                                                           _metadata->get_types(),
                                                           use_index,
                                                           &num_dict_entries,
@@ -1152,13 +1330,21 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                                           stream_info,
                                                           level == 0);
 
-          CUDF_EXPECTS(total_data_size > 0, "Expected streams data within stripe");
+          if (total_data_size == 0) {
+            CUDF_EXPECTS(stripe_info->indexLength == 0, "Invalid index rowgroup stream data");
+            // In case ROW GROUP INDEX is not present and all columns are structs with no null
+            // stream, there is nothing to read at this level.
+            auto fn_check_dtype = [](auto dtype) { return dtype.id() == type_id::STRUCT; };
+            CUDF_EXPECTS(std::all_of(column_types.begin(), column_types.end(), fn_check_dtype),
+                         "Expected streams data within stripe");
+            is_data_empty = true;
+          }
 
           stripe_data.emplace_back(total_data_size, stream);
           auto dst_base = static_cast<uint8_t*>(stripe_data.back().data());
 
           // Coalesce consecutive streams into one read
-          while (stream_count < stream_info.size()) {
+          while (not is_data_empty and stream_count < stream_info.size()) {
             const auto d_dst  = dst_base + stream_info[stream_count].dst_pos;
             const auto offset = stream_info[stream_count].offset;
             auto len          = stream_info[stream_count].length;
@@ -1207,10 +1393,12 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                 ? stripe_info->numberOfRows
                 : _col_meta.num_child_rows_per_stripe[stripe_idx * num_columns + col_idx];
             chunk.column_num_rows = (level == 0) ? num_rows : _col_meta.num_child_rows[col_idx];
-            chunk.parent_validity_info.valid_map_base =
-              (level == 0) ? nullptr : _col_meta.parent_column_data[col_idx].valid_map_base;
-            chunk.parent_validity_info.null_count =
-              (level == 0) ? 0 : _col_meta.parent_column_data[col_idx].null_count;
+            chunk.parent_validity_info =
+              (level == 0) ? column_validity_info{} : _col_meta.parent_column_data[col_idx];
+            chunk.parent_null_count_prefix_sums =
+              (level == 0)
+                ? nullptr
+                : null_count_prefix_sums[level - 1][_col_meta.parent_column_index[col_idx]].data();
             chunk.encoding_kind = stripe_footer->columns[selected_columns[col_idx].id].kind;
             chunk.type_kind     = _metadata->per_file_metadata[stripe_source_mapping.source_idx]
                                 .ff.types[selected_columns[col_idx].id]
@@ -1238,8 +1426,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             if (chunk.type_kind == orc::TIMESTAMP) {
               chunk.ts_clock_rate = to_clockrate(_timestamp_type.id());
             }
-            for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
-              chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
+            if (not is_data_empty) {
+              for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {
+                chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
+              }
             }
           }
           stripe_start_row += num_rows_per_stripe;
@@ -1273,7 +1463,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                          });
         }
         // Setup row group descriptors if using indexes
-        if (_metadata->per_file_metadata[0].ps.compression != orc::NONE) {
+        if (_metadata->per_file_metadata[0].ps.compression != orc::NONE and not is_data_empty) {
           auto decomp_data =
             decompress_stripe_data(chunks,
                                    stripe_data,
@@ -1324,18 +1514,23 @@ table_with_metadata reader::impl::read(size_type skip_rows,
           out_buffers[level].emplace_back(column_types[i], n_rows, is_nullable, stream, _mr);
         }
 
-        decode_stream_data(chunks,
-                           num_dict_entries,
-                           skip_rows,
-                           tz_table.view(),
-                           row_groups,
-                           _metadata->get_row_index_stride(),
-                           out_buffers[level],
-                           level,
-                           stream);
+        if (not is_data_empty) {
+          decode_stream_data(chunks,
+                             num_dict_entries,
+                             skip_rows,
+                             tz_table.view(),
+                             row_groups,
+                             _metadata->get_row_index_stride(),
+                             out_buffers[level],
+                             level,
+                             stream);
+        }
 
         // Extract information to process nested child columns
         if (nested_col.size()) {
+          if (not is_data_empty) {
+            scan_null_counts(chunks, null_count_prefix_sums[level], stream);
+          }
           row_groups.device_to_host(stream, true);
           aggregate_child_meta(chunks, row_groups, out_buffers[level], nested_col, level);
         }
@@ -1381,15 +1576,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
   }
 
   return {std::make_unique<table>(std::move(out_columns)), std::move(out_metadata)};
-}
-
-// Forward to implementation
-reader::reader(std::vector<std::string> const& filepaths,
-               orc_reader_options const& options,
-               rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr)
-{
-  _impl = std::make_unique<impl>(datasource::create(filepaths), options, mr);
 }
 
 // Forward to implementation

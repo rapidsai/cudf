@@ -396,7 +396,18 @@ def test_categorical_as_unordered(pd_str_cat, inplace):
 
 @pytest.mark.parametrize("from_ordered", [True, False])
 @pytest.mark.parametrize("to_ordered", [True, False])
-@pytest.mark.parametrize("inplace", [True, False])
+@pytest.mark.parametrize(
+    "inplace",
+    [
+        pytest.param(
+            True,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/43232"
+            ),
+        ),
+        False,
+    ],
+)
 def test_categorical_reorder_categories(
     pd_str_cat, from_ordered, to_ordered, inplace
 ):
@@ -420,7 +431,18 @@ def test_categorical_reorder_categories(
     assert str(cd_sr_1) == str(pd_sr_1)
 
 
-@pytest.mark.parametrize("inplace", [True, False])
+@pytest.mark.parametrize(
+    "inplace",
+    [
+        pytest.param(
+            True,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/43232"
+            ),
+        ),
+        False,
+    ],
+)
 def test_categorical_add_categories(pd_str_cat, inplace):
 
     pd_sr = pd.Series(pd_str_cat.copy())
@@ -441,7 +463,18 @@ def test_categorical_add_categories(pd_str_cat, inplace):
     assert_eq(pd_sr_1, cd_sr_1)
 
 
-@pytest.mark.parametrize("inplace", [True, False])
+@pytest.mark.parametrize(
+    "inplace",
+    [
+        pytest.param(
+            True,
+            marks=pytest.mark.xfail(
+                reason="https://github.com/pandas-dev/pandas/issues/43232"
+            ),
+        ),
+        False,
+    ],
+)
 def test_categorical_remove_categories(pd_str_cat, inplace):
 
     pd_sr = pd.Series(pd_str_cat.copy())
@@ -799,7 +832,7 @@ def test_categorical_setitem_with_nan():
 @pytest.mark.parametrize("dtype", list(NUMERIC_TYPES) + ["object"])
 @pytest.mark.parametrize("input_obj", [[1, cudf.NA, 3]])
 def test_series_construction_with_nulls(input_obj, dtype):
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
     input_obj = [
         dtype.type(v) if v is not cudf.NA else cudf.NA for v in input_obj
     ]

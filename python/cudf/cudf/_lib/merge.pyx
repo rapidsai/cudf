@@ -10,7 +10,8 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.merge cimport merge as cpp_merge
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport Table, table_view_from_table
+from cudf._lib.utils cimport data_from_unique_ptr
 
 
 def merge_sorted(
@@ -33,10 +34,8 @@ def merge_sorted(
     # Use metadata from 0th table for names, etc
     c_input_tables.reserve(len(tables))
     for source_table in tables:
-        if ignore_index:
-            c_input_tables.push_back(source_table.data_view())
-        else:
-            c_input_tables.push_back(source_table.view())
+        c_input_tables.push_back(
+            table_view_from_table(source_table, ignore_index))
     source_table = tables[0]
 
     # Define sorting order and null precedence
@@ -102,7 +101,7 @@ def merge_sorted(
             )
         )
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=source_table._column_names,
         index_names=index_names,

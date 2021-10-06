@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-20, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,8 +24,10 @@
 namespace cudf {
 namespace groupby {
 namespace detail {
-inline std::vector<aggregation_result> extract_results(
-  host_span<aggregation_request const> requests, cudf::detail::result_cache& cache)
+
+template <typename RequestType>
+inline std::vector<aggregation_result> extract_results(host_span<RequestType const> requests,
+                                                       cudf::detail::result_cache& cache)
 {
   std::vector<aggregation_result> results(requests.size());
 

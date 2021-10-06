@@ -59,11 +59,76 @@ def extract_datetime_component(Column col, object field):
     return result
 
 
+def ceil_datetime(Column col, object field):
+    cdef unique_ptr[column] c_result
+    cdef column_view col_view = col.view()
+
+    with nogil:
+        # https://pandas.pydata.org/pandas-docs/version/0.25.0/reference/api/pandas.Timedelta.resolution.html
+        if field == "D":
+            c_result = move(libcudf_datetime.ceil_day(col_view))
+        elif field == "H":
+            c_result = move(libcudf_datetime.ceil_hour(col_view))
+        elif field == "T":
+            c_result = move(libcudf_datetime.ceil_minute(col_view))
+        elif field == "S":
+            c_result = move(libcudf_datetime.ceil_second(col_view))
+        elif field == "L":
+            c_result = move(libcudf_datetime.ceil_millisecond(col_view))
+        elif field == "U":
+            c_result = move(libcudf_datetime.ceil_microsecond(col_view))
+        elif field == "N":
+            c_result = move(libcudf_datetime.ceil_nanosecond(col_view))
+        else:
+            raise ValueError(f"Invalid resolution: '{field}'")
+
+    result = Column.from_unique_ptr(move(c_result))
+    return result
+
+
 def is_leap_year(Column col):
+    """Returns a boolean indicator whether the year of the date is a leap year
+    """
     cdef unique_ptr[column] c_result
     cdef column_view col_view = col.view()
 
     with nogil:
         c_result = move(libcudf_datetime.is_leap_year(col_view))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def extract_quarter(Column col):
+    """
+    Returns a column which contains the corresponding quarter of the year
+    for every timestamp inside the input column.
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view col_view = col.view()
+
+    with nogil:
+        c_result = move(libcudf_datetime.extract_quarter(col_view))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def days_in_month(Column col):
+    """Extracts the number of days in the month of the date
+    """
+    cdef unique_ptr[column] c_result
+    cdef column_view col_view = col.view()
+
+    with nogil:
+        c_result = move(libcudf_datetime.days_in_month(col_view))
+
+    return Column.from_unique_ptr(move(c_result))
+
+
+def last_day_of_month(Column col):
+    cdef unique_ptr[column] c_result
+    cdef column_view col_view = col.view()
+
+    with nogil:
+        c_result = move(libcudf_datetime.last_day_of_month(col_view))
 
     return Column.from_unique_ptr(move(c_result))

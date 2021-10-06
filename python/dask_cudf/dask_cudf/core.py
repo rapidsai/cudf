@@ -27,7 +27,7 @@ import cudf
 from cudf import _lib as libcudf
 
 from dask_cudf import sorting
-from dask_cudf.accessors import ListMethods
+from dask_cudf.accessors import ListMethods, StructMethods
 
 DASK_VERSION = LooseVersion(dask.__version__)
 
@@ -169,7 +169,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             or isinstance(divisions, (cudf.DataFrame, cudf.Series))
             or (
                 isinstance(other, str)
-                and cudf.utils.dtypes.is_string_dtype(self[other].dtype)
+                and cudf.api.types.is_string_dtype(self[other].dtype)
             )
         ):
 
@@ -413,6 +413,10 @@ class Series(_Frame, dd.core.Series):
     @property
     def list(self):
         return ListMethods(self)
+
+    @property
+    def struct(self):
+        return StructMethods(self)
 
 
 class Index(Series, dd.core.Index):

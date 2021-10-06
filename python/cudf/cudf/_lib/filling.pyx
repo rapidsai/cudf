@@ -15,7 +15,8 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.table cimport Table
+from cudf._lib.table cimport Table, table_view_from_table
+from cudf._lib.utils cimport data_from_unique_ptr
 
 
 def fill_in_place(Column destination, int begin, int end, DeviceScalar value):
@@ -58,7 +59,7 @@ def repeat(Table inp, object count, bool check_count=False):
 
 
 def _repeat_via_column(Table inp, Column count, bool check_count):
-    cdef table_view c_inp = inp.view()
+    cdef table_view c_inp = table_view_from_table(inp)
     cdef column_view c_count = count.view()
     cdef bool c_check_count = check_count
     cdef unique_ptr[table] c_result
@@ -70,7 +71,7 @@ def _repeat_via_column(Table inp, Column count, bool check_count):
             c_check_count
         ))
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=inp._column_names,
         index_names=inp._index_names
@@ -78,7 +79,7 @@ def _repeat_via_column(Table inp, Column count, bool check_count):
 
 
 def _repeat_via_size_type(Table inp, size_type count):
-    cdef table_view c_inp = inp.view()
+    cdef table_view c_inp = table_view_from_table(inp)
     cdef unique_ptr[table] c_result
 
     with nogil:
@@ -87,7 +88,7 @@ def _repeat_via_size_type(Table inp, size_type count):
             count
         ))
 
-    return Table.from_unique_ptr(
+    return data_from_unique_ptr(
         move(c_result),
         column_names=inp._column_names,
         index_names=inp._index_names

@@ -24,8 +24,10 @@
 #include <cudf/dictionary/encode.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/reduction.hpp>
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
+#include <cudf_test/table_utilities.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -85,7 +87,7 @@ template <typename T>
 struct ReductionTest : public cudf::test::BaseFixture {
   // Sum/Prod/SumOfSquare never support non arithmetics
   static constexpr bool ret_non_arithmetic =
-    (std::is_arithmetic<T>::value || std::is_same<T, bool>::value) ? true : false;
+    (std::is_arithmetic<T>::value || std::is_same_v<T, bool>) ? true : false;
 
   ReductionTest() {}
 
@@ -936,7 +938,7 @@ TYPED_TEST(ReductionTest, Median)
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
   double expected_value = [] {
-    if (std::is_same<T, bool>::value) return 1.0;
+    if (std::is_same_v<T, bool>) return 1.0;
     if (std::is_signed<T>::value) return 3.0;
     return 13.5;
   }();
@@ -945,7 +947,7 @@ TYPED_TEST(ReductionTest, Median)
 
   auto col_odd              = cudf::split(col, {1})[1];
   double expected_value_odd = [] {
-    if (std::is_same<T, bool>::value) return 1.0;
+    if (std::is_same_v<T, bool>) return 1.0;
     if (std::is_signed<T>::value) return 0.0;
     return 14.0;
   }();
@@ -954,7 +956,7 @@ TYPED_TEST(ReductionTest, Median)
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
   double expected_null_value                          = [] {
-    if (std::is_same<T, bool>::value) return 1.0;
+    if (std::is_same_v<T, bool>) return 1.0;
     if (std::is_signed<T>::value) return 0.0;
     return 13.0;
   }();
@@ -964,7 +966,7 @@ TYPED_TEST(ReductionTest, Median)
 
   auto col_nulls_odd             = cudf::split(col_nulls, {1})[1];
   double expected_null_value_odd = [] {
-    if (std::is_same<T, bool>::value) return 1.0;
+    if (std::is_same_v<T, bool>) return 1.0;
     if (std::is_signed<T>::value) return -6.5;
     return 13.5;
   }();
@@ -985,7 +987,7 @@ TYPED_TEST(ReductionTest, Quantile)
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
-  double expected_value0 = std::is_same<T, bool>::value || std::is_unsigned<T>::value ? v[4] : v[6];
+  double expected_value0 = std::is_same_v<T, bool> || std::is_unsigned<T>::value ? v[4] : v[6];
   this->reduction_test(
     col, expected_value0, this->ret_non_arithmetic, cudf::make_quantile_aggregation({0.0}, interp));
   double expected_value1 = v[3];
@@ -1015,7 +1017,7 @@ TYPED_TEST(ReductionTest, UniqueCount)
 
   // test without nulls
   cudf::test::fixed_width_column_wrapper<T> col(v.begin(), v.end());
-  cudf::size_type expected_value = std::is_same<T, bool>::value ? 2 : 6;
+  cudf::size_type expected_value = std::is_same_v<T, bool> ? 2 : 6;
   this->reduction_test(col,
                        expected_value,
                        this->ret_non_arithmetic,
@@ -1027,8 +1029,8 @@ TYPED_TEST(ReductionTest, UniqueCount)
 
   // test with nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
-  cudf::size_type expected_null_value0                = std::is_same<T, bool>::value ? 3 : 7;
-  cudf::size_type expected_null_value1                = std::is_same<T, bool>::value ? 2 : 6;
+  cudf::size_type expected_null_value0                = std::is_same_v<T, bool> ? 3 : 7;
+  cudf::size_type expected_null_value1                = std::is_same_v<T, bool> ? 2 : 6;
 
   this->reduction_test(col_nulls,
                        expected_null_value0,
@@ -1844,7 +1846,7 @@ TYPED_TEST(DictionaryReductionTest, Quantile)
 
   // test without nulls
   cudf::test::dictionary_column_wrapper<T> col(v.begin(), v.end());
-  double expected_value = std::is_same<T, bool>::value || std::is_unsigned<T>::value ? 0.0 : -20.0;
+  double expected_value = std::is_same_v<T, bool> || std::is_unsigned<T>::value ? 0.0 : -20.0;
   this->reduction_test(col,
                        expected_value,
                        this->ret_non_arithmetic,
@@ -1870,6 +1872,268 @@ TYPED_TEST(DictionaryReductionTest, Quantile)
                        this->ret_non_arithmetic,
                        cudf::make_quantile_aggregation({1}, interp),
                        output_type);
+}
+
+struct ListReductionTest : public cudf::test::BaseFixture {
+  void reduction_test(cudf::column_view const& input_data,
+                      cudf::column_view const& expected_value,
+                      bool succeeded_condition,
+                      bool is_valid,
+                      std::unique_ptr<aggregation> const& agg)
+  {
+    auto statement = [&]() {
+      std::unique_ptr<cudf::scalar> result =
+        cudf::reduce(input_data, agg, cudf::data_type(cudf::type_id::LIST));
+      auto list_result = dynamic_cast<cudf::list_scalar*>(result.get());
+      EXPECT_EQ(is_valid, list_result->is_valid());
+      if (is_valid) { CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_value, list_result->view()); }
+    };
+
+    if (succeeded_condition) {
+      CUDF_EXPECT_NO_THROW(statement());
+    } else {
+      EXPECT_ANY_THROW(statement());
+    }
+  }
+};
+
+TEST_F(ListReductionTest, ListReductionNthElement)
+{
+  using LCW        = cudf::test::lists_column_wrapper<int>;
+  using ElementCol = cudf::test::fixed_width_column_wrapper<int>;
+
+  // test without nulls
+  LCW col{{-3}, {2, 1}, {0, 5, -3}, {-2}, {}, {28}};
+  this->reduction_test(col,
+                       ElementCol{0, 5, -3},  // expected_value,
+                       true,
+                       true,
+                       cudf::make_nth_element_aggregation(2, cudf::null_policy::INCLUDE));
+
+  // test with null-exclude
+  std::vector<bool> validity{1, 0, 0, 1, 1, 0};
+  LCW col_nulls({{-3}, {2, 1}, {0, 5, -3}, {-2}, {}, {28}}, validity.begin());
+  this->reduction_test(col_nulls,
+                       ElementCol{-2},  // expected_value,
+                       true,
+                       true,
+                       cudf::make_nth_element_aggregation(1, cudf::null_policy::EXCLUDE));
+
+  // test with null-include
+  this->reduction_test(col_nulls,
+                       ElementCol{},  // expected_value,
+                       true,
+                       false,
+                       cudf::make_nth_element_aggregation(1, cudf::null_policy::INCLUDE));
+}
+
+TEST_F(ListReductionTest, NestedListReductionNthElement)
+{
+  using LCW = cudf::test::lists_column_wrapper<int>;
+
+  // test without nulls
+  auto validity    = std::vector<bool>{1, 0, 0, 1, 1};
+  auto nested_list = LCW(
+    {{LCW{}, LCW{2, 3, 4}}, {}, {LCW{5}, LCW{6}, LCW{7, 8}}, {LCW{9, 10}}, {LCW{11}, LCW{12, 13}}},
+    validity.begin());
+  this->reduction_test(nested_list,
+                       LCW{{}, {2, 3, 4}},  // expected_value,
+                       true,
+                       true,
+                       cudf::make_nth_element_aggregation(0, cudf::null_policy::INCLUDE));
+
+  // test with null-include
+  this->reduction_test(nested_list,
+                       LCW{},  // expected_value,
+                       true,
+                       false,
+                       cudf::make_nth_element_aggregation(2, cudf::null_policy::INCLUDE));
+
+  // test with null-exclude
+  this->reduction_test(nested_list,
+                       LCW{{11}, {12, 13}},  // expected_value,
+                       true,
+                       true,
+                       cudf::make_nth_element_aggregation(2, cudf::null_policy::EXCLUDE));
+}
+
+TEST_F(ListReductionTest, NonValidListReductionNthElement)
+{
+  using LCW        = cudf::test::lists_column_wrapper<int>;
+  using ElementCol = cudf::test::fixed_width_column_wrapper<int>;
+
+  // test against col.size() <= col.null_count()
+  std::vector<bool> validity{0};
+  this->reduction_test(LCW{{{1, 2}}, validity.begin()},
+                       ElementCol{},  // expected_value,
+                       true,
+                       false,
+                       cudf::make_nth_element_aggregation(0, cudf::null_policy::INCLUDE));
+
+  // test against empty input
+  this->reduction_test(LCW{},
+                       ElementCol{{0}, {0}},  // expected_value,
+                       true,
+                       false,
+                       cudf::make_nth_element_aggregation(0, cudf::null_policy::INCLUDE));
+}
+
+struct StructReductionTest : public cudf::test::BaseFixture {
+  using SCW = cudf::test::structs_column_wrapper;
+
+  void reduction_test(SCW const& struct_column,
+                      cudf::table_view const& expected_value,
+                      bool succeeded_condition,
+                      bool is_valid,
+                      std::unique_ptr<aggregation> const& agg)
+  {
+    auto statement = [&]() {
+      std::unique_ptr<cudf::scalar> result =
+        cudf::reduce(struct_column, agg, cudf::data_type(cudf::type_id::STRUCT));
+      auto struct_result = dynamic_cast<cudf::struct_scalar*>(result.get());
+      EXPECT_EQ(is_valid, struct_result->is_valid());
+      if (is_valid) { CUDF_TEST_EXPECT_TABLES_EQUAL(expected_value, struct_result->view()); }
+    };
+
+    if (succeeded_condition) {
+      CUDF_EXPECT_NO_THROW(statement());
+    } else {
+      EXPECT_ANY_THROW(statement());
+    }
+  }
+};
+
+TEST_F(StructReductionTest, StructReductionNthElement)
+{
+  using ICW = cudf::test::fixed_width_column_wrapper<int>;
+
+  // test without nulls
+  auto child0 = *ICW{-3, 2, 1, 0, 5, -3, -2, 28}.release();
+  auto child1 = *ICW{0, 1, 2, 3, 4, 5, 6, 7}.release();
+  auto child2 =
+    *ICW{{-10, 10, -100, 100, -1000, 1000, -10000, 10000}, {1, 0, 0, 1, 1, 1, 0, 1}}.release();
+  std::vector<std::unique_ptr<cudf::column>> input_vector;
+  input_vector.push_back(std::make_unique<cudf::column>(child0));
+  input_vector.push_back(std::make_unique<cudf::column>(child1));
+  input_vector.push_back(std::make_unique<cudf::column>(child2));
+  auto struct_col  = SCW(std::move(input_vector));
+  auto result_col0 = ICW{1};
+  auto result_col1 = ICW{2};
+  auto result_col2 = ICW{{0}, {0}};
+  this->reduction_test(
+    struct_col,
+    cudf::table_view{{result_col0, result_col1, result_col2}},  // expected_value,
+    true,
+    true,
+    cudf::make_nth_element_aggregation(2, cudf::null_policy::INCLUDE));
+
+  // test with null-include
+  std::vector<bool> validity{1, 1, 1, 0, 1, 0, 0, 1};
+  input_vector.clear();
+  input_vector.push_back(std::make_unique<cudf::column>(child0));
+  input_vector.push_back(std::make_unique<cudf::column>(child1));
+  input_vector.push_back(std::make_unique<cudf::column>(child2));
+  struct_col  = SCW(std::move(input_vector), validity);
+  result_col0 = ICW{{0}, {0}};
+  result_col1 = ICW{{0}, {0}};
+  result_col2 = ICW{{0}, {0}};
+  this->reduction_test(
+    struct_col,
+    cudf::table_view{{result_col0, result_col1, result_col2}},  // expected_value,
+    true,
+    false,
+    cudf::make_nth_element_aggregation(6, cudf::null_policy::INCLUDE));
+
+  // test with null-exclude
+  result_col0 = ICW{{28}, {1}};
+  result_col1 = ICW{{7}, {1}};
+  result_col2 = ICW{{10000}, {1}};
+  this->reduction_test(
+    struct_col,
+    cudf::table_view{{result_col0, result_col1, result_col2}},  // expected_value,
+    true,
+    true,
+    cudf::make_nth_element_aggregation(4, cudf::null_policy::EXCLUDE));
+}
+
+TEST_F(StructReductionTest, NestedStructReductionNthElement)
+{
+  using ICW = cudf::test::fixed_width_column_wrapper<int>;
+  using LCW = cudf::test::lists_column_wrapper<int>;
+
+  auto int_col0      = ICW{-4, -3, -2, -1, 0};
+  auto struct_col0   = SCW({int_col0}, std::vector<bool>{1, 0, 0, 1, 1});
+  auto int_col1      = ICW{0, 1, 2, 3, 4};
+  auto list_col      = LCW{{0}, {}, {1, 2}, {3}, {4}};
+  auto struct_col1   = SCW({struct_col0, int_col1, list_col}, std::vector<bool>{1, 1, 1, 0, 1});
+  auto result_child0 = ICW{0};
+  auto result_col0   = SCW({result_child0}, std::vector<bool>{0});
+  auto result_col1   = ICW{{1}, {1}};
+  auto result_col2   = LCW({LCW{}}, std::vector<bool>{1}.begin());
+  // test without nulls
+  this->reduction_test(
+    struct_col1,
+    cudf::table_view{{result_col0, result_col1, result_col2}},  // expected_value,
+    true,
+    true,
+    cudf::make_nth_element_aggregation(1, cudf::null_policy::INCLUDE));
+
+  // test with null-include
+  result_child0 = ICW{0};
+  result_col0   = SCW({result_child0}, std::vector<bool>{0});
+  result_col1   = ICW{{0}, {0}};
+  result_col2   = LCW({LCW{3}}, std::vector<bool>{0}.begin());
+  this->reduction_test(
+    struct_col1,
+    cudf::table_view{{result_col0, result_col1, result_col2}},  // expected_value,
+    true,
+    false,
+    cudf::make_nth_element_aggregation(3, cudf::null_policy::INCLUDE));
+
+  // test with null-exclude
+  result_child0 = ICW{0};
+  result_col0   = SCW({result_child0}, std::vector<bool>{1});
+  result_col1   = ICW{{4}, {1}};
+  result_col2   = LCW({LCW{4}}, std::vector<bool>{1}.begin());
+  this->reduction_test(
+    struct_col1,
+    cudf::table_view{{result_col0, result_col1, result_col2}},  // expected_value,
+    true,
+    true,
+    cudf::make_nth_element_aggregation(3, cudf::null_policy::EXCLUDE));
+}
+
+TEST_F(StructReductionTest, NonValidStructReductionNthElement)
+{
+  using ICW = cudf::test::fixed_width_column_wrapper<int>;
+
+  // test against col.size() <= col.null_count()
+  auto child0     = ICW{-3, 3};
+  auto child1     = ICW{0, 0};
+  auto child2     = ICW{{-10, 10}, {0, 1}};
+  auto struct_col = SCW{{child0, child1, child2}, {0, 0}};
+  auto ret_col0   = ICW{{0}, {0}};
+  auto ret_col1   = ICW{{0}, {0}};
+  auto ret_col2   = ICW{{0}, {0}};
+  this->reduction_test(struct_col,
+                       cudf::table_view{{ret_col0, ret_col1, ret_col2}},  // expected_value,
+                       true,
+                       false,
+                       cudf::make_nth_element_aggregation(0, cudf::null_policy::INCLUDE));
+
+  // test against empty input (would fail because we can not create empty struct scalar)
+  child0     = ICW{};
+  child1     = ICW{};
+  child2     = ICW{};
+  struct_col = SCW{{child0, child1, child2}};
+  ret_col0   = ICW{};
+  ret_col1   = ICW{};
+  ret_col2   = ICW{};
+  this->reduction_test(struct_col,
+                       cudf::table_view{{ret_col0, ret_col1, ret_col2}},  // expected_value,
+                       false,
+                       false,
+                       cudf::make_nth_element_aggregation(0, cudf::null_policy::INCLUDE));
 }
 
 CUDF_TEST_PROGRAM_MAIN()

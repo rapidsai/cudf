@@ -257,3 +257,79 @@ def test_lists_of_structs_dtype(data):
 
     assert_column_array_dtype_equal(got._column, expected)
     assert expected.equals(got._column.to_arrow())
+
+
+@pytest.mark.parametrize(
+    "in_dtype,expect",
+    [
+        (np.dtype("int8"), np.dtype("int8")),
+        (np.int8, np.dtype("int8")),
+        (pd.Int8Dtype(), np.dtype("int8")),
+        (pd.StringDtype(), np.dtype("object")),
+        ("int8", np.dtype("int8")),
+        ("boolean", np.dtype("bool")),
+        ("bool_", np.dtype("bool")),
+        (np.bool_, np.dtype("bool")),
+        (int, np.dtype("int64")),
+        (float, np.dtype("float64")),
+        (cudf.ListDtype("int64"), cudf.ListDtype("int64")),
+        (np.dtype("U"), np.dtype("object")),
+        ("timedelta64[ns]", np.dtype("<m8[ns]")),
+        ("timedelta64[ms]", np.dtype("<m8[ms]")),
+        ("<m8[s]", np.dtype("<m8[s]")),
+        ("datetime64[ns]", np.dtype("<M8[ns]")),
+        ("datetime64[ms]", np.dtype("<M8[ms]")),
+        ("<M8[s]", np.dtype("<M8[s]")),
+        (cudf.ListDtype("int64"), cudf.ListDtype("int64")),
+        ("category", cudf.CategoricalDtype()),
+        (
+            cudf.CategoricalDtype(categories=("a", "b", "c")),
+            cudf.CategoricalDtype(categories=("a", "b", "c")),
+        ),
+        (
+            pd.CategoricalDtype(categories=("a", "b", "c")),
+            cudf.CategoricalDtype(categories=("a", "b", "c")),
+        ),
+        (
+            # this is a pandas.core.arrays.numpy_.PandasDtype...
+            pd.array([1], dtype="int16").dtype,
+            np.dtype("int16"),
+        ),
+        (pd.IntervalDtype("int"), cudf.IntervalDtype("int64")),
+        (cudf.IntervalDtype("int"), cudf.IntervalDtype("int64")),
+        (pd.IntervalDtype("int64"), cudf.IntervalDtype("int64")),
+    ],
+)
+def test_dtype(in_dtype, expect):
+    assert_eq(cudf.dtype(in_dtype), expect)
+
+
+@pytest.mark.parametrize(
+    "in_dtype",
+    [
+        "complex",
+        np.complex128,
+        complex,
+        "S",
+        "a",
+        "V",
+        "float16",
+        np.float16,
+        "timedelta64",
+        "timedelta64[D]",
+        "datetime64[D]",
+        "datetime64",
+    ],
+)
+def test_dtype_raise(in_dtype):
+    with pytest.raises(TypeError):
+        cudf.dtype(in_dtype)
+
+
+def test_dtype_np_bool_to_pa_bool():
+    """This test case captures that utility np_to_pa_dtype
+    should map np.bool_ to pa.bool_, nuances on bit width
+    difference should be handled elsewhere.
+    """
+
+    assert np_to_pa_dtype(np.dtype("bool")) == pa.bool_()

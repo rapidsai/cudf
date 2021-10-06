@@ -197,23 +197,21 @@ class ProtobufReader {
     return (field_number * 8) + PB_TYPE_VARINT;
   }
 
-  template <typename base_t,
-            typename std::enable_if_t<std::is_same<base_t, float>::value>* = nullptr>
+  template <typename base_t, typename std::enable_if_t<std::is_same_v<base_t, float>>* = nullptr>
   int static constexpr encode_field_number_base(int field_number) noexcept
   {
     return (field_number * 8) + PB_TYPE_FIXED32;
   }
 
-  template <typename base_t,
-            typename std::enable_if_t<std::is_same<base_t, double>::value>* = nullptr>
+  template <typename base_t, typename std::enable_if_t<std::is_same_v<base_t, double>>* = nullptr>
   int static constexpr encode_field_number_base(int field_number) noexcept
   {
     return (field_number * 8) + PB_TYPE_FIXED64;
   }
 
   template <typename T,
-            typename std::enable_if_t<!std::is_class<T>::value or
-                                      std::is_same<T, std::string>::value>* = nullptr>
+            typename std::enable_if_t<!std::is_class<T>::value or std::is_same_v<T, std::string>>* =
+              nullptr>
   int static constexpr encode_field_number(int field_number) noexcept
   {
     return encode_field_number_base<T>(field_number);
@@ -251,7 +249,7 @@ class ProtobufReader {
     value = static_cast<T>(get<uint32_t>());
   }
 
-  template <typename T, typename std::enable_if_t<std::is_same<T, std::string>::value>* = nullptr>
+  template <typename T, typename std::enable_if_t<std::is_same_v<T, std::string>>* = nullptr>
   void read_field(T& value, const uint8_t* end)
   {
     auto const size = read_field_size(end);
@@ -271,7 +269,7 @@ class ProtobufReader {
   template <
     typename T,
     typename std::enable_if_t<std::is_same<T, std::vector<typename T::value_type>>::value and
-                              !std::is_same<std::string, typename T::value_type>::value>* = nullptr>
+                              !std::is_same_v<std::string, typename T::value_type>>* = nullptr>
   void read_field(T& value, const uint8_t* end)
   {
     auto const size = read_field_size(end);
@@ -617,9 +615,13 @@ class metadata {
 /**
  * @brief `column_device_view` and additional, ORC specific, information on the column.
  */
-struct orc_column_device_view {
-  column_device_view cudf_column;
+struct orc_column_device_view : public column_device_view {
+  __device__ orc_column_device_view(column_device_view col, thrust::optional<uint32_t> parent_idx)
+    : column_device_view{col}, parent_index{parent_idx}
+  {
+  }
   thrust::optional<uint32_t> parent_index;
+  bitmask_type const* pushdown_mask = nullptr;
 };
 
 /**

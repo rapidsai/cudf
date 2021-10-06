@@ -27,6 +27,7 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/unary.hpp>
+#include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/lists/detail/drop_list_duplicates.hpp>
 #include <cudf/table/table.hpp>
@@ -146,7 +147,10 @@ void aggregate_result_functor::operator()<aggregation::MIN>(aggregation const& a
   if (cache.has_result(col_idx, agg)) return;
 
   auto result = [&]() {
-    if (cudf::is_fixed_width(values.type())) {
+    auto values_type = cudf::is_dictionary(values.type())
+                         ? dictionary_column_view(values).keys().type()
+                         : values.type();
+    if (cudf::is_fixed_width(values_type)) {
       return detail::group_min(
         get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr);
     } else {
@@ -183,7 +187,10 @@ void aggregate_result_functor::operator()<aggregation::MAX>(aggregation const& a
   if (cache.has_result(col_idx, agg)) return;
 
   auto result = [&]() {
-    if (cudf::is_fixed_width(values.type())) {
+    auto values_type = cudf::is_dictionary(values.type())
+                         ? dictionary_column_view(values).keys().type()
+                         : values.type();
+    if (cudf::is_fixed_width(values_type)) {
       return detail::group_max(
         get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr);
     } else {
@@ -258,7 +265,7 @@ void aggregate_result_functor::operator()<aggregation::VARIANCE>(aggregation con
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto var_agg   = dynamic_cast<cudf::detail::var_aggregation const&>(agg);
+  auto& var_agg  = dynamic_cast<cudf::detail::var_aggregation const&>(agg);
   auto mean_agg  = make_mean_aggregation();
   auto count_agg = make_count_aggregation();
   operator()<aggregation::MEAN>(*mean_agg);
@@ -281,8 +288,8 @@ void aggregate_result_functor::operator()<aggregation::STD>(aggregation const& a
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto std_agg = dynamic_cast<cudf::detail::std_aggregation const&>(agg);
-  auto var_agg = make_variance_aggregation(std_agg._ddof);
+  auto& std_agg = dynamic_cast<cudf::detail::std_aggregation const&>(agg);
+  auto var_agg  = make_variance_aggregation(std_agg._ddof);
   operator()<aggregation::VARIANCE>(*var_agg);
   column_view var_result = cache.get_result(col_idx, *var_agg);
 
@@ -298,7 +305,7 @@ void aggregate_result_functor::operator()<aggregation::QUANTILE>(aggregation con
   auto count_agg = make_count_aggregation();
   operator()<aggregation::COUNT_VALID>(*count_agg);
   column_view group_sizes = cache.get_result(col_idx, *count_agg);
-  auto quantile_agg       = dynamic_cast<cudf::detail::quantile_aggregation const&>(agg);
+  auto& quantile_agg      = dynamic_cast<cudf::detail::quantile_aggregation const&>(agg);
 
   auto result = detail::group_quantiles(get_sorted_values(),
                                         group_sizes,
@@ -336,7 +343,7 @@ void aggregate_result_functor::operator()<aggregation::NUNIQUE>(aggregation cons
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto nunique_agg = dynamic_cast<cudf::detail::nunique_aggregation const&>(agg);
+  auto& nunique_agg = dynamic_cast<cudf::detail::nunique_aggregation const&>(agg);
 
   auto result = detail::group_nunique(get_sorted_values(),
                                       helper.group_labels(stream),
@@ -353,7 +360,7 @@ void aggregate_result_functor::operator()<aggregation::NTH_ELEMENT>(aggregation 
 {
   if (cache.has_result(col_idx, agg)) return;
 
-  auto nth_element_agg = dynamic_cast<cudf::detail::nth_element_aggregation const&>(agg);
+  auto& nth_element_agg = dynamic_cast<cudf::detail::nth_element_aggregation const&>(agg);
 
   auto count_agg = make_count_aggregation(nth_element_agg._null_handling);
   if (count_agg->kind == aggregation::COUNT_VALID) {
@@ -474,12 +481,12 @@ void aggregate_result_functor::operator()<aggregation::MERGE_SETS>(aggregation c
 {
   if (cache.has_result(col_idx, agg)) { return; }
 
-  auto const merged_result  = detail::group_merge_lists(get_grouped_values(),
+  auto const merged_result   = detail::group_merge_lists(get_grouped_values(),
                                                        helper.group_offsets(stream),
                                                        helper.num_groups(stream),
                                                        stream,
                                                        rmm::mr::get_current_device_resource());
-  auto const merge_sets_agg = dynamic_cast<cudf::detail::merge_sets_aggregation const&>(agg);
+  auto const& merge_sets_agg = dynamic_cast<cudf::detail::merge_sets_aggregation const&>(agg);
   cache.add_result(col_idx,
                    agg,
                    lists::detail::drop_list_duplicates(lists_column_view(merged_result->view()),
@@ -516,6 +523,97 @@ void aggregate_result_functor::operator()<aggregation::MERGE_M2>(aggregation con
     agg,
     detail::group_merge_m2(
       get_grouped_values(), helper.group_offsets(stream), helper.num_groups(stream), stream, mr));
+};
+
+/**
+ * @brief Generate a tdigest column from a grouped set of numeric input values.
+ *
+ * The tdigest column produced is of the following structure:
+ *
+ * struct {
+ *   // centroids for the digest
+ *   list {
+ *    struct {
+ *      double    // mean
+ *      double    // weight
+ *    },
+ *    ...
+ *   }
+ *   // these are from the input stream, not the centroids. they are used
+ *   // during the percentile_approx computation near the beginning or
+ *   // end of the quantiles
+ *   double       // min
+ *   double       // max
+ * }
+ *
+ * Each output row is a single tdigest.  The length of the row is the "size" of the
+ * tdigest, each element of which represents a weighted centroid (mean, weight).
+ */
+template <>
+void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation const& agg)
+{
+  if (cache.has_result(col_idx, agg)) { return; }
+
+  auto const max_centroids =
+    dynamic_cast<cudf::detail::tdigest_aggregation const&>(agg).max_centroids;
+
+  auto count_agg = make_count_aggregation();
+  operator()<aggregation::COUNT_VALID>(*count_agg);
+  column_view valid_counts = cache.get_result(col_idx, *count_agg);
+
+  cache.add_result(col_idx,
+                   agg,
+                   detail::group_tdigest(
+                     get_sorted_values(),
+                     helper.group_offsets(stream),
+                     helper.group_labels(stream),
+                     {valid_counts.begin<size_type>(), static_cast<size_t>(valid_counts.size())},
+                     helper.num_groups(stream),
+                     max_centroids,
+                     stream,
+                     mr));
+};
+
+/**
+ * @brief Generate a merged tdigest column from a grouped set of input tdigest columns.
+ *
+ * The tdigest column produced is of the following structure:
+ *
+ * struct {
+ *   // centroids for the digest
+ *   list {
+ *    struct {
+ *      double    // mean
+ *      double    // weight
+ *    },
+ *    ...
+ *   }
+ *   // these are from the input stream, not the centroids. they are used
+ *   // during the percentile_approx computation near the beginning or
+ *   // end of the quantiles
+ *   double       // min
+ *   double       // max
+ * }
+ *
+ * Each output row is a single tdigest.  The length of the row is the "size" of the
+ * tdigest, each element of which represents a weighted centroid (mean, weight).
+ */
+template <>
+void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregation const& agg)
+{
+  if (cache.has_result(col_idx, agg)) { return; }
+
+  auto const max_centroids =
+    dynamic_cast<cudf::detail::merge_tdigest_aggregation const&>(agg).max_centroids;
+  cache.add_result(col_idx,
+                   agg,
+                   detail::group_merge_tdigest(get_grouped_values(),
+                                               helper.group_offsets(stream),
+                                               helper.group_labels(stream),
+                                               helper.num_groups(stream),
+                                               max_centroids,
+                                               stream,
+                                               mr));
 };
 
 }  // namespace detail

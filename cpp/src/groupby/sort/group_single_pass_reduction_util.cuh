@@ -21,20 +21,106 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/valid_if.cuh>
-#include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/functional.h>
+#include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <thrust/reduce.h>
 
 namespace cudf {
 namespace groupby {
 namespace detail {
+
+/**
+ * @brief ArgMin binary operator with index values into input column.
+ *
+ * @tparam T Type of the underlying column. Must support '<' operator.
+ */
+template <typename T>
+struct ArgMin {
+  column_device_view const d_col;
+  CUDA_DEVICE_CALLABLE auto operator()(size_type const& lhs, size_type const& rhs) const
+  {
+    // The extra bounds checking is due to issue github.com/rapidsai/cudf/9156 and
+    // github.com/NVIDIA/thrust/issues/1525
+    // where invalid random values may be passed here by thrust::reduce_by_key
+    if (lhs < 0 || lhs >= d_col.size() || d_col.is_null(lhs)) { return rhs; }
+    if (rhs < 0 || rhs >= d_col.size() || d_col.is_null(rhs)) { return lhs; }
+    return d_col.element<T>(lhs) < d_col.element<T>(rhs) ? lhs : rhs;
+  }
+};
+
+/**
+ * @brief ArgMax binary operator with index values into input column.
+ *
+ * @tparam T Type of the underlying column. Must support '<' operator.
+ */
+template <typename T>
+struct ArgMax {
+  column_device_view const d_col;
+  CUDA_DEVICE_CALLABLE auto operator()(size_type const& lhs, size_type const& rhs) const
+  {
+    // The extra bounds checking is due to issue github.com/rapidsai/cudf/9156 and
+    // github.com/NVIDIA/thrust/issues/1525
+    // where invalid random values may be passed here by thrust::reduce_by_key
+    if (lhs < 0 || lhs >= d_col.size() || d_col.is_null(lhs)) { return rhs; }
+    if (rhs < 0 || rhs >= d_col.size() || d_col.is_null(rhs)) { return lhs; }
+    return d_col.element<T>(rhs) < d_col.element<T>(lhs) ? lhs : rhs;
+  }
+};
+
+/**
+ * @brief Value accessor for column which supports dictionary column too.
+ *
+ * @tparam T Type of the underlying column. For dictionary column, type of the key column.
+ */
+template <typename T>
+struct value_accessor {
+  column_device_view const col;
+  bool const is_dict;
+  value_accessor(column_device_view const& col) : col(col), is_dict(cudf::is_dictionary(col.type()))
+  {
+  }
+
+  __device__ T value(size_type i) const
+  {
+    if (is_dict) {
+      auto keys = col.child(dictionary_column_view::keys_column_index);
+      return keys.element<T>(static_cast<size_type>(col.element<dictionary32>(i)));
+    } else {
+      return col.element<T>(i);
+    }
+  }
+  __device__ auto operator()(size_type i) const { return value(i); }
+};
+
+/**
+ * @brief Null replaced value accessor for column which supports dictionary column too.
+ * For null value, returns null `init` value
+ *
+ * @tparam T Type of the underlying column. For dictionary column, type of the key column.
+ */
+template <typename T>
+struct null_replaced_value_accessor : value_accessor<T> {
+  using super_t = value_accessor<T>;
+  bool const has_nulls;
+  T const init;
+  null_replaced_value_accessor(column_device_view const& col, T const& init, bool const has_nulls)
+    : super_t(col), init(init), has_nulls(has_nulls)
+  {
+  }
+  __device__ T operator()(size_type i) const
+  {
+    return has_nulls && super_t::col.is_null_nocheck(i) ? init : super_t::value(i);
+  }
+};
+
 template <aggregation::Kind K>
 struct reduce_functor {
   template <typename T>
@@ -61,51 +147,62 @@ struct reduce_functor {
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr)
   {
-    using DeviceType = device_storage_type_t<T>;
-    using OpType     = cudf::detail::corresponding_operator_t<K>;
-    using ResultType = cudf::detail::target_type_t<T, K>;
+    using DeviceType  = device_storage_type_t<T>;
+    using OpType      = cudf::detail::corresponding_operator_t<K>;
+    using ResultType  = cudf::detail::target_type_t<T, K>;
+    using ResultDType = device_storage_type_t<ResultType>;
 
     auto result_type = is_fixed_point<ResultType>()
                          ? data_type{type_to_id<ResultType>(), values.type().scale()}
                          : data_type{type_to_id<ResultType>()};
 
     std::unique_ptr<column> result =
-      make_fixed_width_column(result_type,
-                              num_groups,
-                              values.has_nulls() ? mask_state::ALL_NULL : mask_state::UNALLOCATED,
-                              stream,
-                              mr);
+      make_fixed_width_column(result_type, num_groups, mask_state::UNALLOCATED, stream, mr);
 
     if (values.is_empty()) { return result; }
 
-    auto result_table = mutable_table_view({*result});
-    cudf::detail::initialize_with_identity(result_table, {K}, stream);
-
     auto resultview = mutable_column_device_view::create(result->mutable_view(), stream);
     auto valuesview = column_device_view::create(values, stream);
-
-    if (!cudf::is_dictionary(values.type())) {
-      thrust::for_each_n(rmm::exec_policy(stream),
-                         thrust::make_counting_iterator(0),
-                         values.size(),
-                         [d_values     = *valuesview,
-                          d_result     = *resultview,
-                          dest_indices = group_labels.data()] __device__(auto i) {
-                           cudf::detail::update_target_element<DeviceType, K, true, true>{}(
-                             d_result, dest_indices[i], d_values, i);
-                         });
+    if constexpr (K == aggregation::ARGMAX || K == aggregation::ARGMIN) {
+      using OpType =
+        std::conditional_t<(K == aggregation::ARGMAX), ArgMax<DeviceType>, ArgMin<DeviceType>>;
+      thrust::reduce_by_key(rmm::exec_policy(stream),
+                            group_labels.data(),
+                            group_labels.data() + group_labels.size(),
+                            thrust::make_counting_iterator<ResultType>(0),
+                            thrust::make_discard_iterator(),
+                            resultview->begin<ResultType>(),
+                            thrust::equal_to<ResultType>{},
+                            OpType{*valuesview});
     } else {
-      thrust::for_each_n(rmm::exec_policy(stream),
-                         thrust::make_counting_iterator(0),
-                         values.size(),
-                         [d_values     = *valuesview,
-                          d_result     = *resultview,
-                          dest_indices = group_labels.data()] __device__(auto i) {
-                           cudf::detail::update_target_element<dictionary32, K, true, true>{}(
-                             d_result, dest_indices[i], d_values, i);
-                         });
+      auto init  = OpType::template identity<DeviceType>();
+      auto begin = cudf::detail::make_counting_transform_iterator(
+        0, null_replaced_value_accessor{*valuesview, init, values.has_nulls()});
+      thrust::reduce_by_key(rmm::exec_policy(stream),
+                            group_labels.data(),
+                            group_labels.data() + group_labels.size(),
+                            begin,
+                            thrust::make_discard_iterator(),
+                            resultview->begin<ResultDType>(),
+                            thrust::equal_to<size_type>{},
+                            OpType{});
     }
 
+    if (values.has_nulls()) {
+      rmm::device_uvector<bool> validity(num_groups, stream);
+      thrust::reduce_by_key(rmm::exec_policy(stream),
+                            group_labels.data(),
+                            group_labels.data() + group_labels.size(),
+                            cudf::detail::make_validity_iterator(*valuesview),
+                            thrust::make_discard_iterator(),
+                            validity.begin(),
+                            thrust::equal_to<size_type>{},
+                            thrust::logical_or<bool>{});
+      auto [null_mask, null_count] = cudf::detail::valid_if(
+        validity.begin(), validity.end(), thrust::identity<bool>{}, stream, mr);
+      result->set_null_mask(std::move(null_mask));
+      result->set_null_count(null_count);
+    }
     return result;
   }
 

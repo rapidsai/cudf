@@ -789,7 +789,7 @@ TYPED_TEST(FixedPointTests, FixedPointToFixedPointDifferentTypeid)
   using namespace numeric;
   using decimalA    = TypeParam;
   using RepTypeA    = cudf::device_storage_type_t<decimalA>;
-  using RepTypeB    = std::conditional_t<std::is_same<RepTypeA, int32_t>::value, int64_t, int32_t>;
+  using RepTypeB    = std::conditional_t<std::is_same_v<RepTypeA, int32_t>, int64_t, int32_t>;
   using fp_wrapperA = cudf::test::fixed_point_column_wrapper<RepTypeA>;
   using fp_wrapperB = cudf::test::fixed_point_column_wrapper<RepTypeB>;
 
@@ -805,7 +805,7 @@ TYPED_TEST(FixedPointTests, FixedPointToFixedPointDifferentTypeidDown)
   using namespace numeric;
   using decimalA    = TypeParam;
   using RepTypeA    = cudf::device_storage_type_t<decimalA>;
-  using RepTypeB    = std::conditional_t<std::is_same<RepTypeA, int32_t>::value, int64_t, int32_t>;
+  using RepTypeB    = std::conditional_t<std::is_same_v<RepTypeA, int32_t>, int64_t, int32_t>;
   using fp_wrapperA = cudf::test::fixed_point_column_wrapper<RepTypeA>;
   using fp_wrapperB = cudf::test::fixed_point_column_wrapper<RepTypeB>;
 
@@ -821,7 +821,7 @@ TYPED_TEST(FixedPointTests, FixedPointToFixedPointDifferentTypeidUp)
   using namespace numeric;
   using decimalA    = TypeParam;
   using RepTypeA    = cudf::device_storage_type_t<decimalA>;
-  using RepTypeB    = std::conditional_t<std::is_same<RepTypeA, int32_t>::value, int64_t, int32_t>;
+  using RepTypeB    = std::conditional_t<std::is_same_v<RepTypeA, int32_t>, int64_t, int32_t>;
   using fp_wrapperA = cudf::test::fixed_point_column_wrapper<RepTypeA>;
   using fp_wrapperB = cudf::test::fixed_point_column_wrapper<RepTypeB>;
 
@@ -837,7 +837,7 @@ TYPED_TEST(FixedPointTests, FixedPointToFixedPointDifferentTypeidUpNullMask)
   using namespace numeric;
   using decimalA    = TypeParam;
   using RepTypeA    = cudf::device_storage_type_t<decimalA>;
-  using RepTypeB    = std::conditional_t<std::is_same<RepTypeA, int32_t>::value, int64_t, int32_t>;
+  using RepTypeB    = std::conditional_t<std::is_same_v<RepTypeA, int32_t>, int64_t, int32_t>;
   using fp_wrapperA = cudf::test::fixed_point_column_wrapper<RepTypeA>;
   using fp_wrapperB = cudf::test::fixed_point_column_wrapper<RepTypeB>;
 

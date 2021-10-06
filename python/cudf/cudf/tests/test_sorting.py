@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf.core import DataFrame, Series
+from cudf import DataFrame, Series
 from cudf.core.column import NumericalColumn
 from cudf.testing._utils import (
     DATETIME_TYPES,
@@ -106,12 +106,12 @@ def test_series_argsort(nelem, dtype, asc):
 def test_series_sort_index(nelem, asc):
     np.random.seed(0)
     sr = Series((100 * np.random.random(nelem)))
-    orig = sr.to_array()
-    got = sr.sort_values().sort_index(ascending=asc).to_array()
-    if not asc:
-        # Reverse the array for descending sort
-        got = got[::-1]
-    np.testing.assert_array_equal(orig, got)
+    psr = sr.to_pandas()
+
+    expected = psr.sort_index(ascending=asc)
+    got = sr.sort_index(ascending=asc)
+
+    assert_eq(expected, got)
 
 
 @pytest.mark.parametrize("data", [[0, 1, 1, 2, 2, 2, 3, 3], [0], [1, 2, 3]])
@@ -359,3 +359,22 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
     if keep:
         for frame in multiindex_result:
             isinstance(frame.index, type(df2.index))
+
+
+@pytest.mark.parametrize(
+    "nelem,dtype", list(product(sort_nelem_args, sort_dtype_args))
+)
+@pytest.mark.parametrize(
+    "kind", ["quicksort", "mergesort", "heapsort", "stable"]
+)
+def test_dataframe_sort_values_kind(nelem, dtype, kind):
+    np.random.seed(0)
+    df = DataFrame()
+    df["a"] = aa = (100 * np.random.random(nelem)).astype(dtype)
+    df["b"] = bb = (100 * np.random.random(nelem)).astype(dtype)
+    sorted_df = df.sort_values(by="a", kind=kind)
+    # Check
+    sorted_index = np.argsort(aa, kind="mergesort")
+    assert_eq(sorted_df.index.values, sorted_index)
+    assert_eq(sorted_df["a"].values, aa[sorted_index])
+    assert_eq(sorted_df["b"].values, bb[sorted_index])

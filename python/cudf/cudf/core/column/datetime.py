@@ -15,6 +15,7 @@ import pandas as pd
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import DatetimeLikeScalar, Dtype, DtypeObj, ScalarLike
+from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.buffer import Buffer
 from cudf.core.column import (
@@ -24,7 +25,6 @@ from cudf.core.column import (
     column_empty_like,
     string,
 )
-from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import _fillna_natwise
 
 if PANDAS_GE_120:
@@ -52,6 +52,19 @@ _dtype_to_format_conversion = {
 
 
 class DatetimeColumn(column.ColumnBase):
+    """
+    A Column implementation for Date-time types.
+
+    Parameters
+    ----------
+    data : Buffer
+        The datetime values
+    dtype : np.dtype
+        The data type
+    mask : Buffer; optional
+        The validity mask
+    """
+
     def __init__(
         self,
         data: Buffer,
@@ -61,17 +74,8 @@ class DatetimeColumn(column.ColumnBase):
         offset: int = 0,
         null_count: int = None,
     ):
-        """
-        Parameters
-        ----------
-        data : Buffer
-            The datetime values
-        dtype : np.dtype
-            The data type
-        mask : Buffer; optional
-            The validity mask
-        """
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
+
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
@@ -154,8 +158,20 @@ class DatetimeColumn(column.ColumnBase):
             index=index,
         )
 
+    @property
+    def values(self):
+        """
+        Return a CuPy representation of the DateTimeColumn.
+        """
+        raise NotImplementedError(
+            "DateTime Arrays is not yet implemented in cudf"
+        )
+
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(self, field)
+
+    def ceil(self, field: str) -> ColumnBase:
+        return libcudf.datetime.ceil_datetime(self, field)
 
     def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarLike:
         if isinstance(other, cudf.Scalar):
@@ -236,7 +252,7 @@ class DatetimeColumn(column.ColumnBase):
         return output
 
     def as_datetime_column(self, dtype: Dtype, **kwargs) -> DatetimeColumn:
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype=dtype)
@@ -245,7 +261,7 @@ class DatetimeColumn(column.ColumnBase):
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.TimeDeltaColumn":
         raise TypeError(
-            f"cannot astype a datetimelike from [{self.dtype}] to [{dtype}]"
+            f"cannot astype a datetimelike from {self.dtype} to {dtype}"
         )
 
     def as_numerical_column(
@@ -264,7 +280,7 @@ class DatetimeColumn(column.ColumnBase):
             )
         if len(self) > 0:
             return string._datetime_to_str_typecast_functions[
-                np.dtype(self.dtype)
+                cudf.dtype(self.dtype)
             ](self, format)
         else:
             return cast(
@@ -316,7 +332,7 @@ class DatetimeColumn(column.ColumnBase):
             return rhs._datetime_binop(self, op, reflect=reflect)
         lhs: Union[ScalarLike, ColumnBase] = self
         if op in ("eq", "ne", "lt", "gt", "le", "ge", "NULL_EQUALS"):
-            out_dtype = np.dtype(np.bool_)  # type: Dtype
+            out_dtype = cudf.dtype(np.bool_)  # type: Dtype
         elif op == "add" and pd.api.types.is_timedelta64_dtype(rhs.dtype):
             out_dtype = cudf.core.column.timedelta._timedelta_add_result_dtype(
                 rhs, lhs
@@ -389,13 +405,13 @@ class DatetimeColumn(column.ColumnBase):
             to_res, _ = np.datetime_data(to_dtype)
             self_res, _ = np.datetime_data(self.dtype)
 
-            max_int = np.iinfo(np.dtype("int64")).max
+            max_int = np.iinfo(cudf.dtype("int64")).max
 
             max_dist = np.timedelta64(
-                self.max().astype(np.dtype("int64"), copy=False), self_res
+                self.max().astype(cudf.dtype("int64"), copy=False), self_res
             )
             min_dist = np.timedelta64(
-                self.min().astype(np.dtype("int64"), copy=False), self_res
+                self.min().astype(cudf.dtype("int64"), copy=False), self_res
             )
 
             self_delta_dtype = np.timedelta64(0, self_res).dtype
@@ -408,7 +424,7 @@ class DatetimeColumn(column.ColumnBase):
                 return True
             else:
                 return False
-        elif to_dtype == np.dtype("int64") or to_dtype == np.dtype("O"):
+        elif to_dtype == cudf.dtype("int64") or to_dtype == cudf.dtype("O"):
             # can safely cast to representation, or string
             return True
         else:

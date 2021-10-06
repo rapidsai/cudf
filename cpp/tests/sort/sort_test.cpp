@@ -77,7 +77,7 @@ TYPED_TEST(Sort, WithNullMax)
   // Sorted order
   auto got = sorted_order(input, column_order, null_precedence);
 
-  if (!std::is_same<T, bool>::value) {
+  if (!std::is_same_v<T, bool>) {
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
     // Run test for sort and sort_by_key
@@ -115,7 +115,7 @@ TYPED_TEST(Sort, WithNullMin)
 
   auto got = sorted_order(input, column_order);
 
-  if (!std::is_same<T, bool>::value) {
+  if (!std::is_same_v<T, bool>) {
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
     // Run test for sort and sort_by_key
@@ -154,7 +154,7 @@ TYPED_TEST(Sort, WithMixedNullOrder)
 
   auto got = sorted_order(input, column_order, null_precedence);
 
-  if (!std::is_same<T, bool>::value) {
+  if (!std::is_same_v<T, bool>) {
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
   } else {
     // for bools only validate that the null element landed at the front, since
@@ -190,7 +190,7 @@ TYPED_TEST(Sort, WithAllValid)
 
   // Skip validating bools order. Valid true bools are all
   // equivalent, and yield random order after thrust::sort
-  if (!std::is_same<T, bool>::value) {
+  if (!std::is_same_v<T, bool>) {
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
     // Run test for sort and sort_by_key
@@ -237,7 +237,7 @@ TYPED_TEST(Sort, WithStructColumn)
 
   // Skip validating bools order. Valid true bools are all
   // equivalent, and yield random order after thrust::sort
-  if (!std::is_same<T, bool>::value) {
+  if (!std::is_same_v<T, bool>) {
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
     // Run test for sort and sort_by_key
@@ -282,7 +282,7 @@ TYPED_TEST(Sort, WithNestedStructColumn)
 
   // Skip validating bools order. Valid true bools are all
   // equivalent, and yield random order after thrust::sort
-  if (!std::is_same<T, bool>::value) {
+  if (!std::is_same_v<T, bool>) {
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, got->view());
 
     // Run test for sort and sort_by_key

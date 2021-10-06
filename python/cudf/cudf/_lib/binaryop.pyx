@@ -16,7 +16,7 @@ from cudf._lib.scalar import as_device_scalar
 
 from cudf._lib.scalar cimport DeviceScalar
 
-from cudf._lib.types import np_to_cudf_types
+from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
@@ -24,10 +24,11 @@ from cudf._lib.cpp.scalar.scalar cimport scalar
 from cudf._lib.cpp.types cimport data_type, type_id
 from cudf._lib.types cimport dtype_to_data_type, underlying_type_t_type_id
 
-from cudf.utils.dtypes import is_scalar, is_string_dtype
+from cudf.api.types import is_scalar, is_string_dtype
 
 cimport cudf._lib.cpp.binaryop as cpp_binaryop
 from cudf._lib.cpp.binaryop cimport binary_operator
+import cudf
 
 
 class BinaryOperation(IntEnum):
@@ -211,7 +212,7 @@ def binaryop_udf(Column lhs, Column rhs, udf_ptx, dtype):
     cdef type_id tid = (
         <type_id> (
             <underlying_type_t_type_id> (
-                np_to_cudf_types[np.dtype(dtype)]
+                SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[cudf.dtype(dtype)]
             )
         )
     )

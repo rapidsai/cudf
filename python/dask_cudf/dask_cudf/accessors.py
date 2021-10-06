@@ -1,6 +1,69 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 
+class StructMethods:
+    def __init__(self, d_series):
+        self.d_series = d_series
+
+    def field(self, key):
+        """
+        Extract children of the specified struct column
+        in the Series
+        Parameters
+        ----------
+        key: int or str
+            index/position or field name of the respective
+            struct column
+        Returns
+        -------
+        Series
+        Examples
+        --------
+        >>> s = cudf.Series([{'a': 1, 'b': 2}, {'a': 3, 'b': 4}])
+        >>> ds = dask_cudf.from_cudf(s, 2)
+        >>> ds.struct.field(0).compute()
+        0    1
+        1    3
+        dtype: int64
+        >>> ds.struct.field('a').compute()
+        0    1
+        1    3
+        dtype: int64
+        """
+        typ = self.d_series._meta.struct.field(key).dtype
+
+        return self.d_series.map_partitions(
+            lambda s: s.struct.field(key),
+            meta=self.d_series._meta._constructor([], dtype=typ),
+        )
+
+    def explode(self):
+        """
+        Creates a dataframe view of the struct column, one column per field.
+
+        Returns
+        -------
+        DataFrame
+
+        Examples
+        --------
+        >>> import cudf, dask_cudf
+        >>> ds = dask_cudf.from_cudf(cudf.Series(
+        ...     [{'a': 42, 'b': 'str1', 'c': [-1]},
+        ...      {'a': 0,  'b': 'str2', 'c': [400, 500]},
+        ...      {'a': 7,  'b': '',     'c': []}]), npartitions=2)
+        >>> ds.struct.explode().compute()
+            a     b           c
+        0  42  str1        [-1]
+        1   0  str2  [400, 500]
+        2   7                []
+        """
+        return self.d_series.map_partitions(
+            lambda s: s.struct.explode(),
+            meta=self.d_series._meta.struct.explode(),
+        )
+
+
 class ListMethods:
     def __init__(self, d_series):
         self.d_series = d_series

@@ -1167,8 +1167,17 @@ __global__ void __launch_bounds__(block_size)
       // No present stream: all rows are valid
       s->vals.u32[t] = ~0;
     }
-    while (s->top.nulls_desc_row < s->chunk.num_rows) {
-      uint32_t nrows_max = min(s->chunk.num_rows - s->top.nulls_desc_row, blockDim.x * 32);
+    auto const prev_parent_null_count =
+      (s->chunk.parent_null_count_prefix_sums != nullptr && stripe > 0)
+        ? s->chunk.parent_null_count_prefix_sums[stripe - 1]
+        : 0;
+    auto const parent_null_count =
+      (s->chunk.parent_null_count_prefix_sums != nullptr)
+        ? s->chunk.parent_null_count_prefix_sums[stripe] - prev_parent_null_count
+        : 0;
+    auto const num_elems = s->chunk.num_rows - parent_null_count;
+    while (s->top.nulls_desc_row < num_elems) {
+      uint32_t nrows_max = min(num_elems - s->top.nulls_desc_row, blockDim.x * 32);
       uint32_t nrows;
       size_t row_in;
 
@@ -1187,7 +1196,7 @@ __global__ void __launch_bounds__(block_size)
       }
       __syncthreads();
 
-      row_in = s->chunk.start_row + s->top.nulls_desc_row;
+      row_in = s->chunk.start_row + s->top.nulls_desc_row - prev_parent_null_count;
       if (row_in + nrows > first_row && row_in < first_row + max_num_rows &&
           s->chunk.valid_map_base != NULL) {
         int64_t dst_row   = row_in - first_row;
@@ -1251,7 +1260,7 @@ __global__ void __launch_bounds__(block_size)
     // Sum up the valid counts and infer null_count
     null_count = block_reduce(temp_storage.bk_storage).Sum(null_count);
     if (t == 0) {
-      chunks[chunk_id].null_count = null_count;
+      chunks[chunk_id].null_count = parent_null_count + null_count;
       chunks[chunk_id].skip_count = s->chunk.skip_count;
     }
   } else {
@@ -1563,9 +1572,10 @@ __global__ void __launch_bounds__(block_size)
       __syncthreads();
       // Account for skipped values
       if (num_rowgroups > 0 && !s->is_string) {
-        uint32_t run_pos = (s->chunk.type_kind == DECIMAL || s->chunk.type_kind == LIST)
-                             ? s->top.data.index.run_pos[CI_DATA2]
-                             : s->top.data.index.run_pos[CI_DATA];
+        uint32_t run_pos =
+          (s->chunk.type_kind == DECIMAL || s->chunk.type_kind == LIST || s->chunk.type_kind == MAP)
+            ? s->top.data.index.run_pos[CI_DATA2]
+            : s->top.data.index.run_pos[CI_DATA];
         numvals =
           min(numvals + run_pos, (s->chunk.type_kind == BOOLEAN) ? blockDim.x * 2 : blockDim.x);
       }
@@ -1578,7 +1588,7 @@ __global__ void __launch_bounds__(block_size)
           numvals = Integer_RLEv2(&s->bs, &s->u.rlev2, s->vals.i32, numvals, t);
         }
         __syncthreads();
-      } else if (s->chunk.type_kind == LIST) {
+      } else if (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP) {
         if (is_rlev1(s->chunk.encoding_kind)) {
           numvals = Integer_RLEv1<uint64_t>(&s->bs2, &s->u.rlev1, s->vals.u64, numvals, t);
         } else {
@@ -1667,15 +1677,17 @@ __global__ void __launch_bounds__(block_size)
       } else {
         vals_skipped = 0;
         if (num_rowgroups > 0) {
-          uint32_t run_pos = (s->chunk.type_kind == LIST) ? s->top.data.index.run_pos[CI_DATA2]
-                                                          : s->top.data.index.run_pos[CI_DATA];
+          uint32_t run_pos = (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP)
+                               ? s->top.data.index.run_pos[CI_DATA2]
+                               : s->top.data.index.run_pos[CI_DATA];
           if (run_pos) {
             vals_skipped = min(numvals, run_pos);
             numvals -= vals_skipped;
             __syncthreads();
             if (t == 0) {
-              (s->chunk.type_kind == LIST) ? s->top.data.index.run_pos[CI_DATA2] = 0
-                                           : s->top.data.index.run_pos[CI_DATA]  = 0;
+              (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP)
+                ? s->top.data.index.run_pos[CI_DATA2] = 0
+                : s->top.data.index.run_pos[CI_DATA]  = 0;
             }
           }
         }
@@ -1711,6 +1723,7 @@ __global__ void __launch_bounds__(block_size)
             case DECIMAL:
               static_cast<uint64_t*>(data_out)[row] = s->vals.u64[t + vals_skipped];
               break;
+            case MAP:
             case LIST: {
               // Since the offsets column in cudf is `size_type`,
               // If the limit exceeds then value will be 0, which is Fail.
@@ -1787,7 +1800,7 @@ __global__ void __launch_bounds__(block_size)
         }
       }
       // Aggregate num of elements for the chunk
-      if (s->chunk.type_kind == LIST) {
+      if (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP) {
         list_child_elements = block_reduce(temp_storage.blk_uint64).Sum(list_child_elements);
       }
       __syncthreads();
@@ -1804,14 +1817,16 @@ __global__ void __launch_bounds__(block_size)
     __syncthreads();
     if (t == 0) {
       s->top.data.cur_row += s->top.data.nrows;
-      if (s->chunk.type_kind == LIST) { s->num_child_rows += list_child_elements; }
+      if (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP) {
+        s->num_child_rows += list_child_elements;
+      }
       if (s->is_string && !is_dictionary(s->chunk.encoding_kind) && s->top.data.max_vals > 0) {
         s->chunk.dictionary_start += s->vals.u32[s->top.data.max_vals - 1];
       }
     }
     __syncthreads();
   }
-  if (t == 0 and s->chunk.type_kind == LIST) {
+  if (t == 0 and (s->chunk.type_kind == LIST or s->chunk.type_kind == MAP)) {
     if (num_rowgroups > 0) {
       row_groups[blockIdx.y][blockIdx.x].num_child_rows = s->num_child_rows;
     }
