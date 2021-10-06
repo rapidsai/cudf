@@ -46,26 +46,26 @@ inline double __device__ generic_round_half_even(double d) { return rint(d); }
 inline float __device__ generic_modf(float a, float* b) { return modff(a, b); }
 inline double __device__ generic_modf(double a, double* b) { return modf(a, b); }
 
-template <typename T, typename std::enable_if_t<std::is_signed<T>::value>* = nullptr>
+template <typename T, typename std::enable_if_t<cuda::std::is_signed<T>::value>* = nullptr>
 T __device__ generic_abs(T value)
 {
-  return abs(value);
+  return value < 0 ? -value : value;
 }
 
-template <typename T, typename std::enable_if_t<not std::is_signed<T>::value>* = nullptr>
+template <typename T, typename std::enable_if_t<not cuda::std::is_signed<T>::value>* = nullptr>
 T __device__ generic_abs(T value)
 {
   return value;
 }
 
-template <typename T, typename std::enable_if_t<std::is_signed<T>::value>* = nullptr>
+template <typename T, typename std::enable_if_t<cuda::std::is_signed<T>::value>* = nullptr>
 int16_t __device__ generic_sign(T value)
 {
   return value < 0 ? -1 : 1;
 }
 
 // this is needed to suppress warning: pointless comparison of unsigned integer with zero
-template <typename T, typename std::enable_if_t<not std::is_signed<T>::value>* = nullptr>
+template <typename T, typename std::enable_if_t<not cuda::std::is_signed<T>::value>* = nullptr>
 int16_t __device__ generic_sign(T)
 {
   return 1;
