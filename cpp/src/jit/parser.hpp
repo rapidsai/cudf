@@ -194,7 +194,6 @@ class ptx_parser {
    * @param output_arg_type_ The C++ type of the output parameter of the
    * function.
    * @param pointer_arg_list_ A list of the parameters that are pointers.
-   * @return The resulting code
    */
   ptx_parser(const std::string& ptx_,
              const std::string& function_name_,
