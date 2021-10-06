@@ -1807,7 +1807,9 @@ __global__ void __launch_bounds__(block_size)
                   res = cuda::std::chrono::duration_cast<duration_us>(d_ns).count();
                   break;
                 }
-                default: res = d_ns.count();  // nanoseconds if not specified
+                default:
+                  res = d_ns.count();  // nanoseconds as output in case of `type_id::EMPTY` and
+                                       // `type_id::TIMESTAMP_NANOSECONDS`
               }
               static_cast<int64_t*>(data_out)[row] = res;
               break;
