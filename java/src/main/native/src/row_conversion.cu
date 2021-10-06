@@ -21,6 +21,8 @@
 #include <tuple>
 
 #include <cooperative_groups.h>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/lists/lists_column_device_view.cuh>
 #include <type_traits>
 
 #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
@@ -42,6 +44,8 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
+#include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
@@ -54,6 +58,7 @@ constexpr auto NUM_VALIDITY_BLOCKS_PER_KERNEL_LOADED = 2;
 #endif
 
 using cudf::detail::make_device_uvector_async;
+using rmm::device_uvector;
 namespace cudf {
 
 namespace detail {
@@ -885,8 +890,6 @@ __global__ void copy_validity_to_columns(
           if (threadIdx.x % detail::warp_size == 0) {
             auto const validity_write_offset =
                 validity_data_col_length * (relative_col + i) + relative_row / 8;
-            auto const write_5006_offset = 837; // validity_data_col_length * (65 - block_start_col)
-                                                // + (5006 - block_start_row)/8;
 
             if (rows_left <= 8) {
               // write byte
@@ -1330,28 +1333,7 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows(cudf::table_view cons
                                       });
 
   size_type fixed_width_size_per_row =
-      detail::compute_column_information(iter, iter + num_columns, column_starts,
-                                         column_sizes); //,
-  //    [&variable_width_columns](column_view const &cv) { variable_width_columns.push_back(cv); });
-  /*  size_type fixed_width_size_per_row = 0;
-    for (int col = 0; col < num_columns; ++col) {
-      auto cv          = tbl.column(col);
-      auto col_type    = cv.type();
-      bool nested_type = col_type.id() == type_id::LIST || col_type.id() == type_id::STRING;
-
-      if (nested_type) { variable_width_columns.push_back(cv); }
-
-      // a list or string column will write a single uint64
-      // of data here for offset/length
-      auto col_size = nested_type ? 8 : size_of(col_type);
-
-      // align size for this type
-      std::size_t const alignment_needed = col_size;  // They are the same for fixed width types
-      fixed_width_size_per_row = detail::align_offset(fixed_width_size_per_row, alignment_needed);
-      column_starts.push_back(fixed_width_size_per_row);
-      column_sizes.push_back(col_size);
-      fixed_width_size_per_row += col_size;
-    }*/
+      detail::compute_column_information(iter, iter + num_columns, column_starts, column_sizes);
 
   auto dev_col_sizes = make_device_uvector_async(column_sizes, stream, mr);
   auto dev_col_starts = make_device_uvector_async(column_starts, stream, mr);
@@ -1368,29 +1350,6 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows(cudf::table_view cons
     // will be included in the variable-width data blob at the end of the
     // row.
     return 0;
-    /*      auto c = variable_width_columns[col];
-            while (true) {
-              auto col_offsets   = c.child(0).data<size_type>();
-              auto col_data_size = size_of(c.child(1).type());
-              std::size_t alignment_needed  = col_data_size;
-
-            row_sizes[row] += (col_offsets[row + 1] - col_offsets[row]) * col_data_size;
-            if (c.num_children() == 0) {
-              break;
-            }
-            c = c.child(1);
-          }
-          exclusive_scan([t](int row_index) {
-            size_type total_row_size = 0;
-            for (int i=0 i<t.num_columns(); ++i) {
-              // compute data prior to validity
-              data_size += compute_type_size();
-              // compute validity size
-              total_row_size += num_columns() / 8;
-              total_row_size = align(data_size + bit_size + variable_size);
-            }
-          }
-    */
   };
 
   uint64_t row_batch_size = 0;
