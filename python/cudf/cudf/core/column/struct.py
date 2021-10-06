@@ -55,7 +55,6 @@ class StructColumn(ColumnBase):
         )
 
     def to_arrow(self):
-
         children = [
             pa.nulls(len(child))
             if len(child) == child.null_count
