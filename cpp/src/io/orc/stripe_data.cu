@@ -1729,7 +1729,7 @@ __global__ void __launch_bounds__(block_size)
               // Since the offsets column in cudf is `size_type`,
               // If the limit exceeds then value will be 0, which is Fail.
               cudf_assert(
-                (s->vals.u64[t + vals_skipped] > std::numeric_limits<size_type>::max()) and
+                (s->vals.u64[t + vals_skipped] <= std::numeric_limits<size_type>::max()) and
                 "Number of elements is more than what size_type can handle");
               list_child_elements                   = s->vals.u64[t + vals_skipped];
               static_cast<uint32_t*>(data_out)[row] = list_child_elements;
