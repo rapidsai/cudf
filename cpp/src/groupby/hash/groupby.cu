@@ -209,8 +209,7 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
 
   auto to_dense_agg_result(cudf::aggregation const& agg)
   {
-    auto s = sparse_results->get_result(col_idx, agg);
-
+    auto s                  = sparse_results->get_result(col, agg);
     auto dense_result_table = cudf::detail::gather(table_view({std::move(s)}),
                                                    gather_map,
                                                    out_of_bounds_policy::DONT_CHECK,
@@ -403,7 +402,7 @@ void sparse_to_dense_results(table_view const& keys,
     // Given an aggregation, this will get the result from sparse_results and
     // convert and return dense, compacted result
     auto finalizer = hash_compound_agg_finalizer<Map>(
-      i, col, sparse_results, dense_results, gather_map, map, row_bitmask_ptr, stream, mr);
+      col, sparse_results, dense_results, gather_map, map, row_bitmask_ptr, stream, mr);
     for (auto&& agg : agg_v) {
       agg->finalize(finalizer);
     }

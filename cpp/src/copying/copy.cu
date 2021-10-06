@@ -20,6 +20,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/scatter.hpp>
+#include <cudf/strings/detail/copy_if_else.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/traits.hpp>
 
@@ -119,24 +120,10 @@ struct copy_if_else_functor_impl<string_view> {
     auto const& lhs = *p_lhs;
     auto const& rhs = *p_rhs;
 
-    if (left_nullable) {
-      if (right_nullable) {
-        auto lhs_iter = cudf::detail::make_pair_iterator<T, true>(lhs);
-        auto rhs_iter = cudf::detail::make_pair_iterator<T, true>(rhs);
-        return strings::detail::copy_if_else(
-          lhs_iter, lhs_iter + size, rhs_iter, filter, stream, mr);
-      }
-      auto lhs_iter = cudf::detail::make_pair_iterator<T, true>(lhs);
-      auto rhs_iter = cudf::detail::make_pair_iterator<T, false>(rhs);
-      return strings::detail::copy_if_else(lhs_iter, lhs_iter + size, rhs_iter, filter, stream, mr);
-    }
-    if (right_nullable) {
-      auto lhs_iter = cudf::detail::make_pair_iterator<T, false>(lhs);
-      auto rhs_iter = cudf::detail::make_pair_iterator<T, true>(rhs);
-      return strings::detail::copy_if_else(lhs_iter, lhs_iter + size, rhs_iter, filter, stream, mr);
-    }
-    auto lhs_iter = cudf::detail::make_pair_iterator<T, false>(lhs);
-    auto rhs_iter = cudf::detail::make_pair_iterator<T, false>(rhs);
+    auto lhs_iter =
+      cudf::detail::make_optional_iterator<T>(lhs, contains_nulls::DYNAMIC{}, left_nullable);
+    auto rhs_iter =
+      cudf::detail::make_optional_iterator<T>(rhs, contains_nulls::DYNAMIC{}, right_nullable);
     return strings::detail::copy_if_else(lhs_iter, lhs_iter + size, rhs_iter, filter, stream, mr);
   }
 };

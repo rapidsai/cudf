@@ -34,7 +34,11 @@ struct pair_column_aggregation_equal_to {
 };
 
 struct pair_column_aggregation_hash {
+<<<<<<< HEAD
   size_t operator()(std::pair<column_view, aggregation const&> const& key) const noexcept
+=======
+  size_t operator()(std::pair<column_view, aggregation const&> const& key) const
+>>>>>>> 3f09f967fe07246138ff6cfbed84675960a75f94
   {
     return hash_combine(shallow_hash(key.first), key.second.do_hash());
   }
