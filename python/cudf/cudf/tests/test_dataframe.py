@@ -2067,6 +2067,23 @@ def test_unaryops_df(pdf, gdf, unaryop):
     assert_eq(d, g)
 
 
+@pytest.mark.parametrize("unary_func", ["abs", "floor", "ceil"])
+def test_unary_func_df(pdf, gdf, unary_func):
+    disturbance = pd.Series(np.random.rand(10))
+    pdf = pdf - 5 + disturbance
+    d = pdf.apply(getattr(np, unary_func))
+    g = getattr(cudf.from_pandas(pdf), unary_func)()
+    assert_eq(d, g)
+
+
+def test_scale_df(gdf):
+    got = (gdf - 5).scale()
+    expect = cudf.DataFrame(
+        {"x": np.linspace(0.0, 1.0, 10), "y": np.linspace(0.0, 1.0, 10)}
+    )
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "func",
     [
