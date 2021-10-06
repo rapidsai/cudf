@@ -294,23 +294,8 @@ def test_struct_field_errors(data):
         got.struct.field(100)
 
 
-@pytest.mark.parametrize("dtype", DATETIME_TYPES)
-def test_struct_with_datetime(dtype):
-    df = cudf.DataFrame(
-        {
-            "a": [12, 232, 2334],
-            "datetime": cudf.Series([23432, 3432423, 324324], dtype=dtype),
-        }
-    )
-    series = df.to_struct()
-
-    actual = series.to_pandas()
-    expected = pd.Series(series.to_arrow().tolist())
-    assert_eq(expected, actual)
-
-
-@pytest.mark.parametrize("dtype", TIMEDELTA_TYPES)
-def test_struct_with_timedelta(dtype):
+@pytest.mark.parametrize("dtype", DATETIME_TYPES + TIMEDELTA_TYPES)
+def test_struct_with_datetime_and_timedelta(dtype):
     df = cudf.DataFrame(
         {
             "a": [12, 232, 2334],
