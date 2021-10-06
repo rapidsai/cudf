@@ -104,27 +104,19 @@ struct segmented_shift_functor<string_view> {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    using T = string_view;
-
     auto values_device_view = column_device_view::create(segmented_values, stream);
-    auto fill_pair_iterator = make_pair_iterator<T>(fill_value);
-    if (segmented_values.has_nulls()) {
-      auto input_pair_iterator = make_pair_iterator<T, true>(*values_device_view) - offset;
-      return strings::detail::copy_if_else(input_pair_iterator,
-                                           input_pair_iterator + segmented_values.size(),
-                                           fill_pair_iterator,
-                                           segmented_shift_filter{segment_offsets, offset},
-                                           stream,
-                                           mr);
-    } else {
-      auto input_pair_iterator = make_pair_iterator<T, false>(*values_device_view) - offset;
-      return strings::detail::copy_if_else(input_pair_iterator,
-                                           input_pair_iterator + segmented_values.size(),
-                                           fill_pair_iterator,
-                                           segmented_shift_filter{segment_offsets, offset},
-                                           stream,
-                                           mr);
-    }
+    auto input_iterator =
+      make_optional_iterator<cudf::string_view>(
+        *values_device_view, contains_nulls::DYNAMIC{}, segmented_values.has_nulls()) -
+      offset;
+    auto fill_iterator =
+      make_optional_iterator<cudf::string_view>(fill_value, contains_nulls::YES{});
+    return strings::detail::copy_if_else(input_iterator,
+                                         input_iterator + segmented_values.size(),
+                                         fill_iterator,
+                                         segmented_shift_filter{segment_offsets, offset},
+                                         stream,
+                                         mr);
   }
 };
 
