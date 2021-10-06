@@ -8,7 +8,7 @@ from cudf._typing import Dtype
 from cudf.api.types import is_struct_dtype
 from cudf.core.column import ColumnBase, build_struct_column
 from cudf.core.column.methods import ColumnMethods
-from cudf.core.dtypes import StructDtype
+from cudf.core.dtypes import IntervalDtype, StructDtype
 
 
 class StructColumn(ColumnBase):
@@ -55,19 +55,34 @@ class StructColumn(ColumnBase):
         )
 
     def to_arrow(self):
+
+        if isinstance(self.dtype, IntervalDtype):
+            pa_type = super(IntervalDtype, self.dtype).to_arrow()
+        else:
+            pa_type = self.dtype.to_arrow()
+
+        # An all-null cudf column of object type mapping to arrow array is
+        # ambiguous (null type or string type). Here we arbitrarily determine
+        # that it should be a null type array.
+        pa_type = pa.struct(
+            [
+                (
+                    field.name,
+                    pa.null()
+                    if len(child) == child.null_count
+                    and child.dtype == cudf.dtype("O")
+                    else field.type,
+                )
+                for field, child in zip(pa_type, self.children)
+            ]
+        )
+
         children = [
-            pa.nulls(len(child))
+            pa.nulls(len(child), type=field.type)
             if len(child) == child.null_count
             else child.to_arrow()
-            for child in self.children
+            for field, child in zip(pa_type, self.children)
         ]
-
-        pa_type = pa.struct(
-            {
-                field: child.type
-                for field, child in zip(self.dtype.fields, children)
-            }
-        )
 
         if self.nullable:
             nbuf = self.mask.to_host_array().view("int8")
