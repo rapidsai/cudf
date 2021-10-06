@@ -1804,6 +1804,7 @@ __global__ void __launch_bounds__(block_size)
                   case type_id::TIMESTAMP_MICROSECONDS:
                     return duration_cast<duration_us>(d_s).count() +
                            duration_cast<duration_us>(d_ns).count();
+                  case type_id::TIMESTAMP_NANOSECONDS:
                   default:
                     return duration_cast<duration_ns>(d_s).count() +
                            d_ns.count();  // nanoseconds as output in case of `type_id::EMPTY` and

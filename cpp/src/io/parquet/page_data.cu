@@ -663,15 +663,24 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s* s, int src
     nanos |= v.x;
     // Convert from Julian day at noon to UTC seconds
     days = static_cast<int32_t>(v.z);
-    cudf::duration_D d{
+    cudf::duration_D d_d{
       days - 2440588};  // TBD: Should be noon instead of midnight, but this matches pyarrow
-    if (s->col.ts_clock_rate) {
-      int64_t secs = duration_cast<cudf::duration_s>(d).count() +
-                     duration_cast<cudf::duration_s>(cudf::duration_ns{nanos}).count();
-      ts = secs * s->col.ts_clock_rate;  // Output to desired clock rate
-    } else {
-      ts = duration_cast<cudf::duration_ns>(d).count() + nanos;
-    }
+
+    ts = [&]() {
+      switch (s->col.ts_clock_rate) {
+        case 1:  // seconds
+          return duration_cast<duration_s>(d_d).count() +
+                 duration_cast<duration_s>(duration_ns{nanos}).count();
+        case 1'000:  // milliseconds
+          return duration_cast<duration_ms>(d_d).count() +
+                 duration_cast<duration_ms>(duration_ns{nanos}).count();
+        case 1'000'000:  // microseconds
+          return duration_cast<duration_us>(d_d).count() +
+                 duration_cast<duration_us>(duration_ns{nanos}).count();
+        case 1'000'000'000:  // nanoseconds
+        default: return duration_cast<cudf::duration_ns>(d_d).count() + nanos;
+      }
+    }();
   } else {
     ts = 0;
   }
