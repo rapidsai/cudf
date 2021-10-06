@@ -7,7 +7,7 @@ import pytest
 
 import cudf
 from cudf.core.dtypes import StructDtype
-from cudf.testing._utils import assert_eq
+from cudf.testing._utils import DATETIME_TYPES, TIMEDELTA_TYPES, assert_eq
 
 
 @pytest.mark.parametrize(
@@ -292,3 +292,44 @@ def test_struct_field_errors(data):
 
     with pytest.raises(IndexError):
         got.struct.field(100)
+
+
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+def test_struct_with_datetime(dtype):
+    df = cudf.DataFrame(
+        {
+            "a": [12, 232, 2334],
+            "datetime": cudf.Series([23432, 3432423, 324324], dtype=dtype),
+        }
+    )
+    series = df.to_struct()
+
+    actual = series.to_pandas()
+    expected = pd.Series(series.to_arrow().tolist())
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("dtype", TIMEDELTA_TYPES)
+def test_struct_with_timedelta(dtype):
+    df = cudf.DataFrame(
+        {
+            "a": [12, 232, 2334],
+            "datetime": cudf.Series([23432, 3432423, 324324], dtype=dtype),
+        }
+    )
+    series = df.to_struct()
+
+    actual = series.to_pandas()
+    expected = pd.Series(series.to_arrow().tolist())
+    assert_eq(expected, actual)
+
+
+def test_struct_int_values():
+    series = cudf.Series(
+        [{"a": 1, "b": 2}, {"a": 10, "b": None}, {"a": 5, "b": 6}]
+    )
+    actual_series = series.to_pandas()
+
+    assert isinstance(actual_series[0]["b"], int)
+    assert isinstance(actual_series[1]["b"], type(None))
+    assert isinstance(actual_series[2]["b"], int)
