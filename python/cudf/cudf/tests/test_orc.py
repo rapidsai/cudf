@@ -941,7 +941,7 @@ def generate_list_struct_buff(size=100_000):
             "struct_nests_list": struct_nests_list,
         }
     )
-
+    # import pdb;pdb.set_trace()
     writer = po.Writer(buff, schema, stripe_size=1024)
     tuples = list(
         map(

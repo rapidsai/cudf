@@ -63,7 +63,7 @@ class OrcReader(IOFuzz):
                 - cudf.utils.dtypes.UNSIGNED_TYPES
                 - {"datetime64[ns]"}
             )
-
+            dtypes_list = ["struct"]
             dtypes_meta, num_rows, num_cols = _generate_rand_meta(
                 self, dtypes_list
             )
@@ -83,7 +83,10 @@ class OrcReader(IOFuzz):
         self._df = df
         file_obj = io.BytesIO()
         pandas_to_orc(
-            df, file_io_obj=file_obj, stripe_size=self._rand(len(df))
+            df,
+            file_io_obj=file_obj,
+            stripe_size=self._rand(len(df)),
+            arrow_table_schema=table.schema,
         )
         file_obj.seek(0)
         buf = file_obj.read()

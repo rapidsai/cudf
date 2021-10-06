@@ -1,6 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import pandas as pd
 import pyarrow as pa
 
 import cudf
@@ -79,6 +80,17 @@ class StructColumn(ColumnBase):
         return pa.StructArray.from_buffers(
             pa_type, len(self), buffers, children=children
         )
+
+    def to_pandas(self, index: pd.Index = None, **kwargs) -> "pd.Series":
+        nullable = kwargs.get("nullable", False)
+        if nullable:
+            kwargs["integer_object_nulls"] = True
+        # pd_series = pd.Series(self.to_arrow().tolist())
+        pd_series = self.to_arrow().to_pandas(kwargs)
+
+        if index is not None:
+            pd_series.index = index
+        return pd_series
 
     def __getitem__(self, args):
         result = super().__getitem__(args)

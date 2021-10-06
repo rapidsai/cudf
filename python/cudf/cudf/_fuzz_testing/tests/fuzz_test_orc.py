@@ -18,7 +18,7 @@ from cudf._fuzz_testing.utils import (
     data_handle=OrcReader,
     params={
         "columns": ALL_POSSIBLE_VALUES,
-        "skiprows": ALL_POSSIBLE_VALUES,
+        "skiprows": [None],
         "num_rows": ALL_POSSIBLE_VALUES,
         "use_index": ALL_POSSIBLE_VALUES,
     },
@@ -44,8 +44,13 @@ def orc_reader_test(input_tuple, columns, skiprows, num_rows, use_index):
         num_rows=num_rows,
         use_index=use_index,
     )
+    try:
+        compare_dataframe(expected_pdf, gdf)
+    except AssertionError:
+        import pdb
 
-    compare_dataframe(expected_pdf, gdf)
+        pdb.set_trace()
+        print("abc")
 
 
 @pythonfuzz(
