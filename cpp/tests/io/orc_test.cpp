@@ -306,6 +306,31 @@ TYPED_TEST(OrcWriterTimestampTypeTest, TimestampsWithNulls)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
+TYPED_TEST(OrcWriterTimestampTypeTest, TimestampOverflow)
+{
+  constexpr int64_t max = std::numeric_limits<int64_t>::max();
+  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return max - i; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  constexpr auto num_rows = 100;
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
+    sequence, sequence + num_rows, validity);
+  table_view expected({col});
+
+  auto filepath = temp_env->get_temp_filepath("OrcTimestampOverflow.orc");
+  cudf_io::orc_writer_options out_opts =
+    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected);
+  cudf_io::write_orc(out_opts);
+
+  cudf_io::orc_reader_options in_opts =
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
+      .use_index(false)
+      .timestamp_type(this->type());
+  auto result = cudf_io::read_orc(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
 TEST_F(OrcWriterTest, MultiColumn)
 {
   constexpr auto num_rows = 10;
@@ -1099,29 +1124,6 @@ TEST_F(OrcReaderTest, MultipleInputs)
   auto result = cudf_io::read_orc(read_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(*result.tbl, *full_table);
-}
-
-TEST_F(OrcReaderTest, SimpleTimestamps)
-{
-  auto int_data = random_values<int64_t>(5);
-  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-
-  column_wrapper<int64_t> const intcol{int_data.begin(), int_data.end(), validity};
-  auto tscol = cudf::bit_cast(intcol, cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS});
-  table_view expected({tscol});
-
-  auto filepath = temp_env->get_temp_filepath("OrcSimpleTimestamps.orc");
-  cudf_io::orc_writer_options out_opts =
-    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected);
-  cudf_io::write_orc(out_opts);
-
-  cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
-      .use_index(false)
-      .timestamp_type(cudf::data_type{cudf::type_id::TIMESTAMP_NANOSECONDS});
-  auto result = cudf_io::read_orc(in_opts);
-
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 struct OrcWriterTestDecimal : public OrcWriterTest,
