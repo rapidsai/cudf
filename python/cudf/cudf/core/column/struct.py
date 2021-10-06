@@ -85,7 +85,7 @@ class StructColumn(ColumnBase):
         # We cannot go via Arrow's `to_pandas` because of the following issue:
         # https://issues.apache.org/jira/browse/ARROW-12680
 
-        pd_series = pd.Series(self.to_arrow().tolist())
+        pd_series = pd.Series(self.to_arrow().tolist(), dtype="object")
 
         if index is not None:
             pd_series.index = index
