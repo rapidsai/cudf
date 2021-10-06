@@ -102,7 +102,6 @@ class avro_reader_options {
    * @brief Sets number of rows to skip.
    *
    * @param val Number of rows to skip from start.
-   * @return this for chaining.
    */
   void set_skip_rows(size_type val) { _skip_rows = val; }
 
@@ -110,7 +109,6 @@ class avro_reader_options {
    * @brief Sets number of rows to read.
    *
    * @param val Number of rows to read after skip.
-   * @return this for chaining.
    */
   void set_num_rows(size_type val) { _num_rows = val; }
 

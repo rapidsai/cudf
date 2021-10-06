@@ -59,7 +59,7 @@ class data_sink {
   /**
    * @brief Create a wrapped custom user data sink
    *
-   * @param[in] User-provided data sink (typically custom class)
+   * @param[in] user_sink User-provided data sink (typically custom class)
    *
    * The data sink returned here is not the one passed by the user. It is an internal
    * class that wraps the user pointer.  The principle is to allow the user to declare
@@ -78,8 +78,6 @@ class data_sink {
    *
    * @param[in] data Pointer to the buffer to be written into the sink object
    * @param[in] size Number of bytes to write
-   *
-   * @return void
    */
   virtual void host_write(void const* data, size_t size) = 0;
 
