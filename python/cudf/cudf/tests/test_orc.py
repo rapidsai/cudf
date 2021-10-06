@@ -634,6 +634,10 @@ def test_orc_write_statistics(tmpdir, datadir, nrows):
             stats_max = file_stats[0][col]["maximum"]
             actual_max = gdf[col].max()
             assert normalized_equals(actual_max, stats_max)
+        if "number_of_values" in file_stats[0][col]:
+            stats_num_vals = file_stats[0][col]["number_of_values"]
+            actual_num_vals = gdf[col].count()
+            assert stats_num_vals == actual_num_vals
 
     # compare stripe statistics with actual min/max
     for stripe_idx in range(0, orc_file.nstripes):
@@ -650,6 +654,13 @@ def test_orc_write_statistics(tmpdir, datadir, nrows):
                 actual_max = stripe_df[col].max()
                 stats_max = stripes_stats[stripe_idx][col]["maximum"]
                 assert normalized_equals(actual_max, stats_max)
+
+            if "number_of_values" in stripes_stats[stripe_idx][col]:
+                stats_num_vals = stripes_stats[stripe_idx][col][
+                    "number_of_values"
+                ]
+                actual_num_vals = stripe_df[col].count()
+                assert stats_num_vals == actual_num_vals
 
 
 @pytest.mark.parametrize("nrows", [1, 100, 6000000])
