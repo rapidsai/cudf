@@ -1791,27 +1791,26 @@ __global__ void __launch_bounds__(block_size)
               if (seconds < 0 && nanos != 0) { seconds -= 1; }
 
               duration_ns d_ns{nanos};
-              d_ns += duration_s{seconds};
+              duration_s d_s{seconds};
 
-              int64_t res;
-              switch (s->chunk.timestamp_type_id) {
-                case type_id::TIMESTAMP_SECONDS: {
-                  res = cuda::std::chrono::duration_cast<duration_s>(d_ns).count();
-                  break;
+              static_cast<int64_t*>(data_out)[row] = [&]() {
+                using cuda::std::chrono::duration_cast;
+                switch (s->chunk.timestamp_type_id) {
+                  case type_id::TIMESTAMP_SECONDS:
+                    return d_s.count() + duration_cast<duration_s>(d_ns).count();
+                  case type_id::TIMESTAMP_MILLISECONDS:
+                    return duration_cast<duration_ms>(d_s).count() +
+                           duration_cast<duration_ms>(d_ns).count();
+                  case type_id::TIMESTAMP_MICROSECONDS:
+                    return duration_cast<duration_us>(d_s).count() +
+                           duration_cast<duration_us>(d_ns).count();
+                  default:
+                    return duration_cast<duration_ns>(d_s).count() +
+                           d_ns.count();  // nanoseconds as output in case of `type_id::EMPTY` and
+                                          // `type_id::TIMESTAMP_NANOSECONDS`
                 }
-                case type_id::TIMESTAMP_MILLISECONDS: {
-                  res = cuda::std::chrono::duration_cast<duration_ms>(d_ns).count();
-                  break;
-                }
-                case type_id::TIMESTAMP_MICROSECONDS: {
-                  res = cuda::std::chrono::duration_cast<duration_us>(d_ns).count();
-                  break;
-                }
-                default:
-                  res = d_ns.count();  // nanoseconds as output in case of `type_id::EMPTY` and
-                                       // `type_id::TIMESTAMP_NANOSECONDS`
-              }
-              static_cast<int64_t*>(data_out)[row] = res;
+              }();
+
               break;
             }
           }
