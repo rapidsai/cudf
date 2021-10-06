@@ -303,9 +303,15 @@ def test_struct_with_datetime_and_timedelta(dtype):
         }
     )
     series = df.to_struct()
+    a_array = np.array([12, 232, 2334])
+    datetime_array = np.array([23432, 3432423, 324324]).astype(dtype)
 
     actual = series.to_pandas()
-    expected = pd.Series(series.to_arrow().tolist())
+    values_list = []
+    for i, val in enumerate(a_array):
+        values_list.append({"a": val, "datetime": datetime_array[i]})
+
+    expected = pd.Series(values_list)
     assert_eq(expected, actual)
 
 
