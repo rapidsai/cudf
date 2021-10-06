@@ -21,6 +21,7 @@
 #include <cudf/detail/round.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/fixed_point/temporary.hpp>
 #include <cudf/round.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -49,7 +50,7 @@ inline double __device__ generic_modf(double a, double* b) { return modf(a, b); 
 template <typename T, typename std::enable_if_t<cuda::std::is_signed<T>::value>* = nullptr>
 T __device__ generic_abs(T value)
 {
-  return value < 0 ? -value : value;
+  return numeric::detail::abs(value);
 }
 
 template <typename T, typename std::enable_if_t<not cuda::std::is_signed<T>::value>* = nullptr>
