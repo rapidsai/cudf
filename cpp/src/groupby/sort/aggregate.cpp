@@ -26,6 +26,7 @@
 #include <cudf/detail/binaryop.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
@@ -235,11 +236,14 @@ void aggregate_result_functor::operator()<aggregation::MEAN>(aggregation const& 
 
   // TODO (dm): Special case for timestamp. Add target_type_impl for it.
   //            Blocked until we support operator+ on timestamps
+  auto col_type = cudf::is_dictionary(values.type())
+                    ? cudf::dictionary_column_view(values).keys().type()
+                    : values.type();
   auto result =
     cudf::detail::binary_operation(sum_result,
                                    count_result,
                                    binary_operator::DIV,
-                                   cudf::detail::target_type(values.type(), aggregation::MEAN),
+                                   cudf::detail::target_type(col_type, aggregation::MEAN),
                                    stream,
                                    mr);
   cache.add_result(values, agg, std::move(result));
@@ -526,6 +530,77 @@ void aggregate_result_functor::operator()<aggregation::MERGE_M2>(aggregation con
 };
 
 /**
+ * @brief Creates column views with only valid elements in both input column views
+ *
+ * @param column_0 The first column
+ * @param column_1 The second column
+ * @return tuple with new null mask (if null masks if input differ) and new column views
+ */
+auto column_view_with_common_nulls(column_view const& column_0, column_view const& column_1)
+{
+  rmm::device_buffer new_nullmask = cudf::bitmask_and(table_view{{column_0, column_1}});
+  auto null_count                 = cudf::count_unset_bits(
+    static_cast<cudf::bitmask_type const*>(new_nullmask.data()), 0, column_0.size());
+  if (null_count == 0) { return std::make_tuple(std::move(new_nullmask), column_0, column_1); }
+  auto column_view_with_new_nullmask = [](auto const& col, void* nullmask, auto null_count) {
+    return column_view(col.type(),
+                       col.size(),
+                       col.head(),
+                       static_cast<cudf::bitmask_type const*>(nullmask),
+                       null_count,
+                       col.offset(),
+                       std::vector(col.child_begin(), col.child_end()));
+  };
+  auto new_column_0 = null_count == column_0.null_count()
+                        ? column_0
+                        : column_view_with_new_nullmask(column_0, new_nullmask.data(), null_count);
+  auto new_column_1 = null_count == column_1.null_count()
+                        ? column_1
+                        : column_view_with_new_nullmask(column_1, new_nullmask.data(), null_count);
+  return std::make_tuple(std::move(new_nullmask), new_column_0, new_column_1);
+}
+
+/**
+ * @brief Perform covariance betweeen two child columns of non-nullable struct column.
+ *
+ */
+template <>
+void aggregate_result_functor::operator()<aggregation::COVARIANCE>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) { return; }
+  CUDF_EXPECTS(values.type().id() == type_id::STRUCT,
+               "Input to `groupby covariance` must be a structs column.");
+  CUDF_EXPECTS(values.num_children() == 2,
+               "Input to `groupby covariance` must be a structs column having 2 children columns.");
+
+  // Covariance only for valid values in both columns.
+  // in non-identical null mask cases, this prevents caching of the results - STD, MEAN, COUNT.
+  auto [_, values_child0, values_child1] =
+    column_view_with_common_nulls(values.child(0), values.child(1));
+
+  auto mean_agg = make_mean_aggregation();
+  aggregate_result_functor(values_child0, helper, cache, stream, mr).operator()<aggregation::MEAN>(*mean_agg);
+  aggregate_result_functor(values_child1, helper, cache, stream, mr).operator()<aggregation::MEAN>(*mean_agg);
+
+  auto const mean0 = cache.get_result(values_child0, *mean_agg);
+  auto const mean1 = cache.get_result(values_child1, *mean_agg);
+  auto count_agg   = make_count_aggregation();
+  auto const count = cache.get_result(values_child0, *count_agg);
+
+  cache.add_result(values,
+                   agg,
+                   detail::group_covariance(get_grouped_values().child(0),
+                                            get_grouped_values().child(1),
+                                            helper.group_labels(stream),
+                                            helper.num_groups(stream),
+                                            count,
+                                            mean0,
+                                            mean1,
+                                            stream,
+                                            mr));
+};
+
+/**
  * @brief Perform correlation betweeen two child columns of non-nullable struct column.
  *
  */
@@ -534,41 +609,142 @@ void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation 
 {
   if (cache.has_result(values, agg)) { return; }
   CUDF_EXPECTS(values.type().id() == type_id::STRUCT,
-               "Input to `group_corr` must be a structs column.");
-  CUDF_EXPECTS(values.num_children() == 2,
-               "Input to `group_corr` must be a structs column having 2 children columns.");
+               "Input to `groupby correlation` must be a structs column.");
+  CUDF_EXPECTS(
+    values.num_children() == 2,
+    "Input to `groupby correlation` must be a structs column having 2 children columns.");
   CUDF_EXPECTS(values.nullable() == false,
-               "Input to `group_corr` must be a non-nullable structs column.");
+               "Input to `groupby correlation` must be a non-nullable structs column.");
 
   auto const& corr_agg = dynamic_cast<cudf::detail::correlation_aggregation const&>(agg);
   CUDF_EXPECTS(corr_agg._type == correlation_type::PEARSON,
                "Only Pearson correlation is supported.");
 
-  auto std_agg = make_std_aggregation();
-  cudf::detail::aggregation_dispatcher(
-    std_agg->kind, aggregate_result_functor(values.child(0), helper, cache, stream, mr), *std_agg);
-  cudf::detail::aggregation_dispatcher(
-    std_agg->kind, aggregate_result_functor(values.child(1), helper, cache, stream, mr), *std_agg);
+  // Correlation only for valid values in both columns.
+  // in non-identical null mask cases, this prevents caching of the results - STD, MEAN, COUNT
+  auto [_, values_child0, values_child1] =
+    column_view_with_common_nulls(values.child(0), values.child(1));
 
-  auto const stddev0 = cache.get_result(values.child(0), *std_agg);
-  auto const stddev1 = cache.get_result(values.child(1), *std_agg);
-  auto mean_agg      = make_mean_aggregation();
-  auto const mean0   = cache.get_result(values.child(0), *mean_agg);
-  auto const mean1   = cache.get_result(values.child(1), *mean_agg);
+  auto std_agg = make_std_aggregation();
+  aggregate_result_functor(values_child0, helper, cache, stream, mr).operator()<aggregation::STD>(*std_agg);
+  aggregate_result_functor(values_child1, helper, cache, stream, mr).operator()<aggregation::STD>(*std_agg);
+
+  auto const stddev0 = cache.get_result(values_child0, *std_agg);
+  auto const stddev1 = cache.get_result(values_child1, *std_agg);
+
+  auto mean_agg    = make_mean_aggregation();
+  auto const mean0 = cache.get_result(values_child0, *mean_agg);
+  auto const mean1 = cache.get_result(values_child1, *mean_agg);
+  auto count_agg   = make_count_aggregation();
+  auto const count = cache.get_result(values_child0, *count_agg);
+
+  // Compute covariance here to avoid repeated computation of mean & count
+  auto cov_agg = make_covariance_aggregation();
+  cache.add_result(values,
+                   *cov_agg,
+                   detail::group_covariance(get_grouped_values().child(0),
+                                            get_grouped_values().child(1),
+                                            helper.group_labels(stream),
+                                            helper.num_groups(stream),
+                                            count,
+                                            mean0,
+                                            mean1,
+                                            stream,
+                                            mr));
+  auto const covariance = cache.get_result(values, *cov_agg);
+  cache.add_result(
+    values, agg, detail::group_correlation(covariance, stddev0, stddev1, stream, mr));
+}
+
+/**
+ * @brief Generate a tdigest column from a grouped set of numeric input values.
+ *
+ * The tdigest column produced is of the following structure:
+ *
+ * struct {
+ *   // centroids for the digest
+ *   list {
+ *    struct {
+ *      double    // mean
+ *      double    // weight
+ *    },
+ *    ...
+ *   }
+ *   // these are from the input stream, not the centroids. they are used
+ *   // during the percentile_approx computation near the beginning or
+ *   // end of the quantiles
+ *   double       // min
+ *   double       // max
+ * }
+ *
+ * Each output row is a single tdigest.  The length of the row is the "size" of the
+ * tdigest, each element of which represents a weighted centroid (mean, weight).
+ */
+template <>
+void aggregate_result_functor::operator()<aggregation::TDIGEST>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) { return; }
+
+  auto const max_centroids =
+    dynamic_cast<cudf::detail::tdigest_aggregation const&>(agg).max_centroids;
+
+  auto count_agg = make_count_aggregation();
+  operator()<aggregation::COUNT_VALID>(*count_agg);
+  column_view valid_counts = cache.get_result(values, *count_agg);
 
   cache.add_result(values,
                    agg,
-                   detail::group_corr(get_grouped_values().child(0),
-                                      get_grouped_values().child(1),
-                                      helper.group_offsets(stream),
-                                      helper.group_labels(stream),
-                                      helper.num_groups(stream),
-                                      mean0,
-                                      mean1,
-                                      stddev0,
-                                      stddev1,
-                                      stream,
-                                      mr));
+                   detail::group_tdigest(
+                     get_sorted_values(),
+                     helper.group_offsets(stream),
+                     helper.group_labels(stream),
+                     {valid_counts.begin<size_type>(), static_cast<size_t>(valid_counts.size())},
+                     helper.num_groups(stream),
+                     max_centroids,
+                     stream,
+                     mr));
+};
+
+/**
+ * @brief Generate a merged tdigest column from a grouped set of input tdigest columns.
+ *
+ * The tdigest column produced is of the following structure:
+ *
+ * struct {
+ *   // centroids for the digest
+ *   list {
+ *    struct {
+ *      double    // mean
+ *      double    // weight
+ *    },
+ *    ...
+ *   }
+ *   // these are from the input stream, not the centroids. they are used
+ *   // during the percentile_approx computation near the beginning or
+ *   // end of the quantiles
+ *   double       // min
+ *   double       // max
+ * }
+ *
+ * Each output row is a single tdigest.  The length of the row is the "size" of the
+ * tdigest, each element of which represents a weighted centroid (mean, weight).
+ */
+template <>
+void aggregate_result_functor::operator()<aggregation::MERGE_TDIGEST>(aggregation const& agg)
+{
+  if (cache.has_result(values, agg)) { return; }
+
+  auto const max_centroids =
+    dynamic_cast<cudf::detail::merge_tdigest_aggregation const&>(agg).max_centroids;
+  cache.add_result(values,
+                   agg,
+                   detail::group_merge_tdigest(get_grouped_values(),
+                                               helper.group_offsets(stream),
+                                               helper.group_labels(stream),
+                                               helper.num_groups(stream),
+                                               max_centroids,
+                                               stream,
+                                               mr));
 };
 
 }  // namespace detail

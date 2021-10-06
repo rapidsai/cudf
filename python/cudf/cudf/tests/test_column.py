@@ -102,7 +102,7 @@ def column_slicing_test(col, offset, size, cast_to_float=False):
             sliced_series.reset_index(drop=True),
         )
     else:
-        assert_eq(np.asarray(pd_series[sl]), sliced_series.to_array())
+        assert_eq(np.asarray(pd_series[sl]), sliced_series.to_numpy())
 
 
 @pytest.mark.parametrize("offset", [0, 1, 15])
@@ -161,11 +161,17 @@ def test_as_column_scalar_with_nan(nan_as_null):
     size = 10
     scalar = np.nan
 
-    expected = cudf.Series([np.nan] * size, nan_as_null=nan_as_null).to_array()
+    expected = (
+        cudf.Series([np.nan] * size, nan_as_null=nan_as_null)
+        .dropna()
+        .to_numpy()
+    )
 
-    got = cudf.Series(
-        as_column(scalar, length=size, nan_as_null=nan_as_null)
-    ).to_array()
+    got = (
+        cudf.Series(as_column(scalar, length=size, nan_as_null=nan_as_null))
+        .dropna()
+        .to_numpy()
+    )
 
     np.testing.assert_equal(expected, got)
 

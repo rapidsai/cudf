@@ -92,7 +92,13 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class merge_m2_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class covariance_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class correlation_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class tdigest_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(
+    data_type col_type, class merge_tdigest_aggregation const& agg);
 };
 
 class aggregation_finalizer {  // Declares the interface for the finalizer
@@ -127,7 +133,10 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class merge_lists_aggregation const& agg);
   virtual void visit(class merge_sets_aggregation const& agg);
   virtual void visit(class merge_m2_aggregation const& agg);
+  virtual void visit(class covariance_aggregation const& agg);
   virtual void visit(class correlation_aggregation const& agg);
+  virtual void visit(class tdigest_aggregation const& agg);
+  virtual void visit(class merge_tdigest_aggregation const& agg);
 };
 
 /**
@@ -888,6 +897,25 @@ class merge_m2_aggregation final : public groupby_aggregation {
 };
 
 /**
+ * @brief Derived aggregation class for specifying COVARIANCE aggregation
+ */
+class covariance_aggregation final : public groupby_aggregation {
+ public:
+  explicit covariance_aggregation() : aggregation{COVARIANCE} {}
+
+  std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<covariance_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
  * @brief Derived aggregation class for specifying CORRELATION aggregation
  */
 class correlation_aggregation final : public groupby_aggregation {
@@ -917,6 +945,54 @@ class correlation_aggregation final : public groupby_aggregation {
 
  protected:
   size_t hash_impl() const { return std::hash<int>{}(static_cast<int>(_type)); }
+};
+
+/**
+ * @brief Derived aggregation class for specifying TDIGEST aggregation
+ */
+class tdigest_aggregation final : public groupby_aggregation {
+ public:
+  explicit tdigest_aggregation(int max_centroids_)
+    : aggregation{TDIGEST}, max_centroids{max_centroids_}
+  {
+  }
+
+  int const max_centroids;
+
+  std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<tdigest_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
+ * @brief Derived aggregation class for specifying MERGE_TDIGEST aggregation
+ */
+class merge_tdigest_aggregation final : public groupby_aggregation {
+ public:
+  explicit merge_tdigest_aggregation(int max_centroids_)
+    : aggregation{MERGE_TDIGEST}, max_centroids{max_centroids_}
+  {
+  }
+
+  int const max_centroids;
+
+  std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<merge_tdigest_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
 /**
@@ -989,14 +1065,16 @@ template <typename Source, aggregation::Kind k>
 struct target_type_impl<
   Source,
   k,
-  std::enable_if_t<is_fixed_width<Source>() && !is_chrono<Source>() && (k == aggregation::MEAN)>> {
+  std::enable_if_t<is_fixed_width<Source>() && not is_chrono<Source>() &&
+                   not is_fixed_point<Source>() && (k == aggregation::MEAN)>> {
   using type = double;
 };
 
 template <typename Source, aggregation::Kind k>
-struct target_type_impl<Source,
-                        k,
-                        std::enable_if_t<is_chrono<Source>() && (k == aggregation::MEAN)>> {
+struct target_type_impl<
+  Source,
+  k,
+  std::enable_if_t<(is_chrono<Source>() or is_fixed_point<Source>()) && (k == aggregation::MEAN)>> {
   using type = Source;
 };
 
@@ -1153,10 +1231,34 @@ struct target_type_impl<SourceType, aggregation::MERGE_M2> {
   using type = struct_view;
 };
 
-// Always use struct for CORRELATION
+// Always use double for COVARIANCE
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::COVARIANCE> {
+  using type = double;
+};
+
+// Always use double for CORRELATION
 template <typename SourceType>
 struct target_type_impl<SourceType, aggregation::CORRELATION> {
   using type = double;
+};
+
+// Always use numeric types for TDIGEST
+template <typename Source>
+struct target_type_impl<Source,
+                        aggregation::TDIGEST,
+                        std::enable_if_t<(is_numeric<Source>() || is_fixed_point<Source>())>> {
+  using type = struct_view;
+};
+
+// TDIGEST_MERGE. The root column type for a tdigest column is a list_view. Strictly
+// speaking, this check is not sufficient to guarantee we are actually being given a
+// real tdigest column, but we will do further verification inside the aggregation code.
+template <typename Source>
+struct target_type_impl<Source,
+                        aggregation::MERGE_TDIGEST,
+                        std::enable_if_t<std::is_same_v<Source, cudf::struct_view>>> {
+  using type = struct_view;
 };
 
 /**
@@ -1263,8 +1365,14 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(aggregation::Kin
       return f.template operator()<aggregation::MERGE_SETS>(std::forward<Ts>(args)...);
     case aggregation::MERGE_M2:
       return f.template operator()<aggregation::MERGE_M2>(std::forward<Ts>(args)...);
+    case aggregation::COVARIANCE:
+      return f.template operator()<aggregation::COVARIANCE>(std::forward<Ts>(args)...);
     case aggregation::CORRELATION:
       return f.template operator()<aggregation::CORRELATION>(std::forward<Ts>(args)...);
+    case aggregation::TDIGEST:
+      return f.template operator()<aggregation::TDIGEST>(std::forward<Ts>(args)...);
+    case aggregation::MERGE_TDIGEST:
+      return f.template operator()<aggregation::MERGE_TDIGEST>(std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");

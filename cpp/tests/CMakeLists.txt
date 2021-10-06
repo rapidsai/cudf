@@ -59,6 +59,7 @@ ConfigureTest(GROUPBY_TEST
     groupby/argmax_tests.cpp
     groupby/collect_list_tests.cpp
     groupby/collect_set_tests.cpp
+    groupby/correlation_tests.cpp
     groupby/count_scan_tests.cpp
     groupby/count_tests.cpp
     groupby/groups_tests.cpp
@@ -86,6 +87,7 @@ ConfigureTest(GROUPBY_TEST
     groupby/sum_of_squares_tests.cpp
     groupby/sum_scan_tests.cpp
     groupby/sum_tests.cpp
+    groupby/tdigest_tests.cu
     groupby/var_tests.cpp)
 
 ###################################################################################################
@@ -124,6 +126,7 @@ ConfigureTest(HASH_MAP_TEST
 ###################################################################################################
 # - quantiles tests -------------------------------------------------------------------------------
 ConfigureTest(QUANTILES_TEST
+    quantiles/percentile_approx_test.cu
     quantiles/quantile_test.cpp
     quantiles/quantiles_test.cpp)
 
@@ -264,6 +267,7 @@ ConfigureTest(ITERATOR_TEST
     iterator/scalar_iterator_test.cu
     iterator/optional_iterator_test_chrono.cu
     iterator/optional_iterator_test_numeric.cu
+    iterator/indexalator_test.cu
     )
 
 ###################################################################################################

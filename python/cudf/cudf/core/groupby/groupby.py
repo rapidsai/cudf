@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import collections
+import itertools
 import pickle
 import warnings
 
@@ -9,7 +10,6 @@ from nvtx import annotate
 
 import cudf
 from cudf._lib import groupby as libgroupby
-from cudf._lib.table import Table
 from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
@@ -781,6 +781,36 @@ class GroupBy(Serializable):
         """Get the column-wise median of the values in each group."""
         return self.agg("median")
 
+    def corr(self):
+        # breakpoint()
+        _cols = self.grouping.values.columns.tolist()
+        new_df = cudf.DataFrame({self.grouping.keys.names: self.grouping.keys})
+        new_df._data.multiindex = False
+        for i in tuple(itertools.combinations_with_replacement(_cols, 2)):
+            new_df[i] = cudf.DataFrame(
+                {"x": self.obj[i[0]], "y": self.obj[i[1]]}
+            ).to_struct()
+        new_gb = new_df.groupby(self.grouping)
+        gb_corr = new_gb.agg("corr")
+
+        cols_list = []
+        for i, x in enumerate(_cols):
+            for j, y in enumerate(_cols):
+                if i > j:
+                    cols_list.append((_cols[j], _cols[i]))
+                else:
+                    cols_list.append((_cols[i], _cols[j]))
+        cols_split = [
+            cols_list[i : i + 3] for i in range(0, len(cols_list), 3)
+        ]
+
+        res = cudf.DataFrame()
+        for i, x in zip(cols_split, _cols):
+            ic = gb_corr.loc[:, i].interleave_columns()
+            res[x] = ic
+
+        return res
+
     def var(self, ddof=1):
         """Compute the column-wise variance of the values in each group.
 
@@ -866,7 +896,9 @@ class GroupBy(Serializable):
         """
         value_columns = self.grouping.values
         result = self.obj.__class__._from_data(
-            self._groupby.replace_nulls(Table(value_columns._data), method)
+            self._groupby.replace_nulls(
+                cudf.core.frame.Frame(value_columns._data), method
+            )
         )
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(value_columns)
@@ -981,7 +1013,9 @@ class GroupBy(Serializable):
             return getattr(self, method, limit)()
 
         value_columns = self.grouping.values
-        _, (data, index), _ = self._groupby.groups(Table(value_columns._data))
+        _, (data, index), _ = self._groupby.groups(
+            cudf.core.frame.Frame(value_columns._data)
+        )
 
         grouped = self.obj.__class__._from_data(data, index)
         result = grouped.fillna(
@@ -1039,7 +1073,9 @@ class GroupBy(Serializable):
             fill_value = [fill_value] * len(value_columns._data)
 
         result = self.obj.__class__._from_data(
-            *self._groupby.shift(Table(value_columns), periods, fill_value)
+            *self._groupby.shift(
+                cudf.core.frame.Frame(value_columns), periods, fill_value
+            )
         )
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(value_columns)
@@ -1052,7 +1088,7 @@ class GroupBy(Serializable):
         """
         sorted_order_column = arange(0, result._data.nrows)
         _, (order, _), _ = self._groupby.groups(
-            Table({"sorted_order_column": sorted_order_column})
+            cudf.core.frame.Frame({"sorted_order_column": sorted_order_column})
         )
         gather_map = order["sorted_order_column"].argsort()
         result = result.take(gather_map)

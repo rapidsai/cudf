@@ -12,11 +12,10 @@ from cudf._lib.cpp.reshape cimport (
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
-from cudf._lib.table cimport Table, table_view_from_table
-from cudf._lib.utils cimport data_from_unique_ptr
+from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
 
-def interleave_columns(Table source_table):
+def interleave_columns(source_table):
     cdef table_view c_view = table_view_from_table(
         source_table, ignore_index=True)
     cdef unique_ptr[column] c_result
@@ -29,7 +28,7 @@ def interleave_columns(Table source_table):
     )
 
 
-def tile(Table source_table, size_type count):
+def tile(source_table, size_type count):
     cdef size_type c_count = count
     cdef table_view c_view = table_view_from_table(source_table)
     cdef unique_ptr[table] c_result

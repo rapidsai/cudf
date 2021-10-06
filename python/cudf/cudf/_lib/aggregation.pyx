@@ -57,6 +57,7 @@ class AggregationKind(Enum):
     UNIQUE = libcudf_aggregation.aggregation.Kind.COLLECT_SET
     PTX = libcudf_aggregation.aggregation.Kind.PTX
     CUDA = libcudf_aggregation.aggregation.Kind.CUDA
+    CORRELATION = libcudf_aggregation.aggregation.Kind.CORRELATION
 
 
 cdef class Aggregation:
@@ -318,6 +319,15 @@ cdef class Aggregation:
         agg.c_obj = move(
             libcudf_aggregation.make_count_aggregation[aggregation](
                 libcudf_types.null_policy.INCLUDE
+            ))
+        return agg
+
+    @classmethod
+    def corr(cls):
+        cdef Aggregation agg = cls()
+        agg.c_obj = move(
+            libcudf_aggregation.make_correlation_aggregation[aggregation](
+                libcudf_aggregation.correlation_type.PEARSON
             ))
         return agg
 
@@ -690,6 +700,17 @@ cdef class GroupbyAggregation:
                 )
             )
         )
+        return agg
+
+    @classmethod
+    def corr(cls):
+        cdef GroupbyAggregation agg = cls()
+        agg.c_obj = move(
+            libcudf_aggregation.
+            make_correlation_aggregation[groupby_aggregation](
+                libcudf_aggregation.correlation_type.PEARSON
+            ))
+
         return agg
 
 cdef class GroupbyScanAggregation:
