@@ -1882,7 +1882,7 @@ def test_parquet_allnull_str(tmpdir, engine):
 def normalized_equals(value1, value2):
     if value1 is pd.NA or value1 is pd.NaT:
         value1 = None
-    if value2 is pd.NA or value1 is pd.NaT:
+    if value2 is pd.NA or value2 is pd.NaT:
         value2 = None
     if isinstance(value1, pd.Timestamp):
         value1 = value1.to_pydatetime()
