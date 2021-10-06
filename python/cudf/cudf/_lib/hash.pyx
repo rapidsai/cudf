@@ -54,9 +54,9 @@ def hash_partition(source_table, object columns_to_hash,
     )
 
 
-def hash(source_table, str method, object initial_hash_values=None,
+def hash(source_table, str method, object initial_hash=None,
          int seed=0):
-    cdef vector[uint32_t] c_initial_hash = initial_hash_values or []
+    cdef vector[uint32_t] c_initial_hash = initial_hash or []
     cdef table_view c_source_view = table_view_from_table(
         source_table, ignore_index=True)
     cdef unique_ptr[column] c_result

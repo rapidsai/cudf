@@ -623,8 +623,8 @@ class Frame:
             result._index.names = self._index.names
         return result
 
-    def _hash(self, method, initial_hash_values=None):
-        return libcudf.hash.hash(self, method, initial_hash_values)
+    def _hash(self, method, initial_hash=None):
+        return libcudf.hash.hash(self, method, initial_hash)
 
     def _hash_partition(
         self, columns_to_hash, num_partitions, keep_index=True

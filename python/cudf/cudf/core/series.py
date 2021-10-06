@@ -4165,7 +4165,9 @@ class Series(SingleColumnFrame, Serializable):
             raise ValueError("stop must be a positive integer.")
 
         initial_hash = [hash(self.name) & 0xFFFFFFFF] if use_name else None
-        hashed_values = Series(self._hash(initial_hash))
+        hashed_values = Series(
+            self._hash(method="murmur3", initial_hash=initial_hash)
+        )
 
         if hashed_values.has_nulls:
             raise ValueError("Column must have no nulls.")

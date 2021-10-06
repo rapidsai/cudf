@@ -5021,16 +5021,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         Series
             Hash values for each row.
         """
-        if method not in {"murmur3", "md5"}:
-            raise ValueError(f"Unsupported hash function: {method}")
-
         if columns is None:
             table_to_hash = self
         else:
             cols = [self[k]._column for k in columns]
             table_to_hash = Frame(data=dict(zip(columns, cols)))
 
-        return Series(table_to_hash._hash())
+        return Series(table_to_hash._hash(method=method))
 
     def partition_by_hash(self, columns, nparts, keep_index=True):
         """Partition the dataframe by the hashed value of data in *columns*.
