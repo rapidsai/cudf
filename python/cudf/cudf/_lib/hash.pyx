@@ -63,6 +63,8 @@ def hash(source_table, str method, object initial_hash_values=None,
     cdef libcudf_types.hash_id c_hash_id
     if method == "murmur3":
         c_hash_function = libcudf_types.hash_id.HASH_MURMUR3
+    elif method == "md5":
+        c_hash_function = libcudf_types.hash_id.HASH_MD5
     else:
         raise ValueError(f"Unsupported hash function: {method}")
     with nogil:
