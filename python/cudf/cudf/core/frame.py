@@ -5181,7 +5181,7 @@ class Frame(libcudf.table.Table):
         triangle        4      181
         rectangle       5      361
 
-        **series**
+        **Series**
 
         >>> a = cudf.Series([1, 2, 3, None], index=['a', 'b', 'c', 'd'])
         >>> a
@@ -5243,7 +5243,7 @@ class Frame(libcudf.table.Table):
         Examples
         --------
 
-        **dataframe**
+        **DataFrame**
 
         >>> import cudf
         >>> df = cudf.DataFrame({'angles': [0, 3, 4],
@@ -5260,7 +5260,7 @@ class Frame(libcudf.table.Table):
         triangle        2      178
         rectangle       3      358
 
-        **series**
+        **Series**
 
         >>> a = cudf.Series([10, 20, None, 30, None], index=['a', 'b', 'c', 'd', 'e'])
         >>> a
@@ -5325,7 +5325,7 @@ class Frame(libcudf.table.Table):
         Examples
         --------
 
-        **dataframe**
+        **DataFrame**
 
         >>> import cudf
         >>> df = cudf.DataFrame({'angles': [0, 3, 4],
@@ -5347,7 +5347,7 @@ class Frame(libcudf.table.Table):
         triangle       -2     -178
         rectangle      -3     -358
 
-        **series**
+        **Series**
 
         >>> import cudf
         >>> a = cudf.Series([1, 2, 3, None], index=['a', 'b', 'c', 'd'])
@@ -5408,7 +5408,7 @@ class Frame(libcudf.table.Table):
         Examples
         --------
 
-        **dataframe**
+        **DataFrame**
 
         >>> import cudf
         >>> df = cudf.DataFrame({'angles': [0, 3, 4],
@@ -5427,7 +5427,7 @@ class Frame(libcudf.table.Table):
         triangle        9        0
         rectangle      16        0
 
-        **series**
+        **Series**
 
         >>> import cudf
         >>> a = cudf.Series([1, 2, 3, None], index=['a', 'b', 'c', 'd'])
@@ -5492,7 +5492,7 @@ class Frame(libcudf.table.Table):
         Examples
         --------
 
-        **dataframe**
+        **DataFrame**
 
         >>> import cudf
         >>> df = cudf.DataFrame({'angles': [0, 3, 4],
@@ -5511,7 +5511,7 @@ class Frame(libcudf.table.Table):
         triangle        9        0
         rectangle      16        0
 
-        **series**
+        **Series**
 
         >>> import cudf
         >>> a = cudf.Series([10, 20, None, 30, 40], index=['a', 'b', 'c', 'd', 'e'])
@@ -5576,7 +5576,7 @@ class Frame(libcudf.table.Table):
         Examples
         --------
 
-        **dataframe**
+        **DataFrame**
 
         >>> import cudf
         >>> df = cudf.DataFrame({'angles': [0, 3, 4],
@@ -5593,7 +5593,7 @@ class Frame(libcudf.table.Table):
         triangle        3       80
         rectangle       4       60
 
-        **series**
+        **Series**
 
         >>> import cudf
         >>> series = cudf.Series([10, 20, 30])
@@ -5646,7 +5646,7 @@ class Frame(libcudf.table.Table):
         Examples
         --------
 
-        **dataframe**
+        **DataFrame**
 
         >>> import cudf
         >>> df = cudf.DataFrame({'angles': [1, 3, 4],
@@ -5663,7 +5663,7 @@ class Frame(libcudf.table.Table):
         triangle        1      100
         rectangle       0      100
 
-        **series**
+        **Series**
 
         >>> import cudf
         >>> a = cudf.Series([10, 20, None, 30, 40], index=['a', 'b', 'c', 'd', 'e'])
@@ -5728,7 +5728,7 @@ class Frame(libcudf.table.Table):
         Examples
         --------
 
-        **dataframe**
+        **DataFrame**
 
         >>> import cudf
         >>> df = cudf.DataFrame({'angles': [1, 3, 4],
@@ -5745,7 +5745,7 @@ class Frame(libcudf.table.Table):
         triangle        9    32400
         rectangle      16   129600
 
-        **series**
+        **Series**
 
         >>> import cudf
         >>> a = cudf.Series([1, 2, 3, None], index=['a', 'b', 'c', 'd'])
@@ -5807,7 +5807,7 @@ class Frame(libcudf.table.Table):
         Examples
         --------
 
-        **dataframe**
+        **DataFrame**
 
         >>> import cudf
         >>> df = cudf.DataFrame({'angles': [1, 3, 4],
@@ -5824,7 +5824,7 @@ class Frame(libcudf.table.Table):
         triangle        1        1
         rectangle       1        1
 
-        **series**
+        **Series**
 
         >>> import cudf
         >>> a = cudf.Series([1, 2, 3, None], index=['a', 'b', 'c', 'd'])
@@ -5887,7 +5887,7 @@ class Frame(libcudf.table.Table):
         Examples
         --------
 
-        **dataframe**
+        **DataFrame**
 
         >>> import cudf
         >>> df = cudf.DataFrame({'angles': [1, 3, 4],
@@ -5904,7 +5904,7 @@ class Frame(libcudf.table.Table):
         triangle        1       90
         rectangle       2      180
 
-        **series**
+        **Series**
 
         >>> import cudf
         >>> a = cudf.Series([1, 1, 1, None], index=['a', 'b', 'c', 'd'])
@@ -5966,7 +5966,7 @@ class Frame(libcudf.table.Table):
         Examples
         --------
 
-        **dataframe**
+        **DataFrame**
 
         >>> import cudf
         >>> df = cudf.DataFrame({'col1': [10, 11, 23],
@@ -5992,7 +5992,7 @@ class Frame(libcudf.table.Table):
         1     9     0
         2     4     0
 
-        **series**
+        **Series**
 
         >>> import cudf
         >>> s = cudf.Series([1, 2, 10, 17])
@@ -6063,7 +6063,7 @@ class Frame(libcudf.table.Table):
         Examples
         --------
 
-        **dataframe**
+        **DataFrame**
 
         >>> import cudf
         >>> df = cudf.DataFrame({'angles': [0, 3, 4],
@@ -6085,7 +6085,7 @@ class Frame(libcudf.table.Table):
         triangle      0.3     18.0
         rectangle     0.4     36.0
 
-        **series**
+        **Series**
 
         >>> import cudf
         >>> a = cudf.Series([1, 10, 20, None], index=['a', 'b', 'c', 'd'])
@@ -6151,7 +6151,7 @@ class Frame(libcudf.table.Table):
         Examples
         --------
 
-        **dataframe**
+        **DataFrame**
 
         >>> import cudf
         >>> df = cudf.DataFrame({'angles': [0, 3, 4],
@@ -6178,7 +6178,7 @@ class Frame(libcudf.table.Table):
         triangle   3.333333  0.055556
         rectangle  2.500000  0.027778
 
-        **series**
+        **Series**
 
         >>> import cudf
         >>> a = cudf.Series([10, 20, None, 30], index=['a', 'b', 'c', 'd'])
