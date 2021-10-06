@@ -5372,7 +5372,7 @@ class SingleColumnFrame(Frame):
         warnings.warn(
             "The to_gpu_array method will be removed in a future cuDF "
             "release. Consider using `to_cupy` instead.",
-            DeprecationWarning,
+            FutureWarning,
         )
         return self._column.to_gpu_array(fillna=fillna)
 
