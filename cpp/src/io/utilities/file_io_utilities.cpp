@@ -202,23 +202,22 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
 
   std::vector<std::future<ssize_t>> slice_tasks;
   constexpr size_t max_slice_bytes = 4 * 1024 * 1024;
-  size_t n_slices                  = util::div_rounding_up_safe(size, max_slice_bytes);
-  size_t slice_size                = max_slice_bytes;
+  size_t const n_slices            = util::div_rounding_up_safe(size, max_slice_bytes);
   size_t slice_offset              = 0;
   for (size_t t = 0; t < n_slices; ++t) {
     void* dst_slice = dst + slice_offset;
 
-    if (t == n_slices - 1) { slice_size = size % max_slice_bytes; }
+    size_t const slice_size = (t == n_slices - 1) ? size % max_slice_bytes : max_slice_bytes;
     slice_tasks.push_back(pool.submit(read_slice, dst_slice, slice_size, offset + slice_offset));
 
     slice_offset += slice_size;
   }
-  auto waiter = [](decltype(slice_tasks) slice_tasks) -> size_t {
+  auto waiter = [](auto slice_tasks) -> size_t {
     return std::accumulate(slice_tasks.begin(), slice_tasks.end(), 0, [](auto sum, auto& task) {
       return sum + task.get();
     });
   };
-  // The future returned from this function is deferred, not async becasue we want to avoid creating
+  // The future returned from this function is deferred, not async because we want to avoid creating
   // threads for each read_async call. This overhead is significant in case of multiple small reads.
   return std::async(std::launch::deferred, waiter, std::move(slice_tasks));
 }
@@ -259,23 +258,22 @@ std::future<void> cufile_output_impl::write_async(void const* data, size_t offse
   auto source = static_cast<uint8_t const*>(data);
   std::vector<std::future<bool>> slice_tasks;
   constexpr size_t max_slice_bytes = 4 * 1024 * 1024;
-  size_t n_slices                  = util::div_rounding_up_safe(size, max_slice_bytes);
-  size_t slice_size                = max_slice_bytes;
+  size_t const n_slices            = util::div_rounding_up_safe(size, max_slice_bytes);
   size_t slice_offset              = 0;
   for (size_t t = 0; t < n_slices; ++t) {
     void const* src_slice = source + slice_offset;
 
-    if (t == n_slices - 1) { slice_size = size % max_slice_bytes; }
+    size_t const slice_size = (t == n_slices - 1) ? size % max_slice_bytes : max_slice_bytes;
     slice_tasks.push_back(pool.submit(write_slice, src_slice, slice_size, offset + slice_offset));
 
     slice_offset += slice_size;
   }
-  auto waiter = [](decltype(slice_tasks) slice_tasks) -> void {
-    for (auto& task : slice_tasks) {
+  auto waiter = [](auto slice_tasks) -> void {
+    for (auto const& task : slice_tasks) {
       task.wait();
     }
   };
-  // The future returned from this function is deferred, not async becasue we want to avoid creating
+  // The future returned from this function is deferred, not async because we want to avoid creating
   // threads for each write_async call. This overhead is significant in case of multiple small
   // writes.
   return std::async(std::launch::deferred, waiter, std::move(slice_tasks));

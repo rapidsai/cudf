@@ -1440,7 +1440,7 @@ void writer::impl::write(table_view const& table)
         current_chunk_offset += ck->compressed_size;
       }
     }
-    for (auto& task : write_tasks) {
+    for (auto const& task : write_tasks) {
       task.wait();
     }
   }
