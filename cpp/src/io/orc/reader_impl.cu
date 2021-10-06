@@ -809,8 +809,8 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
     }
   }
 
-  thrust::counting_iterator<int, thrust::host_space_tag> col_idx_it(0);
-  thrust::counting_iterator<int, thrust::host_space_tag> stripe_idx_it(0);
+  thrust::counting_iterator<int> col_idx_it(0);
+  thrust::counting_iterator<int> stripe_idx_it(0);
 
   if (is_mask_updated) {
     // Update chunks with pointers to column data which might have been changed.
@@ -879,8 +879,8 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
 {
   const auto num_stripes = chunks.size().first;
   const auto num_columns = chunks.size().second;
-  thrust::counting_iterator<int, thrust::host_space_tag> col_idx_it(0);
-  thrust::counting_iterator<int, thrust::host_space_tag> stripe_idx_it(0);
+  thrust::counting_iterator<int> col_idx_it(0);
+  thrust::counting_iterator<int> stripe_idx_it(0);
 
   // Update chunks with pointers to column data
   std::for_each(stripe_idx_it, stripe_idx_it + num_stripes, [&](auto stripe_idx) {

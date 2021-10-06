@@ -15,11 +15,13 @@
  */
 
 #include <cudf/copying.hpp>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/reshape.hpp>
+#include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/detail/interleave_columns.hpp>
 #include <cudf/strings/detail/utilities.cuh>
+#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/types.hpp>
 

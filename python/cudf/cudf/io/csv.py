@@ -3,6 +3,7 @@
 from io import BytesIO, StringIO
 
 from nvtx import annotate
+from pyarrow.lib import NativeFile
 
 import cudf
 from cudf import _lib as libcudf
@@ -60,7 +61,7 @@ def read_csv(
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
         compression=compression,
-        iotypes=(BytesIO, StringIO),
+        iotypes=(BytesIO, StringIO, NativeFile),
         byte_ranges=[byte_range] if byte_range else None,
         clip_local_buffer=True if byte_range else False,
         **kwargs,

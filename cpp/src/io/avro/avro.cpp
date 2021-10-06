@@ -55,11 +55,11 @@ std::string container::get_encoded()
 }
 
 /**
- * @Brief AVRO file metadata parser
+ * @brief AVRO file metadata parser
  *
- * @param md[out] parsed avro file metadata
- * @param max_num_rows[in] maximum number of rows
- * @param first_row[in] drop blocks below first_row
+ * @param[out] md parsed avro file metadata
+ * @param[in] max_num_rows maximum number of rows
+ * @param[in] first_row drop blocks below first_row
  *
  * @returns true if successful, false if error
  */
@@ -188,10 +188,10 @@ enum {
 };
 
 /**
- * @Brief AVRO JSON schema parser
+ * @brief AVRO JSON schema parser
  *
- * @param schema[out] parsed avro schema
- * @param str[in] avro schema (JSON string)
+ * @param[out] schema parsed avro schema
+ * @param[in] json_str avro schema (JSON string)
  *
  * @returns true if successful, false if error
  */
@@ -354,7 +354,7 @@ bool schema_parser::parse(std::vector<schema_entry>& schema, const std::string& 
 }
 
 /**
- * @Brief Parse a string
+ * @brief Parse a string
  *
  * @returns parsed string, consuming the terminating quote
  */
