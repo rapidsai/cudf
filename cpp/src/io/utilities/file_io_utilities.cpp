@@ -185,6 +185,31 @@ std::unique_ptr<datasource::buffer> cufile_input_impl::read(size_t offset,
   return datasource::buffer::create(std::move(out_data));
 }
 
+namespace {
+
+template <typename DataT,
+          typename F,
+          typename ResultT = std::invoke_result_t<F, DataT*, size_t, size_t>>
+std::vector<std::future<ResultT>> make_sliced_tasks(
+  F function, DataT* ptr, size_t offset, size_t size, cudf::detail::thread_pool& pool)
+{
+  std::vector<std::future<ResultT>> slice_tasks;
+  constexpr size_t max_slice_bytes = 4 * 1024 * 1024;
+  size_t const n_slices            = util::div_rounding_up_safe(size, max_slice_bytes);
+  size_t slice_offset              = 0;
+  for (size_t t = 0; t < n_slices; ++t) {
+    DataT* ptr_slice = ptr + slice_offset;
+
+    size_t const slice_size = (t == n_slices - 1) ? size % max_slice_bytes : max_slice_bytes;
+    slice_tasks.push_back(pool.submit(function, ptr_slice, slice_size, offset + slice_offset));
+
+    slice_offset += slice_size;
+  }
+  return slice_tasks;
+}
+
+}  // namespace
+
 std::future<size_t> cufile_input_impl::read_async(size_t offset,
                                                   size_t size,
                                                   uint8_t* dst,
@@ -200,18 +225,8 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
     return read_size;
   };
 
-  std::vector<std::future<ssize_t>> slice_tasks;
-  constexpr size_t max_slice_bytes = 4 * 1024 * 1024;
-  size_t const n_slices            = util::div_rounding_up_safe(size, max_slice_bytes);
-  size_t slice_offset              = 0;
-  for (size_t t = 0; t < n_slices; ++t) {
-    void* dst_slice = dst + slice_offset;
+  auto slice_tasks = make_sliced_tasks(read_slice, dst, offset, size, pool);
 
-    size_t const slice_size = (t == n_slices - 1) ? size % max_slice_bytes : max_slice_bytes;
-    slice_tasks.push_back(pool.submit(read_slice, dst_slice, slice_size, offset + slice_offset));
-
-    slice_offset += slice_size;
-  }
   auto waiter = [](auto slice_tasks) -> size_t {
     return std::accumulate(slice_tasks.begin(), slice_tasks.end(), 0, [](auto sum, auto& task) {
       return sum + task.get();
@@ -255,19 +270,9 @@ std::future<void> cufile_output_impl::write_async(void const* data, size_t offse
                  "cuFile error writing to a file");
   };
 
-  auto source = static_cast<uint8_t const*>(data);
-  std::vector<std::future<bool>> slice_tasks;
-  constexpr size_t max_slice_bytes = 4 * 1024 * 1024;
-  size_t const n_slices            = util::div_rounding_up_safe(size, max_slice_bytes);
-  size_t slice_offset              = 0;
-  for (size_t t = 0; t < n_slices; ++t) {
-    void const* src_slice = source + slice_offset;
+  auto source      = static_cast<uint8_t const*>(data);
+  auto slice_tasks = make_sliced_tasks(write_slice, source, offset, size, pool);
 
-    size_t const slice_size = (t == n_slices - 1) ? size % max_slice_bytes : max_slice_bytes;
-    slice_tasks.push_back(pool.submit(write_slice, src_slice, slice_size, offset + slice_offset));
-
-    slice_offset += slice_size;
-  }
   auto waiter = [](auto slice_tasks) -> void {
     for (auto const& task : slice_tasks) {
       task.wait();
