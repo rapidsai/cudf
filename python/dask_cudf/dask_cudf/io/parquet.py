@@ -5,6 +5,7 @@ from functools import partial
 from io import BufferedWriter, BytesIO, IOBase
 
 import numpy as np
+import pyarrow as pa
 from pyarrow import dataset as pa_ds, parquet as pq
 
 from dask import dataframe as dd
@@ -45,7 +46,6 @@ class CudfEngine(ArrowDatasetEngine):
                 and strings_to_cats
             ):
                 new_meta._data[col] = new_meta._data[col].astype("int32")
-
         return (new_meta, stats, parts, index)
 
     @classmethod
@@ -332,12 +332,13 @@ def set_object_dtypes_from_pa_schema(df, schema):
     # pyarrow schema.
     if schema:
         for col_name, col in df._data.items():
-            if col_name in schema.names and isinstance(
-                col, cudf.core.column.StringColumn
+            typ = schema.field(col_name).type
+            if (
+                col_name in schema.names
+                and not isinstance(typ, (pa.ListType, pa.StructType))
+                and isinstance(col, cudf.core.column.StringColumn)
             ):
-                df._data[col_name] = col.astype(
-                    cudf_dtype_from_pa_type(schema.field(col_name).type)
-                )
+                df._data[col_name] = col.astype(cudf_dtype_from_pa_type(typ))
 
 
 def read_parquet(
@@ -370,7 +371,8 @@ def read_parquet(
     if row_groups_per_part:
         warnings.warn(
             "row_groups_per_part is deprecated. "
-            "Pass an integer value to split_row_groups instead."
+            "Pass an integer value to split_row_groups instead.",
+            FutureWarning,
         )
         if split_row_groups is None:
             split_row_groups = row_groups_per_part

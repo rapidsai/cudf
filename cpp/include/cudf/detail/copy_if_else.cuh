@@ -18,12 +18,12 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
-#include <cudf/strings/detail/copy_if_else.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
@@ -152,8 +152,8 @@ __launch_bounds__(block_size) __global__
  * @param filter      Function of type `FilterFn` which determines for index `i` where to get the
  *                    corresponding output value from
  * @param out_type    `cudf::data_type` of the returned column
- * @param mr          Device memory resource used to allocate the returned column's device memory
  * @param stream      CUDA stream used for device memory operations and kernel launches.
+ * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return            A new column that contains the values from either `lhs` or `rhs` as determined
  *                    by `filter[i]`
  */

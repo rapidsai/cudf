@@ -22,7 +22,7 @@
 #include "writer_impl.hpp"
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -135,9 +135,9 @@ struct column_to_strings_fn {
   // instead of column-wise; might be faster
   //
   // Note: Cannot pass `stream` to detail::<fname> version of <fname> calls below, because they are
-  // not exposed in header (see, for example, detail::concatenate(tbl_view, separator, na_rep, mr,
-  // stream) is declared and defined in combine.cu); Possible solution: declare `extern`, or just
-  // declare a prototype inside `namespace cudf::strings::detail`;
+  // not exposed in header (see, for example, detail::concatenate(tbl_view, separator, na_rep,
+  // stream, mr) is declared and defined in combine.cu); Possible solution: declare `extern`, or
+  // just declare a prototype inside `namespace cudf::strings::detail`;
 
   // bools:
   //
@@ -423,7 +423,7 @@ void writer::impl::write(table_view const& table,
       });
 
       // split table_view into chunks:
-      vector_views = cudf::split(table, splits);
+      vector_views = cudf::detail::split(table, splits, stream);
     }
 
     // convert each chunk to CSV:

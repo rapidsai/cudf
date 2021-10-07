@@ -298,16 +298,16 @@ class DataFrame(_Frame, dd.core.DataFrame):
             return _parallel_var(self, meta, skipna, split_every, out)
 
     def repartition(self, *args, **kwargs):
-        """ Wraps dask.dataframe DataFrame.repartition method.
+        """Wraps dask.dataframe DataFrame.repartition method.
         Uses DataFrame.shuffle if `columns=` is specified.
         """
         # TODO: Remove this function in future(0.17 release)
         columns = kwargs.pop("columns", None)
         if columns:
             warnings.warn(
-                "The column argument will be removed from repartition in "
-                " future versions of dask_cudf. Use DataFrame.shuffle().",
-                DeprecationWarning,
+                "The columns argument will be removed from repartition in "
+                "future versions of dask_cudf. Use DataFrame.shuffle().",
+                FutureWarning,
             )
             warnings.warn(
                 "Rearranging data by column hash. Divisions will lost. "
@@ -420,7 +420,7 @@ class Series(_Frame, dd.core.Series):
 
 
 class Index(Series, dd.core.Index):
-    _partition_type = cudf.Index
+    _partition_type = cudf.Index  # type: ignore
 
 
 def _naive_var(ddf, meta, skipna, ddof, split_every, out):
