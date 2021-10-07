@@ -4122,7 +4122,9 @@ class Series(SingleColumnFrame, Serializable):
         >>> series.hash_values(method="murmur3")
         array([-1930516747,   422619251,  -941520876], dtype=int32)
         """
-        return Series(self._hash(method=method))
+        return Series._from_data(
+            {None: self._hash(method=method)}, index=self.index
+        )
 
     def hash_encode(self, stop, use_name=False):
         """Encode column values as ints in [0, stop) using hash function.

@@ -5027,7 +5027,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             cols = [self[k]._column for k in columns]
             table_to_hash = Frame(data=dict(zip(columns, cols)))
 
-        return Series(table_to_hash._hash(method=method))
+        return Series._from_data(
+            {None: table_to_hash._hash(method=method)}, index=self.index
+        )
 
     def partition_by_hash(self, columns, nparts, keep_index=True):
         """Partition the dataframe by the hashed value of data in *columns*.
