@@ -45,20 +45,19 @@ namespace {
  * with `segmented_gather()`.
  */
 std::unique_ptr<cudf::column> make_index_child(column_view const& indices,
-                                               size_type ignore,  // Placeholder for number of rows.
+                                               size_type,
                                                rmm::cuda_stream_view stream)
 {
   // New column, near identical to `indices`, except with null values replaced.
   // `segmented_gather()` on a null index should produce a null row.
   if (not indices.nullable()) { return std::make_unique<column>(indices, stream); }
 
-  auto const indices_device_view = column_device_view::create(indices);
-  auto const d_indices           = *indices_device_view;
-  auto const null_index          = std::numeric_limits<size_type>::max();
+  auto const d_indices = column_device_view::create(indices);
+  // Replace null indices with MAX_SIZE_TYPE, so that gather() returns null for them.
   auto const null_replaced_iter_begin =
-    cudf::detail::make_null_replacement_iterator(d_indices, null_index);
-  auto index_child = cudf::make_numeric_column(
-    data_type{type_id::INT32}, indices.size(), mask_state::UNALLOCATED, stream);
+    cudf::detail::make_null_replacement_iterator(*d_indices, std::numeric_limits<size_type>::max());
+  auto index_child =
+    make_numeric_column(data_type{type_id::INT32}, indices.size(), mask_state::UNALLOCATED, stream);
   thrust::copy_n(rmm::exec_policy(stream),
                  null_replaced_iter_begin,
                  indices.size(),

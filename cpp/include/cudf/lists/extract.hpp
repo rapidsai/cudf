@@ -28,8 +28,8 @@ namespace lists {
  */
 
 /**
- * @brief Create a column using values from row `index` from each
- * sublist within the input `lists_column`.
+ * @brief Create a column where each row is the `index`th element from the corresponding sublist
+ * in the input `lists_column`.
  *
  * Output `column[i]` is set from element `lists_column[i][index]`.
  * If `index` is larger than the size of the sublist at `lists_column[i]`
@@ -66,8 +66,8 @@ std::unique_ptr<column> extract_list_element(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Create a column of values from each sublist within the input `lists_column`,
- * using indices from the `indices` column.
+ * @brief Create a column where each row is a single element from the corresponding sublist
+ * in the input `lists_column`, selected using indices from the `indices` column.
  *
  * Output `column[i]` is set from element `lists_column[i][indices[i]]`.
  * If `indices[i]` is larger than the size of the sublist at `lists_column[i]`
@@ -89,10 +89,8 @@ std::unique_ptr<column> extract_list_element(
  * r is now {"a", "b", null}
  * @endcode
  *
- * Any input where `lists_column[i] == null` will produce
- * output `column[i] = null`. Also, any element where
- * `lists_column[i][indices[i]] == null` will produce
- * output `column[i] = null`.
+ * Any input where `lists_column[i] == null` produces output `column[i] = null`.
+ * Any input where `lists_column[i][indices[i]] == null` produces output `column[i] = null`.
  *
  * @param lists_column Column to extract elements from.
  * @param indices The column whose rows indicate the element index to be retrieved from each list
