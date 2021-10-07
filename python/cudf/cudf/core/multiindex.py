@@ -9,7 +9,16 @@ import warnings
 from collections import defaultdict
 from collections.abc import Sequence
 from numbers import Integral
-from typing import Any, Callable, Dict, List, Mapping, MutableMapping, Optional, Tuple, Union
+from typing import (
+    Any,
+    Callable,
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Tuple,
+    Union,
+)
 
 import cupy
 import numpy as np
@@ -21,9 +30,9 @@ from cudf import _lib as libcudf
 from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_integer, is_list_like
 from cudf.core import column
+from cudf.core._compat import PANDAS_GE_120
 from cudf.core.column import ColumnBase
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core._compat import PANDAS_GE_120
 from cudf.core.frame import Frame
 from cudf.core.index import BaseIndex, _lexsorted_equal_range, as_index
 from cudf.utils.utils import _maybe_indices_to_slice, cached_property
@@ -60,8 +69,8 @@ class _MultiIndexColumnAccessor(ColumnAccessor):
                 _MultiIndexColumnName((i, k[1]))
                 if isinstance(k, _MultiIndexColumnName)
                 else _MultiIndexColumnName((i, k))
-            ): v for i, (k, v) in enumerate(data.items())
-
+            ): v
+            for i, (k, v) in enumerate(data.items())
         }
         super().__init__(data, multiindex, level_names)
 
@@ -96,9 +105,7 @@ class _MultiIndexColumnAccessor(ColumnAccessor):
         if indices is None:
             raise KeyError(key)
         if len(indices) > 1:
-            raise ValueError(
-                "__getitem__ not supported with duplicate keys."
-            )
+            raise ValueError("__getitem__ not supported with duplicate keys.")
         return self._data[_MultiIndexColumnName((indices[0], key))]
 
         return self._data[key]
@@ -400,9 +407,9 @@ class MultiIndex(Frame, BaseIndex):
                 level = cudf.DataFrame({None: levels[i]})
 
             column_name = names[i] if names is not None else None
-            source_data[_MultiIndexColumnName((i, column_name))] = libcudf.copying.gather(level, col)[0][
-                None
-            ]
+            source_data[
+                _MultiIndexColumnName((i, column_name))
+            ] = libcudf.copying.gather(level, col)[0][None]
             source_codes[_MultiIndexColumnName((i, column_name))] = col
 
         self._data = self.__class__._accessor_type(source_data)
@@ -423,18 +430,20 @@ class MultiIndex(Frame, BaseIndex):
 
         # At least one of of _levels or _data will be non-null
         num_levels = (
-            len(self._levels)
-            if self._levels is not None else len(self._data)
+            len(self._levels) if self._levels is not None else len(self._data)
         )
 
         if len(value) != num_levels:
             raise ValueError(
-                "Length of names must match number of levels in MultiIndex.")
+                "Length of names must match number of levels in MultiIndex."
+            )
 
-        value = [_MultiIndexColumnName((i, name))
-                 if not isinstance(name, _MultiIndexColumnName)
-                 else name
-                 for i, name in zip(range(len(value)), value)]
+        value = [
+            _MultiIndexColumnName((i, name))
+            if not isinstance(name, _MultiIndexColumnName)
+            else name
+            for i, name in zip(range(len(value)), value)
+        ]
         self._data = self._data.__class__._create_unsafe(
             dict(zip(value, self._data.values())),
             level_names=self._data.level_names,
@@ -1031,11 +1040,13 @@ class MultiIndex(Frame, BaseIndex):
             result.reset_index(drop=True)
             if index.names is not None:
                 result.names = index.names[size:]
-            index = MultiIndex._from_data(index._data)
-            #     levels=index.levels[size:],
-            #     codes=index.codes.iloc[:, size:]._data.columns,
-            #     names=index.names[size:],
-            # )
+            index = MultiIndex._from_data(
+                {
+                    k: v
+                    for i, (k, v) in enumerate(index._data.items())
+                    if i >= size
+                }
+            )
 
         if isinstance(index_key, tuple):
             result = result.set_index(index)
@@ -1173,9 +1184,11 @@ class MultiIndex(Frame, BaseIndex):
         # Note: This code assumes that in the case of duplicate levels pandas
         # will keep the later one in the order when converting to a DataFrame.
         # That appears to be empirically true, but is not documented anywhere.
-        names = [k[1] for k in self._data.names]
+        # TODO: Something is wrong here
+        names = [k for k in self._data.names]
         df = cudf.DataFrame._from_data(
-            data=dict(zip(names, self._data.values())))
+            data=dict(zip(names, self._data.values()))
+        )
         if index:
             df = df.set_index(self)
         if name is not None:
