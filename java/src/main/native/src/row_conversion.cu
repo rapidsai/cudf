@@ -330,9 +330,17 @@ struct block_info {
   int end_row;
   int buffer_num;
 
-  __host__ __device__ size_type get_row_size(size_type const *const col_offsets,
-                                             size_type const *const col_sizes) const {
+  __host__ __device__ size_type get_shared_row_size(size_type const *const col_offsets,
+                                                    size_type const *const col_sizes,
+                                                    bool debug_print = false) const {
     return align_offset(col_offsets[end_col] + col_sizes[end_col] - col_offsets[start_col], 8);
+  }
+  __host__ __device__ size_type get_dest_row_size(size_type const *const col_offsets,
+                                                  size_type const *const col_sizes,
+                                                  bool debug_print = false) const {
+    return align_offset(col_offsets[end_col] + col_sizes[end_col] - col_offsets[start_col] +
+                            util::div_rounding_up_unsafe(num_cols(), 8),
+                        8);
   }
   __host__ __device__ size_type num_cols() const { return end_col - start_col + 1; }
 
@@ -409,7 +417,7 @@ __global__ void copy_from_columns(const size_type num_rows, const size_type num_
       auto const num_fetch_cols = fetch_block.num_cols();
       auto const num_fetch_rows = fetch_block.num_rows();
       auto const num_elements_in_block = num_fetch_cols * num_fetch_rows;
-      auto const fetch_block_row_size = fetch_block.get_row_size(col_offsets, col_sizes);
+      auto const fetch_block_row_size = fetch_block.get_shared_row_size(col_offsets, col_sizes);
       auto const starting_column_offset = col_offsets[fetch_block.start_col];
       auto &fetch_barrier = block_barrier[fetch % NUM_BLOCKS_PER_KERNEL_LOADED];
 
@@ -448,7 +456,8 @@ __global__ void copy_from_columns(const size_type num_rows, const size_type num_
 
     auto block = block_infos[blockIdx.x * NUM_BLOCKS_PER_KERNEL_TO_COLUMNS + subset];
 
-    auto const block_row_size = block.get_row_size(col_offsets, col_sizes);
+    auto const block_row_size = block.get_shared_row_size(col_offsets, col_sizes);
+    auto const dest_row_size = block.get_dest_row_size(col_offsets, col_sizes);
     auto const column_offset = col_offsets[block.start_col];
 
     // copy entire rows to final dest
@@ -457,7 +466,7 @@ __global__ void copy_from_columns(const size_type num_rows, const size_type num_
 
       auto const relative_row = absolute_row - block.start_row;
       auto const output_dest =
-          output_data[block.buffer_num] + absolute_row * block_row_size + column_offset;
+          output_data[block.buffer_num] + absolute_row * dest_row_size + column_offset;
       auto const shared_offset = block_row_size * relative_row;
 
       cuda::memcpy_async(output_dest, &shared[subset % stages_count][shared_offset], block_row_size,
@@ -650,7 +659,7 @@ fetch_blocks_for_row_to_column(size_t &fetch_index, size_t const processing_inde
     auto const fetch_block_start_row = fetch_block.start_row;
     auto const fetch_block_end_row = fetch_block.end_row;
     auto const starting_col_offset = col_offsets[fetch_block.start_col];
-    auto const fetch_block_row_size = fetch_block.get_row_size(col_offsets, col_sizes);
+    auto const fetch_block_row_size = fetch_block.get_shared_row_size(col_offsets, col_sizes);
     auto const num_fetch_cols = fetch_block.num_cols();
     auto [col_size_bytes, col_offset_bytes] = get_admin_data_sizes(
         sizeof(decltype(*col_sizes)), sizeof(decltype(*col_offsets)), num_fetch_cols);
@@ -766,7 +775,7 @@ __global__ void copy_to_columns(const size_type num_rows, const size_type num_co
 
     auto const shared_row_offset = align_offset(col_size_bytes + col_offset_bytes, 8);
 
-    auto block_row_size = block.get_row_size(_col_offsets, _col_sizes);
+    auto block_row_size = block.get_shared_row_size(_col_offsets, _col_sizes);
 
     // now we copy from shared memory to final destination.
     // the data is laid out in rows in shared memory, so the reads
