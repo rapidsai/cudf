@@ -1211,4 +1211,55 @@ TEST_F(OrcStatisticsTest, Overflow)
   check_sum_exist(4, true);
 }
 
+TEST_F(OrcWriterTest, TestMap)
+{
+  auto const num_rows       = 1200000;
+  auto const lists_per_row  = 4;
+  auto const num_child_rows = (num_rows * lists_per_row) / 2;  // half due to validity
+
+  auto keys      = random_values<int>(num_child_rows);
+  auto vals      = random_values<float>(num_child_rows);
+  auto keys_mask = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto vals_mask = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3; });
+  column_wrapper<int> keys_col{keys.begin(), keys.end(), keys_mask};
+  column_wrapper<float> vals_col{vals.begin(), vals.end(), vals_mask};
+  auto struct_col = cudf::test::structs_column_wrapper({keys_col, vals_col}).release();
+
+  auto valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
+
+  std::vector<int> row_offsets(num_rows + 1);
+  int offset = 0;
+  for (int idx = 0; idx < (num_rows) + 1; ++idx) {
+    row_offsets[idx] = offset;
+    if (valids[idx]) { offset += lists_per_row; }
+  }
+  cudf::test::fixed_width_column_wrapper<int> offsets(row_offsets.begin(), row_offsets.end());
+
+  auto num_list_rows = static_cast<cudf::column_view>(offsets).size() - 1;
+  auto list_col =
+    cudf::make_lists_column(num_list_rows,
+                            offsets.release(),
+                            std::move(struct_col),
+                            cudf::UNKNOWN_NULL_COUNT,
+                            cudf::test::detail::make_null_mask(valids, valids + num_list_rows));
+
+  table_view expected({*list_col});
+
+  cudf_io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_list_column_as_map();
+
+  auto filepath = temp_env->get_temp_filepath("MapColumn.orc");
+  cudf_io::orc_writer_options out_opts =
+    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+      .metadata(&expected_metadata);
+  cudf_io::write_orc(out_opts);
+
+  cudf_io::orc_reader_options in_opts =
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).use_index(false);
+  auto result = cudf_io::read_orc(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+  cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
