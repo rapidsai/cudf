@@ -1144,7 +1144,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             if 1 == first_data_column_position:
                 table_index = cudf.core.index.as_index(cols[0])
             elif first_data_column_position > 1:
-                table_index = libcudf.table.Table(
+                table_index = Frame(
                     data=dict(
                         zip(
                             indices[:first_data_column_position],
@@ -1153,7 +1153,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                     )
                 )
             tables.append(
-                libcudf.table.Table(
+                Frame(
                     data=dict(
                         zip(
                             indices[first_data_column_position:],
@@ -3697,7 +3697,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         warnings.warn(
             "The as_gpu_matrix method will be removed in a future cuDF "
             "release. Consider using `to_cupy` instead.",
-            DeprecationWarning,
+            FutureWarning,
         )
         if columns is None:
             columns = self._data.names
@@ -3745,7 +3745,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         warnings.warn(
             "The as_matrix method will be removed in a future cuDF "
             "release. Consider using `to_numpy` instead.",
-            DeprecationWarning,
+            FutureWarning,
         )
         return self.as_gpu_matrix(columns=columns).copy_to_host()
 

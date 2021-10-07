@@ -2918,13 +2918,23 @@ public class TableTest extends CudfTestBase {
         .build();
          ColumnVector parts = ColumnVector
              .fromInts(1, 2, 1, 2, 1, 2, 1, 2, 1, 2);
-         PartitionedTable pt = t.partition(parts, 3);
-         Table expected = new Table.TestBuilder()
-             .column(1, 3, 5, 7, 9, 2, 4, 6, 8, 10)
-             .build()) {
-      int[] partCutoffs = pt.getPartitions();
-      assertArrayEquals(new int[]{0, 0, 5}, partCutoffs);
-      assertTablesAreEqual(expected, pt.getTable());
+         PartitionedTable pt = t.partition(parts, 3)) {
+      assertArrayEquals(new int[]{0, 0, 5}, pt.getPartitions());
+      // order within partitions is not guaranteed, so sort each partition to compare
+      ColumnVector[] slicedColumns = pt.getTable().getColumn(0).slice(0, 5, 5, 10);
+      try (Table part1 = new Table(slicedColumns[0]);
+           Table part1Sorted = part1.orderBy(OrderByArg.asc(0));
+           Table part1Expected = new Table.TestBuilder().column(1, 3, 5, 7, 9).build();
+           Table part2 = new Table(slicedColumns[1]);
+           Table part2Sorted = part2.orderBy(OrderByArg.asc(0));
+           Table part2Expected = new Table.TestBuilder().column(2, 4, 6, 8, 10).build()) {
+        assertTablesAreEqual(part1Expected, part1Sorted);
+        assertTablesAreEqual(part2Expected, part2Sorted);
+      } finally {
+        for (ColumnVector c : slicedColumns) {
+          c.close();
+        }
+      }
     }
   }
 

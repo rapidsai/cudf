@@ -12,6 +12,7 @@ from libcpp.vector cimport vector
 
 from rmm._lib.device_buffer cimport DeviceBuffer
 
+import cudf
 from cudf.core.buffer import Buffer
 
 from cudf._lib.column cimport Column
@@ -19,11 +20,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.scalar import as_device_scalar
 
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.table cimport (
-    Table,
-    table_view_from_columns,
-    table_view_from_table,
-)
+from cudf._lib.utils cimport table_view_from_columns, table_view_from_table
 
 from cudf._lib.reduce import minmax
 from cudf.core.abc import Serializable
@@ -147,7 +144,7 @@ def copy_range(Column input_column,
 
 
 def gather(
-    Table source_table,
+    source_table,
     Column gather_map,
     bool keep_index=True,
     bool nullify=False
@@ -265,7 +262,7 @@ def _reverse_column(Column source_column):
     )
 
 
-def _reverse_table(Table source_table):
+def _reverse_table(source_table):
     cdef table_view reverse_table_view = table_view_from_columns(source_table)
 
     cdef unique_ptr[table] c_result
@@ -326,7 +323,7 @@ def column_allocate_like(Column input_column, size=None):
     return Column.from_unique_ptr(move(c_result))
 
 
-def table_empty_like(Table input_table, bool keep_index=True):
+def table_empty_like(input_table, bool keep_index=True):
 
     cdef table_view input_table_view = table_view_from_table(
         input_table, not keep_index
@@ -375,7 +372,7 @@ def column_slice(Column input_column, object indices):
     return result
 
 
-def table_slice(Table input_table, object indices, bool keep_index=True):
+def table_slice(input_table, object indices, bool keep_index=True):
 
     cdef table_view input_table_view = table_view_from_table(
         input_table, not keep_index
@@ -442,7 +439,7 @@ def column_split(Column input_column, object splits):
     return result
 
 
-def table_split(Table input_table, object splits, bool keep_index=True):
+def table_split(input_table, object splits, bool keep_index=True):
 
     cdef table_view input_table_view = table_view_from_table(
         input_table, not keep_index
@@ -582,7 +579,7 @@ def copy_if_else(object lhs, object rhs, Column boolean_mask):
                 as_device_scalar(lhs), as_device_scalar(rhs), boolean_mask)
 
 
-def _boolean_mask_scatter_table(Table input_table, Table target_table,
+def _boolean_mask_scatter_table(input_table, target_table,
                                 Column boolean_mask):
 
     cdef table_view input_table_view = table_view_from_columns(input_table)
@@ -607,7 +604,7 @@ def _boolean_mask_scatter_table(Table input_table, Table target_table,
     )
 
 
-def _boolean_mask_scatter_scalar(list input_scalars, Table target_table,
+def _boolean_mask_scatter_scalar(list input_scalars, target_table,
                                  Column boolean_mask):
 
     cdef vector[reference_wrapper[constscalar]] input_scalar_vector
@@ -639,10 +636,10 @@ def _boolean_mask_scatter_scalar(list input_scalars, Table target_table,
 
 # TODO: This function is currently unused but should be used in
 # ColumnBase.__setitem__, see https://github.com/rapidsai/cudf/issues/8667.
-def boolean_mask_scatter(object input, Table target_table,
+def boolean_mask_scatter(object input, target_table,
                          Column boolean_mask):
 
-    if isinstance(input, Table):
+    if isinstance(input, cudf.core.frame.Frame):
         return _boolean_mask_scatter_table(
             input,
             target_table,
@@ -697,7 +694,7 @@ def get_element(Column input_column, size_type index):
     )
 
 
-def sample(Table input, size_type n,
+def sample(input, size_type n,
            bool replace, int64_t seed, bool keep_index=True):
     cdef table_view tbl_view = table_view_from_table(input, not keep_index)
     cdef cpp_copying.sample_with_replacement replacement
@@ -745,7 +742,7 @@ def segmented_gather(Column source_column, Column gather_map):
 cdef class _CPackedColumns:
 
     @staticmethod
-    cdef _CPackedColumns from_py_table(Table input_table, keep_index=True):
+    def from_py_table(input_table, keep_index=True):
         """
         Construct a ``PackedColumns`` object from a ``cudf.DataFrame``.
         """
@@ -846,7 +843,7 @@ cdef class _CPackedColumns:
         return p
 
     def unpack(self):
-        output_table = Table(*data_from_table_view(
+        output_table = cudf.core.frame.Frame(*data_from_table_view(
             cpp_copying.unpack(self.c_obj),
             self,
             self.column_names,
@@ -863,7 +860,7 @@ cdef class _CPackedColumns:
 
 class PackedColumns(Serializable):
     """
-    A packed representation of a ``cudf.Table``, with all columns residing
+    A packed representation of a Frame, with all columns residing
     in a single GPU memory buffer.
     """
 
@@ -903,14 +900,14 @@ class PackedColumns(Serializable):
 
 def pack(input_table, keep_index=True):
     """
-    Pack the columns of a ``cudf.Table`` into a single GPU memory buffer.
+    Pack the columns of a cudf Frame into a single GPU memory buffer.
     """
     return PackedColumns.from_py_table(input_table, keep_index)
 
 
 def unpack(packed):
     """
-    Unpack the results of packing a ``cudf.Table``, returning a new
-    ``Table`` in the process.
+    Unpack the results of packing a cudf Frame returning a new
+    cudf Frame in the process.
     """
     return packed.unpack()
