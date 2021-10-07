@@ -166,6 +166,7 @@ class RangeIndex(BaseIndex):
         self._index = None
         self._name = name
         self._range = range(self._start, self._stop, self._step)
+        self._end = self._start + self._step * (len(self._range) - 1)
 
     def _copy_type_metadata(
         self, other: Frame, include_index: bool = True
@@ -548,9 +549,9 @@ class RangeIndex(BaseIndex):
     def _union(self, other, sort=None):
         if isinstance(other, RangeIndex):
             start_s, step_s = self.start, self.step
-            end_s = self.start + self.step * (len(self) - 1)
+            end_s = self._end
             start_o, step_o = other.start, other.step
-            end_o = other.start + other.step * (len(other) - 1)
+            end_o = other._end
             if self.step < 0:
                 start_s, step_s, end_s = end_s, -step_s, start_s
             if other.step < 0:
@@ -618,11 +619,6 @@ class RangeIndex(BaseIndex):
             old_t, t = t, old_t - quotient * t
         return old_r, old_s, old_t
 
-    def _min_fitting_element(self, lower_limit: int) -> int:
-        """Returns the smallest element greater than or equal to the limit"""
-        no_steps = -(-(lower_limit - self.start) // abs(self.step))
-        return self.start + abs(self.step) * no_steps
-
     def _intersection(self, other, sort=False):
         if not isinstance(other, RangeIndex):
             return super()._intersection(other, sort=sort)
@@ -655,7 +651,7 @@ class RangeIndex(BaseIndex):
         tmp_start = (
             first.start + (second.start - first.start) * first.step // gcd * s
         )
-        new_step = first.step * second.step // gcd        
+        new_step = first.step * second.step // gcd
         no_steps = -(-(int_low - tmp_start) // abs(new_step))
         new_start = tmp_start + abs(new_step) * no_steps
         new_range = range(new_start, int_high, new_step)
