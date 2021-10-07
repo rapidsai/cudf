@@ -151,7 +151,7 @@ class user_sink_wrapper : public data_sink {
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
     CUDF_EXPECTS(user_sink->supports_device_write(),
-                 "device write being called on a data_sink that doesn't support it");
+                 "device_write() was called on a data_sink that doesn't support it");
     user_sink->device_write(gpu_data, size, stream);
   }
 
@@ -160,7 +160,7 @@ class user_sink_wrapper : public data_sink {
                                        rmm::cuda_stream_view stream) override
   {
     CUDF_EXPECTS(user_sink->supports_device_write(),
-                 "device write being called on a data_sink that doesn't support it");
+                 "device_write_async() was called on a data_sink that doesn't support it");
     return user_sink->device_write_async(gpu_data, size, stream);
   }
 

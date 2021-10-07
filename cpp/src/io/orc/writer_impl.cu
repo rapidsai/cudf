@@ -1882,7 +1882,7 @@ void writer::impl::write(table_view const& table)
       write_tasks.push_back(
         write_data_stream(strm_desc,
                           enc_data.streams[strm_desc.column_id][rowgroups_range.first],
-                          static_cast<uint8_t*>(compressed_data.data()),
+                          static_cast<uint8_t const*>(compressed_data.data()),
                           stream_output.get(),
                           &stripe,
                           &streams));
@@ -1912,7 +1912,7 @@ void writer::impl::write(table_view const& table)
     }
     out_sink_->host_write(buffer_.data(), buffer_.size());
   }
-  for (auto& task : write_tasks) {
+  for (auto const& task : write_tasks) {
     task.wait();
   }
 

@@ -158,7 +158,7 @@ class data_sink {
                                                size_t size,
                                                rmm::cuda_stream_view stream)
   {
-    CUDF_FAIL("data_sink classes that support device_write must override it.");
+    CUDF_FAIL("data_sink classes that support device_write_async must override it.");
   }
 
   /**
