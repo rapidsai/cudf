@@ -340,7 +340,7 @@ class BaseIndex(Serializable):
                     (2, 'Green')],
                    )
         """
-        if not isinstance(other, cudf.Index):
+        if not isinstance(other, BaseIndex):
             other = cudf.Index(other, name=self.name)
 
         if sort not in {None, False}:
@@ -428,7 +428,7 @@ class BaseIndex(Serializable):
                     (1, 'Blue')],
                 )
         """
-        if not isinstance(other, cudf.Index):
+        if not isinstance(other, BaseIndex):
             other = cudf.Index(other, name=self.name)
 
         if sort not in {None, False}:
