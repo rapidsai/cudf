@@ -306,6 +306,31 @@ TYPED_TEST(OrcWriterTimestampTypeTest, TimestampsWithNulls)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
+TYPED_TEST(OrcWriterTimestampTypeTest, TimestampOverflow)
+{
+  constexpr int64_t max = std::numeric_limits<int64_t>::max();
+  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return max - i; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  constexpr auto num_rows = 100;
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
+    sequence, sequence + num_rows, validity);
+  table_view expected({col});
+
+  auto filepath = temp_env->get_temp_filepath("OrcTimestampOverflow.orc");
+  cudf_io::orc_writer_options out_opts =
+    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected);
+  cudf_io::write_orc(out_opts);
+
+  cudf_io::orc_reader_options in_opts =
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
+      .use_index(false)
+      .timestamp_type(this->type());
+  auto result = cudf_io::read_orc(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
 TEST_F(OrcWriterTest, MultiColumn)
 {
   constexpr auto num_rows = 10;
