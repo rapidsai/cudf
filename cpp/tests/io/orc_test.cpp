@@ -1259,6 +1259,7 @@ TEST_F(OrcWriterTest, TestMap)
   auto result = cudf_io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+  cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
