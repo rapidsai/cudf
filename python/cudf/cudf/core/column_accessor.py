@@ -152,6 +152,15 @@ class ColumnAccessor(MutableMapping):
     def __iter__(self):
         return self._data.__iter__()
 
+    def keys(self):
+        return self._data.keys()
+
+    def values(self):
+        return self._data.values()
+
+    def items(self):
+        return self._data.items()
+
     def __getitem__(self, key: Any) -> ColumnBase:
         return self._data[key]
 

@@ -9,7 +9,7 @@ import warnings
 from collections import defaultdict
 from collections.abc import Sequence
 from numbers import Integral
-from typing import Any, List, MutableMapping, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Mapping, MutableMapping, Optional, Tuple, Union
 
 import cupy
 import numpy as np
@@ -57,9 +57,9 @@ class _MultiIndexColumnAccessor(ColumnAccessor):
             level_names = level_names or data.level_names
         data = {
             (
-                _MultiIndexColumnName(i, k[1])
+                _MultiIndexColumnName((i, k[1]))
                 if isinstance(k, _MultiIndexColumnName)
-                else _MultiIndexColumnName(i, k)
+                else _MultiIndexColumnName((i, k))
             ): v for i, (k, v) in enumerate(data.items())
 
         }
@@ -69,9 +69,9 @@ class _MultiIndexColumnAccessor(ColumnAccessor):
         # self._column_counter = len(data)
         self._name_index_map = defaultdict(list)
         for k in data:
-            self._name_index_map[k[1]] = k[0]
+            self._name_index_map[k[1]].append(k[0])
 
-    # TODO: Determine if this needs to be overridden.
+    # # TODO: Determine if this needs to be overridden.
     # @classmethod
     # def _create_unsafe(
     #     cls,
@@ -87,17 +87,19 @@ class _MultiIndexColumnAccessor(ColumnAccessor):
     #     obj._level_names = level_names
     #     return obj
 
+    def __iter__(self):
+        for k in super().__iter__():
+            yield k[1]
+
     def __getitem__(self, key: Any) -> ColumnBase:
-        # Possible implementation if we need one
-        try:
-            indices = self._name_index_map[key]
-            if len(indices) > 1:
-                raise ValueError(
-                    "__getitem__ not supported with duplicate keys."
-                )
-            return self._data[_MultiIndexColumnName(indices[0], key)]
-        except KeyError:
+        indices = self._name_index_map.get(key)
+        if indices is None:
             raise KeyError(key)
+        if len(indices) > 1:
+            raise ValueError(
+                "__getitem__ not supported with duplicate keys."
+            )
+        return self._data[_MultiIndexColumnName((indices[0], key))]
 
         return self._data[key]
 
@@ -171,7 +173,7 @@ class _MultiIndexColumnAccessor(ColumnAccessor):
         """
         if pd.api.types.is_integer(index):
             index = (index,)
-        data = {k: v for k in self._data if k[0] in index}
+        data = {k: v for k, v in self._data.items() if k[0] in index}
         return self.__class__(
             data, multiindex=self.multiindex, level_names=self.level_names,
         )
@@ -326,10 +328,12 @@ class MultiIndex(Frame, BaseIndex):
                )
     """
 
+    _accessor_type = _MultiIndexColumnAccessor
+
     def __init__(
         self,
-        levels=None,
-        codes=None,
+        levels,
+        codes,
         sortorder=None,
         names=None,
         dtype=None,
@@ -346,44 +350,38 @@ class MultiIndex(Frame, BaseIndex):
             )
         if len(levels) == 0:
             raise ValueError("Must pass non-zero number of levels/codes")
-        if not isinstance(codes, cudf.DataFrame) and not isinstance(
+        if not isinstance(codes, (Sequence, np.ndarray)) or not isinstance(
             codes[0], (Sequence, np.ndarray)
         ):
             raise TypeError("Codes is not a Sequence of sequences")
 
-        if copy:
-            if isinstance(codes, cudf.DataFrame):
-                codes = codes.copy(deep=True)
-            if len(levels) > 0 and isinstance(levels[0], cudf.Series):
-                levels = [level.copy(deep=True) for level in levels]
+        # TODO: Implement copying in terms of copy.copy/deepcopy
+        # if copy:
+        #     if isinstance(codes, cudf.DataFrame):
+        #         codes = codes.copy(deep=True)
+        #     if len(levels) > 0 and isinstance(levels[0], cudf.Series):
+        #         levels = [level.copy(deep=True) for level in levels]
 
-        if not isinstance(codes, cudf.DataFrame):
-            if len(levels) == len(codes):
-                codes = cudf.DataFrame._from_data(
-                    {
-                        i: column.as_column(code).astype(np.int64)
-                        for i, code in enumerate(codes)
-                    }
-                )
-            else:
-                raise ValueError(
-                    "MultiIndex has unequal number of levels and "
-                    "codes and is inconsistent!"
-                )
-
-        levels = [cudf.Series(level) for level in levels]
-
-        if len(levels) != len(codes.columns):
+        if len(levels) != len(codes):
             raise ValueError(
                 "MultiIndex has unequal number of levels and "
                 "codes and is inconsistent!"
             )
-        if len(set(c.size for c in codes._data.columns)) != 1:
+
+        codes = [column.as_column(code).astype(np.int64) for code in codes]
+        levels = [cudf.Series(level) for level in levels]
+
+        if len(levels) != len(codes):
+            raise ValueError(
+                "MultiIndex has unequal number of levels and "
+                "codes and is inconsistent!"
+            )
+        if len(set(c.size for c in codes)) != 1:
             raise ValueError(
                 "MultiIndex length of codes does not match "
                 "and is inconsistent!"
             )
-        for level, code in zip(levels, codes._data.columns):
+        for level, code in zip(levels, codes):
             if code.max() > len(level) - 1:
                 raise ValueError(
                     "MultiIndex code %d contains value %d larger "
@@ -391,24 +389,28 @@ class MultiIndex(Frame, BaseIndex):
                 )
 
         source_data = {}
-        for i, (column_name, col) in enumerate(codes._data.items()):
+        source_codes = {}
+        for i, col in enumerate(codes):
             if -1 in col.values:
                 level = cudf.DataFrame(
-                    {column_name: [None] + list(levels[i])},
+                    {None: [None] + list(levels[i])},
                     index=range(-1, len(levels[i])),
                 )
             else:
-                level = cudf.DataFrame({column_name: levels[i]})
+                level = cudf.DataFrame({None: levels[i]})
 
+            column_name = names[i] if names is not None else None
             source_data[_MultiIndexColumnName((i, column_name))] = libcudf.copying.gather(level, col)[0][
-                column_name
+                None
             ]
+            source_codes[_MultiIndexColumnName((i, column_name))] = col
 
-        super().__init__(source_data)
+        self._data = self.__class__._accessor_type(source_data)
+        self._index = None
+
         self._levels = levels
-        self._codes = codes
+        self._codes = cudf.DataFrame._from_data(source_codes)
         self._name = None
-        self.names = names
 
     # TODO: This is inefficient but TBD if it is a bottleneck.
     @property
@@ -437,7 +439,6 @@ class MultiIndex(Frame, BaseIndex):
             dict(zip(value, self._data.values())),
             level_names=self._data.level_names,
         )
-        self._names = pd.core.indexes.frozen.FrozenList(value)
 
     def rename(self, names, inplace=False):
         """
@@ -1030,11 +1031,11 @@ class MultiIndex(Frame, BaseIndex):
             result.reset_index(drop=True)
             if index.names is not None:
                 result.names = index.names[size:]
-            index = MultiIndex(
-                levels=index.levels[size:],
-                codes=index.codes.iloc[:, size:],
-                names=index.names[size:],
-            )
+            index = MultiIndex._from_data(index._data)
+            #     levels=index.levels[size:],
+            #     codes=index.codes.iloc[:, size:]._data.columns,
+            #     names=index.names[size:],
+            # )
 
         if isinstance(index_key, tuple):
             result = result.set_index(index)
@@ -1169,13 +1170,12 @@ class MultiIndex(Frame, BaseIndex):
         # TODO: Currently this function makes a shallow copy, which is
         # incorrect. We want to make a deep copy, otherwise further
         # modifications of the resulting DataFrame will affect the MultiIndex.
-        cols = [col[1] if col[1] is not None else i
-                for i, col in enumerate(self._data.names)]
         # Note: This code assumes that in the case of duplicate levels pandas
         # will keep the later one in the order when converting to a DataFrame.
         # That appears to be empirically true, but is not documented anywhere.
+        names = [k[1] for k in self._data.names]
         df = cudf.DataFrame._from_data(
-            data=dict(zip(cols, self._data.values())))
+            data=dict(zip(names, self._data.values())))
         if index:
             df = df.set_index(self)
         if name is not None:
