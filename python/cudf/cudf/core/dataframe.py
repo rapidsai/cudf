@@ -5021,11 +5021,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         Series
             Hash values for each row.
         """
-        if columns is None:
-            table_to_hash = self
-        else:
-            cols = [self[k]._column for k in columns]
-            table_to_hash = Frame(data=dict(zip(columns, cols)))
+        table_to_hash = (
+            self
+            if columns is None
+            else Frame(data={k: self._data[k] for k in columns})
+        )
 
         return Series._from_data(
             {None: table_to_hash._hash(method=method)}, index=self.index
