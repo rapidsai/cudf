@@ -1009,8 +1009,6 @@ class BaseIndex(Serializable):
         return self.dtype == "interval"
 
     def _union(self, other, sort=None):
-
-        # union_result = self.join(other, how='outer')
         self_df = self.to_frame(index=False, name=0)
         other_df = other.to_frame(index=False, name=0)
         self_df["order"] = self_df.index

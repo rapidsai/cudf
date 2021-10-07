@@ -83,12 +83,8 @@ def _get_combined_index(indexes, intersect: bool = False, sort=None):
             index = index.intersection(other, sort=False)
     else:
         index = indexes[0]
-        if sort is False:
-            sort = False
-        elif sort is None:
+        if sort is None:
             sort = False if isinstance(index, cudf.StringIndex) else True
-        else:
-            sort = True
         for other in indexes[1:]:
             index = index.union(other, sort=False)
 
