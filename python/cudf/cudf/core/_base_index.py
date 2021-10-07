@@ -343,6 +343,12 @@ class BaseIndex(Serializable):
         if not isinstance(other, cudf.Index):
             other = cudf.Index(other, name=self.name)
 
+        if sort not in {None, False}:
+            raise ValueError(
+                f"The 'sort' keyword only takes the values of "
+                f"None or False; {sort} was passed."
+            )
+
         res_name = _get_result_name(self.name, other.name)
 
         if not len(other) or self.equals(other):
@@ -424,6 +430,12 @@ class BaseIndex(Serializable):
         """
         if not isinstance(other, cudf.Index):
             other = cudf.Index(other, name=self.name)
+
+        if sort not in {None, False}:
+            raise ValueError(
+                f"The 'sort' keyword only takes the values of "
+                f"None or False; {sort} was passed."
+            )
 
         res_name = _get_result_name(self.name, other.name)
         if self.equals(other):
