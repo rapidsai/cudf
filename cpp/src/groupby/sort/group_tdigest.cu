@@ -845,9 +845,8 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
       // if there's no weights in this group of digests at all, return 0.
       auto const num_weights =
         inner_offsets[outer_offsets[group_index + 1]] - inner_offsets[outer_offsets[group_index]];
-      return num_weights == 0
-               ? 0
-               : cumulative_weights[inner_offsets[outer_offsets[group_index + 1]] - 1];
+      auto const last_weight_index = inner_offsets[outer_offsets[group_index + 1]] - 1;
+      return num_weights == 0 ? 0 : cumulative_weights[last_weight_index];
     });
   auto [group_cluster_wl, group_cluster_offsets, total_clusters] = generate_group_cluster_info(
     delta,

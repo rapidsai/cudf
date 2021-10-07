@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ using namespace cudf;
 
 /**
  * @brief Given a column_view containing tdigest data, an instance of this class
- * provides a wrapper on this compound column for tdigest operations.
+ * provides a wrapper on the compound column for tdigest operations.
  *
  * A tdigest is a "compressed" set of input scalars represented as a sorted
  * set of centroids (https://arxiv.org/pdf/1902.04023.pdf).
@@ -59,11 +59,6 @@ class tdigest_column_view : private column_view {
   tdigest_column_view& operator=(tdigest_column_view const&) = default;
   tdigest_column_view& operator=(tdigest_column_view&&) = default;
 
-  using column_view::has_nulls;
-  using column_view::is_empty;
-  using column_view::null_count;
-  using column_view::null_mask;
-  using column_view::offset;
   using column_view::size;
   static_assert(std::is_same_v<offset_type, size_type>,
                 "offset_type is expected to be the same as size_type.");

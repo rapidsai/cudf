@@ -224,17 +224,14 @@ std::unique_ptr<column> compute_approx_percentiles(structs_column_view const& in
   auto centroids = cudf::detail::make_counting_transform_iterator(
     0, make_centroid{mean.begin<double>(), weight.begin<double>()});
 
-  column_view min_col = tdv.min_column();
-  column_view max_col = tdv.max_column();
-
   constexpr size_type block_size = 256;
   cudf::detail::grid_1d const grid(percentiles.size() * input.size(), block_size);
   compute_percentiles_kernel<<<grid.num_blocks, block_size, 0, stream.value()>>>(
     {offsets.begin<offset_type>(), static_cast<size_t>(offsets.size())},
     *percentiles_cdv,
     centroids,
-    min_col.begin<double>(),
-    max_col.begin<double>(),
+    tdv.min_column().begin<double>(),
+    tdv.max_column().begin<double>(),
     cumulative_weights->view().begin<double>(),
     result->mutable_view().begin<double>());
 
