@@ -4167,15 +4167,19 @@ class Series(SingleColumnFrame, Serializable):
             raise ValueError("stop must be a positive integer.")
 
         initial_hash = [hash(self.name) & 0xFFFFFFFF] if use_name else None
-        hashed_values = Series(
-            self._hash(method="murmur3", initial_hash=initial_hash)
+        hashed_values = Series._from_data(
+            {
+                self.name: self._hash(
+                    method="murmur3", initial_hash=initial_hash
+                )
+            },
+            self.index,
         )
 
         if hashed_values.has_nulls:
             raise ValueError("Column must have no nulls.")
 
-        mod_vals = hashed_values % stop
-        return Series(mod_vals._column, index=self.index, name=self.name)
+        return hashed_values % stop
 
     def quantile(
         self, q=0.5, interpolation="linear", exact=True, quant_index=True
