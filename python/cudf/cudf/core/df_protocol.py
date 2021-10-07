@@ -98,22 +98,11 @@ def convert_column_to_cupy_ndarray(col:ColumnObject, allow_copy:bool = False) ->
         raise NotImplementedError("column.offset > 0 not handled yet")
 
     _dbuffer, _ddtype = col.get_buffers()['data']
-    dcol = build_column(Buffer(_dbuffer.ptr, _dbuffer.bufsize), protocol_dtype_to_np_dtype(_ddtype))
-    null_kind, null_value = col.describe_null
-    if null_kind != 0:
-        _vbuffer, _vdtype = col.get_buffers()['validity']
-        valid_mask = cp.asarray(Buffer(_vbuffer.ptr, _vbuffer.bufsize), cp.bool8)
-        dcol[~valid_mask] = None
-        
-    return dcol, _dbuffer
-                #  Buffer(_vbuffer.ptr, _vbuffer.bufsize)if _vbuffer != None else None)
-    # x = buffer_to_cupy_ndarray(_buffer, _dtype, allow_copy=allow_copy)
-    # x = buffer_to_cupy_ndarray(_buffer, _dtype, allow_copy=allow_copy)
-
-    # return set_missing_values(col, x), _buffer
+    dcol = build_column(Buffer(_dbuffer.ptr, _dbuffer.bufsize), protocol_dtype_to_np_dtype(_ddtype))        
+    return set_missing_values(col, dcol), _dbuffer
 
 
-def buffer_to_cupy_ndarray(_buffer, _dtype, allow_copy : bool = False) -> cp.ndarray:
+def buffer_to_cupy_ndarray(_buffer, _dtype, allow_copy : bool = True) -> cp.ndarray:
     if _buffer.__dlpack_device__()[0] == 2: # dataframe is on GPU/CUDA
         x = _gpu_buffer_to_cupy(_buffer, _dtype)
     else:
@@ -124,16 +113,15 @@ def buffer_to_cupy_ndarray(_buffer, _dtype, allow_copy : bool = False) -> cp.nda
 
     return x
 
-def set_missing_values(col, col_array):
-    series = cudf.Series(col_array)
+def set_missing_values(col, dcol):
     null_kind, null_value = col.describe_null
     if  null_kind != 0:
         assert null_kind == 3, f"cudf supports only bit mask, null_kind should be 3 ." 
         _mask_buffer, _mask_dtype = col.get_buffers()["validity"]
-        bitmask = buffer_to_cupy_ndarray(_mask_buffer, _mask_dtype)
-        series[bitmask==null_value] = None
+        bitmask = cp.asarray(Buffer(_mask_buffer.ptr, _mask_buffer.bufsize), cp.bool8) 
+        dcol[~bitmask] = None
 
-    return series
+    return dcol
 
 def _gpu_buffer_to_cupy(_buffer, _dtype):
     _k = _DtypeKind
@@ -146,7 +134,6 @@ def _gpu_buffer_to_cupy(_buffer, _dtype):
     return x
 
 def protocol_dtype_to_np_dtype(_dtype):
-    print(_dtype)
     kind = _dtype[0]
     bitwidth = _dtype[1]
     _k = _DtypeKind
@@ -185,19 +172,15 @@ def convert_categorical_column(col : ColumnObject, allow_copy:bool=False) :
     if not is_dict:
         raise NotImplementedError('Non-dictionary categoricals not supported yet')
 
-    # If you want to cheat for testing (can't use `_col` in real-world code):
-    #    categories = col._col.values.categories.values
-    #    codes = col._col.values.codes
-    categories = cp.asarray(list(mapping.values()))
+    categories = as_column(mapping.values())
     codes_buffer, codes_dtype = col.get_buffers()['data']
-    codes = buffer_to_cupy_ndarray(codes_buffer, codes_dtype, 
-                                   allow_copy=allow_copy)
-    values = categories[codes]
+    cdtype = protocol_dtype_to_np_dtype(codes_dtype)
+    codes = build_column(Buffer(codes_buffer.ptr, codes_buffer.bufsize), cdtype)
+    
+    col1 = build_categorical_column(categories=categories,codes=codes,mask=codes.base_mask,
+                                    size=codes.size,ordered=ordered)
 
-    # Seems like cudf can only construct with non-null values, so need to
-    # null out the nulls later
-    cat = cudf.CategoricalIndex(values, categories=categories, ordered=ordered)
-    return set_missing_values(col, cat), codes_buffer
+    return set_missing_values(col, col1), codes_buffer
 
 
 def __dataframe__(self, nan_as_null : bool = False,
@@ -236,16 +219,7 @@ class _CuDFBuffer:
         """
         Use cudf Buffer object.
         """
-        # if not x.strides == (x.dtype.itemsize,):
-        #     # The protocol does not support strided buffers, so a copy is
-        #     # necessary. If that's not allowed, we need to raise an exception.
-        #     if allow_copy:
-        #         x = x.copy()
-        #     else:
-        #         raise RuntimeError("Exports cannot be zero-copy in the case "
-        #                            "of a non-contiguous buffer")
-
-        # Store the numpy array in which the data resides as a private
+        # Store the cudf buffer where the data resides as a private
         # attribute, so we can use it to retrieve the public attributes
         self._x = x
 
