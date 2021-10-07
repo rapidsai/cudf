@@ -166,6 +166,8 @@ class orc_column_view {
 
     if (_type_kind == TypeKind::MAP) {
       auto const struct_col = col.child(lists_column_view::child_column_index);
+      CUDF_EXPECTS(struct_col.null_count() == 0,
+                   "struct column of a MAP column should not have null elements");
       CUDF_EXPECTS(struct_col.num_children() == 2, "MAP column must have two child columns");
     }
   }
@@ -1475,12 +1477,13 @@ orc_table_view make_orc_table_view(table_view const& table,
                             &orc_columns[new_col_idx],
                             col_meta.child(lists_column_view::child_column_index));
         } else if (kind == TypeKind::STRUCT or kind == TypeKind::MAP) {
-          // MAP: skip to the list child - include grandchildren columns instead of child
-          auto const column =
+          // MAP: skip to the list child - include grandchildren columns instead of children
+          auto const real_parent_col =
             kind == TypeKind::MAP ? col.child(lists_column_view::child_column_index) : col;
-          for (auto child_idx = 0; child_idx != column.num_children(); ++child_idx) {
-            append_orc_column(
-              column.child(child_idx), &orc_columns[new_col_idx], col_meta.child(child_idx));
+          for (auto child_idx = 0; child_idx != real_parent_col.num_children(); ++child_idx) {
+            append_orc_column(real_parent_col.child(child_idx),
+                              &orc_columns[new_col_idx],
+                              col_meta.child(child_idx));
           }
         }
       };

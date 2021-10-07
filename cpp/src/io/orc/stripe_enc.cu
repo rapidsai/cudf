@@ -766,7 +766,8 @@ __global__ void __launch_bounds__(block_size)
   auto const column = *s->chunk.column;
   while (s->cur_row < s->chunk.num_rows || s->numvals + s->numlengths != 0) {
     // Fetch non-null values
-    if (s->chunk.type_kind != LIST && s->chunk.type_kind != MAP && !s->stream.data_ptrs[CI_DATA]) {
+    auto const length_stream_only = s->chunk.type_kind == LIST or s->chunk.type_kind == MAP;
+    if (not length_stream_only && s->stream.data_ptrs[CI_DATA] == nullptr) {
       // Pass-through
       __syncthreads();
       if (!t) {

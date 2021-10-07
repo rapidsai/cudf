@@ -1213,7 +1213,7 @@ TEST_F(OrcStatisticsTest, Overflow)
 
 TEST_F(OrcWriterTest, TestMap)
 {
-  auto const num_rows       = 12000;
+  auto const num_rows       = 1200000;
   auto const lists_per_row  = 4;
   auto const num_child_rows = (num_rows * lists_per_row) / 2;  // half due to validity
 
