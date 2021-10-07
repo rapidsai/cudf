@@ -867,7 +867,7 @@ class MultiIndex(Frame, BaseIndex):
                 "21.10 or older will no longer be deserializable "
                 "after version 21.12. Please load and resave any "
                 "pickles before upgrading to version 22.02.",
-                DeprecationWarning,
+                FutureWarning,
             )
             header["column_names"] = header["names"]
         column_names = pickle.loads(header["column_names"])
@@ -877,7 +877,7 @@ class MultiIndex(Frame, BaseIndex):
                 "21.08 or older will no longer be deserializable "
                 "after version 21.10. Please load and resave any "
                 "pickles before upgrading to version 21.12.",
-                DeprecationWarning,
+                FutureWarning,
             )
             df = cudf.DataFrame.deserialize(header["source_data"], frames)
             return cls.from_frame(df)._set_names(column_names)

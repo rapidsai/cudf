@@ -79,7 +79,7 @@ class reader::impl {
   /**
    * @brief Constructor from a dataset source with reader options.
    *
-   * @param source Dataset source
+   * @param sources Dataset sources
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */

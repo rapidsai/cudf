@@ -157,6 +157,7 @@ std::unique_ptr<scalar> make_fixed_width_scalar(
  *
  * @tparam T Datatype of the value to be represented by the scalar
  * @param value The value to store in the scalar object
+ * @param scale The scale of the fixed point value
  * @param stream CUDA stream used for device memory operations.
  * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
  */
@@ -201,7 +202,7 @@ std::unique_ptr<scalar> make_struct_scalar(
  *
  * The columns must have 1 row.
  *
- * @param value The columnar data to store in the scalar object
+ * @param data The columnar data to store in the scalar object
  * @param stream CUDA stream used for device memory operations.
  * @param mr Device memory resource used to allocate the scalar's `data` and `is_valid` bool.
  */

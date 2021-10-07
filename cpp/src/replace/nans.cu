@@ -26,6 +26,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/transform_scan.h>
 
@@ -234,8 +235,8 @@ void normalize_nans_and_zeros(mutable_column_view in_out, rmm::cuda_stream_view 
  *        Convert  -0.0  -> 0.0
  *
  * @throws cudf::logic_error if column does not have floating point data type.
- * @param[in] column_view representing input data
- * @param[in] device_memory_resource allocator for allocating output data
+ * @param[in] input column_view representing input data
+ * @param[in] mr device_memory_resource allocator for allocating output data
  *
  * @returns new column with the modified data
  */
@@ -261,7 +262,7 @@ std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
  *        Convert  -0.0  -> 0.0
  *
  * @throws cudf::logic_error if column does not have floating point data type.
- * @param[in, out] mutable_column_view representing input data. data is processed in-place
+ * @param[in, out] in_out mutable_column_view representing input data. data is processed in-place
  */
 void normalize_nans_and_zeros(mutable_column_view& in_out)
 {

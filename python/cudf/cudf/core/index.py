@@ -759,7 +759,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 "21.10 or older will no longer be deserializable "
                 "after version 21.12. Please load and resave any "
                 "pickles before upgrading to version 22.02.",
-                DeprecationWarning,
+                FutureWarning,
             )
             header["columns"] = [header.pop("index_column")]
             header["column_names"] = pickle.dumps(
