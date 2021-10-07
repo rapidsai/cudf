@@ -2484,7 +2484,7 @@ class Series(SingleColumnFrame, Serializable):
         warnings.warn(
             "The to_array method will be removed in a future cuDF "
             "release. Consider using `to_numpy` instead.",
-            DeprecationWarning,
+            FutureWarning,
         )
         return self._column.to_array(fillna=fillna)
 
