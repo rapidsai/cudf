@@ -69,7 +69,7 @@ cpdef read_raw_orc_statistics(filepath_or_buffer):
     cudf.io.orc.read_orc_statistics
     """
 
-    # Hanlde NativeFile input
+    # Handle NativeFile input
     if isinstance(filepath_or_buffer, NativeFile):
         filepath_or_buffer = NativeFileDatasource(filepath_or_buffer)
 
