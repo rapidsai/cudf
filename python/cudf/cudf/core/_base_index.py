@@ -340,7 +340,7 @@ class BaseIndex(Serializable):
                     (2, 'Green')],
                    )
         """
-        if not isinstance(other, cudf.Index):
+        if not isinstance(other, BaseIndex):
             other = cudf.Index(other, name=self.name)
 
         res_name = _get_result_name(self.name, other.name)
@@ -422,7 +422,7 @@ class BaseIndex(Serializable):
                     (1, 'Blue')],
                 )
         """
-        if not isinstance(other, cudf.Index):
+        if not isinstance(other, BaseIndex):
             other = cudf.Index(other, name=self.name)
 
         res_name = _get_result_name(self.name, other.name)
@@ -997,8 +997,6 @@ class BaseIndex(Serializable):
         return self.dtype == "interval"
 
     def _union(self, other, sort=None):
-
-        # union_result = self.join(other, how='outer')
         self_df = self.to_frame(index=False, name=0)
         other_df = other.to_frame(index=False, name=0)
         self_df["order"] = self_df.index

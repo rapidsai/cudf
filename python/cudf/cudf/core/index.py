@@ -655,13 +655,10 @@ class RangeIndex(BaseIndex):
         tmp_start = (
             first.start + (second.start - first.start) * first.step // gcd * s
         )
-        new_step = first.step * second.step // gcd
-        new_range = range(tmp_start, int_high, new_step)
-        new_index = RangeIndex(new_range)
-
-        # adjust index to limiting interval
-        new_start = new_index._min_fitting_element(int_low)
-        new_range = range(new_start, new_index.stop, new_index.step)
+        new_step = first.step * second.step // gcd        
+        no_steps = -(-(int_low - tmp_start) // abs(new_step))
+        new_start = tmp_start + abs(new_step) * no_steps
+        new_range = range(new_start, int_high, new_step)
         new_index = RangeIndex(new_range)
 
         if (self.step < 0 and other.step < 0) is not (new_index.step < 0):
