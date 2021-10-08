@@ -94,6 +94,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/sorting.hpp
     - test -f $PREFIX/include/cudf/detail/stream_compaction.hpp
     - test -f $PREFIX/include/cudf/detail/tdigest/tdigest.hpp
+    - test -f $PREFIX/include/cudf/detail/tdigest/tdigest_column_view.hpp
     - test -f $PREFIX/include/cudf/detail/transform.hpp
     - test -f $PREFIX/include/cudf/detail/transpose.hpp
     - test -f $PREFIX/include/cudf/detail/unary.hpp

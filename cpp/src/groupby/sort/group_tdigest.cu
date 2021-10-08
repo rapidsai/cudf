@@ -649,22 +649,22 @@ std::unique_ptr<column> group_tdigest(column_view const& col,
 
 // disregard min value from empty digests
 struct tdigest_min {
-  offset_type const* offsets;
+  offset_type const* inner_offsets;  // offsets to the individual tdigests
   double const* min_values;
   __device__ double operator()(size_type tdigest_index)
   {
-    auto const tdigest_size = offsets[tdigest_index + 1] - offsets[tdigest_index];
+    auto const tdigest_size = inner_offsets[tdigest_index + 1] - inner_offsets[tdigest_index];
     return tdigest_size == 0 ? std::numeric_limits<double>::max() : min_values[tdigest_index];
   }
 };
 
 // disregard max value from empty digests
 struct tdigest_max {
-  offset_type const* offsets;
+  offset_type const* inner_offsets;  // offsets to the individual tdigests
   double const* max_values;
   __device__ double operator()(size_type tdigest_index)
   {
-    auto const tdigest_size = offsets[tdigest_index + 1] - offsets[tdigest_index];
+    auto const tdigest_size = inner_offsets[tdigest_index + 1] - inner_offsets[tdigest_index];
     return tdigest_size == 0 ? std::numeric_limits<double>::lowest() : max_values[tdigest_index];
   }
 };
@@ -782,7 +782,8 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
   auto group_num_weights = cudf::detail::make_counting_transform_iterator(
     0,
     [outer_offsets = group_offsets.data(),
-     inner_offsets = tdigest_offsets.begin<size_type>()] __device__(size_type group_index) -> int {
+     inner_offsets =
+       tdigest_offsets.begin<size_type>()] __device__(size_type group_index) -> size_type {
       auto const tdigest_begin = outer_offsets[group_index];
       auto const tdigest_end   = outer_offsets[group_index + 1];
       return inner_offsets[tdigest_end] - inner_offsets[tdigest_begin];

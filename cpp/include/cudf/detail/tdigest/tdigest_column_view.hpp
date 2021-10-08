@@ -22,8 +22,6 @@ namespace cudf {
 namespace detail {
 namespace tdigest {
 
-using namespace cudf;
-
 /**
  * @brief Given a column_view containing tdigest data, an instance of this class
  * provides a wrapper on the compound column for tdigest operations.

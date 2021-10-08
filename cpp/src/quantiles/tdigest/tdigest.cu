@@ -313,23 +313,20 @@ std::unique_ptr<column> percentile_approx(structs_column_view const& input,
   // if any of the input digests are empty, nullify the corresponding output rows (values will be
   // uninitialized)
   auto [bitmask, null_count] = [stream, mr, &tdv]() {
-    auto offsets = tdv.centroids().offsets();
-    auto iter    = cudf::detail::make_counting_transform_iterator(
-      0, [offsets = offsets.begin<offset_type>()] __device__(size_type index) {
+    auto tdigest_is_empty = cudf::detail::make_counting_transform_iterator(
+      0, [offsets = tdv.centroids().offsets_begin()] __device__(size_type index) {
         return offsets[index + 1] - offsets[index] == 0 ? 1 : 0;
       });
-    auto const null_count = thrust::reduce(rmm::exec_policy(stream), iter, iter + tdv.size(), 0);
+    auto const null_count =
+      thrust::reduce(rmm::exec_policy(stream), tdigest_is_empty, tdigest_is_empty + tdv.size(), 0);
     if (null_count == 0) {
       return std::pair<rmm::device_buffer, size_type>{rmm::device_buffer{}, null_count};
     }
-    return cudf::detail::valid_if(
-      thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(0) + tdv.size(),
-      [offsets = offsets.begin<offset_type>()] __device__(size_type index) {
-        return offsets[index + 1] - offsets[index] == 0 ? 0 : 1;
-      },
-      stream,
-      mr);
+    return cudf::detail::valid_if(tdigest_is_empty,
+                                  tdigest_is_empty + tdv.size(),
+                                  thrust::logical_not<size_type>{},
+                                  stream,
+                                  mr);
   }();
 
   return cudf::make_lists_column(
