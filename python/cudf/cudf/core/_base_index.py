@@ -44,6 +44,9 @@ class BaseIndex(Serializable):
     def copy(self, deep: bool = True) -> BaseIndex:
         raise NotImplementedError
 
+    def __len__(self):
+        raise NotImplementedError
+
     @property
     def size(self):
         # The size of an index is always its length irrespective of dimension.
@@ -798,22 +801,8 @@ class BaseIndex(Serializable):
             self.copy(deep=copy)._values.astype(dtype), name=self.name
         )
 
+    # TODO: This method is deprecated and can be removed.
     def to_array(self, fillna=None):
-        """Get a dense numpy array for the data.
-
-        Parameters
-        ----------
-        fillna : str or None
-            Defaults to None, which will skip null values.
-            If it equals "pandas", null values are filled with NaNs.
-            Non integral dtype is promoted to np.float64.
-
-        Notes
-        -----
-
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-        """
         return self._values.to_array(fillna=fillna)
 
     def to_series(self, index=None, name=None):

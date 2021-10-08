@@ -8,7 +8,9 @@ import warnings
 from collections import abc
 from typing import (
     Any,
+    Callable,
     Dict,
+    List,
     MutableMapping,
     Optional,
     Tuple,
@@ -25,7 +27,7 @@ from nvtx import annotate
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._typing import ColumnLike, DataFrameOrSeries
+from cudf._typing import ColumnLike, DataFrameOrSeries, Dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
@@ -46,15 +48,16 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import merge
+from cudf.core.udf.pipeline import compile_or_get
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import is_column_like
+from cudf.utils.dtypes import find_common_type, is_column_like
 
 T = TypeVar("T", bound="Frame")
 
 
-class Frame(libcudf.table.Table):
+class Frame:
     """
     Frame: A collection of Column objects with an optional index.
 
@@ -67,6 +70,50 @@ class Frame(libcudf.table.Table):
     """
 
     _data: "ColumnAccessor"
+    _index: Optional[cudf.core.index.BaseIndex]
+
+    def __init__(self, data=None, index=None):
+        if data is None:
+            data = {}
+        self._data = cudf.core.column_accessor.ColumnAccessor(data)
+        self._index = index
+
+    @property
+    def _num_columns(self) -> int:
+        return len(self._data)
+
+    @property
+    def _num_indices(self) -> int:
+        if self._index is None:
+            return 0
+        else:
+            return len(self._index_names)
+
+    @property
+    def _num_rows(self) -> int:
+        if self._index is not None:
+            return len(self._index)
+        if len(self._data) == 0:
+            return 0
+        return len(self._data.columns[0])
+
+    @property
+    def _column_names(self) -> List[Any]:  # TODO: List[str]?
+        return self._data.names
+
+    @property
+    def _index_names(self) -> List[Any]:  # TODO: List[str]?
+        # TODO: Temporarily suppressing mypy warnings to avoid introducing bugs
+        # by returning an empty list where one is not expected.
+        return (
+            None  # type: ignore
+            if self._index is None
+            else self._index._data.names
+        )
+
+    @property
+    def _columns(self) -> List[Any]:  # TODO: List[Column]?
+        return self._data.columns
 
     def serialize(self):
         header = {
@@ -90,7 +137,7 @@ class Frame(libcudf.table.Table):
         index: Optional[cudf.core.index.BaseIndex] = None,
     ):
         obj = cls.__new__(cls)
-        libcudf.table.Table.__init__(obj, data, index)
+        Frame.__init__(obj, data, index)
         return obj
 
     def _mimic_inplace(
@@ -609,6 +656,151 @@ class Frame(libcudf.table.Table):
 
         result._copy_type_metadata(self, include_index=keep_index)
         return result
+
+    @property
+    def values(self):
+        """
+        Return a CuPy representation of the DataFrame.
+
+        Only the values in the DataFrame will be returned, the axes labels will
+        be removed.
+
+        Returns
+        -------
+        cupy.ndarray
+            The values of the DataFrame.
+        """
+        return self.to_cupy()
+
+    @property
+    def values_host(self):
+        """
+        Return a NumPy representation of the data.
+
+        Only the values in the DataFrame will be returned, the axes labels will
+        be removed.
+
+        Returns
+        -------
+        numpy.ndarray
+            A host representation of the underlying data.
+        """
+        return self.to_numpy()
+
+    def __array__(self, dtype=None):
+        raise TypeError(
+            "Implicit conversion to a host NumPy array via __array__ is not "
+            "allowed, To explicitly construct a GPU matrix, consider using "
+            ".to_cupy()\nTo explicitly construct a host matrix, consider "
+            "using .to_numpy()."
+        )
+
+    def __arrow_array__(self, type=None):
+        raise TypeError(
+            "Implicit conversion to a host PyArrow object via __arrow_array__ "
+            "is not allowed. Consider using .to_arrow()"
+        )
+
+    def _to_array(
+        self,
+        get_column_values: Callable,
+        make_empty_matrix: Callable,
+        dtype: Union[Dtype, None] = None,
+        na_value=None,
+    ) -> Union[cupy.ndarray, np.ndarray]:
+        # Internal function to implement to_cupy and to_numpy, which are nearly
+        # identical except for the attribute they access to generate values.
+
+        def get_column_values_na(col):
+            if na_value is not None:
+                col = col.fillna(na_value)
+            return get_column_values(col)
+
+        # Early exit for an empty Frame.
+        ncol = self._num_columns
+        if ncol == 0:
+            return make_empty_matrix(shape=(0, 0), dtype=np.dtype("float64"))
+
+        if dtype is None:
+            dtype = find_common_type(
+                [col.dtype for col in self._data.values()]
+            )
+
+        matrix = make_empty_matrix(shape=(len(self), ncol), dtype=dtype)
+        for i, col in enumerate(self._data.values()):
+            # TODO: col.values may fail if there is nullable data or an
+            # unsupported dtype. We may want to catch and provide a more
+            # suitable error.
+            matrix[:, i] = get_column_values_na(col)
+        return matrix
+
+    def to_cupy(
+        self,
+        dtype: Union[Dtype, None] = None,
+        copy: bool = False,
+        na_value=None,
+    ) -> cupy.ndarray:
+        """Convert the Frame to a CuPy array.
+
+        Parameters
+        ----------
+        dtype : str or numpy.dtype, optional
+            The dtype to pass to :meth:`numpy.asarray`.
+        copy : bool, default False
+            Whether to ensure that the returned value is not a view on
+            another array. Note that ``copy=False`` does not *ensure* that
+            ``to_cupy()`` is no-copy. Rather, ``copy=True`` ensure that
+            a copy is made, even if not strictly necessary.
+        na_value : Any, default None
+            The value to use for missing values. The default value depends on
+            dtype and the dtypes of the DataFrame columns.
+
+        Returns
+        -------
+        cupy.ndarray
+        """
+        return self._to_array(
+            (lambda col: col.values.copy())
+            if copy
+            else (lambda col: col.values),
+            cupy.empty,
+            dtype,
+            na_value,
+        )
+
+    def to_numpy(
+        self,
+        dtype: Union[Dtype, None] = None,
+        copy: bool = True,
+        na_value=None,
+    ) -> np.ndarray:
+        """Convert the Frame to a NumPy array.
+
+        Parameters
+        ----------
+        dtype : str or numpy.dtype, optional
+            The dtype to pass to :meth:`numpy.asarray`.
+        copy : bool, default True
+            Whether to ensure that the returned value is not a view on
+            another array. This parameter must be ``True`` since cuDF must copy
+            device memory to host to provide a numpy array.
+        na_value : Any, default None
+            The value to use for missing values. The default value depends on
+            dtype and the dtypes of the DataFrame columns.
+
+        Returns
+        -------
+        numpy.ndarray
+        """
+        if not copy:
+            raise ValueError(
+                "copy=False is not supported because conversion to a numpy "
+                "array always copies the data."
+            )
+
+        return self._to_array(
+            (lambda col: col.values_host), np.empty, dtype, na_value
+        )
 
     def clip(self, lower=None, upper=None, inplace=False, axis=1):
         """
@@ -1455,10 +1647,29 @@ class Frame(libcudf.table.Table):
         """
         Apply `func` across the rows of the frame.
         """
-        output_dtype, ptx = cudf.core.udf.pipeline.compile_masked_udf(
-            func, self.dtypes
+        kernel, retty = compile_or_get(self, func)
+
+        # Mask and data column preallocated
+        ans_col = cupy.empty(len(self), dtype=retty)
+        ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
+        launch_args = [(ans_col, ans_mask)]
+        offsets = []
+        for col in self._data.values():
+            data = col.data
+            mask = col.mask
+            if mask is None:
+                launch_args.append(data)
+            else:
+                launch_args.append((data, mask))
+            offsets.append(col.offset)
+        launch_args += offsets
+        launch_args.append(len(self))  # size
+        kernel.forall(len(self))(*launch_args)
+
+        result = cudf.Series(ans_col).set_mask(
+            libcudf.transform.bools_to_mask(ans_mask)
         )
-        result = cudf._lib.transform.masked_udf(self, ptx, output_dtype)
+
         return result
 
     def rank(
@@ -1797,21 +2008,6 @@ class Frame(libcudf.table.Table):
         data_columns = (col.shift(offset, fill_value) for col in self._columns)
         return self.__class__._from_data(
             zip(self._column_names, data_columns), self._index
-        )
-
-    def __array__(self, dtype=None):
-        raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not "
-            "allowed, To explicitly construct a GPU array, consider using "
-            "cupy.asarray(...)\nTo explicitly construct a "
-            "host array, consider using .to_array()"
-        )
-
-    def __arrow_array__(self, type=None):
-        raise TypeError(
-            "Implicit conversion to a host PyArrow Array via __arrow_array__ "
-            "is not allowed, To explicitly construct a PyArrow Array, "
-            "consider using .to_arrow()"
         )
 
     def round(self, decimals=0, how="half_even"):
@@ -3532,7 +3728,6 @@ class Frame(libcudf.table.Table):
         right_index=False,
         how="inner",
         sort=False,
-        method="hash",
         indicator=False,
         suffixes=("_x", "_y"),
     ):
@@ -3555,7 +3750,6 @@ class Frame(libcudf.table.Table):
             right_index=right_index,
             how=how,
             sort=sort,
-            method=method,
             indicator=indicator,
             suffixes=suffixes,
         )
@@ -5140,55 +5334,27 @@ class SingleColumnFrame(Frame):
 
     @property
     def values(self):
-        """
-        Return a CuPy representation of the data.
-
-        Returns
-        -------
-        out : cupy.ndarray
-            A device representation of the underlying data.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, -10, 100, 20])
-        >>> ser.values
-        array([  1, -10, 100,  20])
-        >>> type(ser.values)
-        <class 'cupy.core.core.ndarray'>
-        >>> index = cudf.Index([1, -10, 100, 20])
-        >>> index.values
-        array([  1, -10, 100,  20])
-        >>> type(index.values)
-        <class 'cupy.core.core.ndarray'>
-        """
         return self._column.values
 
     @property
     def values_host(self):
-        """
-        Return a NumPy representation of the data.
-
-        Returns
-        -------
-        out : numpy.ndarray
-            A host representation of the underlying data.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> ser = cudf.Series([1, -10, 100, 20])
-        >>> ser.values_host
-        array([  1, -10, 100,  20])
-        >>> type(ser.values_host)
-        <class 'numpy.ndarray'>
-        >>> index = cudf.Index([1, -10, 100, 20])
-        >>> index.values_host
-        array([  1, -10, 100,  20])
-        >>> type(index.values_host)
-        <class 'numpy.ndarray'>
-        """
         return self._column.values_host
+
+    def to_cupy(
+        self,
+        dtype: Union[Dtype, None] = None,
+        copy: bool = True,
+        na_value=None,
+    ) -> cupy.ndarray:
+        return super().to_cupy(dtype, copy, na_value).flatten()
+
+    def to_numpy(
+        self,
+        dtype: Union[Dtype, None] = None,
+        copy: bool = True,
+        na_value=None,
+    ) -> np.ndarray:
+        return super().to_numpy(dtype, copy, na_value).flatten()
 
     def tolist(self):
 
@@ -5200,38 +5366,14 @@ class SingleColumnFrame(Frame):
 
     to_list = tolist
 
+    # TODO: When this method is removed we can also remove
+    # ColumnBase.to_gpu_array.
     def to_gpu_array(self, fillna=None):
-        """Get a dense numba device array for the data.
-
-        Parameters
-        ----------
-        fillna : str or None
-            See *fillna* in ``.to_array``.
-
-        Notes
-        -----
-
-        if ``fillna`` is ``None``, null values are skipped.  Therefore, the
-        output size could be smaller.
-
-        Returns
-        -------
-        numba.DeviceNDArray
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([10, 20, 30, 40, 50])
-        >>> s
-        0    10
-        1    20
-        2    30
-        3    40
-        4    50
-        dtype: int64
-        >>> s.to_gpu_array()
-        <numba.cuda.cudadrv.devicearray.DeviceNDArray object at 0x7f1840858890>
-        """
+        warnings.warn(
+            "The to_gpu_array method will be removed in a future cuDF "
+            "release. Consider using `to_cupy` instead.",
+            FutureWarning,
+        )
         return self._column.to_gpu_array(fillna=fillna)
 
     @classmethod

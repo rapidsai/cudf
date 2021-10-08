@@ -134,7 +134,7 @@ def test_orc_reader_trailing_nulls(datadir):
         pytest.skip(".orc file is not found: %s" % e)
 
     expect = orcfile.read().to_pandas().fillna(0)
-    got = cudf.read_orc(path, engine="cudf").fillna(0)
+    got = cudf.read_orc(path).fillna(0)
 
     # PANDAS uses NaN to represent invalid data, which forces float dtype
     # For comparison, we can replace NaN with 0 and cast to the cuDF dtype
@@ -157,7 +157,7 @@ def test_orc_reader_datetimestamp(datadir, inputfile, use_index):
         pytest.skip(".orc file is not found: %s" % e)
 
     pdf = orcfile.read().to_pandas(date_as_object=False)
-    gdf = cudf.read_orc(path, engine="cudf", use_index=use_index)
+    gdf = cudf.read_orc(path, use_index=use_index)
 
     assert_eq(pdf, gdf, check_categorical=False)
 
@@ -170,7 +170,7 @@ def test_orc_reader_strings(datadir):
         pytest.skip(".orc file is not found: %s" % e)
 
     expect = orcfile.read(columns=["string1"])
-    got = cudf.read_orc(path, engine="cudf", columns=["string1"])
+    got = cudf.read_orc(path, columns=["string1"])
 
     assert_eq(expect, got, check_categorical=False)
 
@@ -291,9 +291,7 @@ def test_orc_read_rows(datadir, skiprows, num_rows):
         pytest.skip(".orc file is not found: %s" % e)
 
     pdf = orcfile.read().to_pandas()
-    gdf = cudf.read_orc(
-        path, engine="cudf", skiprows=skiprows, num_rows=num_rows
-    )
+    gdf = cudf.read_orc(path, skiprows=skiprows, num_rows=num_rows)
 
     # Slice rows out of the whole dataframe for comparison as PyArrow doesn't
     # have an API to read a subsection of rows from the file
@@ -335,7 +333,7 @@ def test_orc_reader_uncompressed_block(datadir):
         pytest.skip(".orc file is not found: %s" % e)
 
     expect = orcfile.read().to_pandas()
-    got = cudf.read_orc(path, engine="cudf")
+    got = cudf.read_orc(path)
 
     assert_eq(expect, got, check_categorical=False)
 
@@ -351,7 +349,7 @@ def test_orc_reader_nodata_block(datadir):
             print(type(excpr).__name__)
 
     expect = orcfile.read().to_pandas()
-    got = cudf.read_orc(path, engine="cudf", num_rows=1)
+    got = cudf.read_orc(path, num_rows=1)
 
     assert_eq(expect, got, check_categorical=False)
 
@@ -570,7 +568,7 @@ def test_orc_reader_tzif_timestamps(datadir):
         pytest.skip(".orc file is not found: %s" % e)
 
     pdf = orcfile.read().to_pandas()
-    gdf = cudf.read_orc(path, engine="cudf").to_pandas()
+    gdf = cudf.read_orc(path).to_pandas()
 
     assert_eq(pdf, gdf)
 
@@ -634,6 +632,10 @@ def test_orc_write_statistics(tmpdir, datadir, nrows):
             stats_max = file_stats[0][col]["maximum"]
             actual_max = gdf[col].max()
             assert normalized_equals(actual_max, stats_max)
+        if "number_of_values" in file_stats[0][col]:
+            stats_num_vals = file_stats[0][col]["number_of_values"]
+            actual_num_vals = gdf[col].count()
+            assert stats_num_vals == actual_num_vals
 
     # compare stripe statistics with actual min/max
     for stripe_idx in range(0, orc_file.nstripes):
@@ -650,6 +652,13 @@ def test_orc_write_statistics(tmpdir, datadir, nrows):
                 actual_max = stripe_df[col].max()
                 stats_max = stripes_stats[stripe_idx][col]["maximum"]
                 assert normalized_equals(actual_max, stats_max)
+
+            if "number_of_values" in stripes_stats[stripe_idx][col]:
+                stats_num_vals = stripes_stats[stripe_idx][col][
+                    "number_of_values"
+                ]
+                actual_num_vals = stripe_df[col].count()
+                assert stats_num_vals == actual_num_vals
 
 
 @pytest.mark.parametrize("nrows", [1, 100, 6000000])
@@ -704,7 +713,7 @@ def test_orc_reader_gmt_timestamps(datadir):
         pytest.skip(".orc file is not found: %s" % e)
 
     pdf = orcfile.read().to_pandas()
-    gdf = cudf.read_orc(path, engine="cudf").to_pandas()
+    gdf = cudf.read_orc(path).to_pandas()
     assert_eq(pdf, gdf)
 
 
@@ -803,9 +812,7 @@ def test_orc_reader_multiple_files(datadir, num_rows):
     df_2 = pd.read_orc(path)
     df = pd.concat([df_1, df_2], ignore_index=True)
 
-    gdf = cudf.read_orc(
-        [path, path], engine="cudf", num_rows=num_rows
-    ).to_pandas()
+    gdf = cudf.read_orc([path, path], num_rows=num_rows).to_pandas()
 
     # Slice rows out of the whole dataframe for comparison as PyArrow doesn't
     # have an API to read a subsection of rows from the file
@@ -821,13 +828,13 @@ def test_orc_reader_multi_file_single_stripe(datadir):
 
     # should raise an exception
     with pytest.raises(ValueError):
-        cudf.read_orc([path, path], engine="cudf", stripes=[0])
+        cudf.read_orc([path, path], stripes=[0])
 
 
 def test_orc_reader_multi_file_multi_stripe(datadir):
 
     path = datadir / "TestOrcFile.testStripeLevelStats.orc"
-    gdf = cudf.read_orc([path, path], engine="cudf", stripes=[[0, 1], [2]])
+    gdf = cudf.read_orc([path, path], stripes=[[0, 1], [2]])
     pdf = pd.read_orc(path)
     assert_eq(pdf, gdf)
 
@@ -1197,9 +1204,7 @@ def test_orc_reader_decimal(datadir, data):
         pytest.skip(".orc file is not found: %s" % e)
 
     pdf = orcfile.read().to_pandas()
-    gdf = cudf.read_orc(
-        path, engine="cudf", decimal_cols_as_float=data
-    ).to_pandas()
+    gdf = cudf.read_orc(path, decimal_cols_as_float=data).to_pandas()
 
     # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
     # This is because cuDF returns as float64
@@ -1217,9 +1222,7 @@ def test_orc_reader_decimal_invalid_column(datadir, data):
         pytest.skip(".orc file is not found: %s" % e)
 
     pdf = orcfile.read().to_pandas()
-    gdf = cudf.read_orc(
-        path, engine="cudf", decimal_cols_as_float=data
-    ).to_pandas()
+    gdf = cudf.read_orc(path, decimal_cols_as_float=data).to_pandas()
 
     # Since the `decimal_cols_as_float` column name
     # is invalid, this should be a decimal
