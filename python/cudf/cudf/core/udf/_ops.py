@@ -1,4 +1,5 @@
 import operator
+import math
 
 arith_ops = [
     operator.add,
@@ -8,6 +9,10 @@ arith_ops = [
     operator.floordiv,
     operator.mod,
     operator.pow,
+]
+
+unary_ops = [
+    math.sin,
 ]
 
 comparison_ops = [
