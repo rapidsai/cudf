@@ -19,6 +19,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/strings/detail/strings_column_factories.cuh>
 #include <cudf/strings/extract.hpp>
@@ -123,17 +124,22 @@ std::unique_ptr<table> extract(
   }
 
   // build a result column for each group
-  std::vector<std::unique_ptr<column>> results;
-  for (auto column_index = 0; column_index < groups; ++column_index) {
+  std::vector<std::unique_ptr<column>> results(groups);
+  auto make_strings_lambda = [&](size_type column_index) {
     // this iterator transposes the extract results into column order
-    auto indices_itr = thrust::make_permutation_iterator(
-      indices.begin(),
-      thrust::make_transform_iterator(thrust::make_counting_iterator<size_type>(0),
-                                      [column_index, groups] __device__(size_type idx) {
-                                        return (idx * groups) + column_index;
-                                      }));
-    results.emplace_back(make_strings_column(indices_itr, indices_itr + strings_count, stream, mr));
-  }
+    auto indices_itr =
+      thrust::make_permutation_iterator(indices.begin(),
+                                        cudf::detail::make_counting_transform_iterator(
+                                          0, [column_index, groups] __device__(size_type idx) {
+                                            return (idx * groups) + column_index;
+                                          }));
+    return make_strings_column(indices_itr, indices_itr + strings_count, stream, mr);
+  };
+
+  std::transform(thrust::make_counting_iterator<size_type>(0),
+                 thrust::make_counting_iterator<size_type>(groups),
+                 results.begin(),
+                 make_strings_lambda);
 
   return std::make_unique<table>(std::move(results));
 }
