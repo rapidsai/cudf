@@ -41,7 +41,7 @@ static void BM_hash(benchmark::State& state, cudf::hash_id hid)
   (::benchmark::State & st) { BM_hash(st, cudf::hash_id::name); } \
   BENCHMARK_REGISTER_F(HashBenchmark, name)                       \
     ->RangeMultiplier(4)                                          \
-    ->Ranges({{1 << 14, 1 << 24}})                                \
+    ->Ranges({{1 << 14, 1 << 23}})                                \
     ->UseManualTime()                                             \
     ->Unit(benchmark::kMillisecond);
 
