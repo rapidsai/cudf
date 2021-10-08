@@ -1671,6 +1671,34 @@ class MultiIndex(Frame, BaseIndex):
         mask[true_inds] = True
         return mask
 
+    def _get_reconciled_name_object(self, other) -> MultiIndex:
+        """
+        If the result of a set operation will be self,
+        return self, unless the names change, in which
+        case make a shallow copy of self.
+        """
+        names = self._maybe_match_names(other)
+        if self.names != names:
+            return self.rename(names)
+        return self
+
+    def _maybe_match_names(self, other):
+        """
+        Try to find common names to attach to the result of an operation
+        between a and b. Return a consensus list of names if they match
+        at least partly or list of None if they have completely
+        different names.
+        """
+        if len(self.names) != len(other.names):
+            return [None] * len(self.names)
+        names = []
+        for a_name, b_name in zip(self.names, other.names):
+            if a_name == b_name:
+                names.append(a_name)
+            else:
+                names.append(None)
+        return names
+
     def _union(self, other, sort=None):
         other_df = other.copy(deep=True).to_frame(index=False)
         self_df = self.copy(deep=True).to_frame(index=False)

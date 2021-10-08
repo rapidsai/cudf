@@ -349,21 +349,13 @@ class BaseIndex(Serializable):
                 f"None or False; {sort} was passed."
             )
 
-        res_name = _get_result_name(self.name, other.name)
-
         if not len(other) or self.equals(other):
-            if res_name != self.name:
-                return self.rename(res_name)
-            else:
-                return self
+            return self._get_reconciled_name_object(other)
         elif not len(self):
-            if res_name != other.name:
-                return other.rename(res_name)
-            else:
-                return other
+            return other._get_reconciled_name_object(self)
 
         result = self._union(other, sort=sort)
-        result.name = res_name
+        result.name = _get_result_name(self.name, other.name)
         return result
 
     def intersection(self, other, sort=False):
@@ -437,16 +429,14 @@ class BaseIndex(Serializable):
                 f"None or False; {sort} was passed."
             )
 
-        res_name = _get_result_name(self.name, other.name)
         if self.equals(other):
             if self.has_duplicates:
-                result = self.unique()
-            else:
-                if res_name != self.name:
-                    result = self.copy(deep=False)
-                else:
-                    result = self
-        elif (self.is_boolean() and other.is_numeric()) or (
+                return self.unique()._get_reconciled_name_object(other)
+            return self._get_reconciled_name_object(other)
+
+        res_name = _get_result_name(self.name, other.name)
+
+        if (self.is_boolean() and other.is_numeric()) or (
             self.is_numeric() and other.is_boolean()
         ):
             if isinstance(self, cudf.MultiIndex):
@@ -465,6 +455,17 @@ class BaseIndex(Serializable):
         result = lhs._intersection(rhs, sort=sort)
         result.name = res_name
         return result
+
+    def _get_reconciled_name_object(self, other):
+        """
+        If the result of a set operation will be self,
+        return self, unless the name changes, in which
+        case make a shallow copy of self.
+        """
+        name = _get_result_name(self.name, other.name)
+        if self.name != name:
+            return self.rename(name)
+        return self
 
     def fillna(self, value, downcast=None):
         """
