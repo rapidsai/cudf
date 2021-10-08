@@ -602,23 +602,6 @@ class RangeIndex(BaseIndex):
 
         return Int64Index(self._values)._union(other, sort=sort)
 
-    def _extended_gcd(self, a: int, b: int) -> Tuple[int, int, int]:
-        """
-        Extended Euclidean algorithms to solve Bezout's identity:
-           a*x + b*y = gcd(x, y)
-        Finds one particular solution for x, y: s, t
-        Returns: gcd, s, t
-        """
-        s, old_s = 0, 1
-        t, old_t = 1, 0
-        r, old_r = b, a
-        while r:
-            quotient = old_r // r
-            old_r, r = r, old_r - quotient * r
-            old_s, s = s, old_s - quotient * s
-            old_t, t = t, old_t - quotient * t
-        return old_r, old_s, old_t
-
     def _intersection(self, other, sort=False):
         if not isinstance(other, RangeIndex):
             return super()._intersection(other, sort=sort)
@@ -640,7 +623,7 @@ class RangeIndex(BaseIndex):
         # solve intersection problem
         # performance hint: for identical step sizes, could use
         # cheaper alternative
-        gcd, s, _ = self._extended_gcd(first.step, second.step)
+        gcd, s, _ = _extended_gcd(first.step, second.step)
 
         # check whether element sets intersect
         if (first.start - second.start) % gcd:
@@ -2591,3 +2574,21 @@ def _concat_range_index(indexes: List[RangeIndex]) -> BaseIndex:
 
     stop = non_empty_indexes[-1].stop if next_ is None else next_
     return RangeIndex(start, stop, step)
+
+
+def _extended_gcd(a: int, b: int) -> Tuple[int, int, int]:
+    """
+    Extended Euclidean algorithms to solve Bezout's identity:
+       a*x + b*y = gcd(x, y)
+    Finds one particular solution for x, y: s, t
+    Returns: gcd, s, t
+    """
+    s, old_s = 0, 1
+    t, old_t = 1, 0
+    r, old_r = b, a
+    while r:
+        quotient = old_r // r
+        old_r, r = r, old_r - quotient * r
+        old_s, s = s, old_s - quotient * s
+        old_t, t = t, old_t - quotient * t
+    return old_r, old_s, old_t
