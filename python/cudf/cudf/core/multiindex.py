@@ -12,6 +12,7 @@ from numbers import Integral
 from typing import (
     Any,
     Callable,
+    Dict,
     List,
     Mapping,
     MutableMapping,
@@ -73,48 +74,56 @@ class _MultiIndexColumnAccessor(ColumnAccessor):
             for i, (k, v) in enumerate(data.items())
         }
         super().__init__(data, multiindex, level_names)
+        self._build_name_index_map()
 
+    def _build_name_index_map(self):
         # Build up a mapping of names to indexes.
-        # self._column_counter = len(data)
-        self._name_index_map = defaultdict(list)
-        for k in data:
-            self._name_index_map[k[1]].append(k[0])
+        self._name_index_map = defaultdict(set)
+        for k in self._data:
+            self._name_index_map[k[1]].add(k[0])
+        self._index_counter = len(self._data)
 
-    # # TODO: Determine if this needs to be overridden.
-    # @classmethod
-    # def _create_unsafe(
-    #     cls,
-    #     data: Dict[Any, ColumnBase],
-    #     multiindex: bool = False,
-    #     level_names=None,
-    # ) -> ColumnAccessor:
-    #     # create a ColumnAccessor without verifying column
-    #     # type or size
-    #     obj = cls()
-    #     obj._data = data
-    #     obj.multiindex = multiindex
-    #     obj._level_names = level_names
-    #     return obj
+    @classmethod
+    def _create_unsafe(
+        cls,
+        data: Dict[Any, ColumnBase],
+        multiindex: bool = False,
+        level_names=None,
+    ) -> ColumnAccessor:
+        # create a ColumnAccessor without verifying column
+        # type or size
+        obj = super()._create_unsafe(data, multiindex, level_names)
+        obj._build_name_index_map()
+        return obj
 
     def __iter__(self):
         for k in super().__iter__():
             yield k[1]
 
-    def __getitem__(self, key: Any) -> ColumnBase:
+    def _get_and_validate_unique_index(self, key: Any) -> int:
         indices = self._name_index_map.get(key)
         if indices is None:
             raise KeyError(key)
         if len(indices) > 1:
-            raise ValueError("__getitem__ not supported with duplicate keys.")
-        return self._data[_MultiIndexColumnName((indices[0], key))]
+            raise ValueError(
+                f"The name {key} appears multiple times. This operation is "
+                "not supported with duplicate keys."
+            )
+        return next(iter(indices))
 
-        return self._data[key]
-
-    def __setitem__(self, key: Any, value: Any):
-        raise NotImplementedError
+    def __getitem__(self, key: Any) -> ColumnBase:
+        return self._data[
+            _MultiIndexColumnName(
+                (self._get_and_validate_unique_index(key), key)
+            )
+        ]
 
     def __delitem__(self, key: Any):
-        raise NotImplementedError
+        del self._data[
+            _MultiIndexColumnName(
+                (self._get_and_validate_unique_index(key), key)
+            )
+        ]
 
     @cached_property
     def names(self) -> Tuple[Any, ...]:
@@ -185,6 +194,10 @@ class _MultiIndexColumnAccessor(ColumnAccessor):
             data, multiindex=self.multiindex, level_names=self.level_names,
         )
 
+    def _pad_key(self, key: Any, pad_value="") -> Any:
+        # MultiIndex never has a MultiColumn
+        return key
+
     def set_by_label(self, key: Any, value: Any, validate: bool = True):
         """
         Add (or modify) column by name.
@@ -199,21 +212,29 @@ class _MultiIndexColumnAccessor(ColumnAccessor):
             If True, the provided value will be coerced to a column and
             validated before setting (Default value = True).
         """
-        raise NotImplementedError
+        # If we were passed the right key type, it always already exists and we
+        # already overwrote it correctly.
+        if not isinstance(key, _MultiIndexColumnName):
+            # Pop the key, verify its uniqueness or error, then insert.
+            if key in self._name_index_map:
+                raise ValueError(
+                    "set_by_label is not defined for labels that already exist in the dataset."
+                )
+            key = _MultiIndexColumnName(self._index_counter, key)
+            self._index_counter += 1
+
+        try:
+            super().set_by_label(key, value, validate)
+        except:
+            self._index_counter -= 1
+            raise
+        else:
+            self._name_index_map[key[1]].add(key[0])
 
     def _select_by_label_list_like(self, key: Any) -> ColumnAccessor:
         indices = []
         for k in key:
-            try:
-                key_indices = self._name_index_map[k]
-            except KeyError:
-                raise KeyError(k)
-            if len(key_indices) > 1:
-                raise ValueError(
-                    "_select_by_label_list_like not supported with duplicate "
-                    "keys."
-                )
-            indices.extend(key_indices)
+            indices.append(self._get_and_validate_unique_index(key))
         return self.select_by_index(indices)
 
     def _select_by_label_slice(self, key: slice) -> ColumnAccessor:
@@ -357,8 +378,9 @@ class MultiIndex(Frame, BaseIndex):
             )
         if len(levels) == 0:
             raise ValueError("Must pass non-zero number of levels/codes")
-        if not isinstance(codes, (Sequence, np.ndarray)) or not isinstance(
-            codes[0], (Sequence, np.ndarray)
+        valid_code_types = (Sequence, np.ndarray, cupy.ndarray)
+        if not isinstance(codes, valid_code_types) or not isinstance(
+            codes[0], valid_code_types
         ):
             raise TypeError("Codes is not a Sequence of sequences")
 
@@ -422,7 +444,7 @@ class MultiIndex(Frame, BaseIndex):
     # TODO: This is inefficient but TBD if it is a bottleneck.
     @property
     def names(self):
-        return [name[1] for name in self._data.keys()]
+        return list(self._data.names)
 
     @names.setter
     def names(self, value):
@@ -626,10 +648,19 @@ class MultiIndex(Frame, BaseIndex):
 
         # ._data needs to be rebuilt
         if levels is not None or codes is not None:
+            warnings.warn(
+                "The levels and codes parameters to copy are deprecated and "
+                "will be removed. Use set_levels instead.",
+                FutureWarning,
+            )
             if self._levels is None or self._codes is None:
                 self._compute_levels_and_codes()
             levels = self._levels if levels is None else levels
-            codes = self._codes if codes is None else codes
+            codes = (
+                [c.values for c in self._codes._data.columns]
+                if codes is None
+                else codes
+            )
             names = self.names if names is None else names
 
             mi = MultiIndex(levels=levels, codes=codes, names=names, copy=deep)
@@ -940,11 +971,13 @@ class MultiIndex(Frame, BaseIndex):
         """ Computes the valid set of indices of values in the lookup
         """
         lookup = cudf.DataFrame()
-        for name, row in zip(index.names, row_tuple):
+        for name, row in zip(index._data.names, row_tuple):
             if isinstance(row, slice) and row == slice(None):
                 continue
             lookup[name] = cudf.Series(row)
         frame = index.to_frame(index=False)
+        # TODO: Just insert a column instead of using concat, which is
+        # painfully slow.
         data_table = cudf.concat(
             [
                 frame,
@@ -1178,14 +1211,18 @@ class MultiIndex(Frame, BaseIndex):
         return self.take(index)
 
     def to_frame(self, index=True, name=None):
-        # TODO: Currently this function makes a shallow copy, which is
-        # incorrect. We want to make a deep copy, otherwise further
-        # modifications of the resulting DataFrame will affect the MultiIndex.
         # Note: This code assumes that in the case of duplicate levels pandas
         # will keep the later one in the order when converting to a DataFrame.
         # That appears to be empirically true, but is not documented anywhere.
-        # TODO: Something is wrong here
-        names = [k for k in self._data.names]
+
+        # pandas inserts indexes in place of names when the name is None.
+        names = [
+            k if k is not None else i for i, k in enumerate(self._data.names)
+        ]
+
+        # TODO: Currently this function makes a shallow copy, which is
+        # incorrect. We want to make a deep copy, otherwise further
+        # modifications of the resulting DataFrame will affect the MultiIndex.
         df = cudf.DataFrame._from_data(
             data=dict(zip(names, self._data.values()))
         )
@@ -1399,7 +1436,6 @@ class MultiIndex(Frame, BaseIndex):
                     ('NJ', 'Precip')],
                    names=['state', 'observation'])
         """
-        # breakpoint()
         obj = cls.__new__(cls)
         super(cls, obj).__init__()
 
@@ -1414,7 +1450,7 @@ class MultiIndex(Frame, BaseIndex):
         if len(dict.fromkeys(names)) == len(names):
             source_data.columns = names
         obj._name = None
-        obj._data = source_data._data
+        obj._data = _MultiIndexColumnAccessor(source_data._data)
         obj._codes = None
         obj._levels = None
         obj.names = names

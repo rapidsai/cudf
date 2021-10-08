@@ -81,6 +81,7 @@ def test_multiindex_construction():
     assert_eq(pmi, mi)
     pmi = pd.MultiIndex(levels, codes)
     mi = cudf.MultiIndex(levels=levels, codes=codes)
+    mi.to_frame()
     assert_eq(pmi, mi)
 
 

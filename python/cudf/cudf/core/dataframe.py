@@ -2256,8 +2256,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                         if isinstance(col, pd.MultiIndex)
                         else col
                     )
-                    cols = [col._data[x] for x in col._data]
-                    columns_to_add.extend(cols)
+                    columns_to_add.extend(col._data.columns)
                     names.extend(col.names)
                 else:
                     if isinstance(col, (pd.RangeIndex, cudf.RangeIndex)):
