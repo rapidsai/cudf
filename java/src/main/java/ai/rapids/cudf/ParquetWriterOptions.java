@@ -22,7 +22,7 @@ package ai.rapids.cudf;
  * This class represents settings for writing Parquet files. It includes meta data information
  * that will be used by the Parquet writer to write the file
  */
-public final class ParquetWriterOptions extends CondensedMetadataWriterOptions {
+public final class ParquetWriterOptions extends CompressionMetadataWriterOptions {
   private final StatisticsFrequency statsGranularity;
 
   private ParquetWriterOptions(Builder builder) {
@@ -55,7 +55,7 @@ public final class ParquetWriterOptions extends CondensedMetadataWriterOptions {
     return statsGranularity;
   }
 
-  public static class Builder extends CondensedMetadataWriterOptions.Builder
+  public static class Builder extends CompressionMetadataWriterOptions.Builder
         <Builder, ParquetWriterOptions> {
     private StatisticsFrequency statsGranularity = StatisticsFrequency.ROWGROUP;
 

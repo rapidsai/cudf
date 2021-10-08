@@ -21,11 +21,11 @@ package ai.rapids.cudf;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-public class CondensedMetadataWriterOptions extends ColumnWriterOptions.StructColumnWriterOptions {
+public class CompressionMetadataWriterOptions extends ColumnWriterOptions.StructColumnWriterOptions {
   private final CompressionType compressionType;
   private final Map<String, String> metadata;
 
-  protected CondensedMetadataWriterOptions(Builder builder) {
+  protected CompressionMetadataWriterOptions(Builder builder) {
     super(builder);
     this.compressionType = builder.compressionType;
     this.metadata = builder.metadata;
@@ -82,7 +82,7 @@ public class CondensedMetadataWriterOptions extends ColumnWriterOptions.StructCo
   }
 
   public abstract static class Builder<T extends Builder,
-        V extends CondensedMetadataWriterOptions> extends AbstractStructBuilder<T, V> {
+        V extends CompressionMetadataWriterOptions> extends AbstractStructBuilder<T, V> {
     final Map<String, String> metadata = new LinkedHashMap<>();
     CompressionType compressionType = CompressionType.AUTO;
 
