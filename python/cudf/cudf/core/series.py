@@ -3238,9 +3238,12 @@ class Series(SingleColumnFrame, Serializable):
 
         res = libcudf.transform.one_hot_encode(self._column, cats_col)
         if dtype.type == np.bool_:
-            return list(res.values())
+            return [Series._from_data({None: x}) for x in list(res.values())]
         else:
-            return [x.astype(dtype) for x in list(res.values())]
+            return [
+                Series._from_data({None: x.astype(dtype)})
+                for x in list(res.values())
+            ]
 
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):
         """Perform label encoding
