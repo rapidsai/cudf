@@ -3238,10 +3238,13 @@ class Series(SingleColumnFrame, Serializable):
 
         res = libcudf.transform.one_hot_encode(self._column, cats_col)
         if dtype.type == np.bool_:
-            return [Series._from_data({None: x}) for x in list(res.values())]
+            return [
+                Series._from_data({None: x}, index=self._index)
+                for x in list(res.values())
+            ]
         else:
             return [
-                Series._from_data({None: x.astype(dtype)})
+                Series._from_data({None: x.astype(dtype)}, index=self._index)
                 for x in list(res.values())
             ]
 
