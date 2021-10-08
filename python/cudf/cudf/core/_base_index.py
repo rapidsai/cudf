@@ -6,7 +6,6 @@ import pickle
 from typing import Any, Set
 
 import cupy
-import numpy as np
 import pandas as pd
 
 import cudf
@@ -787,12 +786,7 @@ class BaseIndex(Serializable):
         >>> idx.is_numeric()
         False
         """
-        if cudf.api.types.is_numeric_dtype(
-            self.dtype
-        ) and self.dtype != np.dtype("bool"):
-            return True
-        else:
-            return False
+        raise NotImplementedError()
 
     def is_boolean(self):
         """
@@ -825,7 +819,7 @@ class BaseIndex(Serializable):
         >>> idx.is_boolean()
         False
         """
-        return self.dtype == "bool"
+        raise NotImplementedError()
 
     def is_integer(self):
         """
@@ -858,7 +852,7 @@ class BaseIndex(Serializable):
         >>> idx.is_integer()
         False
         """
-        return cudf.api.types.is_integer_dtype(self.dtype)
+        raise NotImplementedError()
 
     def is_floating(self):
         """
@@ -898,7 +892,7 @@ class BaseIndex(Serializable):
         >>> idx.is_floating()
         False
         """
-        return cudf.api.types.is_float_dtype(self.dtype)
+        raise NotImplementedError()
 
     def is_object(self):
         """
@@ -932,7 +926,7 @@ class BaseIndex(Serializable):
         >>> idx.is_object()
         False
         """
-        return self.dtype == np.dtype("object")
+        raise NotImplementedError()
 
     def is_categorical(self):
         """
@@ -973,7 +967,7 @@ class BaseIndex(Serializable):
         >>> s.index.is_categorical()
         False
         """
-        return isinstance(self.dtype, cudf.CategoricalDtype)
+        raise NotImplementedError()
 
     def is_interval(self):
         """
@@ -1007,7 +1001,7 @@ class BaseIndex(Serializable):
         >>> idx.is_interval()
         False
         """
-        return self.dtype == "interval"
+        raise NotImplementedError()
 
     def _union(self, other, sort=None):
         self_df = self.to_frame(index=False, name=0)

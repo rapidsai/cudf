@@ -1137,6 +1137,27 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     def get_slice_bound(self, label, side, kind=None):
         return self._values.get_slice_bound(label, side, kind)
 
+    def is_numeric(self):
+        return False
+
+    def is_boolean(self):
+        return True
+
+    def is_integer(self):
+        return False
+
+    def is_floating(self):
+        return False
+
+    def is_object(self):
+        return False
+
+    def is_categorical(self):
+        return False
+
+    def is_interval(self):
+        return False
+
 
 class NumericIndex(GenericIndex):
     """Immutable, ordered and sliceable sequence of labels.
@@ -1171,6 +1192,27 @@ class NumericIndex(GenericIndex):
         data = column.as_column(data, dtype=dtype)
 
         super().__init__(data, **kwargs)
+
+    def is_numeric(self):
+        return True
+
+    def is_boolean(self):
+        return False
+
+    def is_integer(self):
+        return True
+
+    def is_floating(self):
+        return False
+
+    def is_object(self):
+        return False
+
+    def is_categorical(self):
+        return False
+
+    def is_interval(self):
+        return False
 
 
 class Int8Index(NumericIndex):
@@ -1397,6 +1439,12 @@ class Float32Index(NumericIndex):
 
     _dtype = np.float32
 
+    def is_integer(self):
+        return False
+
+    def is_floating(self):
+        return True
+
 
 class Float64Index(NumericIndex):
     """
@@ -1421,6 +1469,12 @@ class Float64Index(NumericIndex):
     """
 
     _dtype = np.float64
+
+    def is_integer(self):
+        return False
+
+    def is_floating(self):
+        return True
 
 
 class DatetimeIndex(GenericIndex):
@@ -1797,6 +1851,9 @@ class DatetimeIndex(GenericIndex):
         )
         return as_index(out_column, name=self.name)
 
+    def is_boolean(self):
+        return False
+
 
 class TimedeltaIndex(GenericIndex):
     """
@@ -1925,6 +1982,9 @@ class TimedeltaIndex(GenericIndex):
         """
         raise NotImplementedError("inferred_freq is not yet supported")
 
+    def is_boolean(self):
+        return False
+
 
 class CategoricalIndex(GenericIndex):
     """
@@ -2036,6 +2096,12 @@ class CategoricalIndex(GenericIndex):
         The categories of this categorical.
         """
         return as_index(self._values.categories)
+
+    def is_boolean(self):
+        return False
+
+    def is_categorical(self):
+        return True
 
 
 def interval_range(
@@ -2265,6 +2331,12 @@ class IntervalIndex(GenericIndex):
 
         return IntervalIndex(interval_col, name=name)
 
+    def is_interval(self):
+        return True
+
+    def is_boolean(self):
+        return False
+
 
 class StringIndex(GenericIndex):
     """String defined indices into another Column
@@ -2324,6 +2396,12 @@ class StringIndex(GenericIndex):
             return self.fillna(cudf._NA_REP)
         else:
             return self
+
+    def is_boolean(self):
+        return False
+
+    def is_object(self):
+        return True
 
 
 def as_index(arbitrary, **kwargs) -> BaseIndex:
