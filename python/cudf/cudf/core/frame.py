@@ -1415,11 +1415,10 @@ class Frame:
 
         if isinstance(value, cudf.Series):
             value = value.reindex(self._data.names)
-        elif isinstance(value, cudf.DataFrame):
-            if not self.index.equals(value.index):
-                value = value.reindex(self.index)
-            else:
-                value = value
+        elif isinstance(value, cudf.DataFrame) and not self.index.equals(
+            value.index
+        ):
+            value = value.reindex(self.index)
         elif not isinstance(value, abc.Mapping):
             value = {name: copy.deepcopy(value) for name in self._data.names}
         elif isinstance(value, abc.Mapping):

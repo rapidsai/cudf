@@ -19,6 +19,7 @@ from typing import (
     Optional,
     Tuple,
     Union,
+    cast,
 )
 
 import cupy
@@ -92,7 +93,10 @@ class _MultiIndexColumnAccessor(ColumnAccessor):
     ) -> ColumnAccessor:
         # create a ColumnAccessor without verifying column
         # type or size
-        obj = super()._create_unsafe(data, multiindex, level_names)
+        obj = cast(
+            _MultiIndexColumnAccessor,
+            super()._create_unsafe(data, multiindex, level_names),
+        )
         obj._build_name_index_map()
         return obj
 
@@ -218,14 +222,15 @@ class _MultiIndexColumnAccessor(ColumnAccessor):
             # Pop the key, verify its uniqueness or error, then insert.
             if key in self._name_index_map:
                 raise ValueError(
-                    "set_by_label is not defined for labels that already exist in the dataset."
+                    "set_by_label is not defined for labels that already "
+                    "exist in the dataset."
                 )
-            key = _MultiIndexColumnName(self._index_counter, key)
+            key = _MultiIndexColumnName((self._index_counter, key))
             self._index_counter += 1
 
         try:
             super().set_by_label(key, value, validate)
-        except:
+        except Exception:
             self._index_counter -= 1
             raise
         else:
@@ -1610,10 +1615,19 @@ class MultiIndex(Frame, BaseIndex):
             return mi
 
     def to_pandas(self, nullable=False, **kwargs):
+        # Stash the original names to set again at the end.
         names = self.names
-        if len(set(names)) != len(names):
-            # Duplicate names are present that would be lost on conversion to
-            # frame, so we must instead convert a copied version.
+
+        # Checking name uniqueness alone is insufficient because if a name is
+        # None _and_ the index of that column happens to be another column
+        # name, to_frame will overwrite (as expected by pandas). That case is
+        # the same as true duplicate names: we convert to indexed names, then
+        # reassign after the MultiIndex is converted.
+        names_check = [
+            k if k is not None else i for i, k in enumerate(self._data.names)
+        ]
+
+        if len(set(names_check)) != len(names_check):
             midx = self.copy(deep=False)
             midx.names = range(len(names))
         else:
