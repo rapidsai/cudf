@@ -2016,7 +2016,7 @@ public final class Table implements AutoCloseable {
    * @return the resulting Table.
    */
   public Table gather(ColumnView gatherMap) {
-    return gather(gatherMap, true);
+    return gather(gatherMap, OutOfBoundsPolicy.NULLIFY);
   }
 
   /**
@@ -2027,13 +2027,18 @@ public final class Table implements AutoCloseable {
    *
    * A negative value `i` in the `gatherMap` is interpreted as `i+n`, where
    * `n` is the number of rows in this table.
-
+   *
    * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
-   * @param checkBounds if true bounds checking is performed on the value. Be very careful
-   *                    when setting this to false.
+   * @param outOfBoundsPolicy NULLIFY: indices that are out of bounds (not in this table)
+   *                          will yield null values in the result table.
+   *                          DONT_CHECK: all indices from the gather map must be valid and
+   *                          therefore there is no need to nullify. This should yield
+   *                          better performance. DONT_CHECK can result in a CUDA exception
+   *                          if not used carefully.
    * @return the resulting Table.
    */
-  public Table gather(ColumnView gatherMap, boolean checkBounds) {
+  public Table gather(ColumnView gatherMap, OutOfBoundsPolicy outOfBoundsPolicy) {
+    boolean checkBounds = outOfBoundsPolicy == OutOfBoundsPolicy.NULLIFY;
     return new Table(gather(nativeHandle, gatherMap.getNativeView(), checkBounds));
   }
 
