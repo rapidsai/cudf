@@ -2028,13 +2028,28 @@ public final class Table implements AutoCloseable {
    * A negative value `i` in the `gatherMap` is interpreted as `i+n`, where
    * `n` is the number of rows in this table.
    *
+   * @deprecated Use {@link #gather(ColumnView, OutOfBoundsPolicy)}
    * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
-   * @param outOfBoundsPolicy NULLIFY: indices that are out of bounds (not in this table)
-   *                          will yield null values in the result table.
-   *                          DONT_CHECK: all indices from the gather map must be valid and
-   *                          therefore there is no need to nullify. This should yield
-   *                          better performance. DONT_CHECK can result in a CUDA exception
-   *                          if not used carefully.
+   * @param checkBounds if true bounds checking is performed on the value. Be very careful
+   *                    when setting this to false.
+   * @return the resulting Table.
+   */
+  @Deprecated
+  public Table gather(ColumnView gatherMap, boolean checkBounds) {
+    return new Table(gather(nativeHandle, gatherMap.getNativeView(), checkBounds));
+  }
+
+  /**
+   * Gathers the rows of this table according to `gatherMap` such that row "i"
+   * in the resulting table's columns will contain row "gatherMap[i]" from this table.
+   * The number of rows in the result table will be equal to the number of elements in
+   * `gatherMap`.
+   *
+   * A negative value `i` in the `gatherMap` is interpreted as `i+n`, where
+   * `n` is the number of rows in this table.
+   *
+   * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
+   * @param outOfBoundsPolicy policy to use when an out-of-range value is in `gatherMap`
    * @return the resulting Table.
    */
   public Table gather(ColumnView gatherMap, OutOfBoundsPolicy outOfBoundsPolicy) {
