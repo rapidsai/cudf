@@ -1710,46 +1710,6 @@ class MultiIndex(Frame, BaseIndex):
         else:
             return index_sorted
 
-    def fillna(self, value):
-        """
-        Fill null values with the specified value.
-
-        Parameters
-        ----------
-        value : scalar
-            Scalar value to use to fill nulls. This value cannot be a
-            list-likes.
-
-        Returns
-        -------
-        filled : MultiIndex
-
-        Examples
-        --------
-        >>> import cudf
-        >>> index = cudf.MultiIndex(
-        ...         levels=[["a", "b", "c", None], ["1", None, "5"]],
-        ...         codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-        ...         names=["x", "y"],
-        ...       )
-        >>> index
-        MultiIndex([( 'a',  '1'),
-                    ( 'a',  '5'),
-                    ( 'b', <NA>),
-                    ( 'c', <NA>),
-                    (<NA>,  '1')],
-                   names=['x', 'y'])
-        >>> index.fillna('hello')
-        MultiIndex([(    'a',     '1'),
-                    (    'a',     '5'),
-                    (    'b', 'hello'),
-                    (    'c', 'hello'),
-                    ('hello',     '1')],
-                   names=['x', 'y'])
-        """
-
-        return super().fillna(value=value)
-
     def unique(self):
         return self.drop_duplicates(ignore_index=True)
 
