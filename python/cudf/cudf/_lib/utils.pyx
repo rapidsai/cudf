@@ -275,14 +275,21 @@ cdef data_from_unique_ptr(
         # that does not impose performance penalties. The same applies to
         # data_from_table_view below.
         cudf.core.index._index_from_data(
+            # Iterate by index then set the names after the fact to allow
+            # duplicate names in MultiIndex.
             {
-                name: columns[i]
-                for i, name in enumerate(index_names)
+                i: columns[i]
+                for i in range(len(index_names))
             }
         )
         if index_names is not None
         else None
     )
+    if isinstance(index, cudf.MultiIndex):
+        index.names = index_names
+    elif isinstance(index, cudf.core.index.BaseIndex):
+        index.name = index_names[0]
+
     n_index_columns = len(index_names) if index_names is not None else 0
     data = {
         name: columns[i + n_index_columns]
@@ -325,7 +332,11 @@ cdef data_from_table_view(
             )
             column_idx += 1
         index = cudf.core.index._index_from_data(
-            dict(zip(index_names, index_columns)))
+            dict(zip(range(len(index_names)), index_columns)))
+        if isinstance(index, cudf.MultiIndex):
+            index.names = index_names
+        elif isinstance(index, cudf.core.index.BaseIndex):
+            index.name = index_names[0]
 
     # Construct the data dict
     cdef size_type source_column_idx = 0

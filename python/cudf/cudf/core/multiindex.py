@@ -116,11 +116,14 @@ class _MultiIndexColumnAccessor(ColumnAccessor):
         return next(iter(indices))
 
     def __getitem__(self, key: Any) -> ColumnBase:
-        return self._data[
-            _MultiIndexColumnName(
-                (self._get_and_validate_unique_index(key), key)
-            )
-        ]
+        if isinstance(key, _MultiIndexColumnName):
+            return self._data[key]
+        else:
+            return self._data[
+                _MultiIndexColumnName(
+                    (self._get_and_validate_unique_index(key), key)
+                )
+            ]
 
     def __delitem__(self, key: Any):
         del self._data[
@@ -1254,23 +1257,23 @@ class MultiIndex(Frame, BaseIndex):
         -------
         An Index containing the values at the requested level.
         """
-        colnames = self._data.names
-        if level not in colnames:
-            if isinstance(level, int):
-                if level < 0:
-                    level = level + len(colnames)
-                if level < 0 or level >= len(colnames):
-                    raise IndexError(f"Invalid level number: '{level}'")
-                level_idx = level
-                level = colnames[level_idx]
-            elif level in self.names:
-                level_idx = list(self.names).index(level)
-                level = colnames[level_idx]
-            else:
+        keys = tuple(self._data.keys())
+        if isinstance(level, int):
+            if level < 0:
+                level = level + len(keys)
+            if level < 0 or level >= len(keys):
+                raise IndexError(f"Invalid level number: '{level}'")
+            try:
+                level = keys[level]
+            except IndexError:
                 raise KeyError(f"Level not found: '{level}'")
         else:
-            level_idx = colnames.index(level)
-        level_values = as_index(self._data[level], name=self.names[level_idx])
+            # TODO: Should this work with duplicate names? Nope.
+            try:
+                level = keys[self._data.names.index(level)]
+            except ValueError:
+                raise KeyError(f"Level not found: '{level}'")
+        level_values = as_index(self._data[level], name=level[1])
         return level_values
 
     @classmethod
