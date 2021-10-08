@@ -238,26 +238,53 @@ std::unique_ptr<column> compute_approx_percentiles(structs_column_view const& in
   return result;
 }
 
+std::unique_ptr<column> make_tdigest_column(size_type num_rows,
+                                            std::unique_ptr<column>&& centroid_means,
+                                            std::unique_ptr<column>&& centroid_weights,
+                                            std::unique_ptr<column>&& tdigest_offsets,
+                                            std::unique_ptr<column>&& min_values,
+                                            std::unique_ptr<column>&& max_values,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(tdigest_offsets->size() == num_rows + 1,
+               "Encountered unexpected offset count in make_tdigest_column");
+  CUDF_EXPECTS(centroid_means->size() == centroid_weights->size(),
+               "Encountered unexpected centroid size mismatch in make_tdigest_column");
+  CUDF_EXPECTS(min_values->size() == num_rows,
+               "Encountered unexpected min value count in make_tdigest_column");
+  CUDF_EXPECTS(max_values->size() == num_rows,
+               "Encountered unexpected max value count in make_tdigest_column");
+
+  // inner struct column
+  auto const centroids_size = centroid_means->size();
+  std::vector<std::unique_ptr<column>> inner_children;
+  inner_children.push_back(std::move(centroid_means));
+  inner_children.push_back(std::move(centroid_weights));
+  auto tdigest_data =
+    cudf::make_structs_column(centroids_size, std::move(inner_children), 0, {}, stream, mr);
+
+  // grouped into lists
+  auto tdigest =
+    cudf::make_lists_column(num_rows, std::move(tdigest_offsets), std::move(tdigest_data), 0, {});
+
+  // create the final column
+  std::vector<std::unique_ptr<column>> children;
+  children.push_back(std::move(tdigest));
+  children.push_back(std::move(min_values));
+  children.push_back(std::move(max_values));
+  return make_structs_column(num_rows, std::move(children), 0, {}, stream, mr);
+}
+
 std::unique_ptr<column> make_empty_tdigest_column(rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
-  // mean/weight columns
-  std::vector<std::unique_ptr<column>> inner_children;
-  inner_children.push_back(make_empty_column(data_type(type_id::FLOAT64)));
-  inner_children.push_back(make_empty_column(data_type(type_id::FLOAT64)));
-
   auto offsets = cudf::make_fixed_width_column(
     data_type(type_id::INT32), 2, mask_state::UNALLOCATED, stream, mr);
   thrust::fill(rmm::exec_policy(stream),
                offsets->mutable_view().begin<offset_type>(),
                offsets->mutable_view().end<offset_type>(),
                0);
-  auto list =
-    make_lists_column(1,
-                      std::move(offsets),
-                      cudf::make_structs_column(0, std::move(inner_children), 0, {}, stream, mr),
-                      0,
-                      {});
 
   auto min_col =
     cudf::make_numeric_column(data_type(type_id::FLOAT64), 1, mask_state::UNALLOCATED, stream, mr);
@@ -272,12 +299,14 @@ std::unique_ptr<column> make_empty_tdigest_column(rmm::cuda_stream_view stream,
                max_col->mutable_view().end<double>(),
                0);
 
-  std::vector<std::unique_ptr<column>> children;
-  children.push_back(std::move(list));
-  children.push_back(std::move(min_col));
-  children.push_back(std::move(max_col));
-
-  return make_structs_column(1, std::move(children), 0, {}, stream, mr);
+  return make_tdigest_column(1,
+                             make_empty_column(data_type(type_id::FLOAT64)),
+                             make_empty_column(data_type(type_id::FLOAT64)),
+                             std::move(offsets),
+                             std::move(min_col),
+                             std::move(max_col),
+                             stream,
+                             mr);
 }
 
 }  // namespace tdigest.

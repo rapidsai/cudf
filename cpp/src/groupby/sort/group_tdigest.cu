@@ -450,18 +450,7 @@ std::unique_ptr<column> compute_tdigests(int delta,
   //   double       // max
   // }
   //
-  //
   if (total_clusters == 0) { return cudf::detail::tdigest::make_empty_tdigest_column(stream, mr); }
-  std::vector<std::unique_ptr<column>> inner_children;
-  // mean
-  inner_children.push_back(cudf::make_fixed_width_column(
-    data_type{type_id::FLOAT64}, total_clusters, mask_state::UNALLOCATED, stream, mr));
-  // weight
-  inner_children.push_back(cudf::make_fixed_width_column(
-    data_type{type_id::FLOAT64}, total_clusters, mask_state::UNALLOCATED, stream, mr));
-  // tdigest struct
-  auto tdigests =
-    cudf::make_structs_column(total_clusters, std::move(inner_children), 0, {}, stream, mr);
 
   // each input group represents an individual tdigest.  within each tdigest, we want the keys
   // to represent cluster indices (for example, if a tdigest had 100 clusters, the keys should fall
@@ -497,11 +486,14 @@ std::unique_ptr<column> compute_tdigests(int delta,
       return group_cluster_index + group_cluster_offsets[group_index];
     });
 
+  // mean and weight data
+  auto centroid_means = cudf::make_fixed_width_column(
+    data_type{type_id::FLOAT64}, total_clusters, mask_state::UNALLOCATED, stream, mr);
+  auto centroid_weights = cudf::make_fixed_width_column(
+    data_type{type_id::FLOAT64}, total_clusters, mask_state::UNALLOCATED, stream, mr);
   // reduce the centroids down by key.
-  cudf::mutable_column_view mean_col =
-    tdigests->child(cudf::detail::tdigest::tdigest_column_view::mean_column_index).mutable_view();
-  cudf::mutable_column_view weight_col =
-    tdigests->child(cudf::detail::tdigest::tdigest_column_view::weight_column_index).mutable_view();
+  cudf::mutable_column_view mean_col(*centroid_means);
+  cudf::mutable_column_view weight_col(*centroid_weights);
   auto output           = thrust::make_zip_iterator(thrust::make_tuple(
     mean_col.begin<double>(), weight_col.begin<double>(), thrust::make_discard_iterator()));
   auto const num_values = std::distance(centroids_begin, centroids_end);
@@ -514,17 +506,16 @@ std::unique_ptr<column> compute_tdigests(int delta,
                         thrust::equal_to<size_type>{},    // key equality check
                         merge_centroids{});
 
-  // create the list
-  auto const num_groups = group_cluster_offsets->size() - 1;
-  auto list             = cudf::make_lists_column(
-    num_groups, std::move(group_cluster_offsets), std::move(tdigests), 0, {});
-
   // create final tdigest column
-  std::vector<std::unique_ptr<column>> children;
-  children.push_back(std::move(list));
-  children.push_back(std::move(min_col));
-  children.push_back(std::move(max_col));
-  return make_structs_column(num_groups, std::move(children), 0, {}, stream, mr);
+  auto const num_output_rows = group_cluster_offsets->size() - 1;
+  return cudf::detail::tdigest::make_tdigest_column(num_output_rows,
+                                                    std::move(centroid_means),
+                                                    std::move(centroid_weights),
+                                                    std::move(group_cluster_offsets),
+                                                    std::move(min_col),
+                                                    std::move(max_col),
+                                                    stream,
+                                                    mr);
 }
 
 // retrieve total weight of scalar inputs by group index

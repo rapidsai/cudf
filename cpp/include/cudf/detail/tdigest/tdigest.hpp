@@ -24,6 +24,33 @@ namespace detail {
 namespace tdigest {
 
 /**
+ * @brief Create a tdigest column from it's constituent components.
+ *
+ * @param num_rows The number of rows in the output column.
+ * @param centroid_means The inner means column.  These values are partitioned into lists by the
+ * `tdigest_offsets` column.
+ * @param centroid_weights The inner weights column.  These values are partitioned into lists by the
+ * `tdigest_offsets` column.
+ * @param tdigest_offsets Offsets representing each individual tdigest in the output column. The
+ * offsets partition the centroid means and weights.
+ * @param min_values Column representing the minimum input value for each tdigest.
+ * @param max_values Column representing the maximum input value for each tdigest.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ *
+ * @returns The constructed tdigest column.
+ */
+std::unique_ptr<column> make_tdigest_column(
+  size_type num_rows,
+  std::unique_ptr<column>&& centroid_means,
+  std::unique_ptr<column>&& centroid_weights,
+  std::unique_ptr<column>&& tdigest_offsets,
+  std::unique_ptr<column>&& min_values,
+  std::unique_ptr<column>&& max_values,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Create an empty tdigest column.
  *
  * An empty tdigest column contains a single row of length 0
