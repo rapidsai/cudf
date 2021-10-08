@@ -147,9 +147,9 @@ cpdef write_orc(table,
                 object path_or_buf,
                 object compression=None,
                 bool enable_statistics=True,
-                size_t stripe_size_bytes=67108864,
-                size_type stripe_size_rows=1000000,
-                size_type row_index_stride=10000):
+                object stripe_size_bytes=None,
+                object stripe_size_rows=None,
+                object row_index_stride=None):
     """
     Cython function to call into libcudf API, see `write_orc`.
 
@@ -189,11 +189,14 @@ cpdef write_orc(table,
         ).metadata(tbl_meta.get())
         .compression(compression_)
         .enable_statistics(<bool> (True if enable_statistics else False))
-        .stripe_size_bytes(stripe_size_bytes)
-        .stripe_size_rows(stripe_size_rows)
-        .row_index_stride(row_index_stride)
         .build()
     )
+    if stripe_size_bytes is not None:
+        c_orc_writer_options.set_stripe_size_bytes(stripe_size_bytes)
+    if stripe_size_rows is not None:
+        c_orc_writer_options.set_stripe_size_rows(stripe_size_rows)
+    if row_index_stride is not None:
+        c_orc_writer_options.set_row_index_stride(row_index_stride)
 
     with nogil:
         libcudf_write_orc(c_orc_writer_options)

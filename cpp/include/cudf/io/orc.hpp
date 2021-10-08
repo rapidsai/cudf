@@ -34,6 +34,10 @@ namespace io {
  * @file
  */
 
+constexpr size_t default_stripe_size_bytes   = 64 * 1024 * 1024;
+constexpr size_type default_stripe_size_rows = 1000000;
+constexpr size_type default_row_index_stride = 10000;
+
 /**
  * @brief Builds settings to use for `read_orc()`.
  */
@@ -387,11 +391,11 @@ class orc_writer_options {
   // Enable writing column statistics
   bool _enable_statistics = true;
   // Maximum size of each stripe (unless smaller than a single row group)
-  size_t _stripe_size_bytes = 64 * 1024 * 1024;
+  size_t _stripe_size_bytes = default_stripe_size_bytes;
   // Maximum number of rows in stripe (unless smaller than a single row group)
-  size_type _stripe_size_rows = 1000000;
+  size_type _stripe_size_rows = default_stripe_size_rows;
   // Row index stride (maximum number of rows in each row group)
-  size_type _row_index_stride = 10000;
+  size_type _row_index_stride = default_row_index_stride;
   // Set of columns to output
   table_view _table;
   // Optional associated metadata
@@ -688,11 +692,11 @@ class chunked_orc_writer_options {
   // Enable writing column statistics
   bool _enable_statistics = true;
   // Maximum size of each stripe (unless smaller than a single row group)
-  size_t _stripe_size_bytes = 64 * 1024 * 1024;
+  size_t _stripe_size_bytes = default_stripe_size_bytes;
   // Maximum number of rows in stripe (unless smaller than a single row group)
-  size_type _stripe_size_rows = 1000000;
+  size_type _stripe_size_rows = default_stripe_size_rows;
   // Row index stride (maximum number of rows in each row group)
-  size_type _row_index_stride = 10000;
+  size_type _row_index_stride = default_row_index_stride;
   // Optional associated metadata
   const table_input_metadata* _metadata = nullptr;
 

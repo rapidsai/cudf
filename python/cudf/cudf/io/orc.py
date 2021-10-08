@@ -396,9 +396,9 @@ def to_orc(
     fname,
     compression=None,
     enable_statistics=True,
-    stripe_size_bytes=67108864,
-    stripe_size_rows=1000000,
-    row_index_stride=10000,
+    stripe_size_bytes=None,
+    stripe_size_rows=None,
+    row_index_stride=None,
     **kwargs,
 ):
     """{docstring}"""
