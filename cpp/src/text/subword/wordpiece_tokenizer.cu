@@ -56,15 +56,15 @@ namespace {
  * - 1 byte for each each `tokens_per_word`
  * Also, there is a code point value for each byte in the input strings.
  *
- * @param code_points[in] A pointer to the code points in the strings after normalization.
- * @param start_word_indices[out] An array of size `num_code_points` which will contain the
+ * @param[in] code_points A pointer to the code points in the strings after normalization.
+ * @param[out] start_word_indices An array of size `num_code_points` which will contain the
  *        starting index for each word.
- * @param end_word_indices[out] An array of size `num_code_points` which will contain the
+ * @param[out] end_word_indices An array of size `num_code_points` which will contain the
  *        ending index for each word.
  * @param num_code_points The total number of code_points.
- * @param token_ids[out] An array of size `num_code_points` which will hold the token ids.
+ * @param[out] token_ids An array of size `num_code_points` which will hold the token ids.
  *        This kernel just sets all the values to max uint32_t.
- * @param tokens_per_word[out] An array of size `num_code_points` which hold the number of
+ * @param[out] tokens_per_word An array of size `num_code_points` which hold the number of
  *        tokens. This kernel just sets all the values to 0.
  */
 __global__ void init_data_and_mark_word_start_and_ends(uint32_t const* code_points,
