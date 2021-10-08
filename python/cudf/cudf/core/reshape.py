@@ -89,11 +89,8 @@ def _get_combined_index(indexes, intersect: bool = False, sort=None):
             index = index.union(other, sort=False)
 
     if sort:
-        try:
-            if not index.is_monotonic_increasing:
-                index = index.sort_values()
-        except TypeError:
-            pass
+        if not index.is_monotonic_increasing:
+            index = index.sort_values()
 
     return index
 
