@@ -1610,8 +1610,16 @@ class MultiIndex(Frame, BaseIndex):
             return mi
 
     def to_pandas(self, nullable=False, **kwargs):
-        result = self.to_frame(index=False).to_pandas(nullable=nullable)
-        return pd.MultiIndex.from_frame(result, names=self.names)
+        names = self.names
+        if len(set(names)) != len(names):
+            # Duplicate names are present that would be lost on conversion to
+            # frame, so we must instead convert a copied version.
+            midx = self.copy(deep=False)
+            midx.names = range(len(names))
+        else:
+            midx = self
+        result = midx.to_frame(index=False).to_pandas(nullable=nullable)
+        return pd.MultiIndex.from_frame(result, names=names)
 
     @classmethod
     def from_pandas(cls, multiindex, nan_as_null=None):
