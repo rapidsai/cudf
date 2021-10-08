@@ -1232,30 +1232,36 @@ void writer::impl::write_index_stream(int32_t stripe_id,
   stripe->indexLength += buffer_.size();
 }
 
-void writer::impl::write_data_stream(gpu::StripeStream const& strm_desc,
-                                     gpu::encoder_chunk_streams const& enc_stream,
-                                     uint8_t const* compressed_data,
-                                     uint8_t* stream_out,
-                                     StripeInformation* stripe,
-                                     orc_streams* streams)
+std::future<void> writer::impl::write_data_stream(gpu::StripeStream const& strm_desc,
+                                                  gpu::encoder_chunk_streams const& enc_stream,
+                                                  uint8_t const* compressed_data,
+                                                  uint8_t* stream_out,
+                                                  StripeInformation* stripe,
+                                                  orc_streams* streams)
 {
   const auto length                                        = strm_desc.stream_size;
   (*streams)[enc_stream.ids[strm_desc.stream_type]].length = length;
-  if (length == 0) { return; }
+  if (length == 0) {
+    return std::async(std::launch::deferred, [] {});
+  }
 
   const auto* stream_in = (compression_kind_ == NONE) ? enc_stream.data_ptrs[strm_desc.stream_type]
                                                       : (compressed_data + strm_desc.bfr_offset);
 
-  if (out_sink_->is_device_write_preferred(length)) {
-    out_sink_->device_write(stream_in, length, stream);
-  } else {
-    CUDA_TRY(
-      cudaMemcpyAsync(stream_out, stream_in, length, cudaMemcpyDeviceToHost, stream.value()));
-    stream.synchronize();
+  auto write_task = [&]() {
+    if (out_sink_->is_device_write_preferred(length)) {
+      return out_sink_->device_write_async(stream_in, length, stream);
+    } else {
+      CUDA_TRY(
+        cudaMemcpyAsync(stream_out, stream_in, length, cudaMemcpyDeviceToHost, stream.value()));
+      stream.synchronize();
 
-    out_sink_->host_write(stream_out, length);
-  }
+      out_sink_->host_write(stream_out, length);
+      return std::async(std::launch::deferred, [] {});
+    }
+  }();
   stripe->dataLength += length;
+  return write_task;
 }
 
 void writer::impl::add_uncompressed_block_headers(std::vector<uint8_t>& v)
@@ -1879,6 +1885,7 @@ void writer::impl::write(table_view const& table)
   ProtobufWriter pbw_(&buffer_);
 
   // Write stripes
+  std::vector<std::future<void>> write_tasks;
   for (size_t stripe_id = 0; stripe_id < stripes.size(); ++stripe_id) {
     auto const& rowgroups_range = segmentation.stripes[stripe_id];
     auto& stripe                = stripes[stripe_id];
@@ -1901,12 +1908,13 @@ void writer::impl::write(table_view const& table)
 
     // Column data consisting one or more separate streams
     for (auto const& strm_desc : strm_descs[stripe_id]) {
-      write_data_stream(strm_desc,
-                        enc_data.streams[strm_desc.column_id][rowgroups_range.first],
-                        static_cast<uint8_t*>(compressed_data.data()),
-                        stream_output.get(),
-                        &stripe,
-                        &streams);
+      write_tasks.push_back(
+        write_data_stream(strm_desc,
+                          enc_data.streams[strm_desc.column_id][rowgroups_range.first],
+                          static_cast<uint8_t const*>(compressed_data.data()),
+                          stream_output.get(),
+                          &stripe,
+                          &streams));
     }
 
     // Write stripefooter consisting of stream information
@@ -1932,6 +1940,9 @@ void writer::impl::write(table_view const& table)
       buffer_[2]             = static_cast<uint8_t>(uncomp_sf_len >> 16);
     }
     out_sink_->host_write(buffer_.data(), buffer_.size());
+  }
+  for (auto const& task : write_tasks) {
+    task.wait();
   }
 
   if (column_stats.size() != 0) {

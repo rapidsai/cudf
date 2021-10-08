@@ -325,13 +325,14 @@ class writer::impl {
    * @param[in,out] stream_out Temporary host output buffer
    * @param[in,out] stripe Stream's parent stripe
    * @param[in,out] streams List of all streams
+   * @return An std::future that should be synchronized to ensure the writing is complete
    */
-  void write_data_stream(gpu::StripeStream const& strm_desc,
-                         gpu::encoder_chunk_streams const& enc_stream,
-                         uint8_t const* compressed_data,
-                         uint8_t* stream_out,
-                         StripeInformation* stripe,
-                         orc_streams* streams);
+  std::future<void> write_data_stream(gpu::StripeStream const& strm_desc,
+                                      gpu::encoder_chunk_streams const& enc_stream,
+                                      uint8_t const* compressed_data,
+                                      uint8_t* stream_out,
+                                      StripeInformation* stripe,
+                                      orc_streams* streams);
 
   /**
    * @brief Insert 3-byte uncompressed block headers in a byte vector
