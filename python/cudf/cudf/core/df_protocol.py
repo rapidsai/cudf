@@ -64,11 +64,16 @@ def _from_dataframe(df : DataFrameObject) :
     _buffers = []  # hold on to buffers, keeps memory alive
     for name in df.column_names():
         col = df.get_column_by_name(name)
+
         if col.dtype[0] in (_k.INT, _k.UINT, _k.FLOAT, _k.BOOL):
-            # Simple numerical or bool dtype, turn into numpy array
-            columns[name], _buf = convert_column_to_cupy_ndarray(col, allow_copy=col._allow_copy)
+            columns[name], _buf = convert_to_cudf_column(col)
+
         elif col.dtype[0] == _k.CATEGORICAL:
-            columns[name], _buf = convert_categorical_column(col, allow_copy=col._allow_copy)
+            columns[name], _buf = convert_to_cudf_categorical(col)
+
+        elif col.dtype[0] == _k.STRING:
+            columns[name], _buf = convert_to_cudf_string(col)
+            
         else:
             raise NotImplementedError(f"Data type {col.dtype[0]} not handled yet")
         
@@ -90,7 +95,7 @@ class _DtypeKind(enum.IntEnum):
     CATEGORICAL = 23
 
 
-def convert_column_to_cupy_ndarray(col:ColumnObject, allow_copy:bool = False) -> cp.ndarray:
+def convert_to_cudf_column(col:ColumnObject) -> cp.ndarray:
     """
     Convert an int, uint, float or bool column to a numpy array
     """
@@ -98,15 +103,22 @@ def convert_column_to_cupy_ndarray(col:ColumnObject, allow_copy:bool = False) ->
         raise NotImplementedError("column.offset > 0 not handled yet")
 
     _dbuffer, _ddtype = col.get_buffers()['data']
-    dcol = build_column(Buffer(_dbuffer.ptr, _dbuffer.bufsize), protocol_dtype_to_np_dtype(_ddtype))        
+    check_data_is_on_gpu(_dbuffer)
+    dcol = build_column(Buffer(_dbuffer.ptr, _dbuffer.bufsize), 
+                        protocol_dtypes_to_cupy_dtype(_ddtype))        
     return set_missing_values(col, dcol), _dbuffer
 
+def check_data_is_on_gpu(buffer):
+  
+    if buffer.__dlpack_device__()[0] != 2 and not buffer._allow_copy:
+        raise TypeError("This operation must copy data from CPU to GPU."
+                            "Set `allow_copy=True` to allow it.")
 
-def buffer_to_cupy_ndarray(_buffer, _dtype, allow_copy : bool = True) -> cp.ndarray:
+def buffer_to_cupy_ndarray(_buffer, _dtype) -> cp.ndarray:
     if _buffer.__dlpack_device__()[0] == 2: # dataframe is on GPU/CUDA
         x = _gpu_buffer_to_cupy(_buffer, _dtype)
     else:
-        if not allow_copy:
+        if not _buffer._allow_copy:
             raise TypeError("This operation must copy data from CPU to GPU."
                             "Set `allow_copy=True` to allow it.")
         x = _cpu_buffer_to_cupy(_buffer, _dtype)
@@ -133,7 +145,7 @@ def _gpu_buffer_to_cupy(_buffer, _dtype):
         raise NotImplementedError(f"Data type {_dtype[0]} not handled yet")
     return x
 
-def protocol_dtype_to_np_dtype(_dtype):
+def protocol_dtypes_to_cupy_dtype(_dtype):
     kind = _dtype[0]
     bitwidth = _dtype[1]
     _k = _DtypeKind
@@ -141,16 +153,16 @@ def protocol_dtype_to_np_dtype(_dtype):
                          _k.STRING, _k.DATETIME):
         raise RuntimeError(f"Data type {_dtype[0]} not handled yet")
 
-    _ints = {8: np.int8, 16: np.int16, 32: np.int32, 64: np.int64}
-    _uints = {8: np.uint8, 16: np.uint16, 32: np.uint32, 64: np.uint64}
-    _floats = {32: np.float32, 64: np.float64}
-    _np_dtypes = {0: _ints, 1: _uints, 2: _floats, 20: {8: bool}}
-    return _np_dtypes[kind][bitwidth]
+    _ints = {8: cp.int8, 16: cp.int16, 32: cp.int32, 64: cp.int64}
+    _uints = {8: cp.uint8, 16: cp.uint16, 32: cp.uint32, 64: cp.uint64}
+    _floats = {32: cp.float32, 64: cp.float64}
+    _cp_dtypes = {0: _ints, 1: _uints, 2: _floats, 20: {8: bool}}
+    return _cp_dtypes[kind][bitwidth]
 
 def _cpu_buffer_to_cupy(_buffer, _dtype):
     # Handle the dtype
    
-    column_dtype = protocol_dtype_to_np_dtype(_dtype)
+    column_dtype = protocol_dtypes_to_cupy_dtype(_dtype)
     # No DLPack yet, so need to construct a new ndarray from the data pointer
     # and size in the buffer plus the dtype on the column
     ctypes_type = np.ctypeslib.as_ctypes_type(column_dtype)
@@ -164,7 +176,7 @@ def _cpu_buffer_to_cupy(_buffer, _dtype):
     return cp.asarray(x, dtype=column_dtype)
 
 
-def convert_categorical_column(col : ColumnObject, allow_copy:bool=False) :
+def convert_to_cudf_categorical(col : ColumnObject) :
     """
     Convert a categorical column to a Series instance
     """
@@ -174,13 +186,40 @@ def convert_categorical_column(col : ColumnObject, allow_copy:bool=False) :
 
     categories = as_column(mapping.values())
     codes_buffer, codes_dtype = col.get_buffers()['data']
-    cdtype = protocol_dtype_to_np_dtype(codes_dtype)
+    check_data_is_on_gpu(codes_buffer)
+    cdtype = protocol_dtypes_to_cupy_dtype(codes_dtype)
     codes = build_column(Buffer(codes_buffer.ptr, codes_buffer.bufsize), cdtype)
     
     col1 = build_categorical_column(categories=categories,codes=codes,mask=codes.base_mask,
                                     size=codes.size,ordered=ordered)
 
     return set_missing_values(col, col1), codes_buffer
+
+
+def convert_to_cudf_string(col : ColumnObject) :
+    """
+    Convert a string ColumnObject to cudf Column object.
+    """
+    # Retrieve the data buffers
+    buffers = col.get_buffers()
+
+    # Retrieve the data buffer containing the UTF-8 code units
+    dbuffer, bdtype = buffers["data"]
+    check_data_is_on_gpu(dbuffer)
+    encoded_string = build_column(Buffer(dbuffer.ptr, dbuffer.bufsize),
+                        protocol_dtypes_to_cupy_dtype(bdtype)
+                        )
+
+    # Retrieve the offsets buffer containing the index offsets demarcating the beginning and end of each string
+    obuffer, odtype = buffers["offsets"]
+    offsets = build_column(Buffer(obuffer.ptr, obuffer.bufsize), 
+                           protocol_dtypes_to_cupy_dtype(odtype)
+                           )
+    
+    col_str = build_column(None, dtype=cp.dtype('O'), children=(offsets, encoded_string))
+
+    return set_missing_values(col, col_str), buffers
+
 
 
 def __dataframe__(self, nan_as_null : bool = False,
@@ -222,6 +261,7 @@ class _CuDFBuffer:
         # Store the cudf buffer where the data resides as a private
         # attribute, so we can use it to retrieve the public attributes
         self._x = x
+        self._allow_copy = allow_copy
 
     @property
     def bufsize(self) -> int:
@@ -284,7 +324,7 @@ class _CuDFColumn:
 
     def __init__(self, column,
                  nan_as_null : bool = True, 
-                 allow_copy: bool = False) -> None:
+                 allow_copy: bool = True) -> None:
         """
         Note: doesn't deal with extension arrays yet, just assume a regular
         Series/ndarray for now.
@@ -529,41 +569,21 @@ class _CuDFColumn:
         """
         _k = _DtypeKind
         invalid = self.describe_null[1]
-        if self.dtype[0] in (_k.INT, _k.UINT, _k.FLOAT):
-            buffer = _CuDFBuffer(
-                self._col.data,
-                # cp.asarray(self._col.fillna(invalid).to_gpu_array()),
-                allow_copy=self._allow_copy)
+        if self.dtype[0] in (_k.INT, _k.UINT, _k.FLOAT, _k.BOOL):
+            buffer = _CuDFBuffer(self._col.data, allow_copy=self._allow_copy)
             dtype = self.dtype
-        elif self.dtype[0] == _k.BOOL:
-            # convert bool to uint8 as dlpack does not support bool natively.
-            buffer = _CuDFBuffer(
-                self._col.data,
-                # cp.asarray(self._col.fillna(invalid).to_gpu_array(), dtype=cp.uint8),
-                allow_copy=self._allow_copy)
-            dtype = self.dtype
+
         elif self.dtype[0] == _k.CATEGORICAL:
             codes = self._col.codes
-            buffer = _CuDFBuffer(
-                self._col.codes.data,
-                # cp.asarray(codes.fillna(invalid)),
-                allow_copy=self._allow_copy)
+            buffer = _CuDFBuffer(self._col.codes.data, allow_copy=self._allow_copy)
             dtype = self._dtype_from_cudfdtype(codes.dtype)
-        # elif self.dtype[0] == _k.STRING:
-        #     # Marshal the strings from a NumPy object array into a byte array
-        #     buf = self._col.to_numpy()
-        #     b = bytearray()
 
-        #     # TODO: this for-loop is slow; can be implemented in Cython/C/C++ later
-        #     for i in range(buf.size):
-        #         if type(buf[i]) == str:
-        #             b.extend(buf[i].encode(encoding="utf-8"))
+        elif self.dtype[0] == _k.STRING:
+            encoded_string = self._col.children[1]
+            buffer = _CuDFBuffer(encoded_string.data, allow_copy=self._allow_copy)
+            dtype = self._dtype_from_cudfdtype(encoded_string.dtype) 
+            # dtype = (_k.STRING, 8, "u", "=") 
 
-        #     # Convert the byte array to a Pandas "buffer" using a NumPy array as the backing store
-        #     buffer = _CuDFBuffer(np.frombuffer(b, dtype="uint8"))
-
-        #     # Define the dtype for the returned buffer
-        #     dtype = (_k.STRING, 8, "u", "=")  # note: currently only support native endianness
         else:
             raise NotImplementedError(f"Data type {self._col.dtype} not handled yet")
 
@@ -580,12 +600,12 @@ class _CuDFColumn:
         null, invalid = self.describe_null
         if null == 3:
             _k = _DtypeKind
-            # bitmask = cp.asarray(self._col._get_mask_as_column().to_gpu_array(), dtype=cp.uint8)
-            # buffer = _CuDFBuffer(bitmask)
             if self.dtype[0] == _k.CATEGORICAL:
-                buffer = _CuDFBuffer(self._col.codes._get_mask_as_column().data)
+                buffer = _CuDFBuffer(self._col.codes._get_mask_as_column().data, 
+                                     allow_copy=self._allow_copy)
             else:
-                buffer = _CuDFBuffer(self._col._get_mask_as_column().data)
+                buffer = _CuDFBuffer(self._col._get_mask_as_column().data, 
+                                     allow_copy=self._allow_copy)
             dtype = (_k.UINT, 8, "C", "=")
             return buffer, dtype
 
@@ -606,33 +626,15 @@ class _CuDFColumn:
         Raises RuntimeError if the data buffer does not have an associated
         offsets buffer.
         """
-        # _k = _DtypeKind
-        # if self.dtype[0] == _k.STRING:
-        #     # For each string, we need to manually determine the next offset
-        #     values = self._col.to_numpy()
-        #     ptr = 0
-        #     offsets = [ptr]
-        #     for v in values:
-        #         # For missing values (in this case, `np.nan` values), we don't increment the pointer)
-        #         if type(v) == str:
-        #             b = v.encode(encoding="utf-8")
-        #             ptr += len(b)
+        _k = _DtypeKind
+        if self.dtype[0] == _k.STRING:
+            offsets = self._col.children[0]
+            buffer = _CuDFBuffer(offsets.data, allow_copy=self._allow_copy)
+            dtype = self._dtype_from_cudfdtype(offsets.dtype) 
+        else:
+            raise RuntimeError("This column has a fixed-length dtype so does not have an offsets buffer")
 
-        #         offsets.append(ptr)
-
-        #     # Convert the list of offsets to a NumPy array of signed 64-bit integers (note: Arrow allows the offsets array to be either `int32` or `int64`; here, we default to the latter)
-        #     buf = cp.asarray(offsets, dtype="int64")
-
-        #     # Convert the offsets to a Pandas "buffer" using the NumPy array as the backing store
-        #     buffer = _CuDFBuffer(buf)
-
-        #     # Assemble the buffer dtype info
-        #     dtype = (_k.INT, 64, 'l', "=")  # note: currently only support native endianness
-        # else:
-        #     raise RuntimeError("This column has a fixed-length dtype so does not have an offsets buffer")
-
-        # return buffer, dtype
-        pass
+        return buffer, dtype
 
 class _CuDFDataFrame:
     """

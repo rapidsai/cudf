@@ -115,6 +115,13 @@ def test_bool_dtype():
     data_bool = dict(a=[True, True, False], b=[False, True, False])
     _test_datatype(data_bool)
 
+
+def test_string_dtype():
+    data_string = dict(a=["a", "b", "cdef", "", "g"])
+    _test_datatype(data_string)
+   
+
+
 def test_mixed_dtype():
     data_mixed = dict(int=[1, 2, 3], float=[1.5, 2.5, 3.5],
                         bool=[True, False, True], categorical=[5, 1, 5])
@@ -148,9 +155,20 @@ def test_NA_categorical_dtype():
     _test_from_dataframe_equals(df.__dataframe__(allow_copy=False))
     _test_from_dataframe_equals(df.__dataframe__(allow_copy=True))
 
-
-
-
 def test_NA_bool_dtype():
     data_bool = dict(a=[None, True, False], b=[False, None, None])
     _test_datatype(data_bool)
+
+def test_NA_string_dtype():
+    df = cudf.DataFrame({"A": ["a", "b", "cdef", "", "g"]})
+    df["B"] = df["A"].astype("object")
+    df.at[1, "B"] = cudf.NA  # Set one item to null
+
+    # Test for correctness and null handling:
+    col = df.__dataframe__().get_column_by_name("B")
+    assert col.dtype[0] == _DtypeKind.STRING
+    assert col.null_count == 1
+    assert col.describe_null == (3, 0)
+    assert col.num_chunks() == 1
+    _test_from_dataframe_equals(df.__dataframe__(allow_copy=False))
+    _test_from_dataframe_equals(df.__dataframe__(allow_copy=True))
