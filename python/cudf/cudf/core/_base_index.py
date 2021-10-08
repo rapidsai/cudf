@@ -1010,7 +1010,7 @@ class BaseIndex(Serializable):
         other_df["order"] = other_df.index
         res = self_df.merge(other_df, on=[0], how="outer")
         res = res.sort_values(by=res.columns[1:], ignore_index=True)
-        union_result = cudf.Index(res[0])
+        union_result = cudf.core.index._index_from_data({0: res._data[0]})
 
         if sort is None and len(other):
             return union_result.sort_values()
@@ -1116,7 +1116,9 @@ class BaseIndex(Serializable):
         -------
         Index without duplicates
         """
-        return cudf.Index(self._values.unique(), name=self.name)
+        return cudf.core.index._index_from_data(
+            {self.name: self._values.unique()}, name=self.name
+        )
 
     def join(
         self, other, how="left", level=None, return_indexers=False, sort=False
