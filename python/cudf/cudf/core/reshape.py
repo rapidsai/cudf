@@ -41,14 +41,9 @@ def _align_objs(objs, how="outer", sort=None):
         index = objs[0].index
         name = index.name
 
-        if how == "inner":
-            final_index = _get_combined_index(
-                [obj.index for obj in objs], intersect=True, sort=sort
-            )
-        else:
-            final_index = _get_combined_index(
-                [obj.index for obj in objs], intersect=False, sort=sort
-            )
+        final_index = _get_combined_index(
+            [obj.index for obj in objs], intersect=how == "inner", sort=sort
+        )
 
         final_index.name = name
         return [
