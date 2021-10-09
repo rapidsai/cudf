@@ -357,6 +357,10 @@ use_index : bool, default True
 decimal_cols_as_float: list, default None
     If specified, names of the columns that should be converted from
     Decimal to Float64 in the resulting dataframe.
+use_python_file_object : boolean, default True
+    If True, Arrow-backed PythonFile objects will be used in place of fsspec
+    AbstractBufferedFile objects at IO time. This option is likely to improve
+    performance when making small reads from larger ORC files.
 kwargs are passed to the engine
 
 Returns
@@ -397,6 +401,15 @@ compression : {{ 'snappy', None }}, default None
     Name of the compression to use. Use None for no compression.
 enable_statistics: boolean, default True
     Enable writing column statistics.
+stripe_size_bytes: integer or None, default None
+    Maximum size of each stripe of the output.
+    If None, 67108864 (64MB) will be used.
+stripe_size_rows: integer or None, default None 1000000
+    Maximum number of rows of each stripe of the output.
+    If None, 1000000 will be used.
+row_index_stride: integer or None, default None 10000
+    Row index stride (maximum number of rows in each row group).
+    If None, 10000 will be used.
 
 
 Notes
