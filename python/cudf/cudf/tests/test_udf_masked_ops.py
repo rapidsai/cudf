@@ -1,3 +1,4 @@
+import math
 import operator
 
 import pandas as pd
@@ -299,6 +300,8 @@ def test_apply_everything():
             return z / x
         elif x + y is pd.NA:
             return 2.5
+        elif w > 100:
+            return math.sin(x) + math.sqrt(y) - operator.neg(z)
         else:
             return y > 2
 
@@ -312,15 +315,17 @@ def test_apply_everything():
             return z / x
         elif x + y is cudf.NA:
             return 2.5
+        elif w > 100:
+            return math.sin(x) + math.sqrt(y) - operator.neg(z)
         else:
             return y > 2
 
     gdf = cudf.DataFrame(
         {
-            "a": [1, 3, 6, 0, None, 5, None],
-            "b": [3.0, 2.5, None, 5.0, 1.0, 5.0, 11.0],
-            "c": [2, 3, 6, 0, None, 5, None],
-            "d": [4, None, 6, 0, None, 5, None],
+            "a": [1, 3, 6, 0, None, 5, None, 100],
+            "b": [3.0, 2.5, None, 5.0, 1.0, 5.0, 11.0, 1.0],
+            "c": [2, 3, 6, 0, None, 5, None, 6],
+            "d": [4, None, 6, 0, None, 5, None, 7.5],
         }
     )
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
