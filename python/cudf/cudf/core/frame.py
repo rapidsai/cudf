@@ -5099,12 +5099,12 @@ class Frame(libcudf.table.Table):
         ...                    'degrees': [360, 180, 360]},
         ...                   index=['circle', 'triangle', 'rectangle'])
         >>> df + 1
-                angles  degrees
+                   angles  degrees
         circle          1      361
         triangle        4      181
         rectangle       5      361
         >>> df.add(1)
-                angles  degrees
+                   angles  degrees
         circle          1      361
         triangle        4      181
         rectangle       5      361
@@ -5171,12 +5171,12 @@ class Frame(libcudf.table.Table):
         ...                    'degrees': [360, 180, 360]},
         ...                   index=['circle', 'triangle', 'rectangle'])
         >>> df + 1
-                angles  degrees
+                   angles  degrees
         circle          1      361
         triangle        4      181
         rectangle       5      361
         >>> df.radd(1)
-                angles  degrees
+                   angles  degrees
         circle          1      361
         triangle        4      181
         rectangle       5      361
@@ -5250,12 +5250,12 @@ class Frame(libcudf.table.Table):
         ...                    'degrees': [360, 180, 360]},
         ...                   index=['circle', 'triangle', 'rectangle'])
         >>> df.sub(1)
-                angles  degrees
+                   angles  degrees
         circle         -1      359
         triangle        2      179
         rectangle       3      359
         >>> df.sub([1, 2])
-                angles  degrees
+                   angles  degrees
         circle         -1      358
         triangle        2      178
         rectangle       3      358
@@ -5422,7 +5422,7 @@ class Frame(libcudf.table.Table):
         triangle        9    <NA>
         rectangle      16    <NA>
         >>> df.mul(other, fill_value=0)
-                angles  degrees
+                   angles  degrees
         circle          0        0
         triangle        9        0
         rectangle      16        0
@@ -5848,7 +5848,6 @@ class Frame(libcudf.table.Table):
         d       1
         e    <NA>
         dtype: int64
-
         """
 
         if level is not None:
@@ -6024,7 +6023,6 @@ class Frame(libcudf.table.Table):
         1     10
         2    100
         dtype: int64
-
         """
 
         if level is not None:
@@ -6109,7 +6107,6 @@ class Frame(libcudf.table.Table):
         d     0.0
         e    <NA>
         dtype: float64
-
         """
 
         if level is not None:
@@ -6202,7 +6199,6 @@ class Frame(libcudf.table.Table):
         d    0.066666667
         e            Inf
         dtype: float64
-
         """
 
         if level is not None:
