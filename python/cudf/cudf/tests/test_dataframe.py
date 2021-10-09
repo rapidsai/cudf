@@ -2973,7 +2973,7 @@ def test_dataframe_sort_index(
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("inplace", [True, False])
 @pytest.mark.parametrize("na_position", ["first", "last"])
-def test_dataframe_mulitindex_sort_index(
+def test_dataframe_multiindex_sort_index(
     axis, level, ascending, inplace, ignore_index, na_position
 ):
     pdf = pd.DataFrame(
@@ -2996,8 +2996,6 @@ def test_dataframe_mulitindex_sort_index(
         inplace=inplace,
         na_position=na_position,
     )
-    if ignore_index is True:
-        expected = expected
     got = gdf.sort_index(
         axis=axis,
         level=level,

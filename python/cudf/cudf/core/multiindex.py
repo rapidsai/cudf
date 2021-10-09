@@ -196,7 +196,9 @@ class _MultiIndexColumnAccessor(ColumnAccessor):
         """
         if pd.api.types.is_integer(index):
             index = (index,)
-        data = {k: v for k, v in self._data.items() if k[0] in index}
+        keys = list(self._data.keys())
+        keys = [keys[i] for i in index]
+        data = {key: self._data[key] for key in keys}
         return self.__class__(
             data, multiindex=self.multiindex, level_names=self.level_names,
         )
@@ -242,7 +244,7 @@ class _MultiIndexColumnAccessor(ColumnAccessor):
     def _select_by_label_list_like(self, key: Any) -> ColumnAccessor:
         indices = []
         for k in key:
-            indices.append(self._get_and_validate_unique_index(key))
+            indices.append(self._get_and_validate_unique_index(k))
         return self.select_by_index(indices)
 
     def _select_by_label_slice(self, key: slice) -> ColumnAccessor:
