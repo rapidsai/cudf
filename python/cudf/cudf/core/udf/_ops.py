@@ -1,5 +1,5 @@
-import operator
 import math
+import operator
 
 arith_ops = [
     operator.add,
@@ -12,7 +12,23 @@ arith_ops = [
 ]
 
 unary_ops = [
+    # Trigonometry
     math.sin,
+    math.cos,
+    math.tan,
+    math.asin,
+    math.acos,
+    math.atan,
+    # Rounding
+    math.ceil,
+    math.floor,
+    # Arithmatic
+    math.sqrt,
+    # Sign
+    operator.pos,
+    operator.neg,
+    # Bit
+    operator.not_,
 ]
 
 comparison_ops = [

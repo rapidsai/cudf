@@ -4,27 +4,9 @@ import pandas as pd
 import pytest
 
 import cudf
+from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
 from cudf.core.udf.pipeline import nulludf
 from cudf.testing._utils import NUMERIC_TYPES, assert_eq
-
-arith_ops = [
-    operator.add,
-    operator.sub,
-    operator.mul,
-    operator.truediv,
-    operator.floordiv,
-    operator.mod,
-    operator.pow,
-]
-
-comparison_ops = [
-    operator.eq,
-    operator.ne,
-    operator.lt,
-    operator.le,
-    operator.gt,
-    operator.ge,
-]
 
 
 def run_masked_udf_test(func_pdf, func_gdf, data, **kwargs):
@@ -166,6 +148,25 @@ def test_arith_masked_vs_null_reflected(op):
         return op(cudf.NA, x)
 
     gdf = cudf.DataFrame({"data": [1, None, 3]})
+    run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
+
+
+@pytest.mark.parametrize("op", unary_ops)
+@pytest.mark.parametrize("dtype", list(NUMERIC_TYPES))
+def test_unary_masked(op, dtype):
+    # This test should test all the typing
+    # and lowering for unary ops
+    def func_pdf(x):
+        # unary ops doesn't really operate on NA type,
+        # so we assume result is NA whenever input is
+        # NA.
+        return op(x) if x is not pd.NA else pd.NA
+
+    @nulludf
+    def func_gdf(x):
+        return op(x)
+
+    gdf = cudf.DataFrame({"a": [0.0, 0.5, None, 1.0]}).astype(dtype)
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
 

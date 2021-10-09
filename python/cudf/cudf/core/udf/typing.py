@@ -223,13 +223,15 @@ class MaskedScalarArithOp(AbstractTemplate):
             ).return_type
             return nb_signature(MaskedType(return_type), args[0], args[1])
 
+
 class MaskedScalarUnaryOp(AbstractTemplate):
     def generic(self, args, kws):
         if isinstance(args[0], MaskedType):
             return_type = self.context.resolve_function_type(
-                self.key, (args[0].value_type, ), kws
+                self.key, (args[0].value_type,), kws
             ).return_type
             return nb_signature(MaskedType(return_type), args[0])
+
 
 class MaskedScalarNullOp(AbstractTemplate):
     def generic(self, args, kws):
@@ -311,11 +313,11 @@ class UnpackReturnToMasked(AbstractTemplate):
             return nb_signature(return_type, args[0])
 
 
-for op in arith_ops + comparison_ops:
+for binary_op in arith_ops + comparison_ops:
     # Every op shares the same typing class
-    cuda_decl_registry.register_global(op)(MaskedScalarArithOp)
-    cuda_decl_registry.register_global(op)(MaskedScalarNullOp)
-    cuda_decl_registry.register_global(op)(MaskedScalarScalarOp)
+    cuda_decl_registry.register_global(binary_op)(MaskedScalarArithOp)
+    cuda_decl_registry.register_global(binary_op)(MaskedScalarNullOp)
+    cuda_decl_registry.register_global(binary_op)(MaskedScalarScalarOp)
 
-for op in unary_ops:
-    cuda_decl_registry.register_global(op)(MaskedScalarUnaryOp)
+for unary_op in unary_ops:
+    cuda_decl_registry.register_global(unary_op)(MaskedScalarUnaryOp)
