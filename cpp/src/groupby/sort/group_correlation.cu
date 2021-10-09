@@ -88,17 +88,17 @@ struct covariance_transform {
     if (d_values_0.is_null(i) or d_values_1.is_null(i)) return 0.0;
 
     // This has to be device dispatch because x and y type may differ
-    auto x = value(d_values_0, i);
-    auto y = value(d_values_1, i);
+    auto const x = value(d_values_0, i);
+    auto const y = value(d_values_1, i);
 
-    size_type group_idx  = d_group_labels[i];
-    size_type group_size = d_group_sizes[group_idx];
+    size_type const group_idx  = d_group_labels[i];
+    size_type const group_size = d_group_sizes[group_idx];
 
     // prevent divide by zero error
     if (group_size == 0 or group_size - ddof <= 0) return 0.0;
 
-    ResultType xmean = d_means_0[group_idx];
-    ResultType ymean = d_means_1[group_idx];
+    ResultType const xmean = d_means_0[group_idx];
+    ResultType const ymean = d_means_1[group_idx];
     return (x - xmean) * (y - ymean) / (group_size - ddof);
   }
 };

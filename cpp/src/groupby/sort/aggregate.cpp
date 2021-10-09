@@ -534,7 +534,7 @@ void aggregate_result_functor::operator()<aggregation::MERGE_M2>(aggregation con
  *
  * @param column_0 The first column
  * @param column_1 The second column
- * @return tuple with new null mask (if null masks if input differ) and new column views
+ * @return tuple with new null mask (if null masks of input differ) and new column views
  */
 auto column_view_with_common_nulls(column_view const& column_0, column_view const& column_1)
 {
