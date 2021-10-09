@@ -7016,6 +7016,34 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testORCWriteMapChunked() throws IOException {
+    ORCWriterOptions options = ORCWriterOptions.builder()
+            .withMapColumn(mapColumn("my_map",
+                    new ColumnWriterOptions("key0", false),
+                    new ColumnWriterOptions("value0"))).build();
+    File f = File.createTempFile("test-map", ".parquet");
+    List<HostColumnVector.StructData> list1 =
+            Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
+    List<HostColumnVector.StructData> list2 =
+            Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "c")));
+    List<HostColumnVector.StructData> list3 =
+            Arrays.asList(new HostColumnVector.StructData(Arrays.asList("e", "d")));
+    HostColumnVector.StructType structType = new HostColumnVector.StructType(true,
+            Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
+                    new HostColumnVector.BasicType(true, DType.STRING)));
+    try (ColumnVector listColumn = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+            structType), list1, list2, list3);
+         Table t0 = new Table(listColumn)) {
+      try (TableWriter writer = Table.writeORCChunked(options, f)) {
+        writer.write(t0);
+      }
+      try (Table res = Table.readORC(f)) {
+        assertTablesAreEqual(t0, res);
+      }
+    }
+  }
+
+  @Test
   void testORCWriteToFile() throws IOException {
     File tempFile = File.createTempFile("test", ".orc");
     try (Table table0 = getExpectedFileTable()) {
