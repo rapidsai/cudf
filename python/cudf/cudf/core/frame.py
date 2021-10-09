@@ -385,7 +385,7 @@ class Frame:
         b    2
         dtype: int64
         """
-        new_frame = self.__class__.__new__(type(self))
+        new_frame = self.__class__.__new__(self.__class__)
         new_frame._data = self._data.copy(deep=deep)
 
         if self._index is not None:
