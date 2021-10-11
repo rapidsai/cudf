@@ -385,7 +385,7 @@ class Frame:
         b    2
         dtype: int64
         """
-        new_frame = self.__class__.__new__(type(self))
+        new_frame = self.__class__.__new__(self.__class__)
         new_frame._data = self._data.copy(deep=deep)
 
         if self._index is not None:
@@ -5372,7 +5372,7 @@ class SingleColumnFrame(Frame):
         warnings.warn(
             "The to_gpu_array method will be removed in a future cuDF "
             "release. Consider using `to_cupy` instead.",
-            DeprecationWarning,
+            FutureWarning,
         )
         return self._column.to_gpu_array(fillna=fillna)
 
