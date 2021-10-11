@@ -23,8 +23,6 @@
 
 #include <rmm/device_buffer.hpp>
 
-// #include <string>
-
 class CopyIfElse : public cudf::benchmark {
 };
 
