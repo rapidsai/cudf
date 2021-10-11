@@ -95,8 +95,8 @@ std::unique_ptr<column> title(
  * @brief Checks if the strings in the input column are title formatted.
  *
  * The first character of each word should be upper-case while all other
- * characters should be lower-case. A word is a sequence of alphabetic characters.
- * Numerics, punctuation, and spaces delimit words.
+ * characters should be lower-case. A word is a sequence of upper-case
+ * and lower-case characters.
  *
  * This function returns a column of booleans indicating true if the string in
  * the input row is in title format and false if not.

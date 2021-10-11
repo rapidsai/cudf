@@ -1868,8 +1868,8 @@ class StringMethods(ColumnMethods):
     def istitle(self) -> SeriesOrIndex:
         """
         Check whether each string is title formatted.
-        The first letter of each word is uppercase and the rest are
-        lowercase.
+        The first letter of each word should be uppercase and the rest
+        should be lowercase.
 
         Equivalent to :meth:`str.istitle`.
 

@@ -184,9 +184,9 @@ struct title_fn : base_fn<title_fn> {
 /**
  * @brief Functor for determining title format for each string in a column.
  *
- * Non-alphabetic (IS_ALPHA) characters delimit words. The first letter of
- * each word should be upper-case (IS_UPPER). All other characters should be
- * lower-case (IS_LOWER).
+ * The first letter of each word should be upper-case (IS_UPPER).
+ * All other characters should be lower-case (IS_LOWER).
+ * Non-upper/lower-case (IS_UPPER_OR_LOWER) characters delimit words.
  */
 struct is_title_fn {
   character_flags_table_type const* d_flags;
@@ -197,17 +197,17 @@ struct is_title_fn {
     if (d_column.is_null(idx)) { return false; }
     auto const d_str = d_column.element<string_view>(idx);
 
-    bool at_least_one_alpha    = false;  // requires one or more alphabetic characters
+    bool at_least_one_valid    = false;  // requires one or more cased characters
     bool should_be_capitalized = true;   // current character should be upper-case
     for (auto const chr : d_str) {
       auto const flag = get_char_info(d_flags, chr).second;
       if (IS_UPPER_OR_LOWER(flag)) {
         if (should_be_capitalized == !IS_UPPER(flag)) return false;
-        at_least_one_alpha = true;
+        at_least_one_valid = true;
       }
       should_be_capitalized = !IS_UPPER_OR_LOWER(flag);
     }
-    return at_least_one_alpha;
+    return at_least_one_valid;
   }
 };
 
