@@ -1736,7 +1736,7 @@ class MultiIndex(Frame, BaseIndex):
             self_df.columns = col_names
 
         result_df = cudf.merge(self_df, other_df, how="inner")
-        midx = MultiIndex.from_frame(result_df)
+        midx = self.__class__.from_frame(result_df)
         midx.names = res_name
         if sort is None and len(other):
             return midx.sort_values()
