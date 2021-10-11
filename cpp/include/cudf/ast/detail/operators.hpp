@@ -198,8 +198,8 @@ CUDA_HOST_DEVICE_CALLABLE constexpr void ast_operator_dispatcher(ast_operator op
     case ast_operator::CAST_TO_UINT64:
       f.template operator()<ast_operator::CAST_TO_UINT64>(std::forward<Ts>(args)...);
       break;
-    case ast_operator::CAST_TO_DOUBLE:
-      f.template operator()<ast_operator::CAST_TO_DOUBLE>(std::forward<Ts>(args)...);
+    case ast_operator::CAST_TO_FLOAT64:
+      f.template operator()<ast_operator::CAST_TO_FLOAT64>(std::forward<Ts>(args)...);
       break;
     default:
 #ifndef __CUDA_ARCH__
@@ -789,49 +789,24 @@ struct operator_functor<ast_operator::NOT, false> {
   }
 };
 
-// Type traits used to determine when a casting operation is valid.
-template <typename T, typename U, typename = void>
-struct can_cast : std::false_type {
-};
-
-template <typename T, typename U>
-struct can_cast<T, U, std::void_t<decltype(static_cast<U>(std::declval<T>()))>> : std::true_type {
-};
-
-template <typename T, typename U>
-constexpr bool can_cast_v = can_cast<T, U>::value;
-
-template <>
-struct operator_functor<ast_operator::CAST_TO_INT64, false> {
+template <typename To>
+struct cast {
   static constexpr auto arity{1};
-
-  template <typename InputT, std::enable_if_t<can_cast_v<InputT, int64_t>>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(InputT input) -> int64_t
+  template <typename From, CUDF_ENABLE_IF(std::is_convertible_v<From, To>)>
+  CUDA_DEVICE_CALLABLE To operator()(From f)
   {
-    return static_cast<int64_t>(input);
+    return static_cast<To>(f);
   }
 };
 
 template <>
-struct operator_functor<ast_operator::CAST_TO_UINT64, false> {
-  static constexpr auto arity{1};
-
-  template <typename InputT, std::enable_if_t<can_cast_v<InputT, uint64_t>>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(InputT input) -> uint64_t
-  {
-    return static_cast<uint64_t>(input);
-  }
+struct operator_functor<ast_operator::CAST_TO_INT64, false> : cast<int64_t> {
 };
-
 template <>
-struct operator_functor<ast_operator::CAST_TO_DOUBLE, false> {
-  static constexpr auto arity{1};
-
-  template <typename InputT, std::enable_if_t<can_cast_v<InputT, double>>* = nullptr>
-  CUDA_DEVICE_CALLABLE auto operator()(InputT input) -> double
-  {
-    return static_cast<double>(input);
-  }
+struct operator_functor<ast_operator::CAST_TO_UINT64, false> : cast<uint64_t> {
+};
+template <>
+struct operator_functor<ast_operator::CAST_TO_FLOAT64, false> : cast<double> {
 };
 
 /*

@@ -113,7 +113,7 @@ enum class ast_operator {
   NOT,             ///< Logical Not (!)
   CAST_TO_INT64,   ///< Cast value to int64
   CAST_TO_UINT64,  ///< Cast value to int64
-  CAST_TO_DOUBLE   ///< Cast value to double
+  CAST_TO_FLOAT64  ///< Cast value to double
 };
 
 /**
