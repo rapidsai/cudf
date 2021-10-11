@@ -1136,6 +1136,12 @@ class ColumnBase(Column, Serializable):
         """
         Get unique values in the data
         """
+        # TODO: We could avoid performing `drop_duplicates` for
+        # columns with values that already are unique.
+        # Few things to note before we can do this optimization is
+        # the following issue resolved:
+        # https://github.com/rapidsai/cudf/issues/5286
+
         return (
             self.as_frame()
             .drop_duplicates(keep="first", ignore_index=True)
