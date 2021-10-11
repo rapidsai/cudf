@@ -98,7 +98,8 @@ rapids_find_package(CUDAToolkit REQUIRED
 include(cmake/Modules/ConfigureCUDA.cmake) # set other CUDA compilation flags
 
 # ctest cuda memcheck
-set(MEMORYCHECK_COMMAND /usr/local/cuda-11.2/bin/compute-sanitizer)
+find_program(CUDA_SANITIZER compute-sanitizer)
+set(MEMORYCHECK_COMMAND ${CUDA_SANITIZER})
 set(MEMORYCHECK_TYPE CudaSanitizer)
 set(CUDA_SANITIZER_COMMAND_OPTIONS "--tool memcheck")
 
