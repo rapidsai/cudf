@@ -53,10 +53,6 @@ def _align_objs(objs, how="outer", sort=None):
             for obj in objs
         ]
     else:
-        # This check uses `sort is not False` rather than just `sort=True`
-        # to differentiate between a user-provided `False` value and the
-        # default `None`. This is necessary for pandas compatibility, even
-        # though `True` and `False` are the only valid options from the user.
         if sort:
             if not first.index.is_monotonic_increasing:
                 final_index = first.index.sort_values()
