@@ -56,8 +56,7 @@ T = TypeVar("T", bound="Frame")
 
 
 class Frame:
-    """
-    Frame: A collection of Column objects with an optional index.
+    """A collection of Column objects with an optional index.
 
     Parameters
     ----------

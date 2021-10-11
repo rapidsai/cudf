@@ -3,11 +3,74 @@
 
 from __future__ import annotations
 
+from typing import MutableMapping, Optional, Type, TypeVar
+
+import cupy as cp
+import pandas as pd
 from nvtx import annotate
 
-from cudf.api.types import is_list_like
+import cudf
+from cudf.api.types import is_categorical_dtype, is_list_like
+from cudf.core._base_index import BaseIndex
 from cudf.core.frame import Frame
 from cudf.core.multiindex import MultiIndex
+
+
+def _indices_from_labels(obj, labels):
+    from cudf.core.column import column
+
+    if not isinstance(labels, cudf.MultiIndex):
+        labels = column.as_column(labels)
+
+        if is_categorical_dtype(obj.index):
+            labels = labels.astype("category")
+            codes = labels.codes.astype(obj.index._values.codes.dtype)
+            labels = column.build_categorical_column(
+                categories=labels.dtype.categories,
+                codes=codes,
+                ordered=labels.dtype.ordered,
+            )
+        else:
+            labels = labels.astype(obj.index.dtype)
+
+    # join is not guaranteed to maintain the index ordering
+    # so we will sort it with its initial ordering which is stored
+    # in column "__"
+    lhs = cudf.DataFrame({"__": column.arange(len(labels))}, index=labels)
+    rhs = cudf.DataFrame({"_": column.arange(len(obj))}, index=obj.index)
+    return lhs.join(rhs).sort_values("__")["_"]
+
+
+def _get_label_range_or_mask(index, start, stop, step):
+    if (
+        not (start is None and stop is None)
+        and type(index) is cudf.core.index.DatetimeIndex
+        and index.is_monotonic is False
+    ):
+        start = pd.to_datetime(start)
+        stop = pd.to_datetime(stop)
+        if start is not None and stop is not None:
+            if start > stop:
+                return slice(0, 0, None)
+            # TODO: Once Index binary ops are updated to support logical_and,
+            # can use that instead of using cupy.
+            boolean_mask = cp.logical_and((index >= start), (index <= stop))
+        elif start is not None:
+            boolean_mask = index >= start
+        else:
+            boolean_mask = index <= stop
+        return boolean_mask
+    else:
+        start, stop = index.find_label_range(start, stop)
+        return slice(start, stop, step)
+
+
+class _FrameIndexer:
+    """Parent class for indexers."""
+
+
+_LocIndexerClass = TypeVar("_LocIndexerClass", bound="_FrameIndexer")
+_IlocIndexerClass = TypeVar("_IlocIndexerClass", bound="_FrameIndexer")
 
 
 class IndexedFrame(Frame):
@@ -16,7 +79,41 @@ class IndexedFrame(Frame):
     This class encodes the common behaviors for core user-facing classes like
     DataFrame and Series that consist of a sequence of columns along with a
     special set of index columns.
+
+    Parameters
+    ----------
+    data : dict
+        An dict mapping column names to Columns
+    index : Table
+        A Frame representing the (optional) index columns.
     """
+
+    # mypy can't handle bound type variables as class members
+    _loc_indexer_type: Type[_LocIndexerClass]  # type: ignore
+    _iloc_indexer_type: Type[_IlocIndexerClass]  # type: ignore
+
+    def __init__(self, data=None, index=None):
+        super().__init__(data=data, index=index)
+        self._reset_indexers()
+
+    @classmethod
+    def _from_data(
+        cls, data: MutableMapping, index: Optional[BaseIndex] = None,
+    ):
+        # Add indexers when constructing any subclass via from_data.
+        obj = super()._from_data(data=data, index=index)
+        obj._reset_indexers()
+        return obj
+
+    def copy(self, deep=True):  # noqa: D102
+        obj = super().copy(deep=deep)
+        obj._reset_indexers()
+        return obj
+
+    def _reset_indexers(self):
+        # Helper function to regenerate indexer objects.
+        self._loc_indexer = self._loc_indexer_type(self)
+        self._iloc_indexer = self._iloc_indexer_type(self)
 
     @annotate("SORT_INDEX", color="red", domain="cudf_python")
     def sort_index(

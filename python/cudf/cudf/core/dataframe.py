@@ -52,8 +52,12 @@ from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import DataFrameGroupBy
 from cudf.core.index import BaseIndex, RangeIndex, as_index
-from cudf.core.indexed_frame import IndexedFrame
-from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
+from cudf.core.indexed_frame import (
+    IndexedFrame,
+    _FrameIndexer,
+    _get_label_range_or_mask,
+    _indices_from_labels,
+)
 from cudf.core.series import Series
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
@@ -80,6 +84,348 @@ _cupy_nan_methods_map = {
     "std": "nanstd",
     "var": "nanvar",
 }
+
+
+def _normalize_dtypes(df):
+    if df._num_columns > 0:
+        dtypes = df.dtypes.values.tolist()
+        normalized_dtype = np.result_type(*dtypes)
+        for name, col in df._data.items():
+            df[name] = col.astype(normalized_dtype)
+    return df
+
+
+class _DataFrameIndexer(_FrameIndexer):
+    def __getitem__(self, arg):
+        from cudf import MultiIndex
+
+        if isinstance(self._df.index, MultiIndex) or isinstance(
+            self._df.columns, MultiIndex
+        ):
+            # This try/except block allows the use of pandas-like
+            # tuple arguments into MultiIndex dataframes.
+            try:
+                return self._getitem_tuple_arg(arg)
+            except (TypeError, KeyError, IndexError, ValueError):
+                return self._getitem_tuple_arg((arg, slice(None)))
+        else:
+            if not isinstance(arg, tuple):
+                arg = (arg, slice(None))
+            return self._getitem_tuple_arg(arg)
+
+    def __setitem__(self, key, value):
+        if not isinstance(key, tuple):
+            key = (key, slice(None))
+        return self._setitem_tuple_arg(key, value)
+
+    def _can_downcast_to_series(self, df, arg):
+        """
+        This method encapsulates the logic used
+        to determine whether or not the result of a loc/iloc
+        operation should be "downcasted" from a DataFrame to a
+        Series
+        """
+        from cudf.core.column import as_column
+
+        if isinstance(df, cudf.Series):
+            return False
+        nrows, ncols = df.shape
+        if nrows == 1:
+            if type(arg[0]) is slice:
+                if not is_scalar(arg[1]):
+                    return False
+            elif (is_list_like(arg[0]) or is_column_like(arg[0])) and (
+                is_list_like(arg[1])
+                or is_column_like(arg[0])
+                or type(arg[1]) is slice
+            ):
+                return False
+            else:
+                if is_bool_dtype(as_column(arg[0]).dtype) and not isinstance(
+                    arg[1], slice
+                ):
+                    return True
+            dtypes = df.dtypes.values.tolist()
+            all_numeric = all([is_numeric_dtype(t) for t in dtypes])
+            if all_numeric:
+                return True
+        if ncols == 1:
+            if type(arg[1]) is slice:
+                return False
+            if isinstance(arg[1], tuple):
+                # Multiindex indexing with a slice
+                if any(isinstance(v, slice) for v in arg):
+                    return False
+            if not (is_list_like(arg[1]) or is_column_like(arg[1])):
+                return True
+        return False
+
+    def _downcast_to_series(self, df, arg):
+        """
+        "Downcast" from a DataFrame to a Series
+        based on Pandas indexing rules
+        """
+        nrows, ncols = df.shape
+        # determine the axis along which the Series is taken:
+        if nrows == 1 and ncols == 1:
+            if is_scalar(arg[0]) and is_scalar(arg[1]):
+                return df[df.columns[0]].iloc[0]
+            elif not is_scalar(arg[0]):
+                axis = 1
+            else:
+                axis = 0
+
+        elif nrows == 1:
+            axis = 0
+        elif ncols == 1:
+            axis = 1
+        else:
+            raise ValueError("Cannot downcast DataFrame selection to Series")
+
+        # take series along the axis:
+        if axis == 1:
+            return df[df._data.names[0]]
+        else:
+            df = _normalize_dtypes(df)
+            sr = df.T
+            return sr[sr._data.names[0]]
+
+
+class _DataFrameLocIndexer(_DataFrameIndexer):
+    """
+    For selection by label.
+    """
+
+    def __init__(self, df):
+        self._df = df
+
+    def _getitem_scalar(self, arg):
+        return self._df[arg[1]].loc[arg[0]]
+
+    @annotate("LOC_GETITEM", color="blue", domain="cudf_python")
+    def _getitem_tuple_arg(self, arg):
+        from uuid import uuid4
+
+        from cudf import MultiIndex
+        from cudf.core.column import column
+        from cudf.core.dataframe import DataFrame
+        from cudf.core.index import as_index
+
+        # Step 1: Gather columns
+        if isinstance(arg, tuple):
+            columns_df = self._get_column_selection(arg[1])
+            columns_df._index = self._df._index
+        else:
+            columns_df = self._df
+
+        # Step 2: Gather rows
+        if isinstance(columns_df.index, MultiIndex):
+            if isinstance(arg, (MultiIndex, pd.MultiIndex)):
+                if isinstance(arg, pd.MultiIndex):
+                    arg = MultiIndex.from_pandas(arg)
+
+                indices = _indices_from_labels(columns_df, arg)
+                return columns_df.take(indices)
+
+            else:
+                if isinstance(arg, tuple):
+                    return columns_df.index._get_row_major(columns_df, arg[0])
+                else:
+                    return columns_df.index._get_row_major(columns_df, arg)
+        else:
+            if isinstance(arg[0], slice):
+                out = _get_label_range_or_mask(
+                    columns_df.index, arg[0].start, arg[0].stop, arg[0].step
+                )
+                if isinstance(out, slice):
+                    df = columns_df._slice(out)
+                else:
+                    df = columns_df._apply_boolean_mask(out)
+            else:
+                tmp_arg = arg
+                if is_scalar(arg[0]):
+                    # If a scalar, there is possibility of having duplicates.
+                    # Join would get all the duplicates. So, coverting it to
+                    # an array kind.
+                    tmp_arg = ([tmp_arg[0]], tmp_arg[1])
+                if len(tmp_arg[0]) == 0:
+                    return columns_df._empty_like(keep_index=True)
+                tmp_arg = (column.as_column(tmp_arg[0]), tmp_arg[1])
+
+                if is_bool_dtype(tmp_arg[0]):
+                    df = columns_df._apply_boolean_mask(tmp_arg[0])
+                else:
+                    tmp_col_name = str(uuid4())
+                    other_df = DataFrame(
+                        {tmp_col_name: column.arange(len(tmp_arg[0]))},
+                        index=as_index(tmp_arg[0]),
+                    )
+                    df = other_df.join(columns_df, how="inner")
+                    # as join is not assigning any names to index,
+                    # update it over here
+                    df.index.name = columns_df.index.name
+                    df = df.sort_values(tmp_col_name)
+                    df.drop(columns=[tmp_col_name], inplace=True)
+                    # There were no indices found
+                    if len(df) == 0:
+                        raise KeyError(arg)
+
+        # Step 3: Gather index
+        if df.shape[0] == 1:  # we have a single row
+            if isinstance(arg[0], slice):
+                start = arg[0].start
+                if start is None:
+                    start = self._df.index[0]
+                df.index = as_index(start)
+            else:
+                row_selection = column.as_column(arg[0])
+                if is_bool_dtype(row_selection.dtype):
+                    df.index = self._df.index.take(row_selection)
+                else:
+                    df.index = as_index(row_selection)
+        # Step 4: Downcast
+        if self._can_downcast_to_series(df, arg):
+            return self._downcast_to_series(df, arg)
+        return df
+
+    @annotate("LOC_SETITEM", color="blue", domain="cudf_python")
+    def _setitem_tuple_arg(self, key, value):
+        if isinstance(self._df.index, cudf.MultiIndex) or isinstance(
+            self._df.columns, pd.MultiIndex
+        ):
+            raise NotImplementedError(
+                "Setting values using df.loc[] not supported on "
+                "DataFrames with a MultiIndex"
+            )
+
+        try:
+            columns_df = self._get_column_selection(key[1])
+        except KeyError:
+            if not self._df.empty and isinstance(key[0], slice):
+                pos_range = _get_label_range_or_mask(
+                    self._df.index, key[0].start, key[0].stop, key[0].step
+                )
+                idx = self._df.index[pos_range]
+            elif self._df.empty and isinstance(key[0], slice):
+                idx = None
+            else:
+                idx = cudf.Index(key[0])
+            if is_scalar(value):
+                length = len(idx) if idx is not None else 1
+                value = as_column(value, length=length)
+
+            new_col = cudf.Series(value, index=idx)
+            if not self._df.empty:
+                new_col = new_col._align_to_index(self._df.index, how="right")
+
+            if self._df.empty:
+                self._df.index = (
+                    idx if idx is not None else cudf.RangeIndex(len(new_col))
+                )
+            self._df._data.insert(key[1], new_col)
+        else:
+            if isinstance(value, (cupy.ndarray, np.ndarray)):
+                value_df = cudf.DataFrame(value)
+                if value_df.shape[1] != columns_df.shape[1]:
+                    if value_df.shape[1] == 1:
+                        value_cols = (
+                            value_df._data.columns * columns_df.shape[1]
+                        )
+                    else:
+                        raise ValueError(
+                            f"shape mismatch: value array of shape "
+                            f"{value_df.shape} could not be "
+                            f"broadcast to indexing result of shape "
+                            f"{columns_df.shape}"
+                        )
+                else:
+                    value_cols = value_df._data.columns
+                for i, col in enumerate(columns_df._column_names):
+                    self._df[col].loc[key[0]] = value_cols[i]
+            else:
+                for col in columns_df._column_names:
+                    self._df[col].loc[key[0]] = value
+
+    def _get_column_selection(self, arg):
+        return self._df._get_columns_by_label(arg)
+
+
+class _DataFrameIlocIndexer(_DataFrameIndexer):
+    """
+    For selection by index.
+    """
+
+    def __init__(self, df):
+        self._df = df
+
+    @annotate("ILOC_GETITEM", color="blue", domain="cudf_python")
+    def _getitem_tuple_arg(self, arg):
+        from cudf import MultiIndex
+        from cudf.core.column import column
+        from cudf.core.index import as_index
+
+        # Iloc Step 1:
+        # Gather the columns specified by the second tuple arg
+        columns_df = self._get_column_selection(arg[1])
+        columns_df._index = self._df._index
+
+        # Iloc Step 2:
+        # Gather the rows specified by the first tuple arg
+        if isinstance(columns_df.index, MultiIndex):
+            if isinstance(arg[0], slice):
+                df = columns_df[arg[0]]
+            else:
+                df = columns_df.index._get_row_major(columns_df, arg[0])
+            if (len(df) == 1 and len(columns_df) >= 1) and not (
+                isinstance(arg[0], slice) or isinstance(arg[1], slice)
+            ):
+                # Pandas returns a numpy scalar in this case
+                return df.iloc[0]
+            if self._can_downcast_to_series(df, arg):
+                return self._downcast_to_series(df, arg)
+            return df
+        else:
+            if isinstance(arg[0], slice):
+                df = columns_df._slice(arg[0])
+            elif is_scalar(arg[0]):
+                index = arg[0]
+                if index < 0:
+                    index += len(columns_df)
+                df = columns_df._slice(slice(index, index + 1, 1))
+            else:
+                arg = (column.as_column(arg[0]), arg[1])
+                if is_bool_dtype(arg[0]):
+                    df = columns_df._apply_boolean_mask(arg[0])
+                else:
+                    df = columns_df._gather(arg[0])
+
+        # Iloc Step 3:
+        # Reindex
+        if df.shape[0] == 1:  # we have a single row without an index
+            df.index = as_index(self._df.index[arg[0]])
+
+        # Iloc Step 4:
+        # Downcast
+        if self._can_downcast_to_series(df, arg):
+            return self._downcast_to_series(df, arg)
+
+        if df.shape[0] == 0 and df.shape[1] == 0 and isinstance(arg[0], slice):
+            df._index = as_index(self._df.index[arg[0]])
+        return df
+
+    @annotate("ILOC_SETITEM", color="blue", domain="cudf_python")
+    def _setitem_tuple_arg(self, key, value):
+        columns = self._get_column_selection(key[1])
+
+        for col in columns:
+            self._df[col].iloc[key[0]] = value
+
+    def _getitem_scalar(self, arg):
+        col = self._df.columns[arg[1]]
+        return self._df[col].iloc[arg[0]]
+
+    def _get_column_selection(self, arg):
+        return cudf.DataFrame(self._df._get_columns_by_index(arg))
 
 
 class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
@@ -175,6 +521,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     _PROTECTED_KEYS = frozenset(("_column_accessor", "_data", "_index"))
     _accessors: Set[Any] = set()
+    _loc_indexer_type = _DataFrameLocIndexer
+    _iloc_indexer_type = _DataFrameIlocIndexer
 
     @annotate("DATAFRAME_INIT", color="blue", domain="cudf_python")
     def __init__(self, data=None, index=None, columns=None, dtype=None):
@@ -2592,7 +2940,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
            a  b
         0  1  a
         """
-        return _DataFrameLocIndexer(self)
+        return self._loc_indexer
 
     @property
     def iloc(self):
@@ -2676,7 +3024,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
            a  b
         0  1  a
         """
-        return _DataFrameIlocIndexer(self)
+        return self._iloc_indexer
 
     @property
     def iat(self):
