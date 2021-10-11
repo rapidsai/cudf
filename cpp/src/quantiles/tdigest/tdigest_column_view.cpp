@@ -15,12 +15,11 @@
  */
 
 #include <cudf/detail/tdigest/tdigest.hpp>
-#include <cudf/detail/tdigest/tdigest_column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
+#include <cudf/tdigest/tdigest_column_view.hpp>
 
 namespace cudf {
-namespace detail {
 namespace tdigest {
 
 using namespace cudf;
@@ -72,5 +71,4 @@ column_view tdigest_column_view::min_column() const { return child(min_column_in
 column_view tdigest_column_view::max_column() const { return child(max_column_index); }
 
 }  // namespace tdigest
-}  // namespace detail
 }  // namespace cudf

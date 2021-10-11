@@ -19,7 +19,6 @@
 #include <cudf/lists/lists_column_view.hpp>
 
 namespace cudf {
-namespace detail {
 namespace tdigest {
 
 /**
@@ -103,5 +102,4 @@ class tdigest_column_view : private column_view {
 };
 
 }  // namespace tdigest
-}  // namespace detail
 }  // namespace cudf

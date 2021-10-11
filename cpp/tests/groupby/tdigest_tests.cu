@@ -18,9 +18,8 @@
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
-#include <cudf/detail/tdigest/tdigest_column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/structs/structs_column_view.hpp>
+#include <cudf/tdigest/tdigest_column_view.hpp>
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -73,7 +72,7 @@ struct tdigest_gen {
 void tdigest_sample_compare(column_view const& result,
                             std::vector<expected_value> const& h_expected)
 {
-  cudf::detail::tdigest::tdigest_column_view tdv(result);
+  cudf::tdigest::tdigest_column_view tdv(result);
   column_view result_mean   = tdv.means();
   column_view result_weight = tdv.weights();
 

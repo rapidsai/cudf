@@ -24,12 +24,11 @@
 #include <cudf/detail/merge.cuh>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/tdigest/tdigest.hpp>
-#include <cudf/detail/tdigest/tdigest_column_view.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/tdigest/tdigest_column_view.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/structs/structs_column_view.hpp>
 
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
@@ -40,6 +39,8 @@
 namespace cudf {
 namespace groupby {
 namespace detail {
+
+using namespace cudf::tdigest;
 
 namespace {
 
@@ -668,7 +669,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
-  cudf::detail::tdigest::tdigest_column_view tdv(input);
+  tdigest_column_view tdv(input);
 
   if (num_groups == 0 || input.size() == 0) {
     return cudf::detail::tdigest::make_empty_tdigest_column(stream, mr);

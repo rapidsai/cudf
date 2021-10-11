@@ -17,17 +17,18 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/tdigest/tdigest.hpp>
-#include <cudf/detail/tdigest/tdigest_column_view.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/structs/structs_column_view.hpp>
+#include <cudf/tdigest/tdigest_column_view.hpp>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
+
+using namespace cudf::tdigest;
 
 namespace cudf {
 namespace detail {
@@ -167,7 +168,7 @@ __global__ void compute_percentiles_kernel(device_span<offset_type const> tdiges
  *
  * @returns Column of doubles containing requested percentile values.
  */
-std::unique_ptr<column> compute_approx_percentiles(structs_column_view const& input,
+std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& input,
                                                    column_view const& percentiles,
                                                    rmm::cuda_stream_view stream,
                                                    rmm::mr::device_memory_resource* mr)
@@ -311,12 +312,12 @@ std::unique_ptr<column> make_empty_tdigest_column(rmm::cuda_stream_view stream,
 
 }  // namespace tdigest.
 
-std::unique_ptr<column> percentile_approx(structs_column_view const& input,
+std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                                           column_view const& percentiles,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
 {
-  tdigest::tdigest_column_view tdv(input);
+  tdigest_column_view tdv(input);
   CUDF_EXPECTS(percentiles.type().id() == type_id::FLOAT64,
                "percentile_approx expects float64 percentile inputs");
 
@@ -370,7 +371,7 @@ std::unique_ptr<column> percentile_approx(structs_column_view const& input,
 
 }  // namespace detail
 
-std::unique_ptr<column> percentile_approx(structs_column_view const& input,
+std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
                                           column_view const& percentiles,
                                           rmm::mr::device_memory_resource* mr)
 {
