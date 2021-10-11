@@ -1914,6 +1914,8 @@ def test_index_from_arrow(data):
 
 
 def test_multiindex_to_arrow():
+    # TODO: Should this work for integer keys? I don't think pyarrow supports
+    # them, should we provide a nicer error?
     pdf = pd.DataFrame(
         {
             "a": [1, 2, 1, 2, 3],

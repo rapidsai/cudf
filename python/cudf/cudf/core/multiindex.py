@@ -25,6 +25,7 @@ from typing import (
 import cupy
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 from pandas._config import get_option
 
 import cudf
@@ -194,7 +195,9 @@ class _MultiIndexColumnAccessor(ColumnAccessor):
         -------
         ColumnAccessor
         """
-        if pd.api.types.is_integer(index):
+        if isinstance(index, slice):
+            index = range(*index.indices(len(self._data)))
+        elif pd.api.types.is_integer(index):
             index = (index,)
         keys = list(self._data.keys())
         keys = [keys[i] for i in index]
@@ -221,6 +224,9 @@ class _MultiIndexColumnAccessor(ColumnAccessor):
             If True, the provided value will be coerced to a column and
             validated before setting (Default value = True).
         """
+        # TODO: Actually I think the below comment is wrong.
+        # _MultiIndexColumnName needs to be handled differently. Something to
+        # come back.
         # If we were passed the right key type, it always already exists and we
         # already overwrote it correctly.
         if not isinstance(key, _MultiIndexColumnName):
@@ -717,7 +723,7 @@ class MultiIndex(Frame, BaseIndex):
                         column.timedelta.TimeDeltaColumn,
                     ),
                 ):
-                    preprocess_df[name] = col.astype("str").fillna(
+                    preprocess_df[name[1]] = col.astype("str").fillna(
                         cudf._NA_REP
                     )
 
@@ -1619,6 +1625,11 @@ class MultiIndex(Frame, BaseIndex):
         else:
             return mi
 
+    def to_arrow(self):
+        return pa.Table.from_pydict(
+            {name[1]: col.to_arrow() for name, col in self._data.items()}
+        )
+
     def to_pandas(self, nullable=False, **kwargs):
         # Stash the original names to set again at the end.
         names = self.names
@@ -1927,11 +1938,14 @@ class MultiIndex(Frame, BaseIndex):
 
         # Handle partial key search. If length of `key` is less than `nlevels`,
         # Only search levels up to `len(key)` level.
-        key_as_table = cudf.core.frame.Frame(
-            {i: column.as_column(k, length=1) for i, k in enumerate(key)}
-        )
         partial_index = self.__class__._from_data(
-            data=self._data.select_by_index(slice(key_as_table._num_columns))
+            data=self._data.select_by_index(slice(len(key)))
+        )
+        key_as_table = cudf.core.frame.Frame(
+            {
+                n: column.as_column(k, length=1)
+                for n, k in zip(partial_index.names, key)
+            }
         )
         (lower_bound, upper_bound, sort_inds,) = _lexsorted_equal_range(
             partial_index, key_as_table, is_sorted
