@@ -2775,52 +2775,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         self._index = as_index(_index)
 
     @property
-    def loc(self):
-        """
-        Select values by label.
-
-        See also
-        --------
-        cudf.DataFrame.loc
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([10, 11, 12], index=['a', 'b', 'c'])
-        >>> series
-        a    10
-        b    11
-        c    12
-        dtype: int64
-        >>> series.loc['b']
-        11
-        """
-        return self._loc_indexer
-
-    @property
-    def iloc(self):
-        """
-        Select values by position.
-
-        See also
-        --------
-        cudf.DataFrame.iloc
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([10, 20, 30])
-        >>> s
-        0    10
-        1    20
-        2    30
-        dtype: int64
-        >>> s.iloc[2]
-        30
-        """
-        return self._iloc_indexer
-
-    @property
     def nullmask(self):
         """The gpu buffer for the null-mask
         """

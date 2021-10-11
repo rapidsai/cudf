@@ -118,6 +118,155 @@ class IndexedFrame(Frame):
         self._loc_indexer = self._loc_indexer_type(self)
         self._iloc_indexer = self._iloc_indexer_type(self)
 
+    @property
+    def loc(self):
+        """Select rows and columns by label or boolean mask.
+
+        Examples
+        --------
+        **Series**
+
+        >>> import cudf
+        >>> series = cudf.Series([10, 11, 12], index=['a', 'b', 'c'])
+        >>> series
+        a    10
+        b    11
+        c    12
+        dtype: int64
+        >>> series.loc['b']
+        11
+
+        **DataFrame**
+
+        DataFrame with string index.
+
+        >>> df
+           a  b
+        a  0  5
+        b  1  6
+        c  2  7
+        d  3  8
+        e  4  9
+
+        Select a single row by label.
+
+        >>> df.loc['a']
+        a    0
+        b    5
+        Name: a, dtype: int64
+
+        Select multiple rows and a single column.
+
+        >>> df.loc[['a', 'c', 'e'], 'b']
+        a    5
+        c    7
+        e    9
+        Name: b, dtype: int64
+
+        Selection by boolean mask.
+
+        >>> df.loc[df.a > 2]
+           a  b
+        d  3  8
+        e  4  9
+
+        Setting values using loc.
+
+        >>> df.loc[['a', 'c', 'e'], 'a'] = 0
+        >>> df
+           a  b
+        a  0  5
+        b  1  6
+        c  0  7
+        d  3  8
+        e  0  9
+
+        """
+        return self._loc_indexer
+
+    @property
+    def iloc(self):
+        """Select values by position.
+
+        Examples
+        --------
+        **Series**
+
+        >>> import cudf
+        >>> s = cudf.Series([10, 20, 30])
+        >>> s
+        0    10
+        1    20
+        2    30
+        dtype: int64
+        >>> s.iloc[2]
+        30
+
+        **DataFrame**
+
+        Selecting rows and column by position.
+
+        Examples
+        --------
+        >>> df = cudf.DataFrame({'a': range(20),
+        ...                      'b': range(20),
+        ...                      'c': range(20)})
+
+        Select a single row using an integer index.
+
+        >>> df.iloc[1]
+        a    1
+        b    1
+        c    1
+        Name: 1, dtype: int64
+
+        Select multiple rows using a list of integers.
+
+        >>> df.iloc[[0, 2, 9, 18]]
+              a    b    c
+         0    0    0    0
+         2    2    2    2
+         9    9    9    9
+        18   18   18   18
+
+        Select rows using a slice.
+
+        >>> df.iloc[3:10:2]
+             a    b    c
+        3    3    3    3
+        5    5    5    5
+        7    7    7    7
+        9    9    9    9
+
+        Select both rows and columns.
+
+        >>> df.iloc[[1, 3, 5, 7], 2]
+        1    1
+        3    3
+        5    5
+        7    7
+        Name: c, dtype: int64
+
+        Setting values in a column using iloc.
+
+        >>> df.iloc[:4] = 0
+        >>> df
+           a  b  c
+        0  0  0  0
+        1  0  0  0
+        2  0  0  0
+        3  0  0  0
+        4  4  4  4
+        5  5  5  5
+        6  6  6  6
+        7  7  7  7
+        8  8  8  8
+        9  9  9  9
+        [10 more rows]
+
+        """
+        return self._iloc_indexer
+
     @annotate("SORT_INDEX", color="red", domain="cudf_python")
     def sort_index(
         self,
