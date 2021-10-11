@@ -1395,6 +1395,7 @@ def test_string_is_title():
         "!A",
         "hello World",
         "A B C",
+        "#",
         "Art of War",
     ]
     gs = cudf.Series(data)

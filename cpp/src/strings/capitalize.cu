@@ -196,17 +196,18 @@ struct is_title_fn {
   {
     if (d_column.is_null(idx)) { return false; }
     auto const d_str = d_column.element<string_view>(idx);
-    if (d_str.empty()) { return false; }
-    bool capitalized = true;
+
+    bool at_least_one_alpha    = false;  // requires one or more alphabetic characters
+    bool should_be_capitalized = true;   // current character should be upper-case
     for (auto const chr : d_str) {
       auto const flag = get_char_info(d_flags, chr).second;
       if (IS_ALPHA(flag)) {
-        if (capitalized && IS_LOWER(flag)) return false;
-        if (!capitalized && IS_UPPER(flag)) return false;
+        if (should_be_capitalized == !IS_UPPER(flag)) return false;
+        at_least_one_alpha = true;
       }
-      capitalized = (IS_ALPHA(flag) == 0);
+      should_be_capitalized = !IS_ALPHA(flag);
     }
-    return true;
+    return at_least_one_alpha;
   }
 };
 

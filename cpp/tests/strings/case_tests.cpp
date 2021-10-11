@@ -163,13 +163,14 @@ TEST_F(StringsCaseTest, IsTitle)
                                             "!Abc",
                                             " Eagle",
                                             "A Test",
+                                            "12345",
                                             "one More"},
-                                           {1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+                                           {1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
 
   auto results = cudf::strings::is_title(cudf::strings_column_view(input));
 
-  cudf::test::fixed_width_column_wrapper<bool> expected({1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0},
-                                                        {1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<bool> expected({1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0},
+                                                        {1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 

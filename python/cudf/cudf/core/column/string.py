@@ -1868,11 +1868,10 @@ class StringMethods(ColumnMethods):
     def istitle(self) -> SeriesOrIndex:
         """
         Check whether each string is title formatted.
-        The first letter after a space is uppercase and the rest
-        are lowercase.
+        The first letter of each word is uppercase and the rest are
+        lowercase.
 
-        Equivalent to `str.istitle()
-        <https://docs.python.org/3/library/stdtypes.html#str.istitle>`_.
+        Equivalent to :meth:`str.istitle`.
 
         Returns : Series or Index of object
 
@@ -1886,7 +1885,7 @@ class StringMethods(ColumnMethods):
         1     True
         2    False
         3    False
-        dtype: object
+        dtype: bool
         """
         return self._return_or_inplace(libstrings.is_title(self._column))
 
