@@ -21,7 +21,6 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
-#include <hash/hash_constants.hpp>
 
 using hash_value_type = uint32_t;
 
