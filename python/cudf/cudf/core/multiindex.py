@@ -1723,7 +1723,7 @@ class MultiIndex(Frame, BaseIndex):
         if self.names != other.names:
             deep = True
             col_names = list(range(0, self.nlevels))
-            res_name = None
+            res_name = (None,) * self.nlevels
         else:
             deep = False
             col_names = None
