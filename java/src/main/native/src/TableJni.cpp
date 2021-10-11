@@ -147,7 +147,7 @@ public:
                                        rmm::cuda_stream_view stream) override {
     // Call the sync version until figuring out how to write asynchronously.
     device_write(gpu_data, size, stream);
-    return std::async(std::launch::deferred, []{});
+    return std::async(std::launch::deferred, [] {});
   }
 
   void flush() override {
