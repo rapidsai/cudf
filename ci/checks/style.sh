@@ -14,7 +14,7 @@ LANG=C.UTF-8
 . /opt/conda/etc/profile.d/conda.sh
 conda activate rapids
 
-pre-commit run --hook-stage manual
+pre-commit run --hook-stage manual --all-files
 PRE_COMMIT_RETVAL=$?
 
 # Run clang-format and check for a consistent code format
