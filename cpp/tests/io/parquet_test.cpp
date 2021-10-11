@@ -1083,12 +1083,21 @@ class custom_test_data_sink : public cudf::io::data_sink {
 
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
-    char* ptr = nullptr;
-    CUDA_TRY(cudaMallocHost(&ptr, size));
-    CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
-    stream.synchronize();
-    outfile_.write(ptr, size);
-    CUDA_TRY(cudaFreeHost(ptr));
+    this->device_write_async(gpu_data, size, stream).get();
+  }
+
+  std::future<void> device_write_async(void const* gpu_data,
+                                       size_t size,
+                                       rmm::cuda_stream_view stream) override
+  {
+    return std::async(std::launch::deferred, [=] {
+      char* ptr = nullptr;
+      CUDA_TRY(cudaMallocHost(&ptr, size));
+      CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
+      stream.synchronize();
+      outfile_.write(ptr, size);
+      CUDA_TRY(cudaFreeHost(ptr));
+    });
   }
 
   void flush() override { outfile_.flush(); }
@@ -2046,12 +2055,21 @@ class custom_test_memmap_sink : public cudf::io::data_sink {
 
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
-    char* ptr = nullptr;
-    CUDA_TRY(cudaMallocHost(&ptr, size));
-    CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
-    stream.synchronize();
-    mm_writer->host_write(ptr, size);
-    CUDA_TRY(cudaFreeHost(ptr));
+    this->device_write_async(gpu_data, size, stream).get();
+  }
+
+  std::future<void> device_write_async(void const* gpu_data,
+                                       size_t size,
+                                       rmm::cuda_stream_view stream) override
+  {
+    return std::async(std::launch::deferred, [=] {
+      char* ptr = nullptr;
+      CUDA_TRY(cudaMallocHost(&ptr, size));
+      CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
+      stream.synchronize();
+      mm_writer->host_write(ptr, size);
+      CUDA_TRY(cudaFreeHost(ptr));
+    });
   }
 
   void flush() override { mm_writer->flush(); }
