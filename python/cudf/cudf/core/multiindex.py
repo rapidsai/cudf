@@ -1864,6 +1864,19 @@ class MultiIndex(Frame, BaseIndex):
                 ) from None
             return level
 
+    def _gather(self, gather_map, keep_index=True, nullify=False):
+        # TODO: This override is necessary to properly handle duplicate names.
+        # Once index/name handling is all moved to the Python layer this
+        # override should no longer be necessary.
+        other = self.copy(deep=False)
+        other.names = list(range(other._num_columns))
+        # Call the parent method to avoid infinite recursion.
+        result = super(MultiIndex, other)._gather(
+            gather_map, keep_index, nullify
+        )
+        result.names = self.names
+        return result
+
     def get_loc(self, key, method=None, tolerance=None):
         """
         Get location for a label or a tuple of labels.
@@ -1942,10 +1955,7 @@ class MultiIndex(Frame, BaseIndex):
             data=self._data.select_by_index(slice(len(key)))
         )
         key_as_table = cudf.core.frame.Frame(
-            {
-                n: column.as_column(k, length=1)
-                for n, k in zip(partial_index.names, key)
-            }
+            {i: column.as_column(k, length=1) for i, k in enumerate(key)}
         )
         (lower_bound, upper_bound, sort_inds,) = _lexsorted_equal_range(
             partial_index, key_as_table, is_sorted
