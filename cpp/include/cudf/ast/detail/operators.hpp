@@ -792,8 +792,8 @@ struct operator_functor<ast_operator::NOT, false> {
 template <typename To>
 struct cast {
   static constexpr auto arity{1};
-  template <typename From, CUDF_ENABLE_IF(std::is_convertible_v<From, To>)>
-  CUDA_DEVICE_CALLABLE To operator()(From f)
+  template <typename From>
+  CUDA_DEVICE_CALLABLE auto operator()(From f) -> decltype(static_cast<To>(f))
   {
     return static_cast<To>(f);
   }
