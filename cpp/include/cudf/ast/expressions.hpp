@@ -111,8 +111,8 @@ enum class ast_operator {
   RINT,            ///< Rounds the floating-point argument arg to an integer value
   BIT_INVERT,      ///< Bitwise Not (~)
   NOT,             ///< Logical Not (!)
-  CAST_TO_INT64,   ///< Cast value to int64
-  CAST_TO_UINT64,  ///< Cast value to int64
+  CAST_TO_INT64,   ///< Cast value to int64_t
+  CAST_TO_UINT64,  ///< Cast value to uint64_t
   CAST_TO_FLOAT64  ///< Cast value to double
 };
 
