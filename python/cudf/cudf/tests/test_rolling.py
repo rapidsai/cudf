@@ -136,7 +136,7 @@ def test_rolling_with_offset(agg):
 @pytest.mark.parametrize("agg", ["std", "var"])
 @pytest.mark.parametrize("ddof", [0, 1])
 @pytest.mark.parametrize("center", [True, False])
-@pytest.mark.parametrize("seed", [100, 2000])
+@pytest.mark.parametrize("seed", [42, 100])
 @pytest.mark.parametrize("window_size", [2, 10, 100])
 def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
     if PANDAS_GE_110:
@@ -151,26 +151,27 @@ def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
     flower_bound = -math.sqrt(abs(np.finfo(np.float64).min) / window_size)
 
     n_rows = 1_000
+    cardinality = 100
     data = rand_dataframe(
         dtypes_meta=[
             {
                 "dtype": "int64",
                 "null_frequency": 0.4,
-                "cardinality": n_rows,
+                "cardinality": cardinality,
                 "min_bound": ilower_bound,
                 "max_bound": iupper_bound,
             },
             {
                 "dtype": "float64",
                 "null_frequency": 0.4,
-                "cardinality": n_rows,
+                "cardinality": cardinality,
                 "min_bound": flower_bound,
                 "max_bound": fupper_bound,
             },
             {
                 "dtype": "decimal64",
                 "null_frequency": 0.4,
-                "cardinality": n_rows,
+                "cardinality": cardinality,
                 "min_bound": ilower_bound,
                 "max_bound": iupper_bound,
             },
@@ -185,7 +186,13 @@ def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
     expect = getattr(pdf.rolling(window_size, 1, center), agg)(ddof=ddof)
     got = getattr(gdf.rolling(window_size, 1, center), agg)(ddof=ddof)
 
-    assert_eq(expect, got, **kwargs)
+    # Due to pandas-37051, pandas rolling var/std on uniform window is
+    # not reliable. Skipping these rows when comparing.
+    for col in expect:
+        mask = (got[col].fillna(-1) != 0).to_pandas()
+        expect[col] = expect[col][mask]
+        got[col] = got[col][mask]
+        assert_eq(expect[col], got[col], **kwargs)
 
 
 @pytest.mark.xfail
