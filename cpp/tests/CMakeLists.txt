@@ -17,12 +17,16 @@
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
+if(DEFINED ENV{GTEST_CUDF_RMM_MODE})
+    set(GTEST_CUDF_RMM_MODE "--rmm_mode=$ENV{GTEST_CUDF_RMM_MODE}")
+endif()
+
 function(ConfigureTest CMAKE_TEST_NAME )
     add_executable(${CMAKE_TEST_NAME} ${ARGN})
     set_target_properties(${CMAKE_TEST_NAME}
         PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>")
     target_link_libraries(${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main)
-    add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
+    add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME} ${GTEST_CUDF_RMM_MODE} COMMAND_EXPAND_LISTS)
 endfunction()
 
 ###################################################################################################
@@ -385,7 +389,7 @@ ConfigureTest(STRINGS_TEST
 
 ###################################################################################################
 # - structs test ----------------------------------------------------------------------------------
-ConfigureTest(STRUCTS_TEST 
+ConfigureTest(STRUCTS_TEST
     structs/structs_column_tests.cpp
     structs/utilities_tests.cpp
     )
