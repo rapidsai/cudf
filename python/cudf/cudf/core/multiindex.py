@@ -1726,8 +1726,19 @@ class MultiIndex(Frame, BaseIndex):
         else:
             return index_sorted
 
+    def drop_duplicates(self, keep="first"):
+        # TODO: This override is necessary to properly handle duplicate names.
+        # Once index/name handling is all moved to the Python layer this
+        # override should no longer be necessary.
+        other = self.copy(deep=False)
+        other.names = list(range(other._num_columns))
+        # Call the parent method to avoid infinite recursion.
+        result = super(MultiIndex, other).drop_duplicates(keep=keep)
+        result.names = self.names
+        return result
+
     def unique(self):
-        return self.drop_duplicates(ignore_index=True)
+        return self.drop_duplicates()
 
     def _clean_nulls_from_index(self):
         """
