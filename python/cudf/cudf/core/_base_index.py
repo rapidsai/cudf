@@ -1004,6 +1004,8 @@ class BaseIndex(Serializable):
         raise NotImplementedError()
 
     def _union(self, other, sort=None):
+        # TODO: As a future optimization we should explore
+        # not doing `to_frame`
         self_df = self.to_frame(index=False, name=0)
         other_df = other.to_frame(index=False, name=0)
         self_df["order"] = self_df.index
