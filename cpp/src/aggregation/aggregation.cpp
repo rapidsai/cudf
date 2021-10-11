@@ -515,14 +515,15 @@ template std::unique_ptr<groupby_aggregation> make_median_aggregation<groupby_ag
 
 /// Factory to create a QUANTILE aggregation
 template <typename Base>
-std::unique_ptr<Base> make_quantile_aggregation(std::vector<double> const& q, interpolation i)
+std::unique_ptr<Base> make_quantile_aggregation(std::vector<double> const& quantiles,
+                                                interpolation interp)
 {
-  return std::make_unique<detail::quantile_aggregation>(q, i);
+  return std::make_unique<detail::quantile_aggregation>(quantiles, interp);
 }
 template std::unique_ptr<aggregation> make_quantile_aggregation<aggregation>(
-  std::vector<double> const& q, interpolation i);
+  std::vector<double> const& quantiles, interpolation interp);
 template std::unique_ptr<groupby_aggregation> make_quantile_aggregation<groupby_aggregation>(
-  std::vector<double> const& q, interpolation i);
+  std::vector<double> const& quantiles, interpolation interp);
 
 /// Factory to create an ARGMAX aggregation
 template <typename Base>
