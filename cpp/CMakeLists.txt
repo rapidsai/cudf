@@ -16,7 +16,7 @@
 
 cmake_minimum_required(VERSION 3.20.1 FATAL_ERROR)
 
-file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-21.10/RAPIDS.cmake
+file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-21.12/RAPIDS.cmake
     ${CMAKE_BINARY_DIR}/RAPIDS.cmake)
 include(${CMAKE_BINARY_DIR}/RAPIDS.cmake)
 
@@ -717,7 +717,7 @@ get_target_property(all_includes cudf::cudf INTERFACE_INCLUDE_DIRECTORIES)
 set(system_includes )
 set(normal_includes )
 foreach(include IN LISTS all_includes)
-  if(include MATCHES "/include/libcudf/")
+  if(include MATCHES "/libcudacxx")
     list(APPEND normal_includes "${include}")
   else()
     list(APPEND system_includes "${include}")
