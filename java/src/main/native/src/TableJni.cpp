@@ -143,6 +143,13 @@ public:
     stream.synchronize();
   }
 
+  std::future<void> device_write_async(void const *gpu_data, size_t size,
+                                       rmm::cuda_stream_view stream) override {
+    // Call the sync version until figuring out how to write asynchronously.
+    device_write(gpu_data, size, stream);
+    return std::async(std::launch::deferred, [] {});
+  }
+
   void flush() override {
     if (current_buffer_written > 0) {
       JNIEnv *env = cudf::jni::get_jni_env(jvm);
