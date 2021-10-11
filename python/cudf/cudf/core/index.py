@@ -548,6 +548,9 @@ class RangeIndex(BaseIndex):
 
     def _union(self, other, sort=None):
         if isinstance(other, RangeIndex):
+            # Variable suffixes are of the
+            # following notation: *_o -> other, *_s -> self,
+            # and *_r -> result
             start_s, step_s = self.start, self.step
             end_s = self._end
             start_o, step_o = other.start, other.step
