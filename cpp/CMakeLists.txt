@@ -97,6 +97,10 @@ rapids_find_package(CUDAToolkit REQUIRED
     INSTALL_EXPORT_SET cudf-exports)
 include(cmake/Modules/ConfigureCUDA.cmake) # set other CUDA compilation flags
 
+# ctest cuda memcheck
+set(MEMORYCHECK_COMMAND /usr/local/cuda-11.2/bin/compute-sanitizer)
+set(MEMORYCHECK_TYPE CudaSanitizer)
+set(CUDA_SANITIZER_COMMAND_OPTIONS "--tool memcheck")
 
 ###################################################################################################
 # - dependencies ----------------------------------------------------------------------------------
