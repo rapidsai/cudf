@@ -96,13 +96,10 @@ class _SeriesIlocIndexer(_FrameIndexer):
     For integer-location based selection.
     """
 
-    def __init__(self, sr):
-        self._sr = sr
-
     def __getitem__(self, arg):
         if isinstance(arg, tuple):
             arg = list(arg)
-        data = self._sr._column[arg]
+        data = self._frame._column[arg]
 
         if (
             isinstance(data, (dict, list))
@@ -110,8 +107,9 @@ class _SeriesIlocIndexer(_FrameIndexer):
             or _is_null_host_scalar(data)
         ):
             return data
-        return self._sr._from_data(
-            {self._sr.name: data}, index=cudf.Index(self._sr.index.take(arg))
+        return self._frame._from_data(
+            {self._frame.name: data},
+            index=cudf.Index(self._frame.index.take(arg)),
         )
 
     def __setitem__(self, key, value):
@@ -126,14 +124,14 @@ class _SeriesIlocIndexer(_FrameIndexer):
         elif not (
             isinstance(value, (list, dict))
             and isinstance(
-                self._sr._column.dtype, (cudf.ListDtype, cudf.StructDtype)
+                self._frame._column.dtype, (cudf.ListDtype, cudf.StructDtype)
             )
         ):
             value = column.as_column(value)
 
         if (
             not isinstance(
-                self._sr._column.dtype,
+                self._frame._column.dtype,
                 (cudf.Decimal64Dtype, cudf.CategoricalDtype),
             )
             and hasattr(value, "dtype")
@@ -141,13 +139,15 @@ class _SeriesIlocIndexer(_FrameIndexer):
         ):
             # normalize types if necessary:
             if not is_integer(key):
-                to_dtype = np.result_type(value.dtype, self._sr._column.dtype)
+                to_dtype = np.result_type(
+                    value.dtype, self._frame._column.dtype
+                )
                 value = value.astype(to_dtype)
-                self._sr._column._mimic_inplace(
-                    self._sr._column.astype(to_dtype), inplace=True
+                self._frame._column._mimic_inplace(
+                    self._frame._column.astype(to_dtype), inplace=True
                 )
 
-        self._sr._column[key] = value
+        self._frame._column[key] = value
 
 
 class _SeriesLocIndexer(_FrameIndexer):
@@ -155,20 +155,17 @@ class _SeriesLocIndexer(_FrameIndexer):
     Label-based selection
     """
 
-    def __init__(self, sr):
-        self._sr = sr
-
     def __getitem__(self, arg: Any) -> Union[ScalarLike, DataFrameOrSeries]:
         if isinstance(arg, pd.MultiIndex):
             arg = cudf.from_pandas(arg)
 
-        if isinstance(self._sr.index, cudf.MultiIndex) and not isinstance(
+        if isinstance(self._frame.index, cudf.MultiIndex) and not isinstance(
             arg, cudf.MultiIndex
         ):
-            result = self._sr.index._get_row_major(self._sr, arg)
+            result = self._frame.index._get_row_major(self._frame, arg)
             if (
                 isinstance(arg, tuple)
-                and len(arg) == self._sr._index.nlevels
+                and len(arg) == self._frame._index.nlevels
                 and not any((isinstance(x, slice) for x in arg))
             ):
                 result = result.iloc[0]
@@ -178,7 +175,7 @@ class _SeriesLocIndexer(_FrameIndexer):
         except (TypeError, KeyError, IndexError, ValueError):
             raise KeyError(arg)
 
-        return self._sr.iloc[arg]
+        return self._frame.iloc[arg]
 
     def __setitem__(self, key, value):
         try:
@@ -186,22 +183,22 @@ class _SeriesLocIndexer(_FrameIndexer):
         except KeyError as e:
             if (
                 is_scalar(key)
-                and not isinstance(self._sr.index, cudf.MultiIndex)
+                and not isinstance(self._frame.index, cudf.MultiIndex)
                 and is_scalar(value)
             ):
-                _append_new_row_inplace(self._sr.index._values, key)
-                _append_new_row_inplace(self._sr._column, value)
+                _append_new_row_inplace(self._frame.index._values, key)
+                _append_new_row_inplace(self._frame._column, value)
                 return
             else:
                 raise e
         if isinstance(value, (pd.Series, cudf.Series)):
             value = cudf.Series(value)
-            value = value._align_to_index(self._sr.index, how="right")
-        self._sr.iloc[key] = value
+            value = value._align_to_index(self._frame.index, how="right")
+        self._frame.iloc[key] = value
 
     def _loc_to_iloc(self, arg):
         if _is_scalar_or_zero_d_array(arg):
-            if not _is_non_decimal_numeric_dtype(self._sr.index.dtype):
+            if not _is_non_decimal_numeric_dtype(self._frame.index.dtype):
                 # TODO: switch to cudf.utils.dtypes.is_integer(arg)
                 if isinstance(arg, cudf.Scalar) and is_integer_dtype(
                     arg.dtype
@@ -212,7 +209,7 @@ class _SeriesLocIndexer(_FrameIndexer):
                     found_index = arg
                     return found_index
             try:
-                found_index = self._sr.index._values.find_first_value(
+                found_index = self._frame.index._values.find_first_value(
                     arg, closest=False
                 )
                 return found_index
@@ -221,20 +218,20 @@ class _SeriesLocIndexer(_FrameIndexer):
 
         elif isinstance(arg, slice):
             return _get_label_range_or_mask(
-                self._sr.index, arg.start, arg.stop, arg.step
+                self._frame.index, arg.start, arg.stop, arg.step
             )
         elif isinstance(arg, (cudf.MultiIndex, pd.MultiIndex)):
             if isinstance(arg, pd.MultiIndex):
                 arg = cudf.MultiIndex.from_pandas(arg)
 
-            return _indices_from_labels(self._sr, arg)
+            return _indices_from_labels(self._frame, arg)
 
         else:
             arg = cudf.core.series.Series(cudf.core.column.as_column(arg))
             if arg.dtype in (bool, np.bool_):
                 return arg
             else:
-                indices = _indices_from_labels(self._sr, arg)
+                indices = _indices_from_labels(self._frame, arg)
                 if indices.null_count > 0:
                     raise KeyError("label scalar is out of bound")
                 return indices

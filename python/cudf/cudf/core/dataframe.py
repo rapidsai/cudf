@@ -86,21 +86,12 @@ _cupy_nan_methods_map = {
 }
 
 
-def _normalize_dtypes(df):
-    if df._num_columns > 0:
-        dtypes = df.dtypes.values.tolist()
-        normalized_dtype = np.result_type(*dtypes)
-        for name, col in df._data.items():
-            df[name] = col.astype(normalized_dtype)
-    return df
-
-
 class _DataFrameIndexer(_FrameIndexer):
     def __getitem__(self, arg):
         from cudf import MultiIndex
 
-        if isinstance(self._df.index, MultiIndex) or isinstance(
-            self._df.columns, MultiIndex
+        if isinstance(self._frame.index, MultiIndex) or isinstance(
+            self._frame.columns, MultiIndex
         ):
             # This try/except block allows the use of pandas-like
             # tuple arguments into MultiIndex dataframes.
@@ -186,7 +177,12 @@ class _DataFrameIndexer(_FrameIndexer):
         if axis == 1:
             return df[df._data.names[0]]
         else:
-            df = _normalize_dtypes(df)
+            if df._num_columns > 0:
+                dtypes = df.dtypes.values.tolist()
+                normalized_dtype = np.result_type(*dtypes)
+                for name, col in df._data.items():
+                    df[name] = col.astype(normalized_dtype)
+
             sr = df.T
             return sr[sr._data.names[0]]
 
@@ -196,11 +192,8 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
     For selection by label.
     """
 
-    def __init__(self, df):
-        self._df = df
-
     def _getitem_scalar(self, arg):
-        return self._df[arg[1]].loc[arg[0]]
+        return self._frame[arg[1]].loc[arg[0]]
 
     @annotate("LOC_GETITEM", color="blue", domain="cudf_python")
     def _getitem_tuple_arg(self, arg):
@@ -213,10 +206,10 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
         # Step 1: Gather columns
         if isinstance(arg, tuple):
-            columns_df = self._get_column_selection(arg[1])
-            columns_df._index = self._df._index
+            columns_df = self._frame._get_columns_by_label(arg[1])
+            columns_df._index = self._frame._index
         else:
-            columns_df = self._df
+            columns_df = self._frame
 
         # Step 2: Gather rows
         if isinstance(columns_df.index, MultiIndex):
@@ -275,12 +268,12 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             if isinstance(arg[0], slice):
                 start = arg[0].start
                 if start is None:
-                    start = self._df.index[0]
+                    start = self._frame.index[0]
                 df.index = as_index(start)
             else:
                 row_selection = column.as_column(arg[0])
                 if is_bool_dtype(row_selection.dtype):
-                    df.index = self._df.index.take(row_selection)
+                    df.index = self._frame.index.take(row_selection)
                 else:
                     df.index = as_index(row_selection)
         # Step 4: Downcast
@@ -290,8 +283,8 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
     @annotate("LOC_SETITEM", color="blue", domain="cudf_python")
     def _setitem_tuple_arg(self, key, value):
-        if isinstance(self._df.index, cudf.MultiIndex) or isinstance(
-            self._df.columns, pd.MultiIndex
+        if isinstance(self._frame.index, cudf.MultiIndex) or isinstance(
+            self._frame.columns, pd.MultiIndex
         ):
             raise NotImplementedError(
                 "Setting values using df.loc[] not supported on "
@@ -299,14 +292,14 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             )
 
         try:
-            columns_df = self._get_column_selection(key[1])
+            columns_df = self._frame._get_columns_by_label(key[1])
         except KeyError:
-            if not self._df.empty and isinstance(key[0], slice):
+            if not self._frame.empty and isinstance(key[0], slice):
                 pos_range = _get_label_range_or_mask(
-                    self._df.index, key[0].start, key[0].stop, key[0].step
+                    self._frame.index, key[0].start, key[0].stop, key[0].step
                 )
-                idx = self._df.index[pos_range]
-            elif self._df.empty and isinstance(key[0], slice):
+                idx = self._frame.index[pos_range]
+            elif self._frame.empty and isinstance(key[0], slice):
                 idx = None
             else:
                 idx = cudf.Index(key[0])
@@ -315,14 +308,16 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 value = as_column(value, length=length)
 
             new_col = cudf.Series(value, index=idx)
-            if not self._df.empty:
-                new_col = new_col._align_to_index(self._df.index, how="right")
+            if not self._frame.empty:
+                new_col = new_col._align_to_index(
+                    self._frame.index, how="right"
+                )
 
-            if self._df.empty:
-                self._df.index = (
+            if self._frame.empty:
+                self._frame.index = (
                     idx if idx is not None else cudf.RangeIndex(len(new_col))
                 )
-            self._df._data.insert(key[1], new_col)
+            self._frame._data.insert(key[1], new_col)
         else:
             if isinstance(value, (cupy.ndarray, np.ndarray)):
                 value_df = cudf.DataFrame(value)
@@ -341,22 +336,16 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 else:
                     value_cols = value_df._data.columns
                 for i, col in enumerate(columns_df._column_names):
-                    self._df[col].loc[key[0]] = value_cols[i]
+                    self._frame[col].loc[key[0]] = value_cols[i]
             else:
                 for col in columns_df._column_names:
-                    self._df[col].loc[key[0]] = value
-
-    def _get_column_selection(self, arg):
-        return self._df._get_columns_by_label(arg)
+                    self._frame[col].loc[key[0]] = value
 
 
 class _DataFrameIlocIndexer(_DataFrameIndexer):
     """
     For selection by index.
     """
-
-    def __init__(self, df):
-        self._df = df
 
     @annotate("ILOC_GETITEM", color="blue", domain="cudf_python")
     def _getitem_tuple_arg(self, arg):
@@ -366,8 +355,9 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
         # Iloc Step 1:
         # Gather the columns specified by the second tuple arg
-        columns_df = self._get_column_selection(arg[1])
-        columns_df._index = self._df._index
+        columns_df = cudf.DataFrame(self._frame._get_columns_by_index(arg[1]))
+
+        columns_df._index = self._frame._index
 
         # Iloc Step 2:
         # Gather the rows specified by the first tuple arg
@@ -402,7 +392,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         # Iloc Step 3:
         # Reindex
         if df.shape[0] == 1:  # we have a single row without an index
-            df.index = as_index(self._df.index[arg[0]])
+            df.index = as_index(self._frame.index[arg[0]])
 
         # Iloc Step 4:
         # Downcast
@@ -410,22 +400,19 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             return self._downcast_to_series(df, arg)
 
         if df.shape[0] == 0 and df.shape[1] == 0 and isinstance(arg[0], slice):
-            df._index = as_index(self._df.index[arg[0]])
+            df._index = as_index(self._frame.index[arg[0]])
         return df
 
     @annotate("ILOC_SETITEM", color="blue", domain="cudf_python")
     def _setitem_tuple_arg(self, key, value):
-        columns = self._get_column_selection(key[1])
+        columns = cudf.DataFrame(self._frame._get_columns_by_index(key[1]))
 
         for col in columns:
-            self._df[col].iloc[key[0]] = value
+            self._frame[col].iloc[key[0]] = value
 
     def _getitem_scalar(self, arg):
-        col = self._df.columns[arg[1]]
-        return self._df[col].iloc[arg[0]]
-
-    def _get_column_selection(self, arg):
-        return cudf.DataFrame(self._df._get_columns_by_index(arg))
+        col = self._frame.columns[arg[1]]
+        return self._frame[col].iloc[arg[0]]
 
 
 class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):

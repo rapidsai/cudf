@@ -68,6 +68,9 @@ def _get_label_range_or_mask(index, start, stop, step):
 class _FrameIndexer:
     """Parent class for indexers."""
 
+    def __init__(self, frame):
+        self._frame = frame
+
 
 _LocIndexerClass = TypeVar("_LocIndexerClass", bound="_FrameIndexer")
 _IlocIndexerClass = TypeVar("_IlocIndexerClass", bound="_FrameIndexer")
