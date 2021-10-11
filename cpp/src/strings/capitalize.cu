@@ -201,11 +201,11 @@ struct is_title_fn {
     bool should_be_capitalized = true;   // current character should be upper-case
     for (auto const chr : d_str) {
       auto const flag = get_char_info(d_flags, chr).second;
-      if (IS_ALPHA(flag)) {
+      if (IS_UPPER_OR_LOWER(flag)) {
         if (should_be_capitalized == !IS_UPPER(flag)) return false;
         at_least_one_alpha = true;
       }
-      should_be_capitalized = !IS_ALPHA(flag);
+      should_be_capitalized = !IS_UPPER_OR_LOWER(flag);
     }
     return at_least_one_alpha;
   }
