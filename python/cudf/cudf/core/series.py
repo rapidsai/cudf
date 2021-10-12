@@ -13,6 +13,7 @@ from uuid import uuid4
 import cupy
 import numpy as np
 import pandas as pd
+from numba import cuda
 from pandas._config import get_option
 
 import cudf
@@ -3372,7 +3373,10 @@ class Series(SingleColumnFrame, Serializable):
         Notes
         -----
         UDFs are cached in memory to avoid recompilation. The first
-        call to the UDF will incur compilation overhead.
+        call to the UDF will incur compilation overhead. `func` may
+        call nested functions that are decorated with the decorator
+        `numba.cuda.jit(device=True)`, otherwise numba will raise a
+        typing error.
 
         Examples
         --------
@@ -3425,16 +3429,21 @@ class Series(SingleColumnFrame, Serializable):
         1    <NA>
         2     4.5
         dtype: float64
-
-
-
         """
         if args or kwargs:
             raise ValueError(
                 "UDFs using *args or **kwargs are not yet supported."
             )
 
-        return super()._apply(func)
+        # these functions are generally written as functions of scalar
+        # values rather than rows. Rather than writing an entirely separate
+        # numba kernel that is not built around a row object, its simpler
+        # to just turn this into the equivalent single column dataframe case
+        name = self.name or "__temp_srname"
+        df = cudf.DataFrame({name: self})
+        f_ = cuda.jit(device=True)(func)
+
+        return df.apply(lambda row: f_(row[name]))
 
     def applymap(self, udf, out_dtype=None):
         """Apply an elementwise function to transform the values in the Column.
