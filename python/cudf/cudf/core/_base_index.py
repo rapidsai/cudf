@@ -786,7 +786,7 @@ class BaseIndex(Serializable):
         >>> idx.is_numeric()
         False
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def is_boolean(self):
         """
@@ -819,7 +819,7 @@ class BaseIndex(Serializable):
         >>> idx.is_boolean()
         False
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def is_integer(self):
         """
@@ -852,7 +852,7 @@ class BaseIndex(Serializable):
         >>> idx.is_integer()
         False
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def is_floating(self):
         """
@@ -892,7 +892,7 @@ class BaseIndex(Serializable):
         >>> idx.is_floating()
         False
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def is_object(self):
         """
@@ -926,7 +926,7 @@ class BaseIndex(Serializable):
         >>> idx.is_object()
         False
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def is_categorical(self):
         """
@@ -967,7 +967,7 @@ class BaseIndex(Serializable):
         >>> s.index.is_categorical()
         False
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def is_interval(self):
         """
@@ -1001,7 +1001,7 @@ class BaseIndex(Serializable):
         >>> idx.is_interval()
         False
         """
-        raise NotImplementedError()
+        raise NotImplementedError
 
     def _union(self, other, sort=None):
         # TODO: As a future optimization we should explore
