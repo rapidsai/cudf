@@ -16,7 +16,7 @@
 
 cmake_minimum_required(VERSION 3.20.1 FATAL_ERROR)
 
-file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-21.10/RAPIDS.cmake
+file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-21.12/RAPIDS.cmake
     ${CMAKE_BINARY_DIR}/RAPIDS.cmake)
 include(${CMAKE_BINARY_DIR}/RAPIDS.cmake)
 
@@ -331,6 +331,7 @@ add_library(cudf
     src/reductions/nth_element.cu
     src/reductions/product.cu
     src/reductions/reductions.cpp
+    src/reductions/scan/rank_scan.cu
     src/reductions/scan/scan.cpp
     src/reductions/scan/scan_exclusive.cu
     src/reductions/scan/scan_inclusive.cu
@@ -436,6 +437,7 @@ add_library(cudf
     src/transform/encode.cu
     src/transform/mask_to_bools.cu
     src/transform/nans_to_nulls.cu
+    src/transform/one_hot_encode.cu
     src/transform/row_bit_count.cu
     src/transform/transform.cpp
     src/transpose/transpose.cu
@@ -473,8 +475,7 @@ target_include_directories(cudf
                        "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
            PRIVATE     "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
            INTERFACE   "$<INSTALL_INTERFACE:include>"
-                       "$<INSTALL_INTERFACE:include/libcudf/libcudacxx>"
-                       "$<INSTALL_INTERFACE:include/libcudf/Thrust>")
+                       "$<INSTALL_INTERFACE:include/libcudf/libcudacxx>")
 
 target_compile_definitions(cudf
             PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_DEFINITIONS}>"
@@ -511,7 +512,7 @@ target_link_libraries(cudf
                   cudf::Thrust
                   rmm::rmm
            PRIVATE cuco::cuco
-	             ZLIB::ZLIB
+                   ZLIB::ZLIB
                    nvcomp::nvcomp)
 
 # Add Conda library, and include paths if specified
@@ -692,6 +693,40 @@ following IMPORTED GLOBAL  targets:
     ]=])
 
 
+set(common_code_string
+    [=[
+if(NOT TARGET cudf::Thrust)
+  thrust_create_target(cudf::Thrust FROM_OPTIONS)
+endif()
+
+# nvcc automatically adds the CUDA Toolkit system include paths before any
+# system include paths that CMake adds.
+#
+# CMake implicitly treats all includes on import targets as 'SYSTEM' includes.
+#
+# To get the cudacxx shipped with cudf to be picked up by consumers instead of the
+# version shipped with the CUDA Toolkit we need to make sure it is a non-SYSTEM
+# include on the CMake side.
+#
+# To do this currently, we move the includes from the cudf::cudf target to a
+# non-import target to ensure they are `-I` instead of `-isystem`
+
+add_library(cudf_non_system_includes INTERFACE)
+target_link_libraries(cudf::cudf INTERFACE cudf_non_system_includes)
+
+get_target_property(all_includes cudf::cudf INTERFACE_INCLUDE_DIRECTORIES)
+set(system_includes )
+set(normal_includes )
+foreach(include IN LISTS all_includes)
+  if(include MATCHES "/libcudacxx")
+    list(APPEND normal_includes "${include}")
+  else()
+    list(APPEND system_includes "${include}")
+  endif()
+endforeach()
+set_target_properties(cudf::cudf PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${system_includes}")
+set_target_properties(cudf_non_system_includes PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${normal_includes}")
+]=])
 set(install_code_string
     [=[
 set(ArrowCUDA_DIR "${Arrow_DIR}")
@@ -705,11 +740,8 @@ if(testing IN_LIST cudf_FIND_COMPONENTS)
     include("${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
   endif()
 endif()
-
-if(NOT TARGET cudf::Thrust)
-  thrust_create_target(cudf::Thrust FROM_OPTIONS)
-endif()
 ]=])
+string(APPEND install_code_string "${common_code_string}")
 
 rapids_export(INSTALL cudf
     EXPORT_SET cudf-exports
@@ -728,11 +760,8 @@ endif()
 if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
   include("${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
 endif()
-
-if(NOT TARGET cudf::Thrust)
-  thrust_create_target(cudf::Thrust FROM_OPTIONS)
-endif()
 ]=])
+string(APPEND build_code_string "${common_code_string}")
 
 rapids_export(BUILD cudf
     EXPORT_SET cudf-exports

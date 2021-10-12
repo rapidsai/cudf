@@ -163,8 +163,8 @@ struct device_cast {
  * @tparam T     Type of the `fixed_point` column_view (`decimal32` or `decimal64`)
  * @param input  Input `column_view`
  * @param scale  `scale` of the returned `column`
- * @param mr     Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr     Device memory resource used to allocate the returned column's device memory
  *
  * @return std::unique_ptr<column> Returned column with new @p scale
  */

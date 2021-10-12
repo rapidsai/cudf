@@ -324,8 +324,8 @@ namespace detail {
  * @param rhs Right-hand side `column_view` used in the binary operation
  * @param op `binary_operator` to be used to combine `lhs` and `rhs`
  * @param output_type `data_type` of the output column
- * @param mr Device memory resource to use for device memory allocation
  * @param stream CUDA stream used for device memory operations
+ * @param mr Device memory resource to use for device memory allocation
  * @return std::unique_ptr<column> Output column used for binary operation
  */
 std::unique_ptr<column> make_fixed_width_column_for_output(scalar const& lhs,
@@ -351,8 +351,8 @@ std::unique_ptr<column> make_fixed_width_column_for_output(scalar const& lhs,
  * @param rhs Right-hand side `scalar` used in the binary operation
  * @param op `binary_operator` to be used to combine `lhs` and `rhs`
  * @param output_type `data_type` of the output column
- * @param mr Device memory resource to use for device memory allocation
  * @param stream CUDA stream used for device memory operations
+ * @param mr Device memory resource to use for device memory allocation
  * @return std::unique_ptr<column> Output column used for binary operation
  */
 std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lhs,
@@ -378,8 +378,8 @@ std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lh
  * @param rhs Right-hand side `column_view` used in the binary operation
  * @param op `binary_operator` to be used to combine `lhs` and `rhs`
  * @param output_type `data_type` of the output column
- * @param mr Device memory resource to use for device memory allocation
  * @param stream CUDA stream used for device memory operations
+ * @param mr Device memory resource to use for device memory allocation
  * @return std::unique_ptr<column> Output column used for binary operation
  */
 std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lhs,
@@ -426,8 +426,8 @@ namespace jit {
  * @param lhs Left-hand side `scalar` used in the binary operation
  * @param rhs Right-hand side `column_view` used in the binary operation
  * @param op `binary_operator` to be used to combine `lhs` and `rhs`
- * @param mr Device memory resource to use for device memory allocation
  * @param stream CUDA stream used for device memory operations
+ * @param mr Device memory resource to use for device memory allocation
  * @return std::unique_ptr<column> Resulting output column from the binary operation
  */
 std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
@@ -496,8 +496,8 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
  * @param lhs Left-hand side `column_view` used in the binary operation
  * @param rhs Right-hand side `scalar` used in the binary operation
  * @param op `binary_operator` to be used to combine `lhs` and `rhs`
- * @param mr Device memory resource to use for device memory allocation
  * @param stream CUDA stream used for device memory operations
+ * @param mr Device memory resource to use for device memory allocation
  * @return std::unique_ptr<column> Resulting output column from the binary operation
  */
 std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
@@ -566,8 +566,8 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
  * @param lhs Left-hand side `column_view` used in the binary operation
  * @param rhs Right-hand side `column_view` used in the binary operation
  * @param op `binary_operator` to be used to combine `lhs` and `rhs`
- * @param mr Device memory resource to use for device memory allocation
  * @param stream CUDA stream used for device memory operations
+ * @param mr Device memory resource to use for device memory allocation
  * @return std::unique_ptr<column> Resulting output column from the binary operation
  */
 std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,

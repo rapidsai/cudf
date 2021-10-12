@@ -157,17 +157,40 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     endif()
 
     if(Arrow_ADDED)
+        set(arrow_code_string
+        [=[
+        if (TARGET cudf::arrow_shared AND (NOT TARGET arrow_shared))
+            add_library(arrow_shared ALIAS cudf::arrow_shared)
+        endif()
+        if (TARGET cudf::arrow_static AND (NOT TARGET arrow_static))
+            add_library(arrow_static ALIAS cudf::arrow_static)
+        endif()
+        ]=]
+        )
+        set(arrow_cuda_code_string
+        [=[
+        if (TARGET cudf::arrow_cuda_shared AND (NOT TARGET arrow_cuda_shared))
+            add_library(arrow_cuda_shared ALIAS cudf::arrow_cuda_shared)
+        endif()
+        if (TARGET cudf::arrow_cuda_static AND (NOT TARGET arrow_cuda_static))
+            add_library(arrow_cuda_static ALIAS cudf::arrow_cuda_static)
+        endif()
+        ]=]
+        )
+
         rapids_export(BUILD Arrow
           VERSION ${VERSION}
           EXPORT_SET arrow_targets
           GLOBAL_TARGETS arrow_shared arrow_static
-          NAMESPACE cudf::)
+          NAMESPACE cudf::
+          FINAL_CODE_BLOCK arrow_code_string)
 
         rapids_export(BUILD ArrowCUDA
           VERSION ${VERSION}
           EXPORT_SET arrow_cuda_targets
           GLOBAL_TARGETS arrow_cuda_shared arrow_cuda_static
-          NAMESPACE cudf::)
+          NAMESPACE cudf::
+          FINAL_CODE_BLOCK arrow_cuda_code_string)
     endif()
     # We generate the arrow-config and arrowcuda-config files
     # when we built arrow locally, so always do `find_dependency`

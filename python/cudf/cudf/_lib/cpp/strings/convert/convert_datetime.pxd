@@ -17,7 +17,8 @@ cdef extern from "cudf/strings/convert/convert_datetime.hpp" namespace \
 
     cdef unique_ptr[column] from_timestamps(
         column_view input_col,
-        string format) except +
+        string format,
+        column_view input_strings_names) except +
 
     cdef unique_ptr[column] is_timestamp(
         column_view input_col,

@@ -9,10 +9,9 @@ from numba.cuda.cudaimpl import (
 )
 from numba.extending import lower_builtin, types
 
+from cudf.core.udf import api
+from cudf.core.udf._ops import arith_ops, comparison_ops
 from cudf.core.udf.typing import MaskedType, NAType
-
-from . import classes
-from ._ops import arith_ops, comparison_ops
 
 
 @cuda_lowering_registry.lower_constant(NAType)
@@ -154,9 +153,8 @@ def register_const_op(op):
     to_lower_op = make_const_op(op)
     cuda_lower(op, MaskedType, types.Number)(to_lower_op)
     cuda_lower(op, types.Number, MaskedType)(to_lower_op)
-
-    # to_lower_op_reflected = make_reflected_const_op(op)
-    # cuda_lower(op, types.Number, MaskedType)(to_lower_op_reflected)
+    cuda_lower(op, MaskedType, types.Boolean)(to_lower_op)
+    cuda_lower(op, types.Boolean, MaskedType)(to_lower_op)
 
 
 # register all lowering at init
@@ -192,6 +190,24 @@ def masked_scalar_is_null_impl(context, builder, sig, args):
             builder.store(context.get_constant(types.boolean, 1), result)
 
     return builder.load(result)
+
+
+# Main kernel always calls `pack_return` on whatever the user defined
+# function returned. This returns the same data if its already a `Masked`
+# else packs it up into a new one that is valid from the get go
+@cuda_lower(api.pack_return, MaskedType)
+def pack_return_masked_impl(context, builder, sig, args):
+    return args[0]
+
+
+@cuda_lower(api.pack_return, types.Boolean)
+@cuda_lower(api.pack_return, types.Number)
+def pack_return_scalar_impl(context, builder, sig, args):
+    outdata = cgutils.create_struct_proxy(sig.return_type)(context, builder)
+    outdata.value = args[0]
+    outdata.valid = context.get_constant(types.boolean, 1)
+
+    return outdata._getvalue()
 
 
 @cuda_lower(operator.truth, MaskedType)
@@ -253,7 +269,8 @@ def cast_masked_to_masked(context, builder, fromty, toty, val):
 
 
 # Masked constructor for use in a kernel for testing
-@lower_builtin(classes.Masked, types.Number, types.boolean)
+@lower_builtin(api.Masked, types.Boolean, types.boolean)
+@lower_builtin(api.Masked, types.Number, types.boolean)
 def masked_constructor(context, builder, sig, args):
     ty = sig.return_type
     value, valid = args

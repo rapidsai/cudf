@@ -2918,13 +2918,23 @@ public class TableTest extends CudfTestBase {
         .build();
          ColumnVector parts = ColumnVector
              .fromInts(1, 2, 1, 2, 1, 2, 1, 2, 1, 2);
-         PartitionedTable pt = t.partition(parts, 3);
-         Table expected = new Table.TestBuilder()
-             .column(1, 3, 5, 7, 9, 2, 4, 6, 8, 10)
-             .build()) {
-      int[] partCutoffs = pt.getPartitions();
-      assertArrayEquals(new int[]{0, 0, 5}, partCutoffs);
-      assertTablesAreEqual(expected, pt.getTable());
+         PartitionedTable pt = t.partition(parts, 3)) {
+      assertArrayEquals(new int[]{0, 0, 5}, pt.getPartitions());
+      // order within partitions is not guaranteed, so sort each partition to compare
+      ColumnVector[] slicedColumns = pt.getTable().getColumn(0).slice(0, 5, 5, 10);
+      try (Table part1 = new Table(slicedColumns[0]);
+           Table part1Sorted = part1.orderBy(OrderByArg.asc(0));
+           Table part1Expected = new Table.TestBuilder().column(1, 3, 5, 7, 9).build();
+           Table part2 = new Table(slicedColumns[1]);
+           Table part2Sorted = part2.orderBy(OrderByArg.asc(0));
+           Table part2Expected = new Table.TestBuilder().column(2, 4, 6, 8, 10).build()) {
+        assertTablesAreEqual(part1Expected, part1Sorted);
+        assertTablesAreEqual(part2Expected, part2Sorted);
+      } finally {
+        for (ColumnVector c : slicedColumns) {
+          c.close();
+        }
+      }
     }
   }
 
@@ -3138,6 +3148,28 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testSerializationRoundTripToHostEmpty() throws IOException {
+    DataType listStringsType = new ListType(true, new BasicType(true, DType.STRING));
+    DataType mapType = new ListType(true,
+            new StructType(true,
+                    new BasicType(false, DType.STRING),
+                    new BasicType(false, DType.STRING)));
+    DataType structType = new StructType(true,
+            new BasicType(true, DType.INT8),
+            new BasicType(false, DType.FLOAT32));
+    try (ColumnVector emptyInt = ColumnVector.fromInts();
+         ColumnVector emptyDouble = ColumnVector.fromDoubles();
+         ColumnVector emptyString = ColumnVector.fromStrings();
+         ColumnVector emptyListString = ColumnVector.fromLists(listStringsType);
+         ColumnVector emptyMap = ColumnVector.fromLists(mapType);
+         ColumnVector emptyStruct = ColumnVector.fromStructs(structType);
+         Table t = new Table(emptyInt, emptyInt, emptyDouble, emptyString,
+                 emptyListString, emptyMap, emptyStruct)) {
+      testSerializationRoundTripToHost(t);
+    }
+  }
+
+  @Test
   void testRoundRobinPartition() {
     try (Table t = new Table.TestBuilder()
         .column(     100,      202,      3003,    40004,        5,      -60,       1,      null,        3,  null,        5,     null,        7, null,        9,      null,       11,      null,        13,      null,       15)
@@ -3270,6 +3302,45 @@ public class TableTest extends CudfTestBase {
           for (HostMemoryBuffer buff: buffers) {
             buff.close();
           }
+        }
+      }
+    }
+  }
+
+  @Test
+  void testSerializationRoundTripToHost() throws IOException {
+    try (Table t = buildTestTable()) {
+      testSerializationRoundTripToHost(t);
+    }
+  }
+
+  private void testSerializationRoundTripToHost(Table t) throws IOException {
+    long rowCount = t.getRowCount();
+    ByteArrayOutputStream bout = new ByteArrayOutputStream();
+    JCudfSerialization.writeToStream(t, bout, 0, rowCount);
+    ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
+    DataInputStream din = new DataInputStream(bin);
+
+    JCudfSerialization.SerializedTableHeader header =
+            new JCudfSerialization.SerializedTableHeader(din);
+    assertTrue(header.wasInitialized());
+    try (HostMemoryBuffer buffer = HostMemoryBuffer.allocate(header.getDataLen())) {
+      JCudfSerialization.readTableIntoBuffer(din, header, buffer);
+      assertTrue(header.wasDataRead());
+      HostColumnVector[] hostColumns =
+              JCudfSerialization.unpackHostColumnVectors(header, buffer);
+      try {
+        assertEquals(t.getNumberOfColumns(), hostColumns.length);
+        for (int i = 0; i < hostColumns.length; i++) {
+          HostColumnVector actual = hostColumns[i];
+          assertEquals(rowCount, actual.getRowCount());
+          try (HostColumnVector expected = t.getColumn(i).copyToHost()) {
+            assertPartialColumnsAreEqual(expected, 0, rowCount, actual, "COLUMN " + i, true, false);
+          }
+        }
+      } finally {
+        for (HostColumnVector c: hostColumns) {
+          c.close();
         }
       }
     }
@@ -3481,6 +3552,106 @@ public class TableTest extends CudfTestBase {
                .build()) {
         assertTablesAreEqual(expected, result);
       }
+    }
+  }
+
+  @Test
+  void testGroupByApproxPercentileReproCase() {
+    double[] percentiles = {0.25, 0.50, 0.75};
+    try (Table t1 = new Table.TestBuilder()
+            .column("a", "a", "b", "c", "d")
+            .column(1084.0, 1719.0, 15948.0, 148029.0, 1269761.0)
+            .build();
+         Table t2 = t1
+            .groupBy(0)
+            .aggregate(GroupByAggregation.createTDigest(100).onColumn(1));
+         Table sorted = t2.orderBy(OrderByArg.asc(0));
+         ColumnVector actual = sorted.getColumn(1).approxPercentile(percentiles);
+         ColumnVector expected = ColumnVector.fromLists(
+             new ListType(false, new BasicType(false, DType.FLOAT64)),
+             Arrays.asList(1084.0, 1084.0, 1719.0),
+             Arrays.asList(15948.0, 15948.0, 15948.0),
+             Arrays.asList(148029.0, 148029.0, 148029.0),
+             Arrays.asList(1269761.0, 1269761.0, 1269761.0)
+         )) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testGroupByApproxPercentile() {
+    double[] percentiles = {0.25, 0.50, 0.75};
+    try (Table t1 = new Table.TestBuilder()
+            .column("a", "a", "a", "b", "b", "b")
+            .column(100, 150, 160, 70, 110, 160)
+            .build();
+      Table t2 = t1
+          .groupBy(0)
+          .aggregate(GroupByAggregation.createTDigest(1000).onColumn(1));
+      Table sorted = t2.orderBy(OrderByArg.asc(0));
+      ColumnVector actual = sorted.getColumn(1).approxPercentile(percentiles);
+      ColumnVector expected = ColumnVector.fromLists(
+        new ListType(false, new BasicType(false, DType.FLOAT64)),
+          Arrays.asList(100d, 150d, 160d),
+          Arrays.asList(70d, 110d, 160d)
+      )) {
+        assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testMergeApproxPercentile() {
+    double[] percentiles = {0.25, 0.50, 0.75};
+    try (Table t1 = new Table.TestBuilder()
+            .column("a", "a", "a", "b", "b", "b")
+            .column(100, 150, 160, 70, 110, 160)
+            .build();
+         Table t2 = t1
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.createTDigest(1000).onColumn(1));
+         Table t3 = t1
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.createTDigest(1000).onColumn(1));
+         Table t4 = Table.concatenate(t2, t3);
+         Table t5 = t4
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.mergeTDigest(1000).onColumn(1));
+         Table sorted = t5.orderBy(OrderByArg.asc(0));
+         ColumnVector actual = sorted.getColumn(1).approxPercentile(percentiles);
+         ColumnVector expected = ColumnVector.fromLists(
+                 new ListType(false, new BasicType(false, DType.FLOAT64)),
+                 Arrays.asList(100d, 150d, 160d),
+                 Arrays.asList(70d, 110d, 160d)
+         )) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testMergeApproxPercentile2() {
+    double[] percentiles = {0.25, 0.50, 0.75};
+    try (Table t1 = new Table.TestBuilder()
+            .column("a", "a", "a", "b", "b", "b")
+            .column(70, 110, 160, 100, 150, 160)
+            .build();
+         Table t2 = t1
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.createTDigest(1000).onColumn(1));
+         Table t3 = t1
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.createTDigest(1000).onColumn(1));
+         Table t4 = Table.concatenate(t2, t3);
+         Table t5 = t4
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.mergeTDigest(1000).onColumn(1));
+         Table sorted = t5.orderBy(OrderByArg.asc(0));
+         ColumnVector actual = sorted.getColumn(1).approxPercentile(percentiles);
+         ColumnVector expected = ColumnVector.fromLists(
+                 new ListType(false, new BasicType(false, DType.FLOAT64)),
+                 Arrays.asList(70d, 110d, 160d),
+                 Arrays.asList(100d, 150d, 160d)
+         )) {
+      assertColumnsAreEqual(expected, actual);
     }
   }
 

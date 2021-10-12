@@ -33,6 +33,7 @@ endfunction()
 # - column tests ----------------------------------------------------------------------------------
 ConfigureTest(COLUMN_TEST
     column/bit_cast_test.cpp
+    column/column_view_shallow_test.cpp
     column/column_test.cu
     column/column_device_view_test.cu
     column/compound_test.cu)
@@ -181,7 +182,8 @@ ConfigureTest(TRANSFORM_TEST
     transform/nans_to_null_test.cpp
     transform/mask_to_bools_test.cpp
     transform/bools_to_mask_test.cpp
-    transform/row_bit_count_test.cu)
+    transform/row_bit_count_test.cu
+    transform/one_hot_encode_tests.cpp)
 
 ###################################################################################################
 # - interop tests -------------------------------------------------------------------------
@@ -265,6 +267,7 @@ ConfigureTest(ITERATOR_TEST
     iterator/scalar_iterator_test.cu
     iterator/optional_iterator_test_chrono.cu
     iterator/optional_iterator_test_numeric.cu
+    iterator/indexalator_test.cu
     )
 
 ###################################################################################################

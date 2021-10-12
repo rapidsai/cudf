@@ -110,8 +110,8 @@ void set_null_mask(bitmask_type* bitmask, size_type begin_bit, size_type end_bit
  * @throws cudf::logic_error if `start < 0`
  *
  * @param bitmask Bitmask residing in device memory whose bits will be counted
- * @param start_bit Index of the first bit to count (inclusive)
- * @param stop_bit Index of the last bit to count (exclusive)
+ * @param start Index of the first bit to count (inclusive)
+ * @param stop Index of the last bit to count (exclusive)
  * @return The number of non-zero bits in the specified range
  */
 cudf::size_type count_set_bits(bitmask_type const* bitmask, size_type start, size_type stop);
@@ -126,8 +126,8 @@ cudf::size_type count_set_bits(bitmask_type const* bitmask, size_type start, siz
  * @throws cudf::logic_error if `start < 0`
  *
  * @param bitmask Bitmask residing in device memory whose bits will be counted
- * @param start_bit Index of the first bit to count (inclusive)
- * @param stop_bit Index of the last bit to count (exclusive)
+ * @param start Index of the first bit to count (inclusive)
+ * @param stop Index of the last bit to count (exclusive)
  * @return The number of zero bits in the specified range
  */
 cudf::size_type count_unset_bits(bitmask_type const* bitmask, size_type start, size_type stop);
