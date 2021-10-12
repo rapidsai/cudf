@@ -48,10 +48,10 @@ repos:
       - repo: local
         hooks:
               - id: clang-format
-                # Added to simplify invocation of all other hooks
-                # simultaneously (via any other hook stage).  This can be
-                # removed if we also move to running clang-format entirely
-                # through pre-commit.
+                # Using the pre-commit stage to simplify invocation of all
+                # other hooks simultaneously (via any other hook stage).  This
+                # can be removed if we also move to running clang-format
+                # entirely through pre-commit.
                 stages: [commit]
                 name: clang-format
                 description: Format files with ClangFormat.

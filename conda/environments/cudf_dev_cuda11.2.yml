@@ -34,7 +34,7 @@ dependencies:
   - cudatoolkit=11.2
   - pip
   - typing_extensions
-  - pre_commit
+  - pre-commit
   - dask=2021.09.1
   - distributed=2021.09.1
   - streamz
