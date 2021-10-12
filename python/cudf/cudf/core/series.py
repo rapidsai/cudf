@@ -379,7 +379,7 @@ class Series(SingleColumnFrame, Serializable):
                 "21.10 or older will no longer be deserializable "
                 "after version 21.12. Please load and resave any "
                 "pickles before upgrading to version 22.02.",
-                DeprecationWarning,
+                FutureWarning,
             )
             header["columns"] = [header.pop("column")]
             header["column_names"] = pickle.dumps(
@@ -791,7 +791,7 @@ class Series(SingleColumnFrame, Serializable):
     def set_mask(self, mask, null_count=None):
         warnings.warn(
             "Series.set_mask is deprecated and will be removed in the future.",
-            DeprecationWarning,
+            FutureWarning,
         )
         return self._from_data(
             {self.name: self._column.set_mask(mask)}, self._index
@@ -2485,7 +2485,7 @@ class Series(SingleColumnFrame, Serializable):
         warnings.warn(
             "The to_array method will be removed in a future cuDF "
             "release. Consider using `to_numpy` instead.",
-            DeprecationWarning,
+            FutureWarning,
         )
         return self._column.to_array(fillna=fillna)
 
@@ -3172,7 +3172,7 @@ class Series(SingleColumnFrame, Serializable):
     def reverse(self):
         warnings.warn(
             "Series.reverse is deprecated and will be removed in the future.",
-            DeprecationWarning,
+            FutureWarning,
         )
         rinds = column.arange((self._column.size - 1), -1, -1, dtype=np.int32)
         return self._from_data(
@@ -3226,22 +3226,28 @@ class Series(SingleColumnFrame, Serializable):
             cats = pd.Series(cats, dtype="object")
         dtype = cudf.dtype(dtype)
 
-        def encode(cat):
-            if cat is None:
-                if self.dtype.kind == "f":
-                    # Need to ignore `np.nan` values incase
-                    # of a float column
-                    return self.__class__(
-                        libcudf.unary.is_null((self._column))
-                    )
-                else:
-                    return self.isnull()
-            elif np.issubdtype(type(cat), np.floating) and np.isnan(cat):
-                return self.__class__(libcudf.unary.is_nan(self._column))
-            else:
-                return (self == cat).fillna(False)
+        try:
+            cats_col = as_column(cats, nan_as_null=False, dtype=self.dtype)
+        except TypeError:
+            raise ValueError("Cannot convert `cats` as cudf column.")
 
-        return [encode(cat).astype(dtype) for cat in cats]
+        if self._column.size * cats_col.size >= np.iinfo("int32").max:
+            raise ValueError(
+                "Size limitation exceeded: series.size * category.size < "
+                "np.iinfo('int32').max. Consider reducing size of category"
+            )
+
+        res = libcudf.transform.one_hot_encode(self._column, cats_col)
+        if dtype.type == np.bool_:
+            return [
+                Series._from_data({None: x}, index=self._index)
+                for x in list(res.values())
+            ]
+        else:
+            return [
+                Series._from_data({None: x.astype(dtype)}, index=self._index)
+                for x in list(res.values())
+            ]
 
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):
         """Perform label encoding
@@ -3296,9 +3302,9 @@ class Series(SingleColumnFrame, Serializable):
         """
 
         warnings.warn(
-            "Series.label_encoding is deprecated and will be removed in the future.\
-                 Consider using cuML's LabelEncoder instead",
-            DeprecationWarning,
+            "Series.label_encoding is deprecated and will be removed in the "
+            "future. Consider using cuML's LabelEncoder instead.",
+            FutureWarning,
         )
 
         def _return_sentinel_series():

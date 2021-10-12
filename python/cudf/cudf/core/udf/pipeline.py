@@ -198,24 +198,13 @@ def _define_function(fr, row_type, scalar_return=False):
     funtions dynamically at runtime and define them using `exec`.
     """
     # Create argument list for kernel
-    fr = {name: col for name, col in fr._data.items() if col.dtype != 'object'}
-
-    input_col_list = []
-    input_off_list = []
-    for i, col in enumerate(fr.values()):
-        if col.dtype.kind == 'O':
-            continue
-        input_col_list.append(f"input_col_{i}")
-        input_off_list.append(f"offset_{i}")
-
-    input_columns = ", ".join(input_col_list)
-    input_offsets = ", ".join(input_off_list)
+    input_columns = ", ".join([f"input_col_{i}" for i in range(len(fr._data))])
+    input_offsets = ", ".join([f"offset_{i}" for i in range(len(fr._data))])
 
     # Generate the initializers for each device function argument
     initializers = []
     row_initializers = []
-    for i, (colname, col) in enumerate(fr.items()):
-
+    for i, (colname, col) in enumerate(fr._data.items()):
         idx = str(i)
         if col.mask is not None:
             template = masked_input_initializer_template
@@ -274,6 +263,7 @@ def compile_or_get(df, f):
     cache_key = (
         *cudautils.make_cache_key(f, frame_dtypes),
         *(col.mask is None for col in df._data.values()),
+        *df._data.keys(),
     )
     if precompiled.get(cache_key) is not None:
         kernel, scalar_return_type = precompiled[cache_key]

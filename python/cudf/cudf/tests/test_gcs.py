@@ -29,7 +29,7 @@ def pdf(scope="module"):
     return df
 
 
-def test_read_csv(pdf, monkeypatch):
+def test_read_csv(pdf, monkeypatch, tmpdir):
     # Write to buffer
     fpath = TEST_BUCKET + "test_csv_reader.csv"
     buffer = pdf.to_csv(index=False)
@@ -42,8 +42,21 @@ def test_read_csv(pdf, monkeypatch):
 
     monkeypatch.setattr(gcsfs.core.GCSFileSystem, "open", mock_open)
     monkeypatch.setattr(gcsfs.core.GCSFileSystem, "size", mock_size)
-    got = cudf.read_csv("gcs://{}".format(fpath))
 
+    # Test read from explicit path.
+    # Since we are monkey-patching, we cannot use
+    # use_python_file_object=True, because the pyarrow
+    # `open_input_file` command will fail (since it doesn't
+    # use the monkey-patched `open` definition)
+    got = cudf.read_csv("gcs://{}".format(fpath), use_python_file_object=False)
+    assert_eq(pdf, got)
+
+    # AbstractBufferedFile -> PythonFile conversion
+    # will work fine with the monkey-patched FS if we
+    # pass in an fsspec file object
+    fs = gcsfs.core.GCSFileSystem()
+    with fs.open("gcs://{}".format(fpath)) as f:
+        got = cudf.read_csv(f)
     assert_eq(pdf, got)
 
 
