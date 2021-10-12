@@ -20,14 +20,15 @@
 #include <cudf/detail/sequence.hpp>
 #include <cudf/lists/detail/gather.cuh>
 #include <cudf/lists/extract.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
 
-#include <limits>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
-#include "cudf/scalar/scalar_factories.hpp"
 
 #include <thrust/copy.h>
 #include <thrust/iterator/constant_iterator.h>
+
+#include <limits>
 
 namespace cudf {
 namespace lists {

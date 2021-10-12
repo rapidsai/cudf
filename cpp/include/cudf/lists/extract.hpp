@@ -28,8 +28,8 @@ namespace lists {
  */
 
 /**
- * @brief Create a column where each row is the `index`th element from the corresponding sublist
- * in the input `lists_column`.
+ * @brief Create a column where each row is the element at position `index` from the corresponding
+ * sublist in the input `lists_column`.
  *
  * Output `column[i]` is set from element `lists_column[i][index]`.
  * If `index` is larger than the size of the sublist at `lists_column[i]`
