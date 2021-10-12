@@ -427,17 +427,14 @@ class NumericalColumn(NumericalBaseColumn):
             found = find(self.data_array_view, value, mask=self.mask,)
         if found == -1:
             if self.is_monotonic_increasing and closest:
-                if value > self.max():
-                    found = len(self) - 1
-                else:
-                    found = find(
-                        self.data_array_view,
-                        value,
-                        mask=self.mask,
-                        compare=compare,
-                    )
-                    if found == -1:
-                        raise ValueError("value not found")
+                found = find(
+                    self.data_array_view,
+                    value,
+                    mask=self.mask,
+                    compare=compare,
+                )
+                if found == -1:
+                    raise ValueError("value not found")
             else:
                 raise ValueError("value not found")
         return found
@@ -450,6 +447,11 @@ class NumericalColumn(NumericalBaseColumn):
         columns, returns the offset of the first larger value
         if closest=True.
         """
+        if self.is_monotonic_increasing and closest:
+            if value < self.min():
+                return 0
+            elif value > self.max():
+                return len(self)
         return self._find_value(value, closest, cudautils.find_first, "gt")
 
     def find_last_value(self, value: ScalarLike, closest: bool = False) -> int:
@@ -458,6 +460,11 @@ class NumericalColumn(NumericalBaseColumn):
         columns, returns the offset of the last smaller value
         if closest=True.
         """
+        if self.is_monotonic_increasing and closest:
+            if value < self.min():
+                return -1
+            elif value > self.max():
+                return len(self) - 1
         return self._find_value(value, closest, cudautils.find_last, "lt")
 
     def can_cast_safely(self, to_dtype: DtypeObj) -> bool:
