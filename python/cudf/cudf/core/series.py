@@ -4110,13 +4110,20 @@ class Series(SingleColumnFrame, Serializable):
         """
         return self._unaryop("floor")
 
-    def hash_values(self):
+    def hash_values(self, method="murmur3"):
         """Compute the hash of values in this column.
+
+        Parameters
+        ----------
+        method : {'murmur3', 'md5'}, default 'murmur3'
+            Hash function to use:
+            * murmur3: MurmurHash3 hash function.
+            * md5: MD5 hash function.
 
         Returns
         -------
-        cupy array
-            A cupy array with hash values.
+        Series
+            A Series with hash values.
 
         Examples
         --------
@@ -4127,10 +4134,12 @@ class Series(SingleColumnFrame, Serializable):
         1    120
         2     30
         dtype: int64
-        >>> series.hash_values()
+        >>> series.hash_values(method="murmur3")
         array([-1930516747,   422619251,  -941520876], dtype=int32)
         """
-        return Series(self._hash()).values
+        return Series._from_data(
+            {None: self._hash(method=method)}, index=self.index
+        )
 
     def hash_encode(self, stop, use_name=False):
         """Encode column values as ints in [0, stop) using hash function.
@@ -4173,13 +4182,19 @@ class Series(SingleColumnFrame, Serializable):
             raise ValueError("stop must be a positive integer.")
 
         initial_hash = [hash(self.name) & 0xFFFFFFFF] if use_name else None
-        hashed_values = Series(self._hash(initial_hash))
+        hashed_values = Series._from_data(
+            {
+                self.name: self._hash(
+                    method="murmur3", initial_hash=initial_hash
+                )
+            },
+            self.index,
+        )
 
         if hashed_values.has_nulls:
             raise ValueError("Column must have no nulls.")
 
-        mod_vals = hashed_values % stop
-        return Series(mod_vals._column, index=self.index, name=self.name)
+        return hashed_values % stop
 
     def quantile(
         self, q=0.5, interpolation="linear", exact=True, quant_index=True
