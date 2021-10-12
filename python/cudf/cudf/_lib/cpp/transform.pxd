@@ -43,3 +43,8 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
     cdef pair[unique_ptr[table], unique_ptr[column]] encode(
         table_view input
     ) except +
+
+    cdef pair[unique_ptr[column], table_view] one_hot_encode(
+        column_view input_column,
+        column_view categories
+    )
