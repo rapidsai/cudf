@@ -10,6 +10,8 @@ arith_ops = [
     operator.pow,
 ]
 
+bitwise_ops = [operator.and_, operator.or_, operator.xor]
+
 comparison_ops = [
     operator.eq,
     operator.ne,

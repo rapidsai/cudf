@@ -10,7 +10,7 @@ from numba.cuda.cudaimpl import (
 from numba.extending import lower_builtin, types
 
 from cudf.core.udf import api
-from cudf.core.udf._ops import arith_ops, comparison_ops
+from cudf.core.udf._ops import arith_ops, bitwise_ops, comparison_ops
 from cudf.core.udf.typing import MaskedType, NAType
 
 
@@ -158,7 +158,7 @@ def register_const_op(op):
 
 
 # register all lowering at init
-for op in arith_ops + comparison_ops:
+for op in arith_ops + bitwise_ops + comparison_ops:
     register_arithmetic_op(op)
     register_const_op(op)
     # null op impl can be shared between all ops

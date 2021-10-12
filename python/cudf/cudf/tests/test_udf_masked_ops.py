@@ -1,11 +1,11 @@
 import operator
 
-import pandas as pd
 import pytest
 from numba import cuda
 
 import cudf
 from cudf.core.scalar import NA
+from cudf.core.udf._ops import bitwise_ops
 from cudf.testing._utils import NUMERIC_TYPES, assert_eq
 
 arith_ops = [
@@ -57,6 +57,25 @@ def test_arith_masked_vs_masked(op):
         return op(x, y)
 
     gdf = cudf.DataFrame({"a": [1, None, 3, None], "b": [4, 5, None, None]})
+    run_masked_udf_test(func, func, gdf, check_dtype=False)
+
+
+@pytest.mark.parametrize("op", bitwise_ops)
+def test_bitwise_masked_vs_masked(op):
+    # This test should test all the typing
+    # and lowering for bitwise ops between
+    # two columns
+    def func(row):
+        x = row["a"]
+        y = row["b"]
+        return op(x, y)
+
+    gdf = cudf.DataFrame(
+        {
+            "a": [1, 0, 1, 0, 0b1011, 42, None],
+            "b": [1, 1, 0, 0, 0b1100, -42, 5],
+        }
+    )
     run_masked_udf_test(func, func, gdf, check_dtype=False)
 
 
