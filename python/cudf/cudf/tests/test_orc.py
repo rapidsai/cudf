@@ -1257,11 +1257,6 @@ def dec(num):
             "lf": [[i * 0.5] * 13 for i in range(12345)],
             "ld": [[dec(i / 2)] * 15 for i in range(12345)],
         },
-        # multiple stripes
-        {
-            "ls": [[str(i), str(2 * i)] for i in range(1_200_000)],
-            "ld": [[dec(i / 2)] * 5 for i in range(1_200_000)],
-        },
         # with nulls
         {
             "ls": [
@@ -1306,7 +1301,9 @@ def test_orc_writer_lists(data):
     pdf_in = pd.DataFrame(data)
 
     buffer = BytesIO()
-    cudf.from_pandas(pdf_in).to_orc(buffer)
+    cudf.from_pandas(pdf_in).to_orc(
+        buffer, stripe_size_rows=2048, row_index_stride=512
+    )
 
     pdf_out = pa.orc.ORCFile(buffer).read().to_pandas()
     assert_eq(pdf_out, pdf_in)

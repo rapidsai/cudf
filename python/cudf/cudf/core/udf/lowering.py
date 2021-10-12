@@ -335,6 +335,7 @@ def cast_masked_to_masked(context, builder, fromty, toty, val):
 
 
 # Masked constructor for use in a kernel for testing
+@lower_builtin(api.Masked, types.Boolean, types.boolean)
 @lower_builtin(api.Masked, types.Number, types.boolean)
 def masked_constructor(context, builder, sig, args):
     ty = sig.return_type

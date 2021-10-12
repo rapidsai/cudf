@@ -91,6 +91,33 @@ std::unique_ptr<column> title(
   string_character_types sequence_type = string_character_types::ALPHA,
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief Checks if the strings in the input column are title formatted.
+ *
+ * The first character of each word should be upper-case while all other
+ * characters should be lower-case. A word is a sequence of upper-case
+ * and lower-case characters.
+ *
+ * This function returns a column of booleans indicating true if the string in
+ * the input row is in title format and false if not.
+ *
+ * @code{.pseudo}
+ * Example:
+ * input = ["   Test1", "A Test", " Another test ", "N2Vidia Corp", "!Abc"];
+ * output = is_title(input)
+ * output is [true, true, false, true, true]
+ * @endcode
+ *
+ * Any null string entries result in corresponding null output column entries.
+ *
+ * @param input String column.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ * @return Column of type BOOL8.
+ */
+std::unique_ptr<column> is_title(
+  strings_column_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /** @} */  // end of doxygen group
 }  // namespace strings
 }  // namespace cudf

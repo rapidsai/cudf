@@ -4856,7 +4856,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if args or kwargs:
             raise ValueError("args and kwargs are not yet supported.")
 
-        return cudf.Series(func(self))
+        return self._apply(func)
 
     @applyutils.doc_apply()
     def apply_rows(

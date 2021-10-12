@@ -13,6 +13,7 @@ from uuid import uuid4
 import cupy
 import numpy as np
 import pandas as pd
+from numba import cuda
 from pandas._config import get_option
 
 import cudf
@@ -3225,22 +3226,28 @@ class Series(SingleColumnFrame, Serializable):
             cats = pd.Series(cats, dtype="object")
         dtype = cudf.dtype(dtype)
 
-        def encode(cat):
-            if cat is None:
-                if self.dtype.kind == "f":
-                    # Need to ignore `np.nan` values incase
-                    # of a float column
-                    return self.__class__(
-                        libcudf.unary.is_null((self._column))
-                    )
-                else:
-                    return self.isnull()
-            elif np.issubdtype(type(cat), np.floating) and np.isnan(cat):
-                return self.__class__(libcudf.unary.is_nan(self._column))
-            else:
-                return (self == cat).fillna(False)
+        try:
+            cats_col = as_column(cats, nan_as_null=False, dtype=self.dtype)
+        except TypeError:
+            raise ValueError("Cannot convert `cats` as cudf column.")
 
-        return [encode(cat).astype(dtype) for cat in cats]
+        if self._column.size * cats_col.size >= np.iinfo("int32").max:
+            raise ValueError(
+                "Size limitation exceeded: series.size * category.size < "
+                "np.iinfo('int32').max. Consider reducing size of category"
+            )
+
+        res = libcudf.transform.one_hot_encode(self._column, cats_col)
+        if dtype.type == np.bool_:
+            return [
+                Series._from_data({None: x}, index=self._index)
+                for x in list(res.values())
+            ]
+        else:
+            return [
+                Series._from_data({None: x.astype(dtype)}, index=self._index)
+                for x in list(res.values())
+            ]
 
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):
         """Perform label encoding
@@ -3366,7 +3373,10 @@ class Series(SingleColumnFrame, Serializable):
         Notes
         -----
         UDFs are cached in memory to avoid recompilation. The first
-        call to the UDF will incur compilation overhead.
+        call to the UDF will incur compilation overhead. `func` may
+        call nested functions that are decorated with the decorator
+        `numba.cuda.jit(device=True)`, otherwise numba will raise a
+        typing error.
 
         Examples
         --------
@@ -3419,16 +3429,21 @@ class Series(SingleColumnFrame, Serializable):
         1    <NA>
         2     4.5
         dtype: float64
-
-
-
         """
         if args or kwargs:
             raise ValueError(
                 "UDFs using *args or **kwargs are not yet supported."
             )
 
-        return super()._apply(func)
+        # these functions are generally written as functions of scalar
+        # values rather than rows. Rather than writing an entirely separate
+        # numba kernel that is not built around a row object, its simpler
+        # to just turn this into the equivalent single column dataframe case
+        name = self.name or "__temp_srname"
+        df = cudf.DataFrame({name: self})
+        f_ = cuda.jit(device=True)(func)
+
+        return df.apply(lambda row: f_(row[name]))
 
     def applymap(self, udf, out_dtype=None):
         """Apply an elementwise function to transform the values in the Column.
