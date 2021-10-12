@@ -163,14 +163,13 @@ def test_arith_masked_vs_null_reflected(op):
 def test_unary_masked(op, dtype):
     # This test should test all the typing
     # and lowering for unary ops
-    def func_pdf(x):
-        # unary ops doesn't really operate on NA type,
-        # so we assume result is NA whenever input is
-        # NA.
+    def func_pdf(row):
+        x = row["a"]
         return op(x) if x is not pd.NA else pd.NA
 
-    def func_gdf(x):
-        return op(x)
+    def func_gdf(row):
+        x = row["a"]
+        return op(x) if x is not cudf.NA else cudf.NA
 
     gdf = cudf.DataFrame({"a": [0.0, 0.5, None, 1.0]}).astype(dtype)
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)

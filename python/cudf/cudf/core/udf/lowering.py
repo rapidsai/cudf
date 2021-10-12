@@ -80,7 +80,7 @@ def make_arithmetic_op(op):
 
 def make_unary_op(op):
     """
-    Make closures that implement unary operations. See make_unary_op for
+    Make closures that implement unary operations. See register_unary_op for
     details.
     """
 
@@ -88,13 +88,11 @@ def make_unary_op(op):
         """
         Implement <op> `MaskedType`
         """
-        # MaskedType(...), MaskedType(...)
+        # MaskedType(...)
         masked_type_1 = sig.args[0]
         # MaskedType(...)
         masked_return_type = sig.return_type
 
-        # Let there be two actual LLVM structs backing the two inputs
-        # https://mapping-high-level-constructs-to-llvm-ir.readthedocs.io/en/latest/basic-constructs/structures.html
         m1 = cgutils.create_struct_proxy(masked_type_1)(
             context, builder, value=args[0]
         )
