@@ -900,15 +900,13 @@ class ColumnBase(Column, Serializable):
         if method != "sort":
             msg = "non sort based distinct_count() not implemented yet"
             raise NotImplementedError(msg)
-        if self._distinct_count is None:
-            self._distinct_count = {
-                dropna: cpp_distinct_count(self, ignore_nulls=dropna)
-            }
-        else:
+        try:
+            return self._distinct_count[dropna]
+        except KeyError:
             self._distinct_count[dropna] = cpp_distinct_count(
                 self, ignore_nulls=dropna
             )
-        return self._distinct_count[dropna]
+            return self._distinct_count[dropna]
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
         raise NotImplementedError()

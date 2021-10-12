@@ -1691,13 +1691,8 @@ class MultiIndex(Frame, BaseIndex):
         """
         if len(self.names) != len(other.names):
             return [None] * len(self.names)
-        names = []
-        for a_name, b_name in zip(self.names, other.names):
-            if a_name == b_name:
-                names.append(a_name)
-            else:
-                names.append(None)
-        return names
+        return [self_name if self_name == other_name else None
+                   for self_name, other_name in zip(self.names, other.names)]
 
     def _union(self, other, sort=None):
         other_df = other.copy(deep=True).to_frame(index=False)

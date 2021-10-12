@@ -80,7 +80,7 @@ cdef class Column:
 
         self._size = size
         self._cached_sizeof = None
-        self._distinct_count = None
+        self._distinct_count = {}
         self._dtype = dtype
         self._offset = offset
         self._null_count = null_count
@@ -209,7 +209,7 @@ cdef class Column:
         self._clear_cache()
 
     def _clear_cache(self):
-        self._distinct_count = None
+        self._distinct_count = {}
         self._cached_sizeof = None
         self._null_count = None
 
