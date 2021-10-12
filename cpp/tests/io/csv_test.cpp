@@ -2215,14 +2215,13 @@ TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
   // read the temp csv file using default options
   cudf_io::csv_reader_options read_options =
     cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
-      .header(-1)
       .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<cudf::string_view>()});
 
   cudf_io::table_with_metadata new_table_and_metadata = cudf_io::read_csv(read_options);
 
   // check to see / assert / verify they are identical, or at least as identical as expected.
   const auto new_table_view = new_table_and_metadata.tbl->view();
-  EXPECT_EQ(input_table, new_table_view);
+  CUDF_TEST_EXPECT_TABLES_EQUAL(input_table, new_table_view);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
