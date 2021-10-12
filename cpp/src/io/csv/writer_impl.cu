@@ -22,7 +22,7 @@
 #include "writer_impl.hpp"
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -430,7 +430,7 @@ void writer::impl::write(table_view const& table,
       });
 
       // split table_view into chunks:
-      vector_views = cudf::split(table, splits);
+      vector_views = cudf::detail::split(table, splits, stream);
     }
 
     // convert each chunk to CSV:

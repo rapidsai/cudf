@@ -42,7 +42,8 @@ std::unique_ptr<cudf::table> average_closing_price(cudf::table_view stock_info_t
 
   // Compute the average of each company's closing price with entire column
   cudf::groupby::groupby grpby_obj(keys);
-  auto requests = make_single_aggregation_request(cudf::make_mean_aggregation<cudf::groupby_aggregation>(), val);
+  auto requests =
+    make_single_aggregation_request(cudf::make_mean_aggregation<cudf::groupby_aggregation>(), val);
 
   auto agg_results = grpby_obj.aggregate(requests);
 
