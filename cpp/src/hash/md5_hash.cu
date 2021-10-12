@@ -29,6 +29,8 @@
 #include <thrust/for_each.h>
 #include <thrust/iterator/constant_iterator.h>
 
+#include <iterator>
+
 namespace cudf {
 
 namespace detail {
@@ -65,18 +67,77 @@ static const __device__ __constant__ uint32_t md5_hash_constants[64] = {
   0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1, 0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391,
 };
 
-struct md5_intermediate_data {
+template <typename T, int capacity>
+struct hash_circular_buffer {
+  T storage[capacity];
+  T* cur;
+
+  CUDA_DEVICE_CALLABLE hash_circular_buffer() : cur(storage) {}
+
+  CUDA_DEVICE_CALLABLE T* begin() { return storage; }
+  CUDA_DEVICE_CALLABLE const T* begin() const { return storage; }
+
+  CUDA_DEVICE_CALLABLE T* end() { return &storage[capacity]; }
+  CUDA_DEVICE_CALLABLE const T* end() const { return &storage[capacity]; }
+
+  CUDA_DEVICE_CALLABLE int size() const
+  {
+    return std::distance(begin(), static_cast<const T*>(cur));
+  }
+
+  CUDA_DEVICE_CALLABLE int available_space() const { return capacity - size(); }
+
+  template <typename hash_step_callable>
+  CUDA_DEVICE_CALLABLE void put(T const* in, int size, hash_step_callable hash_step)
+  {
+    int space      = available_space();
+    int copy_start = 0;
+    while (size >= space) {
+      // The buffer will be filled by this chunk of data. Copy a chunk of the
+      // data to fill the buffer and trigger a hash step.
+      memcpy(cur, in + copy_start, space);
+      hash_step();
+      size -= space;
+      copy_start += space;
+      cur   = begin();
+      space = available_space();
+    }
+    // The buffer will not be filled by the remaining data. That is, `size >= 0
+    // && size < capacity`. We copy the remaining data into the buffer but do
+    // not trigger a hash step.
+    memcpy(cur, in + copy_start, size);
+    cur += size;
+  }
+
+  template <typename hash_step_callable>
+  CUDA_DEVICE_CALLABLE void pad(int space_to_leave, hash_step_callable hash_step)
+  {
+    int space = available_space();
+    if (space_to_leave > space) {
+      memset(cur, 0x00, space);
+      hash_step();
+      cur   = begin();
+      space = available_space();
+    }
+    memset(cur, 0x00, space - space_to_leave);
+    cur += space - space_to_leave;
+  }
+
+  CUDA_DEVICE_CALLABLE T& operator[](size_t idx) { return storage[idx]; }
+  CUDA_DEVICE_CALLABLE const T& operator[](size_t idx) const { return storage[idx]; }
+};
+
+struct md5_hash_state {
   uint64_t message_length = 0;
-  uint32_t buffer_length  = 0;
   uint32_t hash_value[4]  = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
-  uint8_t buffer[64];
+  hash_circular_buffer<uint8_t, 64> buffer;
 };
 
 /**
  * @brief Core MD5 algorithm implementation. Processes a single 512-bit chunk,
  * updating the hash value so far. Does not zero out the buffer contents.
  */
-void CUDA_DEVICE_CALLABLE md5_hash_step(md5_intermediate_data* hash_state)
+void CUDA_DEVICE_CALLABLE md5_hash_step(md5_hash_state* hash_state)
 {
   uint32_t A = hash_state->hash_value[0];
   uint32_t B = hash_state->hash_value[1];
@@ -106,7 +167,7 @@ void CUDA_DEVICE_CALLABLE md5_hash_step(md5_intermediate_data* hash_state)
     }
 
     uint32_t buffer_element_as_int;
-    memcpy(&buffer_element_as_int, hash_state->buffer + g * 4, 4);
+    memcpy(&buffer_element_as_int, &hash_state->buffer[g * 4], 4);
     F = F + A + md5_hash_constants[j] + buffer_element_as_int;
     A = D;
     D = C;
@@ -118,8 +179,6 @@ void CUDA_DEVICE_CALLABLE md5_hash_step(md5_intermediate_data* hash_state)
   hash_state->hash_value[1] += B;
   hash_state->hash_value[2] += C;
   hash_state->hash_value[3] += D;
-
-  hash_state->buffer_length = 0;
 }
 
 /**
@@ -128,46 +187,20 @@ void CUDA_DEVICE_CALLABLE md5_hash_step(md5_intermediate_data* hash_state)
  * This accepts arbitrary data, handles it as bytes, and calls the hash step
  * when the buffer is filled up to message_chunk_size bytes.
  */
-void CUDA_DEVICE_CALLABLE md5_process_bytes(char const* data,
+void CUDA_DEVICE_CALLABLE md5_process_bytes(uint8_t const* data,
                                             uint32_t len,
-                                            md5_intermediate_data* hash_state)
+                                            md5_hash_state* hash_state)
 {
   hash_state->message_length += len;
-
-  // 64 bytes are processed in each hash step
-  uint32_t constexpr md5_chunk_size = 64;
-
-  if (hash_state->buffer_length + len < md5_chunk_size) {
-    // The buffer will not be filled by this data. We copy the new data into
-    // the buffer but do not trigger a hash step yet.
-    memcpy(hash_state->buffer + hash_state->buffer_length, data, len);
-    hash_state->buffer_length += len;
-  } else {
-    // The buffer will be filled by this data. Copy a chunk of the data to fill
-    // the buffer and trigger a hash step.
-    uint32_t copylen = md5_chunk_size - hash_state->buffer_length;
-    memcpy(hash_state->buffer + hash_state->buffer_length, data, copylen);
-    md5_hash_step(hash_state);
-
-    // Take buffer-sized chunks of the data and do a hash step on each chunk.
-    while (len > md5_chunk_size + copylen) {
-      memcpy(hash_state->buffer, data + copylen, md5_chunk_size);
-      md5_hash_step(hash_state);
-      copylen += md5_chunk_size;
-    }
-
-    // The remaining data chunk does not fill the buffer. We copy the data into
-    // the buffer but do not trigger a hash step yet.
-    memcpy(hash_state->buffer, data + copylen, len - copylen);
-    hash_state->buffer_length = len - copylen;
-  }
+  auto hash_step = [hash_state]() { md5_hash_step(hash_state); };
+  hash_state->buffer.put(data, len, hash_step);
 }
 
 template <typename Key>
 auto CUDA_DEVICE_CALLABLE get_data(Key const& k)
 {
   if constexpr (is_fixed_width<Key>() && !is_chrono<Key>()) {
-    return thrust::make_pair(reinterpret_cast<char const*>(&k), sizeof(Key));
+    return thrust::make_pair(reinterpret_cast<uint8_t const*>(&k), sizeof(Key));
   } else {
     cudf_assert(false && "Unsupported type.");
   }
@@ -175,7 +208,7 @@ auto CUDA_DEVICE_CALLABLE get_data(Key const& k)
 
 auto CUDA_DEVICE_CALLABLE get_data(string_view const& s)
 {
-  return thrust::make_pair(s.data(), s.size_bytes());
+  return thrust::make_pair(reinterpret_cast<uint8_t const*>(s.data()), s.size_bytes());
 }
 
 /**
@@ -183,8 +216,8 @@ auto CUDA_DEVICE_CALLABLE get_data(string_view const& s)
  *
  * This accepts typed data, normalizes it, and performs processing on raw bytes.
  */
-template <typename T>
-void CUDA_DEVICE_CALLABLE md5_process(T const& key, md5_intermediate_data* hash_state)
+template <typename Key>
+void CUDA_DEVICE_CALLABLE md5_process(Key const& key, md5_hash_state* hash_state)
 {
   auto const normalized_key = normalize_nans_and_zeros(key);
   auto const [data, size]   = get_data(normalized_key);
@@ -192,58 +225,37 @@ void CUDA_DEVICE_CALLABLE md5_process(T const& key, md5_intermediate_data* hash_
 }
 
 struct MD5ListHasher {
-  template <typename T,
-            CUDF_ENABLE_IF((is_fixed_width<T>() && !is_chrono<T>()) ||
-                           std::is_same_v<T, string_view>)>
+  template <typename Key>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view data_col,
                                        size_type offset_begin,
                                        size_type offset_end,
-                                       md5_intermediate_data* hash_state) const
+                                       md5_hash_state* hash_state) const
   {
-    for (size_type i = offset_begin; i < offset_end; i++) {
-      if (data_col.is_valid(i)) { md5_process(data_col.element<T>(i), hash_state); }
+    if constexpr ((is_fixed_width<Key>() && !is_chrono<Key>()) ||
+                  std::is_same_v<Key, string_view>) {
+      for (size_type i = offset_begin; i < offset_end; i++) {
+        if (data_col.is_valid(i)) { md5_process(data_col.element<Key>(i), hash_state); }
+      }
+    } else {
+      cudf_assert(false && "Unsupported type.");
     }
-  }
-
-  template <typename T,
-            CUDF_ENABLE_IF((!is_fixed_width<T>() || is_chrono<T>()) &&
-                           !std::is_same_v<T, string_view>)>
-  void CUDA_DEVICE_CALLABLE
-  operator()(column_device_view, size_type, size_type, md5_intermediate_data*) const
-  {
-    cudf_assert(false && "Unsupported type for hash function.");
   }
 };
 
 struct MD5Hash {
-  void CUDA_DEVICE_CALLABLE finalize(md5_intermediate_data* hash_state, char* result_location) const
+  void CUDA_DEVICE_CALLABLE finalize(md5_hash_state* hash_state, char* result_location) const
   {
-    // 64 bytes are processed in each hash step
-    constexpr int md5_chunk_size = 64;
     // Add a one bit flag (10000000) to signal the end of the message
     uint8_t constexpr end_of_message = 0x80;
     // The message length is appended to the end of the last chunk processed
     uint64_t const message_length_in_bits = hash_state->message_length * 8;
 
-    auto padding_begin     = thrust::fill_n(thrust::seq,
-                                        hash_state->buffer + hash_state->buffer_length,
-                                        sizeof(end_of_message),
-                                        end_of_message);
-    auto const buffer_end  = hash_state->buffer + md5_chunk_size;
-    auto const message_end = buffer_end - sizeof(message_length_in_bits);
-
-    if (padding_begin > message_end) {
-      // The message size will be processed in a separate hash step. Pad the remainder of the buffer
-      // with zeros for this hash step.
-      thrust::fill(thrust::seq, padding_begin, buffer_end, 0x00);
-      md5_hash_step(hash_state);
-      padding_begin = hash_state->buffer;
-    }
-    // Pad up to the point where the message size goes with zeros.
-    thrust::fill(thrust::seq, padding_begin, message_end, 0x00);
-
-    memcpy(message_end, &message_length_in_bits, sizeof(message_length_in_bits));
-    md5_hash_step(hash_state);
+    auto hash_step = [hash_state]() { md5_hash_step(hash_state); };
+    hash_state->buffer.put(&end_of_message, sizeof(end_of_message), hash_step);
+    hash_state->buffer.pad(sizeof(message_length_in_bits), hash_step);
+    hash_state->buffer.put(reinterpret_cast<uint8_t const*>(&message_length_in_bits),
+                           sizeof(message_length_in_bits),
+                           hash_step);
 
     for (int i = 0; i < 4; ++i) {
       uint32ToLowercaseHexString(hash_state->hash_value[i], result_location + (8 * i));
@@ -255,7 +267,7 @@ struct MD5Hash {
                            std::is_same_v<T, string_view>)>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
                                        size_type row_index,
-                                       md5_intermediate_data* hash_state) const
+                                       md5_hash_state* hash_state) const
   {
     md5_process(col.element<T>(row_index), hash_state);
   }
@@ -263,7 +275,7 @@ struct MD5Hash {
   template <typename T,
             CUDF_ENABLE_IF((!is_fixed_width<T>() || is_chrono<T>()) &&
                            !std::is_same_v<T, string_view>)>
-  void CUDA_DEVICE_CALLABLE operator()(column_device_view, size_type, md5_intermediate_data*) const
+  void CUDA_DEVICE_CALLABLE operator()(column_device_view, size_type, md5_hash_state*) const
   {
     cudf_assert(false && "Unsupported type for hash function.");
   }
@@ -272,7 +284,7 @@ struct MD5Hash {
 template <>
 void CUDA_DEVICE_CALLABLE MD5Hash::operator()<list_view>(column_device_view col,
                                                          size_type row_index,
-                                                         md5_intermediate_data* hash_state) const
+                                                         md5_hash_state* hash_state) const
 {
   auto const data    = col.child(lists_column_view::child_column_index);
   auto const offsets = col.child(lists_column_view::offsets_column_index);
@@ -335,7 +347,7 @@ std::unique_ptr<column> md5_hash(table_view const& input,
                    thrust::make_counting_iterator(0),
                    thrust::make_counting_iterator(input.num_rows()),
                    [d_chars, device_input = *device_input] __device__(auto row_index) {
-                     md5_intermediate_data hash_state;
+                     md5_hash_state hash_state;
                      MD5Hash hasher = MD5Hash{};
                      for (auto const& col : device_input) {
                        if (col.is_valid(row_index)) {
