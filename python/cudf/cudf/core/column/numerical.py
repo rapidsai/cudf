@@ -403,13 +403,14 @@ class NumericalColumn(NumericalBaseColumn):
             if is_integer_dtype(col.dtype):
                 # cast safely to the same dtype as self
                 if fill_value.dtype != col.dtype:
-                    fill_value = fill_value.astype(col.dtype)
-                    if not (fill_value == col).all():
+                    new_fill_value = fill_value.astype(col.dtype)
+                    if not (fill_value == fill_value).all():
                         raise TypeError(
                             f"Cannot safely cast non-equivalent "
                             f"{col.dtype.type.__name__} to "
                             f"{cudf.dtype(dtype).type.__name__}"
                         )
+                    fill_value = new_fill_value
             else:
                 fill_value = fill_value.astype(col.dtype)
 
