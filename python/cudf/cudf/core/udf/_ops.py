@@ -22,7 +22,7 @@ unary_ops = [
     # Rounding
     math.ceil,
     math.floor,
-    # Arithmatic
+    # Arithmetic
     math.sqrt,
     # Sign
     operator.pos,
