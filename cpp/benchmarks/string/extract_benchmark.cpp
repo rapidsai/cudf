@@ -47,7 +47,7 @@ static void BM_extract(benchmark::State& state, int groups)
     return row;
   });
 
-  std::string pattern;
+  std::string pattern{""};
   while (groups--) {
     pattern += "(\\d+) ";
   }
