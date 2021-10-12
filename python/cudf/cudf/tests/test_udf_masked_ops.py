@@ -343,7 +343,7 @@ def test_apply_everything():
 
     gdf = cudf.DataFrame(
         {
-            "a": [1, 3, 6, 0, None, 5, None, 100],
+            "a": [1, 3, 6, 0, None, 5, None, 101],
             "b": [3.0, 2.5, None, 5.0, 1.0, 5.0, 11.0, 1.0],
             "c": [2, 3, 6, 0, None, 5, None, 6],
             "d": [4, None, 6, 0, None, 5, None, 7.5],
