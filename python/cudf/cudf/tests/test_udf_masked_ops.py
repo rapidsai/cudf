@@ -5,7 +5,7 @@ import pytest
 from numba import cuda
 
 import cudf
-from cudf.testing._utils import NUMERIC_TYPES, assert_eq
+from cudf.testing._utils import NUMERIC_TYPES, assert_eq, _decimal_series
 
 arith_ops = [
     operator.add,
@@ -505,12 +505,7 @@ def test_masked_udf_nested_function_support(op):
     [
         {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]},
         {"a": [1, 2, 3], "c": [4, 5, 6], "b": [7, 8, 9]},
-        pytest.param(
-            {"a": [1, 2, 3], "b": [4, 5, 6], "c": ["a", "b", "c"]},
-            marks=pytest.mark.xfail(
-                reason="Until cudf/9359 is merged, this will fail"
-            ),
-        ),
+        {"a": [1, 2, 3], "b": [4, 5, 6], "c": ["a", "b", "c"]},
     ],
 )
 def test_masked_udf_subset_selection(data):
@@ -519,3 +514,28 @@ def test_masked_udf_subset_selection(data):
 
     data = cudf.DataFrame(data)
     run_masked_udf_test(func, func, data)
+
+@pytest.mark.parametrize(
+    "unsupported_dtype", 
+    [
+        "string",
+        "decimal",
+        "categorical",
+        "interval",
+        "list",
+        "struct"
+    ]
+)
+def test_masked_udf_unsupported_dtype(unsupported_dtype):
+    def func(row):
+        return row[unsupported_dtype]
+
+    data = cudf.DataFrame()
+    data['string'] = ['a','b','c']
+    data['decimal'] = _decimal_series(['1.0', '2.0', '3.0'], dtype=cudf.Decimal64Dtype(2,1))
+    data['categorical'] = cudf.Series([1,2,3], dtype='category')
+    data['interval'] = cudf.interval_range(start=0, end=3, closed=True)
+    data['list'] = [[1,2],[3,4],[5,6]]
+    data['struct'] = [{'a':1}, {'a':2}, {'a':3}]
+
+    data.apply(func, axis=1)

@@ -10,6 +10,7 @@ from nvtx import annotate
 from cudf.core.udf.api import Masked, pack_return
 from cudf.core.udf.typing import MaskedType
 from cudf.utils import cudautils
+from cudf.core.udf._ops import _is_supported_type
 
 libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 MASK_BITSIZE = np.dtype("int32").itemsize * 8
@@ -30,7 +31,7 @@ def get_frame_row_type(fr):
     """
 
     # Create the numpy structured type corresponding to the frame.
-    dtype = np.dtype([(name, col.dtype) for name, col in fr._data.items()])
+    dtype = np.dtype([(name, col.dtype) if _is_supported_type(col.dtype) else (name, np.dtype('O')) for name, col in fr._data.items()])
 
     fields = []
     offset = 0
@@ -73,7 +74,6 @@ def get_udf_return_type(func, df):
     input dtype.
     """
     row_type = get_frame_row_type(df)
-
     # Get the return type. The PTX is also returned by compile_udf, but is not
     # needed here.
     ptx, output_type = cudautils.compile_udf(func, (row_type,))
@@ -82,7 +82,15 @@ def get_udf_return_type(func, df):
     else:
         numba_output_type = output_type
 
-    return numba_output_type
+    scalar_return_type = (
+        numba_output_type
+        if not isinstance(numba_output_type, MaskedType)
+        else numba_output_type.value_type
+    )
+    if isinstance(scalar_return_type, Dummy):
+        raise TypeError(str(scalar_return_type))
+
+    return scalar_return_type
 
 
 def masked_array_type_from_col(col):
@@ -92,7 +100,7 @@ def masked_array_type_from_col(col):
     corresponding to `dtype`, and the second an
     array of bools representing a mask.
     """
-    nb_scalar_ty = numpy_support.from_dtype(col.dtype)
+    nb_scalar_ty = numpy_support.from_dtype(col.dtype if _is_supported_type(col.dtype) else np.dtype('O'))
     if col.mask is None:
         return nb_scalar_ty[::1]
     else:
@@ -198,13 +206,23 @@ def _define_function(fr, row_type, scalar_return=False):
     funtions dynamically at runtime and define them using `exec`.
     """
     # Create argument list for kernel
-    input_columns = ", ".join([f"input_col_{i}" for i in range(len(fr._data))])
-    input_offsets = ", ".join([f"offset_{i}" for i in range(len(fr._data))])
+    fr = {name: col for name, col in fr._data.items() if col.dtype != 'object'}
+
+    input_col_list = []
+    input_off_list = []
+    for i, col in enumerate(fr.values()):
+        if col.dtype.kind == 'O':
+            continue
+        input_col_list.append(f"input_col_{i}")
+        input_off_list.append(f"offset_{i}")
+
+    input_columns = ", ".join(input_col_list)
+    input_offsets = ", ".join(input_off_list)
 
     # Generate the initializers for each device function argument
     initializers = []
     row_initializers = []
-    for i, (colname, col) in enumerate(fr._data.items()):
+    for i, (colname, col) in enumerate(fr.items()):
         idx = str(i)
         if col.mask is not None:
             template = masked_input_initializer_template
@@ -259,7 +277,7 @@ def compile_or_get(df, f):
     """
 
     # check to see if we already compiled this function
-    frame_dtypes = tuple(col.dtype for col in df._data.values())
+    frame_dtypes = tuple(col.dtype if _is_supported_type(col.dtype) else np.dtype('O') for col in df._data.values())
     cache_key = (
         *cudautils.make_cache_key(f, frame_dtypes),
         *(col.mask is None for col in df._data.values()),
@@ -271,14 +289,9 @@ def compile_or_get(df, f):
 
     # precompile the user udf to get the right return type.
     # could be a MaskedType or a scalar type.
-    numba_return_type = get_udf_return_type(f, df)
+    scalar_return_type = get_udf_return_type(f, df)
 
-    _is_scalar_return = not isinstance(numba_return_type, MaskedType)
-    scalar_return_type = (
-        numba_return_type
-        if _is_scalar_return
-        else numba_return_type.value_type
-    )
+    _is_scalar_return = not isinstance(scalar_return_type, MaskedType)
 
     # this is the signature for the final full kernel compilation
     sig = construct_signature(df, scalar_return_type)
