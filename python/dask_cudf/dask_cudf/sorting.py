@@ -5,7 +5,6 @@ import cupy
 import numpy as np
 import tlz as toolz
 
-import dask.dataframe as dd
 from dask.base import tokenize
 from dask.dataframe import methods
 from dask.dataframe.core import DataFrame, Index, Series
@@ -23,16 +22,19 @@ def set_index_post(df, index_name, drop, column_dtype):
     return df2
 
 
-def _set_partitions_pre(s, divisions, ascending=True):
+def _set_partitions_pre(s, divisions, ascending=True, na_position="last"):
     if ascending:
         partitions = divisions.searchsorted(s, side="right") - 1
     else:
         partitions = (
             len(divisions) - divisions.searchsorted(s, side="right") - 1
         )
-    partitions[
-        divisions.tail(1).searchsorted(s, side="right").astype("bool")
-    ] = ((len(divisions) - 2) if ascending else 0)
+    partitions[(partitions < 0) | (partitions >= len(divisions) - 1)] = (
+        0 if ascending else (len(divisions) - 2)
+    )
+    partitions[s._columns[0].isna().values] = (
+        len(divisions) - 2 if na_position == "last" else 0
+    )
     return partitions
 
 
@@ -246,6 +248,7 @@ def sort_values(
         _set_partitions_pre,
         divisions=divisions,
         ascending=ascending,
+        na_position=na_position,
         meta=meta,
     )
 
@@ -265,13 +268,5 @@ def sort_values(
     if not isinstance(divisions, gd.DataFrame) and set_divisions:
         # Can't have multi-column divisions elsewhere in dask (yet)
         df4.divisions = methods.tolist(divisions)
-
-    # Step 4 - Reposition first column's null values if we need to
-    if na_position == "first":
-        is_na = df4[by[0]].isna()
-        df_is_na = df4[is_na]
-        df_not_is_na = df4[~is_na]
-
-        return dd.concat([df_is_na, df_not_is_na])
 
     return df4
