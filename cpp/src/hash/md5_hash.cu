@@ -239,21 +239,23 @@ struct MD5ListHasher {
 };
 
 struct MD5Hash {
-  void CUDA_DEVICE_CALLABLE finalize(md5_hash_state* hash_state, char* result_location) const
+  md5_hash_state hash_state;
+
+  void CUDA_DEVICE_CALLABLE finalize(char* result_location)
   {
     // Add a one bit flag (10000000) to signal the end of the message
     uint8_t constexpr end_of_message = 0x80;
     // The message length is appended to the end of the last chunk processed
-    uint64_t const message_length_in_bits = hash_state->message_length * 8;
+    uint64_t const message_length_in_bits = this->hash_state.message_length * 8;
 
-    hash_state->put(&end_of_message, sizeof(end_of_message), false);
-    hash_state->pad(sizeof(message_length_in_bits));
-    hash_state->put(reinterpret_cast<uint8_t const*>(&message_length_in_bits),
-                    sizeof(message_length_in_bits),
-                    false);
+    this->hash_state.put(&end_of_message, sizeof(end_of_message), false);
+    this->hash_state.pad(sizeof(message_length_in_bits));
+    this->hash_state.put(reinterpret_cast<uint8_t const*>(&message_length_in_bits),
+                         sizeof(message_length_in_bits),
+                         false);
 
     for (int i = 0; i < 4; ++i) {
-      uint32ToLowercaseHexString(hash_state->hash_value[i], result_location + (8 * i));
+      uint32ToLowercaseHexString(this->hash_state.hash_value[i], result_location + (8 * i));
     }
   }
 
@@ -337,15 +339,14 @@ std::unique_ptr<column> md5_hash(table_view const& input,
                    thrust::make_counting_iterator(0),
                    thrust::make_counting_iterator(input.num_rows()),
                    [d_chars, device_input = *device_input] __device__(auto row_index) {
-                     md5_hash_state hash_state;
                      MD5Hash hasher = MD5Hash{};
                      for (auto const& col : device_input) {
                        if (col.is_valid(row_index)) {
                          cudf::type_dispatcher<dispatch_storage_type>(
-                           col.type(), hasher, col, row_index, &hash_state);
+                           col.type(), hasher, col, row_index, &hasher.hash_state);
                        }
                      }
-                     hasher.finalize(&hash_state, d_chars + (row_index * digest_size));
+                     hasher.finalize(d_chars + (row_index * digest_size));
                    });
 
   return make_strings_column(
