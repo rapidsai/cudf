@@ -126,6 +126,21 @@ struct hash_circular_buffer {
   CUDA_DEVICE_CALLABLE const uint8_t& operator[](int idx) const { return storage[idx]; }
 };
 
+template <typename Key>
+auto CUDA_DEVICE_CALLABLE get_data(Key const& k)
+{
+  if constexpr (is_fixed_width<Key>() && !is_chrono<Key>()) {
+    return thrust::make_pair(reinterpret_cast<uint8_t const*>(&k), sizeof(Key));
+  } else {
+    cudf_assert(false && "Unsupported type.");
+  }
+}
+
+auto CUDA_DEVICE_CALLABLE get_data(string_view const& s)
+{
+  return thrust::make_pair(reinterpret_cast<uint8_t const*>(s.data()), s.size_bytes());
+}
+
 // Forward declarations
 struct md5_hash_state;
 void CUDA_DEVICE_CALLABLE md5_hash_step(md5_hash_state* hash_state);
@@ -135,17 +150,25 @@ struct md5_hash_state {
   uint32_t hash_value[4]  = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
   hash_circular_buffer<64> buffer;
 
-  CUDA_DEVICE_CALLABLE void put(uint8_t const* in, int size, bool extend_message_length)
+  void CUDA_DEVICE_CALLABLE put(uint8_t const* in, int size, bool extend_message_length)
   {
     auto hash_step = [this]() { md5_hash_step(this); };
     this->buffer.put(in, size, hash_step);
     if (extend_message_length) { message_length += size; }
   }
 
-  CUDA_DEVICE_CALLABLE void pad(int space_to_leave)
+  void CUDA_DEVICE_CALLABLE pad(int space_to_leave)
   {
     auto hash_step = [this]() { md5_hash_step(this); };
     this->buffer.pad(space_to_leave, hash_step);
+  }
+
+  template <typename Key>
+  void CUDA_DEVICE_CALLABLE process(Key const& key)
+  {
+    auto const normalized_key = normalize_nans_and_zeros(key);
+    auto const [data, size]   = get_data(normalized_key);
+    put(data, size, true);
   }
 };
 
@@ -197,47 +220,6 @@ void CUDA_DEVICE_CALLABLE md5_hash_step(md5_hash_state* hash_state)
   hash_state->hash_value[3] += D;
 }
 
-/**
- * @brief Core MD5 element processing function
- *
- * This accepts arbitrary data, handles it as bytes, and calls the hash step
- * when the buffer is filled up to message_chunk_size bytes.
- */
-void CUDA_DEVICE_CALLABLE md5_process_bytes(uint8_t const* data,
-                                            uint32_t len,
-                                            md5_hash_state* hash_state)
-{
-  hash_state->put(data, len, true);
-}
-
-template <typename Key>
-auto CUDA_DEVICE_CALLABLE get_data(Key const& k)
-{
-  if constexpr (is_fixed_width<Key>() && !is_chrono<Key>()) {
-    return thrust::make_pair(reinterpret_cast<uint8_t const*>(&k), sizeof(Key));
-  } else {
-    cudf_assert(false && "Unsupported type.");
-  }
-}
-
-auto CUDA_DEVICE_CALLABLE get_data(string_view const& s)
-{
-  return thrust::make_pair(reinterpret_cast<uint8_t const*>(s.data()), s.size_bytes());
-}
-
-/**
- * @brief MD5 typed element processor.
- *
- * This accepts typed data, normalizes it, and performs processing on raw bytes.
- */
-template <typename Key>
-void CUDA_DEVICE_CALLABLE md5_process(Key const& key, md5_hash_state* hash_state)
-{
-  auto const normalized_key = normalize_nans_and_zeros(key);
-  auto const [data, size]   = get_data(normalized_key);
-  md5_process_bytes(data, size, hash_state);
-}
-
 struct MD5ListHasher {
   template <typename Key>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view data_col,
@@ -248,7 +230,7 @@ struct MD5ListHasher {
     if constexpr ((is_fixed_width<Key>() && !is_chrono<Key>()) ||
                   std::is_same_v<Key, string_view>) {
       for (size_type i = offset_begin; i < offset_end; i++) {
-        if (data_col.is_valid(i)) { md5_process(data_col.element<Key>(i), hash_state); }
+        if (data_col.is_valid(i)) { hash_state->process(data_col.element<Key>(i)); }
       }
     } else {
       cudf_assert(false && "Unsupported type.");
@@ -282,7 +264,7 @@ struct MD5Hash {
   {
     if constexpr ((is_fixed_width<Key>() && !is_chrono<Key>()) ||
                   std::is_same_v<Key, string_view>) {
-      md5_process(col.element<Key>(row_index), hash_state);
+      hash_state->process(col.element<Key>(row_index));
     } else {
       cudf_assert(false && "Unsupported type for hash function.");
     }
