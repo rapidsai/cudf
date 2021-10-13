@@ -44,7 +44,7 @@ class _Indexer:
         raise KeyError()
 
     def set(self, obj: Frame, value: ColumnBase, validate=False):
-        # set the colum in `obj`
+        # set the column in `obj`
         if self.column:
             obj._data.set_by_label(self.name, value, validate=validate)
         else:

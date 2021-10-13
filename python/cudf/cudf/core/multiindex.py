@@ -127,11 +127,11 @@ class _MultiIndexColumnAccessor(ColumnAccessor):
             ]
 
     def __delitem__(self, key: Any):
-        del self._data[
-            _MultiIndexColumnName(
+        if not isinstance(key, _MultiIndexColumnName):
+            key = _MultiIndexColumnName(
                 (self._get_and_validate_unique_index(key), key)
             )
-        ]
+        super().__delitem__(key)
 
     @cached_property
     def names(self) -> Tuple[Any, ...]:
@@ -172,7 +172,11 @@ class _MultiIndexColumnAccessor(ColumnAccessor):
         -------
         ColumnAccessor
         """
-        if isinstance(key, slice):
+        if isinstance(key, _MultiIndexColumnName):
+            return self.__class__(
+                {key[1]: self._data[key]}, level_names=self.level_names
+            )
+        elif isinstance(key, slice):
             return self._select_by_label_slice(key)
         elif pd.api.types.is_list_like(key) and not isinstance(key, tuple):
             return self._select_by_label_list_like(key)
@@ -224,28 +228,22 @@ class _MultiIndexColumnAccessor(ColumnAccessor):
             If True, the provided value will be coerced to a column and
             validated before setting (Default value = True).
         """
-        # TODO: Actually I think the below comment is wrong.
-        # _MultiIndexColumnName needs to be handled differently. Something to
-        # come back.
-        # If we were passed the right key type, it always already exists and we
-        # already overwrote it correctly.
         if not isinstance(key, _MultiIndexColumnName):
             # Pop the key, verify its uniqueness or error, then insert.
-            if key in self._name_index_map:
-                raise ValueError(
-                    "set_by_label is not defined for labels that already "
-                    "exist in the dataset."
-                )
-            key = _MultiIndexColumnName((self._index_counter, key))
-            self._index_counter += 1
+            keys = self._name_index_map.get(key, [])
+            if keys:
+                if len(keys) != 1:
+                    raise ValueError(
+                        "set_by_label is not defined for duplicate labels in "
+                        "MultiIndexes."
+                    )
+                key = list(self.keys())[next(iter(keys))]
+            else:
+                key = _MultiIndexColumnName((self._index_counter, key))
+                self._index_counter += 1
 
-        try:
-            super().set_by_label(key, value, validate)
-        except Exception:
-            self._index_counter -= 1
-            raise
-        else:
-            self._name_index_map[key[1]].add(key[0])
+        super().set_by_label(key, value, validate)
+        self._name_index_map[key[1]].add(key[0])
 
     def _select_by_label_list_like(self, key: Any) -> ColumnAccessor:
         indices = []
