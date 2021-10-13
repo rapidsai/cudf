@@ -95,16 +95,18 @@ struct calculate_group_statistics_functor {
 
     using type_convert = detail::type_conversion<detail::conversion_map<IO>>;
     using CT           = typename type_convert::template type<T>;
-    typed_statistics_chunk<CT, detail::statistics_type_category<T, IO>::include_aggregate> chunk(
-      s.group.num_rows);
+    typed_statistics_chunk<CT, detail::statistics_type_category<T, IO>::include_aggregate> chunk;
 
     for (uint32_t i = 0; i < s.group.num_rows; i += block_size) {
-      uint32_t r          = i + t;
-      uint32_t row        = r + s.group.start_row;
-      auto const is_valid = (r < s.group.num_rows) ? s.col.leaf_column->is_valid(row) : 0;
-      if (is_valid) {
-        auto converted_value = type_convert::convert(s.col.leaf_column->element<T>(row));
-        chunk.reduce(converted_value);
+      uint32_t r   = i + t;
+      uint32_t row = r + s.group.start_row;
+      if (r < s.group.num_rows) {
+        if (s.col.leaf_column->is_valid(row)) {
+          auto converted_value = type_convert::convert(s.col.leaf_column->element<T>(row));
+          chunk.reduce(converted_value);
+        } else {
+          chunk.null_count++;
+        }
       }
     }
 
@@ -120,13 +122,18 @@ struct calculate_group_statistics_functor {
   __device__ void operator()(stats_state_s& s, uint32_t t)
   {
     detail::storage_wrapper<block_size> storage(temp_storage);
-    typed_statistics_chunk<uint32_t, false> chunk(s.group.num_rows);
+    typed_statistics_chunk<uint32_t, false> chunk;
 
     for (uint32_t i = 0; i < s.group.num_rows; i += block_size) {
-      uint32_t r          = i + t;
-      uint32_t row        = r + s.group.start_row;
-      auto const is_valid = (r < s.group.num_rows) ? s.col.leaf_column->is_valid(row) : 0;
-      chunk.non_nulls += is_valid;
+      uint32_t r   = i + t;
+      uint32_t row = r + s.group.start_row;
+      if (r < s.group.num_rows) {
+        if (s.col.leaf_column->is_valid(row)) {
+          chunk.non_nulls++;
+        } else {
+          chunk.null_count++;
+        }
+      }
     }
     cub::BlockReduce<uint32_t, block_size>(storage.template get<uint32_t>()).Sum(chunk.non_nulls);
 

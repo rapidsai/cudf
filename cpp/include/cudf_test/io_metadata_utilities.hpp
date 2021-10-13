@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,19 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #pragma once
 
-namespace cudf {
-namespace io {
-/**
- * @brief Convert a string to a cuDF data_type
- *
- * @param[in] dtype The string to be converted
- *
- * @return data_type The converted data type
- */
-data_type convert_string_to_dtype(const std::string& dtype);
+#include <cudf/io/types.hpp>
 
-}  // namespace io
-}  // namespace cudf
+namespace cudf::test {
+
+void expect_metadata_equal(cudf::io::table_input_metadata in_meta,
+                           cudf::io::table_metadata out_meta);
+
+}

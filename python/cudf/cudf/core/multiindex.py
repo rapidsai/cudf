@@ -854,31 +854,38 @@ class MultiIndex(Frame, BaseIndex):
         return result
 
     def serialize(self):
-        header = {}
-        header["type-serialized"] = pickle.dumps(type(self))
-        header["names"] = pickle.dumps(self.names)
-
-        header["columns"], frames = column.serialize_columns(self._columns)
-
+        header, frames = super().serialize()
+        # Overwrite the names in _data with the true names.
+        header["column_names"] = pickle.dumps(self.names)
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
-        names = pickle.loads(header["names"])
+        if "names" in header:
+            warnings.warn(
+                "MultiIndex objects serialized in cudf version "
+                "21.10 or older will no longer be deserializable "
+                "after version 21.12. Please load and resave any "
+                "pickles before upgrading to version 22.02.",
+                FutureWarning,
+            )
+            header["column_names"] = header["names"]
+        column_names = pickle.loads(header["column_names"])
         if "source_data" in header:
             warnings.warn(
                 "MultiIndex objects serialized in cudf version "
                 "21.08 or older will no longer be deserializable "
                 "after version 21.10. Please load and resave any "
                 "pickles before upgrading to version 21.12.",
-                DeprecationWarning,
+                FutureWarning,
             )
             df = cudf.DataFrame.deserialize(header["source_data"], frames)
-            obj = cls.from_frame(df)
-            obj._set_names(names)
-            return obj
-        columns = column.deserialize_columns(header["columns"], frames)
-        return cls._from_data(dict(zip(names, columns)))
+            return cls.from_frame(df)._set_names(column_names)
+
+        # Spoof the column names to construct the frame, then set manually.
+        header["column_names"] = pickle.dumps(range(0, len(column_names)))
+        obj = super().deserialize(header, frames)
+        return obj._set_names(column_names)
 
     def __getitem__(self, index):
         if isinstance(index, int):
@@ -1606,7 +1613,7 @@ class MultiIndex(Frame, BaseIndex):
 
         # Handle partial key search. If length of `key` is less than `nlevels`,
         # Only search levels up to `len(key)` level.
-        key_as_table = libcudf.table.Table(
+        key_as_table = cudf.core.frame.Frame(
             {i: column.as_column(k, length=1) for i, k in enumerate(key)}
         )
         partial_index = self.__class__._from_data(
@@ -1633,9 +1640,7 @@ class MultiIndex(Frame, BaseIndex):
             # the range is returned.
             return slice(lower_bound, upper_bound)
 
-        true_inds = cupy.array(
-            sort_inds.slice(lower_bound, upper_bound).to_gpu_array()
-        )
+        true_inds = sort_inds.slice(lower_bound, upper_bound).values
         true_inds = _maybe_indices_to_slice(true_inds)
         if isinstance(true_inds, slice):
             return true_inds

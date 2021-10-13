@@ -23,12 +23,16 @@ def set_index_post(df, index_name, drop, column_dtype):
     return df2
 
 
-def _set_partitions_pre(s, divisions):
-    partitions = divisions.searchsorted(s, side="right") - 1
-    partitions[partitions < 0] = 0
+def _set_partitions_pre(s, divisions, ascending=True):
+    if ascending:
+        partitions = divisions.searchsorted(s, side="right") - 1
+    else:
+        partitions = (
+            len(divisions) - divisions.searchsorted(s, side="right") - 1
+        )
     partitions[
         divisions.tail(1).searchsorted(s, side="right").astype("bool")
-    ] = (len(divisions) - 2)
+    ] = ((len(divisions) - 2) if ascending else 0)
     return partitions
 
 
@@ -214,6 +218,7 @@ def sort_values(
     divisions=None,
     set_divisions=False,
     ignore_index=False,
+    ascending=True,
     na_position="last",
 ):
     """ Sort by the given list/tuple of column names.
@@ -238,7 +243,10 @@ def sort_values(
         divisions = df._meta._constructor_sliced(divisions, dtype=dtype)
 
     partitions = df[by].map_partitions(
-        _set_partitions_pre, divisions=divisions, meta=meta
+        _set_partitions_pre,
+        divisions=divisions,
+        ascending=ascending,
+        meta=meta,
     )
 
     df2 = df.assign(_partitions=partitions)
@@ -253,7 +261,7 @@ def sort_values(
     df3.divisions = (None,) * (df3.npartitions + 1)
 
     # Step 3 - Return final sorted df
-    df4 = df3.map_partitions(M.sort_values, by)
+    df4 = df3.map_partitions(M.sort_values, by, ascending=ascending)
     if not isinstance(divisions, gd.DataFrame) and set_divisions:
         # Can't have multi-column divisions elsewhere in dask (yet)
         df4.divisions = methods.tolist(divisions)

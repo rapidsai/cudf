@@ -14,6 +14,11 @@ import cudf
 from cudf.core._compat import PANDAS_GE_120
 
 _NA_REP = "<NA>"
+
+"""Map numpy dtype to pyarrow types.
+Note that np.bool_ bitwidth (8) is different from pa.bool_ (1). Special
+handling is required when converting a Boolean column into arrow.
+"""
 _np_pa_dtypes = {
     np.float64: pa.float64(),
     np.float32: pa.float32(),
@@ -22,7 +27,7 @@ _np_pa_dtypes = {
     np.int32: pa.int32(),
     np.int16: pa.int16(),
     np.int8: pa.int8(),
-    np.bool_: pa.int8(),
+    np.bool_: pa.bool_(),
     np.uint64: pa.uint64(),
     np.uint32: pa.uint32(),
     np.uint16: pa.uint16(),
@@ -493,6 +498,34 @@ def find_common_type(dtypes):
 
     if len(dtypes) == 0:
         return None
+
+    # Early exit for categoricals since they're not hashable and therefore
+    # can't be put in a set.
+    if any(cudf.api.types.is_categorical_dtype(dtype) for dtype in dtypes):
+        if all(
+            (
+                cudf.api.types.is_categorical_dtype(dtype)
+                and (not dtype.ordered if hasattr(dtype, "ordered") else True)
+            )
+            for dtype in dtypes
+        ):
+            if len(set(dtype._categories.dtype for dtype in dtypes)) == 1:
+                return cudf.CategoricalDtype(
+                    cudf.core.column.concat_columns(
+                        [dtype._categories for dtype in dtypes]
+                    ).unique()
+                )
+            else:
+                raise ValueError(
+                    "Only unordered categories of the same underlying type "
+                    "may be coerced to a common type."
+                )
+        else:
+            # TODO: Should this be an error case (mixing categorical with other
+            # dtypes) or should this return object? Unclear if we have enough
+            # information to decide right now, may have to come back to this as
+            # usage of find_common_type increases.
+            return cudf.dtype("O")
 
     # Aggregate same types
     dtypes = set(dtypes)

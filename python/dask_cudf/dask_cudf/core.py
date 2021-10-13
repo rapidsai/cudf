@@ -233,6 +233,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
         max_branch=None,
         divisions=None,
         set_divisions=False,
+        ascending=True,
         na_position="last",
         **kwargs,
     ):
@@ -243,7 +244,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
 
         if self.npartitions == 1:
             df = self.map_partitions(
-                M.sort_values, by, na_position=na_position
+                M.sort_values, by, ascending=ascending, na_position=na_position
             )
         else:
             df = sorting.sort_values(
@@ -253,6 +254,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 divisions=divisions,
                 set_divisions=set_divisions,
                 ignore_index=ignore_index,
+                ascending=ascending,
                 na_position=na_position,
             )
 
@@ -302,16 +304,16 @@ class DataFrame(_Frame, dd.core.DataFrame):
             return _parallel_var(self, meta, skipna, split_every, out)
 
     def repartition(self, *args, **kwargs):
-        """ Wraps dask.dataframe DataFrame.repartition method.
+        """Wraps dask.dataframe DataFrame.repartition method.
         Uses DataFrame.shuffle if `columns=` is specified.
         """
         # TODO: Remove this function in future(0.17 release)
         columns = kwargs.pop("columns", None)
         if columns:
             warnings.warn(
-                "The column argument will be removed from repartition in "
-                " future versions of dask_cudf. Use DataFrame.shuffle().",
-                DeprecationWarning,
+                "The columns argument will be removed from repartition in "
+                "future versions of dask_cudf. Use DataFrame.shuffle().",
+                FutureWarning,
             )
             warnings.warn(
                 "Rearranging data by column hash. Divisions will lost. "
@@ -424,7 +426,7 @@ class Series(_Frame, dd.core.Series):
 
 
 class Index(Series, dd.core.Index):
-    _partition_type = cudf.Index
+    _partition_type = cudf.Index  # type: ignore
 
 
 def _naive_var(ddf, meta, skipna, ddof, split_every, out):

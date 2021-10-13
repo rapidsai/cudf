@@ -2,7 +2,7 @@
 
 if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
     # This assumes the script is executed from the root of the repo directory
-    ./build.sh -v libcudf --allgpuarch
+    ./build.sh -v libcudf --allgpuarch --cmake-args=\"-DCMAKE_INSTALL_LIBDIR=lib\"
 else
-    ./build.sh -v libcudf tests --allgpuarch
+    ./build.sh -v libcudf tests --allgpuarch --cmake-args=\"-DCMAKE_INSTALL_LIBDIR=lib\"
 fi

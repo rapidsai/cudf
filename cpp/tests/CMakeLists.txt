@@ -33,6 +33,7 @@ endfunction()
 # - column tests ----------------------------------------------------------------------------------
 ConfigureTest(COLUMN_TEST
     column/bit_cast_test.cpp
+    column/column_view_shallow_test.cpp
     column/column_test.cu
     column/column_device_view_test.cu
     column/compound_test.cu)
@@ -62,6 +63,7 @@ ConfigureTest(GROUPBY_TEST
     groupby/count_tests.cpp
     groupby/groups_tests.cpp
     groupby/keys_tests.cpp
+    groupby/lists_tests.cpp
     groupby/m2_tests.cpp
     groupby/min_tests.cpp
     groupby/max_scan_tests.cpp
@@ -84,6 +86,7 @@ ConfigureTest(GROUPBY_TEST
     groupby/sum_of_squares_tests.cpp
     groupby/sum_scan_tests.cpp
     groupby/sum_tests.cpp
+    groupby/tdigest_tests.cu
     groupby/var_tests.cpp)
 
 ###################################################################################################
@@ -122,6 +125,7 @@ ConfigureTest(HASH_MAP_TEST
 ###################################################################################################
 # - quantiles tests -------------------------------------------------------------------------------
 ConfigureTest(QUANTILES_TEST
+    quantiles/percentile_approx_test.cu
     quantiles/quantile_test.cpp
     quantiles/quantiles_test.cpp)
 
@@ -178,7 +182,8 @@ ConfigureTest(TRANSFORM_TEST
     transform/nans_to_null_test.cpp
     transform/mask_to_bools_test.cpp
     transform/bools_to_mask_test.cpp
-    transform/row_bit_count_test.cu)
+    transform/row_bit_count_test.cu
+    transform/one_hot_encode_tests.cpp)
 
 ###################################################################################################
 # - interop tests -------------------------------------------------------------------------
@@ -214,7 +219,7 @@ ConfigureTest(COPYING_TEST
     copying/concatenate_tests.cu
     copying/copy_if_else_nested_tests.cpp
     copying/copy_range_tests.cpp
-    copying/copy_tests.cu
+    copying/copy_tests.cpp
     copying/detail_gather_tests.cu
     copying/gather_list_tests.cpp
     copying/gather_str_tests.cpp
@@ -262,6 +267,7 @@ ConfigureTest(ITERATOR_TEST
     iterator/scalar_iterator_test.cu
     iterator/optional_iterator_test_chrono.cu
     iterator/optional_iterator_test_numeric.cu
+    iterator/indexalator_test.cu
     )
 
 ###################################################################################################

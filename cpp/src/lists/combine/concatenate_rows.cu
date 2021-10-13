@@ -93,12 +93,12 @@ std::unique_ptr<column> concatenate_rows(table_view const& input,
 /**
  * @copydoc cudf::lists::concatenate_rows
  */
-std::unique_ptr<column> concatenate_rows(table_view const& lists_columns,
+std::unique_ptr<column> concatenate_rows(table_view const& input,
                                          concatenate_null_policy null_policy,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::concatenate_rows(lists_columns, null_policy, rmm::cuda_stream_default, mr);
+  return detail::concatenate_rows(input, null_policy, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace lists

@@ -41,8 +41,8 @@ namespace detail {
  * @tparam Iterator Used as input to scan to set the offset values.
  * @param begin The beginning of the input sequence
  * @param end The end of the input sequence
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return offsets child column for strings column
  */
 template <typename InputIterator>
@@ -74,8 +74,8 @@ std::unique_ptr<column> make_offsets_child_column(
  * @tparam Iter Iterator type that returns string_view instances
  * @param strings_begin Iterator to the beginning of the string_view sequence
  * @param num_strings The number of string_view instances in the sequence
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return Child offsets column
  */
 template <typename Iter>
@@ -131,8 +131,8 @@ __device__ inline char* copy_string(char* buffer, const string_view& d_string)
  *        chars memory.
  * @param exec_size Number of rows for executing the `size_and_exec_fn` function.
  * @param strings_count Number of strings.
- * @param mr Device memory resource used to allocate the returned columns' device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned columns' device memory.
  * @return offsets child column and chars child column for a strings column
  */
 template <typename SizeAndExecuteFunction>
@@ -190,8 +190,8 @@ auto make_strings_children(
  *        After that, the d_offsets and d_chars are set and this is called again to fill in the
  *        chars memory.
  * @param strings_count Number of strings.
- * @param mr Device memory resource used to allocate the returned columns' device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned columns' device memory.
  * @return offsets child column and chars child column for a strings column
  */
 template <typename SizeAndExecuteFunction>

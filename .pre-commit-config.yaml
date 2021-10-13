@@ -48,24 +48,26 @@ repos:
       - repo: local
         hooks:
               - id: clang-format
+                # Using the pre-commit stage to simplify invocation of all
+                # other hooks simultaneously (via any other hook stage).  This
+                # can be removed if we also move to running clang-format
+                # entirely through pre-commit.
+                stages: [commit]
                 name: clang-format
                 description: Format files with ClangFormat.
                 entry: clang-format -i
                 language: system
                 files: \.(cu|cuh|h|hpp|cpp|inl)$
                 args: ['-fallback-style=none']
-      - repo: local
+      - repo: https://github.com/pre-commit/mirrors-mypy
+        rev: 'v0.782'
         hooks:
               - id: mypy
-                name: mypy
-                description: mypy
+                args: ["--config-file=python/cudf/setup.cfg", "python/cudf/cudf"]
                 pass_filenames: false
-                entry: mypy --config-file=python/cudf/setup.cfg python/cudf/cudf
-                language: system
-                types: [python]
-      -   repo: https://github.com/pycqa/pydocstyle
-          rev: 6.0.0
-          hooks:
+      - repo: https://github.com/pycqa/pydocstyle
+        rev: 6.0.0
+        hooks:
               - id: pydocstyle
                 args: ["--config=python/.flake8"]
 
