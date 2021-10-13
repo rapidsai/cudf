@@ -14,37 +14,70 @@
  * limitations under the License.
  */
 
-#include "cudf_kafka/kafka_consumer.hpp"
+#define PY_SSIZE_T_CLEAN
+#include <Python.h>
+
 #include <librdkafka/rdkafkacpp.h>
 #include <chrono>
 #include <memory>
+#include "cudf_kafka/kafka_consumer.hpp"
+
+/**
+ * @brief Callback to retrieve OAuth token from external source. Invoked when
+ * token refresh is required.
+ */
+class OAuthRefreshCb : public RdKafka::OAuthBearerTokenRefreshCb {
+  void oauthbearer_token_refresh_cb(RdKafka::Handle* handle, const std::string& oauthbearer_config)
+  {
+    printf("oauthbearer_token_refresh_cb\n");
+    Py_Initialize();
+    Py_Finalize();
+  }
+};
+
+// void rd_kafka_conf_set_oauthbearer_token_refresh_cb(rd_kafka_conf_t *conf,
+//                 void (*oauthbearer_token_refresh_cb) (
+//                         rd_kafka_t *rk,
+//                         const char *oauthbearer_config,
+//                         void *opaque)) {
+// #if WITH_SASL_OAUTHBEARER
+//         rd_kafka_anyconf_set_internal(_RK_GLOBAL, conf,
+//                 "oauthbearer_token_refresh_cb", oauthbearer_token_refresh_cb);
+// #endif
+// }
 
 namespace cudf {
 namespace io {
 namespace external {
 namespace kafka {
 
-kafka_consumer::kafka_consumer(std::map<std::string, std::string> const& configs)
+// kafka_consumer::kafka_consumer(std::map<std::string, std::string> const& configs)
+kafka_consumer::kafka_consumer(PyObject const& configs)
   : kafka_conf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL))
 {
-  for (auto const& key_value : configs) {
-    std::string error_string;
-    CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
-                   kafka_conf->set(key_value.first, key_value.second, error_string),
-                 "Invalid Kafka configuration");
-  }
+  // for (auto const& key_value : configs) {
+  //   std::string error_string;
+  //   CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
+  //                  kafka_conf->set(key_value.first, key_value.second, error_string),
+  //                "Invalid Kafka configuration");
+  // }
 
-  // Kafka 0.9 > requires group.id in the configuration
-  std::string conf_val;
-  CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK == kafka_conf->get("group.id", conf_val),
-               "Kafka group.id must be configured");
+  // // Kafka 0.9 > requires group.id in the configuration
+  // std::string conf_val;
+  // CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK == kafka_conf->get("group.id", conf_val),
+  //              "Kafka group.id must be configured");
 
-  std::string errstr;
-  consumer = std::unique_ptr<RdKafka::KafkaConsumer>(
-    RdKafka::KafkaConsumer::create(kafka_conf.get(), errstr));
+  // // Sets the OAuth Callback if the configuration is present
+  // OAuthRefreshCb cb;
+  // std::string error_string;
+  // kafka_conf->set("oauthbearer_token_refresh_cb", &cb, error_string);
+
+  // std::string errstr;
+  // consumer = std::unique_ptr<RdKafka::KafkaConsumer>(
+  //   RdKafka::KafkaConsumer::create(kafka_conf.get(), errstr));
 }
 
-kafka_consumer::kafka_consumer(std::map<std::string, std::string> const& configs,
+kafka_consumer::kafka_consumer(PyObject const& configs,
                                std::string const& topic_name,
                                int partition,
                                int64_t start_offset,
@@ -58,27 +91,27 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> const& configs
     batch_timeout(batch_timeout),
     delimiter(delimiter)
 {
-  kafka_conf = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
+  // kafka_conf = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
 
-  for (auto const& key_value : configs) {
-    std::string error_string;
-    CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
-                   kafka_conf->set(key_value.first, key_value.second, error_string),
-                 "Invalid Kafka configuration");
-  }
+  // for (auto const& key_value : configs) {
+  //   std::string error_string;
+  //   CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
+  //                  kafka_conf->set(key_value.first, key_value.second, error_string),
+  //                "Invalid Kafka configuration");
+  // }
 
-  // Kafka 0.9 > requires group.id in the configuration
-  std::string conf_val;
-  CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK == kafka_conf->get("group.id", conf_val),
-               "Kafka group.id must be configured");
+  // // Kafka 0.9 > requires group.id in the configuration
+  // std::string conf_val;
+  // CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK == kafka_conf->get("group.id", conf_val),
+  //              "Kafka group.id must be configured");
 
-  std::string errstr;
-  consumer = std::unique_ptr<RdKafka::KafkaConsumer>(
-    RdKafka::KafkaConsumer::create(kafka_conf.get(), errstr));
+  // std::string errstr;
+  // consumer = std::unique_ptr<RdKafka::KafkaConsumer>(
+  //   RdKafka::KafkaConsumer::create(kafka_conf.get(), errstr));
 
-  // Pre fill the local buffer with messages so the datasource->size() invocation
-  // will return a valid size.
-  consume_to_buffer();
+  // // Pre fill the local buffer with messages so the datasource->size() invocation
+  // // will return a valid size.
+  // consume_to_buffer();
 }
 
 std::unique_ptr<cudf::io::datasource::buffer> kafka_consumer::host_read(size_t offset, size_t size)

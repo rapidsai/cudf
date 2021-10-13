@@ -14,7 +14,7 @@ from cudf_kafka._lib.kafka cimport kafka_consumer
 cdef class KafkaDatasource(Datasource):
 
     def __cinit__(self,
-                  map[string, string] kafka_configs,
+                  object kafka_configs,
                   string topic=b"",
                   int32_t partition=-1,
                   int64_t start_offset=0,

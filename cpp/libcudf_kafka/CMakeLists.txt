@@ -44,6 +44,9 @@ rapids_cpm_init()
 include(cmake/thirdparty/get_cudf.cmake)
 include(cmake/thirdparty/get_rdkafka.cmake)
 
+# Locate Python Development headers
+find_package(Python3 COMPONENTS Interpreter Development)
+
 # # GTests if enabled
 if (BUILD_TESTS)
     # GoogleTest
@@ -68,7 +71,7 @@ target_include_directories(cudf_kafka
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
-target_link_libraries(cudf_kafka PUBLIC cudf::cudf RDKAFKA::RDKAFKA)
+target_link_libraries(cudf_kafka PUBLIC cudf::cudf RDKAFKA::RDKAFKA Python3::Python)
 
 set_target_properties(cudf_kafka
     PROPERTIES BUILD_RPATH                         "\$ORIGIN"

@@ -49,7 +49,7 @@ class kafka_consumer : public cudf::io::datasource {
    * @param configs key/value pairs of librdkafka configurations that will be
    *                passed to the librdkafka client
    */
-  kafka_consumer(std::map<std::string, std::string> const& configs);
+  kafka_consumer(PyObject const& configs);
 
   /**
    * @brief Instantiate a Kafka consumer object. Documentation for librdkafka configurations can be
@@ -66,7 +66,7 @@ class kafka_consumer : public cudf::io::datasource {
    * before batch_timeout, a smaller subset will be returned
    * @param delimiter optional delimiter to insert into the output between kafka messages, Ex: "\n"
    */
-  kafka_consumer(std::map<std::string, std::string> const& configs,
+  kafka_consumer(PyObject const& configs,
                  std::string const& topic_name,
                  int partition,
                  int64_t start_offset,

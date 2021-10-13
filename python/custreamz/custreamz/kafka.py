@@ -25,13 +25,7 @@ class CudfKafkaClient:
         """
 
         self.kafka_configs = kafka_configs
-
-        self.kafka_confs = {
-            str.encode(key): str.encode(value)
-            for key, value in self.kafka_configs.items()
-        }
-
-        self.kafka_meta_client = KafkaDatasource(self.kafka_confs)
+        self.kafka_meta_client = KafkaDatasource(kafka_configs)
 
     def list_topics(self, specific_topic=None):
 
