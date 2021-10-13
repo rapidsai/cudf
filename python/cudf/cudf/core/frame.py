@@ -385,7 +385,7 @@ class Frame:
         b    2
         dtype: int64
         """
-        new_frame = self.__class__.__new__(type(self))
+        new_frame = self.__class__.__new__(self.__class__)
         new_frame._data = self._data.copy(deep=deep)
 
         if self._index is not None:
@@ -623,8 +623,8 @@ class Frame:
             result._index.names = self._index.names
         return result
 
-    def _hash(self, initial_hash_values=None):
-        return libcudf.hash.hash(self, initial_hash_values)
+    def _hash(self, method, initial_hash=None):
+        return libcudf.hash.hash(self, method, initial_hash)
 
     def _hash_partition(
         self, columns_to_hash, num_partitions, keep_index=True
