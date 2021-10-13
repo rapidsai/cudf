@@ -574,9 +574,8 @@ class RangeIndex(BaseIndex):
             end_r = max(end_s, end_o)
             result = None
             min_step = min(step_o, step_s)
-            steps_commensurate = ((start_s - start_o) % min_step) == 0
 
-            if steps_commensurate:
+            if ((start_s - start_o) % min_step) == 0:
                 # Checking to determine other is a subset of self with
                 # equal step size.
                 if (
