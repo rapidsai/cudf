@@ -809,6 +809,13 @@ class GroupBy(Serializable):
             ic = gb_corr.loc[:, i].interleave_columns()
             res[x] = ic
 
+        _index = cudf.DataFrame(
+            {
+                self.grouping.keys.names[0]: self.grouping.keys,
+                None: _cols * (len(_cols)),
+            }
+        )
+        res.index = _index
         return res
 
     def var(self, ddof=1):
