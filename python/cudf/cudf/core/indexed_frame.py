@@ -3,7 +3,7 @@
 
 from __future__ import annotations
 
-from typing import MutableMapping, Optional, Type, TypeVar
+from typing import Type, TypeVar
 
 import cupy as cp
 import pandas as pd
@@ -11,9 +11,9 @@ from nvtx import annotate
 
 import cudf
 from cudf.api.types import is_categorical_dtype, is_list_like
-from cudf.core._base_index import BaseIndex
 from cudf.core.frame import Frame
 from cudf.core.multiindex import MultiIndex
+from cudf.utils.utils import cached_property
 
 
 def _indices_from_labels(obj, labels):
@@ -97,28 +97,8 @@ class IndexedFrame(Frame):
 
     def __init__(self, data=None, index=None):
         super().__init__(data=data, index=index)
-        self._reset_indexers()
 
-    @classmethod
-    def _from_data(
-        cls, data: MutableMapping, index: Optional[BaseIndex] = None,
-    ):
-        # Add indexers when constructing any subclass via from_data.
-        obj = super()._from_data(data=data, index=index)
-        obj._reset_indexers()
-        return obj
-
-    def copy(self, deep=True):  # noqa: D102
-        obj = super().copy(deep=deep)
-        obj._reset_indexers()
-        return obj
-
-    def _reset_indexers(self):
-        # Helper function to regenerate indexer objects.
-        self._loc_indexer = self._loc_indexer_type(self)
-        self._iloc_indexer = self._iloc_indexer_type(self)
-
-    @property
+    @cached_property
     def loc(self):
         """Select rows and columns by label or boolean mask.
 
@@ -182,9 +162,9 @@ class IndexedFrame(Frame):
         e  0  9
 
         """
-        return self._loc_indexer
+        return self._loc_indexer_type(self)
 
-    @property
+    @cached_property
     def iloc(self):
         """Select values by position.
 
@@ -265,7 +245,7 @@ class IndexedFrame(Frame):
         [10 more rows]
 
         """
-        return self._iloc_indexer
+        return self._iloc_indexer_type(self)
 
     @annotate("SORT_INDEX", color="red", domain="cudf_python")
     def sort_index(
