@@ -1144,7 +1144,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             if 1 == first_data_column_position:
                 table_index = cudf.core.index.as_index(cols[0])
             elif first_data_column_position > 1:
-                table_index = libcudf.table.Table(
+                table_index = Frame(
                     data=dict(
                         zip(
                             indices[:first_data_column_position],
@@ -1153,7 +1153,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                     )
                 )
             tables.append(
-                libcudf.table.Table(
+                Frame(
                     data=dict(
                         zip(
                             indices[first_data_column_position:],
@@ -3697,7 +3697,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         warnings.warn(
             "The as_gpu_matrix method will be removed in a future cuDF "
             "release. Consider using `to_cupy` instead.",
-            DeprecationWarning,
+            FutureWarning,
         )
         if columns is None:
             columns = self._data.names
@@ -3745,7 +3745,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         warnings.warn(
             "The as_matrix method will be removed in a future cuDF "
             "release. Consider using `to_numpy` instead.",
-            DeprecationWarning,
+            FutureWarning,
         )
         return self.as_gpu_matrix(columns=columns).copy_to_host()
 
@@ -4856,7 +4856,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if args or kwargs:
             raise ValueError("args and kwargs are not yet supported.")
 
-        return cudf.Series(func(self))
+        return self._apply(func)
 
     @applyutils.doc_apply()
     def apply_rows(
@@ -5003,7 +5003,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             tpb=tpb,
         )
 
-    def hash_columns(self, columns=None):
+    def hash_columns(self, columns=None, method="murmur3"):
         """Hash the given *columns* and return a new device array
 
         Parameters
@@ -5011,14 +5011,25 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         columns : sequence of str; optional
             Sequence of column names. If columns is *None* (unspecified),
             all columns in the frame are used.
-        """
-        if columns is None:
-            table_to_hash = self
-        else:
-            cols = [self[k]._column for k in columns]
-            table_to_hash = Frame(data=dict(zip(columns, cols)))
+        method : {'murmur3', 'md5'}, default 'murmur3'
+            Hash function to use:
+            * murmur3: MurmurHash3 hash function.
+            * md5: MD5 hash function.
 
-        return Series(table_to_hash._hash()).values
+        Returns
+        -------
+        Series
+            Hash values for each row.
+        """
+        table_to_hash = (
+            self
+            if columns is None
+            else Frame(data={k: self._data[k] for k in columns})
+        )
+
+        return Series._from_data(
+            {None: table_to_hash._hash(method=method)}, index=self.index
+        )
 
     def partition_by_hash(self, columns, nparts, keep_index=True):
         """Partition the dataframe by the hashed value of data in *columns*.

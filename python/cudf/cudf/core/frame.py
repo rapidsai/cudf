@@ -10,6 +10,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    List,
     MutableMapping,
     Optional,
     Tuple,
@@ -56,7 +57,7 @@ from cudf.utils.dtypes import find_common_type, is_column_like
 T = TypeVar("T", bound="Frame")
 
 
-class Frame(libcudf.table.Table):
+class Frame:
     """
     Frame: A collection of Column objects with an optional index.
 
@@ -69,6 +70,50 @@ class Frame(libcudf.table.Table):
     """
 
     _data: "ColumnAccessor"
+    _index: Optional[cudf.core.index.BaseIndex]
+
+    def __init__(self, data=None, index=None):
+        if data is None:
+            data = {}
+        self._data = cudf.core.column_accessor.ColumnAccessor(data)
+        self._index = index
+
+    @property
+    def _num_columns(self) -> int:
+        return len(self._data)
+
+    @property
+    def _num_indices(self) -> int:
+        if self._index is None:
+            return 0
+        else:
+            return len(self._index_names)
+
+    @property
+    def _num_rows(self) -> int:
+        if self._index is not None:
+            return len(self._index)
+        if len(self._data) == 0:
+            return 0
+        return len(self._data.columns[0])
+
+    @property
+    def _column_names(self) -> List[Any]:  # TODO: List[str]?
+        return self._data.names
+
+    @property
+    def _index_names(self) -> List[Any]:  # TODO: List[str]?
+        # TODO: Temporarily suppressing mypy warnings to avoid introducing bugs
+        # by returning an empty list where one is not expected.
+        return (
+            None  # type: ignore
+            if self._index is None
+            else self._index._data.names
+        )
+
+    @property
+    def _columns(self) -> List[Any]:  # TODO: List[Column]?
+        return self._data.columns
 
     def serialize(self):
         header = {
@@ -92,7 +137,7 @@ class Frame(libcudf.table.Table):
         index: Optional[cudf.core.index.BaseIndex] = None,
     ):
         obj = cls.__new__(cls)
-        libcudf.table.Table.__init__(obj, data, index)
+        Frame.__init__(obj, data, index)
         return obj
 
     def _mimic_inplace(
@@ -340,7 +385,7 @@ class Frame(libcudf.table.Table):
         b    2
         dtype: int64
         """
-        new_frame = self.__class__.__new__(type(self))
+        new_frame = self.__class__.__new__(self.__class__)
         new_frame._data = self._data.copy(deep=deep)
 
         if self._index is not None:
@@ -578,8 +623,8 @@ class Frame(libcudf.table.Table):
             result._index.names = self._index.names
         return result
 
-    def _hash(self, initial_hash_values=None):
-        return libcudf.hash.hash(self, initial_hash_values)
+    def _hash(self, method, initial_hash=None):
+        return libcudf.hash.hash(self, method, initial_hash)
 
     def _hash_partition(
         self, columns_to_hash, num_partitions, keep_index=True
@@ -5327,7 +5372,7 @@ class SingleColumnFrame(Frame):
         warnings.warn(
             "The to_gpu_array method will be removed in a future cuDF "
             "release. Consider using `to_cupy` instead.",
-            DeprecationWarning,
+            FutureWarning,
         )
         return self._column.to_gpu_array(fillna=fillna)
 

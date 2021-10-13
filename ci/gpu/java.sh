@@ -80,7 +80,7 @@ gpuci_conda_retry install -y \
                   "rapids-notebook-env=$MINOR_VERSION.*" \
                   "dask-cuda=${MINOR_VERSION}" \
                   "rmm=$MINOR_VERSION.*" \
-                  "ucx-py=0.22.*" \
+                  "ucx-py=0.23.*" \
                   "openjdk=8.*" \
                   "maven"
 

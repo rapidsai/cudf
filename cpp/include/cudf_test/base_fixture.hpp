@@ -130,6 +130,7 @@ class UniformRandomGenerator {
    *
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
+   * @param seed  seed to initialize generator with
    */
   template <typename TL                                                          = T,
             std::enable_if_t<cudf::is_numeric<TL>() && !cudf::is_boolean<TL>()>* = nullptr>
@@ -154,6 +155,7 @@ class UniformRandomGenerator {
    *
    * @param lower Lower bound of the range
    * @param upper Upper bound of the desired range
+   * @param seed  seed to initialize generator with
    */
   template <typename TL                                                            = T,
             std::enable_if_t<cudf::is_chrono<TL>() or cudf::is_fixed_point<TL>()>* = nullptr>

@@ -867,7 +867,7 @@ class MultiIndex(Frame, BaseIndex):
                 "21.10 or older will no longer be deserializable "
                 "after version 21.12. Please load and resave any "
                 "pickles before upgrading to version 22.02.",
-                DeprecationWarning,
+                FutureWarning,
             )
             header["column_names"] = header["names"]
         column_names = pickle.loads(header["column_names"])
@@ -877,7 +877,7 @@ class MultiIndex(Frame, BaseIndex):
                 "21.08 or older will no longer be deserializable "
                 "after version 21.10. Please load and resave any "
                 "pickles before upgrading to version 21.12.",
-                DeprecationWarning,
+                FutureWarning,
             )
             df = cudf.DataFrame.deserialize(header["source_data"], frames)
             return cls.from_frame(df)._set_names(column_names)
@@ -1613,7 +1613,7 @@ class MultiIndex(Frame, BaseIndex):
 
         # Handle partial key search. If length of `key` is less than `nlevels`,
         # Only search levels up to `len(key)` level.
-        key_as_table = libcudf.table.Table(
+        key_as_table = cudf.core.frame.Frame(
             {i: column.as_column(k, length=1) for i, k in enumerate(key)}
         )
         partial_index = self.__class__._from_data(
