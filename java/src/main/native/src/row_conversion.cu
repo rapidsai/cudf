@@ -21,8 +21,6 @@
 #include <tuple>
 
 #include <cooperative_groups.h>
-#include <cudf/detail/iterator.cuh>
-#include <cudf/lists/lists_column_device_view.cuh>
 #include <type_traits>
 
 #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
@@ -30,10 +28,12 @@
 #endif
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/sequence.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/row_conversion.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
@@ -51,7 +51,7 @@
 
 #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
 constexpr auto NUM_BLOCKS_PER_KERNEL_TO_COLUMNS = 8;
-constexpr auto NUM_BLOCKS_PER_KERNEL_FROM_COLUMNS = 8;
+constexpr auto NUM_BLOCKS_PER_KERNEL_FROM_COLUMNS = 2;
 constexpr auto NUM_BLOCKS_PER_KERNEL_LOADED = 2;
 constexpr auto NUM_VALIDITY_BLOCKS_PER_KERNEL = 8;
 constexpr auto NUM_VALIDITY_BLOCKS_PER_KERNEL_LOADED = 2;
@@ -331,16 +331,8 @@ struct block_info {
   int buffer_num;
 
   __host__ __device__ size_type get_shared_row_size(size_type const *const col_offsets,
-                                                    size_type const *const col_sizes,
-                                                    bool debug_print = false) const {
+                                                    size_type const *const col_sizes) const {
     return align_offset(col_offsets[end_col] + col_sizes[end_col] - col_offsets[start_col], 8);
-  }
-  __host__ __device__ size_type get_dest_row_size(size_type const *const col_offsets,
-                                                  size_type const *const col_sizes,
-                                                  bool debug_print = false) const {
-    return align_offset(col_offsets[end_col] + col_sizes[end_col] - col_offsets[start_col] +
-                            util::div_rounding_up_unsafe(num_cols(), 8),
-                        8);
   }
   __host__ __device__ size_type num_cols() const { return end_col - start_col + 1; }
 
@@ -404,16 +396,15 @@ __global__ void copy_from_columns(const size_type num_rows, const size_type num_
   group.sync();
 
   auto const blocks_remaining =
-      std::min((uint)(num_block_infos % NUM_BLOCKS_PER_KERNEL_FROM_COLUMNS),
-               std::min(num_block_infos - blockIdx.x * NUM_BLOCKS_PER_KERNEL_TO_COLUMNS,
-                        (uint)NUM_BLOCKS_PER_KERNEL_TO_COLUMNS));
+      std::min(num_block_infos - blockIdx.x * NUM_BLOCKS_PER_KERNEL_FROM_COLUMNS,
+               (uint)NUM_BLOCKS_PER_KERNEL_FROM_COLUMNS);
 
   size_t fetch;
   size_t subset;
   for (subset = fetch = 0; subset < blocks_remaining; ++subset) {
     // Fetch ahead up to stages_count subsets
     for (; fetch < blocks_remaining && fetch < (subset + stages_count); ++fetch) {
-      auto const fetch_block = block_infos[blockIdx.x * NUM_BLOCKS_PER_KERNEL_TO_COLUMNS + fetch];
+      auto const fetch_block = block_infos[blockIdx.x * NUM_BLOCKS_PER_KERNEL_FROM_COLUMNS + fetch];
       auto const num_fetch_cols = fetch_block.num_cols();
       auto const num_fetch_rows = fetch_block.num_rows();
       auto const num_elements_in_block = num_fetch_cols * num_fetch_rows;
@@ -429,9 +420,9 @@ __global__ void copy_from_columns(const size_type num_rows, const size_type num_
       // to do the copy we need to do n column copies followed by m element copies OR
       // we have to do m element copies followed by r row copies. When going from column
       // to row it is much easier to copy by elements first otherwise we would need a running
-      // total of the column sizes for our block, which isn't readily available. This makes it more
-      // appealing to copy element-wise from input data into shared matching the end layout and do
-      // row-based memcopies out.
+      // total of the column sizes for our block, which isn't readily available. This makes it
+      // more appealing to copy element-wise from input data into shared matching the end layout
+      // and do row-based memcopies out.
 
       for (auto el = (int)threadIdx.x; el < num_elements_in_block; el += blockDim.x) {
         auto const relative_col = el / num_fetch_rows;
@@ -445,7 +436,7 @@ __global__ void copy_from_columns(const size_type num_rows, const size_type num_
         auto const shared_offset = relative_row * fetch_block_row_size + relative_col_offset;
         auto const input_src = input_data[absolute_col] + col_size * absolute_row;
 
-        // copy the element to global memory
+        // copy the element from global memory
         cuda::memcpy_async(&shared[fetch % stages_count][shared_offset], input_src, col_size,
                            fetch_barrier);
       }
@@ -454,10 +445,8 @@ __global__ void copy_from_columns(const size_type num_rows, const size_type num_
     auto &subset_barrier = block_barrier[subset % NUM_BLOCKS_PER_KERNEL_LOADED];
     subset_barrier.arrive_and_wait();
 
-    auto block = block_infos[blockIdx.x * NUM_BLOCKS_PER_KERNEL_TO_COLUMNS + subset];
-
+    auto block = block_infos[blockIdx.x * NUM_BLOCKS_PER_KERNEL_FROM_COLUMNS + subset];
     auto const block_row_size = block.get_shared_row_size(col_offsets, col_sizes);
-    auto const dest_row_size = block.get_dest_row_size(col_offsets, col_sizes);
     auto const column_offset = col_offsets[block.start_col];
 
     // copy entire rows to final dest
@@ -466,7 +455,7 @@ __global__ void copy_from_columns(const size_type num_rows, const size_type num_
 
       auto const relative_row = absolute_row - block.start_row;
       auto const output_dest =
-          output_data[block.buffer_num] + absolute_row * dest_row_size + column_offset;
+          output_data[block.buffer_num] + row_offsets[absolute_row] + column_offset;
       auto const shared_offset = block_row_size * relative_row;
 
       cuda::memcpy_async(output_dest, &shared[subset % stages_count][shared_offset], block_row_size,
@@ -563,8 +552,8 @@ __global__ void copy_validity_from_columns(
             input_nm[absolute_col] != nullptr ? input_nm[absolute_col][absolute_row / 32] : 0xFF;
 
         // every thread that is participating in the warp has a byte, but it's column-based
-        // data and we need it in row-based. So we shuffle the bits around with ballot_sync to make
-        // the bytes we actually write.
+        // data and we need it in row-based. So we shuffle the bits around with ballot_sync to
+        // make the bytes we actually write.
         for (int i = 0, byte_mask = 1; i < 8 && relative_row + i < num_rows; ++i, byte_mask <<= 1) {
           auto validity_data = __ballot_sync(participation_mask, my_byte & byte_mask);
           // lead thread in each warp writes data
@@ -1085,8 +1074,8 @@ static inline int32_t compute_fixed_width_layout(std::vector<cudf::data_type> co
   }
 
   // Now we need to add in space for validity
-  // Eventually we can think about nullable vs not nullable, but for now we will just always add it
-  // in
+  // Eventually we can think about nullable vs not nullable, but for now we will just always add
+  // it in
   int32_t validity_bytes_needed =
       (schema.size() + 7) / 8; // cudf::util::div_rounding_up_safe<int32_t>(schema.size(), 8);
   // validity comes at the end and is byte aligned so we can pack more in.
@@ -1209,11 +1198,11 @@ std::vector<block_info> build_block_infos(std::vector<size_type> const &column_s
   };
 
   // the ideal window height has lots of 8-byte reads and 8-byte writes. The optimal read/write
-  // would be memory cache line sized access, but since other blocks will read/write the edges this
-  // may not turn out to be overly important. For now, we will attempt to build a square window as
-  // far as byte sizes. x * y = shared_mem_size. Which translates to x^2 = shared_mem_size since we
-  // want them equal, so height and width are sqrt(shared_mem_size). The trick is that it's in
-  // bytes, not rows or columns.
+  // would be memory cache line sized access, but since other blocks will read/write the edges
+  // this may not turn out to be overly important. For now, we will attempt to build a square
+  // window as far as byte sizes. x * y = shared_mem_size. Which translates to x^2 =
+  // shared_mem_size since we want them equal, so height and width are sqrt(shared_mem_size). The
+  // trick is that it's in bytes, not rows or columns.
   size_type const optimal_square_len = size_type(sqrt(shmem_limit_per_block));
   int const window_height = std::clamp(
       util::round_up_safe<int>(
@@ -1478,8 +1467,8 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows(cudf::table_view cons
 }
 
 std::vector<std::unique_ptr<cudf::column>>
-old_convert_to_rows(cudf::table_view const &tbl, rmm::cuda_stream_view stream,
-                    rmm::mr::device_memory_resource *mr) {
+convert_to_rows_fixed_width_optimized(cudf::table_view const &tbl, rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource *mr) {
   const cudf::size_type num_columns = tbl.num_columns();
 
   std::vector<cudf::data_type> schema;
@@ -1656,10 +1645,9 @@ std::unique_ptr<cudf::table> convert_from_rows(cudf::lists_column_view const &in
 #endif // #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
 }
 
-std::unique_ptr<cudf::table> old_convert_from_rows(cudf::lists_column_view const &input,
-                                                   std::vector<cudf::data_type> const &schema,
-                                                   rmm::cuda_stream_view stream,
-                                                   rmm::mr::device_memory_resource *mr) {
+std::unique_ptr<cudf::table> convert_from_rows_fixed_width_optimized(
+    cudf::lists_column_view const &input, std::vector<cudf::data_type> const &schema,
+    rmm::cuda_stream_view stream, rmm::mr::device_memory_resource *mr) {
   // verify that the types are what we expect
   cudf::column_view child = input.child();
   cudf::type_id list_type = child.type().id();

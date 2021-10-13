@@ -2693,14 +2693,15 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gather(JNIEnv *env, jclas
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertToRowsFixedWidthOptimized(JNIEnv *env, jclass,
-                                                                     jlong input_table) {
+JNIEXPORT jlongArray JNICALL
+Java_ai_rapids_cudf_Table_convertToRowsFixedWidthOptimized(JNIEnv *env, jclass, jlong input_table) {
   JNI_NULL_CHECK(env, input_table, "input table is null", 0);
 
   try {
     cudf::jni::auto_set_device(env);
     cudf::table_view *n_input_table = reinterpret_cast<cudf::table_view *>(input_table);
-    std::vector<std::unique_ptr<cudf::column>> cols = cudf::old_convert_to_rows(*n_input_table);
+    std::vector<std::unique_ptr<cudf::column>> cols =
+        cudf::convert_to_rows_fixed_width_optimized(*n_input_table);
     int num_columns = cols.size();
     cudf::jni::native_jlongArray outcol_handles(env, num_columns);
     for (int i = 0; i < num_columns; i++) {
@@ -2732,10 +2733,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertToRows(JNIEnv *env
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertFromRowsFixedWidthOptimized(JNIEnv *env, jclass,
-                                                                       jlong input_column,
-                                                                       jintArray types,
-                                                                       jintArray scale) {
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertFromRowsFixedWidthOptimized(
+    JNIEnv *env, jclass, jlong input_column, jintArray types, jintArray scale) {
   JNI_NULL_CHECK(env, input_column, "input column is null", 0);
   JNI_NULL_CHECK(env, types, "types is null", 0);
 
@@ -2749,7 +2748,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertFromRowsFixedWidth
     for (int i = 0; i < n_types.size(); i++) {
       types_vec.emplace_back(cudf::jni::make_data_type(n_types[i], n_scale[i]));
     }
-    std::unique_ptr<cudf::table> result = cudf::old_convert_from_rows(list_input, types_vec);
+    std::unique_ptr<cudf::table> result =
+        cudf::convert_from_rows_fixed_width_optimized(list_input, types_vec);
     return cudf::jni::convert_table_for_return(env, result);
   }
   CATCH_STD(env, 0);
