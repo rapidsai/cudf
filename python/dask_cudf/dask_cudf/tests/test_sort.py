@@ -71,7 +71,9 @@ def test_sort_values_with_nulls(data, by):
     df = cudf.DataFrame(data)
     ddf = dd.from_pandas(df, npartitions=5)
 
-    got = ddf.sort_values(by=by)
+    with dask.config.set(scheduler="single-threaded"):
+        got = ddf.sort_values(by=by)
+
     expect = df.sort_values(by=by)
 
     # check that sorted indices are identical
