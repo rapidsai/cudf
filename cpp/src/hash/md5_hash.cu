@@ -123,8 +123,7 @@ struct hash_circular_buffer {
     cur += space - space_to_leave;
   }
 
-  CUDA_DEVICE_CALLABLE T& operator[](size_t idx) { return storage[idx]; }
-  CUDA_DEVICE_CALLABLE const T& operator[](size_t idx) const { return storage[idx]; }
+  CUDA_DEVICE_CALLABLE const T& operator[](int idx) const { return storage[idx]; }
 };
 
 struct md5_hash_state {
