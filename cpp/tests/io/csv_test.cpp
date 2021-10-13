@@ -2221,9 +2221,11 @@ TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
 
   cudf_io::table_with_metadata new_table_and_metadata = cudf_io::read_csv(read_options);
 
-  // check to see / assert / verify they are identical, or at least as identical as expected.
+  // verify that the tables are identical, or as identical as expected.
   const auto new_table_view = new_table_and_metadata.tbl->view();
   CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, new_table_view);
+  EXPECT_EQ(new_table_and_metadata.metadata.column_names[0], "0");
+  EXPECT_EQ(new_table_and_metadata.metadata.column_names[1], "1");
 }
 
 CUDF_TEST_PROGRAM_MAIN()

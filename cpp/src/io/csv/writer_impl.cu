@@ -286,12 +286,13 @@ void writer::impl::write_chunked_begin(table_view const& table,
                                        rmm::cuda_stream_view stream)
 {
   if (options_.is_enabled_include_header()) {
-    // column_names should be filled out,generated, if metadata == nullptr
+    // need to generate column names if metadata is not provided
     std::vector<std::string> generated_col_names;
     if (metadata == nullptr) {
-      for (int col_idx = 0; col_idx < table.num_columns(); ++col_idx) {
-        generated_col_names.emplace_back(std::to_string(col_idx));
-      }
+      generated_col_names.resize(table.num_columns());
+      thrust::tabulate(generated_col_names.begin(), generated_col_names.end(), [](auto idx) {
+        return std::to_string(idx);
+      });
     }
     auto const& column_names = (metadata == nullptr) ? generated_col_names : metadata->column_names;
     CUDF_EXPECTS(column_names.size() == static_cast<size_t>(table.num_columns()),
