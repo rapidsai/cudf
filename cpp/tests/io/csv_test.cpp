@@ -407,7 +407,8 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnNegativeScale)
   auto filepath = temp_env->get_temp_dir() + "FixedPointSingleColumnNegativeScale.csv";
 
   cudf_io::csv_writer_options writer_options =
-    cudf_io::csv_writer_options::builder(cudf_io::sink_info(filepath), input_table);
+    cudf_io::csv_writer_options::builder(cudf_io::sink_info(filepath), input_table)
+      .include_header(false);
 
   cudf_io::write_csv(writer_options);
 
@@ -453,7 +454,8 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnPositiveScale)
   auto filepath = temp_env->get_temp_dir() + "FixedPointSingleColumnPositiveScale.csv";
 
   cudf_io::csv_writer_options writer_options =
-    cudf_io::csv_writer_options::builder(cudf_io::sink_info(filepath), input_table);
+    cudf_io::csv_writer_options::builder(cudf_io::sink_info(filepath), input_table)
+      .include_header(false);
 
   cudf_io::write_csv(writer_options);
 
@@ -2221,7 +2223,7 @@ TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
 
   // check to see / assert / verify they are identical, or at least as identical as expected.
   const auto new_table_view = new_table_and_metadata.tbl->view();
-  CUDF_TEST_EXPECT_TABLES_EQUAL(input_table, new_table_view);
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, new_table_view);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
