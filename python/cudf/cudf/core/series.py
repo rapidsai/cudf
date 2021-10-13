@@ -24,6 +24,7 @@ from cudf.api.types import (
     is_decimal_dtype,
     is_dict_like,
     is_dtype_equal,
+    is_integer,
     is_interval_dtype,
     is_list_dtype,
     is_list_like,
@@ -3640,8 +3641,11 @@ class Series(SingleColumnFrame, Serializable):
         return Series(val_counts.index.sort_values(), name=self.name)
 
     def round(self, decimals=0, how="half_even"):
-        if not isinstance(decimals, int):
-            raise ValueError("decimals must be an int")
+        if not is_integer(decimals):
+            raise ValueError(
+                f"decimals must be an int, got {type(decimals).__name__}"
+            )
+        decimals = int(decimals)
         return super().round(decimals, how)
 
     def cov(self, other, min_periods=None):

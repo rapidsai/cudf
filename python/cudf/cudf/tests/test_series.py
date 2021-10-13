@@ -673,7 +673,7 @@ def test_series_mode(df, dropna):
         np.arange(-100.5, 101.5, 1),
     ],
 )
-@pytest.mark.parametrize("decimals", [-5, -3, -1, 0, 1, 4, 12])
+@pytest.mark.parametrize("decimals", [-5, -3, -1, 0, 1, 4, 12, np.int8(1)])
 def test_series_round(arr, decimals):
     pser = pd.Series(arr)
     ser = cudf.Series(arr)
