@@ -29,10 +29,11 @@ def _set_partitions_pre(s, divisions, ascending=True):
         partitions = (
             len(divisions) - divisions.searchsorted(s, side="right") - 1
         )
-    partitions[partitions < 0] = 0 if ascending else len(divisions) - 2
-    partitions[partitions >= len(divisions) - 1] = (
-        (len(divisions) - 2) if ascending else 0
+    # partitions[partitions < 0] = 0 if ascending else len(divisions) - 2
+    partitions[(partitions < 0) | (partitions >= len(divisions) - 1)] = (
+        0 if ascending else (len(divisions) - 2)
     )
+    partitions[s._columns[0].isna().values] = len(divisions) - 2
     return partitions
 
 
