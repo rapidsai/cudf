@@ -29,7 +29,6 @@ def _set_partitions_pre(s, divisions, ascending=True):
         partitions = (
             len(divisions) - divisions.searchsorted(s, side="right") - 1
         )
-    # partitions[partitions < 0] = 0 if ascending else len(divisions) - 2
     partitions[(partitions < 0) | (partitions >= len(divisions) - 1)] = (
         0 if ascending else (len(divisions) - 2)
     )
