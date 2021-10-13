@@ -219,7 +219,7 @@ ConfigureTest(COPYING_TEST
     copying/concatenate_tests.cu
     copying/copy_if_else_nested_tests.cpp
     copying/copy_range_tests.cpp
-    copying/copy_tests.cu
+    copying/copy_tests.cpp
     copying/detail_gather_tests.cu
     copying/gather_list_tests.cpp
     copying/gather_str_tests.cpp
