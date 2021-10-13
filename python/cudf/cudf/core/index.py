@@ -166,6 +166,8 @@ class RangeIndex(BaseIndex):
         self._index = None
         self._name = name
         self._range = range(self._start, self._stop, self._step)
+        # _end is the actual last element of RangeIndex,
+        # whereas _stop is an upper bound.
         self._end = self._start + self._step * (len(self._range) - 1)
 
     def _copy_type_metadata(
@@ -575,37 +577,40 @@ class RangeIndex(BaseIndex):
             steps_commensurate = ((start_s - start_o) % min_step) == 0
 
             if steps_commensurate:
-                if step_o == step_s:
-                    if (start_s - end_o) <= step_s and (
-                        start_o - end_s
-                    ) <= step_s:
-                        # Check to determine other is a subset of self with
-                        # equal step size.
-                        result = type(self)(start_r, end_r + step_s, step_s)
-                elif step_o % step_s == 0:
-                    if (start_o + step_s >= start_s) and (
-                        end_o - step_s <= end_s
-                    ):
-                        # Checking if self is a subset of other with unequal
-                        # step sizes.
-                        result = type(self)(start_r, end_r + step_s, step_s)
-                elif step_s % step_o == 0:
-                    if (start_s + step_o >= start_o) and (
-                        end_s - step_o <= end_o
-                    ):
-                        # Checking if other is a subset of self with unequal
-                        # step sizes.
-                        result = type(self)(start_r, end_r + step_o, step_o)
+                # Checking to determine other is a subset of self with
+                # equal step size.
+                if (
+                    step_o == step_s
+                    and (start_s - end_o) <= step_s
+                    and (start_o - end_s) <= step_s
+                ):
+                    result = type(self)(start_r, end_r + step_s, step_s)
+                # Checking if self is a subset of other with unequal
+                # step sizes.
+                elif (
+                    step_o % step_s == 0
+                    and (start_o + step_s >= start_s)
+                    and (end_o - step_s <= end_s)
+                ):
+                    result = type(self)(start_r, end_r + step_s, step_s)
+                # Checking if other is a subset of self with unequal
+                # step sizes.
+                elif (
+                    step_s % step_o == 0
+                    and (start_s + step_o >= start_o)
+                    and (end_s - step_o <= end_o)
+                ):
+                    result = type(self)(start_r, end_r + step_o, step_o)
+            # Checking to determine when the steps are even but one of
+            # the inputs spans across is near half or less then half
+            # the other input. This case needs manipulation to step
+            # size.
             elif (
                 step_o == step_s
                 and (step_s % 2 == 0)
                 and (abs(start_s - start_o) <= step_s / 2)
                 and (abs(end_s - end_o) <= step_s / 2)
             ):
-                # Check to determine when the steps are even but one of
-                # the inputs spans across is near half or less then half
-                # the other input. This case needs manipulation to step
-                # size.
                 result = type(self)(start_r, end_r + step_s / 2, step_s / 2)
             if result is not None:
                 if sort is None and not result.is_monotonic_increasing:
