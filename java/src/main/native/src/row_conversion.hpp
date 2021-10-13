@@ -25,11 +25,11 @@
 namespace cudf {
 namespace java {
 
-std::vector<std::unique_ptr<cudf::column>>
-old_convert_to_rows(cudf::table_view const &tbl,
-                    // TODO need something for validity
-                    rmm::cuda_stream_view stream = rmm::cuda_stream_default,
-                    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
+std::vector<std::unique_ptr<cudf::column>> convert_to_rows_fixed_width_optimized(
+    cudf::table_view const &tbl,
+    // TODO need something for validity
+    rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
 std::vector<std::unique_ptr<cudf::column>>
 convert_to_rows(cudf::table_view const &tbl,
@@ -37,11 +37,10 @@ convert_to_rows(cudf::table_view const &tbl,
                 rmm::cuda_stream_view stream = rmm::cuda_stream_default,
                 rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
-std::unique_ptr<cudf::table>
-old_convert_from_rows(cudf::lists_column_view const &input,
-                      std::vector<cudf::data_type> const &schema,
-                      rmm::cuda_stream_view stream = rmm::cuda_stream_default,
-                      rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<cudf::table> convert_from_rows_fixed_width_optimized(
+    cudf::lists_column_view const &input, std::vector<cudf::data_type> const &schema,
+    rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<cudf::table>
 convert_from_rows(cudf::lists_column_view const &input, std::vector<cudf::data_type> const &schema,

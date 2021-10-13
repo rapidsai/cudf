@@ -14,15 +14,21 @@
  * limitations under the License.
  */
 
+#include <cudf/column/column_view.hpp>
+#include <cudf/detail/iterator.cuh>
+#include <cudf/lists/lists_column_view.hpp>
+#include <cudf/row_conversion.hpp>
+#include <cudf/types.hpp>
+#include <cudf/wrappers/timestamps.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
-#include <cudf/row_conversion.hpp>
-#include "cudf/lists/lists_column_view.hpp"
-#include "cudf/types.hpp"
+#include <thrust/iterator/transform_iterator.h>
+
+#include <limits>
 
 struct ColumnToRowTests : public cudf::test::BaseFixture {
 };
@@ -35,20 +41,17 @@ TEST_F(ColumnToRowTests, Single)
   cudf::table_view in(std::vector<cudf::column_view>{a});
   std::vector<cudf::data_type> schema = {cudf::data_type{cudf::type_id::INT32}};
 
-  auto old_rows = cudf::old_convert_to_rows(in);
+  auto old_rows = cudf::convert_to_rows_fixed_width_optimized(in);
   auto new_rows = cudf::convert_to_rows(in);
 
   EXPECT_EQ(old_rows.size(), new_rows.size());
   for (uint i = 0; i < old_rows.size(); ++i) {
-    auto old_tbl = cudf::old_convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
+    auto old_tbl =
+      cudf::convert_from_rows_fixed_width_optimized(cudf::lists_column_view(*old_rows[i]), schema);
     auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*old_tbl, *new_tbl);
   }
-
-  /*  for (uint i = 0; i < old_rows.size(); i++) {
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*old_rows[i], *new_rows[i]);
-    }*/
 }
 
 TEST_F(ColumnToRowTests, Simple)
@@ -57,20 +60,17 @@ TEST_F(ColumnToRowTests, Simple)
   cudf::table_view in(std::vector<cudf::column_view>{a});
   std::vector<cudf::data_type> schema = {cudf::data_type{cudf::type_id::INT32}};
 
-  auto old_rows = cudf::old_convert_to_rows(in);
+  auto old_rows = cudf::convert_to_rows_fixed_width_optimized(in);
   auto new_rows = cudf::convert_to_rows(in);
 
   EXPECT_EQ(old_rows.size(), new_rows.size());
   for (uint i = 0; i < old_rows.size(); ++i) {
-    auto old_tbl = cudf::old_convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
+    auto old_tbl =
+      cudf::convert_from_rows_fixed_width_optimized(cudf::lists_column_view(*old_rows[i]), schema);
     auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*old_tbl, *new_tbl);
   }
-
-  /*  for (uint i = 0; i < old_rows.size(); i++) {
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*old_rows[i], *new_rows[i]);
-    }*/
 }
 
 TEST_F(ColumnToRowTests, Tall)
@@ -81,21 +81,18 @@ TEST_F(ColumnToRowTests, Tall)
   cudf::table_view in(std::vector<cudf::column_view>{a});
   std::vector<cudf::data_type> schema = {cudf::data_type{cudf::type_id::INT32}};
 
-  auto old_rows = cudf::old_convert_to_rows(in);
+  auto old_rows = cudf::convert_to_rows_fixed_width_optimized(in);
   auto new_rows = cudf::convert_to_rows(in);
 
   EXPECT_EQ(old_rows.size(), new_rows.size());
 
   for (uint i = 0; i < old_rows.size(); ++i) {
-    auto old_tbl = cudf::old_convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
+    auto old_tbl =
+      cudf::convert_from_rows_fixed_width_optimized(cudf::lists_column_view(*old_rows[i]), schema);
     auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*old_tbl, *new_tbl);
   }
-
-  /*  for (uint i = 0; i < old_rows.size(); i++) {
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*old_rows[i], *new_rows[i]);
-    }*/
 }
 
 TEST_F(ColumnToRowTests, Wide)
@@ -111,20 +108,17 @@ TEST_F(ColumnToRowTests, Wide)
   }
   cudf::table_view in(views);
 
-  auto old_rows = cudf::old_convert_to_rows(in);
+  auto old_rows = cudf::convert_to_rows_fixed_width_optimized(in);
   auto new_rows = cudf::convert_to_rows(in);
 
   EXPECT_EQ(old_rows.size(), new_rows.size());
   for (uint i = 0; i < old_rows.size(); ++i) {
-    auto old_tbl = cudf::old_convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
+    auto old_tbl =
+      cudf::convert_from_rows_fixed_width_optimized(cudf::lists_column_view(*old_rows[i]), schema);
     auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*old_tbl, *new_tbl);
   }
-
-  /*  for (uint i = 0; i < old_rows.size(); i++) {
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*old_rows[i], *new_rows[i]);
-    }*/
 }
 
 TEST_F(ColumnToRowTests, SingleByteWide)
@@ -141,21 +135,18 @@ TEST_F(ColumnToRowTests, SingleByteWide)
   }
   cudf::table_view in(views);
 
-  auto old_rows = cudf::old_convert_to_rows(in);
+  auto old_rows = cudf::convert_to_rows_fixed_width_optimized(in);
   auto new_rows = cudf::convert_to_rows(in);
 
   EXPECT_EQ(old_rows.size(), new_rows.size());
 
   for (uint i = 0; i < old_rows.size(); ++i) {
-    auto old_tbl = cudf::old_convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
+    auto old_tbl =
+      cudf::convert_from_rows_fixed_width_optimized(cudf::lists_column_view(*old_rows[i]), schema);
     auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*old_tbl, *new_tbl);
   }
-
-  /*  for (uint i = 0; i < old_rows.size(); i++) {
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*old_rows[i], *new_rows[i]);
-    }*/
 }
 
 TEST_F(ColumnToRowTests, Non2Power)
@@ -175,13 +166,14 @@ TEST_F(ColumnToRowTests, Non2Power)
   }
   cudf::table_view in(views);
 
-  auto old_rows = cudf::old_convert_to_rows(in);
+  auto old_rows = cudf::convert_to_rows_fixed_width_optimized(in);
   auto new_rows = cudf::convert_to_rows(in);
 
   EXPECT_EQ(old_rows.size(), new_rows.size());
 
   for (uint i = 0; i < old_rows.size(); ++i) {
-    auto old_tbl = cudf::old_convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
+    auto old_tbl =
+      cudf::convert_from_rows_fixed_width_optimized(cudf::lists_column_view(*old_rows[i]), schema);
     auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
 
     for (int j = 0; j < old_tbl->num_columns(); ++j) {
@@ -190,10 +182,6 @@ TEST_F(ColumnToRowTests, Non2Power)
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*old_tbl, *new_tbl);
   }
-
-  /*  for (uint i = 0; i < old_rows.size(); i++) {
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*old_rows[i], *new_rows[i]);
-    }*/
 }
 
 TEST_F(ColumnToRowTests, Big)
@@ -214,13 +202,14 @@ TEST_F(ColumnToRowTests, Big)
   }
   cudf::table_view in(views);
 
-  auto old_rows = cudf::old_convert_to_rows(in);
+  auto old_rows = cudf::convert_to_rows_fixed_width_optimized(in);
   auto new_rows = cudf::convert_to_rows(in);
 
   EXPECT_EQ(old_rows.size(), new_rows.size());
 
   for (uint i = 0; i < old_rows.size(); ++i) {
-    auto old_tbl = cudf::old_convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
+    auto old_tbl =
+      cudf::convert_from_rows_fixed_width_optimized(cudf::lists_column_view(*old_rows[i]), schema);
     auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
 
     for (int j = 0; j < old_tbl->num_columns(); ++j) {
@@ -229,10 +218,6 @@ TEST_F(ColumnToRowTests, Big)
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*old_tbl, *new_tbl);
   }
-
-  /*  for (uint i = 0; i < old_rows.size(); i++) {
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*old_rows[i], *new_rows[i]);
-    }*/
 }
 
 TEST_F(ColumnToRowTests, Bigger)
@@ -253,12 +238,13 @@ TEST_F(ColumnToRowTests, Bigger)
   }
   cudf::table_view in(views);
 
-  auto old_rows = cudf::old_convert_to_rows(in);
+  auto old_rows = cudf::convert_to_rows_fixed_width_optimized(in);
   auto new_rows = cudf::convert_to_rows(in);
 
   EXPECT_EQ(old_rows.size(), new_rows.size());
   for (uint i = 0; i < old_rows.size(); ++i) {
-    auto old_tbl = cudf::old_convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
+    auto old_tbl =
+      cudf::convert_from_rows_fixed_width_optimized(cudf::lists_column_view(*old_rows[i]), schema);
     auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
 
     for (int j = 0; j < old_tbl->num_columns(); ++j) {
@@ -267,10 +253,6 @@ TEST_F(ColumnToRowTests, Bigger)
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*old_tbl, *new_tbl);
   }
-
-  /*  for (uint i = 0; i < old_rows.size(); i++) {
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*old_rows[i], *new_rows[i]);
-    }*/
 }
 
 TEST_F(ColumnToRowTests, Biggest)
@@ -291,13 +273,14 @@ TEST_F(ColumnToRowTests, Biggest)
   }
   cudf::table_view in(views);
 
-  auto old_rows = cudf::old_convert_to_rows(in);
+  auto old_rows = cudf::convert_to_rows_fixed_width_optimized(in);
   auto new_rows = cudf::convert_to_rows(in);
 
   EXPECT_EQ(old_rows.size(), new_rows.size());
 
   for (uint i = 0; i < old_rows.size(); ++i) {
-    auto old_tbl = cudf::old_convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
+    auto old_tbl =
+      cudf::convert_from_rows_fixed_width_optimized(cudf::lists_column_view(*old_rows[i]), schema);
     auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
 
     for (int j = 0; j < old_tbl->num_columns(); ++j) {
@@ -306,9 +289,6 @@ TEST_F(ColumnToRowTests, Biggest)
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*old_tbl, *new_tbl);
   }
-  /*  for (uint i = 0; i < old_rows.size(); i++) {
-      CUDF_TEST_EXPECT_COLUMNS_EQUAL(*old_rows[i], *new_rows[i]);
-    }*/
 }
 
 TEST_F(RowToColumnTests, Single)
@@ -319,7 +299,8 @@ TEST_F(RowToColumnTests, Single)
   auto old_rows = cudf::convert_to_rows(in);
   std::vector<cudf::data_type> schema{cudf::data_type{cudf::type_id::INT32}};
   for (uint i = 0; i < old_rows.size(); ++i) {
-    auto old_tbl = cudf::old_convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
+    auto old_tbl =
+      cudf::convert_from_rows_fixed_width_optimized(cudf::lists_column_view(*old_rows[i]), schema);
     auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*old_tbl, *new_tbl);
@@ -331,10 +312,11 @@ TEST_F(RowToColumnTests, Simple)
   cudf::test::fixed_width_column_wrapper<int32_t> a({-1, 0, 1});
   cudf::table_view in(std::vector<cudf::column_view>{a});
 
-  auto old_rows = cudf::old_convert_to_rows(in);
+  auto old_rows = cudf::convert_to_rows_fixed_width_optimized(in);
   std::vector<cudf::data_type> schema{cudf::data_type{cudf::type_id::INT32}};
   for (uint i = 0; i < old_rows.size(); ++i) {
-    auto old_tbl = cudf::old_convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
+    auto old_tbl =
+      cudf::convert_from_rows_fixed_width_optimized(cudf::lists_column_view(*old_rows[i]), schema);
     auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*old_tbl, *new_tbl);
@@ -348,14 +330,15 @@ TEST_F(RowToColumnTests, Tall)
   cudf::test::fixed_width_column_wrapper<int32_t> a(r, r + (size_t)4096);
   cudf::table_view in(std::vector<cudf::column_view>{a});
 
-  auto old_rows = cudf::old_convert_to_rows(in);
+  auto old_rows = cudf::convert_to_rows_fixed_width_optimized(in);
   std::vector<cudf::data_type> schema;
   schema.reserve(in.num_columns());
   for (auto col = in.begin(); col < in.end(); ++col) {
     schema.push_back(col->type());
   }
   for (uint i = 0; i < old_rows.size(); ++i) {
-    auto old_tbl = cudf::old_convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
+    auto old_tbl =
+      cudf::convert_from_rows_fixed_width_optimized(cudf::lists_column_view(*old_rows[i]), schema);
     auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*old_tbl, *new_tbl);
@@ -373,7 +356,7 @@ TEST_F(RowToColumnTests, Wide)
   }
   cudf::table_view in(views);
 
-  auto old_rows = cudf::old_convert_to_rows(in);
+  auto old_rows = cudf::convert_to_rows_fixed_width_optimized(in);
   std::vector<cudf::data_type> schema;
   schema.reserve(in.num_columns());
   for (auto col = in.begin(); col < in.end(); ++col) {
@@ -381,7 +364,8 @@ TEST_F(RowToColumnTests, Wide)
   }
 
   for (uint i = 0; i < old_rows.size(); ++i) {
-    auto old_tbl = cudf::old_convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
+    auto old_tbl =
+      cudf::convert_from_rows_fixed_width_optimized(cudf::lists_column_view(*old_rows[i]), schema);
     auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*old_tbl, *new_tbl);
@@ -399,21 +383,22 @@ TEST_F(RowToColumnTests, SingleByteWide)
   }
   cudf::table_view in(views);
 
-  auto old_rows = cudf::old_convert_to_rows(in);
+  auto old_rows = cudf::convert_to_rows_fixed_width_optimized(in);
   std::vector<cudf::data_type> schema;
   schema.reserve(in.num_columns());
   for (auto col = in.begin(); col < in.end(); ++col) {
     schema.push_back(col->type());
   }
   for (uint i = 0; i < old_rows.size(); ++i) {
-    auto old_tbl = cudf::old_convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
+    auto old_tbl =
+      cudf::convert_from_rows_fixed_width_optimized(cudf::lists_column_view(*old_rows[i]), schema);
     auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*old_tbl, *new_tbl);
   }
 }
 
-TEST_F(RowToColumnTests, Raza)
+TEST_F(RowToColumnTests, AllTypes)
 {
   std::vector<cudf::test::fixed_width_column_wrapper<int32_t>> cols;
   std::vector<cudf::column_view> views;
@@ -442,11 +427,115 @@ TEST_F(RowToColumnTests, Raza)
 
   cudf::table_view in({c0, c1, c2, c3, c4, c5, c6, c7});
 
-  auto old_rows = cudf::old_convert_to_rows(in);
+  auto old_rows = cudf::convert_to_rows_fixed_width_optimized(in);
   auto new_rows = cudf::convert_to_rows(in);
 
   for (uint i = 0; i < old_rows.size(); ++i) {
-    auto old_tbl = cudf::old_convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
+    auto old_tbl =
+      cudf::convert_from_rows_fixed_width_optimized(cudf::lists_column_view(*old_rows[i]), schema);
+    auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*new_rows[i]), schema);
+
+    CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*old_tbl, *new_tbl);
+  }
+}
+
+TEST_F(RowToColumnTests, AllTypesLarge)
+{
+  std::vector<cudf::column> cols;
+  std::vector<cudf::data_type> schema{};
+
+  // 10 columns of each type with 1024 entries
+  constexpr int num_rows{1024};
+
+  std::default_random_engine re;
+  std::uniform_real_distribution<double> rand_double(std::numeric_limits<double>::min(),
+                                                     std::numeric_limits<double>::max());
+  std::uniform_int_distribution<int64_t> rand_int64(std::numeric_limits<int64_t>::min(),
+                                                    std::numeric_limits<int64_t>::max());
+  auto r = cudf::detail::make_counting_transform_iterator(
+    0, [&](auto i) -> int64_t { return rand_int64(re); });
+  auto d = cudf::detail::make_counting_transform_iterator(
+    0, [&](auto i) -> double { return rand_double(re); });
+
+  for (int i = 0; i < 10; ++i) {
+    cols.push_back(
+      *cudf::test::fixed_width_column_wrapper<int8_t>(r, r + num_rows).release().release());
+    schema.push_back(cudf::data_type{cudf::type_id::INT8});
+  }
+
+  for (int i = 0; i < 10; ++i) {
+    cols.push_back(
+      *cudf::test::fixed_width_column_wrapper<int16_t>(r, r + num_rows).release().release());
+    schema.push_back(cudf::data_type{cudf::type_id::INT16});
+  }
+
+  for (int i = 0; i < 10; ++i) {
+    cols.push_back(
+      *cudf::test::fixed_width_column_wrapper<int32_t>(r, r + num_rows).release().release());
+    schema.push_back(cudf::data_type{cudf::type_id::INT32});
+  }
+
+  for (int i = 0; i < 10; ++i) {
+    cols.push_back(
+      *cudf::test::fixed_width_column_wrapper<float>(d, d + num_rows).release().release());
+    schema.push_back(cudf::data_type{cudf::type_id::FLOAT32});
+  }
+
+  for (int i = 0; i < 10; ++i) {
+    cols.push_back(
+      *cudf::test::fixed_width_column_wrapper<double>(d, d + num_rows).release().release());
+    schema.push_back(cudf::data_type{cudf::type_id::FLOAT64});
+  }
+
+  for (int i = 0; i < 10; ++i) {
+    cols.push_back(
+      *cudf::test::fixed_width_column_wrapper<bool>(r, r + num_rows).release().release());
+    schema.push_back(cudf::data_type{cudf::type_id::BOOL8});
+  }
+
+  for (int i = 0; i < 10; ++i) {
+    cols.push_back(
+      *cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>(
+         r, r + num_rows)
+         .release()
+         .release());
+    schema.push_back(cudf::data_type{cudf::type_id::TIMESTAMP_MILLISECONDS});
+  }
+
+  for (int i = 0; i < 10; ++i) {
+    cols.push_back(
+      *cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>(
+         r, r + num_rows)
+         .release()
+         .release());
+    schema.push_back(cudf::data_type{cudf::type_id::TIMESTAMP_DAYS});
+  }
+
+  for (int i = 0; i < 10; ++i) {
+    cols.push_back(
+      *cudf::test::fixed_point_column_wrapper<int32_t>(r, r + num_rows, numeric::scale_type{-2})
+         .release()
+         .release());
+    schema.push_back(cudf::data_type{cudf::type_id::DECIMAL32});
+  }
+
+  for (int i = 0; i < 10; ++i) {
+    cols.push_back(
+      *cudf::test::fixed_point_column_wrapper<int64_t>(r, r + num_rows, numeric::scale_type{-1})
+         .release()
+         .release());
+    schema.push_back(cudf::data_type{cudf::type_id::DECIMAL64});
+  }
+
+  std::vector<cudf::column_view> views(cols.begin(), cols.end());
+  cudf::table_view in(views);
+
+  auto old_rows = cudf::convert_to_rows_fixed_width_optimized(in);
+  auto new_rows = cudf::convert_to_rows(in);
+
+  for (uint i = 0; i < old_rows.size(); ++i) {
+    auto old_tbl =
+      cudf::convert_from_rows_fixed_width_optimized(cudf::lists_column_view(*old_rows[i]), schema);
     auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*new_rows[i]), schema);
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*old_tbl, *new_tbl);
@@ -470,10 +559,11 @@ TEST_F(RowToColumnTests, Non2Power)
   }
   cudf::table_view in(views);
 
-  auto old_rows = cudf::old_convert_to_rows(in);
+  auto old_rows = cudf::convert_to_rows_fixed_width_optimized(in);
 
   for (uint i = 0; i < old_rows.size(); ++i) {
-    auto old_tbl = cudf::old_convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
+    auto old_tbl =
+      cudf::convert_from_rows_fixed_width_optimized(cudf::lists_column_view(*old_rows[i]), schema);
     auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*old_tbl, *new_tbl);
@@ -498,10 +588,11 @@ TEST_F(RowToColumnTests, Big)
   }
   cudf::table_view in(views);
 
-  auto old_rows = cudf::old_convert_to_rows(in);
+  auto old_rows = cudf::convert_to_rows_fixed_width_optimized(in);
 
   for (uint i = 0; i < old_rows.size(); ++i) {
-    auto old_tbl = cudf::old_convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
+    auto old_tbl =
+      cudf::convert_from_rows_fixed_width_optimized(cudf::lists_column_view(*old_rows[i]), schema);
     auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*old_tbl, *new_tbl);
@@ -526,10 +617,11 @@ TEST_F(RowToColumnTests, Bigger)
   }
   cudf::table_view in(views);
 
-  auto old_rows = cudf::old_convert_to_rows(in);
+  auto old_rows = cudf::convert_to_rows_fixed_width_optimized(in);
 
   for (uint i = 0; i < old_rows.size(); ++i) {
-    auto old_tbl = cudf::old_convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
+    auto old_tbl =
+      cudf::convert_from_rows_fixed_width_optimized(cudf::lists_column_view(*old_rows[i]), schema);
     auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*old_tbl, *new_tbl);
@@ -554,10 +646,11 @@ TEST_F(RowToColumnTests, Biggest)
   }
   cudf::table_view in(views);
 
-  auto old_rows = cudf::old_convert_to_rows(in);
+  auto old_rows = cudf::convert_to_rows_fixed_width_optimized(in);
 
   for (uint i = 0; i < old_rows.size(); ++i) {
-    auto old_tbl = cudf::old_convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
+    auto old_tbl =
+      cudf::convert_from_rows_fixed_width_optimized(cudf::lists_column_view(*old_rows[i]), schema);
     auto new_tbl = cudf::convert_from_rows(cudf::lists_column_view(*old_rows[i]), schema);
 
     CUDF_TEST_EXPECT_TABLES_EQUIVALENT(*old_tbl, *new_tbl);

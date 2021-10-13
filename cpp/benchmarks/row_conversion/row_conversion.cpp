@@ -50,7 +50,7 @@ static void BM_old_to_row(benchmark::State& state)
   for (auto _ : state) {
     cuda_event_timer raii(state, true, rmm::cuda_stream_default);
 
-    auto rows = cudf::old_convert_to_rows(table->view());
+    auto rows = cudf::convert_to_rows_fixed_width_optimized(table->view());
   }
 
   state.SetBytesProcessed(state.iterations() * total_bytes * 2 * table->num_rows());
@@ -109,13 +109,13 @@ static void BM_old_from_row(benchmark::State& state)
     total_bytes += cudf::size_of(t);
   }
 
-  auto rows = cudf::old_convert_to_rows(table->view());
+  auto rows = cudf::convert_to_rows_fixed_width_optimized(table->view());
   cudf::lists_column_view const first_list(rows.front()->view());
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, rmm::cuda_stream_default);
 
-    auto out = cudf::old_convert_from_rows(first_list, schema);
+    auto out = cudf::convert_from_rows_fixed_width_optimized(first_list, schema);
   }
 
   state.SetBytesProcessed(state.iterations() * total_bytes * 2 * table->num_rows());
@@ -144,7 +144,7 @@ static void BM_new_from_row(benchmark::State& state)
     total_bytes += cudf::size_of(t);
   }
 
-  auto rows = cudf::old_convert_to_rows(table->view());
+  auto rows = cudf::convert_to_rows_fixed_width_optimized(table->view());
   cudf::lists_column_view const first_list(rows.front()->view());
 
   for (auto _ : state) {
