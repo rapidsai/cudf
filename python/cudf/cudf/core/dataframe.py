@@ -4713,9 +4713,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         Simple function of a single variable which could be NA
 
-        >>> from cudf.core.udf.pipeline import nulludf
-        >>> @nulludf
-        ... def f(x):
+        >>> def f(x):
         ...     if x is cudf.NA:
         ...             return 0
         ...     else:
@@ -4731,8 +4729,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         Function of multiple variables will operate in
         a null aware manner
 
-        >>> @nulludf
-        ... def f(x, y):
+        >>> def f(x, y):
         ...     return x - y
         ...
         >>> df = cudf.DataFrame({
@@ -4748,8 +4745,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         Functions may conditionally return NA as in pandas
 
-        >>> @nulludf
-        ... def f(x, y):
+        >>> def f(x, y):
         ...     if x + y > 3:
         ...             return cudf.NA
         ...     else:
@@ -4768,8 +4764,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         Mixed types are allowed, but will return the common
         type, rather than object as in pandas
 
-        >>> @nulludf
-        ... def f(x, y):
+        >>> def f(x, y):
         ...     return x + y
         ...
         >>> df = cudf.DataFrame({
@@ -4786,8 +4781,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         result will be promoted to a safe type regardless of
         the data
 
-        >>> @nulludf
-        ... def f(x):
+        >>> def f(x):
         ...     if x > 3:
         ...             return x
         ...     else:
@@ -4804,8 +4798,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         Ops against N columns are supported generally
 
-        >>> @nulludf
-        ... def f(v, w, x, y, z):
+        >>> def f(v, w, x, y, z):
         ...     return x + (y - (z / w)) % v
         ...
         >>> df = cudf.DataFrame({
@@ -4828,11 +4821,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         1     4.8
         2     5.0
         dtype: float64
-
-        Notes
-        -----
-        Available only using cuda 11.1+ due to particular required
-        runtime compilation features
         """
 
         for dtype in self.dtypes:
