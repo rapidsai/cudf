@@ -229,7 +229,7 @@ add_library(cudfjni SHARED
     src/ScalarJni.cpp
     src/TableJni.cpp
     src/map_lookup.cu
-    src/check_output_sizes.cu)
+    src/check_nvcomp_output_sizes.cu)
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------

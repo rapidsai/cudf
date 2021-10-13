@@ -25,69 +25,6 @@ class NvcompJni {
   }
 
   /**
-   * Extracts the metadata from the input on the device and copies
-   * it to the host. Note that the result must be released with a
-   * call to decompressDestroyMetadata
-   * @param inPtr device address of the compressed data
-   * @param inSize size of the compressed data in bytes
-   * @param stream address of CUDA stream that will be used for synchronization
-   * @return address of the metadata on the host
-   */
-  static native long decompressGetMetadata(long inPtr, long inSize, long stream);
-
-  /**
-   * Destroys the metadata object and frees the associated memory.
-   * @param metadataPtr address of the metadata object
-   */
-  static native void decompressDestroyMetadata(long metadataPtr);
-
-  /**
-   * Computes the temporary storage size needed to decompress.
-   * This over-estimates the needed storage considerably.
-   * @param metadataPtr address of the metadata object
-   * @return the number of temporary storage bytes needed to decompress
-   */
-  static native long decompressGetTempSize(long metadataPtr);
-
-  /**
-   * Computes the decompressed size of the data.  Gets this from the
-   * metadata contained in the compressed data.
-   * @param metadataPtr address of the metadata object
-   * @return the size of the decompressed data in bytes
-   */
-  static native long decompressGetOutputSize(long metadataPtr);
-
-  /**
-   * Get the type of compressed data.
-   * @param metadataPtr address of the metadata object
-   * @return the type ID of the data
-   */
-  static native int decompressGetType(long metadataPtr);
-
-  /**
-   * Perform asynchronous decompression using the specified CUDA stream.
-   * The input, temporary, and output buffers must all be in GPU-accessible
-   * memory.
-   * @param inPtr device address of the compressed buffer
-   * @param inSize size of the compressed data in bytes
-   * @param tempPtr device address of the temporary decompression storage buffer
-   * @param tempSize size of the temporary decompression storage buffer
-   * @param metadataPtr address of the metadata object
-   * @param outPtr device address of the buffer to use for uncompressed output
-   * @param outSize size of the uncompressed output buffer in bytes
-   * @param stream CUDA stream to use
-   */
-  static native void decompressAsync(
-      long inPtr,
-      long inSize,
-      long tempPtr,
-      long tempSize,
-      long metadataPtr,
-      long outPtr,
-      long outSize,
-      long stream);
-
-  /**
    * Determine if data is compressed with the nvcomp LZ4 compressor.
    * @param inPtr device address of the compressed data
    * @param inSize size of the compressed data in bytes

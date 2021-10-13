@@ -67,7 +67,7 @@ public class BatchedLZ4Decompressor {
                buildAddrsSizesBuffer(chunkSize, totalChunks, inputs.getArray(), chunksPerInput,
                    outputs, stream);
            DeviceMemoryBuffer devTemp = DeviceMemoryBuffer.allocate(tempBufferSize)) {
-        // buffer containing addresses and sizes contains five vectors of longs in this order:
+        // buffer containing addresses and sizes contains four vectors of longs in this order:
         // - compressed chunk input addresses
         // - chunk output buffer addresses
         // - compressed chunk sizes
@@ -115,7 +115,7 @@ public class BatchedLZ4Decompressor {
                                                           int[] chunksPerInput,
                                                           BaseDeviceMemoryBuffer[] outputs,
                                                           Cuda.Stream stream) {
-    final long totalBufferSize = totalChunks * 8L * 5 + totalChunks * 4L * 1;
+    final long totalBufferSize = totalChunks * 8L * 4L;
     try (NvtxRange range = new NvtxRange("buildAddrSizesBuffer", NvtxColor.YELLOW)) {
       try (HostMemoryBuffer metadata = fetchMetadata(totalChunks, inputs, chunksPerInput, stream);
            HostMemoryBuffer hostAddrsSizes = HostMemoryBuffer.allocate(totalBufferSize);
@@ -172,38 +172,25 @@ public class BatchedLZ4Decompressor {
                                                 Cuda.Stream stream) {
     try (NvtxRange range = new NvtxRange("fetchMetadata", NvtxColor.PURPLE)) {
       // one long per chunk containing the compressed size
-      final long totalMetadataSize = totalChunks * 8L;
-      // one copy descriptor per input consisting of input addr, output addr, and size
-      final long addrsSizesBufferSize = inputs.length * 8L * 3;
+      final long totalMetadataSize = totalChunks * BatchedLZ4Compressor.METADATA_BYTES_PER_CHUNK;
+      // Build corresponding vectors of destination addresses, source addresses and sizes.
+      long[] destAddrs = new long[inputs.length];
+      long[] srcAddrs = new long[inputs.length];
+      long[] sizes = new long[inputs.length];
       try (HostMemoryBuffer hostMetadata = HostMemoryBuffer.allocate(totalMetadataSize);
-           DeviceMemoryBuffer devMetadata = DeviceMemoryBuffer.allocate(totalMetadataSize);
-           HostMemoryBuffer hostAddrsSizes = HostMemoryBuffer.allocate(addrsSizesBufferSize);
-           DeviceMemoryBuffer devAddrsSizes = DeviceMemoryBuffer.allocate(addrsSizesBufferSize)) {
-        // Setup a multi-buffer copy descriptor in AddrsSizes buffer.
-        // AddrsSizes buffer will hold three consecutive long vectors:
-        // - src copy address (one long per input)
-        // - dest copy address (one long per input)
-        // - copy size in bytes (one long per input)
-        final long srcAddrsOffset = 0;
-        final long destAddrsOffset = srcAddrsOffset + inputs.length * 8L;
-        final long sizesOffset = destAddrsOffset + inputs.length * 8L;
+           DeviceMemoryBuffer devMetadata = DeviceMemoryBuffer.allocate(totalMetadataSize)) {
         long destCopyAddr = devMetadata.getAddress();
         for (int inputIdx = 0; inputIdx < inputs.length; inputIdx++) {
           final BaseDeviceMemoryBuffer input = inputs[inputIdx];
-          final long copySize = chunksPerInput[inputIdx] * 8L;
-          hostAddrsSizes.setLong(srcAddrsOffset + inputIdx * 8L, input.getAddress());
-          hostAddrsSizes.setLong(destAddrsOffset + inputIdx * 8L, destCopyAddr);
-          hostAddrsSizes.setLong(sizesOffset + inputIdx * 8L, copySize);
+          final long copySize = chunksPerInput[inputIdx] * BatchedLZ4Compressor.METADATA_BYTES_PER_CHUNK;
+          destAddrs[inputIdx] = destCopyAddr;
+          srcAddrs[inputIdx] = input.getAddress();
+          sizes[inputIdx] = copySize;
           destCopyAddr += copySize;
         }
-        try (NvtxRange copyRange = new NvtxRange("multi-buffer-copy", NvtxColor.CYAN)) {
-          devAddrsSizes.copyFromMemoryBufferAsync(0, hostAddrsSizes, 0, addrsSizesBufferSize, stream);
-          final long descrBaseAddr = devAddrsSizes.getAddress();
-          Cuda.multiBufferCopyAsync(inputs.length, descrBaseAddr + srcAddrsOffset,
-              descrBaseAddr + destAddrsOffset, descrBaseAddr + sizesOffset, stream);
-          hostMetadata.copyFromDeviceBuffer(devMetadata, stream);
-          hostMetadata.incRefCount();
-        }
+        Cuda.multiBufferCopyAsync(destAddrs, srcAddrs, sizes, stream);
+        hostMetadata.copyFromDeviceBuffer(devMetadata, stream);
+        hostMetadata.incRefCount();
         return hostMetadata;
       }
     }

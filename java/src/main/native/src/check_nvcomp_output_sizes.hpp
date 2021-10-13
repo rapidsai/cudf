@@ -22,8 +22,13 @@
 namespace cudf {
 namespace java {
 
-bool check_nvcomp_output_sizes(std::size_t const *uncompressed_sizes,
-                               std::size_t const *actual_uncompressed_sizes, std::size_t batch_size,
+/**
+ * Check that the vector of expected uncompressed sizes matches the vector of actual compressed
+ * sizes. Both vectors are assumed to be in device memory and contain batch_size elements.
+ */
+bool check_nvcomp_output_sizes(std::size_t const *dev_uncompressed_sizes,
+                               std::size_t const *dev_actual_uncompressed_sizes,
+                               std::size_t batch_size,
                                rmm::cuda_stream_view stream);
 } // namespace java
 } // namespace cudf

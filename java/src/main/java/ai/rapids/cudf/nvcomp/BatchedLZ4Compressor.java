@@ -29,7 +29,7 @@ import java.util.Arrays;
 
 /** Multi-buffer LZ4 compressor */
 public class BatchedLZ4Compressor {
-  static final long MIN_CHUNK_SIZE = 32768;
+  static final long MIN_CHUNK_SIZE = 1;
   static final long MAX_CHUNK_SIZE = 16777216;
   // each chunk has a 64-bit integer value as metadata containing the compressed size
   static final long METADATA_BYTES_PER_CHUNK = 8;
@@ -60,8 +60,7 @@ public class BatchedLZ4Compressor {
    * @return compressed buffers corresponding to the input buffers
    */
   public DeviceMemoryBuffer[] compress(BaseDeviceMemoryBuffer[] origInputs, Cuda.Stream stream) {
-    try (CloseableArray<BaseDeviceMemoryBuffer> inputs =
-             CloseableArray.wrap(Arrays.copyOf(origInputs, origInputs.length))) {
+    try (CloseableArray<BaseDeviceMemoryBuffer> inputs = CloseableArray.wrap(origInputs)) {
       if (chunkSize <= 0) {
         throw new IllegalArgumentException("Illegal chunk size: " + chunkSize);
       }
@@ -70,6 +69,8 @@ public class BatchedLZ4Compressor {
         return new DeviceMemoryBuffer[0];
       }
 
+      // Each buffer is broken up into chunkSize chunks for compression.  Calculate how many
+      // chunks are needed for each input buffer.
       int[] chunksPerInput = new int[numInputs];
       int numChunks = 0;
       for (int i = 0; i < numInputs; i++) {
@@ -79,6 +80,8 @@ public class BatchedLZ4Compressor {
         numChunks += numBufferChunks;
       }
 
+      // Allocate buffers for each chunk and generate parallel lists of chunk source addresses,
+      // chunk destination addresses, and sizes.
       try (CloseableArray<DeviceMemoryBuffer> compressedBuffers =
                allocCompressedBuffers(numChunks, stream);
            DeviceMemoryBuffer compressedChunkSizes =
@@ -108,11 +111,13 @@ public class BatchedLZ4Compressor {
               stream.getStream());
         }
 
+        // Synchronously copy the resulting compressed sizes per chunk.
         outputChunkSizes = getOutputChunkSizes(compressedChunkSizes, stream);
 
         // inputs are no longer needed at this point, so free them early
         inputs.close();
 
+        // Combine compressed chunks into output buffers corresponding to each original input
         return stitchOutput(chunksPerInput, compressedChunkSizes, outputChunkAddrs,
             outputChunkSizes, stream);
       }
@@ -160,6 +165,8 @@ public class BatchedLZ4Compressor {
     }
   }
 
+  // Fill in the inputChunkAddrs, inputChunkSizes, and outputChunkAddrs arrays to point
+  // into the chunks in the input and output buffers.
   private void buildAddrsAndSizes(CloseableArray<BaseDeviceMemoryBuffer> inputs,
                                   long[] inputChunkAddrs,
                                   int[] inputChunkSizes,
@@ -192,11 +199,12 @@ public class BatchedLZ4Compressor {
     assert chunkIdx == outputChunkAddrs.length;
   }
 
+  // Write input addresses, output addresses and sizes contiguously into a DeviceMemoryBuffer.
   private DeviceMemoryBuffer putAddrsAndSizesOnDevice(long[] inputAddrs,
                                                       int[] inputSizes,
                                                       long[] outputAddrs,
                                                       Cuda.Stream stream) {
-    final long totalSize = inputAddrs.length * 8L * 3;
+    final long totalSize = inputAddrs.length * 8L * 3; // space for input, output, and size arrays
     final long outputAddrsOffset = inputAddrs.length * 8L;
     final long sizesOffset = outputAddrsOffset + inputAddrs.length * 8L;
     try (NvtxRange range = new NvtxRange("putAddrsAndSizesOnDevice", NvtxColor.YELLOW)) {
@@ -207,13 +215,14 @@ public class BatchedLZ4Compressor {
         for (int i = 0; i < inputSizes.length; i++) {
           hostbuf.setLong(sizesOffset + i * 8L, inputSizes[i]);
         }
-        result.copyFromHostBuffer(hostbuf, stream);
+        result.copyFromHostBufferAsync(hostbuf, stream);
         result.incRefCount();
         return result;
       }
     }
   }
 
+  // Synchronously copy the resulting compressed sizes from device memory to host memory.
   private int[] getOutputChunkSizes(BaseDeviceMemoryBuffer devChunkSizes, Cuda.Stream stream) {
     try (NvtxRange range = new NvtxRange("getOutputChunkSizes", NvtxColor.YELLOW)) {
       try (HostMemoryBuffer hostbuf = HostMemoryBuffer.allocate(devChunkSizes.getLength())) {
@@ -230,6 +239,10 @@ public class BatchedLZ4Compressor {
     }
   }
 
+  // Stitch together the individual chunks into the result buffers.
+  // Each result buffer has metadata at the beginning, followed by compressed chunks.
+  // This is done by building up parallel lists of source addr, dest addr and size and
+  // then calling multiBufferCopyAsync()
   private DeviceMemoryBuffer[] stitchOutput(int[] chunksPerInput,
                                             DeviceMemoryBuffer compressedChunkSizes,
                                             long[] outputChunkAddrs,
@@ -243,60 +256,47 @@ public class BatchedLZ4Compressor {
                CloseableArray.wrap(new DeviceMemoryBuffer[numOutputs])) {
         // Each chunk needs to be copied, and each output needs a copy of the
         // compressed chunk size vector representing the metadata.
-        final long totalBuffersToCopy = (long) numOutputs + outputChunkAddrs.length;
-        final long inputAddrsOffset = 0;
-        final long outputAddrsOffset = totalBuffersToCopy * 8;
-        final long sizesOffset = outputAddrsOffset + totalBuffersToCopy * 8;
+        final int totalBuffersToCopy = numOutputs + outputChunkAddrs.length;
+        long[] destAddrs = new long[totalBuffersToCopy];
+        long[] srcAddrs = new long[totalBuffersToCopy];
+        long[] sizes = new long[totalBuffersToCopy];
         int copyBufferIdx = 0;
         int chunkIdx = 0;
-        try (HostMemoryBuffer hostAddrsSizes = HostMemoryBuffer.allocate(totalBuffersToCopy * 8 * 3)) {
-          for (int outputIdx = 0; outputIdx < numOutputs; outputIdx++) {
-            DeviceMemoryBuffer outputBuffer = DeviceMemoryBuffer.allocate(outputBufferSizes[outputIdx]);
-            final long outputBufferAddr = outputBuffer.getAddress();
-            outputs.set(outputIdx, outputBuffer);
-            final long numChunks = chunksPerInput[outputIdx];
+        for (int outputIdx = 0; outputIdx < numOutputs; outputIdx++) {
+          DeviceMemoryBuffer outputBuffer = DeviceMemoryBuffer.allocate(outputBufferSizes[outputIdx]);
+          final long outputBufferAddr = outputBuffer.getAddress();
+          outputs.set(outputIdx, outputBuffer);
+          final long numChunks = chunksPerInput[outputIdx];
 
-            // setup a copy of the metadata at the front of the output buffer
-            hostAddrsSizes.setLong(inputAddrsOffset + copyBufferIdx * 8,
-                chunkSizesAddr + chunkIdx * 8);
-            hostAddrsSizes.setLong(outputAddrsOffset + copyBufferIdx * 8, outputBufferAddr);
-            hostAddrsSizes.setLong(sizesOffset + copyBufferIdx * 8, numChunks * 8);
-            ++copyBufferIdx;
+          // setup a copy of the metadata at the front of the output buffer
+          srcAddrs[copyBufferIdx] = chunkSizesAddr + chunkIdx * 8;
+          destAddrs[copyBufferIdx] = outputBufferAddr;
+          sizes[copyBufferIdx] = numChunks * 8;
+          ++copyBufferIdx;
 
-            // setup copies of the compressed chunks for this output buffer
-            long nextChunkAddr = outputBufferAddr + numChunks * 8;
-            for (int i = 0; i < numChunks; ++i) {
-              hostAddrsSizes.setLong(inputAddrsOffset + copyBufferIdx * 8,
-                  outputChunkAddrs[chunkIdx]);
-              hostAddrsSizes.setLong(outputAddrsOffset + copyBufferIdx * 8, nextChunkAddr);
-              final long chunkSize = outputChunkSizes[chunkIdx];
-              hostAddrsSizes.setLong(sizesOffset + copyBufferIdx * 8, chunkSize);
-              copyBufferIdx++;
-              chunkIdx++;
-              nextChunkAddr += chunkSize;
-            }
-          }
-          assert copyBufferIdx == totalBuffersToCopy;
-          assert chunkIdx == outputChunkAddrs.length;
-          assert chunkIdx == outputChunkSizes.length;
-
-          try (NvtxRange copyRange = new NvtxRange("multi-buffer-copy", NvtxColor.PURPLE)) {
-            try (DeviceMemoryBuffer devAddrsSizes = DeviceMemoryBuffer.allocate(hostAddrsSizes.getLength())) {
-              devAddrsSizes.copyFromHostBuffer(hostAddrsSizes, stream);
-              Cuda.multiBufferCopyAsync(totalBuffersToCopy,
-                  devAddrsSizes.getAddress() + inputAddrsOffset,
-                  devAddrsSizes.getAddress() + outputAddrsOffset,
-                  devAddrsSizes.getAddress() + sizesOffset,
-                  stream);
-            }
+          // setup copies of the compressed chunks for this output buffer
+          long nextChunkAddr = outputBufferAddr + numChunks * 8;
+          for (int i = 0; i < numChunks; ++i) {
+            srcAddrs[copyBufferIdx] = outputChunkAddrs[chunkIdx];
+            destAddrs[copyBufferIdx] = nextChunkAddr;
+            final long chunkSize = outputChunkSizes[chunkIdx];
+            sizes[copyBufferIdx] = chunkSize;
+            copyBufferIdx++;
+            chunkIdx++;
+            nextChunkAddr += chunkSize;
           }
         }
+        assert copyBufferIdx == totalBuffersToCopy;
+        assert chunkIdx == outputChunkAddrs.length;
+        assert chunkIdx == outputChunkSizes.length;
 
+        Cuda.multiBufferCopyAsync(destAddrs, srcAddrs, sizes, stream);
         return outputs.release();
       }
     }
   }
 
+  // Calculate the list of sizes for each output buffer (metadata plus size of compressed chunks)
   private long[] calcOutputBufferSizes(int[] chunksPerInput,
                                        int[] outputChunkSizes) {
     long[] sizes = new long[chunksPerInput.length];

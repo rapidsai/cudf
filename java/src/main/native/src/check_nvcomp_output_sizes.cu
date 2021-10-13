@@ -18,7 +18,7 @@
 #include <thrust/device_ptr.h>
 #include <thrust/equal.h>
 
-#include "check_output_sizes.hpp"
+#include "check_nvcomp_output_sizes.hpp"
 
 namespace {
 
@@ -32,15 +32,14 @@ namespace cudf {
 namespace java {
 
 /**
- * Copy a simple vector to device memory asynchronously. Be sure to read
- * the data on the same stream as is used to copy it.
+ * Check that the vector of expected uncompressed sizes matches the vector of actual compressed
+ * sizes. Both vectors are assumed to be in device memory and contain batch_size elements.
  */
-bool check_nvcomp_output_sizes(std::size_t const *uncompressed_sizes,
-                               std::size_t const *actual_uncompressed_sizes, std::size_t batch_size,
+bool check_nvcomp_output_sizes(std::size_t const *dev_uncompressed_sizes,
+                               std::size_t const *dev_actual_uncompressed_sizes,
+                               std::size_t batch_size,
                                rmm::cuda_stream_view stream) {
   NVTX3_FUNC_RANGE_IN(java_domain);
-  thrust::device_ptr<const size_t> dev_uncompressed_sizes(uncompressed_sizes);
-  thrust::device_ptr<const size_t> dev_actual_uncompressed_sizes(actual_uncompressed_sizes);
   return thrust::equal(rmm::exec_policy(stream), dev_uncompressed_sizes,
                        dev_uncompressed_sizes + batch_size, dev_actual_uncompressed_sizes);
 }

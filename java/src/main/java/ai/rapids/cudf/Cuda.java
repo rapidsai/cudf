@@ -15,6 +15,9 @@
  */
 package ai.rapids.cudf;
 
+import ai.rapids.cudf.NvtxColor;
+import ai.rapids.cudf.NvtxRange;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -524,36 +527,23 @@ public class Cuda {
 
   /**
    * Copy data from multiple device buffer sources to multiple device buffer destinations.
-   * For each buffer to copy there is a corresponding entry in the source address, destination
+   * For each buffer to copy there is a corresponding entry in the destination address, source
    * address, and copy size vectors.
-   * @param numBuffers number of buffers to copy
-   * @param srcPtrsAddr device address of source buffer addresses vector
-   * @param destPtrsAddr device address of destination buffer addresses vector
-   * @param sizesAddr device addres of the copy size vector
+   * @param destAddrs vector of device destination addresses
+   * @param srcAddrs vector of device source addresses
+   * @param copySizes vector of copy sizes
    * @param stream CUDA stream to use for the copy
    */
-  public static void multiBufferCopyAsync(long numBuffers,
-                                          long srcPtrsAddr,
-                                          long destPtrsAddr,
-                                          long sizesAddr,
+  public static void multiBufferCopyAsync(long [] destAddrs,
+                                          long [] srcAddrs,
+                                          long [] copySizes,
                                           Stream stream) {
     // Temporary sub-par stand-in for a multi-buffer copy CUDA kernel
-    final long bufferSize = numBuffers * 8;
-    try (HostMemoryBuffer srcPtrs = HostMemoryBuffer.allocate(bufferSize);
-         HostMemoryBuffer destPtrs = HostMemoryBuffer.allocate(bufferSize);
-         HostMemoryBuffer sizes = HostMemoryBuffer.allocate(bufferSize)) {
-      asyncMemcpy(srcPtrs.getAddress(), srcPtrsAddr, numBuffers * 8,
-          CudaMemcpyKind.DEFAULT, stream);
-      asyncMemcpy(destPtrs.getAddress(), destPtrsAddr, numBuffers * 8,
-          CudaMemcpyKind.DEFAULT, stream);
-      asyncMemcpy(sizes.getAddress(), sizesAddr, numBuffers * 8,
-          CudaMemcpyKind.DEFAULT, stream);
-      stream.sync();
-      for (int i = 0; i < numBuffers; i++) {
-        final long srcAddr = srcPtrs.getLong(i * 8);
-        final long destAddr = destPtrs.getLong(i * 8);
-        final long size = sizes.getLong(i * 8);
-        asyncMemcpy(destAddr, srcAddr, size, CudaMemcpyKind.DEVICE_TO_DEVICE, stream);
+    assert(destAddrs.length == srcAddrs.length);
+    assert(copySizes.length == destAddrs.length);
+    try (NvtxRange copyRange = new NvtxRange("multiBufferCopyAsync", NvtxColor.CYAN)){
+      for (int i = 0; i < destAddrs.length; i++) {
+        asyncMemcpy(destAddrs[i], srcAddrs[i], copySizes[i], CudaMemcpyKind.DEVICE_TO_DEVICE, stream);
       }
     }
   }
