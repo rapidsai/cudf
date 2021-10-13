@@ -9,12 +9,11 @@ import cudf
 import dask_cudf
 
 
-@pytest.mark.parametrize("na_position", ["first", "last"])
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("by", ["a", "b", "c", "d", ["a", "b"], ["c", "d"]])
 @pytest.mark.parametrize("nelem", [10, 500])
 @pytest.mark.parametrize("nparts", [1, 10])
-def test_sort_values(nelem, nparts, by, ascending, na_position):
+def test_sort_values(nelem, nparts, by, ascending):
     np.random.seed(0)
     df = cudf.DataFrame()
     df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
@@ -24,19 +23,14 @@ def test_sort_values(nelem, nparts, by, ascending, na_position):
     ddf = dd.from_pandas(df, npartitions=nparts)
 
     with dask.config.set(scheduler="single-threaded"):
-        got = ddf.sort_values(
-            by=by, ascending=ascending, na_position=na_position
-        )
-    expect = df.sort_values(
-        by=by, ascending=ascending, na_position=na_position
-    )
+        got = ddf.sort_values(by=by, ascending=ascending)
+    expect = df.sort_values(by=by, ascending=ascending)
     dd.assert_eq(got, expect, check_index=False)
 
 
-@pytest.mark.parametrize("na_position", ["first", "last"])
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
-def test_sort_values_single_partition(by, ascending, na_position):
+def test_sort_values_single_partition(by, ascending):
     df = cudf.DataFrame()
     nelem = 1000
     df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
@@ -44,12 +38,8 @@ def test_sort_values_single_partition(by, ascending, na_position):
     ddf = dd.from_pandas(df, npartitions=1)
 
     with dask.config.set(scheduler="single-threaded"):
-        got = ddf.sort_values(
-            by=by, ascending=ascending, na_position=na_position
-        )
-    expect = df.sort_values(
-        by=by, ascending=ascending, na_position=na_position
-    )
+        got = ddf.sort_values(by=by, ascending=ascending)
+    expect = df.sort_values(by=by, ascending=ascending)
     dd.assert_eq(got, expect)
 
 
