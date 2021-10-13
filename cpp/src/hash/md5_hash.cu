@@ -261,22 +261,17 @@ struct MD5Hash {
     }
   }
 
-  template <typename T,
-            CUDF_ENABLE_IF((is_fixed_width<T>() && !is_chrono<T>()) ||
-                           std::is_same_v<T, string_view>)>
+  template <typename Key>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
                                        size_type row_index,
                                        md5_hash_state* hash_state) const
   {
-    md5_process(col.element<T>(row_index), hash_state);
-  }
-
-  template <typename T,
-            CUDF_ENABLE_IF((!is_fixed_width<T>() || is_chrono<T>()) &&
-                           !std::is_same_v<T, string_view>)>
-  void CUDA_DEVICE_CALLABLE operator()(column_device_view, size_type, md5_hash_state*) const
-  {
-    cudf_assert(false && "Unsupported type for hash function.");
+    if constexpr ((is_fixed_width<Key>() && !is_chrono<Key>()) ||
+                  std::is_same_v<Key, string_view>) {
+      md5_process(col.element<Key>(row_index), hash_state);
+    } else {
+      cudf_assert(false && "Unsupported type for hash function.");
+    }
   }
 };
 
