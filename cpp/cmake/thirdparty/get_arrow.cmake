@@ -181,7 +181,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
         rapids_export(BUILD Arrow
           VERSION ${VERSION}
           EXPORT_SET arrow_targets
-          GLOBAL_TARGETS arrow_shared cud
+          GLOBAL_TARGETS arrow_shared arrow_static
           NAMESPACE cudf::
           FINAL_CODE_BLOCK arrow_code_string)
 
