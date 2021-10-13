@@ -52,7 +52,7 @@ import java.nio.file.Files;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static ai.rapids.cudf.ParquetColumnWriterOptions.mapColumn;
+import static ai.rapids.cudf.ColumnWriterOptions.mapColumn;
 import static ai.rapids.cudf.ParquetWriterOptions.listBuilder;
 import static ai.rapids.cudf.ParquetWriterOptions.structBuilder;
 import static ai.rapids.cudf.Table.TestBuilder;
@@ -6828,8 +6828,8 @@ public class TableTest extends CudfTestBase {
   void testParquetWriteMap() throws IOException {
     ParquetWriterOptions options = ParquetWriterOptions.builder()
         .withMapColumn(mapColumn("my_map",
-            new ParquetColumnWriterOptions("key0", false),
-            new ParquetColumnWriterOptions("value0"))).build();
+            new ColumnWriterOptions("key0", false),
+            new ColumnWriterOptions("value0"))).build();
     File f = File.createTempFile("test-map", ".parquet");
     List<HostColumnVector.StructData> list1 =
         Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
@@ -7045,11 +7045,9 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testORCWriteToBufferChunked() {
-    try (Table table0 = getExpectedFileTable();
+    try (Table table0 = getExpectedFileTable(true);
          MyBufferConsumer consumer = new MyBufferConsumer()) {
-      String[] colNames = new String[table0.getNumberOfColumns()];
-      Arrays.fill(colNames, "");
-      ORCWriterOptions opts = ORCWriterOptions.builder().withColumnNames(colNames).build();
+      ORCWriterOptions opts = createORCWriterOptionsWithNested();
       try (TableWriter writer = Table.writeORCChunked(opts, consumer)) {
         writer.write(table0);
         writer.write(table0);
@@ -7058,6 +7056,50 @@ public class TableTest extends CudfTestBase {
       try (Table table1 = Table.readORC(ORCOptions.DEFAULT, consumer.buffer, 0, consumer.offset);
            Table concat = Table.concatenate(table0, table0, table0)) {
         assertTablesAreEqual(concat, table1);
+      }
+    }
+  }
+
+  @Test
+  void testORCWriteToFileChunked() throws IOException {
+    File tempFile = File.createTempFile("test", ".orc");
+    try (Table table0 = getExpectedFileTable(true)) {
+      ORCWriterOptions opts = createORCWriterOptionsWithNested();
+      try (TableWriter writer = Table.writeORCChunked(opts, tempFile.getAbsoluteFile())) {
+        writer.write(table0);
+      }
+      try (Table table1 = Table.readORC(tempFile.getAbsoluteFile())) {
+        assertTablesAreEqual(table0, table1);
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  @Test
+  void testORCWriteMapChunked() throws IOException {
+    ORCWriterOptions options = ORCWriterOptions.builder()
+            .withMapColumn(mapColumn("my_map",
+                    new ColumnWriterOptions("key0", false),
+                    new ColumnWriterOptions("value0"))).build();
+    File f = File.createTempFile("test-map", ".parquet");
+    List<HostColumnVector.StructData> list1 =
+            Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
+    List<HostColumnVector.StructData> list2 =
+            Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "c")));
+    List<HostColumnVector.StructData> list3 =
+            Arrays.asList(new HostColumnVector.StructData(Arrays.asList("e", "d")));
+    HostColumnVector.StructType structType = new HostColumnVector.StructType(true,
+            Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
+                    new HostColumnVector.BasicType(true, DType.STRING)));
+    try (ColumnVector listColumn = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+            structType), list1, list2, list3);
+         Table t0 = new Table(listColumn)) {
+      try (TableWriter writer = Table.writeORCChunked(options, f)) {
+        writer.write(t0);
+      }
+      try (Table res = Table.readORC(f)) {
+        assertTablesAreEqual(t0, res);
       }
     }
   }
@@ -7081,7 +7123,7 @@ public class TableTest extends CudfTestBase {
     final String[] colNames = new String[]{"bool", "int", "byte","long","str","float","double"};
     try (Table table0 = getExpectedFileTable()) {
       ORCWriterOptions options = ORCWriterOptions.builder()
-          .withColumnNames(colNames)
+          .withColumns(true, colNames)
           .withMetadata("somekey", "somevalue")
           .build();
       table0.writeORC(options, tempFile.getAbsoluteFile());
@@ -7101,7 +7143,7 @@ public class TableTest extends CudfTestBase {
       String[] colNames = new String[table0.getNumberOfColumns()];
       Arrays.fill(colNames, "");
       ORCWriterOptions opts = ORCWriterOptions.builder()
-              .withColumnNames(colNames)
+              .withColumns(true, colNames)
               .withCompressionType(CompressionType.NONE)
               .build();
       table0.writeORC(opts, tempFileUncompressed.getAbsoluteFile());
@@ -7202,6 +7244,26 @@ public class TableTest extends CudfTestBase {
   }
 
   // utility methods to reduce typing
+
+  private ORCWriterOptions createORCWriterOptionsWithNested() {
+    // The column metadata should match the table returned from
+    // 'getExpectedFileTable(true)'.
+    return ORCWriterOptions.builder()
+        .withNullableColumns("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
+        .withStructColumn(structBuilder("_c7")
+            .withNullableColumns("_c7-1")
+            .withNullableColumns("_c7-2")
+            .build())
+        .withListColumn(listBuilder("_c8")
+            .withNullableColumns("_c8-1").build())
+        .withListColumn(listBuilder("_c9")
+            .withStructColumn(structBuilder("_c9-1")
+                .withNullableColumns("_c9-1-1")
+                .withNullableColumns("_c9-1-2")
+                .build())
+            .build())
+        .build();
+  }
 
   private StructData struct(Object... values) {
     return new StructData(values);
