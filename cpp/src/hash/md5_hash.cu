@@ -67,28 +67,28 @@ static const __device__ __constant__ uint32_t md5_hash_constants[64] = {
   0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1, 0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391,
 };
 
-template <typename T, int capacity>
+template <int capacity>
 struct hash_circular_buffer {
-  T storage[capacity];
-  T* cur;
+  uint8_t storage[capacity];
+  uint8_t* cur;
 
   CUDA_DEVICE_CALLABLE hash_circular_buffer() : cur(storage) {}
 
-  CUDA_DEVICE_CALLABLE T* begin() { return storage; }
-  CUDA_DEVICE_CALLABLE const T* begin() const { return storage; }
+  CUDA_DEVICE_CALLABLE uint8_t* begin() { return storage; }
+  CUDA_DEVICE_CALLABLE const uint8_t* begin() const { return storage; }
 
-  CUDA_DEVICE_CALLABLE T* end() { return &storage[capacity]; }
-  CUDA_DEVICE_CALLABLE const T* end() const { return &storage[capacity]; }
+  CUDA_DEVICE_CALLABLE uint8_t* end() { return &storage[capacity]; }
+  CUDA_DEVICE_CALLABLE const uint8_t* end() const { return &storage[capacity]; }
 
   CUDA_DEVICE_CALLABLE int size() const
   {
-    return std::distance(begin(), static_cast<const T*>(cur));
+    return std::distance(begin(), static_cast<const uint8_t*>(cur));
   }
 
   CUDA_DEVICE_CALLABLE int available_space() const { return capacity - size(); }
 
   template <typename hash_step_callable>
-  CUDA_DEVICE_CALLABLE void put(T const* in, int size, hash_step_callable hash_step)
+  CUDA_DEVICE_CALLABLE void put(uint8_t const* in, int size, hash_step_callable hash_step)
   {
     int space      = available_space();
     int copy_start = 0;
@@ -123,13 +123,30 @@ struct hash_circular_buffer {
     cur += space - space_to_leave;
   }
 
-  CUDA_DEVICE_CALLABLE const T& operator[](int idx) const { return storage[idx]; }
+  CUDA_DEVICE_CALLABLE const uint8_t& operator[](int idx) const { return storage[idx]; }
 };
+
+// Forward declarations
+struct md5_hash_state;
+void CUDA_DEVICE_CALLABLE md5_hash_step(md5_hash_state* hash_state);
 
 struct md5_hash_state {
   uint64_t message_length = 0;
   uint32_t hash_value[4]  = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
-  hash_circular_buffer<uint8_t, 64> buffer;
+  hash_circular_buffer<64> buffer;
+
+  CUDA_DEVICE_CALLABLE void put(uint8_t const* in, int size, bool extend_message_length)
+  {
+    auto hash_step = [this]() { md5_hash_step(this); };
+    this->buffer.put(in, size, hash_step);
+    if (extend_message_length) { message_length += size; }
+  }
+
+  CUDA_DEVICE_CALLABLE void pad(int space_to_leave)
+  {
+    auto hash_step = [this]() { md5_hash_step(this); };
+    this->buffer.pad(space_to_leave, hash_step);
+  }
 };
 
 /**
@@ -190,9 +207,7 @@ void CUDA_DEVICE_CALLABLE md5_process_bytes(uint8_t const* data,
                                             uint32_t len,
                                             md5_hash_state* hash_state)
 {
-  hash_state->message_length += len;
-  auto hash_step = [hash_state]() { md5_hash_step(hash_state); };
-  hash_state->buffer.put(data, len, hash_step);
+  hash_state->put(data, len, true);
 }
 
 template <typename Key>
@@ -249,12 +264,11 @@ struct MD5Hash {
     // The message length is appended to the end of the last chunk processed
     uint64_t const message_length_in_bits = hash_state->message_length * 8;
 
-    auto hash_step = [hash_state]() { md5_hash_step(hash_state); };
-    hash_state->buffer.put(&end_of_message, sizeof(end_of_message), hash_step);
-    hash_state->buffer.pad(sizeof(message_length_in_bits), hash_step);
-    hash_state->buffer.put(reinterpret_cast<uint8_t const*>(&message_length_in_bits),
-                           sizeof(message_length_in_bits),
-                           hash_step);
+    hash_state->put(&end_of_message, sizeof(end_of_message), false);
+    hash_state->pad(sizeof(message_length_in_bits));
+    hash_state->put(reinterpret_cast<uint8_t const*>(&message_length_in_bits),
+                    sizeof(message_length_in_bits),
+                    false);
 
     for (int i = 0; i < 4; ++i) {
       uint32ToLowercaseHexString(hash_state->hash_value[i], result_location + (8 * i));
