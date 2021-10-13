@@ -10,10 +10,11 @@ import cudf
 import dask_cudf
 
 
+@pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("by", ["a", "b", "c", "d", ["a", "b"], ["c", "d"]])
 @pytest.mark.parametrize("nelem", [10, 500])
 @pytest.mark.parametrize("nparts", [1, 10])
-def test_sort_values(nelem, nparts, by):
+def test_sort_values(nelem, nparts, by, ascending):
     np.random.seed(0)
     df = cudf.DataFrame()
     df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
@@ -23,15 +24,16 @@ def test_sort_values(nelem, nparts, by):
     ddf = dd.from_pandas(df, npartitions=nparts)
 
     with dask.config.set(scheduler="single-threaded"):
-        got = ddf.sort_values(by=by)
-    expect = df.sort_values(by=by)
+        got = ddf.sort_values(by=by, ascending=ascending)
+    expect = df.sort_values(by=by, ascending=ascending)
 
     # check that sorted indices are identical
     dd.assert_eq(got.reset_index(), expect.reset_index(), check_index=False)
 
 
+@pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
-def test_sort_values_single_partition(by):
+def test_sort_values_single_partition(by, ascending):
     df = cudf.DataFrame()
     nelem = 1000
     df["a"] = np.ascontiguousarray(np.arange(nelem)[::-1])
@@ -39,8 +41,8 @@ def test_sort_values_single_partition(by):
     ddf = dd.from_pandas(df, npartitions=1)
 
     with dask.config.set(scheduler="single-threaded"):
-        got = ddf.sort_values(by=by)
-    expect = df.sort_values(by=by)
+        got = ddf.sort_values(by=by, ascending=ascending)
+    expect = df.sort_values(by=by, ascending=ascending)
     dd.assert_eq(got, expect)
 
 
@@ -54,6 +56,7 @@ def test_sort_repartition():
     dd.assert_eq(len(new_ddf), len(ddf))
 
 
+@pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("by", ["a", "b", ["a", "b"]])
 @pytest.mark.parametrize(
     "data",
@@ -65,16 +68,15 @@ def test_sort_repartition():
         {"a": list(range(15)) + [None] * 5, "b": list(reversed(range(20)))},
     ],
 )
-def test_sort_values_with_nulls(data, by):
+def test_sort_values_with_nulls(data, by, ascending):
     np.random.seed(0)
     cp.random.seed(0)
     df = cudf.DataFrame(data)
     ddf = dd.from_pandas(df, npartitions=5)
 
     with dask.config.set(scheduler="single-threaded"):
-        got = ddf.sort_values(by=by)
-
-    expect = df.sort_values(by=by)
+        got = ddf.sort_values(by=by, ascending=ascending)
+    expect = df.sort_values(by=by, ascending=ascending)
 
     # check that sorted indices are identical
     dd.assert_eq(got.reset_index(), expect.reset_index(), check_index=False)
