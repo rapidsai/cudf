@@ -98,6 +98,13 @@ class IndexedFrame(Frame):
     def __init__(self, data=None, index=None):
         super().__init__(data=data, index=index)
 
+    def to_dict(self, *args, **kwargs):  # noqa: D102
+        raise TypeError(
+            "cuDF does not support conversion to host memory "
+            "via `to_dict()` method. Consider using "
+            "`.to_pandas().to_dict()` to construct a Python dictionary."
+        )
+
     @cached_property
     def loc(self):
         """Select rows and columns by label or boolean mask.

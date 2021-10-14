@@ -1156,13 +1156,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     items = SingleColumnFrame.__iter__
 
-    def to_dict(self, into=dict):
-        raise TypeError(
-            "cuDF does not support conversion to host memory "
-            "via `to_dict()` method. Consider using "
-            "`.to_pandas().to_dict()` to construct a Python dictionary."
-        )
-
     def __setitem__(self, key, value):
         if isinstance(key, slice):
             self.iloc[key] = value

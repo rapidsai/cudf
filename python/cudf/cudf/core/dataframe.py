@@ -6238,13 +6238,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         df.columns = self.columns
         return df
 
-    def to_dict(self, orient="dict", into=dict):
-        raise TypeError(
-            "cuDF does not support conversion to host memory "
-            "via `to_dict()` method. Consider using "
-            "`.to_pandas().to_dict()` to construct a Python dictionary."
-        )
-
     def to_struct(self, name=None):
         """
         Return a struct Series composed of the columns of the DataFrame.
