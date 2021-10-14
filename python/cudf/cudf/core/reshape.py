@@ -9,7 +9,7 @@ import pandas as pd
 import cudf
 from cudf._lib.transform import one_hot_encode
 from cudf._typing import Dtype
-from cudf.core.column import ColumnBase, as_column
+from cudf.core.column import ColumnBase, as_column, column_empty_like
 from cudf.core.column.categorical import CategoricalColumn
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
@@ -1082,7 +1082,10 @@ def _one_hot_encode_column(
     columns maybe coerced into `dtype`.
     """
     if isinstance(column, CategoricalColumn):
-        column = column._get_decategorized_column()
+        if column.size == column.null_count:
+            column = column_empty_like(categories, newsize=column.size)
+        else:
+            column = column._get_decategorized_column()
 
     if column.size * categories.size >= np.iinfo("int32").max:
         raise ValueError(
