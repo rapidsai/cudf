@@ -511,7 +511,7 @@ class ColumnAccessor(MutableMapping):
                     "Renaming columns with a MultiIndex and level=None is"
                     "not supported"
                 )
-            new_names = map(rename_column, self.keys())
+            new_names = (rename_column(col_name) for col_name in self.keys())
             ca = ColumnAccessor(
                 dict(zip(new_names, self.values())),
                 level_names=self.level_names,
