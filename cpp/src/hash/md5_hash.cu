@@ -20,6 +20,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/detail/utilities.cuh>
+#include <cudf/strings/string_view.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
 
@@ -136,52 +137,31 @@ auto CUDA_DEVICE_CALLABLE get_data(Key const& k)
   }
 }
 
-auto CUDA_DEVICE_CALLABLE get_data(string_view const& s)
+auto CUDA_DEVICE_CALLABLE get_data(string_view const& k)
 {
-  return thrust::make_pair(reinterpret_cast<uint8_t const*>(s.data()), s.size_bytes());
+  return thrust::make_pair(reinterpret_cast<uint8_t const*>(k.data()), k.size_bytes());
 }
 
 // Forward declarations
 struct md5_hash_state;
-void CUDA_DEVICE_CALLABLE md5_hash_step(md5_hash_state* hash_state);
+void CUDA_DEVICE_CALLABLE md5_hash_step(md5_hash_state& hash_state);
 
 struct md5_hash_state {
   uint64_t message_length = 0;
   uint32_t hash_value[4]  = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
   hash_circular_buffer<64> buffer;
-
-  void CUDA_DEVICE_CALLABLE put(uint8_t const* in, int size, bool extend_message_length)
-  {
-    auto hash_step = [this]() { md5_hash_step(this); };
-    this->buffer.put(in, size, hash_step);
-    if (extend_message_length) { message_length += size; }
-  }
-
-  void CUDA_DEVICE_CALLABLE pad(int space_to_leave)
-  {
-    auto hash_step = [this]() { md5_hash_step(this); };
-    this->buffer.pad(space_to_leave, hash_step);
-  }
-
-  template <typename Key>
-  void CUDA_DEVICE_CALLABLE process(Key const& key)
-  {
-    auto const normalized_key = normalize_nans_and_zeros(key);
-    auto const [data, size]   = get_data(normalized_key);
-    put(data, size, true);
-  }
 };
 
 /**
  * @brief Core MD5 algorithm implementation. Processes a single 512-bit chunk,
  * updating the hash value so far. Does not zero out the buffer contents.
  */
-void CUDA_DEVICE_CALLABLE md5_hash_step(md5_hash_state* hash_state)
+void CUDA_DEVICE_CALLABLE md5_hash_step(md5_hash_state& hash_state)
 {
-  uint32_t A = hash_state->hash_value[0];
-  uint32_t B = hash_state->hash_value[1];
-  uint32_t C = hash_state->hash_value[2];
-  uint32_t D = hash_state->hash_value[3];
+  uint32_t A = hash_state.hash_value[0];
+  uint32_t B = hash_state.hash_value[1];
+  uint32_t C = hash_state.hash_value[2];
+  uint32_t D = hash_state.hash_value[3];
 
   for (unsigned int j = 0; j < 64; j++) {
     uint32_t F;
@@ -206,7 +186,7 @@ void CUDA_DEVICE_CALLABLE md5_hash_step(md5_hash_state* hash_state)
     }
 
     uint32_t buffer_element_as_int;
-    memcpy(&buffer_element_as_int, &hash_state->buffer[g * 4], 4);
+    memcpy(&buffer_element_as_int, &hash_state.buffer[g * 4], 4);
     F = F + A + md5_hash_constants[j] + buffer_element_as_int;
     A = D;
     D = C;
@@ -214,26 +194,71 @@ void CUDA_DEVICE_CALLABLE md5_hash_step(md5_hash_state* hash_state)
     B = B + __funnelshift_l(F, F, md5_shift_constants[((j / 16) * 4) + (j % 4)]);
   }
 
-  hash_state->hash_value[0] += A;
-  hash_state->hash_value[1] += B;
-  hash_state->hash_value[2] += C;
-  hash_state->hash_value[3] += D;
+  hash_state.hash_value[0] += A;
+  hash_state.hash_value[1] += B;
+  hash_state.hash_value[2] += C;
+  hash_state.hash_value[3] += D;
 }
+
+struct MD5Hasher {
+  md5_hash_state hash_state;
+
+ public:
+  template <typename Key>
+  void CUDA_DEVICE_CALLABLE process(Key const& key)
+  {
+    auto const normalized_key = normalize_nans_and_zeros(key);
+    auto const [data, size]   = get_data(normalized_key);
+    put(data, size, true);
+  }
+
+  void CUDA_DEVICE_CALLABLE finalize(char* result_location)
+  {
+    // Add a one bit flag (10000000) to signal the end of the message
+    uint8_t constexpr end_of_message = 0x80;
+    // The message length is appended to the end of the last chunk processed
+    uint64_t const message_length_in_bits = this->hash_state.message_length * 8;
+
+    put(&end_of_message, sizeof(end_of_message), false);
+    pad(sizeof(message_length_in_bits));
+    put(reinterpret_cast<uint8_t const*>(&message_length_in_bits),
+        sizeof(message_length_in_bits),
+        false);
+
+    for (int i = 0; i < 4; ++i) {
+      uint32ToLowercaseHexString(this->hash_state.hash_value[i], result_location + (8 * i));
+    }
+  }
+
+ private:
+  void CUDA_DEVICE_CALLABLE put(uint8_t const* in, int size, bool extend_message_length)
+  {
+    auto hash_step = [this]() { md5_hash_step(this->hash_state); };
+    this->hash_state.buffer.put(in, size, hash_step);
+    if (extend_message_length) { this->hash_state.message_length += size; }
+  }
+
+  void CUDA_DEVICE_CALLABLE pad(int space_to_leave)
+  {
+    auto hash_step = [this]() { md5_hash_step(this->hash_state); };
+    this->hash_state.buffer.pad(space_to_leave, hash_step);
+  }
+};
 
 struct MD5ListHasher {
   template <typename Key>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view data_col,
                                        size_type offset_begin,
                                        size_type offset_end,
-                                       md5_hash_state* hash_state) const
+                                       MD5Hasher& hasher) const
   {
     if constexpr ((is_fixed_width<Key>() && !is_chrono<Key>()) ||
                   std::is_same_v<Key, string_view>) {
       for (size_type i = offset_begin; i < offset_end; i++) {
-        if (data_col.is_valid(i)) { hash_state->process(data_col.element<Key>(i)); }
+        if (data_col.is_valid(i)) { hasher.process(data_col.element<Key>(i)); }
       }
     } else {
-      cudf_assert(false && "Unsupported type.");
+      cudf_assert(false && "Unsupported type for hash function.");
     }
   }
 };
@@ -248,7 +273,7 @@ struct HasherDispatcher {
   {
     if constexpr ((is_fixed_width<Key>() && !is_chrono<Key>()) ||
                   std::is_same_v<Key, string_view>) {
-      hasher->hash_state.process(col.element<Key>(row_index));
+      hasher->process(col.element<Key>(row_index));
     } else if constexpr (std::is_same_v<Key, list_view>) {
       auto const data    = col.child(lists_column_view::child_column_index);
       auto const offsets = col.child(lists_column_view::offsets_column_index);
@@ -258,32 +283,9 @@ struct HasherDispatcher {
       auto const offset_begin = offsets.element<size_type>(row_index);
       auto const offset_end   = offsets.element<size_type>(row_index + 1);
 
-      cudf::type_dispatcher(
-        data.type(), MD5ListHasher{}, data, offset_begin, offset_end, &hasher->hash_state);
+      cudf::type_dispatcher(data.type(), MD5ListHasher{}, data, offset_begin, offset_end, *hasher);
     } else {
       cudf_assert(false && "Unsupported type for hash function.");
-    }
-  }
-};
-
-struct MD5Hasher {
-  md5_hash_state hash_state;
-
-  void CUDA_DEVICE_CALLABLE finalize(char* result_location)
-  {
-    // Add a one bit flag (10000000) to signal the end of the message
-    uint8_t constexpr end_of_message = 0x80;
-    // The message length is appended to the end of the last chunk processed
-    uint64_t const message_length_in_bits = this->hash_state.message_length * 8;
-
-    this->hash_state.put(&end_of_message, sizeof(end_of_message), false);
-    this->hash_state.pad(sizeof(message_length_in_bits));
-    this->hash_state.put(reinterpret_cast<uint8_t const*>(&message_length_in_bits),
-                         sizeof(message_length_in_bits),
-                         false);
-
-    for (int i = 0; i < 4; ++i) {
-      uint32ToLowercaseHexString(this->hash_state.hash_value[i], result_location + (8 * i));
     }
   }
 };
