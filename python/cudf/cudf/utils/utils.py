@@ -162,7 +162,7 @@ class cached_property:
             return self
         else:
             value = self.func(instance)
-            setattr(instance, self.func.__name__, value)
+            object.__setattr__(instance, self.func.__name__, value)
             return value
 
 

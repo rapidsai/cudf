@@ -81,7 +81,9 @@ class ColumnBase(Column, Serializable):
         """
         Converts a Column to Frame
         """
-        return cudf.core.frame.SingleColumnFrame({None: self.copy(deep=False)})
+        return cudf.core.single_column_frame.SingleColumnFrame(
+            {None: self.copy(deep=False)}
+        )
 
     @property
     def data_array_view(self) -> "cuda.devicearray.DeviceNDArray":
