@@ -10,25 +10,12 @@ from rmm._lib.device_uvector cimport device_uvector
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport size_type
+from cudf._lib.cpp.types cimport null_equality, size_type
 
 ctypedef unique_ptr[device_uvector[size_type]] gather_map_type
 
+
 cdef extern from "cudf/join.hpp" namespace "cudf" nogil:
-    cdef pair[gather_map_type, gather_map_type] inner_join(
-        const table_view left_keys,
-        const table_view right_keys,
-    ) except +
-
-    cdef pair[gather_map_type, gather_map_type] left_join(
-        const table_view left_keys,
-        const table_view right_keys,
-    ) except +
-
-    cdef pair[gather_map_type, gather_map_type] full_join(
-        const table_view left_keys,
-        const table_view right_keys,
-    ) except +
 
     cdef gather_map_type left_semi_join(
         const table_view left_keys,
@@ -39,3 +26,21 @@ cdef extern from "cudf/join.hpp" namespace "cudf" nogil:
         const table_view left_keys,
         const table_view right_keys,
     ) except +
+
+    cdef cppclass hash_join:
+        hash_join(
+            const table_view& build,
+            null_equality compare_nulls
+        ) except +
+
+        pair[gather_map_type, gather_map_type] inner_join(
+            const table_view& probe,
+        ) except +
+
+        pair[gather_map_type, gather_map_type] left_join(
+            const table_view& probe,
+        ) except +
+
+        pair[gather_map_type, gather_map_type] full_join(
+            const table_view& probe,
+        ) except +

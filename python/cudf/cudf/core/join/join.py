@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import functools
 from collections import namedtuple
-from typing import TYPE_CHECKING, Callable, Tuple
+from typing import TYPE_CHECKING, Callable, Optional, Tuple
 
 import cudf
 from cudf import _lib as libcudf
@@ -15,6 +15,7 @@ from cudf.core.join._join_helpers import (
 )
 
 if TYPE_CHECKING:
+    from cudf.core.column.numerical import NumericalColumn
     from cudf.core.frame import Frame
 
 
@@ -53,6 +54,21 @@ def merge(
 
 
 _JoinKeys = namedtuple("JoinKeys", ["left", "right"])
+
+
+def _hash_joiner(
+    lhs: Frame, rhs: Frame, how
+) -> Tuple[Optional[NumericalColumn], Optional[NumericalColumn]]:
+
+    # for a left join, we want to use the RHS always as the build table:
+    if how == "left":
+        join_obj, probe_table = rhs._join, lhs
+        left_rows, right_rows = join_obj.join(probe_table, how=how)
+    else:
+        join_obj, probe_table = lhs._join, rhs
+        right_rows, left_rows = join_obj.join(probe_table, how=how)
+
+    return left_rows, right_rows
 
 
 class Merge(object):
@@ -133,7 +149,7 @@ class Merge(object):
             how=how,
             suffixes=suffixes,
         )
-        self._joiner = functools.partial(libcudf.join.join, how=how)
+        self._joiner = functools.partial(_hash_joiner, how=how)
 
         self.lhs = lhs
         self.rhs = rhs
