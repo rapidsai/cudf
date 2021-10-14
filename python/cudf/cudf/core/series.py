@@ -9,7 +9,7 @@ import warnings
 from collections import abc as abc
 from numbers import Number
 from shutil import get_terminal_size
-from typing import Any, MutableMapping, Optional, Set
+from typing import Any, MutableMapping, Optional, Set, Union
 from uuid import uuid4
 
 import cupy
@@ -20,13 +20,19 @@ from pandas._config import get_option
 
 import cudf
 from cudf import _lib as libcudf
+from cudf._lib.scalar import _is_null_host_scalar
 from cudf._lib.transform import bools_to_mask
+from cudf._typing import ColumnLike, DataFrameOrSeries, ScalarLike
 from cudf.api.types import (
+    _is_non_decimal_numeric_dtype,
+    _is_scalar_or_zero_d_array,
     is_bool_dtype,
     is_categorical_dtype,
     is_decimal_dtype,
     is_dict_like,
     is_dtype_equal,
+    is_integer,
+    is_integer_dtype,
     is_interval_dtype,
     is_list_dtype,
     is_list_like,
@@ -51,10 +57,16 @@ from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame, SingleColumnFrame, _drop_rows_by_labels
+from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import BaseIndex, RangeIndex, as_index
-from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
+from cudf.core.indexed_frame import (
+    IndexedFrame,
+    _FrameIndexer,
+    _get_label_range_or_mask,
+    _indices_from_labels,
+)
+from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils import cudautils, docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -66,10 +78,168 @@ from cudf.utils.dtypes import (
 from cudf.utils.utils import (
     get_appropriate_dispatched_func,
     get_relevant_submodule,
+    to_cudf_compatible_scalar,
 )
 
 
-class Series(SingleColumnFrame, Serializable):
+def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
+    """Append a scalar `value` to the end of `col` inplace.
+       Cast to common type if possible
+    """
+    to_type = find_common_type([type(value), col.dtype])
+    val_col = as_column(value, dtype=to_type)
+    old_col = col.astype(to_type)
+
+    col._mimic_inplace(concat_columns([old_col, val_col]), inplace=True)
+
+
+class _SeriesIlocIndexer(_FrameIndexer):
+    """
+    For integer-location based selection.
+    """
+
+    def __getitem__(self, arg):
+        if isinstance(arg, tuple):
+            arg = list(arg)
+        data = self._frame._column[arg]
+
+        if (
+            isinstance(data, (dict, list))
+            or _is_scalar_or_zero_d_array(data)
+            or _is_null_host_scalar(data)
+        ):
+            return data
+        return self._frame._from_data(
+            {self._frame.name: data},
+            index=cudf.Index(self._frame.index.take(arg)),
+        )
+
+    def __setitem__(self, key, value):
+        from cudf.core.column import column
+
+        if isinstance(key, tuple):
+            key = list(key)
+
+        # coerce value into a scalar or column
+        if is_scalar(value):
+            value = to_cudf_compatible_scalar(value)
+        elif not (
+            isinstance(value, (list, dict))
+            and isinstance(
+                self._frame._column.dtype, (cudf.ListDtype, cudf.StructDtype)
+            )
+        ):
+            value = column.as_column(value)
+
+        if (
+            not isinstance(
+                self._frame._column.dtype,
+                (cudf.Decimal64Dtype, cudf.CategoricalDtype),
+            )
+            and hasattr(value, "dtype")
+            and _is_non_decimal_numeric_dtype(value.dtype)
+        ):
+            # normalize types if necessary:
+            if not is_integer(key):
+                to_dtype = np.result_type(
+                    value.dtype, self._frame._column.dtype
+                )
+                value = value.astype(to_dtype)
+                self._frame._column._mimic_inplace(
+                    self._frame._column.astype(to_dtype), inplace=True
+                )
+
+        self._frame._column[key] = value
+
+
+class _SeriesLocIndexer(_FrameIndexer):
+    """
+    Label-based selection
+    """
+
+    def __getitem__(self, arg: Any) -> Union[ScalarLike, DataFrameOrSeries]:
+        if isinstance(arg, pd.MultiIndex):
+            arg = cudf.from_pandas(arg)
+
+        if isinstance(self._frame.index, cudf.MultiIndex) and not isinstance(
+            arg, cudf.MultiIndex
+        ):
+            result = self._frame.index._get_row_major(self._frame, arg)
+            if (
+                isinstance(arg, tuple)
+                and len(arg) == self._frame._index.nlevels
+                and not any((isinstance(x, slice) for x in arg))
+            ):
+                result = result.iloc[0]
+            return result
+        try:
+            arg = self._loc_to_iloc(arg)
+        except (TypeError, KeyError, IndexError, ValueError):
+            raise KeyError(arg)
+
+        return self._frame.iloc[arg]
+
+    def __setitem__(self, key, value):
+        try:
+            key = self._loc_to_iloc(key)
+        except KeyError as e:
+            if (
+                is_scalar(key)
+                and not isinstance(self._frame.index, cudf.MultiIndex)
+                and is_scalar(value)
+            ):
+                _append_new_row_inplace(self._frame.index._values, key)
+                _append_new_row_inplace(self._frame._column, value)
+                return
+            else:
+                raise e
+        if isinstance(value, (pd.Series, cudf.Series)):
+            value = cudf.Series(value)
+            value = value._align_to_index(self._frame.index, how="right")
+        self._frame.iloc[key] = value
+
+    def _loc_to_iloc(self, arg):
+        if _is_scalar_or_zero_d_array(arg):
+            if not _is_non_decimal_numeric_dtype(self._frame.index.dtype):
+                # TODO: switch to cudf.utils.dtypes.is_integer(arg)
+                if isinstance(arg, cudf.Scalar) and is_integer_dtype(
+                    arg.dtype
+                ):
+                    found_index = arg.value
+                    return found_index
+                elif is_integer(arg):
+                    found_index = arg
+                    return found_index
+            try:
+                found_index = self._frame.index._values.find_first_value(
+                    arg, closest=False
+                )
+                return found_index
+            except (TypeError, KeyError, IndexError, ValueError):
+                raise KeyError("label scalar is out of bound")
+
+        elif isinstance(arg, slice):
+            return _get_label_range_or_mask(
+                self._frame.index, arg.start, arg.stop, arg.step
+            )
+        elif isinstance(arg, (cudf.MultiIndex, pd.MultiIndex)):
+            if isinstance(arg, pd.MultiIndex):
+                arg = cudf.MultiIndex.from_pandas(arg)
+
+            return _indices_from_labels(self._frame, arg)
+
+        else:
+            arg = cudf.core.series.Series(cudf.core.column.as_column(arg))
+            if arg.dtype in (bool, np.bool_):
+                return arg
+            else:
+                indices = _indices_from_labels(self._frame, arg)
+                if indices.null_count > 0:
+                    raise KeyError("label scalar is out of bound")
+                return indices
+
+
+class Series(SingleColumnFrame, IndexedFrame, Serializable):
     """
     One-dimensional GPU array (including time series).
 
@@ -113,6 +283,8 @@ class Series(SingleColumnFrame, Serializable):
     """
 
     _accessors: Set[Any] = set()
+    _loc_indexer_type = _SeriesLocIndexer
+    _iloc_indexer_type = _SeriesIlocIndexer
 
     # The `constructor*` properties are used by `dask` (and `dask_cudf`)
     @property
@@ -1954,52 +2126,6 @@ class Series(SingleColumnFrame, Serializable):
     @index.setter
     def index(self, _index):
         self._index = as_index(_index)
-
-    @property
-    def loc(self):
-        """
-        Select values by label.
-
-        See also
-        --------
-        cudf.DataFrame.loc
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([10, 11, 12], index=['a', 'b', 'c'])
-        >>> series
-        a    10
-        b    11
-        c    12
-        dtype: int64
-        >>> series.loc['b']
-        11
-        """
-        return _SeriesLocIndexer(self)
-
-    @property
-    def iloc(self):
-        """
-        Select values by position.
-
-        See also
-        --------
-        cudf.DataFrame.iloc
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([10, 20, 30])
-        >>> s
-        0    10
-        1    20
-        2    30
-        dtype: int64
-        >>> s.iloc[2]
-        30
-        """
-        return _SeriesIlocIndexer(self)
 
     @property
     def nullmask(self):
