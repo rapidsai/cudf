@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-#include <structs/utilities.hpp>
-
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/table/row_operators.cuh>
 
@@ -55,7 +54,7 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
   table_view const order_table{{std::get<0>(superimposed)}};
   auto const flattener = cudf::structs::detail::flatten_nested_columns(
     order_table, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
-  auto const d_flat_order = table_device_view::create(std::get<0>(flattener), stream);
+  auto const d_flat_order = table_device_view::create(flattener.table(), stream);
   row_equality_comparator<has_nulls> comparator(*d_flat_order, *d_flat_order, true);
   auto ranks         = make_fixed_width_column(data_type{type_to_id<size_type>()},
                                        order_table.num_rows(),

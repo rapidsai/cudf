@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 
-#include <structs/utilities.hpp>
-
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/lists/detail/sorting.hpp>
 #include <cudf/lists/drop_list_duplicates.hpp>
 #include <cudf/structs/struct_view.hpp>
@@ -487,7 +486,7 @@ struct get_unique_entries_dispatch {
                                        : structs::detail::column_nullability::MATCH_INCOMING;
     auto const entries_flattened   = cudf::structs::detail::flatten_nested_columns(
       entries_tview, {order::ASCENDING}, {null_order::AFTER}, flatten_nullability);
-    auto const d_view = table_device_view::create(std::get<0>(entries_flattened), stream);
+    auto const d_view = table_device_view::create(entries_flattened.table(), stream);
 
     auto const comp = table_row_comparator_fn{list_offsets,
                                               *d_view,

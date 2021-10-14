@@ -20,6 +20,7 @@
 #include <join/join_common_utils.hpp>
 #include <join/join_kernels.cuh>
 
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
@@ -138,6 +139,7 @@ struct hash_join::hash_join_impl {
  private:
   cudf::table_view _build;
   std::vector<std::unique_ptr<cudf::column>> _created_null_columns;
+  cudf::structs::detail::flatten_result _flattened_build_table;
   std::unique_ptr<cudf::detail::multimap_type, std::function<void(cudf::detail::multimap_type*)>>
     _hash_table;
 

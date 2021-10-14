@@ -18,6 +18,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/search.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
@@ -26,7 +27,6 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
-#include <structs/utilities.hpp>
 
 #include <hash/unordered_multiset.cuh>
 
@@ -112,13 +112,13 @@ std::unique_ptr<column> search_ordered(table_view const& t,
   auto const values_flattened =
     structs::detail::flatten_nested_columns(matched.second.back(), {}, {}, flatten_nullability);
 
-  auto const t_d      = table_device_view::create(std::get<0>(t_flattened), stream);
-  auto const values_d = table_device_view::create(std::get<0>(values_flattened), stream);
+  auto const t_d      = table_device_view::create(t_flattened.table(), stream);
+  auto const values_d = table_device_view::create(values_flattened.table(), stream);
   auto const& lhs     = find_first ? *t_d : *values_d;
   auto const& rhs     = find_first ? *values_d : *t_d;
 
-  auto const& column_order_flattened    = std::get<1>(t_flattened);
-  auto const& null_precedence_flattened = std::get<2>(t_flattened);
+  auto const& column_order_flattened    = t_flattened.orders();
+  auto const& null_precedence_flattened = t_flattened.null_orders();
   auto const column_order_dv = detail::make_device_uvector_async(column_order_flattened, stream);
   auto const null_precedence_dv =
     detail::make_device_uvector_async(null_precedence_flattened, stream);
