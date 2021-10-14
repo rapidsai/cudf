@@ -530,9 +530,6 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& values,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr);
 
-/** @endinternal
- *
- */
 }  // namespace detail
 }  // namespace groupby
 }  // namespace cudf

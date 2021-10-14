@@ -34,13 +34,13 @@ from cudf._lib.cpp.io.types cimport (
 )
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type, type_id
+from cudf._lib.io.datasource cimport NativeFileDatasource
 from cudf._lib.io.utils cimport (
     make_sink_info,
     make_source_info,
     update_column_struct_field_names,
     update_struct_field_names,
 )
-from cudf._lib.table cimport Table, table_view_from_table
 
 from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
@@ -48,7 +48,13 @@ from cudf._lib.types cimport underlying_type_t_type_id
 
 import numpy as np
 
-from cudf._lib.utils cimport data_from_unique_ptr, get_column_names
+from cudf._lib.utils cimport (
+    data_from_unique_ptr,
+    get_column_names,
+    table_view_from_table,
+)
+
+from pyarrow.lib import NativeFile
 
 from cudf._lib.utils import _index_level_name, generate_pandas_metadata
 from cudf.api.types import is_list_dtype, is_struct_dtype
@@ -62,6 +68,10 @@ cpdef read_raw_orc_statistics(filepath_or_buffer):
     --------
     cudf.io.orc.read_orc_statistics
     """
+
+    # Handle NativeFile input
+    if isinstance(filepath_or_buffer, NativeFile):
+        filepath_or_buffer = NativeFileDatasource(filepath_or_buffer)
 
     cdef raw_orc_statistics raw = (
         libcudf_read_raw_orc_statistics(make_source_info([filepath_or_buffer]))
@@ -133,10 +143,13 @@ cdef compression_type _get_comp_type(object compression):
         raise ValueError(f"Unsupported `compression` type {compression}")
 
 
-cpdef write_orc(Table table,
+cpdef write_orc(table,
                 object path_or_buf,
                 object compression=None,
-                bool enable_statistics=True):
+                bool enable_statistics=True,
+                object stripe_size_bytes=None,
+                object stripe_size_rows=None,
+                object row_index_stride=None):
     """
     Cython function to call into libcudf API, see `write_orc`.
 
@@ -178,6 +191,12 @@ cpdef write_orc(Table table,
         .enable_statistics(<bool> (True if enable_statistics else False))
         .build()
     )
+    if stripe_size_bytes is not None:
+        c_orc_writer_options.set_stripe_size_bytes(stripe_size_bytes)
+    if stripe_size_rows is not None:
+        c_orc_writer_options.set_stripe_size_rows(stripe_size_rows)
+    if row_index_stride is not None:
+        c_orc_writer_options.set_row_index_stride(row_index_stride)
 
     with nogil:
         libcudf_write_orc(c_orc_writer_options)
@@ -206,6 +225,9 @@ cdef orc_reader_options make_orc_reader_options(
     object decimal_cols_as_float
 ) except*:
 
+    for i, datasource in enumerate(filepaths_or_buffers):
+        if isinstance(datasource, NativeFile):
+            filepaths_or_buffers[i] = NativeFileDatasource(datasource)
     cdef vector[string] c_column_names
     cdef vector[vector[size_type]] strps = stripes
     c_column_names.reserve(len(column_names))
@@ -258,7 +280,7 @@ cdef class ORCWriter:
         self.index = index
         self.initialized = False
 
-    def write_table(self, Table table):
+    def write_table(self, table):
         """ Writes a single table to the file """
         if not self.initialized:
             self._initialize_chunked_state(table)
@@ -282,7 +304,7 @@ cdef class ORCWriter:
     def __dealloc__(self):
         self.close()
 
-    def _initialize_chunked_state(self, Table table):
+    def _initialize_chunked_state(self, table):
         """
         Prepare all the values required to build the
         chunked_orc_writer_options anb creates a writer"""

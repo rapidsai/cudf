@@ -111,10 +111,9 @@ def typeof_masked(val, c):
 @cuda_decl_registry.register
 class MaskedConstructor(ConcreteTemplate):
     key = api.Masked
-
     cases = [
         nb_signature(MaskedType(t), t, types.boolean)
-        for t in (types.integer_domain | types.real_domain)
+        for t in (types.integer_domain | types.real_domain | {types.boolean})
     ]
 
 
