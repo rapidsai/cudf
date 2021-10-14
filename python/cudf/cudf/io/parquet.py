@@ -179,7 +179,10 @@ def _process_row_groups(paths, fs, filters=None, row_groups=None):
 
     # Initialize ds.FilesystemDataset
     dataset = ds.dataset(
-        paths, filesystem=fs, format="parquet", partitioning="hive",
+        paths,
+        filesystem=fs,
+        format="parquet",
+        partitioning="hive",
     )
     file_list = dataset.files
     if len(file_list) == 0:
@@ -332,7 +335,10 @@ def read_parquet(
     # into a full list of files if it is a directory.
     if fs is not None:
         filepath_or_buffer, row_groups = _process_row_groups(
-            filepath_or_buffer, fs, filters=filters, row_groups=row_groups,
+            filepath_or_buffer,
+            fs,
+            filters=filters,
+            row_groups=row_groups,
         )
 
     # Check if we should calculate the specific byte-ranges
@@ -348,11 +354,15 @@ def read_parquet(
         if need_byte_ranges or (
             filepath_or_buffer
             and isinstance(
-                filepath_or_buffer[0], fsspec.spec.AbstractBufferedFile,
+                filepath_or_buffer[0],
+                fsspec.spec.AbstractBufferedFile,
             )
         ):
             byte_ranges, footers, file_sizes = _get_byte_ranges(
-                filepath_or_buffer, row_groups, columns, fs,
+                filepath_or_buffer,
+                row_groups,
+                columns,
+                fs,
             )
 
     filepaths_or_buffers = []

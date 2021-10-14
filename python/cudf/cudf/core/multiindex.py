@@ -656,8 +656,7 @@ class MultiIndex(Frame, BaseIndex):
         self._codes = cudf.DataFrame._from_data(codes)
 
     def _compute_validity_mask(self, index, row_tuple, max_length):
-        """ Computes the valid set of indices of values in the lookup
-        """
+        """Computes the valid set of indices of values in the lookup"""
         lookup = cudf.DataFrame()
         for name, row in zip(index.names, row_tuple):
             if isinstance(row, slice) and row == slice(None):
@@ -823,7 +822,8 @@ class MultiIndex(Frame, BaseIndex):
     def __eq__(self, other):
         if isinstance(other, MultiIndex):
             for self_col, other_col in zip(
-                self._data.values(), other._data.values(),
+                self._data.values(),
+                other._data.values(),
             ):
                 if not self_col.equals(other_col):
                     return False
@@ -1619,9 +1619,11 @@ class MultiIndex(Frame, BaseIndex):
         partial_index = self.__class__._from_data(
             data=self._data.select_by_index(slice(key_as_table._num_columns))
         )
-        (lower_bound, upper_bound, sort_inds,) = _lexsorted_equal_range(
-            partial_index, key_as_table, is_sorted
-        )
+        (
+            lower_bound,
+            upper_bound,
+            sort_inds,
+        ) = _lexsorted_equal_range(partial_index, key_as_table, is_sorted)
 
         if lower_bound == upper_bound:
             raise KeyError(key)

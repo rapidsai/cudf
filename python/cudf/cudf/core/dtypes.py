@@ -349,7 +349,10 @@ class StructDtype(_BaseDtype):
                 dtype_header, (start, stop) = dtype
                 fields[k] = pickle.loads(
                     dtype_header["type-serialized"]
-                ).deserialize(dtype_header, frames[start:stop],)
+                ).deserialize(
+                    dtype_header,
+                    frames[start:stop],
+                )
             else:
                 fields[k] = dtype
         return cls(fields)

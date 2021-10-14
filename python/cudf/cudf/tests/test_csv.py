@@ -579,7 +579,9 @@ def test_csv_reader_NaN_values():
 
     # data type detection should evaluate the column to int8 (all nulls)
     gdf = read_csv(
-        StringIO(all_cells), header=None, na_values=custom_na_values,
+        StringIO(all_cells),
+        header=None,
+        na_values=custom_na_values,
     )
     assert gdf.dtypes[0] == "int8"
     assert all(gdf["0"][idx] is cudf.NA for idx in range(len(gdf["0"])))

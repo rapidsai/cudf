@@ -43,7 +43,7 @@ def _quantile(a, q):
 
 
 def merge_quantiles(finalq, qs, vals):
-    """ Combine several quantile calculations of different data.
+    """Combine several quantile calculations of different data.
     [NOTE: Same logic as dask.array merge_percentiles]
     """
     if isinstance(finalq, Iterator):
@@ -219,8 +219,7 @@ def sort_values(
     ignore_index=False,
     ascending=True,
 ):
-    """ Sort by the given list/tuple of column names.
-    """
+    """Sort by the given list/tuple of column names."""
     npartitions = df.npartitions
     if isinstance(by, tuple):
         by = list(by)

@@ -1115,7 +1115,8 @@ def _is_local_filesystem(fs):
 
 
 def ensure_single_filepath_or_buffer(path_or_data, **kwargs):
-    """Return False if `path_or_data` resolves to multiple filepaths or buffers
+    """Return False if `path_or_data` resolves to multiple filepaths or
+    buffers.
     """
     path_or_data = stringify_pathlike(path_or_data)
     if isinstance(path_or_data, str):
@@ -1140,8 +1141,7 @@ def ensure_single_filepath_or_buffer(path_or_data, **kwargs):
 
 
 def is_directory(path_or_data, **kwargs):
-    """Returns True if the provided filepath is a directory
-    """
+    """Returns True if the provided filepath is a directory"""
     path_or_data = stringify_pathlike(path_or_data)
     if isinstance(path_or_data, str):
         storage_options = kwargs.get("storage_options")
@@ -1558,13 +1558,19 @@ def _fsspec_data_transfer(
 
         # Optimize/merge the ranges
         byte_ranges = _merge_ranges(
-            byte_ranges, max_block=bytes_per_thread, max_gap=max_gap,
+            byte_ranges,
+            max_block=bytes_per_thread,
+            max_gap=max_gap,
         )
 
         # Call multi-threaded data transfer of
         # remote byte-ranges to local buffer
         _read_byte_ranges(
-            path_or_fob, byte_ranges, buf, fs=fs, **kwargs,
+            path_or_fob,
+            byte_ranges,
+            buf,
+            fs=fs,
+            **kwargs,
         )
 
         # Add Header & Footer bytes
@@ -1586,7 +1592,11 @@ def _fsspec_data_transfer(
             for b in range(0, file_size, bytes_per_thread)
         ]
         _read_byte_ranges(
-            path_or_fob, byte_ranges, buf, fs=fs, **kwargs,
+            path_or_fob,
+            byte_ranges,
+            buf,
+            fs=fs,
+            **kwargs,
         )
 
     return buf.tobytes()
@@ -1618,19 +1628,25 @@ def _assign_block(fs, path_or_fob, local_buffer, offset, nbytes):
         # We have an open fsspec file object
         path_or_fob.seek(offset)
         local_buffer[offset : offset + nbytes] = np.frombuffer(
-            path_or_fob.read(nbytes), dtype="b",
+            path_or_fob.read(nbytes),
+            dtype="b",
         )
     else:
         # We have an fsspec filesystem and a path
         with fs.open(path_or_fob, mode="rb", cache_type="none") as fob:
             fob.seek(offset)
             local_buffer[offset : offset + nbytes] = np.frombuffer(
-                fob.read(nbytes), dtype="b",
+                fob.read(nbytes),
+                dtype="b",
             )
 
 
 def _read_byte_ranges(
-    path_or_fob, ranges, local_buffer, fs=None, **kwargs,
+    path_or_fob,
+    ranges,
+    local_buffer,
+    fs=None,
+    **kwargs,
 ):
     # Simple utility to copy remote byte ranges
     # into a local buffer for IO in libcudf

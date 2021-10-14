@@ -92,8 +92,7 @@ def test_index_find_label_range_genericindex():
 
 
 def test_index_find_label_range_rangeindex():
-    """Cudf specific
-    """
+    """Cudf specific"""
     # step > 0
     # 3, 8, 13, 18
     ridx = RangeIndex(3, 20, 5)
@@ -344,8 +343,7 @@ def test_index_copy_string(name, dtype, deep=True):
     NUMERIC_TYPES + ["datetime64[ns]", "timedelta64[ns]"] + OTHER_TYPES,
 )
 def test_index_copy_integer(name, dtype, deep=True):
-    """Test for NumericIndex Copy Casts
-    """
+    """Test for NumericIndex Copy Casts"""
     cidx = cudf.Int64Index([1, 2, 3])
     pidx = cidx.to_pandas()
 
@@ -358,8 +356,7 @@ def test_index_copy_integer(name, dtype, deep=True):
 @pytest.mark.parametrize("name", ["x"])
 @pytest.mark.parametrize("dtype", SIGNED_TYPES)
 def test_index_copy_float(name, dtype, deep=True):
-    """Test for NumericIndex Copy Casts
-    """
+    """Test for NumericIndex Copy Casts"""
     cidx = cudf.Float64Index([1.0, 2.0, 3.0])
     pidx = cidx.to_pandas()
 
@@ -515,7 +512,8 @@ def test_range_index_from_range(data):
 
 
 @pytest.mark.parametrize(
-    "n", [-10, -5, -2, 0, 1, 0, 2, 5, 10],
+    "n",
+    [-10, -5, -2, 0, 1, 0, 2, 5, 10],
 )
 def test_empty_df_head_tail_index(n):
     df = cudf.DataFrame()
@@ -562,11 +560,36 @@ def test_empty_df_head_tail_index(n):
             -pd.Index(np.arange(10)),
             None,
         ),
-        (pd.Index([1, 2, np.nan]), pd.Index([1, 2, np.nan]) == 4, None, None,),
-        (pd.Index([1, 2, np.nan]), pd.Index([1, 2, np.nan]) != 4, None, None,),
-        (pd.Index([-2, 3, -4, -79]), [True, True, True], None, ValueError,),
-        (pd.Index([-2, 3, -4, -79]), [True, True, True, False], None, None,),
-        (pd.Index([-2, 3, -4, -79]), [True, True, True, False], 17, None,),
+        (
+            pd.Index([1, 2, np.nan]),
+            pd.Index([1, 2, np.nan]) == 4,
+            None,
+            None,
+        ),
+        (
+            pd.Index([1, 2, np.nan]),
+            pd.Index([1, 2, np.nan]) != 4,
+            None,
+            None,
+        ),
+        (
+            pd.Index([-2, 3, -4, -79]),
+            [True, True, True],
+            None,
+            ValueError,
+        ),
+        (
+            pd.Index([-2, 3, -4, -79]),
+            [True, True, True, False],
+            None,
+            None,
+        ),
+        (
+            pd.Index([-2, 3, -4, -79]),
+            [True, True, True, False],
+            17,
+            None,
+        ),
         (pd.Index(list("abcdgh")), pd.Index(list("abcdgh")) != "g", "3", None),
         (
             pd.Index(list("abcdgh")),
@@ -1974,7 +1997,8 @@ def test_index_rangeindex_search_range():
 
 
 @pytest.mark.parametrize(
-    "rge", [(1, 10, 1), (1, 10, 3), (10, -17, -1), (10, -17, -3)],
+    "rge",
+    [(1, 10, 1), (1, 10, 3), (10, -17, -1), (10, -17, -3)],
 )
 def test_index_rangeindex_get_item_basic(rge):
     pridx = pd.RangeIndex(*rge)
@@ -1985,7 +2009,8 @@ def test_index_rangeindex_get_item_basic(rge):
 
 
 @pytest.mark.parametrize(
-    "rge", [(1, 10, 3), (10, 1, -3)],
+    "rge",
+    [(1, 10, 3), (10, 1, -3)],
 )
 def test_index_rangeindex_get_item_out_of_bounds(rge):
     gridx = cudf.RangeIndex(*rge)
@@ -1994,7 +2019,8 @@ def test_index_rangeindex_get_item_out_of_bounds(rge):
 
 
 @pytest.mark.parametrize(
-    "rge", [(10, 1, 1), (-17, 10, -3)],
+    "rge",
+    [(10, 1, 1), (-17, 10, -3)],
 )
 def test_index_rangeindex_get_item_null_range(rge):
     gridx = cudf.RangeIndex(*rge)
@@ -2101,7 +2127,8 @@ def test_get_loc_single_unique_numeric(idx, key, method):
 
 
 @pytest.mark.parametrize(
-    "idx", [pd.RangeIndex(3, 100, 4)],
+    "idx",
+    [pd.RangeIndex(3, 100, 4)],
 )
 @pytest.mark.parametrize("key", list(range(1, 110, 3)))
 @pytest.mark.parametrize("method", [None, "ffill"])

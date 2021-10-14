@@ -659,7 +659,9 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         # Specialize binops to generate the appropriate output index type.
         operands = self._make_operands_for_binop(other, fill_value, reflect)
         return (
-            _index_from_data(data=self._colwise_binop(operands, fn),)
+            _index_from_data(
+                data=self._colwise_binop(operands, fn),
+            )
             if operands is not NotImplemented
             else NotImplemented
         )
@@ -1897,7 +1899,12 @@ class CategoricalIndex(GenericIndex):
 
 
 def interval_range(
-    start=None, end=None, periods=None, freq=None, name=None, closed="right",
+    start=None,
+    end=None,
+    periods=None,
+    freq=None,
+    name=None,
+    closed="right",
 ) -> "IntervalIndex":
     """
     Returns a fixed frequency IntervalIndex.
@@ -2059,7 +2066,12 @@ class IntervalIndex(GenericIndex):
     """
 
     def __init__(
-        self, data, closed=None, dtype=None, copy=False, name=None,
+        self,
+        data,
+        closed=None,
+        dtype=None,
+        copy=False,
+        name=None,
     ):
         if copy:
             data = column.as_column(data, dtype=dtype).copy()
@@ -2069,7 +2081,10 @@ class IntervalIndex(GenericIndex):
         elif isinstance(data, pd.Series) and (is_interval_dtype(data.dtype)):
             data = column.as_column(data, data.dtype)
         elif isinstance(data, (pd._libs.interval.Interval, pd.IntervalIndex)):
-            data = column.as_column(data, dtype=dtype,)
+            data = column.as_column(
+                data,
+                dtype=dtype,
+            )
         elif not data:
             dtype = IntervalDtype("int64", closed)
             data = column.column_empty_like_same_mask(

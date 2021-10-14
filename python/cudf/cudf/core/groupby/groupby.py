@@ -820,7 +820,7 @@ class GroupBy(Serializable):
         interpolation : {"linear", "lower", "higher", "midpoint", "nearest"}
             The interpolation method to use when the desired quantile lies
             between two data points. Defaults to "linear".
-       """
+        """
 
         def func(x):
             return getattr(x, "quantile")(q=q, interpolation=interpolation)
@@ -861,8 +861,7 @@ class GroupBy(Serializable):
         return self.agg("last")
 
     def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
-        """Internal implementation for `ffill` and `bfill`
-        """
+        """Internal implementation for `ffill` and `bfill`"""
         value_columns = self.grouping.values
         result = self.obj.__class__._from_data(
             self._groupby.replace_nulls(
@@ -1333,8 +1332,7 @@ class _Grouping(Serializable):
 
     @property
     def keys(self):
-        """Return grouping key columns as index
-        """
+        """Return grouping key columns as index"""
         nkeys = len(self._key_columns)
 
         if nkeys == 0:

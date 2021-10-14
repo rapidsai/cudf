@@ -42,7 +42,7 @@ from cudf.utils.dtypes import can_convert_to_column
 
 
 def str_to_boolean(column: StringColumn):
-    """Takes in string column and returns boolean column """
+    """Takes in string column and returns boolean column"""
     return (
         libstrings.count_characters(column) > cudf.Scalar(0, dtype="int8")
     ).fillna(False)
@@ -236,7 +236,9 @@ class StringMethods(ColumnMethods):
         2    11
         dtype: int32
         """
-        return self._return_or_inplace(libstrings.count_bytes(self._column),)
+        return self._return_or_inplace(
+            libstrings.count_bytes(self._column),
+        )
 
     @overload
     def cat(self, sep: str = None, na_rep: str = None) -> str:
@@ -337,7 +339,9 @@ class StringMethods(ColumnMethods):
 
         if others is None:
             data = libstrings.join(
-                self._column, cudf.Scalar(sep), cudf.Scalar(na_rep, "str"),
+                self._column,
+                cudf.Scalar(sep),
+                cudf.Scalar(na_rep, "str"),
             )
         else:
             other_cols = _get_cols_list(self._parent, others)
@@ -753,7 +757,10 @@ class StringMethods(ColumnMethods):
             )
         return self._return_or_inplace(result_col)
 
-    def repeat(self, repeats: Union[int, Sequence],) -> SeriesOrIndex:
+    def repeat(
+        self,
+        repeats: Union[int, Sequence],
+    ) -> SeriesOrIndex:
         """
         Duplicate each string in the Series or Index.
         Equivalent to `str.repeat()
@@ -798,7 +805,8 @@ class StringMethods(ColumnMethods):
         if can_convert_to_column(repeats):
             return self._return_or_inplace(
                 libstrings.repeat_sequence(
-                    self._column, column.as_column(repeats, dtype="int"),
+                    self._column,
+                    column.as_column(repeats, dtype="int"),
                 ),
             )
 
@@ -891,7 +899,9 @@ class StringMethods(ColumnMethods):
 
             return self._return_or_inplace(
                 libstrings.replace_multi_re(
-                    self._column, pat, column.as_column(repl, dtype="str"),
+                    self._column,
+                    pat,
+                    column.as_column(repl, dtype="str"),
                 )
                 if regex
                 else libstrings.replace_multi(
@@ -4768,7 +4778,7 @@ class StringMethods(ColumnMethods):
         0     True
         1    False
         dtype: bool
-         """
+        """
         ltype = libstrings.LetterType.CONSONANT
 
         if can_convert_to_column(position):

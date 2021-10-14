@@ -414,8 +414,7 @@ class ColumnBase(Column, Serializable):
 
     @property
     def nullmask(self) -> Buffer:
-        """The gpu buffer for the null-mask
-        """
+        """The gpu buffer for the null-mask"""
         if self.nullable:
             return self.mask_array_view
         else:
@@ -644,8 +643,7 @@ class ColumnBase(Column, Serializable):
         )
 
     def isnull(self) -> ColumnBase:
-        """Identify missing values in a Column.
-        """
+        """Identify missing values in a Column."""
         result = libcudf.unary.is_null(self)
 
         if self.dtype.kind == "f":
@@ -656,13 +654,11 @@ class ColumnBase(Column, Serializable):
         return result
 
     def isna(self) -> ColumnBase:
-        """Identify missing values in a Column. Alias for isnull.
-        """
+        """Identify missing values in a Column. Alias for isnull."""
         return self.isnull()
 
     def notnull(self) -> ColumnBase:
-        """Identify non-missing values in a Column.
-        """
+        """Identify non-missing values in a Column."""
         result = libcudf.unary.is_valid(self)
 
         if self.dtype.kind == "f":
@@ -673,8 +669,7 @@ class ColumnBase(Column, Serializable):
         return result
 
     def notna(self) -> ColumnBase:
-        """Identify non-missing values in a Column. Alias for notnull.
-        """
+        """Identify non-missing values in a Column. Alias for notnull."""
         return self.notnull()
 
     def find_first_value(
@@ -721,8 +716,7 @@ class ColumnBase(Column, Serializable):
         keep_index: bool = True,
         nullify: bool = False,
     ) -> T:
-        """Return Column by taking values from the corresponding *indices*.
-        """
+        """Return Column by taking values from the corresponding *indices*."""
         # Handle zero size
         if indices.size == 0:
             return cast(T, column_empty_like(self, newsize=0))
@@ -1283,8 +1277,7 @@ def column_empty_like(
     masked: bool = False,
     newsize: int = None,
 ) -> ColumnBase:
-    """Allocate a new column like the given *column*
-    """
+    """Allocate a new column like the given *column*"""
     if dtype is None:
         dtype = column.dtype
     row_count = len(column) if newsize is None else newsize
@@ -1326,8 +1319,7 @@ def column_empty_like_same_mask(
 def column_empty(
     row_count: int, dtype: Dtype = "object", masked: bool = False
 ) -> ColumnBase:
-    """Allocate a new column like the given row_count and dtype.
-    """
+    """Allocate a new column like the given row_count and dtype."""
     dtype = cudf.dtype(dtype)
     children = ()  # type: Tuple[ColumnBase, ...]
 
@@ -1957,7 +1949,8 @@ def as_column(
             # changing from pd array to series,possible arrow bug
             interval_series = pd.Series(arbitrary)
             data = as_column(
-                pa.Array.from_pandas(interval_series), dtype=arbitrary.dtype,
+                pa.Array.from_pandas(interval_series),
+                dtype=arbitrary.dtype,
             )
             if dtype is not None:
                 data = data.astype(dtype)
@@ -2157,7 +2150,11 @@ def _construct_array(
         if (
             dtype is None
             and not cudf._lib.scalar._is_null_host_scalar(arbitrary)
-            and infer_dtype(arbitrary) in ("mixed", "mixed-integer",)
+            and infer_dtype(arbitrary)
+            in (
+                "mixed",
+                "mixed-integer",
+            )
         ):
             native_dtype = "object"
         arbitrary = np.asarray(

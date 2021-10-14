@@ -22,7 +22,12 @@ from cudf.testing._utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq
     "dtype", NUMERIC_TYPES + OTHER_TYPES + ["datetime64[ns]"]
 )
 def test_basic_assert_index_equal(
-    rdata, exact, check_names, rname, check_categorical, dtype,
+    rdata,
+    exact,
+    check_names,
+    rname,
+    check_categorical,
+    dtype,
 ):
     p_left = pd.Index([1, 2, 3], name="a", dtype=dtype)
     p_right = pd.Index(rdata, name=rname, dtype=dtype)
@@ -79,7 +84,12 @@ def test_basic_assert_index_equal(
     "dtype", NUMERIC_TYPES + OTHER_TYPES + ["datetime64[ns]"]
 )
 def test_basic_assert_series_equal(
-    rdata, rname, check_names, check_category_order, check_categorical, dtype,
+    rdata,
+    rname,
+    check_names,
+    check_category_order,
+    check_categorical,
+    dtype,
 ):
 
     p_left = pd.Series([1, 2, 3], name="a", dtype=dtype)

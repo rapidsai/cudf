@@ -228,7 +228,8 @@ def test_groupby_getitem_getattr(as_index):
         by="x",
     )
     assert_groupby_results_equal(
-        pdf.groupby("x")[["y"]].sum(), gdf.groupby("x")[["y"]].sum(),
+        pdf.groupby("x")[["y"]].sum(),
+        gdf.groupby("x")[["y"]].sum(),
     )
     assert_groupby_results_equal(
         pdf.groupby(["x", "y"], as_index=as_index).sum(),
@@ -594,7 +595,8 @@ def test_groupby_levels(level):
     pdf = pd.DataFrame({"c": [1, 2, 3], "d": [2, 3, 4]}, index=idx)
     gdf = cudf.from_pandas(pdf)
     assert_groupby_results_equal(
-        pdf.groupby(level=level).sum(), gdf.groupby(level=level).sum(),
+        pdf.groupby(level=level).sum(),
+        gdf.groupby(level=level).sum(),
     )
 
 
@@ -845,7 +847,11 @@ def test_groupby_multi_agg_hash_groupby(agg):
             coll_dict[prefix + this_name] = float
     coll_dict["id"] = int
     gdf = cudf.datasets.timeseries(
-        start="2000", end="2000-01-2", dtypes=coll_dict, freq="1s", seed=1,
+        start="2000",
+        end="2000-01-2",
+        dtypes=coll_dict,
+        freq="1s",
+        seed=1,
     ).reset_index(drop=True)
     pdf = gdf.to_pandas()
     check_dtype = False if "count" in agg else True
@@ -980,7 +986,9 @@ def test_groupby_cat():
     )
     gdf = cudf.from_pandas(pdf)
     assert_groupby_results_equal(
-        pdf.groupby("a").count(), gdf.groupby("a").count(), check_dtype=False,
+        pdf.groupby("a").count(),
+        gdf.groupby("a").count(),
+        check_dtype=False,
     )
 
 
@@ -1051,7 +1059,9 @@ def test_groupby_size():
     gdf = cudf.from_pandas(pdf)
 
     assert_groupby_results_equal(
-        pdf.groupby("a").size(), gdf.groupby("a").size(), check_dtype=False,
+        pdf.groupby("a").size(),
+        gdf.groupby("a").size(),
+        check_dtype=False,
     )
 
     assert_groupby_results_equal(
@@ -1062,7 +1072,9 @@ def test_groupby_size():
 
     sr = pd.Series(range(len(pdf)))
     assert_groupby_results_equal(
-        pdf.groupby(sr).size(), gdf.groupby(sr).size(), check_dtype=False,
+        pdf.groupby(sr).size(),
+        gdf.groupby(sr).size(),
+        check_dtype=False,
     )
 
 
@@ -1287,7 +1299,8 @@ def test_groupby_nunique(agg, by):
 
 
 @pytest.mark.parametrize(
-    "n", [0, 1, 2, 10],
+    "n",
+    [0, 1, 2, 10],
 )
 @pytest.mark.parametrize("by", ["a", ["a", "b"], ["a", "c"]])
 def test_groupby_nth(n, by):

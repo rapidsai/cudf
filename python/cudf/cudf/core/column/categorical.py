@@ -347,7 +347,9 @@ class CategoricalAccessor(ColumnMethods):
         return self._return_or_inplace(out_col, inplace=inplace)
 
     def remove_categories(
-        self, removals: Any, inplace: bool = False,
+        self,
+        removals: Any,
+        inplace: bool = False,
     ) -> Optional[SeriesOrIndex]:
         """
         Remove the specified categories.
@@ -755,7 +757,9 @@ class CategoricalColumn(column.ColumnBase):
             codes_column = cast(
                 cudf.core.column.NumericalColumn,
                 column.build_column(
-                    data=buf, dtype=codes_column.dtype, size=self.size,
+                    data=buf,
+                    dtype=codes_column.dtype,
+                    size=self.size,
                 ),
             )
             self._children = (codes_column,)
@@ -971,7 +975,9 @@ class CategoricalColumn(column.ColumnBase):
         out_dictionary = categories.to_arrow()
 
         return pa.DictionaryArray.from_arrays(
-            out_indices, out_dictionary, ordered=self.ordered,
+            out_indices,
+            out_dictionary,
+            ordered=self.ordered,
         )
 
     @property
@@ -1195,7 +1201,8 @@ class CategoricalColumn(column.ColumnBase):
                 # TODO: only required if fill_value has a subset of the
                 # categories:
                 fill_value = fill_value._set_categories(
-                    self.categories, is_unique=True,
+                    self.categories,
+                    is_unique=True,
                 )
                 fill_value = column.as_column(fill_value.codes).astype(
                     self.codes.dtype
@@ -1398,7 +1405,10 @@ class CategoricalColumn(column.ColumnBase):
         return self
 
     def set_categories(
-        self, new_categories: Any, ordered: bool = False, rename: bool = False,
+        self,
+        new_categories: Any,
+        ordered: bool = False,
+        rename: bool = False,
     ) -> CategoricalColumn:
         # See CategoricalAccessor.set_categories.
 
@@ -1443,7 +1453,8 @@ class CategoricalColumn(column.ColumnBase):
                 or not self.ordered == ordered
             ):
                 out_col = out_col._set_categories(
-                    new_categories, ordered=ordered,
+                    new_categories,
+                    ordered=ordered,
                 )
         return out_col
 
@@ -1530,7 +1541,9 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def reorder_categories(
-        self, new_categories: Any, ordered: bool = False,
+        self,
+        new_categories: Any,
+        ordered: bool = False,
     ) -> CategoricalColumn:
         new_categories = column.as_column(new_categories)
         # Compare new_categories against current categories.

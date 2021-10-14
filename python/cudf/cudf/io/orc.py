@@ -162,7 +162,9 @@ def read_orc_metadata(path):
 
 @ioutils.doc_read_orc_statistics()
 def read_orc_statistics(
-    filepaths_or_buffers, columns=None, **kwargs,
+    filepaths_or_buffers,
+    columns=None,
+    **kwargs,
 ):
     """{docstring}"""
 

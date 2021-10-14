@@ -35,7 +35,8 @@ def test_ufunc_cudf_non_nullseries(np_ar_tup, func):
 
 
 @pytest.mark.parametrize(
-    "func", [np.bitwise_and, np.bitwise_or, np.bitwise_xor],
+    "func",
+    [np.bitwise_and, np.bitwise_or, np.bitwise_xor],
 )
 def test_ufunc_cudf_series_bitwise(func):
     np.random.seed(0)
@@ -84,7 +85,8 @@ def test_ufunc_cudf_null_series(np_ar_tup, func):
     returns False rather than <NA>"""
 )
 @pytest.mark.parametrize(
-    "func", comparison_ops_ls,
+    "func",
+    comparison_ops_ls,
 )
 def test_ufunc_cudf_null_series_comparison_ops(np_ar_tup, func):
     x, y = np_ar_tup[0].astype(np.float32), np_ar_tup[1].astype(np.float32)
@@ -106,7 +108,8 @@ def test_ufunc_cudf_null_series_comparison_ops(np_ar_tup, func):
 
 
 @pytest.mark.parametrize(
-    "func", [np.logaddexp, np.fmax, np.fmod],
+    "func",
+    [np.logaddexp, np.fmax, np.fmod],
 )
 def test_ufunc_cudf_series_cupy_array(np_ar_tup, func):
     x, y = np_ar_tup[0], np_ar_tup[1]
@@ -143,7 +146,8 @@ def test_error_with_null_cudf_series(func):
 
 
 @pytest.mark.parametrize(
-    "func", [np.absolute, np.sign, np.exp2, np.tanh],
+    "func",
+    [np.absolute, np.sign, np.exp2, np.tanh],
 )
 def test_ufunc_cudf_series_with_index(func):
     data = [-1, 2, 3, 0]
@@ -158,7 +162,8 @@ def test_ufunc_cudf_series_with_index(func):
 
 
 @pytest.mark.parametrize(
-    "func", [np.logaddexp2],
+    "func",
+    [np.logaddexp2],
 )
 def test_ufunc_cudf_series_with_nonaligned_index(func):
     cudf_s1 = cudf.Series(data=[-1, 2, 3, 0], index=[2, 3, 1, 0])
@@ -173,7 +178,8 @@ def test_ufunc_cudf_series_with_nonaligned_index(func):
 
 
 @pytest.mark.parametrize(
-    "func", [np.add],
+    "func",
+    [np.add],
 )
 def test_ufunc_cudf_series_error_with_out_kwarg(func):
     cudf_s1 = cudf.Series(data=[-1, 2, 3, 0])

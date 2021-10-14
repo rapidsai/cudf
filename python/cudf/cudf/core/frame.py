@@ -1768,8 +1768,7 @@ class Frame:
         return self
 
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
-        """Shift values by `periods` positions.
-        """
+        """Shift values by `periods` positions."""
         assert axis in (None, 0) and freq is None
         return self._shift(periods)
 
@@ -4045,7 +4044,12 @@ class Frame:
         )
 
     def min(
-        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs,
+        self,
+        axis=None,
+        skipna=None,
+        level=None,
+        numeric_only=None,
+        **kwargs,
     ):
         """
         Return the minimum of the values in the DataFrame.
@@ -4090,7 +4094,12 @@ class Frame:
         )
 
     def max(
-        self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs,
+        self,
+        axis=None,
+        skipna=None,
+        level=None,
+        numeric_only=None,
+        **kwargs,
     ):
         """
         Return the maximum of the values in the DataFrame.
@@ -4568,7 +4577,11 @@ class Frame:
         dtype: bool
         """
         return self._reduce(
-            "all", axis=axis, skipna=skipna, level=level, **kwargs,
+            "all",
+            axis=axis,
+            skipna=skipna,
+            level=level,
+            **kwargs,
         )
 
     def any(self, axis=0, skipna=True, level=None, **kwargs):
@@ -4603,7 +4616,11 @@ class Frame:
         dtype: bool
         """
         return self._reduce(
-            "any", axis=axis, skipna=skipna, level=level, **kwargs,
+            "any",
+            axis=axis,
+            skipna=skipna,
+            level=level,
+            **kwargs,
         )
 
     def sum_of_squares(self, dtype=None):
@@ -5527,7 +5544,7 @@ class Frame:
 
     def rmul(self, other, axis, level=None, fill_value=None):
         """
-        Get Multiplication of dataframe or series and other, element-wise 
+        Get Multiplication of dataframe or series and other, element-wise
         (binary operator `rmul`).
 
         Equivalent to ``other * frame``, but with support to substitute a
@@ -6317,7 +6334,9 @@ def _get_replacement_values_for_columns(
                 col: [value]
                 if _is_non_decimal_numeric_dtype(columns_dtype_map[col])
                 else cudf.utils.utils.scalar_broadcast_to(
-                    value, (len(to_replace),), cudf.dtype(type(value)),
+                    value,
+                    (len(to_replace),),
+                    cudf.dtype(type(value)),
                 )
                 for col in columns_dtype_map
             }

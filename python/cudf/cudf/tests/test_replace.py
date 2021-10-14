@@ -1045,7 +1045,14 @@ def test_replace_df_error():
 
 @pytest.mark.parametrize(
     ("lower", "upper"),
-    [([2, 7.4], [4, 7.9]), ([2, 7.4], None), (None, [4, 7.9],)],
+    [
+        ([2, 7.4], [4, 7.9]),
+        ([2, 7.4], None),
+        (
+            None,
+            [4, 7.9],
+        ),
+    ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
 def test_dataframe_clip(lower, upper, inplace):
@@ -1064,7 +1071,8 @@ def test_dataframe_clip(lower, upper, inplace):
 
 
 @pytest.mark.parametrize(
-    ("lower", "upper"), [("b", "d"), ("b", None), (None, "c"), (None, None)],
+    ("lower", "upper"),
+    [("b", "d"), ("b", None), (None, "c"), (None, None)],
 )
 @pytest.mark.parametrize("inplace", [True, False])
 def test_dataframe_category_clip(lower, upper, inplace):
@@ -1159,7 +1167,15 @@ def test_index_clip(data, lower, upper, inplace):
 
 
 @pytest.mark.parametrize(
-    ("lower", "upper"), [([2, 3], [4, 5]), ([2, 3], None), (None, [4, 5],)],
+    ("lower", "upper"),
+    [
+        ([2, 3], [4, 5]),
+        ([2, 3], None),
+        (
+            None,
+            [4, 5],
+        ),
+    ],
 )
 @pytest.mark.parametrize("inplace", [True, False])
 def test_multiindex_clip(lower, upper, inplace):
@@ -1243,7 +1259,10 @@ def test_series_replace_errors():
         gsr.replace([1, 2], ["a", "b"])
 
     assert_exceptions_equal(
-        psr.replace, gsr.replace, ([{"a": 1}, 1],), ([{"a": 1}, 1],),
+        psr.replace,
+        gsr.replace,
+        ([{"a": 1}, 1],),
+        ([{"a": 1}, 1],),
     )
 
     assert_exceptions_equal(

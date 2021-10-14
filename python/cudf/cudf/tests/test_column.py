@@ -506,7 +506,8 @@ def test_concatenate_large_column_strings():
     ],
 )
 @pytest.mark.parametrize(
-    "data", [[1, 2, 0]],
+    "data",
+    [[1, 2, 0]],
 )
 def test_astype_with_aliases(alias, expect_dtype, data):
     pd_data = pd.Series(data)

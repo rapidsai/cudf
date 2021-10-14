@@ -68,7 +68,7 @@ def count_zero(arr):
 
 
 def assert_eq(left, right, **kwargs):
-    """ Assert that two cudf-like things are equivalent
+    """Assert that two cudf-like things are equivalent
 
     This equality test works for pandas/cudf dataframes/series/indexes/scalars
     in the same way, and so makes it easier to perform parametrized testing
@@ -299,7 +299,8 @@ def gen_rand_series(dtype, size, **kwargs):
 
 def _decimal_series(input, dtype):
     return cudf.Series(
-        [x if x is None else Decimal(x) for x in input], dtype=dtype,
+        [x if x is None else Decimal(x) for x in input],
+        dtype=dtype,
     )
 
 

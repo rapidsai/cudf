@@ -335,7 +335,8 @@ def test_groupby_multiindex_reset_index(npartitions):
     gr_out[("b", "count")] = gr_out[("b", "count")].astype("int64")
 
     dd.assert_eq(
-        gr_out, pr.compute().sort_values(by=["a", "c"]).reset_index(drop=True),
+        gr_out,
+        pr.compute().sort_values(by=["a", "c"]).reset_index(drop=True),
     )
 
 
@@ -483,7 +484,8 @@ def test_groupby_categorical_key():
 @pytest.mark.parametrize("npartitions", [1, 10])
 def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
     df = cudf.datasets.randomdata(
-        nrows=150, dtypes={"name": str, "a": int, "b": int, "c": float},
+        nrows=150,
+        dtypes={"name": str, "a": int, "b": int, "c": float},
     )
     df["a"] = [0, 1, 2] * 50
     ddf = dask_cudf.from_cudf(df, npartitions)
@@ -499,7 +501,11 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
     if split_out == 1:
         gf = (
             ddf.groupby(["name", "a"], sort=True, as_index=as_index)
-            .aggregate(agg_dict, split_every=split_every, split_out=split_out,)
+            .aggregate(
+                agg_dict,
+                split_every=split_every,
+                split_out=split_out,
+            )
             .compute()
         )
         if as_index:
@@ -518,10 +524,14 @@ def test_groupby_agg_params(npartitions, split_every, split_out, as_index):
 
     # Full check (`sort=False`)
     gr = ddf.groupby(["name", "a"], sort=False, as_index=as_index).aggregate(
-        agg_dict, split_every=split_every, split_out=split_out,
+        agg_dict,
+        split_every=split_every,
+        split_out=split_out,
     )
     pr = pddf.groupby(["name", "a"], sort=False).agg(
-        agg_dict, split_every=split_every, split_out=split_out,
+        agg_dict,
+        split_every=split_every,
+        split_out=split_out,
     )
 
     # Test `as_index` argument
@@ -592,7 +602,8 @@ def test_groupby_unique_lists():
         gddf.groupby("a").b.unique().compute(),
     )
     dd.assert_eq(
-        gdf.groupby("a").b.unique(), gddf.groupby("a").b.unique().compute(),
+        gdf.groupby("a").b.unique(),
+        gddf.groupby("a").b.unique().compute(),
     )
 
 

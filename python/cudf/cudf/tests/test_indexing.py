@@ -1375,7 +1375,8 @@ def test_dataframe_sliced(gdf, slice):
     ],
 )
 @pytest.mark.parametrize(
-    "slice", [slice(6), slice(1), slice(7), slice(1, 3)],
+    "slice",
+    [slice(6), slice(1), slice(7), slice(1, 3)],
 )
 def test_dataframe_iloc_index(gdf, slice):
     pdf = gdf.to_pandas()
@@ -1477,7 +1478,7 @@ def test_iloc_decimal():
         cudf.Decimal64Dtype(scale=2, precision=3)
     )
     got = sr.iloc[[3, 2, 1, 0]]
-    expect = cudf.Series(["4.00", "3.00", "2.00", "1.00"],).astype(
-        cudf.Decimal64Dtype(scale=2, precision=3)
-    )
+    expect = cudf.Series(
+        ["4.00", "3.00", "2.00", "1.00"],
+    ).astype(cudf.Decimal64Dtype(scale=2, precision=3))
     assert_eq(expect.reset_index(drop=True), got.reset_index(drop=True))

@@ -33,7 +33,12 @@ class SingleColumnFrame(Frame):
     }
 
     def _reduce(
-        self, op, axis=None, level=None, numeric_only=None, **kwargs,
+        self,
+        op,
+        axis=None,
+        level=None,
+        numeric_only=None,
+        **kwargs,
     ):
         if axis not in (None, 0):
             raise NotImplementedError("axis parameter is not implemented yet")
