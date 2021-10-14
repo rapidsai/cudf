@@ -442,9 +442,9 @@ def test_rolling_groupby_multi(agg):
         expect = getattr(
             pdf.groupby(["a", "b"], sort=True).rolling(window_size), agg
         )().fillna(-1)
-        got = getattr(
-            gdf.groupby(["a", "b"], sort=True).rolling(window_size), agg
-        )().fillna(-1)
+        gby = gdf.groupby(["a", "b"], sort=True)
+        rolling = gby.rolling(window_size)
+        got = getattr(rolling, agg)().fillna(-1)
         assert_eq(expect, got, check_dtype=False)
 
 

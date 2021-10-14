@@ -455,10 +455,9 @@ class MultiIndex(Frame, BaseIndex):
         self._codes = cudf.DataFrame._from_data(source_codes)
         self._name = None
 
-    # TODO: This is inefficient but TBD if it is a bottleneck.
     @property
-    def names(self):
-        return list(self._data.names)
+    def names(self) -> Tuple[Any, ...]:
+        return self._data.names
 
     @names.setter
     def names(self, value):
@@ -688,7 +687,7 @@ class MultiIndex(Frame, BaseIndex):
         if names is not None:
             mi.names = names
         elif self.names is not None:
-            mi.names = self.names.copy()
+            mi.names = self.names
 
         return mi
 
@@ -742,7 +741,9 @@ class MultiIndex(Frame, BaseIndex):
                 # https://github.com/pandas-dev/pandas/issues/39984
                 preprocess_pdf = pd.DataFrame(
                     {
-                        name: col.to_pandas(nullable=(col.dtype.kind != "f"))
+                        name[1]: col.to_pandas(
+                            nullable=(col.dtype.kind != "f")
+                        )
                         for name, col in preprocess._data.items()
                     }
                 )
@@ -1510,6 +1511,17 @@ class MultiIndex(Frame, BaseIndex):
         # Use Pandas for handling Python host objects
         pdi = pd.MultiIndex.from_product(arrays, names=names)
         return cls.from_pandas(pdi)
+
+    def _repeat(self, count):
+        # TODO: This override is necessary to properly handle duplicate names.
+        # Once index/name handling is all moved to the Python layer this
+        # override should no longer be necessary.
+        other = self.copy(deep=False)
+        other.names = list(range(other._num_columns))
+        # Call the parent method to avoid infinite recursion.
+        result = super(MultiIndex, other)._repeat(count)
+        result.names = self.names
+        return result
 
     def _poplevels(self, level):
         """

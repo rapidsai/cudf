@@ -1415,10 +1415,9 @@ class Frame:
 
         if isinstance(value, cudf.Series):
             value = value.reindex(self._data.names)
-        elif isinstance(value, cudf.DataFrame) and not self.index.equals(
-            value.index
-        ):
-            value = value.reindex(self.index)
+        elif isinstance(value, cudf.DataFrame):
+            if not self.index.equals(value.index):
+                value = value.reindex(self.index)
         elif not isinstance(value, abc.Mapping):
             value = {name: copy.deepcopy(value) for name in self._data.names}
         elif isinstance(value, abc.Mapping):
@@ -5637,7 +5636,7 @@ class Frame:
 
     def rmul(self, other, axis, level=None, fill_value=None):
         """
-        Get Multiplication of dataframe or series and other, element-wise 
+        Get Multiplication of dataframe or series and other, element-wise
         (binary operator `rmul`).
 
         Equivalent to ``other * frame``, but with support to substitute a

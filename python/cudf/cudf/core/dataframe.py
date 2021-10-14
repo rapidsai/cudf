@@ -5959,9 +5959,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         name_index = Frame({0: self._column_names}).tile(self.shape[0])
         new_index = list(repeated_index._columns) + [name_index._columns[0]]
         if isinstance(self._index, cudf.MultiIndex):
-            index_names = self._index.names + [None]
+            index_names = self._index.names + (None,)
         else:
-            index_names = [None] * len(new_index)
+            index_names = (None,) * len(new_index)
         new_index = cudf.core.multiindex.MultiIndex.from_frame(
             DataFrame(dict(zip(range(0, len(new_index)), new_index))),
             names=index_names,

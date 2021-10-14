@@ -205,7 +205,7 @@ class Merge(object):
                 left_keys.extend(
                     [
                         _Indexer(name=on, index=True)
-                        for on in self.lhs.index._data.names
+                        for on in self.lhs.index._data.keys()
                     ]
                 )
             if self.left_on:
@@ -220,7 +220,7 @@ class Merge(object):
                 right_keys.extend(
                     [
                         _Indexer(name=on, index=True)
-                        for on in self.rhs.index._data.names
+                        for on in self.rhs.index._data.keys()
                     ]
                 )
             if self.right_on:

@@ -1,7 +1,5 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION
 
-import itertools
-
 import numba
 import pandas as pd
 from pandas.api.indexers import BaseIndexer
@@ -434,11 +432,18 @@ class RollingGroupby(Rolling):
         index = cudf.MultiIndex.from_frame(
             cudf.DataFrame(
                 {
-                    key: value
-                    for key, value in itertools.chain(
-                        self._group_keys._data.items(),
-                        self.obj.index._data.items(),
-                    )
+                    **{
+                        (
+                            key[1]
+                            if isinstance(self._group_keys, cudf.MultiIndex)
+                            else key
+                        ): value
+                        for key, value in self._group_keys._data.items()
+                    },
+                    **{
+                        key: value
+                        for key, value in self.obj.index._data.items()
+                    },
                 }
             )
         )
