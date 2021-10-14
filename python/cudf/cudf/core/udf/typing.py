@@ -225,7 +225,7 @@ class MaskedScalarArithOp(AbstractTemplate):
 
 class MaskedScalarUnaryOp(AbstractTemplate):
     def generic(self, args, kws):
-        if isinstance(args[0], MaskedType):
+        if len(args) == 1 and isinstance(args[0], MaskedType):
             return_type = self.context.resolve_function_type(
                 self.key, (args[0].value_type,), kws
             ).return_type
