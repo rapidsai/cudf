@@ -178,7 +178,11 @@ def one_hot_encode(Column input_column, Column categories):
     encodings, _ = data_from_table_view(
         move(c_result.second),
         owner=owner,
-        column_names=range(categories.size)
+        column_names=[
+            x if x is not None else (
+                'null' for x in categories.to_arrow().to_pylist()
+            )
+        ]
     )
 
     return encodings

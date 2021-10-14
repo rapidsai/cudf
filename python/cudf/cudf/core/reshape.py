@@ -6,6 +6,9 @@ import numpy as np
 import pandas as pd
 
 import cudf
+from cudf._lib.transform import one_hot_encode
+from cudf.core.column import as_column
+from cudf.core.column.categorical import CategoricalColumn
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
@@ -654,6 +657,7 @@ def get_dummies(
     3     0  0  1  0
     4     0  0  0  1
     """
+
     if cats is None:
         cats = {}
     if sparse:
@@ -693,43 +697,40 @@ def get_dummies(
         if len(columns) == 0:
             return df.select_dtypes(exclude=encode_fallback_dtypes)
         else:
-            result_df = df.copy(deep=False)
-            result_df.drop(columns=columns, inplace=True)
+            result_data = {
+                col_name: col
+                for col_name, col in df._data.items()
+                if col_name not in columns
+            }
 
             for name in columns:
-                unique = _get_unique(column=df._data[name], dummy_na=dummy_na)
+                if name not in cats:
+                    unique = _get_unique(
+                        column=df._data[name], dummy_na=dummy_na
+                    )
+                else:
+                    unique = as_column(cats[name])
 
-                col_enc_df = df.one_hot_encoding(
-                    name,
-                    prefix=prefix_map.get(name, prefix),
-                    cats=cats.get(name, unique),
-                    prefix_sep=prefix_sep_map.get(name, prefix_sep),
-                    dtype=dtype,
+                col_enc_data = _one_hot_encode_column(
+                    df._data[name],
+                    unique,
+                    prefix_map.get(name, prefix),
+                    prefix_sep_map.get(name, prefix_sep),
+                    dtype,
                 )
-                for col in col_enc_df.columns.difference(df._data.names):
-                    result_df[col] = col_enc_df._data[col]
-
-            return result_df
+                result_data.update(col_enc_data)
+            return cudf.DataFrame._from_data(result_data, index=df._index)
     else:
         ser = cudf.Series(df)
         unique = _get_unique(column=ser._column, dummy_na=dummy_na)
-
-        if hasattr(unique, "to_arrow"):
-            cats = unique.to_arrow().to_pylist()
-        else:
-            cats = pd.Series(unique, dtype="object")
-
-        col_names = ["null" if cat is None else cat for cat in cats]
-
-        if prefix is not None:
-            col_names = [f"{prefix}{prefix_sep}{cat}" for cat in col_names]
-
-        newcols = ser.one_hot_encoding(cats=cats, dtype=dtype)
-        result_df = cudf.DataFrame(index=ser.index)
-        for i, col in enumerate(newcols):
-            result_df._data[col_names[i]] = col
-
-        return result_df
+        data = _one_hot_encode_column(
+            column=ser._column,
+            categories=unique,
+            prefix=prefix,
+            prefix_sep=prefix_sep,
+            dtype=dtype,
+        )
+        return cudf.DataFrame._from_data(data, index=ser._index)
 
 
 def merge_sorted(
@@ -1064,6 +1065,18 @@ def _get_unique(column, dummy_na):
             unique = unique.nans_to_nulls()
         unique = unique.dropna()
     return unique
+
+
+def _one_hot_encode_column(column, categories, prefix, prefix_sep, dtype):
+    if isinstance(column, CategoricalColumn):
+        column = column._get_decategorized_column()
+    data = one_hot_encode(column, categories)
+
+    if prefix is not None and prefix_sep is not None:
+        data = {f"{prefix}{prefix_sep}{col}": enc for col, enc in data.items()}
+    if dtype:
+        data = {k: v.astype(dtype) for k, v in data.items()}
+    return data
 
 
 def _length_check_params(obj, columns, name):
