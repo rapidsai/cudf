@@ -139,7 +139,7 @@ class Consumer(CudfKafkaClient):
             )
 
         kafka_datasource = KafkaDatasource(
-            self.kafka_confs,
+            self.kafka_configs,
             topic.encode(),
             partition,
             start,

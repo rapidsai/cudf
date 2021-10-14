@@ -13,14 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#define PY_SSIZE_T_CLEAN
-#include <Python.h>
-
+#include "cudf_kafka/kafka_consumer.hpp"
 #include <librdkafka/rdkafkacpp.h>
 #include <chrono>
 #include <memory>
-#include "cudf_kafka/kafka_consumer.hpp"
 
 /**
  * @brief Callback to retrieve OAuth token from external source. Invoked when
@@ -41,7 +37,8 @@ class OAuthRefreshCb : public RdKafka::OAuthBearerTokenRefreshCb {
 
     // Make sure that we own the GIL
     PyGILState_STATE state = PyGILState_Ensure();
-    PyObject* result       = PyObject_CallObject(callback, args);
+    std::string result(PyUnicode_AsUTF8(PyObject_CallObject(callback, args)));
+    printf("Result: %s\n", result.c_str());
     PyGILState_Release(state);
   }
 
@@ -56,17 +53,55 @@ namespace io {
 namespace external {
 namespace kafka {
 
-// kafka_consumer::kafka_consumer(std::map<std::string, std::string> const& configs)
 kafka_consumer::kafka_consumer(PyObject* confdict)
-  : kafka_conf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL))
+  : conf_dict(confdict), kafka_conf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL))
+{
+  build_validate_configs(confdict);
+
+  std::string errstr;
+  consumer = std::unique_ptr<RdKafka::KafkaConsumer>(
+    RdKafka::KafkaConsumer::create(kafka_conf.get(), errstr));
+}
+
+kafka_consumer::kafka_consumer(PyObject* confdict,
+                               std::string const& topic_name,
+                               int partition,
+                               int64_t start_offset,
+                               int64_t end_offset,
+                               int batch_timeout,
+                               std::string const& delimiter)
+  : topic_name(topic_name),
+    partition(partition),
+    start_offset(start_offset),
+    end_offset(end_offset),
+    batch_timeout(batch_timeout),
+    delimiter(delimiter),
+    conf_dict(confdict),
+    kafka_conf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL))
+{
+  build_validate_configs(confdict);
+
+  std::string errstr;
+  consumer = std::unique_ptr<RdKafka::KafkaConsumer>(
+    RdKafka::KafkaConsumer::create(kafka_conf.get(), errstr));
+
+  // Pre fill the local buffer with messages so the datasource->size() invocation
+  // will return a valid size.
+  consume_to_buffer();
+}
+
+/**
+ * @brief Builds and validates Kafka C++ configuration object from Python values
+ *
+ * @param kafka_configs
+ *  Python Dict of configuration values and possibly callables for callbacks
+ */
+void kafka_consumer::build_validate_configs(PyObject* python_config_dict)
 {
   Py_ssize_t pos = 0;
   PyObject *ko, *vo;
 
-  // Configurations that can be Python callables. Anything else is expected to be a str
-  std::vector<std::string> callableConfigs{"oauth_cb"};
-
-  while (PyDict_Next(confdict, &pos, &ko, &vo)) {
+  while (PyDict_Next(python_config_dict, &pos, &ko, &vo)) {
     CUDF_EXPECTS(PyUnicode_Check(ko), "expected kafka configuration property name as type string");
     std::string key(PyUnicode_AsUTF8(ko));
     std::string valueType(Py_TYPE(vo)->tp_name);
@@ -74,9 +109,6 @@ kafka_consumer::kafka_consumer(PyObject* confdict)
     std::string error_string;
     if (std::find(callableConfigs.begin(), callableConfigs.end(), key) != callableConfigs.end()) {
       // Properly configure the callable. This is a Python callback for callback processing
-      // Sets the OAuth Callback if the configuration is present
-      // https://github.com/edenhill/librdkafka/blob/6d5fbf9131693288f0f198692fae5aa169b61912/src/rdkafka_conf.c#L2797
-      // rd_kafka_conf_set_oauthbearer_token_refresh_cb(kafka_conf, oauth_cb);
       PyObject* args;
       PyObject* kwargs;
       OAuthRefreshCb cb(vo, args, kwargs);
@@ -95,47 +127,6 @@ kafka_consumer::kafka_consumer(PyObject* confdict)
   std::string conf_val;
   CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK == kafka_conf->get("group.id", conf_val),
                "Kafka group.id must be configured");
-
-  std::string errstr;
-  consumer = std::unique_ptr<RdKafka::KafkaConsumer>(
-    RdKafka::KafkaConsumer::create(kafka_conf.get(), errstr));
-}
-
-kafka_consumer::kafka_consumer(PyObject* configs,
-                               std::string const& topic_name,
-                               int partition,
-                               int64_t start_offset,
-                               int64_t end_offset,
-                               int batch_timeout,
-                               std::string const& delimiter)
-  : topic_name(topic_name),
-    partition(partition),
-    start_offset(start_offset),
-    end_offset(end_offset),
-    batch_timeout(batch_timeout),
-    delimiter(delimiter)
-{
-  // kafka_conf = std::unique_ptr<RdKafka::Conf>(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
-
-  // for (auto const& key_value : configs) {
-  //   std::string error_string;
-  //   CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
-  //                  kafka_conf->set(key_value.first, key_value.second, error_string),
-  //                "Invalid Kafka configuration");
-  // }
-
-  // // Kafka 0.9 > requires group.id in the configuration
-  // std::string conf_val;
-  // CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK == kafka_conf->get("group.id", conf_val),
-  //              "Kafka group.id must be configured");
-
-  // std::string errstr;
-  // consumer = std::unique_ptr<RdKafka::KafkaConsumer>(
-  //   RdKafka::KafkaConsumer::create(kafka_conf.get(), errstr));
-
-  // // Pre fill the local buffer with messages so the datasource->size() invocation
-  // // will return a valid size.
-  // consume_to_buffer();
 }
 
 std::unique_ptr<cudf::io::datasource::buffer> kafka_consumer::host_read(size_t offset, size_t size)
