@@ -76,9 +76,9 @@ def test_sort_values_with_nulls(data, by, ascending, na_position):
         got = ddf.sort_values(
             by=by, ascending=ascending, na_position=na_position
         )
-    expect = df.sort_values(
-        by=by, ascending=ascending, na_position=na_position
-    )
+        expect = df.sort_values(
+            by=by, ascending=ascending, na_position=na_position
+        )
 
     # cudf index ordering for nulls is non-deterministic
     dd.assert_eq(got, expect, check_index=False)
