@@ -254,13 +254,13 @@ class _CuDFBuffer:
     Data in the buffer is guaranteed to be contiguous in memory.
     """
 
-    def __init__(self, x : Buffer, allow_copy : bool = True) -> None:
+    def __init__(self, buf : Buffer, allow_copy : bool = True) -> None:
         """
         Use cudf Buffer object.
         """
         # Store the cudf buffer where the data resides as a private
         # attribute, so we can use it to retrieve the public attributes
-        self._x = x
+        self._buf = buf
         self._allow_copy = allow_copy
 
     @property
@@ -268,15 +268,14 @@ class _CuDFBuffer:
         """
         Buffer size in bytes.
         """
-        return self._x.nbytes
-        # return self._x.size * self._x.dtype.itemsize
+        return self._buf.nbytes
 
     @property
     def ptr(self) -> int:
         """
         Pointer to start of the buffer as an integer.
         """
-        return self._x.ptr
+        return self._buf.ptr
         # return self._x.__cuda_array_interface__['data'][0]
         
     def __dlpack__(self):
@@ -285,9 +284,9 @@ class _CuDFBuffer:
         """
         try: 
             # res = self._x.toDlpack()
-            res = cp.asarray(self._x).toDlpack()
+            res = cp.asarray(self._buf).toDlpack()
         except ValueError:
-            raise TypeError(f'dtype {self._x.dtype} unsupported by `dlpack`')
+            raise TypeError(f'dtype {self._buf.dtype} unsupported by `dlpack`')
 
         return res
 
@@ -298,7 +297,7 @@ class _CuDFBuffer:
         class Device(enum.IntEnum):
              CUDA = 2
 
-        return (Device.CUDA, cp.asarray(self._x).device.id)
+        return (Device.CUDA, cp.asarray(self._buf).device.id)
 
     def __repr__(self) -> str:
         return 'CuDFBuffer(' + str({'bufsize': self.bufsize,
