@@ -17,105 +17,192 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/table/row_operators.cuh>
 
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <rmm/exec_policy.hpp>
 #include <structs/utilities.hpp>
 #include "cudf/binaryop.hpp"
 #include "cudf/column/column_device_view.cuh"
 #include "cudf/table/table_device_view.cuh"
 #include "cudf/table/table_view.hpp"
+#include "cudf/types.hpp"
+#include "cudf/utilities/traits.hpp"
+#include "cudf/utilities/type_dispatcher.hpp"
 #include "thrust/logical.h"
 
 namespace cudf {
 namespace structs {
 namespace detail {
 
-template <bool has_nulls>
-void equality_row(table_view lhs,
-                  table_view rhs,
+struct StructCompFunctor {
+  template <typename output_type, bool const has_nulls>
+  void equality_row(table_device_view lhs,
+                    table_device_view rhs,
+                    mutable_column_view out,
+                    rmm::cuda_stream_view stream)
+  {
+    row_equality_comparator<has_nulls> comparator(lhs, rhs, true);
+    auto d_out = mutable_column_device_view::create(out);
+
+    thrust::tabulate(rmm::exec_policy(stream),
+                     out.begin<output_type>(),
+                     out.end<output_type>(),
+                     [comparator, d_out = *d_out] __device__(size_type row_index) {
+                       return d_out.is_valid(row_index) && comparator(row_index, row_index);
+                     });
+  }
+
+  template <typename output_type, bool const has_nulls>
+  void nequal_row(table_device_view lhs,
+                  table_device_view rhs,
                   mutable_column_view out,
                   rmm::cuda_stream_view stream)
-{
-  auto d_lhs = table_device_view::create(lhs);
-  auto d_rhs = table_device_view::create(rhs);
+  {
+    row_equality_comparator<has_nulls> comparator(lhs, rhs, true);
+    auto d_out = mutable_column_device_view::create(out);
 
-  row_equality_comparator<has_nulls> comparator(*d_lhs, *d_rhs, true);
+    thrust::tabulate(rmm::exec_policy(stream),
+                     out.begin<output_type>(),
+                     out.end<output_type>(),
+                     [comparator, d_out = *d_out] __device__(size_type row_index) {
+                       return d_out.is_valid(row_index) && !comparator(row_index, row_index);
+                     });
+  }
 
-  thrust::tabulate(
-    rmm::exec_policy(stream),
-    out.begin<size_type>(),
-    out.end<size_type>(),
-    [comparator] __device__(size_type row_index) { return comparator(row_index, row_index); });
-}
+  template <typename output_type, bool const has_nulls>
+  void lt_row(table_device_view lhs,
+              table_device_view rhs,
+              mutable_column_view out,
+              rmm::cuda_stream_view stream)
+  {
+    row_lexicographic_comparator<has_nulls> comparator(lhs, rhs, nullptr, nullptr);
+    auto d_out = mutable_column_device_view::create(out);
 
-template <bool has_nulls>
-void nequal_row(table_view lhs,
-                table_view rhs,
-                mutable_column_view out,
-                rmm::cuda_stream_view stream)
-{
-  auto d_lhs = table_device_view::create(lhs);
-  auto d_rhs = table_device_view::create(rhs);
+    thrust::tabulate(rmm::exec_policy(stream),
+                     out.begin<output_type>(),
+                     out.end<output_type>(),
+                     [comparator, d_out = *d_out] __device__(size_type row_index) {
+                       return d_out.is_valid(row_index) && comparator(row_index, row_index);
+                     });
+  }
 
-  row_equality_comparator<has_nulls> comparator(*d_lhs, *d_rhs, true);
-
-  thrust::tabulate(
-    rmm::exec_policy(stream),
-    out.begin<size_type>(),
-    out.end<size_type>(),
-    [comparator] __device__(size_type row_index) { return !comparator(row_index, row_index); });
-}
-
-void and_merge(table_view lhs,
-               table_view rhs,
+  template <typename output_type, bool const has_nulls>
+  void gte_row(table_device_view lhs,
+               table_device_view rhs,
                mutable_column_view out,
-               binary_operator op,
                rmm::cuda_stream_view stream)
-{
-  std::vector<column_view> comp_views{};
-  std::vector<std::unique_ptr<column>> child_comparisons{};
-  std::for_each(
-    thrust::make_counting_iterator(0),
-    thrust::make_counting_iterator(lhs.num_columns()),
-    [&](auto child_index) {
-      auto res = binary_operation(
-        lhs.column(child_index), rhs.column(child_index), binary_operator::LESS, out.type());
-      comp_views.push_back(res->view());
-      child_comparisons.push_back(std::move(res));
-    });
+  {
+    row_lexicographic_comparator<has_nulls> comparator(lhs, rhs, nullptr, nullptr);
+    auto d_out = mutable_column_device_view::create(out);
 
+    thrust::tabulate(rmm::exec_policy(stream),
+                     out.begin<output_type>(),
+                     out.end<output_type>(),
+                     [comparator, d_out = *d_out] __device__(size_type row_index) {
+                       return d_out.is_valid(row_index) && !comparator(row_index, row_index);
+                     });
+  }
 
-  table_view comp_table{comp_views};
-  auto const d_comp_table = table_device_view::create(comp_table);
+  template <typename output_type, bool const has_nulls>
+  void gt_row(table_device_view lhs,
+              table_device_view rhs,
+              mutable_column_view out,
+              rmm::cuda_stream_view stream)
+  {
+    std::vector<order> op_modifier{};
+    std::vector<null_order> norder{};
+    std::for_each(thrust::counting_iterator<size_type>(0),
+                  thrust::counting_iterator<size_type>(lhs.num_columns()),
+                  [&](auto child_ind) {
+                    op_modifier.push_back(order::DESCENDING);
+                    norder.push_back(null_order::BEFORE);
+                  });
 
-  // merge
-  thrust::tabulate(rmm::exec_policy(stream),
-                   out.begin<size_type>(),
-                   out.end<size_type>(),
-                   [d_comp_table = *d_comp_table] __device__(size_type row_index) {
-                     return thrust::all_of(thrust::seq,
-                                           d_comp_table.begin(),
-                                           d_comp_table.end(),
-                                           [row_index] __device__(column_device_view col) {
-                                             return col.data<bool>()[row_index];
-                                             // return col.element(row_index);
-                                           });
-                   });
-}
+    auto const op_modifier_dv = cudf::detail::make_device_uvector_async(op_modifier, stream);
+    auto comparator = row_lexicographic_comparator<has_nulls>(lhs, rhs, op_modifier_dv.data());
+    auto d_out      = mutable_column_device_view::create(out);
 
-template <bool has_nulls>
-void lt_row(table_view lhs, table_view rhs, mutable_column_view out, rmm::cuda_stream_view stream)
-{
-  auto d_lhs = table_device_view::create(lhs);
-  auto d_rhs = table_device_view::create(rhs);
+    thrust::tabulate(rmm::exec_policy(stream),
+                     out.begin<output_type>(),
+                     out.end<output_type>(),
+                     [comparator, d_out = *d_out] __device__(size_type row_index) {
+                       return d_out.is_valid(row_index) && comparator(row_index, row_index);
+                     });
+  }
 
-  row_lexicographic_comparator<has_nulls> comparator(*d_lhs, *d_rhs, nullptr, nullptr);
+  template <typename output_type, bool const has_nulls>
+  void lte_row(table_device_view lhs,
+               table_device_view rhs,
+               mutable_column_view out,
+               rmm::cuda_stream_view stream)
+  {
+    std::vector<order> op_modifier{};
+    std::vector<null_order> norder{};
+    std::for_each(thrust::counting_iterator<size_type>(0),
+                  thrust::counting_iterator<size_type>(lhs.num_columns()),
+                  [&](auto child_ind) {
+                    op_modifier.push_back(order::DESCENDING);
+                    norder.push_back(null_order::BEFORE);
+                  });
 
-  thrust::tabulate(
-    rmm::exec_policy(stream),
-    out.begin<size_type>(),
-    out.end<size_type>(),
-    [comparator] __device__(size_type row_index) { return !comparator(row_index, row_index); });
-}
+    auto const op_modifier_dv = cudf::detail::make_device_uvector_async(op_modifier, stream);
+    auto comparator = row_lexicographic_comparator<has_nulls>(lhs, rhs, op_modifier_dv.data());
+    auto d_out      = mutable_column_device_view::create(out);
+
+    thrust::tabulate(rmm::exec_policy(stream),
+                     out.begin<output_type>(),
+                     out.end<output_type>(),
+                     [comparator, d_out = *d_out] __device__(size_type row_index) {
+                       return d_out.is_valid(row_index) && !comparator(row_index, row_index);
+                     });
+  }
+
+  template <typename T, std::enable_if_t<is_numeric<T>()>* = nullptr>
+  void __host__ operator()(table_view const& lhs,
+                           table_view const& rhs,
+                           mutable_column_view& out,
+                           binary_operator op,
+                           rmm::cuda_stream_view stream)
+  {
+    bool const has_nulls = has_nested_nulls(lhs) || has_nested_nulls(rhs);
+
+    auto d_lhs = table_device_view::create(lhs);
+    auto d_rhs = table_device_view::create(rhs);
+
+    if (has_nulls) {
+      switch (op) {
+        case binary_operator::EQUAL: equality_row<T, true>(*d_lhs, *d_rhs, out, stream); break;
+        case binary_operator::NOT_EQUAL: nequal_row<T, true>(*d_lhs, *d_rhs, out, stream); break;
+        case binary_operator::LESS: lt_row<T, true>(*d_lhs, *d_rhs, out, stream); break;
+        case binary_operator::GREATER: gt_row<T, true>(*d_lhs, *d_rhs, out, stream); break;
+        case binary_operator::LESS_EQUAL: lte_row<T, true>(*d_lhs, *d_rhs, out, stream); break;
+        case binary_operator::GREATER_EQUAL: gte_row<T, true>(*d_lhs, *d_rhs, out, stream); break;
+        // case binary_operator::NULL_EQUALS: break;
+        default: CUDF_FAIL("Unsupported operator for these types");
+      }
+    } else {
+      switch (op) {
+        case binary_operator::EQUAL: equality_row<T, false>(*d_lhs, *d_rhs, out, stream); break;
+        case binary_operator::NOT_EQUAL: nequal_row<T, false>(*d_lhs, *d_rhs, out, stream); break;
+        case binary_operator::LESS: lt_row<T, false>(*d_lhs, *d_rhs, out, stream); break;
+        case binary_operator::GREATER: gt_row<T, false>(*d_lhs, *d_rhs, out, stream); break;
+        case binary_operator::LESS_EQUAL: lte_row<T, false>(*d_lhs, *d_rhs, out, stream); break;
+        case binary_operator::GREATER_EQUAL: gte_row<T, false>(*d_lhs, *d_rhs, out, stream); break;
+        // case binary_operator::NULL_EQUALS: break;
+        default: CUDF_FAIL("Unsupported operator for these types");
+      }
+    }
+  }
+
+  template <typename T, std::enable_if_t<!is_numeric<T>()>* = nullptr>
+  void __host__ operator()(table_view const& lhs,
+                           table_view const& rhs,
+                           mutable_column_view& out,
+                           binary_operator op,
+                           rmm::cuda_stream_view stream)
+  {
+    CUDF_FAIL("unsupported output type");
+  }
+};
 
 std::unique_ptr<column> struct_binary_operation(column_view const& lhs,
                                                 column_view const& rhs,
@@ -128,38 +215,21 @@ std::unique_ptr<column> struct_binary_operation(column_view const& lhs,
   auto const lhs_flattener    = flatten_nested_columns(
     table_view{{std::get<0>(lhs_superimposed)}}, {}, {}, column_nullability::MATCH_INCOMING);
   table_view lhs_flat = std::get<0>(lhs_flattener);
-  // auto const d_lhs_flat = table_device_view::create(lhs_flat, stream);
 
   auto const rhs_superimposed = superimpose_parent_nulls(rhs);
   auto const rhs_flattener    = flatten_nested_columns(
     table_view{{std::get<0>(rhs_superimposed)}}, {}, {}, column_nullability::MATCH_INCOMING);
   table_view rhs_flat = std::get<0>(rhs_flattener);
-  // auto const d_rhs_flat = table_device_view::create(rhs_flat, stream);
 
   auto out =
     cudf::detail::make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
   auto out_view = out->mutable_view();
 
-  auto lhs_has_nulls = has_nested_nulls(lhs_flat);
-  auto rhs_has_nulls = has_nested_nulls(rhs_flat);
+  type_dispatcher(out_view.type(), StructCompFunctor{}, lhs_flat, rhs_flat, out_view, op, stream);
 
-  switch (op) {
-    case binary_operator::EQUAL: and_merge(lhs_flat, rhs_flat, out_view, op, stream); break;
-    case binary_operator::NOT_EQUAL: and_merge(lhs_flat, rhs_flat, out_view, op, stream); break;
-    case binary_operator::LESS: lt_row<true>(lhs_flat, rhs_flat, out_view, stream); break;
-    // case binary_operator::GREATER: break;
-    // case binary_operator::LESS_EQUAL: break;
-    case binary_operator::GREATER_EQUAL: lt_row<true>(rhs_flat, lhs_flat, out_view, stream); break;
-    // case binary_operator::NULL_EQUALS: break;
-    default: CUDF_FAIL("Unsupported operator for these types");
-  }
   return out;
 }
 
 }  // namespace detail
 }  // namespace structs
 }  // namespace cudf
-
-// binary_op_compare() {
-//     type_dispatcher()
-// }

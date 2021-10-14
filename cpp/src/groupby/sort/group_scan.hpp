@@ -23,7 +23,6 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <memory>
-#include "cudf/binaryop.hpp"
 
 namespace cudf {
 namespace groupby {
@@ -117,13 +116,6 @@ std::unique_ptr<column> dense_rank_scan(column_view const& order_by,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<column> struct_binary_operation2(
-  column_view lhs,
-  column_view rhs,
-  binary_operator op,
-  data_type output_type,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace detail
 }  // namespace groupby
 }  // namespace cudf

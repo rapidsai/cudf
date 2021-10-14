@@ -158,8 +158,8 @@ std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_paren
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 std::unique_ptr<column> struct_binary_operation(
-  column_view lhs,
-  column_view rhs,
+  column_view const& lhs,
+  column_view const& rhs,
   binary_operator op,
   data_type output_type,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
