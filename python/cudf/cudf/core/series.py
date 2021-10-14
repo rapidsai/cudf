@@ -2112,15 +2112,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return self._column.data
 
     @property
-    def index(self):
-        """The index object"""
-        return self._index
-
-    @index.setter
-    def index(self, _index):
-        self._index = as_index(_index)
-
-    @property
     def nullmask(self):
         """The gpu buffer for the null-mask"""
         return cudf.Series(self._column.nullmask)

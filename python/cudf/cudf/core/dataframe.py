@@ -2123,39 +2123,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         mapper = dict(zip(old_cols, new_names))
         self.rename(mapper=mapper, inplace=True, axis=1)
 
-    @property
-    def index(self):
-        """Returns the index of the DataFrame"""
-        return self._index
-
-    @index.setter
-    def index(self, value):
-        old_length = (
-            self._num_rows if self._index is None else len(self._index)
-        )
-        if isinstance(value, cudf.core.multiindex.MultiIndex):
-            if len(self._data) > 0 and len(value) != old_length:
-                msg = (
-                    f"Length mismatch: Expected axis has {old_length} "
-                    f"elements, new values have {len(value)} elements"
-                )
-                raise ValueError(msg)
-            self._index = value
-            return
-
-        new_length = len(value)
-
-        if len(self._data) > 0 and new_length != old_length:
-            msg = (
-                f"Length mismatch: Expected axis has {old_length} elements, "
-                f"new values have {new_length} elements"
-            )
-            raise ValueError(msg)
-
-        # try to build an index from generic _index
-        idx = as_index(value)
-        self._index = idx
-
     def _reindex(
         self, columns, dtypes=None, deep=False, index=None, inplace=False
     ):
