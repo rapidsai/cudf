@@ -56,6 +56,8 @@ repos:
               - id: mypy
                 args: ["--config-file=python/cudf/setup.cfg", "python/cudf/cudf"]
                 pass_filenames: false
+                additional_dependencies:
+                  - types-cachetools
       - repo: local
         hooks:
               - id: clang-format
