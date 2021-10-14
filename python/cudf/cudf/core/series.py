@@ -2700,6 +2700,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3    0.0
         dtype: float64]
         """
+
+        warnings.warn(
+            "Series.one_hot_encoding is deprecated and will be removed in "
+            "future, use `get_dummies` instead.",
+            FutureWarning,
+        )
+
         if hasattr(cats, "to_arrow"):
             cats = cats.to_pandas()
         else:
