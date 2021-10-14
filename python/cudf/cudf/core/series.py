@@ -2269,37 +2269,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 pass
             return self
 
-    def argsort(self, ascending=True, na_position="last"):
-        """Returns a Series of int64 index that will sort the series.
-
-        Uses Thrust sort.
-
-        Returns
-        -------
-        result: Series
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([3, 1, 2])
-        >>> s
-        0    3
-        1    1
-        2    2
-        dtype: int64
-        >>> s.argsort()
-        0    1
-        1    2
-        2    0
-        dtype: int32
-        >>> s[s.argsort()]
-        1    1
-        2    2
-        0    3
-        dtype: int64
-        """
-        return self._sort(ascending=ascending, na_position=na_position)[1]
-
     def sort_index(self, axis=0, *args, **kwargs):
         if axis not in (0, "index"):
             raise ValueError("Only axis=0 is valid for Series.")
@@ -2359,7 +2328,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         if len(self) == 0:
             return self
-        vals, inds = self._sort(ascending=ascending, na_position=na_position)
+
+        col_keys, col_inds = self._column.sort_by_values(
+            ascending=ascending, na_position=na_position
+        )
+        vals = self._from_data({self.name: col_keys}, self._index)
+        inds = self._from_data({self.name: col_inds}, self._index)
+
         if not ignore_index:
             index = self.index.take(inds)
         else:
@@ -2519,20 +2494,17 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         return self._n_largest_or_smallest(n=n, keep=keep, largest=False)
 
-    def _sort(self, ascending=True, na_position="last"):
-        """
-        Sort by values
-
-        Returns
-        -------
-        2-tuple of key and index
-        """
-        col_keys, col_inds = self._column.sort_by_values(
-            ascending=ascending, na_position=na_position
-        )
-        sr_keys = self._from_data({self.name: col_keys}, self._index)
-        sr_inds = self._from_data({self.name: col_inds}, self._index)
-        return sr_keys, sr_inds
+    def argsort(
+        self,
+        axis=0,
+        kind="quicksort",
+        order=None,
+        ascending=True,
+        na_position="last",
+    ):
+        obj = super().argsort(axis, kind, order, ascending, na_position)
+        obj.name = self.name
+        return obj
 
     def replace(self, to_replace=None, value=None, *args, **kwargs):
         if is_dict_like(to_replace) and value is not None:

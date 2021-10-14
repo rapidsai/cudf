@@ -1364,8 +1364,17 @@ class MultiIndex(Frame, BaseIndex):
             ascending=[False] * len(self.levels), null_position=None
         )
 
-    def argsort(self, ascending=True, **kwargs):
-        return self._get_sorted_inds(ascending=ascending, **kwargs).values
+    def argsort(
+        self,
+        axis=0,
+        kind="quicksort",
+        order=None,
+        ascending=True,
+        na_position="last",
+    ):
+        return (
+            super().argsort(axis, kind, order, ascending, na_position).values
+        )
 
     def sort_values(self, return_indexer=False, ascending=True, key=None):
         if key is not None:

@@ -748,6 +748,18 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         name = kwargs.get("name")
         super().__init__({name: data})
 
+    def argsort(
+        self,
+        axis=0,
+        kind="quicksort",
+        order=None,
+        ascending=True,
+        na_position="last",
+    ):
+        return (
+            super().argsort(axis, kind, order, ascending, na_position).values
+        )
+
     @classmethod
     def deserialize(cls, header, frames):
         if "index_column" in header:
