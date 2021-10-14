@@ -16,6 +16,37 @@ libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 MASK_BITSIZE = np.dtype("int32").itemsize * 8
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
+class FrameJitMetadata(object):
+    def __init__(self, fr, func):
+        """
+        convenience class that contains the metadata from the
+        frame the UDF is targeting that is needed for jitting
+        the eventual kernel.
+        """
+        self.all_dtypes = {}
+        self.supported_dtypes = {}
+
+        self.preprocess_dtypes(fr)
+        self.make_cache_key(fr, func)
+
+    def preprocess_dtypes(self, fr):
+        for colname, col in fr._data.items():
+            if _is_supported_type(col.dtype):
+                self.supported_dtypes[colname] = col.dtype
+                np_type = col.dtype
+            else:
+                np_type = np.dtype('O')
+            self.all_dtypes[colname] = np_type
+
+    def make_cache_key(self, fr, func):
+        cache_key = (
+            *cudautils.make_cache_key(func, self.all_dtypes.values()),
+            *(col.mask is None for col in fr._data.values()),
+            *fr._data.keys(),
+        )
+
+        self.cache_key = cache_key
+
 
 def get_frame_row_type(fr):
     """
@@ -87,8 +118,6 @@ def get_udf_return_type(func, df):
         if not isinstance(numba_output_type, MaskedType)
         else numba_output_type.value_type
     )
-    if isinstance(scalar_return_type, Dummy):
-        raise TypeError(str(scalar_return_type))
 
     return scalar_return_type
 
@@ -119,7 +148,7 @@ def construct_signature(df, return_type):
     offsets = []
     sig = [return_type]
     for col in df._data.values():
-        if col.dtype != np.dtype('object'):
+        if _is_supported_type(col.dtype):
             sig.append(masked_array_type_from_col(col))
             offsets.append(int64)
 
@@ -252,6 +281,23 @@ def _define_function(fr, row_type, scalar_return=False):
 
     return kernel_template.format(**d)
 
+def _check_return_type(ty):
+    """
+    In almost every case, get_udf_return_type will throw a typing error
+    if the user tries to use a field in the row containing a dtype that
+    is not supported. It does this by simply "not finding" overloads of
+    any operators for the ancillary dtype we type that field as. But it
+    is defeated by the following edge case:
+
+    def f(row):
+        return row[<bad dtype key>]
+
+    In this case numba is happy to return MaskedType(<bad dtype key>),
+    and won't throw because no operators were ever used. This function
+    explicitly checks for that case. 
+    """
+    if isinstance(ty, Dummy):
+        raise TypeError(str(ty))
 
 @annotate("UDF COMPILATION", color="darkgreen", domain="cudf_python")
 def compile_or_get(df, f):
@@ -276,13 +322,11 @@ def compile_or_get(df, f):
     use it to allocate an output column of the right dtype.
     """
 
+    md = FrameJitMetadata(df, f)
+
     # check to see if we already compiled this function
-    frame_dtypes = tuple(col.dtype if _is_supported_type(col.dtype) else np.dtype('O') for col in df._data.values())
-    cache_key = (
-        *cudautils.make_cache_key(f, frame_dtypes),
-        *(col.mask is None for col in df._data.values()),
-        *df._data.keys(),
-    )
+    frame_dtypes = md.all_dtypes
+    cache_key = md.cache_key
     if precompiled.get(cache_key) is not None:
         kernel, scalar_return_type = precompiled[cache_key]
         return kernel, scalar_return_type
@@ -290,6 +334,8 @@ def compile_or_get(df, f):
     # precompile the user udf to get the right return type.
     # could be a MaskedType or a scalar type.
     scalar_return_type = get_udf_return_type(f, df)
+
+    _check_return_type(scalar_return_type)
 
     _is_scalar_return = not isinstance(scalar_return_type, MaskedType)
 
