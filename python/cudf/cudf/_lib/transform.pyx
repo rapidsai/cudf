@@ -175,13 +175,13 @@ def one_hot_encode(Column input_column, Column categories):
         )
 
     owner = Column.from_unique_ptr(move(c_result.first))
+
+    pylist_categories = categories.to_arrow().to_pylist()
     encodings, _ = data_from_table_view(
         move(c_result.second),
         owner=owner,
         column_names=[
-            x if x is not None else (
-                'null' for x in categories.to_arrow().to_pylist()
-            )
+            x if x is not None else 'null' for x in pylist_categories
         ]
     )
 
