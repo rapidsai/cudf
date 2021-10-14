@@ -1103,27 +1103,28 @@ def test_assign():
 
 
 @pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
-def test_dataframe_hash_columns(nrows):
+@pytest.mark.parametrize("method", ["murmur3", "md5"])
+def test_dataframe_hash_columns(nrows, method):
     gdf = cudf.DataFrame()
     data = np.asarray(range(nrows))
     data[0] = data[-1]  # make first and last the same
     gdf["a"] = data
     gdf["b"] = gdf.a + 100
     out = gdf.hash_columns(["a", "b"])
-    assert isinstance(out, cupy.ndarray)
+    assert isinstance(out, cudf.Series)
     assert len(out) == nrows
     assert out.dtype == np.int32
 
     # Check default
     out_all = gdf.hash_columns()
-    np.testing.assert_array_equal(cupy.asnumpy(out), cupy.asnumpy(out_all))
+    assert_eq(out, out_all)
 
     # Check single column
-    out_one = cupy.asnumpy(gdf.hash_columns(["a"]))
+    out_one = gdf.hash_columns(["a"], method=method)
     # First matches last
-    assert out_one[0] == out_one[-1]
+    assert out_one.iloc[0] == out_one.iloc[-1]
     # Equivalent to the cudf.Series.hash_values()
-    np.testing.assert_array_equal(cupy.asnumpy(gdf.a.hash_values()), out_one)
+    assert_eq(gdf["a"].hash_values(method=method), out_one)
 
 
 @pytest.mark.parametrize("nrows", [3, 10, 100, 1000])
@@ -2224,6 +2225,18 @@ def test_series_hash_encode(nrows):
 
     enc_with_name_arr = s.hash_encode(num_features, use_name=True).to_numpy()
     assert enc_with_name_arr[0] != enc_arr[0]
+
+
+def test_series_hash_encode_reproducible_results():
+    # Regression test to ensure that hash_encode outputs are reproducible
+    data = cudf.Series([0, 1, 2])
+    hash_result = data.hash_encode(stop=2 ** 16, use_name=False)
+    expected_result = cudf.Series([42165, 55037, 7341])
+    assert_eq(hash_result, expected_result)
+
+    hash_result_with_name = data.hash_encode(stop=2 ** 16, use_name=True)
+    expected_result_with_name = cudf.Series([36137, 39649, 58673])
+    assert_eq(hash_result_with_name, expected_result_with_name)
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["bool"])
