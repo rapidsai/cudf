@@ -28,7 +28,7 @@ repos:
                 args: ["--settings-path=python/dask_cudf/setup.cfg"]
                 files: python/dask_cudf/.*
       - repo: https://github.com/psf/black
-        rev: 19.10b0
+        rev: 21.9b0
         hooks:
               - id: black
                 files: python/.*
