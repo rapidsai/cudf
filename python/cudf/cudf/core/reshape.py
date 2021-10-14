@@ -1,13 +1,15 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 import itertools
+from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
 
 import cudf
 from cudf._lib.transform import one_hot_encode
-from cudf.core.column import as_column
+from cudf._typing import Dtype
+from cudf.core.column import ColumnBase, as_column
 from cudf.core.column.categorical import CategoricalColumn
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
@@ -712,11 +714,11 @@ def get_dummies(
                     unique = as_column(cats[name])
 
                 col_enc_data = _one_hot_encode_column(
-                    df._data[name],
-                    unique,
-                    prefix_map.get(name, prefix),
-                    prefix_sep_map.get(name, prefix_sep),
-                    dtype,
+                    column=df._data[name],
+                    categories=unique,
+                    prefix=prefix_map.get(name, prefix),
+                    prefix_sep=prefix_sep_map.get(name, prefix_sep),
+                    dtype=dtype,
                 )
                 result_data.update(col_enc_data)
             return cudf.DataFrame._from_data(result_data, index=df._index)
@@ -1067,9 +1069,26 @@ def _get_unique(column, dummy_na):
     return unique
 
 
-def _one_hot_encode_column(column, categories, prefix, prefix_sep, dtype):
+def _one_hot_encode_column(
+    column: ColumnBase,
+    categories: ColumnBase,
+    prefix: Optional[str],
+    prefix_sep: Optional[str],
+    dtype: Optional[Dtype],
+) -> Dict[str, ColumnBase]:
+    """Encode a single column with one hot encoding. The return dictionary
+    contains pairs of (category, encodings). The keys may be prefixed with
+    `prefix`, separated with category name with `prefix_sep`. The encoding
+    columns maybe coerced into `dtype`.
+    """
     if isinstance(column, CategoricalColumn):
         column = column._get_decategorized_column()
+
+    if column.size * categories.size >= np.iinfo("int32").max:
+        raise ValueError(
+            "Size limitation exceeded: column.size * category.size < "
+            "np.iinfo('int32').max. Consider reducing size of category"
+        )
     data = one_hot_encode(column, categories)
 
     if prefix is not None and prefix_sep is not None:
