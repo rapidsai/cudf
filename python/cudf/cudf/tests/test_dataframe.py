@@ -2069,7 +2069,8 @@ def test_unaryops_df(pdf, gdf, unaryop):
 
 
 @pytest.mark.parametrize("unary_func", ["abs", "floor", "ceil"])
-def test_unary_func_df(pdf, gdf, unary_func):
+def test_unary_func_df(pdf, unary_func):
+    np.random.seed(0)
     disturbance = pd.Series(np.random.rand(10))
     pdf = pdf - 5 + disturbance
     d = pdf.apply(getattr(np, unary_func))
