@@ -37,8 +37,7 @@ namespace java {
  */
 bool check_nvcomp_output_sizes(std::size_t const *dev_uncompressed_sizes,
                                std::size_t const *dev_actual_uncompressed_sizes,
-                               std::size_t batch_size,
-                               rmm::cuda_stream_view stream) {
+                               std::size_t batch_size, rmm::cuda_stream_view stream) {
   NVTX3_FUNC_RANGE_IN(java_domain);
   return thrust::equal(rmm::exec_policy(stream), dev_uncompressed_sizes,
                        dev_uncompressed_sizes + batch_size, dev_actual_uncompressed_sizes);
