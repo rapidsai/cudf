@@ -720,9 +720,9 @@ class MultiIndex(Frame, BaseIndex):
                         column.timedelta.TimeDeltaColumn,
                     ),
                 ):
-                    preprocess_df[name[1]] = col.astype("str").fillna(
-                        cudf._NA_REP
-                    )
+                    new_col = col.astype("str")
+                    preprocess._data[name] = new_col
+                    preprocess_df[name[1]] = new_col.fillna(cudf._NA_REP)
 
             tuples_list = list(
                 zip(
