@@ -29,6 +29,8 @@ class FrameJitMetadata(object):
         self.preprocess_dtypes(fr)
         self.make_cache_key(fr, func)
 
+        self.func = func
+
     def preprocess_dtypes(self, fr):
         for colname, col in fr._data.items():
             if _is_supported_type(col.dtype):
@@ -48,7 +50,7 @@ class FrameJitMetadata(object):
         self.cache_key = cache_key
 
 
-def get_frame_row_type(fr):
+def get_frame_row_type(md):
     """
     Get the numba `Record` type corresponding to a frame.
     Models each column and its mask as a MaskedType and
@@ -62,7 +64,7 @@ def get_frame_row_type(fr):
     """
 
     # Create the numpy structured type corresponding to the frame.
-    dtype = np.dtype([(name, col.dtype) if _is_supported_type(col.dtype) else (name, np.dtype('O')) for name, col in fr._data.items()])
+    dtype = np.dtype(list(md.all_dtypes.items()))
 
     fields = []
     offset = 0
@@ -98,16 +100,16 @@ def get_frame_row_type(fr):
 
 
 @annotate("NUMBA JIT", color="green", domain="cudf_python")
-def get_udf_return_type(func, df):
+def get_udf_return_type(md):
     """
     Get the return type of a masked UDF for a given set of argument dtypes. It
     is assumed that a `MaskedType(dtype)` is passed to the function for each
     input dtype.
     """
-    row_type = get_frame_row_type(df)
+    row_type = get_frame_row_type(md)
     # Get the return type. The PTX is also returned by compile_udf, but is not
     # needed here.
-    ptx, output_type = cudautils.compile_udf(func, (row_type,))
+    ptx, output_type = cudautils.compile_udf(md.func, (row_type,))
     if not isinstance(output_type, MaskedType):
         numba_output_type = numpy_support.from_dtype(np.dtype(output_type))
     else:
@@ -325,7 +327,6 @@ def compile_or_get(df, f):
     md = FrameJitMetadata(df, f)
 
     # check to see if we already compiled this function
-    frame_dtypes = md.all_dtypes
     cache_key = md.cache_key
     if precompiled.get(cache_key) is not None:
         kernel, scalar_return_type = precompiled[cache_key]
@@ -333,7 +334,7 @@ def compile_or_get(df, f):
 
     # precompile the user udf to get the right return type.
     # could be a MaskedType or a scalar type.
-    scalar_return_type = get_udf_return_type(f, df)
+    scalar_return_type = get_udf_return_type(md)
 
     _check_return_type(scalar_return_type)
 
@@ -344,7 +345,7 @@ def compile_or_get(df, f):
 
     # this row type is used within the kernel to pack up the column and
     # mask data into the dict like data structure the user udf expects
-    row_type = get_frame_row_type(df)
+    row_type = get_frame_row_type(md)
 
     f_ = cuda.jit(device=True)(f)
     # Dict of 'local' variables into which `_kernel` is defined
