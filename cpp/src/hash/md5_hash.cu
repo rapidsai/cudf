@@ -78,9 +78,6 @@ struct hash_circular_buffer {
   CUDA_DEVICE_CALLABLE uint8_t* begin() { return storage; }
   CUDA_DEVICE_CALLABLE const uint8_t* begin() const { return storage; }
 
-  CUDA_DEVICE_CALLABLE uint8_t* end() { return &storage[capacity]; }
-  CUDA_DEVICE_CALLABLE const uint8_t* end() const { return &storage[capacity]; }
-
   CUDA_DEVICE_CALLABLE int size() const
   {
     return std::distance(begin(), static_cast<const uint8_t*>(cur));
@@ -153,7 +150,7 @@ struct md5_hash_state {
 };
 
 /**
- * @brief Core MD5 algorithm implementation. Processes a single 512-bit chunk,
+ * @brief Core MD5 algorithm implementation. Processes a single 64-byte chunk,
  * updating the hash value so far. Does not zero out the buffer contents.
  */
 void CUDA_DEVICE_CALLABLE md5_hash_step(md5_hash_state& hash_state)
@@ -245,12 +242,13 @@ struct MD5Hasher {
   }
 };
 
-struct MD5ListHasher {
+template <typename Hasher>
+struct ListHasherDispatcher {
   template <typename Key>
   void CUDA_DEVICE_CALLABLE operator()(column_device_view data_col,
                                        size_type offset_begin,
                                        size_type offset_end,
-                                       MD5Hasher& hasher) const
+                                       Hasher& hasher) const
   {
     if constexpr ((is_fixed_width<Key>() && !is_chrono<Key>()) ||
                   std::is_same_v<Key, string_view>) {
@@ -283,7 +281,8 @@ struct HasherDispatcher {
       auto const offset_begin = offsets.element<size_type>(row_index);
       auto const offset_end   = offsets.element<size_type>(row_index + 1);
 
-      cudf::type_dispatcher(data.type(), MD5ListHasher{}, data, offset_begin, offset_end, *hasher);
+      cudf::type_dispatcher(
+        data.type(), ListHasherDispatcher<Hasher>{}, data, offset_begin, offset_end, *hasher);
     } else {
       cudf_assert(false && "Unsupported type for hash function.");
     }
