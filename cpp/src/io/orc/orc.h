@@ -591,6 +591,11 @@ class metadata {
     if (column_names.empty() && get_num_columns() != 0) { init_column_names(); }
     return column_names[column_id];
   }
+  std::string const& get_column_path(int32_t column_id) const
+  {
+    if (column_paths.empty() && get_num_columns() != 0) { init_column_names(); }
+    return column_paths[column_id];
+  }
   int get_row_index_stride() const { return ff.rowIndexStride; }
 
  public:
@@ -610,6 +615,7 @@ class metadata {
   void init_column_names() const;
 
   mutable std::vector<std::string> column_names;
+  mutable std::vector<std::string> column_paths;
 };
 
 /**

@@ -467,17 +467,21 @@ void metadata::init_column_names() const
 {
   auto const schema_idxs = get_schema_indexes();
   auto const& types      = ff.types;
-  for (int32_t col_id = 0; col_id < get_num_columns(); ++col_id) {
-    std::string col_name;
-    if (schema_idxs[col_id].parent >= 0 and schema_idxs[col_id].field >= 0) {
-      auto const parent_idx = static_cast<uint32_t>(schema_idxs[col_id].parent);
-      auto const field_idx  = static_cast<uint32_t>(schema_idxs[col_id].field);
-      if (field_idx < types[parent_idx].fieldNames.size()) {
-        col_name = types[parent_idx].fieldNames[field_idx];
-      }
+  // root ORC column
+  column_names.push_back("");
+  column_paths.push_back("");
+  for (int32_t col_id = 1; col_id < get_num_columns(); ++col_id) {
+    auto const parent_idx = schema_idxs[col_id].parent;
+    auto const field_idx  = schema_idxs[col_id].field;
+    if (field_idx >= 0 and field_idx < static_cast<int32_t>(types[parent_idx].fieldNames.size())) {
+      column_names.push_back(types[parent_idx].fieldNames[field_idx]);
+    } else {
+      // If we have no name, generate a name
+      column_names.push_back("col" + std::to_string(col_id));
     }
-    // If we have no name (root column), generate a name
-    column_names.push_back(col_name.empty() ? "col" + std::to_string(col_id) : col_name);
+
+    column_paths.push_back(column_paths[parent_idx] +
+                           (column_paths[parent_idx].empty() ? "" : ".") + column_names.back());
   }
 }
 
