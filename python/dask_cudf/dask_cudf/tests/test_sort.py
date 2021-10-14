@@ -25,7 +25,9 @@ def test_sort_values(nelem, nparts, by, ascending):
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(by=by, ascending=ascending)
     expect = df.sort_values(by=by, ascending=ascending)
-    dd.assert_eq(got, expect, check_index=False)
+
+    # check that sorted indices are identical
+    dd.assert_eq(got.reset_index(), expect.reset_index(), check_index=False)
 
 
 @pytest.mark.parametrize("ascending", [True, False])
@@ -77,4 +79,6 @@ def test_sort_values_with_nulls(data, by, ascending, na_position):
     expect = df.sort_values(
         by=by, ascending=ascending, na_position=na_position
     )
-    dd.assert_eq(got, expect)
+
+    # cudf index ordering for nulls is non-deterministic
+    dd.assert_eq(got, expect, check_index=False)
