@@ -5,7 +5,6 @@ from functools import partial
 from io import BufferedWriter, BytesIO, IOBase
 
 import numpy as np
-import pyarrow as pa
 from pyarrow import dataset as pa_ds, parquet as pq
 
 from dask import dataframe as dd
@@ -332,13 +331,13 @@ def set_object_dtypes_from_pa_schema(df, schema):
     # pyarrow schema.
     if schema:
         for col_name, col in df._data.items():
-            typ = schema.field(col_name).type
+            typ = cudf_dtype_from_pa_type(schema.field(col_name).type)
             if (
                 col_name in schema.names
-                and not isinstance(typ, (pa.ListType, pa.StructType))
+                and not isinstance(typ, (cudf.ListDtype, cudf.StructDtype))
                 and isinstance(col, cudf.core.column.StringColumn)
             ):
-                df._data[col_name] = col.astype(cudf_dtype_from_pa_type(typ))
+                df._data[col_name] = col.astype(typ)
 
 
 def read_parquet(

@@ -75,30 +75,20 @@ struct segmented_shift_functor<T, std::enable_if_t<is_rep_layout_compatible<T>()
                                      rmm::mr::device_memory_resource* mr)
   {
     auto values_device_view = column_device_view::create(segmented_values, stream);
-    auto fill_pair_iterator = make_pair_iterator<T>(fill_value);
     bool nullable           = not fill_value.is_valid() or segmented_values.nullable();
-
-    if (segmented_values.has_nulls()) {
-      auto input_pair_iterator = make_pair_iterator<T, true>(*values_device_view) - offset;
-      return copy_if_else(nullable,
-                          input_pair_iterator,
-                          input_pair_iterator + segmented_values.size(),
-                          fill_pair_iterator,
-                          segmented_shift_filter{segment_offsets, offset},
-                          segmented_values.type(),
-                          stream,
-                          mr);
-    } else {
-      auto input_pair_iterator = make_pair_iterator<T, false>(*values_device_view) - offset;
-      return copy_if_else(nullable,
-                          input_pair_iterator,
-                          input_pair_iterator + segmented_values.size(),
-                          fill_pair_iterator,
-                          segmented_shift_filter{segment_offsets, offset},
-                          segmented_values.type(),
-                          stream,
-                          mr);
-    }
+    auto input_iterator =
+      cudf::detail::make_optional_iterator<T>(
+        *values_device_view, contains_nulls::DYNAMIC{}, segmented_values.has_nulls()) -
+      offset;
+    auto fill_iterator = cudf::detail::make_optional_iterator<T>(fill_value, contains_nulls::YES{});
+    return copy_if_else(nullable,
+                        input_iterator,
+                        input_iterator + segmented_values.size(),
+                        fill_iterator,
+                        segmented_shift_filter{segment_offsets, offset},
+                        segmented_values.type(),
+                        stream,
+                        mr);
   }
 };
 
