@@ -52,7 +52,7 @@ def merge(
     return mergeobj.perform_merge()
 
 
-_JoinKeys = namedtuple("JoinKeys", ["left", "right"])
+_JoinKeys = namedtuple("_JoinKeys", ["left", "right"])
 
 
 class Merge(object):
