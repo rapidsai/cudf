@@ -238,7 +238,35 @@ struct MD5ListHasher {
   }
 };
 
-struct MD5Hash {
+template <typename Hasher>
+struct HasherDispatcher {
+  Hasher* hasher;
+  column_device_view col;
+
+  template <typename Key>
+  void CUDA_DEVICE_CALLABLE operator()(size_type row_index) const
+  {
+    if constexpr ((is_fixed_width<Key>() && !is_chrono<Key>()) ||
+                  std::is_same_v<Key, string_view>) {
+      hasher->hash_state.process(col.element<Key>(row_index));
+    } else if constexpr (std::is_same_v<Key, list_view>) {
+      auto const data    = col.child(lists_column_view::child_column_index);
+      auto const offsets = col.child(lists_column_view::offsets_column_index);
+
+      if (data.type().id() == type_id::LIST) cudf_assert(false && "Nested list unsupported");
+
+      auto const offset_begin = offsets.element<size_type>(row_index);
+      auto const offset_end   = offsets.element<size_type>(row_index + 1);
+
+      cudf::type_dispatcher(
+        data.type(), MD5ListHasher{}, data, offset_begin, offset_end, &hasher->hash_state);
+    } else {
+      cudf_assert(false && "Unsupported type for hash function.");
+    }
+  }
+};
+
+struct MD5Hasher {
   md5_hash_state hash_state;
 
   void CUDA_DEVICE_CALLABLE finalize(char* result_location)
@@ -258,36 +286,7 @@ struct MD5Hash {
       uint32ToLowercaseHexString(this->hash_state.hash_value[i], result_location + (8 * i));
     }
   }
-
-  template <typename Key>
-  void CUDA_DEVICE_CALLABLE operator()(column_device_view col,
-                                       size_type row_index,
-                                       md5_hash_state* hash_state) const
-  {
-    if constexpr ((is_fixed_width<Key>() && !is_chrono<Key>()) ||
-                  std::is_same_v<Key, string_view>) {
-      hash_state->process(col.element<Key>(row_index));
-    } else {
-      cudf_assert(false && "Unsupported type for hash function.");
-    }
-  }
 };
-
-template <>
-void CUDA_DEVICE_CALLABLE MD5Hash::operator()<list_view>(column_device_view col,
-                                                         size_type row_index,
-                                                         md5_hash_state* hash_state) const
-{
-  auto const data    = col.child(lists_column_view::child_column_index);
-  auto const offsets = col.child(lists_column_view::offsets_column_index);
-
-  if (data.type().id() == type_id::LIST) cudf_assert(false && "Nested list unsupported");
-
-  auto const offset_begin = offsets.element<size_type>(row_index);
-  auto const offset_end   = offsets.element<size_type>(row_index + 1);
-
-  cudf::type_dispatcher(data.type(), MD5ListHasher{}, data, offset_begin, offset_end, hash_state);
-}
 
 // MD5 supported leaf data type check
 constexpr inline bool md5_leaf_type_check(data_type dt)
@@ -339,11 +338,12 @@ std::unique_ptr<column> md5_hash(table_view const& input,
                    thrust::make_counting_iterator(0),
                    thrust::make_counting_iterator(input.num_rows()),
                    [d_chars, device_input = *device_input] __device__(auto row_index) {
-                     MD5Hash hasher = MD5Hash{};
+                     MD5Hasher hasher{};
                      for (auto const& col : device_input) {
                        if (col.is_valid(row_index)) {
+                         HasherDispatcher<MD5Hasher> hasher_dispatcher{&hasher, col};
                          cudf::type_dispatcher<dispatch_storage_type>(
-                           col.type(), hasher, col, row_index, &hasher.hash_state);
+                           col.type(), hasher_dispatcher, row_index);
                        }
                      }
                      hasher.finalize(d_chars + (row_index * digest_size));
