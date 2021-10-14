@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+cimport cpython
 from libc.stdint cimport int32_t, int64_t
 from libcpp cimport bool
 from libcpp.map cimport map
@@ -23,7 +24,7 @@ cdef class KafkaDatasource(Datasource):
                   string delimiter=b"",):
         if topic != b"" and partition != -1:
             self.c_datasource = <unique_ptr[datasource]> \
-                make_unique[kafka_consumer](kafka_configs,
+                make_unique[kafka_consumer](<cpython.PyObject*> kafka_configs,
                                             topic,
                                             partition,
                                             start_offset,
@@ -32,7 +33,7 @@ cdef class KafkaDatasource(Datasource):
                                             delimiter)
         else:
             self.c_datasource = <unique_ptr[datasource]> \
-                make_unique[kafka_consumer](kafka_configs)
+                make_unique[kafka_consumer](<cpython.PyObject*> kafka_configs)
 
     cdef datasource* get_datasource(self) nogil:
         return <datasource *> self.c_datasource.get()

@@ -27,24 +27,29 @@
  * token refresh is required.
  */
 class OAuthRefreshCb : public RdKafka::OAuthBearerTokenRefreshCb {
+ public:
+  OAuthRefreshCb(PyObject* callback, PyObject* args, PyObject* kwargs)
+    : callback(callback), args(args), kwargs(kwargs){};
+
   void oauthbearer_token_refresh_cb(RdKafka::Handle* handle, const std::string& oauthbearer_config)
   {
     printf("oauthbearer_token_refresh_cb\n");
-    Py_Initialize();
-    Py_Finalize();
-  }
-};
+    PyObject* args;
+    PyObject* kwargs;
 
-// void rd_kafka_conf_set_oauthbearer_token_refresh_cb(rd_kafka_conf_t *conf,
-//                 void (*oauthbearer_token_refresh_cb) (
-//                         rd_kafka_t *rk,
-//                         const char *oauthbearer_config,
-//                         void *opaque)) {
-// #if WITH_SASL_OAUTHBEARER
-//         rd_kafka_anyconf_set_internal(_RK_GLOBAL, conf,
-//                 "oauthbearer_token_refresh_cb", oauthbearer_token_refresh_cb);
-// #endif
-// }
+    CUDF_EXPECTS(PyCallable_Check(callback), "A Python callable is required");
+
+    // Make sure that we own the GIL
+    PyGILState_STATE state = PyGILState_Ensure();
+    PyObject* result       = PyObject_CallObject(callback, args);
+    PyGILState_Release(state);
+  }
+
+ private:
+  PyObject* callback;
+  PyObject* args;
+  PyObject* kwargs;
+};
 
 namespace cudf {
 namespace io {
@@ -52,32 +57,51 @@ namespace external {
 namespace kafka {
 
 // kafka_consumer::kafka_consumer(std::map<std::string, std::string> const& configs)
-kafka_consumer::kafka_consumer(PyObject const& configs)
+kafka_consumer::kafka_consumer(PyObject* confdict)
   : kafka_conf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL))
 {
-  // for (auto const& key_value : configs) {
-  //   std::string error_string;
-  //   CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
-  //                  kafka_conf->set(key_value.first, key_value.second, error_string),
-  //                "Invalid Kafka configuration");
-  // }
+  Py_ssize_t pos = 0;
+  PyObject *ko, *vo;
 
-  // // Kafka 0.9 > requires group.id in the configuration
-  // std::string conf_val;
-  // CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK == kafka_conf->get("group.id", conf_val),
-  //              "Kafka group.id must be configured");
+  // Configurations that can be Python callables. Anything else is expected to be a str
+  std::vector<std::string> callableConfigs{"oauth_cb"};
 
-  // // Sets the OAuth Callback if the configuration is present
-  // OAuthRefreshCb cb;
-  // std::string error_string;
-  // kafka_conf->set("oauthbearer_token_refresh_cb", &cb, error_string);
+  while (PyDict_Next(confdict, &pos, &ko, &vo)) {
+    CUDF_EXPECTS(PyUnicode_Check(ko), "expected kafka configuration property name as type string");
+    std::string key(PyUnicode_AsUTF8(ko));
+    std::string valueType(Py_TYPE(vo)->tp_name);
 
-  // std::string errstr;
-  // consumer = std::unique_ptr<RdKafka::KafkaConsumer>(
-  //   RdKafka::KafkaConsumer::create(kafka_conf.get(), errstr));
+    std::string error_string;
+    if (std::find(callableConfigs.begin(), callableConfigs.end(), key) != callableConfigs.end()) {
+      // Properly configure the callable. This is a Python callback for callback processing
+      // Sets the OAuth Callback if the configuration is present
+      // https://github.com/edenhill/librdkafka/blob/6d5fbf9131693288f0f198692fae5aa169b61912/src/rdkafka_conf.c#L2797
+      // rd_kafka_conf_set_oauthbearer_token_refresh_cb(kafka_conf, oauth_cb);
+      PyObject* args;
+      PyObject* kwargs;
+      OAuthRefreshCb cb(vo, args, kwargs);
+      kafka_conf->set("oauthbearer_token_refresh_cb", &cb, error_string);
+
+    } else {
+      CUDF_EXPECTS(valueType.compare("str") == 0,
+                   "Only string values are supported for this configuration");
+      CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
+                     kafka_conf->set(key, PyUnicode_AsUTF8(vo), error_string),
+                   "Invalid Kafka configuration provided");
+    }
+  }
+
+  // Kafka 0.9 > requires group.id in the configuration
+  std::string conf_val;
+  CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK == kafka_conf->get("group.id", conf_val),
+               "Kafka group.id must be configured");
+
+  std::string errstr;
+  consumer = std::unique_ptr<RdKafka::KafkaConsumer>(
+    RdKafka::KafkaConsumer::create(kafka_conf.get(), errstr));
 }
 
-kafka_consumer::kafka_consumer(PyObject const& configs,
+kafka_consumer::kafka_consumer(PyObject* configs,
                                std::string const& topic_name,
                                int partition,
                                int64_t start_offset,
