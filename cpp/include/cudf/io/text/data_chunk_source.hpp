@@ -62,9 +62,9 @@ class data_chunk_reader {
    *
    * @param size number of bytes to read.
    * @param stream stream to associate allocations or perform work required to obtain chunk
-   * @return a chunk of data up to @param size bytes. May return less than @param size bytes if
+   * @return a chunk of data up to @p size bytes. May return less than @p size bytes if
    * reader reaches end of underlying data source. Returned data must be accessed in stream order
-   * relative to the specified @param stream.
+   * relative to the specified @p stream
    */
   virtual std::unique_ptr<device_data_chunk> get_next_chunk(std::size_t size,
                                                             rmm::cuda_stream_view stream) = 0;

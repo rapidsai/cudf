@@ -152,7 +152,7 @@ class table {
    * @throws std::out_of_range
    * If i is out of the range [0, num_columns)
    *
-   * @param i Index of the desired column
+   * @param column_index Index of the desired column
    * @return A reference to the desired column
    */
   column& get_column(cudf::size_type column_index) { return *(_columns.at(column_index)); }

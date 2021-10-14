@@ -149,6 +149,32 @@ TEST_F(StringsCaseTest, Title)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected2);
 }
 
+TEST_F(StringsCaseTest, IsTitle)
+{
+  cudf::test::strings_column_wrapper input({"Sⱥⱥnich",
+                                            "Examples Abc",
+                                            "Thesé Strings",
+                                            "",
+                                            "Are The",
+                                            "Tést strings",
+                                            "",
+                                            "N2Vidia Corp",
+                                            "SNAKE",
+                                            "!Abc",
+                                            " Eagle",
+                                            "A Test",
+                                            "12345",
+                                            "Alpha Not Upper Or Lower: ƻC",
+                                            "one More"},
+                                           {1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+
+  auto results = cudf::strings::is_title(cudf::strings_column_view(input));
+
+  cudf::test::fixed_width_column_wrapper<bool> expected(
+    {1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 1, 0}, {1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
+}
+
 TEST_F(StringsCaseTest, MultiCharUpper)
 {
   cudf::test::strings_column_wrapper strings{"\u1f52 \u1f83", "\u1e98 \ufb05", "\u0149"};
