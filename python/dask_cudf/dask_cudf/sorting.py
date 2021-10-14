@@ -29,9 +29,10 @@ def _set_partitions_pre(s, divisions, ascending=True):
         partitions = (
             len(divisions) - divisions.searchsorted(s, side="right") - 1
         )
-    partitions[
-        divisions.tail(1).searchsorted(s, side="right").astype("bool")
-    ] = ((len(divisions) - 2) if ascending else 0)
+    partitions[(partitions < 0) | (partitions >= len(divisions) - 1)] = (
+        0 if ascending else (len(divisions) - 2)
+    )
+    partitions[s._columns[0].isna().values] = len(divisions) - 2
     return partitions
 
 
@@ -206,7 +207,7 @@ def quantile_divisions(df, by, npartitions):
                 divisions[col].iloc[-1] = chr(
                     ord(divisions[col].iloc[-1][0]) + 1
                 )
-        divisions = divisions.drop_duplicates()
+        divisions = divisions.drop_duplicates().sort_index()
     return divisions
 
 
