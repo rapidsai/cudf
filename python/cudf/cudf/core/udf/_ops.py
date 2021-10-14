@@ -42,6 +42,7 @@ unary_ops = [
     operator.pos,
     operator.neg,
     operator.not_,
+    operator.invert,
 ]
 
 comparison_ops = [

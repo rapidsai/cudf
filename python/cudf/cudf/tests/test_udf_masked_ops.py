@@ -180,6 +180,8 @@ def test_unary_masked(op):
         gdf = cudf.DataFrame({"a": [1.0, 2.0, None, 11.0]})
     elif op.__name__ in {"gamma"}:
         gdf = cudf.DataFrame({"a": [0.1, 2, None, 4]})
+    elif op.__name__ in {"invert"}:
+        gdf = cudf.DataFrame({"a": [-100, 128, None, 0]}, dtype="int64")
     else:
         gdf = cudf.DataFrame({"a": [-125.60, 395.2, 0.0, None]})
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
