@@ -76,7 +76,7 @@ def test_sort_values_with_nulls(data, by, ascending):
 
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(by=by, ascending=ascending)
-    expect = df.sort_values(by=by, ascending=ascending)
+        expect = df.sort_values(by=by, ascending=ascending)
 
     # check that sorted indices are identical
     dd.assert_eq(got.reset_index(), expect.reset_index(), check_index=False)
