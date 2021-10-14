@@ -54,17 +54,23 @@ def hash_partition(source_table, object columns_to_hash,
     )
 
 
-def hash(source_table, object initial_hash_values=None, int seed=0):
-    cdef vector[uint32_t] c_initial_hash = initial_hash_values or []
+def hash(source_table, str method, object initial_hash=None, int seed=0):
+    cdef vector[uint32_t] c_initial_hash = initial_hash or []
     cdef table_view c_source_view = table_view_from_table(
         source_table, ignore_index=True)
-
     cdef unique_ptr[column] c_result
+    cdef libcudf_types.hash_id c_hash_function
+    if method == "murmur3":
+        c_hash_function = libcudf_types.hash_id.HASH_MURMUR3
+    elif method == "md5":
+        c_hash_function = libcudf_types.hash_id.HASH_MD5
+    else:
+        raise ValueError(f"Unsupported hash function: {method}")
     with nogil:
         c_result = move(
             cpp_hash(
                 c_source_view,
-                libcudf_types.hash_id.HASH_MURMUR3,
+                c_hash_function,
                 c_initial_hash,
                 seed
             )
