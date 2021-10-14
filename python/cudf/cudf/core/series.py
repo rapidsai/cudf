@@ -7,6 +7,7 @@ import inspect
 import pickle
 import warnings
 from collections import abc as abc
+from hashlib import sha256
 from numbers import Number
 from shutil import get_terminal_size
 from typing import Any, MutableMapping, Optional, Set, Union
@@ -3660,7 +3661,18 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if not stop > 0:
             raise ValueError("stop must be a positive integer.")
 
-        initial_hash = [hash(self.name) & 0xFFFFFFFF] if use_name else None
+        if use_name:
+            name_hasher = sha256()
+            name_hasher.update(str(self.name).encode())
+            name_hash_bytes = name_hasher.digest()[:4]
+            name_hash_int = (
+                int.from_bytes(name_hash_bytes, "little", signed=False)
+                & 0xFFFFFFFF
+            )
+            initial_hash = [name_hash_int]
+        else:
+            initial_hash = None
+
         hashed_values = Series._from_data(
             {
                 self.name: self._hash(

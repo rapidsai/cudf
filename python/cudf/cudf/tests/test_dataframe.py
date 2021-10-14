@@ -2210,6 +2210,18 @@ def test_series_hash_encode(nrows):
     assert enc_with_name_arr[0] != enc_arr[0]
 
 
+def test_series_hash_encode_reproducible_results():
+    # Regression test to ensure that hash_encode outputs are reproducible
+    data = cudf.Series([0, 1, 2])
+    hash_result = data.hash_encode(stop=2 ** 16, use_name=False)
+    expected_result = cudf.Series([42165, 55037, 7341])
+    assert_eq(hash_result, expected_result)
+
+    hash_result_with_name = data.hash_encode(stop=2 ** 16, use_name=True)
+    expected_result_with_name = cudf.Series([36137, 39649, 58673])
+    assert_eq(hash_result_with_name, expected_result_with_name)
+
+
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["bool"])
 def test_cuda_array_interface(dtype):
 
