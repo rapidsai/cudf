@@ -69,6 +69,8 @@ def test_sort_repartition():
     ],
 )
 def test_sort_values_with_nulls(data, by, ascending, na_position):
+    np.random.seed(0)
+    cp.random.seed(0)
     df = cudf.DataFrame(data)
     ddf = dd.from_pandas(df, npartitions=5)
 
