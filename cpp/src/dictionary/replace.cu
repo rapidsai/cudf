@@ -115,7 +115,7 @@ std::unique_ptr<column> replace_nulls(dictionary_column_view const& input,
                                       rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) { return cudf::empty_like(input.parent()); }
-  if (!input.has_nulls() || !replacement.is_valid()) {
+  if (!input.has_nulls() || !replacement.is_valid(stream)) {
     return std::make_unique<cudf::column>(input.parent(), stream, mr);
   }
   CUDF_EXPECTS(input.keys().type() == replacement.type(), "keys must match scalar type");

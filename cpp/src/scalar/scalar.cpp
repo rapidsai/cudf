@@ -145,7 +145,7 @@ fixed_point_scalar<T>::fixed_point_scalar(T value,
                                           rmm::cuda_stream_view stream,
                                           rmm::mr::device_memory_resource* mr)
   : scalar{data_type{type_to_id<T>(), value.scale()}, is_valid, stream, mr},
-    _data{value.value(), stream, mr}
+    _data{value.value(stream), stream, mr}
 {
 }
 
