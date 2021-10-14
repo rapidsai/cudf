@@ -159,8 +159,7 @@ def test_arith_masked_vs_null_reflected(op):
 
 
 @pytest.mark.parametrize("op", unary_ops)
-@pytest.mark.parametrize("dtype", list(NUMERIC_TYPES))
-def test_unary_masked(op, dtype):
+def test_unary_masked(op):
     # This test should test all the typing
     # and lowering for unary ops
     def func_pdf(row):
@@ -171,7 +170,18 @@ def test_unary_masked(op, dtype):
         x = row["a"]
         return op(x) if x is not cudf.NA else cudf.NA
 
-    gdf = cudf.DataFrame({"a": [0.0, 0.5, None, 1.0]}).astype(dtype)
+    if "log" in op.__name__:
+        gdf = cudf.DataFrame({"a": [0.1, 1.0, None, 3.5, 1e8]})
+    elif op.__name__ in {"asin", "acos"}:
+        gdf = cudf.DataFrame({"a": [0.0, 0.5, None, 1.0]})
+    elif op.__name__ in {"atanh"}:
+        gdf = cudf.DataFrame({"a": [0.0, -0.5, None, 0.8]})
+    elif op.__name__ in {"acosh", "sqrt", "lgamma"}:
+        gdf = cudf.DataFrame({"a": [1.0, 2.0, None, 11.0]})
+    elif op.__name__ in {"gamma"}:
+        gdf = cudf.DataFrame({"a": [0.1, 2, None, 4]})
+    else:
+        gdf = cudf.DataFrame({"a": [-125.60, 395.2, 0.0, None]})
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
 
@@ -319,7 +329,12 @@ def test_apply_everything():
         elif x + y is pd.NA:
             return 2.5
         elif w > 100:
-            return math.sin(x) + math.sqrt(y) - operator.neg(z)
+            return (
+                math.sin(x)
+                + math.sqrt(y)
+                - (-z)
+                + math.lgamma(x) * math.fabs(-0.8) / math.radians(3.14)
+            )
         else:
             return y > 2
 

@@ -12,22 +12,35 @@ arith_ops = [
 ]
 
 unary_ops = [
-    # Trigonometry
-    math.sin,
-    math.cos,
-    math.tan,
-    math.asin,
     math.acos,
+    math.acosh,
+    math.asin,
+    math.asinh,
     math.atan,
-    # Rounding
+    math.atanh,
     math.ceil,
+    math.cos,
+    math.degrees,
+    math.erf,
+    math.erfc,
+    math.exp,
+    math.expm1,
+    math.fabs,
     math.floor,
-    # Arithmetic
+    math.gamma,
+    math.lgamma,
+    math.log,
+    math.log10,
+    math.log1p,
+    math.log2,
+    math.radians,
+    math.sin,
+    math.sinh,
     math.sqrt,
-    # Sign
+    math.tan,
+    math.tanh,
     operator.pos,
     operator.neg,
-    # Bit
     operator.not_,
 ]
 
