@@ -209,7 +209,7 @@ def quantile_divisions(df, by, npartitions):
                 divisions[col].iloc[-1] = chr(
                     ord(divisions[col].iloc[-1][0]) + 1
                 )
-        divisions = divisions.drop_duplicates().sort_index()
+        divisions = divisions.drop_duplicates()
     return divisions
 
 

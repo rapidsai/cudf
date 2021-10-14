@@ -26,9 +26,7 @@ def test_sort_values(nelem, nparts, by, ascending):
     with dask.config.set(scheduler="single-threaded"):
         got = ddf.sort_values(by=by, ascending=ascending)
     expect = df.sort_values(by=by, ascending=ascending)
-
-    # check that sorted indices are identical
-    dd.assert_eq(got.reset_index(), expect.reset_index(), check_index=False)
+    dd.assert_eq(got, expect, check_index=False)
 
 
 @pytest.mark.parametrize("ascending", [True, False])
