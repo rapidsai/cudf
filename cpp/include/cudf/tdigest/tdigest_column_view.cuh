@@ -22,7 +22,6 @@
 namespace cudf {
 namespace tdigest {
 
-namespace {
 struct tdigest_size {
   size_type const* offsets;
   __device__ size_type operator()(size_type tdigest_index)
@@ -30,7 +29,6 @@ struct tdigest_size {
     return offsets[tdigest_index + 1] - offsets[tdigest_index];
   }
 };
-};  // namespace
 
 /**
  * @brief Given a column_view containing tdigest data, an instance of this class
