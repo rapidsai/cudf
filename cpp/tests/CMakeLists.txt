@@ -368,6 +368,7 @@ ConfigureTest(STRINGS_TEST
     strings/find_multiple_tests.cpp
     strings/fixed_point_tests.cpp
     strings/floats_tests.cpp
+    strings/format_lists_tests.cpp
     strings/hash_string.cu
     strings/integers_tests.cpp
     strings/ipv4_tests.cpp
