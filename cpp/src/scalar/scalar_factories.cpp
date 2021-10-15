@@ -123,25 +123,22 @@ namespace {
 struct default_scalar_functor {
   data_type type;
 
-  template <typename T,
-           typename std::enable_if_t<not is_fixed_point<T>()>* = nullptr>
+  template <typename T, typename std::enable_if_t<not is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<cudf::scalar> operator()(rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
   {
     return make_fixed_width_scalar(data_type(type_to_id<T>()), stream, mr);
   }
 
-  template <typename T,
-            typename std::enable_if_t<is_fixed_point<T>()>* = nullptr>
+  template <typename T, typename std::enable_if_t<is_fixed_point<T>()>* = nullptr>
   std::unique_ptr<cudf::scalar> operator()(rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
   {
     auto const scale_ = numeric::scale_type{type.scale()};
-    auto s = make_fixed_point_scalar<T>(0, scale_, stream, mr);
+    auto s            = make_fixed_point_scalar<T>(0, scale_, stream, mr);
     s->set_valid_async(false, stream);
     return s;
   }
-
 };
 
 template <>

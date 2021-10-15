@@ -560,14 +560,16 @@ struct ReductionDtypeTest : public cudf::test::BaseFixture {
 
 TEST_F(ReductionDtypeTest, all_null_output)
 {
-  auto sum_agg       = cudf::make_sum_aggregation();
+  auto sum_agg = cudf::make_sum_aggregation();
 
-  auto const col = cudf::test::fixed_point_column_wrapper<int32_t>{{0, 0, 0}, {0, 0, 0}, numeric::scale_type{-2}}.release();
+  auto const col =
+    cudf::test::fixed_point_column_wrapper<int32_t>{{0, 0, 0}, {0, 0, 0}, numeric::scale_type{-2}}
+      .release();
 
   std::unique_ptr<cudf::scalar> result = cudf::reduce(*col, sum_agg, col->type());
-  ASSERT_EQ(result->is_valid(), false);
-  ASSERT_EQ(result->type().id(), col->type().id());
-  ASSERT_EQ(result->type().scale(), col->type().scale());
+  EXPECT_EQ(result->is_valid(), false);
+  EXPECT_EQ(result->type().id(), col->type().id());
+  EXPECT_EQ(result->type().scale(), col->type().scale());
 }
 
 // test case for different output precision
