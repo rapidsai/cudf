@@ -1,17 +1,21 @@
 import datetime
-import cupy
+import cupy as cp
 import numpy as np
 import pytest
 from cudf.core.df_protocol import (
     _from_dataframe, 
     _DtypeKind,
-    __dataframe__,
+    protocol_dtypes_to_cupy_dtype,
+
+
     _CuDFDataFrame,
     _CuDFColumn,
     _CuDFBuffer
 )
 
 import cudf
+from cudf.core.column import build_column
+from cudf.core.buffer import Buffer
 from cudf.testing import _utils as utils
 from cudf.testing._utils import (
     ALL_TYPES,
@@ -27,11 +31,20 @@ from typing import Any, Tuple
 
 DataFrameObject = Any
 
-def assert_buffer_equal(buffer_dtype: Tuple[_CuDFBuffer, Any], cudfcol:cudf.Series):
+def assert_buffer_equal(buffer_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
     buf, dtype = buffer_dtype
-    assert buf.__dlpack_device__() == (2, 0)
+    device_id = cp.asarray(cudfcol.data).device.id
+    assert buf.__dlpack_device__() == (2, device_id)
+    col_from_buf = build_column(Buffer(buf.ptr, buf.bufsize),
+                        protocol_dtypes_to_cupy_dtype(dtype)
+                        )
+    # check that non null values are the equals as null are represented
+    # by sentinel values in the buffer.
+    non_null_idxs = cudfcol!=None
+    assert_eq(col_from_buf[non_null_idxs], cudfcol[non_null_idxs])
 
-def assert_column_equal(col: _CuDFColumn, cudfcol:cudf.Series):
+
+def assert_column_equal(col: _CuDFColumn, cudfcol):
     assert col.size == cudfcol.size 
     assert col.offset == 0
     assert col.null_count == cudfcol.isna().sum() 
@@ -39,7 +52,22 @@ def assert_column_equal(col: _CuDFColumn, cudfcol:cudf.Series):
     if col.null_count == 0 :
         pytest.raises(RuntimeError, col._get_validity_buffer)
         assert col.get_buffers()['validity'] == None
-    assert_buffer_equal(col._get_data_buffer(), cudfcol)
+    else:
+        assert_buffer_equal(col.get_buffers()['validity'],
+                            cudfcol._get_mask_as_column().astype(cp.uint8))
+    
+    if col.dtype[0] == _DtypeKind.CATEGORICAL:
+        assert_buffer_equal(col.get_buffers()['data'], cudfcol.codes)
+        assert col.get_buffers()['offsets'] == None
+
+    elif col.dtype[0] == _DtypeKind.STRING:
+        assert_buffer_equal(col.get_buffers()['data'], cudfcol.children[1])
+        assert_buffer_equal(col.get_buffers()['offsets'], cudfcol.children[0])
+        
+    else:
+        assert_buffer_equal(col.get_buffers()['data'], cudfcol)
+        assert col.get_buffers()['offsets'] == None
+
     null_kind, null_value = col.describe_null
     if col.null_count == 0:
         assert null_kind == 0
@@ -55,7 +83,7 @@ def assert_dataframe_equal(dfo: DataFrameObject, df:cudf.DataFrame):
     assert dfo.num_chunks() == 1
     assert dfo.column_names() == list(df.columns)
     for col in df.columns:
-        assert_column_equal(dfo.get_column_by_name(col), df[col])
+        assert_column_equal(dfo.get_column_by_name(col), df[col]._column)
 
 
 def _test_from_dataframe_equals(dfobj):
