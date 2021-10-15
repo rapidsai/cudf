@@ -2574,7 +2574,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if not inplace:
             return result
 
-    def take(self, positions, keep_index=True):
+    def take(self, positions, keep_index=None):
         out = super().take(positions, keep_index)
         out.columns = self.columns
         return out

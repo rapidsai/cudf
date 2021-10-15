@@ -2985,16 +2985,13 @@ class Frame:
 
         return libcudf.sort.order_by(to_sort, ascending, na_position)
 
-    def take(self, positions, keep_index=True):
+    def take(self, positions, keep_index=None):
         """Return a new object containing the rows specified by *positions*
 
         Parameters
         ----------
         positions : array-like
-            Integer or boolean array-like specifying the rows of the output.
-            If integer, each element represents the integer index of a row.
-            If boolean, *positions* must be of the same length as *self*,
-            and represents a boolean mask.
+            Array of ints indicating which positions to take.
         keep_index : bool, default True
             Whether to retain the index in result or not.
 
@@ -3017,8 +3014,24 @@ class Frame:
         0  1.0  a
         2  3.0  c
         """
+        # TODO: When we remove keep_index we should introduce the axis
+        # parameter. We could also introduce is_copy, but that's already
+        # deprecated in pandas so it's probably unnecessary.
+        if keep_index is not None:
+            warnings.warn(
+                "keep_index is deprecated and will be removed in the future.",
+                FutureWarning,
+            )
+        else:
+            keep_index = True
+
         positions = as_column(positions)
         if is_bool_dtype(positions):
+            warnings.warn(
+                "Calling take with a boolean array is deprecated and will be "
+                "removed in the future.",
+                FutureWarning,
+            )
             return self._apply_boolean_mask(positions)
         return self._gather(positions, keep_index=keep_index)
 

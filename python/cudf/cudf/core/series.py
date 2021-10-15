@@ -111,8 +111,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
         ):
             return data
         return self._frame._from_data(
-            {self._frame.name: data},
-            index=cudf.Index(self._frame.index.take(arg)),
+            {self._frame.name: data}, index=cudf.Index(self._frame.index[arg]),
         )
 
     def __setitem__(self, key, value):
