@@ -135,8 +135,8 @@ class flatten_result {
  * @param null_precedence null order for input table
  * @param nullability force output to have nullability columns even if input columns
  * are all valid
- * @return tuple with flattened table, flattened column order, flattened null precedence,
- * vector of boolean columns (struct validity).
+ * @return `flatten_result` with flattened table, flattened column order, flattened null precedence,
+ * alongside the supporting columns and device_buffers for the flattened table.
  */
 flatten_result flatten_nested_columns(
   table_view const& input,
