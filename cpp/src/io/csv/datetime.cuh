@@ -258,7 +258,7 @@ __inline__ __device__ timestamp_type to_timestamp(char const* begin, char const*
  *
  * Moves the `begin` iterator past the parsed value.
  *
- * @param begin[in, out] Pointer to the first element of the string
+ * @param[in, out] begin Pointer to the first element of the string
  * @param end Pointer to the first element after the string
  * @return The parsed and converted value
  */
@@ -288,8 +288,9 @@ __inline__ __device__ T parse_integer(char const** begin, char const* end)
  *
  * Moves the `begin` iterator past the parsed value.
  *
- * @param begin[in, out] Pointer to the first element of the string
+ * @param[in, out] begin Pointer to the first element of the string
  * @param end Pointer to the first element after the string
+ * @param delimiter delimiter character
  * @return The parsed and converted value, zero is delimiter is not present
  */
 template <typename T>

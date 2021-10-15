@@ -43,7 +43,6 @@ def test_df_set_index_from_series():
     df2 = df.set_index(df["b"])
     assert list(df2.columns) == ["a", "b"]
     sliced_strided = df2.loc[2:6]
-    print(sliced_strided)
     assert len(sliced_strided) == 3
     assert list(sliced_strided.index.values) == [2, 4, 6]
 
@@ -55,11 +54,9 @@ def test_df_set_index_from_name():
 
     # Check set_index(column_name)
     df2 = df.set_index("b")
-    print(df2)
     # 1 less column because 'b' is used as index
     assert list(df2.columns) == ["a"]
     sliced_strided = df2.loc[2:6]
-    print(sliced_strided)
     assert len(sliced_strided) == 3
     assert list(sliced_strided.index.values) == [2, 4, 6]
 
@@ -176,7 +173,7 @@ def test_categorical_index():
     assert_eq(pdf.index, gdf1.index)
     assert_eq(
         pdf.index.codes,
-        gdf1.index.codes.astype(pdf.index.codes.dtype).to_array(),
+        gdf1.index.codes.astype(pdf.index.codes.dtype).to_numpy(),
     )
 
     assert isinstance(gdf2.index, CategoricalIndex)
@@ -184,7 +181,7 @@ def test_categorical_index():
     assert_eq(pdf.index, gdf2.index)
     assert_eq(
         pdf.index.codes,
-        gdf2.index.codes.astype(pdf.index.codes.dtype).to_array(),
+        gdf2.index.codes.astype(pdf.index.codes.dtype).to_numpy(),
     )
 
 
@@ -223,7 +220,7 @@ def test_pandas_as_index():
         pdf_category_index.codes,
         gdf_category_index.codes.astype(
             pdf_category_index.codes.dtype
-        ).to_array(),
+        ).to_numpy(),
     )
 
 
@@ -291,7 +288,7 @@ def test_set_index_as_property():
     # Check set_index(Series)
     cdf.index = cdf["b"]
 
-    assert_eq(cdf.index._values.to_array(), col2)
+    assert_eq(cdf.index.to_numpy(), col2)
 
     with pytest.raises(ValueError):
         cdf.index = [list(range(10))]
@@ -459,14 +456,14 @@ def test_index_copy_deep(idx, deep):
 def test_index_isna(idx):
     pidx = pd.Index(idx, name="idx")
     gidx = cudf.core.index.Int64Index(idx, name="idx")
-    assert_eq(gidx.isna().to_array(), pidx.isna())
+    assert_eq(gidx.isna().to_numpy(), pidx.isna())
 
 
 @pytest.mark.parametrize("idx", [[1, None, 3, None, 5]])
 def test_index_notna(idx):
     pidx = pd.Index(idx, name="idx")
     gidx = cudf.core.index.Int64Index(idx, name="idx")
-    assert_eq(gidx.notna().to_array(), pidx.notna())
+    assert_eq(gidx.notna().to_numpy(), pidx.notna())
 
 
 def test_rangeindex_slice_attr_name():
@@ -674,17 +671,13 @@ def test_index_where(data, condition, other, error):
             got = gs.where(gs_condition, other=gs_other)
             np.testing.assert_array_equal(
                 expect.codes,
-                got.codes.astype(expect.codes.dtype).fillna(-1).to_array(),
+                got.codes.astype(expect.codes.dtype).fillna(-1).to_numpy(),
             )
             assert_eq(expect.categories, got.categories)
         else:
             assert_eq(
-                ps.where(ps_condition, other=ps_other).fillna(
-                    gs._values.default_na_value()
-                ),
-                gs.where(gs_condition, other=gs_other)
-                .to_pandas()
-                .fillna(gs._values.default_na_value()),
+                ps.where(ps_condition, other=ps_other),
+                gs.where(gs_condition, other=gs_other).to_pandas(),
             )
     else:
         assert_exceptions_equal(

@@ -514,7 +514,7 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
  *        `replacement_values`, that is, replace all `values_to_replace[i]` present in `input_col`
  *        with `replacement_values[i]`.
  *
- * @param[in] col column_view of the data to be modified
+ * @param[in] input_col column_view of the data to be modified
  * @param[in] values_to_replace column_view of the old values to be replaced
  * @param[in] replacement_values column_view of the new values
  *

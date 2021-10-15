@@ -28,7 +28,6 @@ import cudf
 from cudf._lib.datetime import extract_quarter, is_leap_year
 from cudf._lib.filling import sequence
 from cudf._lib.search import search_sorted
-from cudf._lib.table import Table
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     _is_scalar_or_zero_d_array,
@@ -51,7 +50,8 @@ from cudf.core.column import (
 from cudf.core.column.column import as_column, concat_columns
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
-from cudf.core.frame import Frame, SingleColumnFrame
+from cudf.core.frame import Frame
+from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type
 from cudf.utils.utils import cached_property, search_range
@@ -61,7 +61,7 @@ T = TypeVar("T", bound="Frame")
 
 def _lexsorted_equal_range(
     idx: Union[GenericIndex, cudf.MultiIndex],
-    key_as_table: Table,
+    key_as_table: Frame,
     is_sorted: bool,
 ) -> Tuple[int, int, Optional[ColumnBase]]:
     """Get equal range for key in lexicographically sorted index. If index
@@ -610,7 +610,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 "21.10 or older will no longer be deserializable "
                 "after version 21.12. Please load and resave any "
                 "pickles before upgrading to version 22.02.",
-                DeprecationWarning,
+                FutureWarning,
             )
             header["columns"] = [header.pop("index_column")]
             header["column_names"] = pickle.dumps(
@@ -825,7 +825,9 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
                 "is specified."
             )
 
-        key_as_table = Table({"None": as_column(key, length=1)})
+        key_as_table = cudf.core.frame.Frame(
+            {"None": as_column(key, length=1)}
+        )
         lower_bound, upper_bound, sort_inds = _lexsorted_equal_range(
             self, key_as_table, is_sorted
         )
@@ -870,8 +872,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
         # Not sorted and not unique. Return a boolean mask
         mask = cupy.full(self._data.nrows, False)
-        true_inds = sort_inds.slice(lower_bound, upper_bound).to_gpu_array()
-        mask[cupy.array(true_inds)] = True
+        true_inds = sort_inds.slice(lower_bound, upper_bound).values
+        mask[true_inds] = True
         return mask
 
     def __sizeof__(self):
@@ -2147,7 +2149,9 @@ class StringIndex(GenericIndex):
         super().__init__(values, **kwargs)
 
     def to_pandas(self):
-        return pd.Index(self.to_array(), name=self.name, dtype="object")
+        return pd.Index(
+            self.to_numpy(na_value=None), name=self.name, dtype="object"
+        )
 
     def take(self, indices):
         return self._values[indices]
