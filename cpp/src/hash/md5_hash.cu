@@ -68,12 +68,17 @@ static const __device__ __constant__ uint32_t md5_hash_constants[64] = {
   0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1, 0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391,
 };
 
-template <int capacity>
+template <int capacity, typename hash_step_callable>
 struct hash_circular_buffer {
   uint8_t storage[capacity];
   uint8_t* cur;
+  uint32_t* hash_values;
+  hash_step_callable hash_step;
 
-  CUDA_DEVICE_CALLABLE hash_circular_buffer() : cur(storage) {}
+  CUDA_DEVICE_CALLABLE hash_circular_buffer(uint32_t* hash_values)
+    : cur{storage}, hash_values{hash_values}
+  {
+  }
 
   CUDA_DEVICE_CALLABLE uint8_t* begin() { return storage; }
   CUDA_DEVICE_CALLABLE const uint8_t* begin() const { return storage; }
@@ -85,8 +90,7 @@ struct hash_circular_buffer {
 
   CUDA_DEVICE_CALLABLE int available_space() const { return capacity - size(); }
 
-  template <typename hash_step_callable>
-  CUDA_DEVICE_CALLABLE void put(uint8_t const* in, int size, hash_step_callable hash_step)
+  CUDA_DEVICE_CALLABLE void put(uint8_t const* in, int size)
   {
     int space      = available_space();
     int copy_start = 0;
@@ -94,7 +98,7 @@ struct hash_circular_buffer {
       // The buffer will be filled by this chunk of data. Copy a chunk of the
       // data to fill the buffer and trigger a hash step.
       memcpy(cur, in + copy_start, space);
-      hash_step();
+      hash_step(storage, hash_values);
       size -= space;
       copy_start += space;
       cur   = begin();
@@ -107,13 +111,12 @@ struct hash_circular_buffer {
     cur += size;
   }
 
-  template <typename hash_step_callable>
-  CUDA_DEVICE_CALLABLE void pad(int space_to_leave, hash_step_callable hash_step)
+  CUDA_DEVICE_CALLABLE void pad(int space_to_leave)
   {
     int space = available_space();
     if (space_to_leave > space) {
       memset(cur, 0x00, space);
-      hash_step();
+      hash_step(storage, hash_values);
       cur   = begin();
       space = available_space();
     }
@@ -139,69 +142,20 @@ auto CUDA_DEVICE_CALLABLE get_data(string_view const& k)
   return thrust::make_pair(reinterpret_cast<uint8_t const*>(k.data()), k.size_bytes());
 }
 
-/**
- * @brief Core MD5 algorithm implementation. Processes a single 64-byte chunk,
- * updating the hash value so far. Does not zero out the buffer contents.
- */
-template <typename hash_circular_buffer>
-void CUDA_DEVICE_CALLABLE md5_hash_step(hash_circular_buffer const& buffer, uint32_t* hash_values)
-{
-  uint32_t A = hash_values[0];
-  uint32_t B = hash_values[1];
-  uint32_t C = hash_values[2];
-  uint32_t D = hash_values[3];
-
-  for (unsigned int j = 0; j < 64; j++) {
-    uint32_t F;
-    uint32_t g;
-    switch (j / 16) {
-      case 0:
-        F = (B & C) | ((~B) & D);
-        g = j;
-        break;
-      case 1:
-        F = (D & B) | ((~D) & C);
-        g = (5 * j + 1) % 16;
-        break;
-      case 2:
-        F = B ^ C ^ D;
-        g = (3 * j + 5) % 16;
-        break;
-      case 3:
-        F = C ^ (B | (~D));
-        g = (7 * j) % 16;
-        break;
-    }
-
-    uint32_t buffer_element_as_int;
-    memcpy(&buffer_element_as_int, &buffer[g * 4], 4);
-    F = F + A + md5_hash_constants[j] + buffer_element_as_int;
-    A = D;
-    D = C;
-    C = B;
-    B = B + __funnelshift_l(F, F, md5_shift_constants[((j / 16) * 4) + (j % 4)]);
-  }
-
-  hash_values[0] += A;
-  hash_values[1] += B;
-  hash_values[2] += C;
-  hash_values[3] += D;
-}
-
 struct MD5Hasher {
-  char* result_location;
-  uint64_t message_length = 0;
-  uint32_t hash_values[4] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
-  hash_circular_buffer<64> buffer;
-
  public:
-  CUDA_DEVICE_CALLABLE MD5Hasher(char* result_location) : result_location(result_location) {}
+  CUDA_DEVICE_CALLABLE MD5Hasher(char* result_location)
+    : result_location(result_location), buffer(hash_values)
+  {
+  }
 
   CUDA_DEVICE_CALLABLE ~MD5Hasher()
   {
-    // Add a one bit flag (10000000) to signal the end of the message
+    // On destruction, finalize the message buffer and write out the current
+    // hexadecimal hash value to the result location.
+    // Add a one bit flag (10000000) to signal the end of the message.
     uint8_t constexpr end_of_message = 0x80;
-    // The message length is appended to the end of the last chunk processed
+    // The message length is appended to the end of the last chunk processed.
     uint64_t const message_length_in_bits = message_length * 8;
 
     put(&end_of_message, sizeof(end_of_message), false);
@@ -231,16 +185,66 @@ struct MD5Hasher {
  private:
   void CUDA_DEVICE_CALLABLE put(uint8_t const* in, int size, bool extend_message_length)
   {
-    auto hash_step = [this]() { md5_hash_step(buffer, hash_values); };
-    buffer.put(in, size, hash_step);
+    buffer.put(in, size);
     if (extend_message_length) { message_length += size; }
   }
 
-  void CUDA_DEVICE_CALLABLE pad(int space_to_leave)
-  {
-    auto hash_step = [this]() { md5_hash_step(buffer, hash_values); };
-    buffer.pad(space_to_leave, hash_step);
-  }
+  void CUDA_DEVICE_CALLABLE pad(int space_to_leave) { buffer.pad(space_to_leave); }
+
+  /**
+   * @brief Core MD5 algorithm implementation. Processes a single 64-byte chunk,
+   * updating the hash value so far. Does not zero out the buffer contents.
+   */
+  struct md5_hash_step {
+    void CUDA_DEVICE_CALLABLE operator()(const uint8_t* buffer, uint32_t* hash_values)
+    {
+      uint32_t A = hash_values[0];
+      uint32_t B = hash_values[1];
+      uint32_t C = hash_values[2];
+      uint32_t D = hash_values[3];
+
+      for (int j = 0; j < 64; j++) {
+        uint32_t F;
+        uint32_t g;
+        switch (j / 16) {
+          case 0:
+            F = (B & C) | ((~B) & D);
+            g = j;
+            break;
+          case 1:
+            F = (D & B) | ((~D) & C);
+            g = (5 * j + 1) % 16;
+            break;
+          case 2:
+            F = B ^ C ^ D;
+            g = (3 * j + 5) % 16;
+            break;
+          case 3:
+            F = C ^ (B | (~D));
+            g = (7 * j) % 16;
+            break;
+        }
+
+        uint32_t buffer_element_as_int;
+        memcpy(&buffer_element_as_int, &buffer[g * 4], 4);
+        F = F + A + md5_hash_constants[j] + buffer_element_as_int;
+        A = D;
+        D = C;
+        C = B;
+        B = B + __funnelshift_l(F, F, md5_shift_constants[((j / 16) * 4) + (j % 4)]);
+      }
+
+      hash_values[0] += A;
+      hash_values[1] += B;
+      hash_values[2] += C;
+      hash_values[3] += D;
+    }
+  };
+
+  char* result_location;
+  hash_circular_buffer<64, md5_hash_step> buffer;
+  uint64_t message_length = 0;
+  uint32_t hash_values[4] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
 };
 
 template <typename Hasher>
