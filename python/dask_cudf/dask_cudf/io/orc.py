@@ -115,12 +115,14 @@ def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
     return dd.core.new_dd_object(dsk, name, meta, divisions)
 
 
-def write_orc_partition(df, path, fs, filename, compression=None):
+def write_orc_partition(df, path, fs, filename, compression, stripe_size_bytes,
+                        stripe_size_rows, row_index_stride):
     full_path = fs.sep.join([path, filename])
     with fs.open(full_path, mode="wb") as out_file:
         if not isinstance(out_file, IOBase):
             out_file = BufferedWriter(out_file)
-        cudf.io.to_orc(df, out_file, compression=compression)
+        cudf.io.to_orc(df, out_file, compression=compression, stripe_size_bytes=stripe_size_bytes,
+                       stripe_size_rows=stripe_size_rows, row_index_stride=row_index_stride)
     return full_path
 
 
@@ -130,6 +132,9 @@ def to_orc(
     write_index=True,
     storage_options=None,
     compression=None,
+    stripe_size_bytes=None,
+    stripe_size_rows=None,
+    row_index_stride=None,
     compute=True,
     **kwargs,
 ):
@@ -146,6 +151,15 @@ def to_orc(
     storage_options: None or dict
         Further parameters to pass to the bytes backend.
     compression : string or dict, optional
+    stripe_size_bytes: integer or None, default None
+        Maximum size of each stripe of the output.
+        If None, 67108864 (64MB) will be used.
+    stripe_size_rows: integer or None, default None 1000000
+        Maximum number of rows of each stripe of the output.
+        If None, 1000000 will be used.
+    row_index_stride: integer or None, default None 10000
+        Row index stride (maximum number of rows in each row group).
+        If None, 10000 will be used.
     compute : bool, optional
         If True (default) then the result is computed immediately. If False
         then a ``dask.delayed`` object is returned for future computation.
@@ -178,7 +192,8 @@ def to_orc(
     # write parts
     dwrite = delayed(write_orc_partition)
     parts = [
-        dwrite(d, path, fs, filename, compression=compression)
+        dwrite(d, path, fs, filename, compression, stripe_size_bytes,
+               stripe_size_rows, row_index_stride)
         for d, filename in zip(df.to_delayed(), filenames)
     ]
 
