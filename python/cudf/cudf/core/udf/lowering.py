@@ -155,6 +155,10 @@ def register_const_op(op):
     cuda_lower(op, types.Number, MaskedType)(to_lower_op)
     cuda_lower(op, MaskedType, types.Boolean)(to_lower_op)
     cuda_lower(op, types.Boolean, MaskedType)(to_lower_op)
+    cuda_lower(op, MaskedType, types.NPDatetime)(to_lower_op)
+    cuda_lower(op, types.NPDatetime, MaskedType)(to_lower_op)
+    cuda_lower(op, MaskedType, types.NPTimedelta)(to_lower_op)
+    cuda_lower(op, types.NPTimedelta, MaskedType)(to_lower_op)
 
 
 # register all lowering at init
@@ -202,6 +206,8 @@ def pack_return_masked_impl(context, builder, sig, args):
 
 @cuda_lower(api.pack_return, types.Boolean)
 @cuda_lower(api.pack_return, types.Number)
+@cuda_lower(api.pack_return, types.NPDatetime)
+@cuda_lower(api.pack_return, types.NPTimedelta)
 def pack_return_scalar_impl(context, builder, sig, args):
     outdata = cgutils.create_struct_proxy(sig.return_type)(context, builder)
     outdata.value = args[0]
@@ -271,6 +277,8 @@ def cast_masked_to_masked(context, builder, fromty, toty, val):
 # Masked constructor for use in a kernel for testing
 @lower_builtin(api.Masked, types.Boolean, types.boolean)
 @lower_builtin(api.Masked, types.Number, types.boolean)
+@lower_builtin(api.Masked, types.NPDatetime, types.boolean)
+@lower_builtin(api.Masked, types.NPTimedelta, types.boolean)
 def masked_constructor(context, builder, sig, args):
     ty = sig.return_type
     value, valid = args
