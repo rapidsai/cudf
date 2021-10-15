@@ -61,8 +61,8 @@ def test_sort_repartition():
     "data",
     [
         {
-            "a": list(range(50)) + [None] * 50 + list(range(50, 100)),
-            "b": [None] * 100 + list(range(100, 150)),
+            "a": [None] * 100 + list(range(100, 150)),
+            "b": list(range(50)) + [None] * 50 + list(range(50, 100)),
         },
         {"a": list(range(15)) + [None] * 5, "b": list(reversed(range(20)))},
     ],
