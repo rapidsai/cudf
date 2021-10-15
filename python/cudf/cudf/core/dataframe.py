@@ -3182,6 +3182,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3         4      bird          0          1.0          0.0          0.0
         4         5      fish          2          0.0          0.0          1.0
         """
+
+        warnings.warn(
+            "DataFrame.one_hot_encoding is deprecated and will be removed in "
+            "future, use `get_dummies` instead.",
+            FutureWarning,
+        )
+
         if hasattr(cats, "to_arrow"):
             cats = cats.to_arrow().to_pylist()
         else:

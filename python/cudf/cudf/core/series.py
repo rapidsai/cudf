@@ -7,6 +7,7 @@ import inspect
 import pickle
 import warnings
 from collections import abc as abc
+from hashlib import sha256
 from numbers import Number
 from shutil import get_terminal_size
 from typing import Any, MutableMapping, Optional, Set, Union
@@ -2699,6 +2700,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3    0.0
         dtype: float64]
         """
+
+        warnings.warn(
+            "Series.one_hot_encoding is deprecated and will be removed in "
+            "future, use `get_dummies` instead.",
+            FutureWarning,
+        )
+
         if hasattr(cats, "to_arrow"):
             cats = cats.to_pandas()
         else:
@@ -3134,8 +3142,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return Series(val_counts.index.sort_values(), name=self.name)
 
     def round(self, decimals=0, how="half_even"):
-        if not isinstance(decimals, int):
-            raise ValueError("decimals must be an int")
+        if not is_integer(decimals):
+            raise ValueError(
+                f"decimals must be an int, got {type(decimals).__name__}"
+            )
+        decimals = int(decimals)
         return super().round(decimals, how)
 
     def cov(self, other, min_periods=None):
@@ -3465,130 +3476,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             res = res / float(res._column.sum())
         return res
 
-    def scale(self):
-        """
-        Scale values to [0, 1] in float64
-
-        Returns
-        -------
-        Series
-            A new series with values scaled to [0, 1].
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([10, 11, 12, 0.5, 1])
-        >>> series
-        0    10.0
-        1    11.0
-        2    12.0
-        3     0.5
-        4     1.0
-        dtype: float64
-        >>> series.scale()
-        0    0.826087
-        1    0.913043
-        2    1.000000
-        3    0.000000
-        4    0.043478
-        dtype: float64
-        """
-        vmin = self.min()
-        vmax = self.max()
-        scaled = (self - vmin) / (vmax - vmin)
-        scaled._index = self._index.copy(deep=False)
-        return scaled
-
-    # Absolute
-    def abs(self):
-        """Absolute value of each element of the series.
-
-        Returns
-        -------
-        abs
-            Series containing the absolute value of each element.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([-1.10, 2, -3.33, 4])
-        >>> series
-        0   -1.10
-        1    2.00
-        2   -3.33
-        3    4.00
-        dtype: float64
-        >>> series.abs()
-        0    1.10
-        1    2.00
-        2    3.33
-        3    4.00
-        dtype: float64
-        """
-        return self._unaryop("abs")
-
-    # Rounding
-    def ceil(self):
-        """
-        Rounds each value upward to the smallest integral value not less
-        than the original.
-
-        Returns
-        -------
-        res
-            Returns a new Series with ceiling value of each element.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([1.1, 2.8, 3.5, 4.5])
-        >>> series
-        0    1.1
-        1    2.8
-        2    3.5
-        3    4.5
-        dtype: float64
-        >>> series.ceil()
-        0    2.0
-        1    3.0
-        2    4.0
-        3    5.0
-        dtype: float64
-        """
-        return self._unaryop("ceil")
-
-    def floor(self):
-        """Rounds each value downward to the largest integral value not greater
-        than the original.
-
-        Returns
-        -------
-        res
-            Returns a new Series with floor of each element.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([-1.9, 2, 0.2, 1.5, 0.0, 3.0])
-        >>> series
-        0   -1.9
-        1    2.0
-        2    0.2
-        3    1.5
-        4    0.0
-        5    3.0
-        dtype: float64
-        >>> series.floor()
-        0   -2.0
-        1    2.0
-        2    0.0
-        3    1.0
-        4    0.0
-        5    3.0
-        dtype: float64
-        """
-        return self._unaryop("floor")
-
     def hash_values(self, method="murmur3"):
         """Compute the hash of values in this column.
 
@@ -3660,7 +3547,18 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         if not stop > 0:
             raise ValueError("stop must be a positive integer.")
 
-        initial_hash = [hash(self.name) & 0xFFFFFFFF] if use_name else None
+        if use_name:
+            name_hasher = sha256()
+            name_hasher.update(str(self.name).encode())
+            name_hash_bytes = name_hasher.digest()[:4]
+            name_hash_int = (
+                int.from_bytes(name_hash_bytes, "little", signed=False)
+                & 0xFFFFFFFF
+            )
+            initial_hash = [name_hash_int]
+        else:
+            initial_hash = None
+
         hashed_values = Series._from_data(
             {
                 self.name: self._hash(

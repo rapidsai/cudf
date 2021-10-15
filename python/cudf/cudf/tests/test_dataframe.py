@@ -2068,6 +2068,24 @@ def test_unaryops_df(pdf, gdf, unaryop):
     assert_eq(d, g)
 
 
+@pytest.mark.parametrize("unary_func", ["abs", "floor", "ceil"])
+def test_unary_func_df(pdf, unary_func):
+    np.random.seed(0)
+    disturbance = pd.Series(np.random.rand(10))
+    pdf = pdf - 5 + disturbance
+    d = pdf.apply(getattr(np, unary_func))
+    g = getattr(cudf.from_pandas(pdf), unary_func)()
+    assert_eq(d, g)
+
+
+def test_scale_df(gdf):
+    got = (gdf - 5).scale()
+    expect = cudf.DataFrame(
+        {"x": np.linspace(0.0, 1.0, 10), "y": np.linspace(0.0, 1.0, 10)}
+    )
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "func",
     [
@@ -2208,6 +2226,18 @@ def test_series_hash_encode(nrows):
 
     enc_with_name_arr = s.hash_encode(num_features, use_name=True).to_numpy()
     assert enc_with_name_arr[0] != enc_arr[0]
+
+
+def test_series_hash_encode_reproducible_results():
+    # Regression test to ensure that hash_encode outputs are reproducible
+    data = cudf.Series([0, 1, 2])
+    hash_result = data.hash_encode(stop=2 ** 16, use_name=False)
+    expected_result = cudf.Series([42165, 55037, 7341])
+    assert_eq(hash_result, expected_result)
+
+    hash_result_with_name = data.hash_encode(stop=2 ** 16, use_name=True)
+    expected_result_with_name = cudf.Series([36137, 39649, 58673])
+    assert_eq(hash_result_with_name, expected_result_with_name)
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["bool"])

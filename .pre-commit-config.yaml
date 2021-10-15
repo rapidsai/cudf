@@ -1,6 +1,6 @@
 repos:
-      - repo: https://github.com/pycqa/isort
-        rev: 5.6.4
+      - repo: https://github.com/PyCQA/isort
+        rev: 5.9.3
         hooks:
               - id: isort
                 alias: isort-cudf
@@ -27,13 +27,13 @@ repos:
                 name: isort-dask-cudf
                 args: ["--settings-path=python/dask_cudf/setup.cfg"]
                 files: python/dask_cudf/.*
-      - repo: https://github.com/ambv/black
+      - repo: https://github.com/psf/black
         rev: 19.10b0
         hooks:
               - id: black
                 files: python/.*
-      - repo: https://gitlab.com/pycqa/flake8
-        rev: 3.8.3
+      - repo: https://github.com/PyCQA/flake8
+        rev: 4.0.1
         hooks:
               - id: flake8
                 alias: flake8
@@ -65,8 +65,8 @@ repos:
               - id: mypy
                 args: ["--config-file=python/cudf/setup.cfg", "python/cudf/cudf"]
                 pass_filenames: false
-      - repo: https://github.com/pycqa/pydocstyle
-        rev: 6.0.0
+      - repo: https://github.com/PyCQA/pydocstyle
+        rev: 6.1.1
         hooks:
               - id: pydocstyle
                 args: ["--config=python/.flake8"]
