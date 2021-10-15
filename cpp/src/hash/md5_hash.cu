@@ -255,16 +255,16 @@ struct MD5Hasher {
 
 template <typename Hasher>
 struct ListHasherDispatcher {
+  Hasher* hasher;
+  column_device_view col;
+
   template <typename Key>
-  void CUDA_DEVICE_CALLABLE operator()(column_device_view data_col,
-                                       size_type offset_begin,
-                                       size_type offset_end,
-                                       Hasher& hasher) const
+  void CUDA_DEVICE_CALLABLE operator()(size_type offset_begin, size_type offset_end) const
   {
     if constexpr ((is_fixed_width<Key>() && !is_chrono<Key>()) ||
                   std::is_same_v<Key, string_view>) {
       for (size_type i = offset_begin; i < offset_end; i++) {
-        if (data_col.is_valid(i)) { hasher.process(data_col.element<Key>(i)); }
+        if (col.is_valid(i)) { hasher->process(col.element<Key>(i)); }
       }
     } else {
       cudf_assert(false && "Unsupported type for hash function.");
@@ -283,17 +283,6 @@ struct HasherDispatcher {
     if constexpr ((is_fixed_width<Key>() && !is_chrono<Key>()) ||
                   std::is_same_v<Key, string_view>) {
       hasher->process(col.element<Key>(row_index));
-    } else if constexpr (std::is_same_v<Key, list_view>) {
-      auto const data    = col.child(lists_column_view::child_column_index);
-      auto const offsets = col.child(lists_column_view::offsets_column_index);
-
-      if (data.type().id() == type_id::LIST) cudf_assert(false && "Nested list unsupported");
-
-      auto const offset_begin = offsets.element<size_type>(row_index);
-      auto const offset_end   = offsets.element<size_type>(row_index + 1);
-
-      cudf::type_dispatcher(
-        data.type(), ListHasherDispatcher<Hasher>{}, data, offset_begin, offset_end, *hasher);
     } else {
       cudf_assert(false && "Unsupported type for hash function.");
     }
@@ -346,19 +335,32 @@ std::unique_ptr<column> md5_hash(table_view const& input,
   auto const device_input = table_device_view::create(input, stream);
 
   // Hash each row, hashing each element sequentially left to right
-  thrust::for_each(rmm::exec_policy(stream),
-                   thrust::make_counting_iterator(0),
-                   thrust::make_counting_iterator(input.num_rows()),
-                   [d_chars, device_input = *device_input] __device__(auto row_index) {
-                     MD5Hasher hasher(d_chars + (row_index * digest_size));
-                     for (auto const& col : device_input) {
-                       if (col.is_valid(row_index)) {
-                         HasherDispatcher<MD5Hasher> hasher_dispatcher{&hasher, col};
-                         cudf::type_dispatcher<dispatch_storage_type>(
-                           col.type(), hasher_dispatcher, row_index);
-                       }
-                     }
-                   });
+  thrust::for_each(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(input.num_rows()),
+    [d_chars, device_input = *device_input] __device__(auto row_index) {
+      MD5Hasher hasher(d_chars + (row_index * digest_size));
+      for (auto const& col : device_input) {
+        if (col.is_valid(row_index)) {
+          if (col.type().id() == type_id::LIST) {
+            auto const data_col = col.child(lists_column_view::child_column_index);
+            auto const offsets  = col.child(lists_column_view::offsets_column_index);
+            if (data_col.type().id() == type_id::LIST) {
+              cudf_assert(false && "Nested list unsupported");
+            }
+            auto const offset_begin = offsets.element<size_type>(row_index);
+            auto const offset_end   = offsets.element<size_type>(row_index + 1);
+            ListHasherDispatcher<MD5Hasher> list_hasher_dispatcher{&hasher, data_col};
+            cudf::type_dispatcher<dispatch_storage_type>(
+              data_col.type(), list_hasher_dispatcher, offset_begin, offset_end);
+          } else {
+            HasherDispatcher<MD5Hasher> hasher_dispatcher{&hasher, col};
+            cudf::type_dispatcher<dispatch_storage_type>(col.type(), hasher_dispatcher, row_index);
+          }
+        }
+      }
+    });
 
   return make_strings_column(
     input.num_rows(), std::move(offsets_column), std::move(chars_column), 0, std::move(null_mask));
