@@ -2281,22 +2281,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             ignore_index=ignore_index,
         )
 
-    def _n_largest_or_smallest(self, largest, n, keep):
-        direction = largest
-        if keep == "first":
-            if n < 0:
-                n = 0
-            return self.sort_values(ascending=not direction).head(n)
-        elif keep == "last":
-            data = self.sort_values(ascending=direction)
-            if n <= 0:
-                data = data[-n:-n]
-            else:
-                data = data.tail(n)
-            return data[::-1]
-        else:
-            raise ValueError('keep must be either "first", "last"')
-
     def nlargest(self, n=5, keep="first"):
         """Returns a new Series of the *n* largest element.
 
@@ -2357,7 +2341,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Brunei      434000
         dtype: int64
         """
-        return self._n_largest_or_smallest(n=n, keep=keep, largest=True)
+        return self._n_largest_or_smallest(True, n, [self.name], keep)
 
     def nsmallest(self, n=5, keep="first"):
         """
@@ -2432,7 +2416,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Tuvalu      11300
         dtype: int64
         """
-        return self._n_largest_or_smallest(n=n, keep=keep, largest=False)
+        return self._n_largest_or_smallest(False, n, [self.name], keep)
 
     def argsort(
         self,

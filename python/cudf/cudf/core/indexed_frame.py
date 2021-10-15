@@ -462,3 +462,36 @@ class IndexedFrame(Frame):
             ),
             keep_index=not ignore_index,
         )
+
+    def _n_largest_or_smallest(self, largest, n, columns, keep):
+        # Get column to operate on
+        if isinstance(columns, str):
+            columns = [columns]
+
+        if len(self) == 0:
+            return self
+
+        if keep == "first":
+            if n < 0:
+                n = 0
+
+            # argsort the `by` column
+            return self.take(
+                self._get_columns_by_label(columns)._get_sorted_inds(
+                    ascending=not largest
+                )[:n],
+                keep_index=True,
+            )
+        elif keep == "last":
+            indices = self._get_columns_by_label(columns)._get_sorted_inds(
+                ascending=largest
+            )
+
+            if n <= 0:
+                # Empty slice.
+                indices = indices[0:0]
+            else:
+                indices = indices[: -n - 1 : -1]
+            return self.take(indices, keep_index=True)
+        else:
+            raise ValueError('keep must be either "first", "last"')

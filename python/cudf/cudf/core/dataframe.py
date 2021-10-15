@@ -3407,7 +3407,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Italy     59000000  1937894      IT
         Brunei      434000    12128      BN
         """
-        return self._n_largest_or_smallest("nlargest", n, columns, keep)
+        return self._n_largest_or_smallest(True, n, columns, keep)
 
     def nsmallest(self, n, columns, keep="first"):
         """Get the rows of the DataFrame sorted by the n smallest value of *columns*
@@ -3475,26 +3475,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Tuvalu         11300   38      TV
         Nauru         337000  182      NR
         """
-        return self._n_largest_or_smallest("nsmallest", n, columns, keep)
-
-    def _n_largest_or_smallest(self, method, n, columns, keep):
-        # Get column to operate on
-        if not isinstance(columns, str):
-            [column] = columns
-        else:
-            column = columns
-
-        col = self[column].reset_index(drop=True)
-        # Operate
-        sorted_series = getattr(col, method)(n=n, keep=keep)
-        df = DataFrame()
-        new_positions = sorted_series.index
-        for k in self._data.names:
-            if k == column:
-                df[k] = sorted_series
-            else:
-                df[k] = self[k].reset_index(drop=True).take(new_positions)
-        return df.set_index(self.index.take(new_positions))
+        return self._n_largest_or_smallest(False, n, columns, keep)
 
     def transpose(self):
         """Transpose index and columns.
