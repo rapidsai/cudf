@@ -1366,20 +1366,6 @@ class MultiIndex(Frame, BaseIndex):
             ascending=[False] * len(self.levels), null_position=None
         )
 
-    def sort_values(self, return_indexer=False, ascending=True, key=None):
-        if key is not None:
-            raise NotImplementedError("key parameter is not yet implemented.")
-
-        indices = cudf.Series._from_data(
-            {None: self._get_sorted_inds(ascending=ascending)}
-        )
-        index_sorted = as_index(self.take(indices), name=self.names)
-
-        if return_indexer:
-            return index_sorted, cupy.asarray(indices)
-        else:
-            return index_sorted
-
     def fillna(self, value):
         """
         Fill null values with the specified value.

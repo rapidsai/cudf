@@ -5,7 +5,6 @@ from __future__ import annotations, division, print_function
 import pickle
 from typing import Any, Set
 
-import cupy
 import pandas as pd
 
 import cudf
@@ -974,7 +973,13 @@ class BaseIndex(Serializable):
             return intersection_result.sort_values()
         return intersection_result
 
-    def sort_values(self, return_indexer=False, ascending=True, key=None):
+    def sort_values(
+        self,
+        return_indexer=False,
+        ascending=True,
+        na_position="last",
+        key=None,
+    ):
         """
         Return a sorted copy of the index, and optionally return the indices
         that sorted the index itself.
@@ -985,6 +990,9 @@ class BaseIndex(Serializable):
             Should the indices that would sort the index be returned.
         ascending : bool, default True
             Should the index values be sorted in an ascending order.
+        na_position : {'first' or 'last'}, default 'last'
+            Argument 'first' puts NaNs at the beginning, 'last' puts NaNs at
+            the end.
         key : None, optional
             This parameter is NON-FUNCTIONAL.
 
@@ -1051,11 +1059,11 @@ class BaseIndex(Serializable):
         if key is not None:
             raise NotImplementedError("key parameter is not yet implemented.")
 
-        indices = self._values.argsort(ascending=ascending)
-        index_sorted = cudf.Index(self.take(indices), name=self.name)
+        indices = self.argsort(ascending=ascending, na_position=na_position)
+        index_sorted = self.take(indices)
 
         if return_indexer:
-            return index_sorted, cupy.asarray(indices)
+            return index_sorted, indices
         else:
             return index_sorted
 
