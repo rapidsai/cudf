@@ -7,6 +7,7 @@ import numbers
 import pickle
 import warnings
 from collections.abc import Sequence
+from numbers import Integral
 from typing import Any, List, MutableMapping, Optional, Tuple, Union
 
 import cupy
@@ -873,11 +874,26 @@ class MultiIndex(Frame, BaseIndex):
         return obj._set_names(column_names)
 
     def __getitem__(self, index):
-        if isinstance(index, int):
-            # we are indexing into a single row of the MultiIndex,
-            # return that row as a tuple:
-            return self.take(index).to_pandas()[0]
-        return self.take(index)
+        flatten = isinstance(index, int)
+
+        if isinstance(index, (Integral, Sequence)):
+            index = np.array(index)
+        elif isinstance(index, slice):
+            start, stop, step = index.indices(len(self))
+            index = column.arange(start, stop, step)
+        result = MultiIndex.from_frame(self.to_frame(index=False).take(index))
+
+        # we are indexing into a single row of the MultiIndex,
+        # return that row as a tuple:
+        if flatten:
+            return result.to_pandas()[0]
+
+        if self._codes is not None:
+            result._codes = self._codes.take(index)
+        if self._levels is not None:
+            result._levels = self._levels
+        result.names = self.names
+        return result
 
     def to_frame(self, index=True, name=None):
         # TODO: Currently this function makes a shallow copy, which is
