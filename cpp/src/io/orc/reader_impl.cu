@@ -475,7 +475,7 @@ class aggregate_orc_metadata {
                   bool& has_timestamp_column)
   {
     if (level == selection.size()) { selection.emplace_back(); }
-    selection[level].push_back({id, types[id].subtypes.size()});
+    selection[level].push_back({id, static_cast<uint32_t>(types[id].subtypes.size())});
     if (types[id].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
 
     for (const auto child_id : types[id].subtypes) {
