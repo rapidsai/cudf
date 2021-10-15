@@ -475,18 +475,13 @@ class aggregate_orc_metadata {
                   bool& has_timestamp_column)
   {
     if (level == selection.size()) { selection.emplace_back(); }
-    selection[level].push_back({id, 0});
-    const int col_id = selection[level].size() - 1;
+    selection[level].push_back({id, types[id].subtypes.size()});
     if (types[id].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
 
-    if (types[id].kind == orc::MAP or types[id].kind == orc::LIST or
-        types[id].kind == orc::STRUCT) {
-      for (const auto child_id : types[id].subtypes) {
-        // Since nested column needs to be processed before its child can be processed,
-        // child column is being added to next level
-        add_column(selection, types, level + 1, child_id, has_timestamp_column);
-      }
-      selection[level][col_id].num_children = types[id].subtypes.size();
+    for (const auto child_id : types[id].subtypes) {
+      // Since nested column needs to be processed before its child can be processed,
+      // child column is being added to next level
+      add_column(selection, types, level + 1, child_id, has_timestamp_column);
     }
   }
 
