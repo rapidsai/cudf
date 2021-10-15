@@ -3488,7 +3488,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # Operate
         sorted_series = getattr(col, method)(n=n, keep=keep)
         df = DataFrame()
-        new_positions = sorted_series.index.gpu_values
+        new_positions = sorted_series.index
         for k in self._data.names:
             if k == column:
                 df[k] = sorted_series
