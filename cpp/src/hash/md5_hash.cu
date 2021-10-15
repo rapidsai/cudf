@@ -143,7 +143,6 @@ auto CUDA_DEVICE_CALLABLE get_data(string_view const& k)
 }
 
 struct MD5Hasher {
- public:
   CUDA_DEVICE_CALLABLE MD5Hasher(char* result_location)
     : result_location(result_location), buffer(hash_values)
   {
@@ -159,7 +158,7 @@ struct MD5Hasher {
     uint64_t const message_length_in_bits = message_length * 8;
 
     buffer.put(&end_of_message, sizeof(end_of_message));
-    pad(sizeof(message_length_in_bits));
+    buffer.pad(sizeof(message_length_in_bits));
     buffer.put(reinterpret_cast<uint8_t const*>(&message_length_in_bits),
                sizeof(message_length_in_bits));
 
@@ -181,9 +180,6 @@ struct MD5Hasher {
     buffer.put(data, size);
     message_length += size;
   }
-
- private:
-  void CUDA_DEVICE_CALLABLE pad(int space_to_leave) { buffer.pad(space_to_leave); }
 
   /**
    * @brief Core MD5 algorithm implementation. Processes a single 64-byte chunk,
