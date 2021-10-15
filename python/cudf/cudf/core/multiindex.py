@@ -7,7 +7,6 @@ import numbers
 import pickle
 import warnings
 from collections.abc import Sequence
-from numbers import Integral
 from typing import Any, List, MutableMapping, Optional, Tuple, Union
 
 import cupy
@@ -835,22 +834,9 @@ class MultiIndex(Frame, BaseIndex):
         return self._num_rows
 
     def take(self, indices):
-        if isinstance(indices, (Integral, Sequence)):
-            indices = np.array(indices)
-        elif isinstance(indices, cudf.Series) and indices.has_nulls:
-            raise ValueError("Column must have no nulls.")
-        elif isinstance(indices, slice):
-            start, stop, step = indices.indices(len(self))
-            indices = column.arange(start, stop, step)
-        result = MultiIndex.from_frame(
-            self.to_frame(index=False).take(indices)
-        )
-        if self._codes is not None:
-            result._codes = self._codes.take(indices)
-        if self._levels is not None:
-            result._levels = self._levels
-        result.names = self.names
-        return result
+        obj = super().take(indices)
+        obj.names = self.names
+        return obj
 
     def serialize(self):
         header, frames = super().serialize()
