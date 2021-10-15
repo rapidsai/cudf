@@ -158,11 +158,10 @@ struct MD5Hasher {
     // The message length is appended to the end of the last chunk processed.
     uint64_t const message_length_in_bits = message_length * 8;
 
-    put(&end_of_message, sizeof(end_of_message), false);
+    buffer.put(&end_of_message, sizeof(end_of_message));
     pad(sizeof(message_length_in_bits));
-    put(reinterpret_cast<uint8_t const*>(&message_length_in_bits),
-        sizeof(message_length_in_bits),
-        false);
+    buffer.put(reinterpret_cast<uint8_t const*>(&message_length_in_bits),
+               sizeof(message_length_in_bits));
 
     for (int i = 0; i < 4; ++i) {
       uint32ToLowercaseHexString(hash_values[i], result_location + (8 * i));
@@ -179,16 +178,11 @@ struct MD5Hasher {
   {
     auto const normalized_key = normalize_nans_and_zeros(key);
     auto const [data, size]   = get_data(normalized_key);
-    put(data, size, true);
+    buffer.put(data, size);
+    message_length += size;
   }
 
  private:
-  void CUDA_DEVICE_CALLABLE put(uint8_t const* in, int size, bool extend_message_length)
-  {
-    buffer.put(in, size);
-    if (extend_message_length) { message_length += size; }
-  }
-
   void CUDA_DEVICE_CALLABLE pad(int space_to_leave) { buffer.pad(space_to_leave); }
 
   /**
