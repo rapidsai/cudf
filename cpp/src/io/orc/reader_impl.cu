@@ -467,29 +467,21 @@ class aggregate_orc_metadata {
    * @param level current level of nesting.
    * @param id current column id that needs to be added.
    * @param has_timestamp_column True if timestamp column present and false otherwise.
-   * @param has_nested_column True if any of the selected column is a nested type.
    */
   void add_column(std::vector<std::vector<orc_column_meta>>& selection,
                   std::vector<SchemaType> const& types,
                   const size_t level,
                   const uint32_t id,
-                  bool& has_timestamp_column,
-                  bool& has_nested_column)
+                  bool& has_timestamp_column)
   {
     if (level == selection.size()) { selection.emplace_back(); }
-    selection[level].push_back({id, 0});
-    const int col_id = selection[level].size() - 1;
+    selection[level].push_back({id, types[id].subtypes.size()});
     if (types[id].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
 
-    if (types[id].kind == orc::MAP or types[id].kind == orc::LIST or
-        types[id].kind == orc::STRUCT) {
-      has_nested_column = true;
-      for (const auto child_id : types[id].subtypes) {
-        // Since nested column needs to be processed before its child can be processed,
-        // child column is being added to next level
-        add_column(selection, types, level + 1, child_id, has_timestamp_column, has_nested_column);
-      }
-      selection[level][col_id].num_children = types[id].subtypes.size();
+    for (const auto child_id : types[id].subtypes) {
+      // Since nested column needs to be processed before its child can be processed,
+      // child column is being added to next level
+      add_column(selection, types, level + 1, child_id, has_timestamp_column);
     }
   }
 
@@ -498,12 +490,11 @@ class aggregate_orc_metadata {
    *
    * @param use_names List of column names to select
    * @param has_timestamp_column True if timestamp column present and false otherwise
-   * @param has_nested_column True if any of the selected column is a nested type.
    *
    * @return Vector of list of ORC column meta-data
    */
   std::vector<std::vector<orc_column_meta>> select_columns(
-    std::vector<std::string> const& use_names, bool& has_timestamp_column, bool& has_nested_column)
+    std::vector<std::string> const& use_names, bool& has_timestamp_column)
   {
     auto const& pfm = per_file_metadata[0];
     std::vector<std::vector<orc_column_meta>> selection;
@@ -520,7 +511,7 @@ class aggregate_orc_metadata {
           auto col_id = pfm.ff.types[0].subtypes[index];
           if (pfm.get_column_name(col_id) == use_name) {
             name_found = true;
-            add_column(selection, pfm.ff.types, 0, col_id, has_timestamp_column, has_nested_column);
+            add_column(selection, pfm.ff.types, 0, col_id, has_timestamp_column);
             // Should start with next index
             index = i + 1;
             break;
@@ -530,7 +521,7 @@ class aggregate_orc_metadata {
       }
     } else {
       for (auto const& col_id : pfm.ff.types[0].subtypes) {
-        add_column(selection, pfm.ff.types, 0, col_id, has_timestamp_column, has_nested_column);
+        add_column(selection, pfm.ff.types, 0, col_id, has_timestamp_column);
       }
     }
 
@@ -1164,8 +1155,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
   _metadata = std::make_unique<aggregate_orc_metadata>(_sources);
 
   // Select only columns required by the options
-  _selected_columns =
-    _metadata->select_columns(options.get_columns(), _has_timestamp_column, _has_nested_column);
+  _selected_columns = _metadata->select_columns(options.get_columns(), _has_timestamp_column);
 
   // Override output timestamp resolution if requested
   if (options.get_timestamp_type().id() != type_id::EMPTY) {
@@ -1187,7 +1177,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                        const std::vector<std::vector<size_type>>& stripes,
                                        rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(skip_rows == 0 or (not _has_nested_column),
+  CUDF_EXPECTS(skip_rows == 0 or _selected_columns.size() == 1,
                "skip_rows is not supported by nested columns");
 
   std::vector<std::unique_ptr<column>> out_columns;
