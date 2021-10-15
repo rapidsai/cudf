@@ -2442,7 +2442,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         ascending=True,
         na_position="last",
     ):
-        obj = super().argsort(axis, kind, order, ascending, na_position)
+        obj = type(self)._from_data(
+            {None: super().argsort(axis, kind, order, ascending, na_position)}
+        )
         obj.name = self.name
         return obj
 

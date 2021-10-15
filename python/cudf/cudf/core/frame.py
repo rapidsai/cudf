@@ -2929,7 +2929,7 @@ class Frame:
 
         Returns
         -------
-        Series of indices sorted based on input.
+        cupy.ndarray: The indices sorted based on input.
 
         Examples
         --------
@@ -2961,13 +2961,9 @@ class Frame:
                 f"GPU-accelerated {kind} is currently not supported, "
                 "defaulting to quicksort."
             )
-        return cudf.Series._from_data(
-            {
-                None: self._get_sorted_inds(
-                    ascending=ascending, na_position=na_position
-                )
-            }
-        )
+        return self._get_sorted_inds(
+            ascending=ascending, na_position=na_position
+        ).values
 
     def _get_sorted_inds(self, by=None, ascending=True, na_position="last"):
         # Get an int64 column consisting of the indices required to sort self
