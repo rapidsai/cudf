@@ -3016,7 +3016,8 @@ class Frame:
         """
         # TODO: When we remove keep_index we should introduce the axis
         # parameter. We could also introduce is_copy, but that's already
-        # deprecated in pandas so it's probably unnecessary.
+        # deprecated in pandas so it's probably unnecessary. We also need to
+        # introduce Index.take's allow_fill and fill_value parameters.
         if keep_index is not None:
             warnings.warn(
                 "keep_index is deprecated and will be removed in the future.",

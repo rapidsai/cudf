@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import Type, TypeVar
 
 import cupy as cp
@@ -388,3 +389,76 @@ class IndexedFrame(Frame):
         if ignore_index is True:
             out = out.reset_index(drop=True)
         return self._mimic_inplace(out, inplace=inplace)
+
+    def sort_values(
+        self,
+        by,
+        axis=0,
+        ascending=True,
+        inplace=False,
+        kind="quicksort",
+        na_position="last",
+        ignore_index=False,
+    ):
+        """Sort by the values along either axis.
+
+        Parameters
+        ----------
+        by : str or list of str
+            Name or list of names to sort by.
+        ascending : bool or list of bool, default True
+            Sort ascending vs. descending. Specify list for multiple sort
+            orders. If this is a list of bools, must match the length of the
+            by.
+        na_position : {‘first’, ‘last’}, default ‘last’
+            'first' puts nulls at the beginning, 'last' puts nulls at the end
+        ignore_index : bool, default False
+            If True, index will not be sorted.
+
+        Returns
+        -------
+        Frame : Frame with sorted values.
+
+        Notes
+        -----
+        Difference from pandas:
+          * Support axis='index' only.
+          * Not supporting: inplace, kind
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame()
+        >>> df['a'] = [0, 1, 2]
+        >>> df['b'] = [-3, 2, 0]
+        >>> df.sort_values('b')
+           a  b
+        0  0 -3
+        2  2  0
+        1  1  2
+        """
+        if inplace:
+            raise NotImplementedError("`inplace` not currently implemented.")
+        if kind != "quicksort":
+            if kind not in {"mergesort", "heapsort", "stable"}:
+                raise AttributeError(
+                    f"{kind} is not a valid sorting algorithm for "
+                    f"'DataFrame' object"
+                )
+            warnings.warn(
+                f"GPU-accelerated {kind} is currently not supported, "
+                f"defaulting to quicksort."
+            )
+        if axis != 0:
+            raise NotImplementedError("`axis` not currently implemented.")
+
+        if len(self) == 0:
+            return self
+
+        # argsort the `by` column
+        return self.take(
+            self._get_columns_by_label(by)._get_sorted_inds(
+                ascending=ascending, na_position=na_position
+            ),
+            keep_index=not ignore_index,
+        )

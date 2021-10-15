@@ -2236,28 +2236,28 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         na_position="last",
         ignore_index=False,
     ):
-        """
-        Sort by the values.
-
-        Sort a Series in ascending or descending order by some criterion.
+        """Sort by the values along either axis.
 
         Parameters
         ----------
-        ascending : bool, default True
-            If True, sort values in ascending order, otherwise descending.
+        ascending : bool or list of bool, default True
+            Sort ascending vs. descending. Specify list for multiple sort
+            orders. If this is a list of bools, must match the length of the
+            by.
         na_position : {‘first’, ‘last’}, default ‘last’
-            'first' puts nulls at the beginning, 'last' puts nulls at the end.
+            'first' puts nulls at the beginning, 'last' puts nulls at the end
         ignore_index : bool, default False
             If True, index will not be sorted.
 
         Returns
         -------
-        sorted_obj : cuDF Series
+        Series : Series with sorted values.
 
         Notes
         -----
         Difference from pandas:
-          * Not supporting: `inplace`, `kind`
+          * Support axis='index' only.
+          * Not supporting: inplace, kind
 
         Examples
         --------
@@ -2271,28 +2271,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         1    5
         dtype: int64
         """
-
-        if inplace:
-            raise NotImplementedError("`inplace` not currently implemented.")
-        if kind != "quicksort":
-            raise NotImplementedError("`kind` not currently implemented.")
-        if axis != 0:
-            raise NotImplementedError("`axis` not currently implemented.")
-
-        if len(self) == 0:
-            return self
-
-        col_keys, col_inds = self._column.sort_by_values(
-            ascending=ascending, na_position=na_position
+        return super().sort_values(
+            by=self.name,
+            axis=axis,
+            ascending=ascending,
+            inplace=inplace,
+            kind=kind,
+            na_position=na_position,
+            ignore_index=ignore_index,
         )
-        vals = self._from_data({self.name: col_keys}, self._index)
-        inds = self._from_data({self.name: col_inds}, self._index)
-
-        if not ignore_index:
-            index = self.index.take(inds)
-        else:
-            index = self.index
-        return vals.set_index(index)
 
     def _n_largest_or_smallest(self, largest, n, keep):
         direction = largest
