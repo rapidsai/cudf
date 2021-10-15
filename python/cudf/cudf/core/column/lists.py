@@ -17,6 +17,7 @@ from cudf._lib.lists import (
     extract_element,
     sort_lists,
 )
+from cudf._lib.strings.convert.convert_lists import format_list_column
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_list_dtype
 from cudf.core.buffer import Buffer
@@ -316,6 +317,25 @@ class ListColumn(ColumnBase):
             children=(offset_col, data_col),
         )
         return res
+
+    def as_string_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.StringColumn":
+        c = self.children[1]
+        # convert leaf child to strings column
+        s = c.as_string_column(dtype)
+        # build same lists column but with strings column child
+        o = self.children[0]
+        lc = cudf.core.column.ListColumn(
+            size=len(self),
+            dtype=cudf.ListDtype(s.dtype),
+            mask=self.mask,
+            offset=self.offset,
+            null_count=self.null_count,
+            children=(o, s),
+        )
+        separators = as_column([", ", "[", "]"])
+        return format_list_column(lc, separators)
 
 
 class ListMethods(ColumnMethods):
