@@ -199,17 +199,15 @@ void CUDA_DEVICE_CALLABLE md5_hash_step(md5_hash_state& hash_state)
 
 struct MD5Hasher {
   md5_hash_state hash_state;
+  char* result_location;
 
  public:
-  template <typename Key>
-  void CUDA_DEVICE_CALLABLE process(Key const& key)
+  CUDA_DEVICE_CALLABLE MD5Hasher(char* result_location)
+    : hash_state(), result_location(result_location)
   {
-    auto const normalized_key = normalize_nans_and_zeros(key);
-    auto const [data, size]   = get_data(normalized_key);
-    put(data, size, true);
   }
 
-  void CUDA_DEVICE_CALLABLE finalize(char* result_location)
+  CUDA_DEVICE_CALLABLE ~MD5Hasher()
   {
     // Add a one bit flag (10000000) to signal the end of the message
     uint8_t constexpr end_of_message = 0x80;
@@ -225,6 +223,19 @@ struct MD5Hasher {
     for (int i = 0; i < 4; ++i) {
       uint32ToLowercaseHexString(this->hash_state.hash_value[i], result_location + (8 * i));
     }
+  }
+
+  MD5Hasher(const MD5Hasher&) = delete;
+  MD5Hasher& operator=(const MD5Hasher&) = delete;
+  MD5Hasher(MD5Hasher&&)                 = delete;
+  MD5Hasher& operator=(MD5Hasher&&) = delete;
+
+  template <typename Key>
+  void CUDA_DEVICE_CALLABLE process(Key const& key)
+  {
+    auto const normalized_key = normalize_nans_and_zeros(key);
+    auto const [data, size]   = get_data(normalized_key);
+    put(data, size, true);
   }
 
  private:
@@ -339,7 +350,7 @@ std::unique_ptr<column> md5_hash(table_view const& input,
                    thrust::make_counting_iterator(0),
                    thrust::make_counting_iterator(input.num_rows()),
                    [d_chars, device_input = *device_input] __device__(auto row_index) {
-                     MD5Hasher hasher{};
+                     MD5Hasher hasher(d_chars + (row_index * digest_size));
                      for (auto const& col : device_input) {
                        if (col.is_valid(row_index)) {
                          HasherDispatcher<MD5Hasher> hasher_dispatcher{&hasher, col};
@@ -347,7 +358,6 @@ std::unique_ptr<column> md5_hash(table_view const& input,
                            col.type(), hasher_dispatcher, row_index);
                        }
                      }
-                     hasher.finalize(d_chars + (row_index * digest_size));
                    });
 
   return make_strings_column(
