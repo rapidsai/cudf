@@ -42,11 +42,15 @@ def assert_buffer_equal(buffer_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
     # by sentinel values in the buffer.
     non_null_idxs = cudfcol!=None
     assert_eq(col_from_buf[non_null_idxs], cudfcol[non_null_idxs])
-    array_from_dlpack = cp.fromDlpack(buf.__dlpack__())
-    col_array = cp.asarray(cudfcol.data_array_view)
-    # non_null_idxs = (col_array!=None)
-    assert_eq(array_from_dlpack.all(), col_array.all())
-    print(f"dlpack OK: \n{array_from_dlpack}\n{col_array}")
+    
+    if dtype[0] != _DtypeKind.BOOL:
+        array_from_dlpack = cp.fromDlpack(buf.__dlpack__())
+        col_array = cp.asarray(cudfcol.data_array_view)
+        assert_eq(array_from_dlpack.all(), col_array.all())
+        print(f"dlpack OK: \n{array_from_dlpack}\n{col_array}")
+    else:
+        pytest.raises(TypeError, buf.__dlpack__)
+
 
 
 

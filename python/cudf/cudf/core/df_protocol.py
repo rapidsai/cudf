@@ -28,6 +28,7 @@ from cudf.core.column import as_column, build_column, build_categorical_column
 from cudf.core.buffer import Buffer
 import numpy as np
 import cupy as cp
+from numba import cuda
 
 
 # A typing protocol could be added later to let Mypy validate code using
@@ -254,13 +255,14 @@ class _CuDFBuffer:
     Data in the buffer is guaranteed to be contiguous in memory.
     """
 
-    def __init__(self, buf : Buffer, allow_copy : bool = True) -> None:
+    def __init__(self, buf : Buffer, cudf_dtype, allow_copy : bool = True) -> None:
         """
         Use cudf Buffer object.
         """
         # Store the cudf buffer where the data resides as a private
         # attribute, so we can use it to retrieve the public attributes
         self._buf = buf
+        self._cudf_dtype =  cudf_dtype
         self._allow_copy = allow_copy
 
     @property
@@ -284,9 +286,10 @@ class _CuDFBuffer:
         """
         try: 
             # res = self._x.toDlpack()
-            res = cp.asarray(self._buf).toDlpack()
+            cudarray = cuda.as_cuda_array(self._buf).view(self._cudf_dtype)
+            res = cp.asarray(cudarray).toDlpack()
         except ValueError:
-            raise TypeError(f'dtype {self._buf.dtype} unsupported by `dlpack`')
+            raise TypeError(f'dtype {self._cudf_dtype} unsupported by `dlpack`')
 
         return res
 
@@ -569,17 +572,19 @@ class _CuDFColumn:
         _k = _DtypeKind
         invalid = self.describe_null[1]
         if self.dtype[0] in (_k.INT, _k.UINT, _k.FLOAT, _k.BOOL):
-            buffer = _CuDFBuffer(self._col.data, allow_copy=self._allow_copy)
+            buffer = _CuDFBuffer(self._col.data, self._col.dtype, 
+                                 allow_copy=self._allow_copy)
             dtype = self.dtype
 
         elif self.dtype[0] == _k.CATEGORICAL:
             codes = self._col.codes
-            buffer = _CuDFBuffer(self._col.codes.data, allow_copy=self._allow_copy)
+            buffer = _CuDFBuffer(self._col.codes.data, self._col.codes.dtype, 
+                                 allow_copy=self._allow_copy)
             dtype = self._dtype_from_cudfdtype(codes.dtype)
 
         elif self.dtype[0] == _k.STRING:
             encoded_string = self._col.children[1]
-            buffer = _CuDFBuffer(encoded_string.data, allow_copy=self._allow_copy)
+            buffer = _CuDFBuffer(encoded_string.data, encoded_string.dtype, allow_copy=self._allow_copy)
             dtype = self._dtype_from_cudfdtype(encoded_string.dtype) 
             # dtype = (_k.STRING, 8, "u", "=") 
 
@@ -600,10 +605,10 @@ class _CuDFColumn:
         if null == 3:
             _k = _DtypeKind
             if self.dtype[0] == _k.CATEGORICAL:
-                buffer = _CuDFBuffer(self._col.codes._get_mask_as_column().data, 
+                buffer = _CuDFBuffer(self._col.codes._get_mask_as_column().data, cp.uint8, 
                                      allow_copy=self._allow_copy)
             else:
-                buffer = _CuDFBuffer(self._col._get_mask_as_column().data, 
+                buffer = _CuDFBuffer(self._col._get_mask_as_column().data, cp.uint8,
                                      allow_copy=self._allow_copy)
             dtype = (_k.UINT, 8, "C", "=")
             return buffer, dtype
@@ -628,7 +633,7 @@ class _CuDFColumn:
         _k = _DtypeKind
         if self.dtype[0] == _k.STRING:
             offsets = self._col.children[0]
-            buffer = _CuDFBuffer(offsets.data, allow_copy=self._allow_copy)
+            buffer = _CuDFBuffer(offsets.data, offsets.dtype, allow_copy=self._allow_copy)
             dtype = self._dtype_from_cudfdtype(offsets.dtype) 
         else:
             raise RuntimeError("This column has a fixed-length dtype so does not have an offsets buffer")
