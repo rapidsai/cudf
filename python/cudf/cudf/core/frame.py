@@ -3168,12 +3168,7 @@ class Frame:
         if np.isscalar(ascending):
             ascending = [ascending] * to_sort._num_columns
 
-        null_precedence = [
-            "after" if asc ^ (na_position == "first") else "before"
-            for asc in ascending
-        ]
-
-        return libcudf.sort.order_by(to_sort, ascending, null_precedence)
+        return libcudf.sort.order_by(to_sort, ascending, na_position)
 
     def sin(self):
         """

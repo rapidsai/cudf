@@ -113,7 +113,7 @@ def is_sorted(
     return c_result
 
 
-def order_by(source_table, object ascending, object null_precedence):
+def order_by(source_table, object ascending, str na_position):
     """
     Sorting the table ascending/descending
 
@@ -123,17 +123,16 @@ def order_by(source_table, object ascending, object null_precedence):
     ascending : list of boolean values which correspond to each column
                 in source_table signifying order of each column
                 True - Ascending and False - Descending
-    null_precedence : list of strings to specify the precedence of nulls to
-                each column, whether to go "before" or "after" the value.
-                Analogous to c functors "less", "greater".
+    na_position : whether null value should show up at the "first" or "last"
+                position of **all** sorted column.
     """
     cdef table_view source_table_view = table_view_from_table(
         source_table, ignore_index=True
     )
     cdef vector[order] column_order
     column_order.reserve(len(ascending))
-    cdef vector[null_order] c_null_precedence
-    c_null_precedence.reserve(len(null_precedence))
+    cdef vector[null_order] null_precedence
+    null_precedence.reserve(len(ascending))
 
     for i in ascending:
         if i is True:
@@ -141,17 +140,16 @@ def order_by(source_table, object ascending, object null_precedence):
         else:
             column_order.push_back(order.DESCENDING)
 
-    for np in null_precedence:
-        if np == "before":
-            c_null_precedence.push_back(null_order.BEFORE)
+        if i ^ (na_position == "first"):
+            null_precedence.push_back(null_order.AFTER)
         else:
-            c_null_precedence.push_back(null_order.AFTER)
+            null_precedence.push_back(null_order.BEFORE)
 
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(sorted_order(source_table_view,
                                      column_order,
-                                     c_null_precedence))
+                                     null_precedence))
 
     return Column.from_unique_ptr(move(c_result))
 
