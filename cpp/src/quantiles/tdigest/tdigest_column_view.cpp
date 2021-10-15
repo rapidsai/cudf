@@ -17,7 +17,7 @@
 #include <cudf/detail/tdigest/tdigest.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include <cudf/tdigest/tdigest_column_view.hpp>
+#include <cudf/tdigest/tdigest_column_view.cuh>
 
 namespace cudf {
 namespace tdigest {
@@ -66,9 +66,15 @@ column_view tdigest_column_view::weights() const
   return inner.child(weight_column_index);
 }
 
-column_view tdigest_column_view::min_column() const { return child(min_column_index); }
+double const* tdigest_column_view::min_begin() const
+{
+  return child(min_column_index).begin<double>();
+}
 
-column_view tdigest_column_view::max_column() const { return child(max_column_index); }
+double const* tdigest_column_view::max_begin() const
+{
+  return child(max_column_index).begin<double>();
+}
 
 }  // namespace tdigest
 }  // namespace cudf

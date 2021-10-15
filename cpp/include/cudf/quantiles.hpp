@@ -18,7 +18,7 @@
 
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/table/table_view.hpp>
-#include <cudf/tdigest/tdigest_column_view.hpp>
+#include <cudf/tdigest/tdigest_column_view.cuh>
 #include <cudf/types.hpp>
 
 namespace cudf {

@@ -4,7 +4,7 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/groupby.hpp>
 #include <cudf/quantiles.hpp>
-#include <cudf/tdigest/tdigest_column_view.hpp>
+#include <cudf/tdigest/tdigest_column_view.cuh>
 #include <cudf/transform.hpp>
 #include <cudf/unary.hpp>
 

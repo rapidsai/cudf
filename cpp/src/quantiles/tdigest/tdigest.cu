@@ -20,7 +20,7 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/lists/lists_column_view.hpp>
-#include <cudf/tdigest/tdigest_column_view.hpp>
+#include <cudf/tdigest/tdigest_column_view.cuh>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -178,13 +178,10 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
   // offsets, representing the size of each tdigest
   auto offsets = tdv.centroids().offsets();
 
-  // means and weights internal to the digests
-  auto mean   = tdv.means();
-  auto weight = tdv.weights();
-
   // compute summed weights
+  auto weight             = tdv.weights();
   auto cumulative_weights = cudf::make_fixed_width_column(data_type{type_id::FLOAT64},
-                                                          mean.size(),
+                                                          weight.size(),
                                                           mask_state::UNALLOCATED,
                                                           stream,
                                                           rmm::mr::get_current_device_resource());
@@ -223,7 +220,7 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
     data_type{type_id::FLOAT64}, num_output_values, std::move(null_mask), null_count, stream, mr);
 
   auto centroids = cudf::detail::make_counting_transform_iterator(
-    0, make_centroid{mean.begin<double>(), weight.begin<double>()});
+    0, make_centroid{tdv.means().begin<double>(), tdv.weights().begin<double>()});
 
   constexpr size_type block_size = 256;
   cudf::detail::grid_1d const grid(percentiles.size() * input.size(), block_size);
@@ -231,8 +228,8 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
     {offsets.begin<offset_type>(), static_cast<size_t>(offsets.size())},
     *percentiles_cdv,
     centroids,
-    tdv.min_column().begin<double>(),
-    tdv.max_column().begin<double>(),
+    tdv.min_begin(),
+    tdv.max_begin(),
     cumulative_weights->view().begin<double>(),
     result->mutable_view().begin<double>());
 
@@ -343,10 +340,9 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
   // if any of the input digests are empty, nullify the corresponding output rows (values will be
   // uninitialized)
   auto [bitmask, null_count] = [stream, mr, &tdv]() {
-    auto tdigest_is_empty = cudf::detail::make_counting_transform_iterator(
-      0, [offsets = tdv.centroids().offsets_begin()] __device__(size_type index) {
-        return offsets[index + 1] - offsets[index] == 0 ? 1 : 0;
-      });
+    auto tdigest_is_empty = thrust::make_transform_iterator(
+      tdv.size_begin(),
+      [] __device__(size_type tdigest_size) -> size_type { return tdigest_size == 0; });
     auto const null_count =
       thrust::reduce(rmm::exec_policy(stream), tdigest_is_empty, tdigest_is_empty + tdv.size(), 0);
     if (null_count == 0) {
