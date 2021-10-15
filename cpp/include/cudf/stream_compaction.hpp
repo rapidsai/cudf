@@ -210,7 +210,6 @@ std::unique_ptr<table> apply_boolean_mask(
 enum class duplicate_keep_option {
   KEEP_FIRST = 0,  ///< Keeps first duplicate element and unique elements
   KEEP_LAST,       ///< Keeps last duplicate element and unique elements
-  KEEP_ANY,        ///< Keeps one duplicate element at any position and unique elements
   KEEP_NONE        ///< Keeps only unique elements
 };
 

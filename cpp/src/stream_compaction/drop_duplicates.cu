@@ -138,27 +138,13 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
                                        rmm::cuda_stream_view stream)
 {
   // Sort only the indices.
-  // Note that if `keep` is given as `KEEP_ANY` or `KEEP_NONE`, we just use unstable sort for better
-  // performance. Otherwise, stable sort must be used.
-  auto sorted_indices =
-    keep == duplicate_keep_option::KEEP_ANY || keep == duplicate_keep_option::KEEP_NONE
-      ? sorted_order(
-          keys,
-          std::vector<order>{},
-          std::vector<null_order>{static_cast<uint64_t>(keys.num_columns()), null_precedence},
-          stream,
-          rmm::mr::get_current_device_resource())
-      : stable_sorted_order(
-          keys,
-          std::vector<order>{},
-          std::vector<null_order>{static_cast<uint64_t>(keys.num_columns()), null_precedence},
-          stream,
-          rmm::mr::get_current_device_resource());
-
-  // From now, if `keep` is given as `KEEP_ANY`, just set it to `KEEP_FIRST`.
-  // Note that this will not make the results be the same as if `keep` is set to `KEEP_FIRST` since
-  // we have used unstable sort for sorting the indices.
-  if (keep == duplicate_keep_option::KEEP_ANY) { keep = duplicate_keep_option::KEEP_FIRST; }
+  // Note that stable sort must be used to maintain the order of duplicate elements.
+  auto sorted_indices = stable_sorted_order(
+    keys,
+    std::vector<order>{},
+    std::vector<null_order>{static_cast<uint64_t>(keys.num_columns()), null_precedence},
+    stream,
+    rmm::mr::get_current_device_resource());
 
   // extract unique indices
   auto device_input_table = cudf::table_device_view::create(keys, stream);
