@@ -1961,7 +1961,7 @@ def test_groupby_diff_row_mixed_numerics(nelem, shift_perc, direction):
     got = gdf.groupby(["0"]).diff(periods=n_shift)
 
     assert_groupby_results_equal(
-        expected[["1", "2", "3", "4"]], got[["1", "2", "3", "4"]]
+        expected[["1", "2", "3", "4", "5"]], got[["1", "2", "3", "4", "5"]]
     )
 
 
