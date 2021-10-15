@@ -1784,12 +1784,6 @@ def test_typecast_on_join_indexes_matching_categorical():
         {"left_index": True, "right_on": "b"},
         {"left_on": "a", "right_index": True},
         {"left_index": True, "right_index": True},
-        {
-            "left_on": "a",
-            "right_on": "b",
-            "left_index": True,
-            "right_index": True,
-        },
     ],
 )
 def test_series_dataframe_mixed_merging(lhs, rhs, how, kwargs):

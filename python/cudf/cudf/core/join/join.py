@@ -5,6 +5,8 @@ import functools
 from collections import namedtuple
 from typing import TYPE_CHECKING, Callable, Optional, Tuple
 
+import cachetools
+
 import cudf
 from cudf import _lib as libcudf
 from cudf.core.join._join_helpers import (
@@ -56,16 +58,56 @@ def merge(
 _JoinKeys = namedtuple("JoinKeys", ["left", "right"])
 
 
+def _hash_for_column(column):
+    if column._base_data:
+        data_ptr_hash = hash(column._base_data.ptr)
+    else:
+        data_ptr_hash = hash(None)
+    if column._base_mask:
+        mask_ptr_hash = hash(column._base_mask.ptr)
+    else:
+        mask_ptr_hash = hash(None)
+    offset_hash = hash(column.offset)
+    children_hash = hash(
+        tuple(_hash_for_column(child) for child in column._base_children)
+    )
+    dtype_hash = hash(column.dtype)
+    return hash(
+        (data_ptr_hash, mask_ptr_hash, offset_hash, dtype_hash, children_hash)
+    )
+
+
+def _hash_for_table(table):
+    return hash(tuple(_hash_for_column(col) for col in table._data.columns))
+
+
+cache = cachetools.LRUCache(maxsize=32)
+
+
+@cachetools.cached(cache, key=_hash_for_table)
+def _get_or_make_hash_object(build_table):
+    return libcudf.join.HashJoin(build_table)
+
+
+def _make_hash_object(build_table):
+    if not len(build_table) or not len(build_table._data):
+        return libcudf.join.HashJoin(build_table)
+    try:
+        return _get_or_make_hash_object(build_table)
+    except TypeError:
+        return libcudf.join.HashJoin(build_table)
+
+
 def _hash_joiner(
     lhs: Frame, rhs: Frame, how
 ) -> Tuple[Optional[NumericalColumn], Optional[NumericalColumn]]:
 
     # for a left join, we want to use the RHS always as the build table:
     if how == "left":
-        join_obj, probe_table = rhs._join, lhs
+        join_obj, probe_table = _make_hash_object(rhs), lhs
         left_rows, right_rows = join_obj.join(probe_table, how=how)
     else:
-        join_obj, probe_table = lhs._join, rhs
+        join_obj, probe_table = _make_hash_object(lhs), rhs
         right_rows, left_rows = join_obj.join(probe_table, how=how)
 
     return left_rows, right_rows

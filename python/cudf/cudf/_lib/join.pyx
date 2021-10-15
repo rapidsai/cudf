@@ -22,6 +22,7 @@ from cudf._lib.utils cimport table_view_from_table
 # the join result when joining on the keys `lhs` and `rhs`.
 
 cdef class HashJoin:
+    cdef dict __dict__
     cdef unique_ptr[cpp_join.hash_join] join_obj
 
     def __cinit__(self, build_table):
@@ -31,6 +32,9 @@ cdef class HashJoin:
             c_build_table,
             c_null_equality
         )
+
+    def __init__(self, build_table):
+        self._build_table = build_table
 
     def join(self, probe_table, how):
         cdef pair[cpp_join.gather_map_type, cpp_join.gather_map_type] c_result

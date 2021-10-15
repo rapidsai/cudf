@@ -77,7 +77,6 @@ cdef class Column:
         object null_count=None,
         object children=()
     ):
-
         self._size = size
         self._cached_sizeof = None
         self._dtype = dtype
