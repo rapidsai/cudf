@@ -139,26 +139,17 @@ auto CUDA_DEVICE_CALLABLE get_data(string_view const& k)
   return thrust::make_pair(reinterpret_cast<uint8_t const*>(k.data()), k.size_bytes());
 }
 
-// Forward declarations
-struct md5_hash_state;
-void CUDA_DEVICE_CALLABLE md5_hash_step(md5_hash_state& hash_state);
-
-struct md5_hash_state {
-  uint64_t message_length = 0;
-  uint32_t hash_value[4]  = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
-  hash_circular_buffer<64> buffer;
-};
-
 /**
  * @brief Core MD5 algorithm implementation. Processes a single 64-byte chunk,
  * updating the hash value so far. Does not zero out the buffer contents.
  */
-void CUDA_DEVICE_CALLABLE md5_hash_step(md5_hash_state& hash_state)
+template <typename hash_circular_buffer>
+void CUDA_DEVICE_CALLABLE md5_hash_step(hash_circular_buffer const& buffer, uint32_t* hash_values)
 {
-  uint32_t A = hash_state.hash_value[0];
-  uint32_t B = hash_state.hash_value[1];
-  uint32_t C = hash_state.hash_value[2];
-  uint32_t D = hash_state.hash_value[3];
+  uint32_t A = hash_values[0];
+  uint32_t B = hash_values[1];
+  uint32_t C = hash_values[2];
+  uint32_t D = hash_values[3];
 
   for (unsigned int j = 0; j < 64; j++) {
     uint32_t F;
@@ -183,7 +174,7 @@ void CUDA_DEVICE_CALLABLE md5_hash_step(md5_hash_state& hash_state)
     }
 
     uint32_t buffer_element_as_int;
-    memcpy(&buffer_element_as_int, &hash_state.buffer[g * 4], 4);
+    memcpy(&buffer_element_as_int, &buffer[g * 4], 4);
     F = F + A + md5_hash_constants[j] + buffer_element_as_int;
     A = D;
     D = C;
@@ -191,28 +182,27 @@ void CUDA_DEVICE_CALLABLE md5_hash_step(md5_hash_state& hash_state)
     B = B + __funnelshift_l(F, F, md5_shift_constants[((j / 16) * 4) + (j % 4)]);
   }
 
-  hash_state.hash_value[0] += A;
-  hash_state.hash_value[1] += B;
-  hash_state.hash_value[2] += C;
-  hash_state.hash_value[3] += D;
+  hash_values[0] += A;
+  hash_values[1] += B;
+  hash_values[2] += C;
+  hash_values[3] += D;
 }
 
 struct MD5Hasher {
-  md5_hash_state hash_state;
   char* result_location;
+  uint64_t message_length = 0;
+  uint32_t hash_values[4] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
+  hash_circular_buffer<64> buffer;
 
  public:
-  CUDA_DEVICE_CALLABLE MD5Hasher(char* result_location)
-    : hash_state(), result_location(result_location)
-  {
-  }
+  CUDA_DEVICE_CALLABLE MD5Hasher(char* result_location) : result_location(result_location) {}
 
   CUDA_DEVICE_CALLABLE ~MD5Hasher()
   {
     // Add a one bit flag (10000000) to signal the end of the message
     uint8_t constexpr end_of_message = 0x80;
     // The message length is appended to the end of the last chunk processed
-    uint64_t const message_length_in_bits = this->hash_state.message_length * 8;
+    uint64_t const message_length_in_bits = message_length * 8;
 
     put(&end_of_message, sizeof(end_of_message), false);
     pad(sizeof(message_length_in_bits));
@@ -221,7 +211,7 @@ struct MD5Hasher {
         false);
 
     for (int i = 0; i < 4; ++i) {
-      uint32ToLowercaseHexString(this->hash_state.hash_value[i], result_location + (8 * i));
+      uint32ToLowercaseHexString(hash_values[i], result_location + (8 * i));
     }
   }
 
@@ -241,15 +231,15 @@ struct MD5Hasher {
  private:
   void CUDA_DEVICE_CALLABLE put(uint8_t const* in, int size, bool extend_message_length)
   {
-    auto hash_step = [this]() { md5_hash_step(this->hash_state); };
-    this->hash_state.buffer.put(in, size, hash_step);
-    if (extend_message_length) { this->hash_state.message_length += size; }
+    auto hash_step = [this]() { md5_hash_step(buffer, hash_values); };
+    buffer.put(in, size, hash_step);
+    if (extend_message_length) { message_length += size; }
   }
 
   void CUDA_DEVICE_CALLABLE pad(int space_to_leave)
   {
-    auto hash_step = [this]() { md5_hash_step(this->hash_state); };
-    this->hash_state.buffer.pad(space_to_leave, hash_step);
+    auto hash_step = [this]() { md5_hash_step(buffer, hash_values); };
+    buffer.pad(space_to_leave, hash_step);
   }
 };
 
