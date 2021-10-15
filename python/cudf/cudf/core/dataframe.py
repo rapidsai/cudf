@@ -2575,40 +2575,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             return result
 
     def take(self, positions, keep_index=True):
-        """
-        Return a new DataFrame containing the rows specified by *positions*
-
-        Parameters
-        ----------
-        positions : array-like
-            Integer or boolean array-like specifying the rows of the output.
-            If integer, each element represents the integer index of a row.
-            If boolean, *positions* must be of the same length as *self*,
-            and represents a boolean mask.
-
-        Returns
-        -------
-        out : DataFrame
-            New DataFrame
-
-        Examples
-        --------
-        >>> a = cudf.DataFrame({'a': [1.0, 2.0, 3.0],
-        ...                    'b': cudf.Series(['a', 'b', 'c'])})
-        >>> a.take([0, 2, 2])
-             a  b
-        0  1.0  a
-        2  3.0  c
-        2  3.0  c
-        >>> a.take([True, False, True])
-             a  b
-        0  1.0  a
-        2  3.0  c
-        """
-        positions = as_column(positions)
-        if is_bool_dtype(positions):
-            return self._apply_boolean_mask(positions)
-        out = self._gather(positions, keep_index=keep_index)
+        out = super().take(positions, keep_index)
         out.columns = self.columns
         return out
 
@@ -3314,7 +3281,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         # argsort the `by` column
         return self.take(
-            self[by].argsort(ascending=ascending, na_position=na_position),
+            self[by]._get_sorted_inds(
+                ascending=ascending, na_position=na_position
+            ),
             keep_index=not ignore_index,
         )
 

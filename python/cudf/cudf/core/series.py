@@ -1169,52 +1169,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         else:
             self.loc[key] = value
 
-    def take(self, indices, keep_index=True):
-        """
-        Return Series by taking values from the corresponding *indices*.
-
-        Parameters
-        ----------
-        indices : array-like or scalar
-            An array/scalar like integers indicating which positions to take.
-        keep_index : bool, default True
-            Whethere to retain the index in result Series or not.
-
-        Returns
-        -------
-        Series
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([10, 11, 12, 13, 14])
-        >>> series
-        0    10
-        1    11
-        2    12
-        3    13
-        4    14
-        dtype: int64
-        >>> series.take([0, 4])
-        0    10
-        4    14
-        dtype: int64
-
-        If you want to drop the index, pass `keep_index=False`
-
-        >>> series.take([0, 4], keep_index=False)
-        0    10
-        1    14
-        dtype: int64
-        """
-        if keep_index is True or is_scalar(indices):
-            return self.iloc[indices]
-        else:
-            col_inds = as_column(indices)
-            return self._from_data(
-                {self.name: self._column.take(col_inds, keep_index=False)}
-            )
-
     def __repr__(self):
         _, height = get_terminal_size()
         max_rows = (
@@ -2353,7 +2307,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 data = data[-n:-n]
             else:
                 data = data.tail(n)
-            return data.reverse()
+            return data[::-1]
         else:
             raise ValueError('keep must be either "first", "last"')
 

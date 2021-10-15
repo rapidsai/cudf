@@ -30,6 +30,7 @@ from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries, Dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
+    is_bool_dtype,
     is_decimal_dtype,
     is_dict_like,
     is_integer_dtype,
@@ -529,6 +530,7 @@ class Frame:
         )
 
         result._copy_type_metadata(self, include_index=keep_index)
+        result._data.names = self._data.names
         if keep_index and self._index is not None:
             result._index.names = self._index.names
         return result
@@ -2982,6 +2984,43 @@ class Frame:
             ascending = [ascending] * to_sort._num_columns
 
         return libcudf.sort.order_by(to_sort, ascending, na_position)
+
+    def take(self, positions, keep_index=True):
+        """Return a new object containing the rows specified by *positions*
+
+        Parameters
+        ----------
+        positions : array-like
+            Integer or boolean array-like specifying the rows of the output.
+            If integer, each element represents the integer index of a row.
+            If boolean, *positions* must be of the same length as *self*,
+            and represents a boolean mask.
+        keep_index : bool, default True
+            Whether to retain the index in result or not.
+
+        Returns
+        -------
+        out : DataFrame
+            New DataFrame
+
+        Examples
+        --------
+        >>> a = cudf.DataFrame({'a': [1.0, 2.0, 3.0],
+        ...                    'b': cudf.Series(['a', 'b', 'c'])})
+        >>> a.take([0, 2, 2])
+             a  b
+        0  1.0  a
+        2  3.0  c
+        2  3.0  c
+        >>> a.take([True, False, True])
+             a  b
+        0  1.0  a
+        2  3.0  c
+        """
+        positions = as_column(positions)
+        if is_bool_dtype(positions):
+            return self._apply_boolean_mask(positions)
+        return self._gather(positions, keep_index=keep_index)
 
     def sin(self):
         """

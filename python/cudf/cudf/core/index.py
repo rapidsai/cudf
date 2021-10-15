@@ -748,6 +748,9 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         name = kwargs.get("name")
         super().__init__({name: data})
 
+    def take(self, indices):
+        return self[indices]
+
     def argsort(
         self,
         axis=0,
@@ -2382,9 +2385,6 @@ class StringIndex(GenericIndex):
         return pd.Index(
             self.to_numpy(na_value=None), name=self.name, dtype="object"
         )
-
-    def take(self, indices):
-        return self._values[indices]
 
     def __repr__(self):
         return (
