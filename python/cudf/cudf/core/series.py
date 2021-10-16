@@ -3510,6 +3510,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     def hash_encode(self, stop, use_name=False):
         """Encode column values as ints in [0, stop) using hash function.
 
+        This method is deprecated. Replace ``series.hash_encode(stop,
+        use_name=False)`` with ``series.hash_values(method="murmur3") % stop``.
+
         Parameters
         ----------
         stop : int
