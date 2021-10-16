@@ -3544,6 +3544,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2     76
         dtype: int32
         """
+        warnings.warn(
+            "The `hash_encode` method will be removed in a future cuDF "
+            "release. Replace `series.hash_encode(stop, use_name=False)` "
+            'with `series.hash_values(method="murmur3") % stop`.',
+            FutureWarning,
+        )
+
         if not stop > 0:
             raise ValueError("stop must be a positive integer.")
 
