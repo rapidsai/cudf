@@ -536,17 +536,14 @@ TYPED_TEST(TypedBinopStructCompare, binopcompare_out_type)
   auto rhs = rhs_col->view();
   auto dt  = cudf::data_type(cudf::type_to_id<T>());
 
-  auto res_eq =
-    cudf::structs::detail::struct_binary_operation(lhs, rhs, binary_operator::EQUAL, dt);
-  auto res_neq =
-    cudf::structs::detail::struct_binary_operation(lhs, rhs, binary_operator::NOT_EQUAL, dt);
-  auto res_lt = cudf::structs::detail::struct_binary_operation(lhs, rhs, binary_operator::LESS, dt);
+  auto res_eq  = cudf::structs::detail::struct_binary_op(lhs, rhs, binary_operator::EQUAL, dt);
+  auto res_neq = cudf::structs::detail::struct_binary_op(lhs, rhs, binary_operator::NOT_EQUAL, dt);
+  auto res_lt  = cudf::structs::detail::struct_binary_op(lhs, rhs, binary_operator::LESS, dt);
   auto res_gteq =
-    cudf::structs::detail::struct_binary_operation(lhs, rhs, binary_operator::GREATER_EQUAL, dt);
-  auto res_gt =
-    cudf::structs::detail::struct_binary_operation(lhs, rhs, binary_operator::GREATER, dt);
+    cudf::structs::detail::struct_binary_op(lhs, rhs, binary_operator::GREATER_EQUAL, dt);
+  auto res_gt = cudf::structs::detail::struct_binary_op(lhs, rhs, binary_operator::GREATER, dt);
   auto res_lteq =
-    cudf::structs::detail::struct_binary_operation(lhs, rhs, binary_operator::LESS_EQUAL, dt);
+    cudf::structs::detail::struct_binary_op(lhs, rhs, binary_operator::LESS_EQUAL, dt);
 
   auto expected_eq   = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 0, 0, 0, 1};
   auto expected_neq  = fixed_width_column_wrapper<T>{1, 1, 1, 1, 1, 1, 1, 1, 0};
@@ -605,17 +602,14 @@ TYPED_TEST(TypedBinopStructCompare, binopcompare_with_nulls)
   auto rhs     = rhs_col->view();
   data_type dt = cudf::data_type(cudf::type_id::BOOL8);
 
-  auto res_eq =
-    cudf::structs::detail::struct_binary_operation(lhs, rhs, binary_operator::EQUAL, dt);
-  auto res_neq =
-    cudf::structs::detail::struct_binary_operation(lhs, rhs, binary_operator::NOT_EQUAL, dt);
-  auto res_lt = cudf::structs::detail::struct_binary_operation(lhs, rhs, binary_operator::LESS, dt);
+  auto res_eq  = cudf::structs::detail::struct_binary_op(lhs, rhs, binary_operator::EQUAL, dt);
+  auto res_neq = cudf::structs::detail::struct_binary_op(lhs, rhs, binary_operator::NOT_EQUAL, dt);
+  auto res_lt  = cudf::structs::detail::struct_binary_op(lhs, rhs, binary_operator::LESS, dt);
   auto res_gteq =
-    cudf::structs::detail::struct_binary_operation(lhs, rhs, binary_operator::GREATER_EQUAL, dt);
-  auto res_gt =
-    cudf::structs::detail::struct_binary_operation(lhs, rhs, binary_operator::GREATER, dt);
+    cudf::structs::detail::struct_binary_op(lhs, rhs, binary_operator::GREATER_EQUAL, dt);
+  auto res_gt = cudf::structs::detail::struct_binary_op(lhs, rhs, binary_operator::GREATER, dt);
   auto res_lteq =
-    cudf::structs::detail::struct_binary_operation(lhs, rhs, binary_operator::LESS_EQUAL, dt);
+    cudf::structs::detail::struct_binary_op(lhs, rhs, binary_operator::LESS_EQUAL, dt);
 
   // c1 vs c2 lt, gt, eq, lt, gt, eq, lt, gt, eq, eq, eq, eq, eq, eq, eq, eq, eq, eq, eq, eq, eq
   // s1 vs s2 gt, eq, lt, eq, lt, gt, lt, gt, eq, gt, lt, eq, gt, lt, eq, gt, lt, eq, eq, eq, eq
@@ -712,17 +706,17 @@ TYPED_TEST(TypedBinopStructCompare, binopcompare_nested_structs)
 
   data_type dt = cudf::data_type(cudf::type_id::BOOL8);
 
-  auto res_eq = cudf::structs::detail::struct_binary_operation(
-    *nested_col1, *nested_col2, binary_operator::EQUAL, dt);
-  auto res_neq = cudf::structs::detail::struct_binary_operation(
+  auto res_eq =
+    cudf::structs::detail::struct_binary_op(*nested_col1, *nested_col2, binary_operator::EQUAL, dt);
+  auto res_neq = cudf::structs::detail::struct_binary_op(
     *nested_col1, *nested_col2, binary_operator::NOT_EQUAL, dt);
-  auto res_lt = cudf::structs::detail::struct_binary_operation(
-    *nested_col1, *nested_col2, binary_operator::LESS, dt);
-  auto res_gteq = cudf::structs::detail::struct_binary_operation(
+  auto res_lt =
+    cudf::structs::detail::struct_binary_op(*nested_col1, *nested_col2, binary_operator::LESS, dt);
+  auto res_gteq = cudf::structs::detail::struct_binary_op(
     *nested_col1, *nested_col2, binary_operator::GREATER_EQUAL, dt);
-  auto res_gt = cudf::structs::detail::struct_binary_operation(
+  auto res_gt = cudf::structs::detail::struct_binary_op(
     *nested_col1, *nested_col2, binary_operator::GREATER, dt);
-  auto res_lteq = cudf::structs::detail::struct_binary_operation(
+  auto res_lteq = cudf::structs::detail::struct_binary_op(
     *nested_col1, *nested_col2, binary_operator::LESS_EQUAL, dt);
 
   auto expected_eq =

@@ -15,12 +15,12 @@
  */
 #pragma once
 
+#include <cudf/binaryop.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include "cudf/binaryop.hpp"
 
 namespace cudf {
 namespace structs {
@@ -157,13 +157,46 @@ std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_paren
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-std::unique_ptr<column> struct_binary_operation(
+/**
+ * @brief
+ *
+ * @param struct_col
+ * @return true
+ * @return false
+ */
+bool contains_struct_nulls(column_view const& struct_col);
+
+/**
+ * @brief
+ *
+ * @param lhs
+ * @param rhs
+ * @param output_type
+ * @param stream
+ * @param mr
+ * @return std::unique_ptr<column>
+ */
+std::unique_ptr<column> struct_binary_op(
   column_view const& lhs,
   column_view const& rhs,
   binary_operator op,
   data_type output_type,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief
+ *
+ * @param out
+ * @param lhs
+ * @param rhs
+ * @param stream
+ */
+void struct_binary_operation(mutable_column_view& out,
+                             column_view const& lhs,
+                             column_view const& rhs,
+                             binary_operator op,
+                             rmm::cuda_stream_view stream);
 
 }  // namespace detail
 }  // namespace structs

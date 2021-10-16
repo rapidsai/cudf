@@ -416,18 +416,13 @@ std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_paren
                          std::move(ret_validity_buffers));
 }
 
-// std::unique_ptr<column> struct_lexicographic_compare(column_view lhs, column_view rhs, data_type
-// output_type, binary_operator op, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource*
-// mr) {
-
-//   auto out = cudf::detail::make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream,
-//   mr);
-
-//   // superimpose
-//   // flatten
-
-//   return out;
-// }
+bool contains_struct_nulls(column_view const& struct_col)
+{
+  return (struct_col.type().id() == type_id::STRUCT && struct_col.has_nulls()) ||
+         std::all_of(struct_col.child_begin(), struct_col.child_end(), [](auto const& child) {
+           return contains_struct_nulls(child);
+         });
+}
 
 }  // namespace detail
 }  // namespace structs
