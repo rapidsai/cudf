@@ -4396,6 +4396,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def hash_columns(self, columns=None, method="murmur3"):
         """Hash the given *columns* and return a new device array
 
+        This method is deprecated. Replace ``df.hash_columns(columns, method)``
+        with ``df[columns].hash_values(method)``.
+
         Parameters
         ----------
         columns : sequence of str; optional
