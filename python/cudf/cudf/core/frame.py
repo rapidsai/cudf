@@ -2954,9 +2954,7 @@ class Frame:
         0    3
         dtype: int64
         """  # noqa: E501
-        if by is None:
-            by = list(self._data.names)
-        elif isinstance(by, str):
+        if isinstance(by, str):
             by = [by]
         if kind != "quicksort":
             if kind not in {"mergesort", "heapsort", "stable"}:
@@ -2969,7 +2967,7 @@ class Frame:
                 "defaulting to quicksort."
             )
         return self._get_sorted_inds(
-            ascending=ascending, na_position=na_position
+            by=by, ascending=ascending, na_position=na_position
         ).values
 
     def _get_sorted_inds(self, by=None, ascending=True, na_position="last"):
@@ -2979,7 +2977,7 @@ class Frame:
         to_sort = (
             self
             if by is None
-            else self._get_columns_by_label(by, downcast=False)
+            else self._get_columns_by_label(list(by), downcast=False)
         )
 
         # If given a scalar need to construct a sequence of length # of columns
