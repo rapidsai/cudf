@@ -319,7 +319,7 @@ class ListColumn(ColumnBase):
         return res
 
     def as_string_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype, format=None, **kwargs
     ) -> "cudf.core.column.StringColumn":
         c = self.children[1]
         # convert leaf child to strings column
