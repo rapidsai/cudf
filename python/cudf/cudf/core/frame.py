@@ -2903,6 +2903,7 @@ class Frame:
 
     def argsort(
         self,
+        by=None,
         axis=0,
         kind="quicksort",
         order=None,
@@ -2913,6 +2914,8 @@ class Frame:
 
         Parameters
         ----------
+        by : str or list of str, default None
+            Name or list of names to sort by. If None, sort by all columns.
         axis : {0 or "index"}
             Has no effect but is accepted for compatibility with numpy.
         kind : {'mergesort', 'quicksort', 'heapsort', 'stable'}, default 'quicksort'
@@ -2951,6 +2954,10 @@ class Frame:
         0    3
         dtype: int64
         """  # noqa: E501
+        if by is None:
+            by = list(self._data.names)
+        elif isinstance(by, str):
+            by = [by]
         if kind != "quicksort":
             if kind not in {"mergesort", "heapsort", "stable"}:
                 raise AttributeError(

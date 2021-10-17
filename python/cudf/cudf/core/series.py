@@ -2427,7 +2427,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         na_position="last",
     ):
         obj = type(self)._from_data(
-            {None: super().argsort(axis, kind, order, ascending, na_position)}
+            {
+                None: super().argsort(
+                    axis=axis,
+                    kind=kind,
+                    order=order,
+                    ascending=ascending,
+                    na_position=na_position,
+                )
+            }
         )
         obj.name = self.name
         return obj
