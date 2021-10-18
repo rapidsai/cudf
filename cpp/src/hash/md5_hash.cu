@@ -235,9 +235,9 @@ struct MD5Hasher {
   };
 
   char* result_location;
-  uint32_t hash_values[4] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
   hash_circular_buffer<message_chunk_size, md5_hash_step> buffer;
   uint64_t message_length = 0;
+  uint32_t hash_values[4] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
 };
 
 template <typename Hasher>
