@@ -59,8 +59,10 @@ ConfigureTest(GROUPBY_TEST
     groupby/argmax_tests.cpp
     groupby/collect_list_tests.cpp
     groupby/collect_set_tests.cpp
+    groupby/correlation_tests.cpp
     groupby/count_scan_tests.cpp
     groupby/count_tests.cpp
+    groupby/covariance_tests.cpp
     groupby/groups_tests.cpp
     groupby/keys_tests.cpp
     groupby/lists_tests.cpp
