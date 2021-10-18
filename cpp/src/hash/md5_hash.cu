@@ -145,7 +145,7 @@ struct MD5Hasher {
   static constexpr int message_chunk_size = 64;
 
   CUDA_DEVICE_CALLABLE MD5Hasher(char* result_location)
-    : result_location(result_location), buffer(md5_hash_step{})
+    : result_location(result_location), buffer(md5_hash_step{hash_values})
   {
   }
 
@@ -164,7 +164,7 @@ struct MD5Hasher {
                sizeof(message_length_in_bits));
 
     for (int i = 0; i < 4; ++i) {
-      uint32ToLowercaseHexString(buffer.hash_step.hash_values[i], result_location + (8 * i));
+      uint32ToLowercaseHexString(hash_values[i], result_location + (8 * i));
     }
   }
 
@@ -187,7 +187,7 @@ struct MD5Hasher {
    * updating the hash value so far. Does not zero out the buffer contents.
    */
   struct md5_hash_step {
-    uint32_t hash_values[4] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
+    uint32_t (&hash_values)[4];
 
     void CUDA_DEVICE_CALLABLE operator()(const uint8_t (&buffer)[message_chunk_size])
     {
@@ -235,6 +235,7 @@ struct MD5Hasher {
   };
 
   char* result_location;
+  uint32_t hash_values[4] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
   hash_circular_buffer<message_chunk_size, md5_hash_step> buffer;
   uint64_t message_length = 0;
 };
