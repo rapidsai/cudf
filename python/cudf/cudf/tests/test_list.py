@@ -498,46 +498,22 @@ def test_serialize_list_columns(data):
 
 
 @pytest.mark.parametrize(
-    "data,item",
+    "data",
     [
-        (
-            # basic list into a list column
-            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
-            [0, 0, 0],
-        ),
-        (
-            # nested list into nested list column
-            [
-                [[1, 2, 3], [4, 5, 6]],
-                [[1, 2, 3], [4, 5, 6]],
-                [[1, 2, 3], [4, 5, 6]],
-            ],
-            [[0, 0, 0], [0, 0, 0]],
-        ),
-        (
-            # NA into a list column
-            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
-            NA,
-        ),
-        (
-            # NA into nested list column
-            [
-                [[1, 2, 3], [4, 5, 6]],
-                [[1, 2, 3], [4, 5, 6]],
-                [[1, 2, 3], [4, 5, 6]],
-            ],
-            NA,
-        ),
+        [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+        [
+            [[1, 2, 3], [4, 5, 6]],
+            [[1, 2, 3], [4, 5, 6]],
+            [[1, 2, 3], [4, 5, 6]],
+        ],
+        [[[1, 2, 3], [4, None, 6]], [], None, [[7, 8], [], None, [9]]],
+        [[1, 2, 3], [4, None, 6], [7, 8], [], None, [9]],
     ],
 )
-def test_listcol_setitem(data, item):
-    sr = cudf.Series(data)
-
-    sr[1] = item
-    data[1] = item
-    expect = cudf.Series(data)
-
-    assert_eq(expect, sr)
+def test_listcol_as_string(data):
+    got = cudf.Series(data).astype("str")
+    expect = pd.Series(data).astype("str")
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
