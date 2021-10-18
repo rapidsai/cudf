@@ -335,14 +335,14 @@ class ListColumn(ColumnBase):
         lc = s
         for c in cc:
             o = c.children[0]
-            lc = cudf.core.column.ListColumn(
+            lc = cudf.core.column.ListColumn(  # type: ignore
                 size=c.size,
                 dtype=cudf.ListDtype(lc.dtype),
                 mask=c.mask,
                 offset=c.offset,
                 null_count=c.null_count,
                 children=(o, lc),
-            )  # type: ignore
+            )
         # Separator strings to match the Python format
         separators = as_column([", ", "[", "]"])
         # Call libcudf to format the list column
