@@ -325,14 +325,14 @@ class ListColumn(ColumnBase):
         Create a strings column from a list column
         """
         # Convert the leaf child column to strings column
-        cc = []  # type : List[ListColumn]
-        c = self
+        cc: List[ListColumn] = []
+        c: ColumnBase = self
         while isinstance(c, ListColumn):
             cc.insert(0, c)
             c = c.children[1]
         s = c.as_string_column(dtype)
         # Rebuild the list column replacing just the leaf child
-        lc = s  # type: ignore
+        lc = s
         for c in cc:
             o = c.children[0]
             lc = cudf.core.column.ListColumn(
@@ -342,7 +342,7 @@ class ListColumn(ColumnBase):
                 offset=c.offset,
                 null_count=c.null_count,
                 children=(o, lc),
-            )
+            )  # type: ignore
         # Separator strings to match the Python format
         separators = as_column([", ", "[", "]"])
         # Call libcudf to format the list column
