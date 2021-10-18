@@ -2108,3 +2108,23 @@ def test_join_on_index_with_duplicate_names():
     got = lhs.join(rhs, how="inner")
 
     assert_join_results_equal(expect, got, how="inner")
+
+
+def test_join_mutated_column():
+    pdf_l = pd.DataFrame({"a": [1, 2, 3], "b": [1, 2, 3]})
+    pdf_r = pd.DataFrame({"a": [1, 2, 4], "c": [1, 2, 3]})
+
+    gdf_l = cudf.from_pandas(pdf_l)
+    gdf_r = cudf.from_pandas(pdf_r)
+
+    expect = pdf_l.merge(pdf_r, on="a")
+    got = gdf_l.merge(gdf_r, on="a")
+    assert_join_results_equal(expect, got, how="inner")
+
+    # now mutate the LHS
+    pdf_l["a"].iloc[:] = 1
+    gdf_l["a"].iloc[:] = 1
+
+    expect = pdf_l.merge(pdf_r, on="a")
+    got = gdf_l.merge(gdf_r, on="a")
+    assert_join_results_equal(expect, got, how="inner")
