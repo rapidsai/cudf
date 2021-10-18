@@ -72,13 +72,9 @@ template <int capacity, typename hash_step_callable>
 struct hash_circular_buffer {
   uint8_t storage[capacity];
   uint8_t* cur;
-  uint32_t* hash_values;
   hash_step_callable hash_step;
 
-  CUDA_DEVICE_CALLABLE hash_circular_buffer(uint32_t* hash_values)
-    : cur{storage}, hash_values{hash_values}
-  {
-  }
+  CUDA_DEVICE_CALLABLE hash_circular_buffer() : cur{storage} {}
 
   CUDA_DEVICE_CALLABLE uint8_t* begin() { return storage; }
   CUDA_DEVICE_CALLABLE const uint8_t* begin() const { return storage; }
@@ -98,7 +94,7 @@ struct hash_circular_buffer {
       // The buffer will be filled by this chunk of data. Copy a chunk of the
       // data to fill the buffer and trigger a hash step.
       memcpy(cur, in + copy_start, space);
-      hash_step(storage, hash_values);
+      hash_step(storage);
       size -= space;
       copy_start += space;
       cur   = begin();
@@ -116,7 +112,7 @@ struct hash_circular_buffer {
     int space = available_space();
     if (space_to_leave > space) {
       memset(cur, 0x00, space);
-      hash_step(storage, hash_values);
+      hash_step(storage);
       cur   = begin();
       space = available_space();
     }
@@ -143,10 +139,7 @@ auto CUDA_DEVICE_CALLABLE get_data(string_view const& k)
 }
 
 struct MD5Hasher {
-  CUDA_DEVICE_CALLABLE MD5Hasher(char* result_location)
-    : result_location(result_location), buffer(hash_values)
-  {
-  }
+  CUDA_DEVICE_CALLABLE MD5Hasher(char* result_location) : result_location(result_location) {}
 
   CUDA_DEVICE_CALLABLE ~MD5Hasher()
   {
@@ -163,7 +156,7 @@ struct MD5Hasher {
                sizeof(message_length_in_bits));
 
     for (int i = 0; i < 4; ++i) {
-      uint32ToLowercaseHexString(hash_values[i], result_location + (8 * i));
+      uint32ToLowercaseHexString(buffer.hash_step.hash_values[i], result_location + (8 * i));
     }
   }
 
@@ -186,7 +179,7 @@ struct MD5Hasher {
    * updating the hash value so far. Does not zero out the buffer contents.
    */
   struct md5_hash_step {
-    void CUDA_DEVICE_CALLABLE operator()(const uint8_t* buffer, uint32_t* hash_values)
+    void CUDA_DEVICE_CALLABLE operator()(const uint8_t* buffer)
     {
       uint32_t A = hash_values[0];
       uint32_t B = hash_values[1];
@@ -229,12 +222,13 @@ struct MD5Hasher {
       hash_values[2] += C;
       hash_values[3] += D;
     }
+
+    uint32_t hash_values[4] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
   };
 
   char* result_location;
   hash_circular_buffer<64, md5_hash_step> buffer;
   uint64_t message_length = 0;
-  uint32_t hash_values[4] = {0x67452301, 0xefcdab89, 0x98badcfe, 0x10325476};
 };
 
 template <typename Hasher>
