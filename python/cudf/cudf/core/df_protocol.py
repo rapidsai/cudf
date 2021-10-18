@@ -80,7 +80,7 @@ def _from_dataframe(df : DataFrameObject) :
         
         _buffers.append(_buf)
 
-    df_new = cudf.DataFrame(columns)
+    df_new = cudf.DataFrame._from_data(columns)
     df_new._buffers = _buffers
     return df_new
 
@@ -278,14 +278,12 @@ class _CuDFBuffer:
         Pointer to start of the buffer as an integer.
         """
         return self._buf.ptr
-        # return self._x.__cuda_array_interface__['data'][0]
         
     def __dlpack__(self):
         """
         DLPack not implemented in NumPy yet, so leave it out here.
         """
         try: 
-            # res = self._x.toDlpack()
             cudarray = cuda.as_cuda_array(self._buf).view(self._cudf_dtype)
             res = cp.asarray(cudarray).toDlpack()
         except ValueError:

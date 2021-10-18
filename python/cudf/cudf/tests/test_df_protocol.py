@@ -47,7 +47,6 @@ def assert_buffer_equal(buffer_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
         array_from_dlpack = cp.fromDlpack(buf.__dlpack__())
         col_array = cp.asarray(cudfcol.data_array_view)
         assert_eq(array_from_dlpack.all(), col_array.all())
-        print(f"dlpack OK: \n{array_from_dlpack}\n{col_array}")
     else:
         pytest.raises(TypeError, buf.__dlpack__)
 
