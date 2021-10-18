@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import pickle
-from typing import Sequence
+from typing import List, Sequence
 
 import numpy as np
 import pyarrow as pa
@@ -325,14 +325,14 @@ class ListColumn(ColumnBase):
         Create a strings column from a list column
         """
         # Convert the leaf child column to strings column
-        cc = []
+        cc = []  # type : List[ListColumn]
         c = self
-        while is_list_dtype(c.dtype):
+        while isinstance(c, ListColumn):
             cc.insert(0, c)
             c = c.children[1]
         s = c.as_string_column(dtype)
         # Rebuild the list column replacing just the leaf child
-        lc = s
+        lc = s  # type: ignore
         for c in cc:
             o = c.children[0]
             lc = cudf.core.column.ListColumn(
