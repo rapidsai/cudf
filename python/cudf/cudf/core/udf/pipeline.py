@@ -31,6 +31,11 @@ class FrameJitMetadata(object):
         self.preprocess_dtypes()
         self.make_cache_key()
 
+    @property
+    def supported_cols(self):
+        return {
+            name: self.fr._data[name] for name in self.supported_dtypes.keys()
+        }
 
     def preprocess_dtypes(self):
         for colname, col in self.fr._data.items():
@@ -103,10 +108,20 @@ def get_frame_row_type(dtype):
 def get_udf_return_type(md):
     """
     Get the return type of a masked UDF for a given set of argument dtypes. It
-    is assumed that a `MaskedType(dtype)` is passed to the function for each
-    input dtype.
+    is assumed that the function consumes a dictionary whos keys are strings
+    and whos values are of MaskedType. Initially it is assumed that the UDF may
+    be written to utilize any field in the row - including those containing an
+    unsupported dtype. If an unsupported dtype is actually used in the funtion,
+    the compilation should fail at `compile_udf`. If compilation succeeds, one
+    can infer that the function does not use any of the columns of unsupported
+    dtype - meaning we can drop them going forward and the UDF will still end
+    up getting fed rows containing all the fields it actually needs to use to
+    compute the answer for that row.
     """
+
+    # present a row containing all fields to the UDF and try and compile
     row_type = get_frame_row_type(np.dtype(list(md.all_dtypes.items())))
+
     # Get the return type. The PTX is also returned by compile_udf, but is not
     # needed here.
     ptx, output_type = cudautils.compile_udf(md.func, (row_type,))
@@ -149,8 +164,7 @@ def construct_signature(md, return_type):
     return_type = Tuple((return_type[::1], boolean[::1]))
     offsets = []
     sig = [return_type]
-    for key in md.supported_dtypes.keys():
-        col = md.fr._data[key]
+    for col in md.supported_cols.values():
         sig.append(masked_array_type_from_col(col))
         offsets.append(int64)
 
@@ -331,9 +345,7 @@ def compile_or_get(md):
     # precompile the user udf to get the right return type.
     # could be a MaskedType or a scalar type.
     scalar_return_type = get_udf_return_type(md)
-
     _check_return_type(scalar_return_type)
-
     _is_scalar_return = not isinstance(scalar_return_type, MaskedType)
 
     # this is the signature for the final full kernel compilation

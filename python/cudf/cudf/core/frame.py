@@ -1655,8 +1655,10 @@ class Frame:
         ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
         launch_args = [(ans_col, ans_mask)]
         offsets = []
-        for name in md.supported_dtypes.keys():
-            col = self._data[name]
+
+        # if compile_or_get succeeds, its safe to create a kernel that only
+        # consumes the columns that are of supported dtype
+        for name, col in md.supported_cols.items():
             data = col.data
             mask = col.mask
             if mask is None:
