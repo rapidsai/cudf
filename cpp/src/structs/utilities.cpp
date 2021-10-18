@@ -88,7 +88,7 @@ bool is_or_has_nested_lists(cudf::column_view const& col)
  * @brief Flattens struct columns to constituent non-struct columns in the input table.
  *
  */
-struct flattened_table {
+struct table_flattener {
   table_view input;
   // reference variables
   std::vector<order> const& column_order;
@@ -101,7 +101,7 @@ struct flattened_table {
   std::vector<null_order> flat_null_precedence;
   column_nullability nullability;
 
-  flattened_table(table_view const& input,
+  table_flattener(table_view const& input,
                   std::vector<order> const& column_order,
                   std::vector<null_order> const& null_precedence,
                   column_nullability nullability)
@@ -189,23 +189,23 @@ struct flattened_table {
       }
     }
 
-    return flatten_result{table_view{flat_columns},
-                          std::move(flat_column_order),
-                          std::move(flat_null_precedence),
-                          std::move(validity_as_column),
-                          std::move(superimposed_nullmasks)};
+    return flattened_table{table_view{flat_columns},
+                           std::move(flat_column_order),
+                           std::move(flat_null_precedence),
+                           std::move(validity_as_column),
+                           std::move(superimposed_nullmasks)};
   }
 };
 
-flatten_result flatten_nested_columns(table_view const& input,
-                                      std::vector<order> const& column_order,
-                                      std::vector<null_order> const& null_precedence,
-                                      column_nullability nullability)
+flattened_table flatten_nested_columns(table_view const& input,
+                                       std::vector<order> const& column_order,
+                                       std::vector<null_order> const& null_precedence,
+                                       column_nullability nullability)
 {
   auto const has_struct = std::any_of(input.begin(), input.end(), is_struct);
-  if (not has_struct) { return flatten_result{input, column_order, null_precedence, {}, {}}; }
+  if (not has_struct) { return flattened_table{input, column_order, null_precedence, {}, {}}; }
 
-  return flattened_table{input, column_order, null_precedence, nullability}();
+  return table_flattener{input, column_order, null_precedence, nullability}();
 }
 
 namespace {

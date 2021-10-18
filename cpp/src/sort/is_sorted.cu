@@ -39,7 +39,7 @@ auto is_sorted(cudf::table_view const& in,
   // 0-table_view, 1-column_order, 2-null_precedence, 3-validity_columns
   auto flattened = structs::detail::flatten_nested_columns(in, column_order, null_precedence);
 
-  auto const d_input           = table_device_view::create(flattened.table(), stream);
+  auto const d_input           = table_device_view::create(flattened, stream);
   auto const d_column_order    = make_device_uvector_async(flattened.orders(), stream);
   auto const d_null_precedence = has_nulls
                                    ? make_device_uvector_async(flattened.null_orders(), stream)

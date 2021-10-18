@@ -52,9 +52,9 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
 {
   auto const superimposed = structs::detail::superimpose_parent_nulls(order_by, stream, mr);
   table_view const order_table{{std::get<0>(superimposed)}};
-  auto const flattener = cudf::structs::detail::flatten_nested_columns(
+  auto const flattened = cudf::structs::detail::flatten_nested_columns(
     order_table, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
-  auto const d_flat_order = table_device_view::create(flattener.table(), stream);
+  auto const d_flat_order = table_device_view::create(flattened, stream);
   row_equality_comparator<has_nulls> comparator(*d_flat_order, *d_flat_order, true);
   auto ranks         = make_fixed_width_column(data_type{type_to_id<size_type>()},
                                        order_table.num_rows(),

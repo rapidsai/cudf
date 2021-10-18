@@ -38,8 +38,7 @@ void flatten_unflatten_compare(table_view const& input_table)
 {
   using namespace cudf::structs::detail;
 
-  auto flattened_result = flatten_nested_columns(input_table, {}, {}, column_nullability::FORCE);
-  auto flattened        = flattened_result.table();
+  auto flattened = flatten_nested_columns(input_table, {}, {}, column_nullability::FORCE);
   auto unflattened =
     unflatten_nested_columns(std::make_unique<cudf::table>(flattened), input_table);
 

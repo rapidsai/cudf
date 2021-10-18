@@ -77,7 +77,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::disp
       detail::hash::can_use_hash_groupby(_keys, requests)) {
     // Optionally flatten nested key columns.
     auto flattened             = flatten_nested_columns(_keys, {}, {}, column_nullability::FORCE);
-    auto flattened_keys        = flattened.table();
+    auto flattened_keys        = flattened.flattened_columns();
     auto is_supported_key_type = [](auto col) { return cudf::is_equality_comparable(col.type()); };
     CUDF_EXPECTS(std::all_of(flattened_keys.begin(), flattened_keys.end(), is_supported_key_type),
                  "Unsupported groupby key type does not support equality comparison");

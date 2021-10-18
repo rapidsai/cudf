@@ -103,7 +103,7 @@ sort_groupby_helper::sort_groupby_helper(table_view const& keys,
   using namespace cudf::structs::detail;
 
   _flattened                 = flatten_nested_columns(keys, {}, {}, column_nullability::FORCE);
-  _keys                      = _flattened.table();
+  _keys                      = _flattened;
   auto is_supported_key_type = [](auto col) { return cudf::is_equality_comparable(col.type()); };
   CUDF_EXPECTS(std::all_of(_keys.begin(), _keys.end(), is_supported_key_type),
                "Unsupported groupby key type does not support equality comparison");

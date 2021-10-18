@@ -123,12 +123,11 @@ std::unique_ptr<column> sorted_order(table_view input,
                    mutable_indices_view.end<size_type>(),
                    0);
 
-  auto flattened = structs::detail::flatten_nested_columns(input, column_order, null_precedence);
-  auto input_flattened      = flattened.table();
-  auto device_table         = table_device_view::create(input_flattened, stream);
+  auto flattened    = structs::detail::flatten_nested_columns(input, column_order, null_precedence);
+  auto device_table = table_device_view::create(flattened, stream);
   auto const d_column_order = make_device_uvector_async(flattened.orders(), stream);
 
-  if (has_nulls(input_flattened)) {
+  if (has_nulls(flattened)) {
     auto const d_null_precedence = make_device_uvector_async(flattened.null_orders(), stream);
     auto const comparator        = row_lexicographic_comparator<true>(
       *device_table, *device_table, d_column_order.data(), d_null_precedence.data());

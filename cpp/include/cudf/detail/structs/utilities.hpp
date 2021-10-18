@@ -21,7 +21,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-#include "rmm/device_buffer.hpp"
+#include <rmm/device_buffer.hpp>
 
 namespace cudf {
 namespace structs {
@@ -67,7 +67,8 @@ std::vector<std::vector<column_view>> extract_ordered_struct_children(
 bool is_or_has_nested_lists(cudf::column_view const& col);
 
 /**
- * @brief Type to capture the results from `flatten_nested_columns()`.
+ * @brief Result of `flatten_nested_columns()`, where all `STRUCT` columns are replaced with
+ * their non-nested member columns, and `BOOL8` columns for their null masks.
  *
  * `flatten_nested_columns()` produces a "flattened" table_view with all `STRUCT` columns
  * replaced with their child column_views, preceded by their null masks.
@@ -76,23 +77,23 @@ bool is_or_has_nested_lists(cudf::column_view const& col);
  *
  * Objects of `flatten_result` need to kept alive while its table_view is accessed.
  */
-class flatten_result {
+class flattened_table {
  public:
   /**
    * @brief Constructor, to be used from `flatten_nested_columns()`.
    *
-   * @param table_ table_view resulting from `flatten_nested_columns()`
+   * @param flattened_columns_ table_view resulting from `flatten_nested_columns()`
    * @param orders_ Per-column ordering of the table_view
    * @param null_orders_ Per-column null_order of the table_view
    * @param columns_ Newly allocated columns to back the table_view
    * @param null_masks_ Newly allocated null masks to back the table_view
    */
-  flatten_result(table_view const& table_,
-                 std::vector<order> const& orders_,
-                 std::vector<null_order> const& null_orders_,
-                 std::vector<std::unique_ptr<column>>&& columns_,
-                 std::vector<rmm::device_buffer>&& null_masks_)
-    : _table{table_},
+  flattened_table(table_view const& flattened_columns_,
+                  std::vector<order> const& orders_,
+                  std::vector<null_order> const& null_orders_,
+                  std::vector<std::unique_ptr<column>>&& columns_,
+                  std::vector<rmm::device_buffer>&& null_masks_)
+    : _flattened_columns{flattened_columns_},
       _orders{orders_},
       _null_orders{null_orders_},
       _columns{std::move(columns_)},
@@ -100,12 +101,12 @@ class flatten_result {
   {
   }
 
-  flatten_result() = default;
+  flattened_table() = default;
 
   /**
-   * @brief Getter for the table_view.
+   * @brief Getter for the flattened columns, as a `table_view`.
    */
-  table_view table() const { return _table; }
+  table_view flattened_columns() const { return _flattened_columns; }
 
   /**
    * @brief Getter for the cudf::order of the table_view's columns.
@@ -117,8 +118,13 @@ class flatten_result {
    */
   std::vector<null_order> null_orders() const { return _null_orders; }
 
+  /**
+   * @brief Conversion to `table_view`, to fetch flattened columns.
+   */
+  operator table_view() const { return flattened_columns(); }
+
  private:
-  table_view _table;
+  table_view _flattened_columns;
   std::vector<order> _orders;
   std::vector<null_order> _null_orders;
   std::vector<std::unique_ptr<column>> _columns;
@@ -138,7 +144,7 @@ class flatten_result {
  * @return `flatten_result` with flattened table, flattened column order, flattened null precedence,
  * alongside the supporting columns and device_buffers for the flattened table.
  */
-flatten_result flatten_nested_columns(
+flattened_table flatten_nested_columns(
   table_view const& input,
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,

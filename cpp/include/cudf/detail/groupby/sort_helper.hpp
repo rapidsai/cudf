@@ -219,7 +219,7 @@ struct sort_groupby_helper {
   column_ptr _keys_bitmask_column;   ///< Column representing rows with one or more nulls values
   table_view _keys;                  ///< Input keys to sort by
   table_view _unflattened_keys;      ///< Input keys, unflattened and possibly nested
-  structs::detail::flatten_result _flattened;  ///< Support datastructures for _keys.
+  structs::detail::flattened_table _flattened;  ///< Support datastructures for _keys
 
   index_vector_ptr
     _group_offsets;  ///< Indices into sorted _keys indicating starting index of each groups

@@ -139,7 +139,7 @@ struct hash_join::hash_join_impl {
  private:
   cudf::table_view _build;
   std::vector<std::unique_ptr<cudf::column>> _created_null_columns;
-  cudf::structs::detail::flatten_result _flattened_build_table;
+  cudf::structs::detail::flattened_table _flattened_build_table;
   std::unique_ptr<cudf::detail::multimap_type, std::function<void(cudf::detail::multimap_type*)>>
     _hash_table;
 
