@@ -349,7 +349,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
 {
   CUDF_EXPECTS(boolean_mask.size() == rhs.size(),
                "Boolean mask column must be the same size as rhs column");
-  return copy_if_else(lhs, rhs, !lhs.is_valid(), rhs.has_nulls(), boolean_mask, stream, mr);
+  return copy_if_else(lhs, rhs, !lhs.is_valid(stream), rhs.has_nulls(), boolean_mask, stream, mr);
 }
 
 std::unique_ptr<column> copy_if_else(column_view const& lhs,
@@ -360,7 +360,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
 {
   CUDF_EXPECTS(boolean_mask.size() == lhs.size(),
                "Boolean mask column must be the same size as lhs column");
-  return copy_if_else(lhs, rhs, lhs.has_nulls(), !rhs.is_valid(), boolean_mask, stream, mr);
+  return copy_if_else(lhs, rhs, lhs.has_nulls(), !rhs.is_valid(stream), boolean_mask, stream, mr);
 }
 
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
@@ -369,7 +369,8 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  return copy_if_else(lhs, rhs, !lhs.is_valid(), !rhs.is_valid(), boolean_mask, stream, mr);
+  return copy_if_else(
+    lhs, rhs, !lhs.is_valid(stream), !rhs.is_valid(stream), boolean_mask, stream, mr);
 }
 
 };  // namespace detail

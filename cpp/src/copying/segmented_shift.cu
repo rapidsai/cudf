@@ -75,7 +75,7 @@ struct segmented_shift_functor<T, std::enable_if_t<is_rep_layout_compatible<T>()
                                      rmm::mr::device_memory_resource* mr)
   {
     auto values_device_view = column_device_view::create(segmented_values, stream);
-    bool nullable           = not fill_value.is_valid() or segmented_values.nullable();
+    bool nullable           = not fill_value.is_valid(stream) or segmented_values.nullable();
     auto input_iterator =
       cudf::detail::make_optional_iterator<T>(
         *values_device_view, contains_nulls::DYNAMIC{}, segmented_values.has_nulls()) -

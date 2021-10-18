@@ -17,8 +17,8 @@
 #pragma once
 
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/tdigest/tdigest_column_view.cuh>
 #include <cudf/types.hpp>
 
 namespace cudf {
@@ -121,7 +121,7 @@ std::unique_ptr<table> quantiles(
  * @returns LIST Column containing requested percentile values as FLOAT64.
  */
 std::unique_ptr<column> percentile_approx(
-  structs_column_view const& input,
+  tdigest::tdigest_column_view const& input,
   column_view const& percentiles,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
