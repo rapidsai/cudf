@@ -1,6 +1,7 @@
 import operator
-from cudf.utils.dtypes import NUMERIC_TYPES, BOOL_TYPES
+
 from cudf.core.dtypes import CategoricalDtype
+from cudf.utils.dtypes import BOOL_TYPES, NUMERIC_TYPES
 
 arith_ops = [
     operator.add,
@@ -24,6 +25,8 @@ comparison_ops = [
 
 # currently only numeric types are supported.
 SUPPORTED_TYPES = NUMERIC_TYPES | BOOL_TYPES
+
+
 def _is_supported_type(dtype):
     # category dtype isn't hashable
     if isinstance(dtype, CategoricalDtype):

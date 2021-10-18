@@ -48,7 +48,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import merge
-from cudf.core.udf.pipeline import compile_or_get, FrameJitMetadata
+from cudf.core.udf.pipeline import FrameJitMetadata, compile_or_get
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring

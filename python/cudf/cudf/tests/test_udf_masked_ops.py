@@ -1,12 +1,12 @@
 import operator
 
+import numpy as np
 import pandas as pd
 import pytest
 from numba import cuda
-import numpy as np
 
 import cudf
-from cudf.testing._utils import NUMERIC_TYPES, assert_eq, _decimal_series
+from cudf.testing._utils import NUMERIC_TYPES, _decimal_series, assert_eq
 
 arith_ops = [
     operator.add,
@@ -516,28 +516,24 @@ def test_masked_udf_subset_selection(data):
     data = cudf.DataFrame(data)
     run_masked_udf_test(func, func, data)
 
+
 @pytest.mark.parametrize(
-    "unsupported_dtype", 
-    [
-        "string",
-        "decimal",
-        "categorical",
-        "interval",
-        "list",
-        "struct"
-    ]
+    "unsupported_dtype",
+    ["string", "decimal", "categorical", "interval", "list", "struct"],
 )
 def test_masked_udf_unsupported_dtype(unsupported_dtype):
     def func(row):
         return row[unsupported_dtype]
 
     data = cudf.DataFrame()
-    data['string'] = ['a','b','c']
-    data['decimal'] = _decimal_series(['1.0', '2.0', '3.0'], dtype=cudf.Decimal64Dtype(2,1))
-    data['categorical'] = cudf.Series([1,2,3], dtype='category')
-    data['interval'] = cudf.interval_range(start=0, end=3, closed=True)
-    data['list'] = [[1,2],[3,4],[5,6]]
-    data['struct'] = [{'a':1}, {'a':2}, {'a':3}]
+    data["string"] = ["a", "b", "c"]
+    data["decimal"] = _decimal_series(
+        ["1.0", "2.0", "3.0"], dtype=cudf.Decimal64Dtype(2, 1)
+    )
+    data["categorical"] = cudf.Series([1, 2, 3], dtype="category")
+    data["interval"] = cudf.interval_range(start=0, end=3, closed=True)
+    data["list"] = [[1, 2], [3, 4], [5, 6]]
+    data["struct"] = [{"a": 1}, {"a": 2}, {"a": 3}]
 
     # check that we fail when an unsupported type is used within a function
     with pytest.raises(TypeError):
@@ -546,9 +542,10 @@ def test_masked_udf_unsupported_dtype(unsupported_dtype):
     # also check that a DF containing unsupported dtypes can still run a
     # function that does NOT involve any of the unsupported dtype columns
 
-    data['supported_dtype'] = 1
+    data["supported_dtype"] = 1
+
     def other_func(row):
-        return row['supported_dtype']
+        return row["supported_dtype"]
 
     expect = cudf.Series(np.ones(len(data)))
     got = data.apply(other_func, axis=1)

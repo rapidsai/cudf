@@ -4,17 +4,18 @@ import cachetools
 import numpy as np
 from numba import cuda
 from numba.np import numpy_support
-from numba.types import Record, Tuple, boolean, int64, void, Dummy
+from numba.types import Dummy, Record, Tuple, boolean, int64, void
 from nvtx import annotate
 
+from cudf.core.udf._ops import _is_supported_type
 from cudf.core.udf.api import Masked, pack_return
 from cudf.core.udf.typing import MaskedType
 from cudf.utils import cudautils
-from cudf.core.udf._ops import _is_supported_type
 
 libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 MASK_BITSIZE = np.dtype("int32").itemsize * 8
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
+
 
 class FrameJitMetadata(object):
     def __init__(self, fr, func):
@@ -43,7 +44,7 @@ class FrameJitMetadata(object):
                 self.supported_dtypes[colname] = col.dtype
                 np_type = col.dtype
             else:
-                np_type = np.dtype('O')
+                np_type = np.dtype("O")
             self.all_dtypes[colname] = np_type
 
     def make_cache_key(self):
@@ -251,7 +252,11 @@ def _define_function(md, row_type, scalar_return=False):
     funtions dynamically at runtime and define them using `exec`.
     """
     # Create argument list for kernel
-    fr = {name: col for name, col in md.fr._data.items() if name in md.supported_dtypes.keys()}
+    fr = {
+        name: col
+        for name, col in md.fr._data.items()
+        if name in md.supported_dtypes.keys()
+    }
 
     input_col_list = []
     input_off_list = []
@@ -295,6 +300,7 @@ def _define_function(md, row_type, scalar_return=False):
 
     return kernel_template.format(**d)
 
+
 def _check_return_type(ty):
     """
     In almost every case, get_udf_return_type will throw a typing error
@@ -308,10 +314,11 @@ def _check_return_type(ty):
 
     In this case numba is happy to return MaskedType(<bad dtype key>),
     and won't throw because no operators were ever used. This function
-    explicitly checks for that case. 
+    explicitly checks for that case.
     """
     if isinstance(ty, Dummy):
         raise TypeError(str(ty))
+
 
 @annotate("UDF COMPILATION", color="darkgreen", domain="cudf_python")
 def compile_or_get(md):
@@ -353,8 +360,7 @@ def compile_or_get(md):
 
     # this row type is used within the kernel to pack up the column and
     # mask data into the dict like data structure the user udf expects
-    row_type = get_frame_row_type(np.dtype(list(md.supported_dtypes.items()))
-)
+    row_type = get_frame_row_type(np.dtype(list(md.supported_dtypes.items())))
 
     f_ = cuda.jit(device=True)(md.func)
     # Dict of 'local' variables into which `_kernel` is defined
