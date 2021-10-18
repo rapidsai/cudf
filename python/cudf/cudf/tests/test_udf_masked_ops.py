@@ -75,12 +75,20 @@ def test_arith_masked_vs_masked(op):
         "timedelta64[us]",
         "timedelta64[ms]",
         "timedelta64[s]",
+        "datetime64[ns]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[s]",
     ],
 )
 @pytest.mark.parametrize("op", [operator.add, operator.sub])
 def test_arith_masked_vs_masked_datelike(op, dtype_l, dtype_r):
     # Datetime version of the above
     # does not test all dtype combinations for now
+    if "datetime" in dtype_l and "datetime" in dtype_r and op is operator.add:
+        # don't try adding datetimes to datetimes.
+        pytest.skip("Adding datetime to datetime is not valid")
+
     def func_pdf(row):
         x = row["a"]
         y = row["b"]
