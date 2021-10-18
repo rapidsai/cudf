@@ -498,15 +498,6 @@ class BaseIndex(Serializable):
 
         return super().fillna(value=value)
 
-    def take(self, indices):
-        """Gather only the specific subset of indices
-
-        Parameters
-        ----------
-        indices: An array-like that maps to values contained in this Index.
-        """
-        return self[indices]
-
     def to_frame(self, index=True, name=None):
         """Create a DataFrame with a column containing this Index
 
