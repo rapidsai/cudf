@@ -31,8 +31,8 @@ auto generate_sorted_lists(lists_column_view const& input,
                            order column_order,
                            null_order null_precedence)
 {
-  return std::make_pair(lists::sort_lists(input, column_order, null_precedence),
-                        lists::stable_sort_lists(input, column_order, null_precedence));
+  return std::pair{lists::sort_lists(input, column_order, null_precedence),
+                   lists::stable_sort_lists(input, column_order, null_precedence)};
 }
 
 template <typename T>
