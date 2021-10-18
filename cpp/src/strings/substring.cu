@@ -111,7 +111,7 @@ std::unique_ptr<column> slice_strings(
 {
   if (strings.is_empty()) return make_empty_column(data_type{type_id::STRING});
 
-  if (step.is_valid()) CUDF_EXPECTS(step.value(stream) != 0, "Step parameter must not be 0");
+  if (step.is_valid(stream)) CUDF_EXPECTS(step.value(stream) != 0, "Step parameter must not be 0");
 
   auto const d_column = column_device_view::create(strings.parent(), stream);
   auto const d_start  = get_scalar_device_view(const_cast<numeric_scalar<size_type>&>(start));

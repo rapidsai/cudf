@@ -87,7 +87,9 @@ class aggregation {
     CUDA,            ///< CUDA UDF based reduction
     MERGE_LISTS,     ///< merge multiple lists values into one list
     MERGE_SETS,      ///< merge multiple lists values into one list then drop duplicate entries
-    MERGE_M2,        ///< merge partial values of M2 aggregation
+    MERGE_M2,        ///< merge partial values of M2 aggregation,
+    COVARIANCE,      ///< covariance between two sets of elements
+    CORRELATION,     ///< correlation between two sets of elements
     TDIGEST,         ///< create a tdigest from a set of input values
     MERGE_TDIGEST    ///< create a tdigest by merging multiple tdigests together
   };
@@ -146,6 +148,7 @@ class groupby_scan_aggregation : public virtual aggregation {
 };
 
 enum class udf_type : bool { CUDA, PTX };
+enum class correlation_type : int32_t { PEARSON, KENDALL, SPEARMAN };
 
 /// Factory to create a SUM aggregation
 template <typename Base = aggregation>
@@ -494,6 +497,26 @@ std::unique_ptr<Base> make_merge_sets_aggregation(null_equality nulls_equal = nu
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_merge_m2_aggregation();
+
+/**
+ * @brief Factory to create a COVARIANCE aggregation
+ *
+ * Compute covariance between two columns.
+ * The input columns are child columns of a non-nullable struct columns.
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_covariance_aggregation();
+
+/**
+ * @brief Factory to create a CORRELATION aggregation
+ *
+ * Compute correlation coefficient between two columns.
+ * The input columns are child columns of a non-nullable struct columns.
+ *
+ * @param[in] type: correlation_type
+ */
+template <typename Base = aggregation>
+std::unique_ptr<Base> make_correlation_aggregation(correlation_type type);
 
 /**
  * @brief Factory to create a TDIGEST aggregation
