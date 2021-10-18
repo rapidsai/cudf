@@ -625,6 +625,7 @@ void generate_offsets(size_type num_entries,
 std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_column,
                                              null_equality nulls_equal,
                                              nan_equality nans_equal,
+                                             keep_policy keep_entry,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
@@ -633,6 +634,10 @@ std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_colu
       cudf::is_nested(child_type) && child_type.id() != type_id::STRUCT) {
     CUDF_FAIL("Nested types other than STRUCT are not supported in `drop_list_duplicates`.");
   }
+
+  CUDF_EXPECTS(
+    keep_entry != duplicate_keep_option::KEEP_NONE,
+    "The option `duplicate_keep_option::KEEP_ANY_ONE` is not yet supported in `drop_duplicates`");
 
   // Flatten all entries (depth = 1) of the lists column.
   auto const lists_entries = lists_column.get_sliced_child(stream);
@@ -695,11 +700,12 @@ std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_colu
 std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_column,
                                              null_equality nulls_equal,
                                              nan_equality nans_equal,
+                                             keep_policy keep_entry,
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::drop_list_duplicates(
-    lists_column, nulls_equal, nans_equal, rmm::cuda_stream_default, mr);
+    lists_column, nulls_equal, nans_equal, keep_entry, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace lists

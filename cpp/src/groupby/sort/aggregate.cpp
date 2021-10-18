@@ -418,11 +418,14 @@ void aggregate_result_functor::operator()<aggregation::COLLECT_SET>(aggregation 
     dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg)._nulls_equal;
   auto const nans_equal =
     dynamic_cast<cudf::detail::collect_set_aggregation const&>(agg)._nans_equal;
-  cache.add_result(
-    col_idx,
-    agg,
-    lists::detail::drop_list_duplicates(
-      lists_column_view(collect_result->view()), nulls_equal, nans_equal, stream, mr));
+  cache.add_result(col_idx,
+                   agg,
+                   lists::detail::drop_list_duplicates(lists_column_view(collect_result->view()),
+                                                       nulls_equal,
+                                                       nans_equal,
+                                                       lists::keep_policy::UNDEFINED,
+                                                       stream,
+                                                       mr));
 };
 
 /**
@@ -492,6 +495,7 @@ void aggregate_result_functor::operator()<aggregation::MERGE_SETS>(aggregation c
                    lists::detail::drop_list_duplicates(lists_column_view(merged_result->view()),
                                                        merge_sets_agg._nulls_equal,
                                                        merge_sets_agg._nans_equal,
+                                                       lists::keep_policy::UNDEFINED,
                                                        stream,
                                                        mr));
 };

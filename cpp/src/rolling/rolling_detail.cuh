@@ -845,8 +845,12 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
                                                      stream,
                                                      rmm::mr::get_current_device_resource());
 
-    result = lists::detail::drop_list_duplicates(
-      lists_column_view(collected_list->view()), agg._nulls_equal, agg._nans_equal, stream, mr);
+    result = lists::detail::drop_list_duplicates(lists_column_view(collected_list->view()),
+                                                 agg._nulls_equal,
+                                                 agg._nans_equal,
+                                                 lists::keep_policy::UNDEFINED,
+                                                 stream,
+                                                 mr);
   }
 
   // perform the element-wise square root operation on result of VARIANCE
