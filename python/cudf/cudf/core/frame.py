@@ -48,7 +48,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import merge
-from cudf.core.udf.pipeline import compile_or_get
+from cudf.core.udf.pipeline import compile_or_get, FrameJitMetadata
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
@@ -1647,22 +1647,23 @@ class Frame:
         """
         Apply `func` across the rows of the frame.
         """
-        kernel, retty = compile_or_get(self, func)
+        md = FrameJitMetadata(self, func)
+        kernel, retty = compile_or_get(md)
 
         # Mask and data column preallocated
         ans_col = cupy.empty(len(self), dtype=retty)
         ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
         launch_args = [(ans_col, ans_mask)]
         offsets = []
-        for col in self._data.values():
-            if col.dtype != np.dtype('object'):
-                data = col.data
-                mask = col.mask
-                if mask is None:
-                    launch_args.append(data)
-                else:
-                    launch_args.append((data, mask))
-                offsets.append(col.offset)
+        for name in md.supported_dtypes.keys():
+            col = self._data[name]
+            data = col.data
+            mask = col.mask
+            if mask is None:
+                launch_args.append(data)
+            else:
+                launch_args.append((data, mask))
+            offsets.append(col.offset)
         launch_args += offsets
         launch_args.append(len(self))  # size
         kernel.forall(len(self))(*launch_args)

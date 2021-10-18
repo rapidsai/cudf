@@ -3,6 +3,7 @@ import operator
 import pandas as pd
 import pytest
 from numba import cuda
+import numpy as np
 
 import cudf
 from cudf.testing._utils import NUMERIC_TYPES, assert_eq, _decimal_series
@@ -538,4 +539,18 @@ def test_masked_udf_unsupported_dtype(unsupported_dtype):
     data['list'] = [[1,2],[3,4],[5,6]]
     data['struct'] = [{'a':1}, {'a':2}, {'a':3}]
 
-    data.apply(func, axis=1)
+    # check that we fail when an unsupported type is used within a function
+    with pytest.raises(TypeError):
+        data.apply(func, axis=1)
+
+    # also check that a DF containing unsupported dtypes can still run a
+    # function that does NOT involve any of the unsupported dtype columns
+
+    data['supported_dtype'] = 1
+    def other_func(row):
+        return row['supported_dtype']
+
+    expect = cudf.Series(np.ones(len(data)))
+    got = data.apply(other_func, axis=1)
+
+    assert_eq(expect, got, check_dtype=False)

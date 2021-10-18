@@ -25,14 +25,15 @@ class FrameJitMetadata(object):
         """
         self.all_dtypes = {}
         self.supported_dtypes = {}
-
-        self.preprocess_dtypes(fr)
-        self.make_cache_key(fr, func)
-
         self.func = func
+        self.fr = fr
 
-    def preprocess_dtypes(self, fr):
-        for colname, col in fr._data.items():
+        self.preprocess_dtypes()
+        self.make_cache_key()
+
+
+    def preprocess_dtypes(self):
+        for colname, col in self.fr._data.items():
             if _is_supported_type(col.dtype):
                 self.supported_dtypes[colname] = col.dtype
                 np_type = col.dtype
@@ -40,17 +41,17 @@ class FrameJitMetadata(object):
                 np_type = np.dtype('O')
             self.all_dtypes[colname] = np_type
 
-    def make_cache_key(self, fr, func):
+    def make_cache_key(self):
         cache_key = (
-            *cudautils.make_cache_key(func, self.all_dtypes.values()),
-            *(col.mask is None for col in fr._data.values()),
-            *fr._data.keys(),
+            *cudautils.make_cache_key(self.func, self.all_dtypes.values()),
+            *(col.mask is None for col in self.fr._data.values()),
+            *self.fr._data.keys(),
         )
 
         self.cache_key = cache_key
 
 
-def get_frame_row_type(md):
+def get_frame_row_type(dtype):
     """
     Get the numba `Record` type corresponding to a frame.
     Models each column and its mask as a MaskedType and
@@ -63,8 +64,7 @@ def get_frame_row_type(md):
     struct.
     """
 
-    # Create the numpy structured type corresponding to the frame.
-    dtype = np.dtype(list(md.all_dtypes.items()))
+    # Create the numpy structured type corresponding to the numpy dtype.
 
     fields = []
     offset = 0
@@ -106,7 +106,7 @@ def get_udf_return_type(md):
     is assumed that a `MaskedType(dtype)` is passed to the function for each
     input dtype.
     """
-    row_type = get_frame_row_type(md)
+    row_type = get_frame_row_type(np.dtype(list(md.all_dtypes.items())))
     # Get the return type. The PTX is also returned by compile_udf, but is not
     # needed here.
     ptx, output_type = cudautils.compile_udf(md.func, (row_type,))
@@ -131,28 +131,28 @@ def masked_array_type_from_col(col):
     corresponding to `dtype`, and the second an
     array of bools representing a mask.
     """
-    nb_scalar_ty = numpy_support.from_dtype(col.dtype if _is_supported_type(col.dtype) else np.dtype('O'))
+    nb_scalar_ty = numpy_support.from_dtype(col.dtype)
     if col.mask is None:
         return nb_scalar_ty[::1]
     else:
         return Tuple((nb_scalar_ty[::1], libcudf_bitmask_type[::1]))
 
 
-def construct_signature(df, return_type):
+def construct_signature(md, return_type):
     """
     Build the signature of numba types that will be used to
     actually JIT the kernel itself later, accounting for types
-    and offsets
+    and offsets. Skips columns with unsupported dtypes.
     """
 
     # Tuple of arrays, first the output data array, then the mask
     return_type = Tuple((return_type[::1], boolean[::1]))
     offsets = []
     sig = [return_type]
-    for col in df._data.values():
-        if _is_supported_type(col.dtype):
-            sig.append(masked_array_type_from_col(col))
-            offsets.append(int64)
+    for key in md.supported_dtypes.keys():
+        col = md.fr._data[key]
+        sig.append(masked_array_type_from_col(col))
+        offsets.append(int64)
 
     # return_type + data,masks + offsets + size
     sig = void(*(sig + offsets + [int64]))
@@ -203,7 +203,7 @@ row_initializer_template = """\
 """
 
 
-def _define_function(fr, row_type, scalar_return=False):
+def _define_function(md, row_type, scalar_return=False):
     """
     The kernel we want to JIT compile looks something like the following,
     which is an example for two columns that both have nulls present
@@ -237,13 +237,11 @@ def _define_function(fr, row_type, scalar_return=False):
     funtions dynamically at runtime and define them using `exec`.
     """
     # Create argument list for kernel
-    fr = {name: col for name, col in fr._data.items() if col.dtype != 'object'}
+    fr = {name: col for name, col in md.fr._data.items() if name in md.supported_dtypes.keys()}
 
     input_col_list = []
     input_off_list = []
     for i, col in enumerate(fr.values()):
-        if col.dtype.kind == 'O':
-            continue
         input_col_list.append(f"input_col_{i}")
         input_off_list.append(f"offset_{i}")
 
@@ -302,7 +300,7 @@ def _check_return_type(ty):
         raise TypeError(str(ty))
 
 @annotate("UDF COMPILATION", color="darkgreen", domain="cudf_python")
-def compile_or_get(df, f):
+def compile_or_get(md):
     """
     Return a compiled kernel in terms of MaskedTypes that launches a
     kernel equivalent of `f` for the dtypes of `df`. The kernel uses
@@ -324,8 +322,6 @@ def compile_or_get(df, f):
     use it to allocate an output column of the right dtype.
     """
 
-    md = FrameJitMetadata(df, f)
-
     # check to see if we already compiled this function
     cache_key = md.cache_key
     if precompiled.get(cache_key) is not None:
@@ -341,13 +337,14 @@ def compile_or_get(df, f):
     _is_scalar_return = not isinstance(scalar_return_type, MaskedType)
 
     # this is the signature for the final full kernel compilation
-    sig = construct_signature(df, scalar_return_type)
+    sig = construct_signature(md, scalar_return_type)
 
     # this row type is used within the kernel to pack up the column and
     # mask data into the dict like data structure the user udf expects
-    row_type = get_frame_row_type(md)
+    row_type = get_frame_row_type(np.dtype(list(md.supported_dtypes.items()))
+)
 
-    f_ = cuda.jit(device=True)(f)
+    f_ = cuda.jit(device=True)(md.func)
     # Dict of 'local' variables into which `_kernel` is defined
     local_exec_context = {}
     global_exec_context = {
@@ -359,7 +356,7 @@ def compile_or_get(df, f):
         "row_type": row_type,
     }
     exec(
-        _define_function(df, row_type, scalar_return=_is_scalar_return),
+        _define_function(md, row_type, scalar_return=_is_scalar_return),
         global_exec_context,
         local_exec_context,
     )
