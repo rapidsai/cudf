@@ -154,14 +154,14 @@ struct contains_scalar_dispatch {
       auto found_iter = thrust::find(rmm::exec_policy(stream),
                                      d_col->pair_begin<Type, true>(),
                                      d_col->pair_end<Type, true>(),
-                                     thrust::make_pair(s->value(), true));
+                                     thrust::make_pair(s->value(stream), true));
 
       return found_iter != d_col->pair_end<Type, true>();
     } else {
       auto found_iter = thrust::find(rmm::exec_policy(stream),  //
                                      d_col->begin<Type>(),
                                      d_col->end<Type>(),
-                                     s->value());
+                                     s->value(stream));
 
       return found_iter != d_col->end<Type>();
     }
@@ -208,7 +208,7 @@ bool contains(column_view const& col, scalar const& value, rmm::cuda_stream_view
 {
   if (col.is_empty()) { return false; }
 
-  if (not value.is_valid()) { return col.has_nulls(); }
+  if (not value.is_valid(stream)) { return col.has_nulls(); }
 
   return cudf::type_dispatcher(col.type(), contains_scalar_dispatch{}, col, value, stream);
 }

@@ -158,6 +158,17 @@ class groupby_simple_aggregations_collector final
 
     return aggs;
   }
+
+  std::vector<std::unique_ptr<aggregation>> visit(
+    data_type, cudf::detail::correlation_aggregation const&) override
+  {
+    std::vector<std::unique_ptr<aggregation>> aggs;
+    aggs.push_back(make_sum_aggregation());
+    // COUNT_VALID
+    aggs.push_back(make_count_aggregation());
+
+    return aggs;
+  }
 };
 
 template <typename Map>

@@ -337,35 +337,53 @@ public final class Table implements AutoCloseable {
   /**
    * Setup everything to write ORC formatted data to a file.
    * @param columnNames     names that correspond to the table columns
+   * @param numChildren     Children of the top level
+   * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
+   * @param precisions      precision list containing all the precisions of the decimal types in
+   *                        the columns
+   * @param isMapValues     true if a column is a map
    * @param filename        local output path
    * @return a handle that is used in later calls to writeORCChunk and writeORCEnd.
    */
   private static native long writeORCFileBegin(String[] columnNames,
+                                               int numChildren,
+                                               int[] flatNumChildren,
                                                boolean[] nullable,
                                                String[] metadataKeys,
                                                String[] metadataValues,
                                                int compression,
+                                               int[] precisions,
+                                               boolean[] isMapValues,
                                                String filename) throws CudfException;
 
   /**
    * Setup everything to write ORC formatted data to a buffer.
    * @param columnNames     names that correspond to the table columns
+   * @param numChildren     Children of the top level
+   * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
+   * @param precisions      precision list containing all the precisions of the decimal types in
+   *                        the columns
+   * @param isMapValues     true if a column is a map
    * @param consumer        consumer of host buffers produced.
    * @return a handle that is used in later calls to writeORCChunk and writeORCEnd.
    */
   private static native long writeORCBufferBegin(String[] columnNames,
+                                                 int numChildren,
+                                                 int[] flatNumChildren,
                                                  boolean[] nullable,
                                                  String[] metadataKeys,
                                                  String[] metadataValues,
                                                  int compression,
+                                                 int[] precisions,
+                                                 boolean[] isMapValues,
                                                  HostBufferConsumer consumer) throws CudfException;
 
   /**
@@ -1079,21 +1097,29 @@ public final class Table implements AutoCloseable {
     HostBufferConsumer consumer;
 
     private ORCTableWriter(ORCWriterOptions options, File outputFile) {
-      this.handle = writeORCFileBegin(options.getColumnNames(),
-          options.getColumnNullability(),
+      this.handle = writeORCFileBegin(options.getFlatColumnNames(),
+          options.getTopLevelChildren(),
+          options.getFlatNumChildren(),
+          options.getFlatIsNullable(),
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
+          options.getFlatPrecision(),
+          options.getFlatIsMap(),
           outputFile.getAbsolutePath());
       this.consumer = null;
     }
 
     private ORCTableWriter(ORCWriterOptions options, HostBufferConsumer consumer) {
-      this.handle = writeORCBufferBegin(options.getColumnNames(),
-          options.getColumnNullability(),
+      this.handle = writeORCBufferBegin(options.getFlatColumnNames(),
+          options.getTopLevelChildren(),
+          options.getFlatNumChildren(),
+          options.getFlatIsNullable(),
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
+          options.getFlatPrecision(),
+          options.getFlatIsMap(),
           consumer);
       this.consumer = consumer;
     }
@@ -1150,7 +1176,7 @@ public final class Table implements AutoCloseable {
     // Need to specify the number of columns but leave all column names undefined
     String[] names = new String[getNumberOfColumns()];
     Arrays.fill(names, "");
-    ORCWriterOptions opts = ORCWriterOptions.builder().withColumnNames(names).build();
+    ORCWriterOptions opts = ORCWriterOptions.builder().withColumns(true, names).build();
     writeORC(opts, outputFile);
   }
 
@@ -1161,7 +1187,7 @@ public final class Table implements AutoCloseable {
    */
   @Deprecated
   public void writeORC(ORCWriterOptions options, File outputFile) {
-    assert options.getColumnNames().length == getNumberOfColumns() : "must specify names for all columns";
+    assert options.getTopLevelChildren() == getNumberOfColumns() : "must specify names for all columns";
     try (TableWriter writer = Table.writeORCChunked(options, outputFile)) {
       writer.write(this);
     }

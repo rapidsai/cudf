@@ -59,9 +59,9 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
 {
   if (col.is_empty()) return rmm::device_buffer{0, stream, mr};
 
-  if (not s.is_valid()) {
+  if (not s.is_valid(stream)) {
     return cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr);
-  } else if (s.is_valid() and col.nullable()) {
+  } else if (s.is_valid(stream) and col.nullable()) {
     return cudf::detail::copy_bitmask(col, stream, mr);
   } else {
     return rmm::device_buffer{0, stream, mr};
@@ -152,7 +152,7 @@ void binary_operation(mutable_column_view& out,
                out.null_mask(),
                lhs.null_mask(),
                lhs.offset(),
-               rhs.is_valid());
+               rhs.is_valid(stream));
   } else {
     std::string kernel_name =
       jitify2::reflection::Template("cudf::binops::jit::kernel_v_s")  //
@@ -456,14 +456,14 @@ std::unique_ptr<column> fixed_point_binary_operation(scalar const& lhs,
       auto const diff = lhs.type().scale() - rhs.type().scale();
       if (lhs.type().id() == type_id::DECIMAL32) {
         auto const factor = numeric::detail::ipow<int32_t, Radix::BASE_10>(diff);
-        auto const val    = static_cast<fixed_point_scalar<decimal32> const&>(lhs).value();
+        auto const val    = static_cast<fixed_point_scalar<decimal32> const&>(lhs).value(stream);
         auto const scale  = scale_type{rhs.type().scale()};
         auto const scalar = make_fixed_point_scalar<decimal32>(val * factor, scale);
         binops::jit::binary_operation(out_view, *scalar, rhs, op, stream);
       } else {
         CUDF_EXPECTS(lhs.type().id() == type_id::DECIMAL64, "Unexpected DTYPE");
         auto const factor = numeric::detail::ipow<int64_t, Radix::BASE_10>(diff);
-        auto const val    = static_cast<fixed_point_scalar<decimal64> const&>(lhs).value();
+        auto const val    = static_cast<fixed_point_scalar<decimal64> const&>(lhs).value(stream);
         auto const scale  = scale_type{rhs.type().scale()};
         auto const scalar = make_fixed_point_scalar<decimal64>(val * factor, scale);
         binops::jit::binary_operation(out_view, *scalar, rhs, op, stream);
@@ -526,14 +526,14 @@ std::unique_ptr<column> fixed_point_binary_operation(column_view const& lhs,
       auto const diff = rhs.type().scale() - lhs.type().scale();
       if (rhs.type().id() == type_id::DECIMAL32) {
         auto const factor = numeric::detail::ipow<int32_t, Radix::BASE_10>(diff);
-        auto const val    = static_cast<fixed_point_scalar<decimal32> const&>(rhs).value();
+        auto const val    = static_cast<fixed_point_scalar<decimal32> const&>(rhs).value(stream);
         auto const scale  = scale_type{lhs.type().scale()};
         auto const scalar = make_fixed_point_scalar<decimal32>(val * factor, scale);
         binops::jit::binary_operation(out_view, lhs, *scalar, op, stream);
       } else {
         CUDF_EXPECTS(rhs.type().id() == type_id::DECIMAL64, "Unexpected DTYPE");
         auto const factor = numeric::detail::ipow<int64_t, Radix::BASE_10>(diff);
-        auto const val    = static_cast<fixed_point_scalar<decimal64> const&>(rhs).value();
+        auto const val    = static_cast<fixed_point_scalar<decimal64> const&>(rhs).value(stream);
         auto const scale  = scale_type{rhs.type().scale()};
         auto const scalar = make_fixed_point_scalar<decimal64>(val * factor, scale);
         binops::jit::binary_operation(out_view, lhs, *scalar, op, stream);

@@ -219,6 +219,7 @@ add_library(cudf
     src/groupby/sort/group_argmax.cu
     src/groupby/sort/group_argmin.cu
     src/groupby/sort/group_collect.cu
+    src/groupby/sort/group_correlation.cu
     src/groupby/sort/group_count.cu
     src/groupby/sort/group_m2.cu
     src/groupby/sort/group_max.cu
@@ -320,6 +321,7 @@ add_library(cudf
     src/partitioning/partitioning.cu
     src/partitioning/round_robin.cu
     src/quantiles/tdigest/tdigest.cu
+    src/quantiles/tdigest/tdigest_column_view.cpp
     src/quantiles/quantile.cu
     src/quantiles/quantiles.cu
     src/reductions/all.cu
