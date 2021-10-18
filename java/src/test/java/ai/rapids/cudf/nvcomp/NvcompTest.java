@@ -55,20 +55,18 @@ public class NvcompTest {
       // create the batched buffers to compress
       for (int i = 0; i < originalBuffers.size(); i++) {
         originalBuffers.set(i, initBatchBuffer(data, i));
+        // Increment the refcount since compression will try to close it
+        originalBuffers.get(i).incRefCount();
       }
 
       // compress and decompress the buffers
       BatchedLZ4Compressor compressor = new BatchedLZ4Compressor(chunkSize, targetIntermediteSize);
 
-      // Increment the refcount on all original buffers since compression will try to close them
-      for (int i = 0; i < originalBuffers.size(); i++) {
-        originalBuffers.get(i).incRefCount();
-      }
       try (CloseableArray<DeviceMemoryBuffer> compressedBuffers =
                CloseableArray.wrap(compressor.compress(originalBuffers.getArray(), stream));
            CloseableArray<DeviceMemoryBuffer> uncompressedBuffers =
-               CloseableArray.wrap(new DeviceMemoryBuffer[originalBuffers.size()])) {
-        for (int i = 0; i < uncompressedBuffers.size(); i++) {
+               CloseableArray.wrap(new DeviceMemoryBuffer[numBuffers])) {
+        for (int i = 0; i < numBuffers; i++) {
           uncompressedBuffers.set(i,
               DeviceMemoryBuffer.allocate(originalBuffers.get(i).getLength()));
         }

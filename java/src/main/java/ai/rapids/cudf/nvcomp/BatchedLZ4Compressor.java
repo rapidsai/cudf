@@ -29,8 +29,7 @@ import java.util.Arrays;
 
 /** Multi-buffer LZ4 compressor */
 public class BatchedLZ4Compressor {
-  static final long MIN_CHUNK_SIZE = 1;
-  static final long MAX_CHUNK_SIZE = 16777216;
+  static final long MAX_CHUNK_SIZE = 16777216;  // in bytes
   // each chunk has a 64-bit integer value as metadata containing the compressed size
   static final long METADATA_BYTES_PER_CHUNK = 8;
 
@@ -55,8 +54,8 @@ public class BatchedLZ4Compressor {
 
   /**
    * Compress a batch of buffers with LZ4. The input buffers will be closed.
-   * @param origInputs    buffers to compress
-   * @param stream    CUDA stream to use
+   * @param origInputs buffers to compress
+   * @param stream CUDA stream to use
    * @return compressed buffers corresponding to the input buffers
    */
   public DeviceMemoryBuffer[] compress(BaseDeviceMemoryBuffer[] origInputs, Cuda.Stream stream) {
@@ -125,9 +124,9 @@ public class BatchedLZ4Compressor {
   }
 
   static void validateChunkSize(int chunkSize) {
-    if (chunkSize < MIN_CHUNK_SIZE || chunkSize > MAX_CHUNK_SIZE) {
-      throw new IllegalArgumentException("Chunk size must be between " + MIN_CHUNK_SIZE +
-          " and " + MAX_CHUNK_SIZE);
+    if (chunkSize <= 0  || chunkSize > MAX_CHUNK_SIZE) {
+      throw new IllegalArgumentException("Invalid chunk size: " + chunkSize + " Max chunk size is: "
+          + MAX_CHUNK_SIZE + "bytes");
     }
   }
 
@@ -267,15 +266,16 @@ public class BatchedLZ4Compressor {
           final long outputBufferAddr = outputBuffer.getAddress();
           outputs.set(outputIdx, outputBuffer);
           final long numChunks = chunksPerInput[outputIdx];
+          final long metadataSize = numChunks * METADATA_BYTES_PER_CHUNK;
 
           // setup a copy of the metadata at the front of the output buffer
           srcAddrs[copyBufferIdx] = chunkSizesAddr + chunkIdx * 8;
           destAddrs[copyBufferIdx] = outputBufferAddr;
-          sizes[copyBufferIdx] = numChunks * 8;
+          sizes[copyBufferIdx] = metadataSize;
           ++copyBufferIdx;
 
           // setup copies of the compressed chunks for this output buffer
-          long nextChunkAddr = outputBufferAddr + numChunks * 8;
+          long nextChunkAddr = outputBufferAddr + metadataSize;
           for (int i = 0; i < numChunks; ++i) {
             srcAddrs[copyBufferIdx] = outputChunkAddrs[chunkIdx];
             destAddrs[copyBufferIdx] = nextChunkAddr;

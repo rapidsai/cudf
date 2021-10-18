@@ -30,11 +30,11 @@ import java.util.Arrays;
 public class BatchedLZ4Decompressor {
   /**
    * Asynchronously decompress a batch of buffers
-   * @param chunkSize  maximum uncompressed block size, must match value used during compression
+   * @param chunkSize maximum uncompressed block size, must match value used during compression
    * @param origInputs buffers to decompress, will be closed by this operation
-   * @param outputs    output buffers that will contain the compressed results, each must be sized
-   *                   to the exact decompressed size of the corresponding input
-   * @param stream     CUDA stream to use
+   * @param outputs output buffers that will contain the compressed results, each must be sized
+   *                to the exact decompressed size of the corresponding input
+   * @param stream CUDA stream to use
    */
   public static void decompressAsync(int chunkSize,
                                      BaseDeviceMemoryBuffer[] origInputs,
@@ -107,6 +107,7 @@ public class BatchedLZ4Decompressor {
    * @param inputs device buffers containing the compressed data
    * @param chunksPerInput number of compressed chunks per input buffer
    * @param outputs device buffers that will hold the uncompressed output
+   * @param stream CUDA stream to use
    * @return device buffer containing address and size vectors
    */
   private static DeviceMemoryBuffer buildAddrsSizesBuffer(int chunkSize,
