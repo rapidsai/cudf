@@ -4,6 +4,7 @@
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/groupby.hpp>
 #include <cudf/quantiles.hpp>
+#include <cudf/tdigest/tdigest_column_view.cuh>
 #include <cudf/transform.hpp>
 #include <cudf/unary.hpp>
 
@@ -17,6 +18,7 @@
 #include <tests/groupby/groupby_test_util.hpp>
 
 using namespace cudf;
+using namespace cudf::tdigest;
 
 struct tdigest_gen {
   template <
@@ -116,8 +118,8 @@ struct percentile_approx_dispatch {
 
     cudf::test::fixed_width_column_wrapper<double> g_percentages(percentages.begin(),
                                                                  percentages.end());
-    structs_column_view scv(*(gb_result.second[0].results[0]));
-    auto result = cudf::percentile_approx(scv, g_percentages);
+    tdigest_column_view tdv(*(gb_result.second[0].results[0]));
+    auto result = cudf::percentile_approx(tdv, g_percentages);
 
     cudf::test::expect_columns_equivalent(
       *expected, *result, cudf::test::debug_output_level::FIRST_ERROR, ulps);
@@ -194,8 +196,8 @@ void percentile_approx_test(column_view const& _keys,
 
   cudf::test::fixed_width_column_wrapper<double> g_percentages(percentages.begin(),
                                                                percentages.end());
-  structs_column_view scv(*(gb_result.second[0].results[0]));
-  auto result = cudf::percentile_approx(scv, g_percentages);
+  tdigest_column_view tdv(*(gb_result.second[0].results[0]));
+  auto result = cudf::percentile_approx(tdv, g_percentages);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*expected, *result);
 }
@@ -364,8 +366,8 @@ TEST_F(PercentileApproxTest, EmptyInput)
   input.push_back(*empty_);
   auto empty = cudf::concatenate(input);
 
-  structs_column_view scv(*empty);
-  auto result = cudf::percentile_approx(scv, percentiles);
+  tdigest_column_view tdv(*empty);
+  auto result = cudf::percentile_approx(tdv, percentiles);
 
   cudf::test::fixed_width_column_wrapper<offset_type> offsets{0, 0, 0, 0};
   std::vector<bool> nulls{0, 0, 0};
@@ -395,8 +397,8 @@ TEST_F(PercentileApproxTest, EmptyPercentiles)
 
   cudf::test::fixed_width_column_wrapper<double> percentiles{};
 
-  structs_column_view scv(*tdigest_column.second[0].results[0]);
-  auto result = cudf::percentile_approx(scv, percentiles);
+  tdigest_column_view tdv(*tdigest_column.second[0].results[0]);
+  auto result = cudf::percentile_approx(tdv, percentiles);
 
   cudf::test::fixed_width_column_wrapper<offset_type> offsets{0, 0, 0};
   auto expected = cudf::make_lists_column(2,
@@ -422,10 +424,10 @@ TEST_F(PercentileApproxTest, NullPercentiles)
   requests.push_back({values, std::move(aggregations)});
   auto tdigest_column = gb.aggregate(requests);
 
-  structs_column_view scv(*tdigest_column.second[0].results[0]);
+  tdigest_column_view tdv(*tdigest_column.second[0].results[0]);
 
   cudf::test::fixed_width_column_wrapper<double> npercentiles{{0.5, 0.5, 1.0, 1.0}, {0, 0, 1, 1}};
-  auto result = cudf::percentile_approx(scv, npercentiles);
+  auto result = cudf::percentile_approx(tdv, npercentiles);
 
   std::vector<bool> valids{0, 0, 1, 1};
   cudf::test::lists_column_wrapper<double> expected{{{99, 99, 4, 4}, valids.begin()},
