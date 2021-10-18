@@ -321,20 +321,31 @@ class ListColumn(ColumnBase):
     def as_string_column(
         self, dtype: Dtype, format=None, **kwargs
     ) -> "cudf.core.column.StringColumn":
-        c = self.children[1]
-        # convert leaf child to strings column
+        """
+        Create a strings column from a list column
+        """
+        # Convert the leaf child column to strings column
+        cc = []
+        c = self
+        while is_list_dtype(c.dtype):
+            cc.insert(0, c)
+            c = c.children[1]
         s = c.as_string_column(dtype)
-        # build same lists column but with strings column child
-        o = self.children[0]
-        lc = cudf.core.column.ListColumn(
-            size=len(self),
-            dtype=cudf.ListDtype(s.dtype),
-            mask=self.mask,
-            offset=self.offset,
-            null_count=self.null_count,
-            children=(o, s),
-        )
+        # Rebuild the list column replacing just the leaf child
+        lc = s
+        for c in cc:
+            o = c.children[0]
+            lc = cudf.core.column.ListColumn(
+                size=c.size,
+                dtype=cudf.ListDtype(lc.dtype),
+                mask=c.mask,
+                offset=c.offset,
+                null_count=c.null_count,
+                children=(o, lc),
+            )
+        # Separator strings to match the Python format
         separators = as_column([", ", "[", "]"])
+        # Call libcudf to format the list column
         return format_list_column(lc, separators)
 
 
