@@ -281,7 +281,7 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
     auto matched_view              = dictionary_column_view(input);
     std::unique_ptr<column> result = nullptr;
     auto add_scalar_key            = [&](scalar const& key, scalar const& key_replace) {
-      if (key.is_valid()) {
+      if (key.is_valid(stream)) {
         result = dictionary::detail::add_keys(
           matched_view, make_column_from_scalar(key_replace, 1, stream)->view(), stream, mr);
         matched_view = dictionary_column_view(result->view());
