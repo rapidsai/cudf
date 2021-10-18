@@ -2986,12 +2986,12 @@ class Frame:
 
         return libcudf.sort.order_by(to_sort, ascending, na_position)
 
-    def take(self, positions, keep_index=None):
+    def take(self, indices, keep_index=None):
         """Return a new object containing the rows specified by *positions*
 
         Parameters
         ----------
-        positions : array-like
+        indices : array-like
             Array of ints indicating which positions to take.
         keep_index : bool, default True
             Whether to retain the index in result or not.
@@ -3027,15 +3027,15 @@ class Frame:
         else:
             keep_index = True
 
-        positions = as_column(positions)
-        if is_bool_dtype(positions):
+        indices = as_column(indices)
+        if is_bool_dtype(indices):
             warnings.warn(
                 "Calling take with a boolean array is deprecated and will be "
                 "removed in the future.",
                 FutureWarning,
             )
-            return self._apply_boolean_mask(positions)
-        return self._gather(positions, keep_index=keep_index)
+            return self._apply_boolean_mask(indices)
+        return self._gather(indices, keep_index=keep_index)
 
     def sin(self):
         """
