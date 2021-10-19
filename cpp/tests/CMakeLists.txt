@@ -387,7 +387,7 @@ ConfigureTest(STRINGS_TEST
 
 ###################################################################################################
 # - structs test ----------------------------------------------------------------------------------
-ConfigureTest(STRUCTS_TEST 
+ConfigureTest(STRUCTS_TEST
     structs/structs_column_tests.cpp
     structs/utilities_tests.cpp
     )

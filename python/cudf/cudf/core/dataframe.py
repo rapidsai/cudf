@@ -4396,6 +4396,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def hash_columns(self, columns=None, method="murmur3"):
         """Hash the given *columns* and return a new device array
 
+        This method is deprecated. Replace ``df.hash_columns(columns, method)``
+        with ``df[columns].hash_values(method)``.
+
         Parameters
         ----------
         columns : sequence of str; optional
@@ -4411,14 +4414,54 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Series
             Hash values for each row.
         """
-        table_to_hash = (
-            self
-            if columns is None
-            else Frame(data={k: self._data[k] for k in columns})
+        warnings.warn(
+            "The `hash_columns` method will be removed in a future cuDF "
+            "release. Replace `df.hash_columns(columns, method)` with "
+            "`df[columns].hash_values(method)`.",
+            FutureWarning,
         )
+        if columns is None:
+            # Slice by [:] to keep all columns.
+            columns = slice(None, None, None)
+        return self[columns].hash_values(method=method)
 
+    def hash_values(self, method="murmur3"):
+        """Compute the hash of values in each row.
+
+        Parameters
+        ----------
+        method : {'murmur3', 'md5'}, default 'murmur3'
+            Hash function to use:
+            * murmur3: MurmurHash3 hash function.
+            * md5: MD5 hash function.
+
+        Returns
+        -------
+        Series
+            A Series with hash values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"a": [10, 120, 30], "b": [0.0, 0.25, 0.50]})
+        >>> df
+             a     b
+        0   10  0.00
+        1  120  0.25
+        2   30  0.50
+        >>> df.hash_values(method="murmur3")
+        0    -330519225
+        1    -397962448
+        2   -1345834934
+        dtype: int32
+        >>> df.hash_values(method="md5")
+        0    57ce879751b5169c525907d5c563fae1
+        1    948d6221a7c4963d4be411bcead7e32b
+        2    fe061786ea286a515b772d91b0dfcd70
+        dtype: object
+        """
         return Series._from_data(
-            {None: table_to_hash._hash(method=method)}, index=self.index
+            {None: self._hash(method=method)}, index=self.index
         )
 
     def partition_by_hash(self, columns, nparts, keep_index=True):
