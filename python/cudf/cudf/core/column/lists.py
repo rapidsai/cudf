@@ -331,6 +331,7 @@ class ListColumn(ColumnBase):
             cc.insert(0, c)
             c = c.children[1]
         s = c.as_string_column(dtype)
+
         # Rebuild the list column replacing just the leaf child
         lc = s
         for c in cc:
@@ -343,8 +344,10 @@ class ListColumn(ColumnBase):
                 null_count=c.null_count,
                 children=(o, lc),
             )
+
         # Separator strings to match the Python format
         separators = as_column([", ", "[", "]"])
+
         # Call libcudf to format the list column
         return format_list_column(lc, separators)
 
