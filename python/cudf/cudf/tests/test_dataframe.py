@@ -2218,24 +2218,30 @@ def test_series_hash_encode(nrows):
     s = cudf.Series(data, name=1)
     num_features = 1000
 
-    encoded_series = s.hash_encode(num_features)
+    with pytest.warns(FutureWarning):
+        encoded_series = s.hash_encode(num_features)
     assert isinstance(encoded_series, cudf.Series)
     enc_arr = encoded_series.to_numpy()
     assert np.all(enc_arr >= 0)
     assert np.max(enc_arr) < num_features
 
-    enc_with_name_arr = s.hash_encode(num_features, use_name=True).to_numpy()
+    with pytest.warns(FutureWarning):
+        enc_with_name_arr = s.hash_encode(
+            num_features, use_name=True
+        ).to_numpy()
     assert enc_with_name_arr[0] != enc_arr[0]
 
 
 def test_series_hash_encode_reproducible_results():
     # Regression test to ensure that hash_encode outputs are reproducible
     data = cudf.Series([0, 1, 2])
-    hash_result = data.hash_encode(stop=2 ** 16, use_name=False)
+    with pytest.warns(FutureWarning):
+        hash_result = data.hash_encode(stop=2 ** 16, use_name=False)
     expected_result = cudf.Series([42165, 55037, 7341])
     assert_eq(hash_result, expected_result)
 
-    hash_result_with_name = data.hash_encode(stop=2 ** 16, use_name=True)
+    with pytest.warns(FutureWarning):
+        hash_result_with_name = data.hash_encode(stop=2 ** 16, use_name=True)
     expected_result_with_name = cudf.Series([36137, 39649, 58673])
     assert_eq(hash_result_with_name, expected_result_with_name)
 
