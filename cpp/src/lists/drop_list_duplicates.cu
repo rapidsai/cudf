@@ -20,8 +20,8 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/sorting.hpp>
 #include <cudf/detail/structs/utilities.hpp>
-#include <cudf/lists/detail/sorting.hpp>
 #include <cudf/lists/drop_list_duplicates.hpp>
 #include <cudf/structs/struct_view.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -627,57 +627,79 @@ void generate_offsets(size_type num_entries,
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_column,
-                                             null_equality nulls_equal,
-                                             nan_equality nans_equal,
-                                             keep_policy keep_entry,
-                                             rmm::cuda_stream_view stream,
-                                             rmm::mr::device_memory_resource* mr)
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates(
+  lists_column_view const& keys,
+  lists_column_view const& values,
+  null_equality nulls_equal,
+  nan_equality nans_equal,
+  duplicate_keep_option keep_option,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
-  if (lists_column.is_empty()) return cudf::empty_like(lists_column.parent());
-  if (auto const child_type = lists_column.child().type();
+  if (auto const child_type = keys.child().type();
       cudf::is_nested(child_type) && child_type.id() != type_id::STRUCT) {
-    CUDF_FAIL("Nested types other than STRUCT are not supported in `drop_list_duplicates`.");
+    CUDF_FAIL(
+      "Keys of nested types other than STRUCT are not supported in `drop_list_duplicates`.");
   }
 
+  // TODO
   CUDF_EXPECTS(
-    keep_entry != duplicate_keep_option::KEEP_NONE,
-    "The option `duplicate_keep_option::KEEP_ANY_ONE` is not yet supported in `drop_duplicates`");
+    keep_option != duplicate_keep_option::KEEP_NONE,
+    "The option `duplicate_keep_option::KEEP_NONE` is not yet supported in `drop_duplicates`.");
+
+  CUDF_EXPECTS(keys.size() == values.size(), "Keys and values columns must have the same size.");
+
+  if (keys.is_empty()) {
+    return std::pair{cudf::empty_like(keys.parent()), cudf::empty_like(values.parent())};
+  }
 
   // Flatten all entries (depth = 1) of the lists column.
-  auto const lists_entries = lists_column.get_sliced_child(stream);
+  auto const keys_child = keys.get_sliced_child(stream);
 
-  // sorted_lists will store the results of the original lists after calling segmented_sort.
-  auto const sorted_lists = [&]() {
+  // Generate a 0-based offset column.
+  auto lists_offsets = detail::generate_clean_offsets(keys, stream, mr);
+
+  //
+  auto const sorted_order = [&]() {
     // If nans_equal == ALL_EQUAL and the column contains lists of floating-point data type,
     // we need to replace -NaN by NaN before sorting.
     auto const replace_negative_nan =
       nans_equal == nan_equality::ALL_EQUAL &&
-      type_dispatcher(
-        lists_entries.type(), detail::has_negative_nans_dispatch{}, lists_entries, stream);
+      type_dispatcher(keys_child.type(), detail::has_negative_nans_dispatch{}, keys_child, stream);
     if (replace_negative_nan) {
-      auto const new_lists_column =
-        detail::replace_negative_nans_entries(lists_entries, lists_column, stream);
-      return detail::sort_lists(
-        lists_column_view(new_lists_column->view()), order::ASCENDING, null_order::AFTER, stream);
+      auto const replaced_nan_keys =
+        detail::replace_negative_nans_entries(keys_child, keys, stream);
+      return cudf::detail::stable_segmented_sorted_order(table_view{{replaced_nan_keys->view()}},
+                                                         lists_offsets->view(),
+                                                         {order::ASCENDING},
+                                                         {null_order::AFTER},
+                                                         stream);
     } else {
-      return detail::sort_lists(lists_column, order::ASCENDING, null_order::AFTER, stream);
+      return cudf::detail::stable_segmented_sorted_order(table_view{{keys.parent()}},
+                                                         lists_offsets->view(),
+                                                         {order::ASCENDING},
+                                                         {null_order::AFTER},
+                                                         stream);
     }
   }();
 
-  auto const sorted_lists_entries =
-    lists_column_view(sorted_lists->view()).get_sliced_child(stream);
+  auto const sorted_keys_table =
+    cudf::detail::gather(table_view{{keys.parent()}},
+                         sorted_order->view(),
+                         out_of_bounds_policy::DONT_CHECK,
+                         cudf::detail::negative_index_policy::NOT_ALLOWED,
+                         stream);
 
-  // Generate a 0-based offset column.
-  auto lists_offsets = detail::generate_clean_offsets(lists_column, stream, mr);
+  auto const sorted_keys_entries =
+    lists_column_view(sorted_keys_table->get_column(0).view()).get_sliced_child(stream);
 
   // Generate a mapping from list entries to offsets of the lists containing those entries.
   auto const entries_list_offsets =
-    detail::generate_entry_list_offsets(sorted_lists_entries.size(), lists_offsets->view(), stream);
+    detail::generate_entry_list_offsets(sorted_keys_entries.size(), lists_offsets->view(), stream);
 
   // Copy non-duplicated entries (along with their list offsets) to new arrays.
   auto unique_entries_and_list_offsets = detail::get_unique_entries_and_list_offsets(
-    sorted_lists_entries, entries_list_offsets->view(), nulls_equal, nans_equal, stream, mr);
+    sorted_keys_entries, entries_list_offsets->view(), nulls_equal, nans_equal, stream, mr);
 
   // Generate offsets for the new lists column.
   detail::generate_offsets(unique_entries_and_list_offsets.front()->size(),
@@ -690,14 +712,56 @@ std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_colu
   // the list elements (rows).
   // For the entries of those lists (rows), their null_count and bitmask were generated separately
   // during the step `get_unique_entries_and_list_offsets` above.
-  return make_lists_column(lists_column.size(),
-                           std::move(lists_offsets),
-                           std::move(unique_entries_and_list_offsets.front()),
-                           lists_column.null_count(),
-                           cudf::detail::copy_bitmask(lists_column.parent(), stream, mr));
+  return std::pair{make_lists_column(keys.size(),
+                                     std::move(lists_offsets),
+                                     std::move(unique_entries_and_list_offsets.front()),
+                                     keys.null_count(),
+                                     cudf::detail::copy_bitmask(keys.parent(), stream, mr)),
+                   make_lists_column(keys.size(),
+                                     std::move(lists_offsets),
+                                     std::move(unique_entries_and_list_offsets.front()),
+                                     keys.null_count(),
+                                     cudf::detail::copy_bitmask(keys.parent(), stream, mr))};
 }
 
+/**
+ * @copydoc cudf::lists::drop_list_duplicates
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_column,
+                                             null_equality nulls_equal,
+                                             nan_equality nans_equal,
+                                             duplicate_keep_option keep_option,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr)
+{
+  return drop_list_duplicates(lists_column,
+                              lists_column,
+                              nulls_equal,
+                              nans_equal,
+                              keep_option,
+                              rmm::cuda_stream_default,
+                              mr)
+    .first;
+}
 }  // namespace detail
+
+/**
+ * @copydoc cudf::lists::drop_list_duplicates
+ */
+std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates(
+  lists_column_view const& keys,
+  lists_column_view const& values,
+  null_equality nulls_equal,
+  nan_equality nans_equal,
+  duplicate_keep_option keep_option,
+  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::drop_list_duplicates(
+    keys, values, nulls_equal, nans_equal, keep_option, rmm::cuda_stream_default, mr);
+}
 
 /**
  * @copydoc cudf::lists::drop_list_duplicates
@@ -705,12 +769,12 @@ std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_colu
 std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_column,
                                              null_equality nulls_equal,
                                              nan_equality nans_equal,
-                                             keep_policy keep_entry,
+                                             duplicate_keep_option keep_option,
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::drop_list_duplicates(
-    lists_column, nulls_equal, nans_equal, keep_entry, rmm::cuda_stream_default, mr);
+    lists_column, nulls_equal, nans_equal, keep_option, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace lists

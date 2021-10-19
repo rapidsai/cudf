@@ -82,10 +82,23 @@ namespace lists {
  */
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates(
   lists_column_view const& keys,
-  std::optional<lists_column_view> const& values,
+  lists_column_view const& values,
   null_equality nulls_equal           = null_equality::EQUAL,
   nan_equality nans_equal             = nan_equality::UNEQUAL,
-  duplicate_keep_option keep_option   = duplicate_keep_option::KEEP_ANY_ONE,
+  duplicate_keep_option keep_option   = duplicate_keep_option::KEEP_FIRST,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Create new lists columns by extracting the key list entries and their corresponding value
+ * entries from the given lists columns such that only the unique list entries in the `keys` column
+ * will be copied.
+ *
+ */
+std::unique_ptr<column> drop_list_duplicates(
+  lists_column_view const& lists_column,
+  null_equality nulls_equal           = null_equality::EQUAL,
+  nan_equality nans_equal             = nan_equality::UNEQUAL,
+  duplicate_keep_option keep_option   = duplicate_keep_option::KEEP_FIRST,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
