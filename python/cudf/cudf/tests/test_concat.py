@@ -341,7 +341,9 @@ def test_pandas_concat_compatibility_axis1():
     got = gd.concat([d1, d2, d3, d4, d5], axis=1)
 
     assert_eq(
-        got, expect, check_index_type=True,
+        got,
+        expect,
+        check_index_type=True,
     )
 
 
@@ -658,7 +660,9 @@ def test_concat_dataframe_with_multiIndex(df1, df2):
     expected = pd.concat([pdf1, pdf2], axis=1)
 
     assert_eq(
-        expected, actual, check_index_type=True,
+        expected,
+        actual,
+        check_index_type=True,
     )
 
 
@@ -788,7 +792,11 @@ def test_concat_join_axis_1(objs, ignore_index, sort, join, axis):
         objs, sort=sort, join=join, ignore_index=ignore_index, axis=axis
     )
     actual = gd.concat(
-        gpu_objs, sort=sort, join=join, ignore_index=ignore_index, axis=axis,
+        gpu_objs,
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
     )
     # TODO: Remove special handling below
     # after following bug from pandas is fixed:

@@ -22,7 +22,6 @@ class Column:
     _children: Tuple[ColumnBase, ...]
     _base_children: Tuple[ColumnBase, ...]
     _distinct_count: Dict[bool, int]
-
     def __init__(
         self,
         data: Optional[Buffer],
