@@ -800,7 +800,7 @@ std::unique_ptr<table> split(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
   size_type max_tokens = 0;
   if (maxsplit > 0) max_tokens = maxsplit + 1;  // makes consistent with Pandas
@@ -825,7 +825,7 @@ std::unique_ptr<table> rsplit(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
   size_type max_tokens = 0;
   if (maxsplit > 0) max_tokens = maxsplit + 1;  // makes consistent with Pandas
