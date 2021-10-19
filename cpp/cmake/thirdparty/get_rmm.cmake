@@ -16,7 +16,23 @@
 
 function(find_and_configure_rmm)
     include(${rapids-cmake-dir}/cpm/rmm.cmake)
+    include(${rapids-cmake-dir}/cpm/package_override.cmake)
 
+    file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/rmm_override.json
+[=[
+{
+  "packages" : {
+    "rmm" : {
+      "version" : "21.12",
+      "git_url" : "https://github.com/robertmaynard/rmm.git",
+      "git_tag" : "mark_optional_cuda_runtime_symbols_as_weak",
+      "git_shallow" : true
+    }
+  }
+}
+]=]
+        )
+    rapids_cpm_package_override(${CMAKE_CURRENT_BINARY_DIR}/rmm_override.json)
     # Find or install RMM
     rapids_cpm_rmm(BUILD_EXPORT_SET cudf-exports
                    INSTALL_EXPORT_SET cudf-exports)
