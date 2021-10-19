@@ -312,6 +312,7 @@ cdef class Column:
         object with the Buffers and attributes from the other column.
         """
         if inplace:
+            other_col = other_col.copy(deep=False)
             self._offset = other_col.offset
             self._size = other_col.size
             self._dtype = other_col._dtype

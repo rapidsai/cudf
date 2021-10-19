@@ -833,13 +833,7 @@ class CategoricalColumn(column.ColumnBase):
         )
         self._mimic_inplace(out, inplace=True)
 
-    def _fill(
-        self,
-        fill_value: ScalarLike,
-        begin: int,
-        end: int,
-        inplace: bool = False,
-    ) -> "column.ColumnBase":
+    def _fill(self, fill_value, begin, end, inplace):
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 

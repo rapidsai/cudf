@@ -60,21 +60,19 @@ _JoinKeys = namedtuple("JoinKeys", ["left", "right"])
 
 def _hash_for_column(column):
     if column._base_data:
-        data_ptr_hash = hash(column._base_data.ptr)
+        data_hash = hash(column._base_data)
     else:
-        data_ptr_hash = hash(None)
+        data_hash = hash(None)
     if column._base_mask:
-        mask_ptr_hash = hash(column._base_mask.ptr)
+        mask_hash = hash(column._base_mask)
     else:
-        mask_ptr_hash = hash(None)
+        mask_hash = hash(None)
     offset_hash = hash(column.offset)
     children_hash = hash(
         tuple(_hash_for_column(child) for child in column._base_children)
     )
     dtype_hash = hash(column.dtype)
-    return hash(
-        (data_ptr_hash, mask_ptr_hash, offset_hash, dtype_hash, children_hash)
-    )
+    return hash((data_hash, mask_hash, offset_hash, dtype_hash, children_hash))
 
 
 def _hash_for_table(table):

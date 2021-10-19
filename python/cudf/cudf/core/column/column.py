@@ -10,6 +10,7 @@ from typing import (
     Any,
     Dict,
     List,
+    Literal,
     MutableSequence,
     Optional,
     Sequence,
@@ -17,6 +18,7 @@ from typing import (
     TypeVar,
     Union,
     cast,
+    overload,
 )
 
 import cupy
@@ -373,13 +375,33 @@ class ColumnBase(Column, Serializable):
     def _reverse(self):
         return libcudf.copying.reverse(self)
 
+    @overload
     def _fill(
         self,
         fill_value: ScalarLike,
         begin: int,
         end: int,
-        inplace: bool = False,
-    ) -> Optional[ColumnBase]:
+        inplace: Literal[True],
+    ) -> None:
+        ...
+
+    @overload
+    def _fill(
+        self,
+        fill_value: ScalarLike,
+        begin: int,
+        end: int,
+        inplace: Literal[False],
+    ) -> ColumnBase:
+        ...
+
+    @overload
+    def _fill(
+        self, fill_value: ScalarLike, begin: int, end: int,
+    ) -> ColumnBase:
+        ...
+
+    def _fill(self, fill_value, begin, end, inplace):
         if end <= begin or begin >= self.size:
             return self if inplace else self.copy()
 
@@ -428,12 +450,22 @@ class ColumnBase(Column, Serializable):
             result = libcudf.copying.copy_column(self)
             return cast(T, result._with_type_metadata(self.dtype))
         else:
+            data = (
+                self.base_data
+                if self.base_data is None
+                else self.base_data.copy(deep=False)
+            )
+            mask = (
+                self.base_mask
+                if self.base_mask is None
+                else self.base_mask.copy(deep=False)
+            )
             return cast(
                 T,
                 build_column(
-                    self.base_data,
-                    self.dtype,
-                    mask=self.base_mask,
+                    data=data,
+                    dtype=self.dtype,
+                    mask=mask,
                     size=self.size,
                     offset=self.offset,
                     children=self.base_children,
@@ -563,9 +595,12 @@ class ColumnBase(Column, Serializable):
             if key_stop < 0:
                 key_stop = key_stop + len(self)
             if key_start >= key_stop:
-                return self.copy()
+                out = self.copy()
             if (key_stride is None or key_stride == 1) and is_scalar(value):
-                return self._fill(value, key_start, key_stop, inplace=True)
+                return self._mimic_inplace(
+                    self._fill(value, key_start, key_stop, inplace=False),
+                    inplace=True,
+                )
             if key_stride != 1 or key_stride is not None or is_scalar(value):
                 key = arange(
                     start=key_start,

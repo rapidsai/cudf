@@ -53,7 +53,6 @@ from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type, is_column_like
-from cudf.utils.utils import cached_property
 
 T = TypeVar("T", bound="Frame")
 
@@ -5237,10 +5236,6 @@ class Frame:
             },
             self._index,
         )
-
-    @cached_property
-    def _join(self):
-        return libcudf.join.HashJoin(build_table=self)
 
 
 class SingleColumnFrame(Frame):
