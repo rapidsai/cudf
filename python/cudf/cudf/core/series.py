@@ -3609,6 +3609,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             Hash function to use:
             * murmur3: MurmurHash3 hash function.
             * md5: MD5 hash function.
+            * sha1: SHA-1 hash function.
+            * sha224: SHA-224 hash function.
+            * sha256: SHA-256 hash function.
+            * sha384: SHA-384 hash function.
+            * sha512: SHA-512 hash function.
 
         Returns
         -------

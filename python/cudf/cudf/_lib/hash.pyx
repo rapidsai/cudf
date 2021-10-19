@@ -64,6 +64,16 @@ def hash(source_table, str method, object initial_hash=None, int seed=0):
         c_hash_function = libcudf_types.hash_id.HASH_MURMUR3
     elif method == "md5":
         c_hash_function = libcudf_types.hash_id.HASH_MD5
+    elif method == "sha1":
+        c_hash_function = libcudf_types.hash_id.HASH_SHA1
+    elif method == "sha224":
+        c_hash_function = libcudf_types.hash_id.HASH_SHA224
+    elif method == "sha256":
+        c_hash_function = libcudf_types.hash_id.HASH_SHA256
+    elif method == "sha384":
+        c_hash_function = libcudf_types.hash_id.HASH_SHA384
+    elif method == "sha512":
+        c_hash_function = libcudf_types.hash_id.HASH_SHA512
     else:
         raise ValueError(f"Unsupported hash function: {method}")
     with nogil:
