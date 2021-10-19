@@ -8,7 +8,8 @@ from numba import cuda
 
 import cudf
 from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
-from cudf.testing._utils import NUMERIC_TYPES, assert_eq, _decimal_series
+from cudf.testing._utils import NUMERIC_TYPES, _decimal_series, assert_eq
+
 
 def run_masked_udf_test(func_pdf, func_gdf, data, **kwargs):
     gdf = data
