@@ -285,8 +285,16 @@ void writer::impl::write_chunked_begin(table_view const& table,
                                        const table_metadata* metadata,
                                        rmm::cuda_stream_view stream)
 {
-  if ((metadata != nullptr) && (options_.is_enabled_include_header())) {
-    auto const& column_names = metadata->column_names;
+  if (options_.is_enabled_include_header()) {
+    // need to generate column names if metadata is not provided
+    std::vector<std::string> generated_col_names;
+    if (metadata == nullptr) {
+      generated_col_names.resize(table.num_columns());
+      thrust::tabulate(generated_col_names.begin(), generated_col_names.end(), [](auto idx) {
+        return std::to_string(idx);
+      });
+    }
+    auto const& column_names = (metadata == nullptr) ? generated_col_names : metadata->column_names;
     CUDF_EXPECTS(column_names.size() == static_cast<size_t>(table.num_columns()),
                  "Mismatch between number of column headers and table columns.");
 

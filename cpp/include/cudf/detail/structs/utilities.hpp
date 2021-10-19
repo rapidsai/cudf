@@ -16,10 +16,12 @@
 #pragma once
 
 #include <cudf/structs/structs_column_view.hpp>
+#include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
 
 namespace cudf {
 namespace structs {
@@ -65,6 +67,71 @@ std::vector<std::vector<column_view>> extract_ordered_struct_children(
 bool is_or_has_nested_lists(cudf::column_view const& col);
 
 /**
+ * @brief Result of `flatten_nested_columns()`, where all `STRUCT` columns are replaced with
+ * their non-nested member columns, and `BOOL8` columns for their null masks.
+ *
+ * `flatten_nested_columns()` produces a "flattened" table_view with all `STRUCT` columns
+ * replaced with their child column_views, preceded by their null masks.
+ * All newly allocated columns and device_buffers that back the returned table_view
+ * are also encapsulated in `flatten_result`.
+ *
+ * Objects of `flatten_result` need to kept alive while its table_view is accessed.
+ */
+class flattened_table {
+ public:
+  /**
+   * @brief Constructor, to be used from `flatten_nested_columns()`.
+   *
+   * @param flattened_columns_ table_view resulting from `flatten_nested_columns()`
+   * @param orders_ Per-column ordering of the table_view
+   * @param null_orders_ Per-column null_order of the table_view
+   * @param columns_ Newly allocated columns to back the table_view
+   * @param null_masks_ Newly allocated null masks to back the table_view
+   */
+  flattened_table(table_view const& flattened_columns_,
+                  std::vector<order> const& orders_,
+                  std::vector<null_order> const& null_orders_,
+                  std::vector<std::unique_ptr<column>>&& columns_,
+                  std::vector<rmm::device_buffer>&& null_masks_)
+    : _flattened_columns{flattened_columns_},
+      _orders{orders_},
+      _null_orders{null_orders_},
+      _columns{std::move(columns_)},
+      _superimposed_nullmasks{std::move(null_masks_)}
+  {
+  }
+
+  flattened_table() = default;
+
+  /**
+   * @brief Getter for the flattened columns, as a `table_view`.
+   */
+  table_view flattened_columns() const { return _flattened_columns; }
+
+  /**
+   * @brief Getter for the cudf::order of the table_view's columns.
+   */
+  std::vector<order> orders() const { return _orders; }
+
+  /**
+   * @brief Getter for the cudf::null_order of the table_view's columns.
+   */
+  std::vector<null_order> null_orders() const { return _null_orders; }
+
+  /**
+   * @brief Conversion to `table_view`, to fetch flattened columns.
+   */
+  operator table_view() const { return flattened_columns(); }
+
+ private:
+  table_view _flattened_columns;
+  std::vector<order> _orders;
+  std::vector<null_order> _null_orders;
+  std::vector<std::unique_ptr<column>> _columns;
+  std::vector<rmm::device_buffer> _superimposed_nullmasks;
+};
+
+/**
  * @brief Flatten table with struct columns to table with constituent columns of struct columns.
  *
  * If a table does not have struct columns, same input arguments are returned.
@@ -74,17 +141,14 @@ bool is_or_has_nested_lists(cudf::column_view const& col);
  * @param null_precedence null order for input table
  * @param nullability force output to have nullability columns even if input columns
  * are all valid
- * @return tuple with flattened table, flattened column order, flattened null precedence,
- * vector of boolean columns (struct validity).
+ * @return `flatten_result` with flattened table, flattened column order, flattened null precedence,
+ * alongside the supporting columns and device_buffers for the flattened table.
  */
-std::tuple<table_view,
-           std::vector<order>,
-           std::vector<null_order>,
-           std::vector<std::unique_ptr<column>>>
-flatten_nested_columns(table_view const& input,
-                       std::vector<order> const& column_order,
-                       std::vector<null_order> const& null_precedence,
-                       column_nullability nullability = column_nullability::MATCH_INCOMING);
+flattened_table flatten_nested_columns(
+  table_view const& input,
+  std::vector<order> const& column_order,
+  std::vector<null_order> const& null_precedence,
+  column_nullability nullability = column_nullability::MATCH_INCOMING);
 
 /**
  * @brief Unflatten columns flattened as by `flatten_nested_columns()`,
@@ -156,6 +220,31 @@ std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_paren
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief Push down nulls from a parent mask into child columns, using bitwise AND,
+ * for all columns in the specified table.
+ *
+ * This function constructs a table_view containing a new column_view instance equivalent to
+ * every column_view in the specified table. Each column_view might contain possibly new
+ * child column_views, all with possibly new null mask values reflecting null rows from the
+ * parent column:
+ * 1. If the column is not STRUCT, the column is returned unmodified, with no new
+ *    supporting device_buffer instances.
+ * 2. If the column is STRUCT, the null masks of the parent and child are bitwise-ANDed, and a
+ *    modified column_view is returned. This applies recursively.
+ *
+ * @param table The table_view of (possibly STRUCT) columns whose nulls need to be pushed to its
+ * members.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr     Device memory resource used to allocate new device memory.
+ * @return A pair of:
+ *         1. table_view of columns with nulls pushed down to child columns, as appropriate.
+ *         2. Supporting device_buffer instances, for any newly constructed null masks.
+ */
+std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> superimpose_parent_nulls(
+  table_view const& table,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 }  // namespace detail
 }  // namespace structs
 }  // namespace cudf

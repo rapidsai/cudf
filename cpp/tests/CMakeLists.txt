@@ -184,7 +184,8 @@ ConfigureTest(TRANSFORM_TEST
     transform/nans_to_null_test.cpp
     transform/mask_to_bools_test.cpp
     transform/bools_to_mask_test.cpp
-    transform/row_bit_count_test.cu)
+    transform/row_bit_count_test.cu
+    transform/one_hot_encode_tests.cpp)
 
 ###################################################################################################
 # - interop tests -------------------------------------------------------------------------
@@ -220,7 +221,7 @@ ConfigureTest(COPYING_TEST
     copying/concatenate_tests.cu
     copying/copy_if_else_nested_tests.cpp
     copying/copy_range_tests.cpp
-    copying/copy_tests.cu
+    copying/copy_tests.cpp
     copying/detail_gather_tests.cu
     copying/gather_list_tests.cpp
     copying/gather_str_tests.cpp
@@ -386,7 +387,7 @@ ConfigureTest(STRINGS_TEST
 
 ###################################################################################################
 # - structs test ----------------------------------------------------------------------------------
-ConfigureTest(STRUCTS_TEST 
+ConfigureTest(STRUCTS_TEST
     structs/structs_column_tests.cpp
     structs/utilities_tests.cpp
     )

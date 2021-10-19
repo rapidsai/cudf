@@ -60,7 +60,7 @@ std::unique_ptr<column> find_fn(strings_column_view const& strings,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(target.is_valid(), "Parameter target must be valid.");
+  CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
   CUDF_EXPECTS(start >= 0, "Parameter start must be positive integer or zero.");
   if ((stop > 0) && (start > stop)) CUDF_FAIL("Parameter start must be less than stop.");
   //
@@ -186,7 +186,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
   auto strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(data_type{type_id::BOOL8});
 
-  CUDF_EXPECTS(target.is_valid(), "Parameter target must be valid.");
+  CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
   if (target.size() == 0)  // empty target string returns true
   {
     auto const true_scalar = make_fixed_width_scalar<bool>(true, stream);
