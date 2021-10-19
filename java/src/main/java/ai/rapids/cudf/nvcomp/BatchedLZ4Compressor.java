@@ -33,7 +33,7 @@ public class BatchedLZ4Compressor {
   // each chunk has a 64-bit integer value as metadata containing the compressed size
   static final long METADATA_BYTES_PER_CHUNK = 8;
 
-  private final int chunkSize;
+  private final long chunkSize;
   private final long targetIntermediateBufferSize;
   private final long maxOutputChunkSize;
 
@@ -44,7 +44,7 @@ public class BatchedLZ4Compressor {
    * @param targetIntermediateBufferSize desired maximum size of intermediate device buffers
    *                                     used during compression.
    */
-  public BatchedLZ4Compressor(int chunkSize, long targetIntermediateBufferSize) {
+  public BatchedLZ4Compressor(long chunkSize, long targetIntermediateBufferSize) {
     validateChunkSize(chunkSize);
     this.chunkSize = chunkSize;
     this.maxOutputChunkSize = NvcompJni.batchedLZ4CompressGetMaxOutputChunkSize(chunkSize);
@@ -86,12 +86,12 @@ public class BatchedLZ4Compressor {
            DeviceMemoryBuffer compressedChunkSizes =
                DeviceMemoryBuffer.allocate(numChunks * 8L, stream)) {
         long[] inputChunkAddrs = new long[numChunks];
-        int[] inputChunkSizes = new int[numChunks];
+        long[] inputChunkSizes = new long[numChunks];
         long[] outputChunkAddrs = new long[numChunks];
         buildAddrsAndSizes(inputs, inputChunkAddrs, inputChunkSizes,
             compressedBuffers, outputChunkAddrs);
 
-        int[] outputChunkSizes;
+        long[] outputChunkSizes;
         final long tempBufferSize = NvcompJni.batchedLZ4CompressGetTempSize(numChunks, chunkSize);
         try (DeviceMemoryBuffer addrsAndSizes =
                  putAddrsAndSizesOnDevice(inputChunkAddrs, inputChunkSizes, outputChunkAddrs, stream);
@@ -123,7 +123,7 @@ public class BatchedLZ4Compressor {
     }
   }
 
-  static void validateChunkSize(int chunkSize) {
+  static void validateChunkSize(long chunkSize) {
     if (chunkSize <= 0  || chunkSize > MAX_CHUNK_SIZE) {
       throw new IllegalArgumentException("Invalid chunk size: " + chunkSize + " Max chunk size is: "
           + MAX_CHUNK_SIZE + "bytes");
@@ -168,7 +168,7 @@ public class BatchedLZ4Compressor {
   // into the chunks in the input and output buffers.
   private void buildAddrsAndSizes(CloseableArray<BaseDeviceMemoryBuffer> inputs,
                                   long[] inputChunkAddrs,
-                                  int[] inputChunkSizes,
+                                  long[] inputChunkSizes,
                                   CloseableArray<DeviceMemoryBuffer> compressedBuffers,
                                   long[] outputChunkAddrs) {
     // setup the input addresses and sizes
@@ -178,7 +178,7 @@ public class BatchedLZ4Compressor {
       for (int i = 0; i < numChunksInBuffer; i++) {
         inputChunkAddrs[chunkIdx] = input.getAddress() + i * chunkSize;
         inputChunkSizes[chunkIdx] = (i != numChunksInBuffer - 1) ? chunkSize
-            : (int) (input.getLength() - (long) i * chunkSize);
+            : (input.getLength() - (long) i * chunkSize);
         ++chunkIdx;
       }
     }
@@ -200,7 +200,7 @@ public class BatchedLZ4Compressor {
 
   // Write input addresses, output addresses and sizes contiguously into a DeviceMemoryBuffer.
   private DeviceMemoryBuffer putAddrsAndSizesOnDevice(long[] inputAddrs,
-                                                      int[] inputSizes,
+                                                      long[] inputSizes,
                                                       long[] outputAddrs,
                                                       Cuda.Stream stream) {
     final long totalSize = inputAddrs.length * 8L * 3; // space for input, output, and size arrays
@@ -222,16 +222,16 @@ public class BatchedLZ4Compressor {
   }
 
   // Synchronously copy the resulting compressed sizes from device memory to host memory.
-  private int[] getOutputChunkSizes(BaseDeviceMemoryBuffer devChunkSizes, Cuda.Stream stream) {
+  private long[] getOutputChunkSizes(BaseDeviceMemoryBuffer devChunkSizes, Cuda.Stream stream) {
     try (NvtxRange range = new NvtxRange("getOutputChunkSizes", NvtxColor.YELLOW)) {
       try (HostMemoryBuffer hostbuf = HostMemoryBuffer.allocate(devChunkSizes.getLength())) {
         hostbuf.copyFromDeviceBuffer(devChunkSizes, stream);
         int numChunks = (int) (devChunkSizes.getLength() / 8);
-        int[] result = new int[numChunks];
+        long[] result = new long[numChunks];
         for (int i = 0; i < numChunks; i++) {
           long size = hostbuf.getLong(i * 8L);
           assert size < Integer.MAX_VALUE : "output size is too big";
-          result[i] = (int) size;
+          result[i] = size;
         }
         return result;
       }
@@ -245,7 +245,7 @@ public class BatchedLZ4Compressor {
   private DeviceMemoryBuffer[] stitchOutput(int[] chunksPerInput,
                                             DeviceMemoryBuffer compressedChunkSizes,
                                             long[] outputChunkAddrs,
-                                            int[] outputChunkSizes,
+                                            long[] outputChunkSizes,
                                             Cuda.Stream stream) {
     try (NvtxRange range = new NvtxRange("stitchOutput", NvtxColor.YELLOW)) {
       final int numOutputs = chunksPerInput.length;
@@ -298,7 +298,7 @@ public class BatchedLZ4Compressor {
 
   // Calculate the list of sizes for each output buffer (metadata plus size of compressed chunks)
   private long[] calcOutputBufferSizes(int[] chunksPerInput,
-                                       int[] outputChunkSizes) {
+                                       long[] outputChunkSizes) {
     long[] sizes = new long[chunksPerInput.length];
     int chunkIdx = 0;
     for (int i = 0; i < sizes.length; i++) {

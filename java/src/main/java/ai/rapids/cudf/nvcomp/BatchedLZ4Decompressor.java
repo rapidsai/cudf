@@ -36,7 +36,7 @@ public class BatchedLZ4Decompressor {
    *                to the exact decompressed size of the corresponding input
    * @param stream CUDA stream to use
    */
-  public static void decompressAsync(int chunkSize,
+  public static void decompressAsync(long chunkSize,
                                      BaseDeviceMemoryBuffer[] origInputs,
                                      BaseDeviceMemoryBuffer[] outputs,
                                      Cuda.Stream stream) {
@@ -89,7 +89,7 @@ public class BatchedLZ4Decompressor {
     }
   }
 
-  private static int getNumChunksInBuffer(int chunkSize, BaseDeviceMemoryBuffer buffer) {
+  private static int getNumChunksInBuffer(long chunkSize, BaseDeviceMemoryBuffer buffer) {
     return (int) ((buffer.getLength() + chunkSize - 1) / chunkSize);
   }
 
@@ -110,7 +110,7 @@ public class BatchedLZ4Decompressor {
    * @param stream CUDA stream to use
    * @return device buffer containing address and size vectors
    */
-  private static DeviceMemoryBuffer buildAddrsSizesBuffer(int chunkSize,
+  private static DeviceMemoryBuffer buildAddrsSizesBuffer(long chunkSize,
                                                           long totalChunks,
                                                           BaseDeviceMemoryBuffer[] inputs,
                                                           int[] chunksPerInput,

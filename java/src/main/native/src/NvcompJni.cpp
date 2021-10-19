@@ -80,7 +80,7 @@ JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_nvcomp_NvcompJni_isLZ4Metadata(JN
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_nvcomp_NvcompJni_lz4CompressConfigure(
-    JNIEnv *env, jclass, jint j_chunk_size, jlong j_uncompressed_size) {
+    JNIEnv *env, jclass, jlong j_chunk_size, jlong j_uncompressed_size) {
   try {
     cudf::jni::auto_set_device(env);
     nvcompLZ4FormatOpts opts{};

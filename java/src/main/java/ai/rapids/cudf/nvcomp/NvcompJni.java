@@ -47,7 +47,7 @@ class NvcompJni {
    * @return array of three longs containing metadata size, temp storage size,
    *         and output buffer size
    */
-  static native long[] lz4CompressConfigure(int chunkSize, long uncompressedSize);
+  static native long[] lz4CompressConfigure(long chunkSize, long uncompressedSize);
 
   /**
    * Perform LZ4 compression asynchronously using the specified CUDA stream.

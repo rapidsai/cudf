@@ -58,7 +58,7 @@ public class LZ4Compressor {
    * @param uncompressedSize total size of the uncompressed data
    * @return compression configuration for the specified chunk size
    */
-  public static Configuration configure(int chunkSize, long uncompressedSize) {
+  public static Configuration configure(long chunkSize, long uncompressedSize) {
     long[] configs = NvcompJni.lz4CompressConfigure(chunkSize, uncompressedSize);
     assert configs.length == 3;
     return new Configuration(configs[0], configs[1], configs[2]);
