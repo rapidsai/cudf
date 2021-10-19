@@ -3919,11 +3919,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 FutureWarning,
             )
 
-        lhs = self
-        rhs = other
-
-        df = lhs.merge(
-            rhs,
+        df = self.merge(
+            other,
             left_index=True,
             right_index=True,
             how=how,
@@ -3931,7 +3928,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             sort=sort,
         )
         df.index.name = (
-            None if lhs.index.name != rhs.index.name else lhs.index.name
+            None if self.index.name != other.index.name else self.index.name
         )
         return df
 
