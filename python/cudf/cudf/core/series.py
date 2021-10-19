@@ -2879,6 +2879,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
 
         Apply a basic function to a series with nulls
+
         >>> sr = cudf.Series([1,cudf.NA,3])
         >>> def f(x):
         ...     return x + 1
@@ -2890,6 +2891,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         Use a function that does something conditionally,
         based on if the value is or is not null
+
         >>> sr = cudf.Series([1,cudf.NA,3])
         >>> def f(x):
         ...     if x is cudf.NA:
