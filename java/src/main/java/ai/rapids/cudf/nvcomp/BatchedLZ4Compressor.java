@@ -126,7 +126,7 @@ public class BatchedLZ4Compressor {
   static void validateChunkSize(long chunkSize) {
     if (chunkSize <= 0  || chunkSize > MAX_CHUNK_SIZE) {
       throw new IllegalArgumentException("Invalid chunk size: " + chunkSize + " Max chunk size is: "
-          + MAX_CHUNK_SIZE + "bytes");
+          + MAX_CHUNK_SIZE + " bytes");
     }
   }
 
@@ -214,7 +214,7 @@ public class BatchedLZ4Compressor {
         for (int i = 0; i < inputSizes.length; i++) {
           hostbuf.setLong(sizesOffset + i * 8L, inputSizes[i]);
         }
-        result.copyFromHostBufferAsync(hostbuf, stream);
+        result.copyFromHostBuffer(hostbuf, stream);
         result.incRefCount();
         return result;
       }

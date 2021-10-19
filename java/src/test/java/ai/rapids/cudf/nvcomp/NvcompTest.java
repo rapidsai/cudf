@@ -41,7 +41,7 @@ public class NvcompTest {
   @Test
   void testBatchedLZ4RoundTripAsync() {
     final Cuda.Stream stream = Cuda.DEFAULT_STREAM;
-    final int chunkSize = 64 * 1024;
+    final long chunkSize = 64 * 1024;
     final long targetIntermediteSize = Long.MAX_VALUE;
     final int maxElements = 1024 * 1024 + 1;
     final int numBuffers = 200;
@@ -137,7 +137,7 @@ public class NvcompTest {
 
   private void lz4RoundTrip(boolean useAsync) {
     final Cuda.Stream stream = Cuda.DEFAULT_STREAM;
-    final int chunkSize = 64 * 1024;
+    final long chunkSize = 64 * 1024;
     final int numElements = 10 * 1024 * 1024 + 1;
     long[] data = new long[numElements];
     for (int i = 0; i < numElements; ++i) {
