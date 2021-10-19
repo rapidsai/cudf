@@ -1,3 +1,4 @@
+import math
 import operator
 
 from cudf.core.dtypes import CategoricalDtype
@@ -11,6 +12,40 @@ arith_ops = [
     operator.floordiv,
     operator.mod,
     operator.pow,
+]
+
+unary_ops = [
+    math.acos,
+    math.acosh,
+    math.asin,
+    math.asinh,
+    math.atan,
+    math.atanh,
+    math.ceil,
+    math.cos,
+    math.degrees,
+    math.erf,
+    math.erfc,
+    math.exp,
+    math.expm1,
+    math.fabs,
+    math.floor,
+    math.gamma,
+    math.lgamma,
+    math.log,
+    math.log10,
+    math.log1p,
+    math.log2,
+    math.radians,
+    math.sin,
+    math.sinh,
+    math.sqrt,
+    math.tan,
+    math.tanh,
+    operator.pos,
+    operator.neg,
+    operator.not_,
+    operator.invert,
 ]
 
 comparison_ops = [

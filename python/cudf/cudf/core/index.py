@@ -50,7 +50,8 @@ from cudf.core.column import (
 from cudf.core.column.column import as_column, concat_columns
 from cudf.core.column.string import StringMethods as StringMethods
 from cudf.core.dtypes import IntervalDtype
-from cudf.core.frame import Frame, SingleColumnFrame
+from cudf.core.frame import Frame
+from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type
 from cudf.utils.utils import cached_property, search_range
@@ -145,6 +146,8 @@ class RangeIndex(BaseIndex):
     RangeIndex(start=1, stop=10, step=1, name='a')
     """
 
+    _range: range
+
     def __init__(
         self, start, stop=None, step=1, dtype=None, copy=False, name=None
     ):
@@ -163,6 +166,10 @@ class RangeIndex(BaseIndex):
         self._step = int(step) if step is not None else 1
         self._index = None
         self._name = name
+        self._range = range(self._start, self._stop, self._step)
+        # _end is the actual last element of RangeIndex,
+        # whereas _stop is an upper bound.
+        self._end = self._start + self._step * (len(self._range) - 1)
 
     def _copy_type_metadata(
         self, other: Frame, include_index: bool = True
@@ -215,6 +222,27 @@ class RangeIndex(BaseIndex):
             )
         else:
             return column.column_empty(0, masked=False, dtype=self.dtype)
+
+    def is_numeric(self):
+        return True
+
+    def is_boolean(self):
+        return False
+
+    def is_integer(self):
+        return True
+
+    def is_floating(self):
+        return False
+
+    def is_object(self):
+        return False
+
+    def is_categorical(self):
+        return False
+
+    def is_interval(self):
+        return False
 
     @property
     def _data(self):
@@ -312,7 +340,7 @@ class RangeIndex(BaseIndex):
                 other._step,
             ):
                 return True
-        return cudf.Int64Index._from_data(self._data).equals(other)
+        return Int64Index._from_data(self._data).equals(other)
 
     def serialize(self):
         header = {}
@@ -476,7 +504,7 @@ class RangeIndex(BaseIndex):
     def _as_int64(self):
         # Convert self to an Int64Index. This method is used to perform ops
         # that are not defined directly on RangeIndex.
-        return cudf.Int64Index._from_data(self._data)
+        return Int64Index._from_data(self._data)
 
     def __getattr__(self, key):
         # For methods that are not defined for RangeIndex we attempt to operate
@@ -520,6 +548,125 @@ class RangeIndex(BaseIndex):
         if tolerance is not None and (abs(idx) * self._step > tolerance):
             raise KeyError(key)
         return np.clip(round_method(idx), 0, idx_int_upper_bound, dtype=int)
+
+    def _union(self, other, sort=None):
+        if isinstance(other, RangeIndex):
+            # Variable suffixes are of the
+            # following notation: *_o -> other, *_s -> self,
+            # and *_r -> result
+            start_s, step_s = self.start, self.step
+            end_s = self._end
+            start_o, step_o = other.start, other.step
+            end_o = other._end
+            if self.step < 0:
+                start_s, step_s, end_s = end_s, -step_s, start_s
+            if other.step < 0:
+                start_o, step_o, end_o = end_o, -step_o, start_o
+            if len(self) == 1 and len(other) == 1:
+                step_s = step_o = abs(self.start - other.start)
+            elif len(self) == 1:
+                step_s = step_o
+            elif len(other) == 1:
+                step_o = step_s
+
+            # Determine minimum start value of the result.
+            start_r = min(start_s, start_o)
+            # Determine maximum end value of the result.
+            end_r = max(end_s, end_o)
+            result = None
+            min_step = min(step_o, step_s)
+
+            if ((start_s - start_o) % min_step) == 0:
+                # Checking to determine other is a subset of self with
+                # equal step size.
+                if (
+                    step_o == step_s
+                    and (start_s - end_o) <= step_s
+                    and (start_o - end_s) <= step_s
+                ):
+                    result = type(self)(start_r, end_r + step_s, step_s)
+                # Checking if self is a subset of other with unequal
+                # step sizes.
+                elif (
+                    step_o % step_s == 0
+                    and (start_o + step_s >= start_s)
+                    and (end_o - step_s <= end_s)
+                ):
+                    result = type(self)(start_r, end_r + step_s, step_s)
+                # Checking if other is a subset of self with unequal
+                # step sizes.
+                elif (
+                    step_s % step_o == 0
+                    and (start_s + step_o >= start_o)
+                    and (end_s - step_o <= end_o)
+                ):
+                    result = type(self)(start_r, end_r + step_o, step_o)
+            # Checking to determine when the steps are even but one of
+            # the inputs spans across is near half or less then half
+            # the other input. This case needs manipulation to step
+            # size.
+            elif (
+                step_o == step_s
+                and (step_s % 2 == 0)
+                and (abs(start_s - start_o) <= step_s / 2)
+                and (abs(end_s - end_o) <= step_s / 2)
+            ):
+                result = type(self)(start_r, end_r + step_s / 2, step_s / 2)
+            if result is not None:
+                if sort is None and not result.is_monotonic_increasing:
+                    return result.sort_values()
+                else:
+                    return result
+
+        # If all the above optimizations don't cater to the inpputs,
+        # we materialize RangeIndex's into `Int64Index` and
+        # then perform `union`.
+        return Int64Index(self._values)._union(other, sort=sort)
+
+    def _intersection(self, other, sort=False):
+        if not isinstance(other, RangeIndex):
+            return super()._intersection(other, sort=sort)
+
+        if not len(self) or not len(other):
+            return RangeIndex(0)
+
+        first = self._range[::-1] if self.step < 0 else self._range
+        second = other._range[::-1] if other.step < 0 else other._range
+
+        # check whether intervals intersect
+        # deals with in- and decreasing ranges
+        int_low = max(first.start, second.start)
+        int_high = min(first.stop, second.stop)
+        if int_high <= int_low:
+            return RangeIndex(0)
+
+        # Method hint: linear Diophantine equation
+        # solve intersection problem
+        # performance hint: for identical step sizes, could use
+        # cheaper alternative
+        gcd, s, _ = _extended_gcd(first.step, second.step)
+
+        # check whether element sets intersect
+        if (first.start - second.start) % gcd:
+            return RangeIndex(0)
+
+        # calculate parameters for the RangeIndex describing the
+        # intersection disregarding the lower bounds
+        tmp_start = (
+            first.start + (second.start - first.start) * first.step // gcd * s
+        )
+        new_step = first.step * second.step // gcd
+        no_steps = -(-(int_low - tmp_start) // abs(new_step))
+        new_start = tmp_start + abs(new_step) * no_steps
+        new_range = range(new_start, int_high, new_step)
+        new_index = RangeIndex(new_range)
+
+        if (self.step < 0 and other.step < 0) is not (new_index.step < 0):
+            new_index = new_index[::-1]
+        if sort is None:
+            new_index = new_index.sort_values()
+
+        return new_index
 
 
 # Patch in all binops and unary ops, which bypass __getattr__ on the instance
@@ -994,6 +1141,27 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
     def get_slice_bound(self, label, side, kind=None):
         return self._values.get_slice_bound(label, side, kind)
 
+    def is_numeric(self):
+        return False
+
+    def is_boolean(self):
+        return True
+
+    def is_integer(self):
+        return False
+
+    def is_floating(self):
+        return False
+
+    def is_object(self):
+        return False
+
+    def is_categorical(self):
+        return False
+
+    def is_interval(self):
+        return False
+
 
 class NumericIndex(GenericIndex):
     """Immutable, ordered and sliceable sequence of labels.
@@ -1028,6 +1196,27 @@ class NumericIndex(GenericIndex):
         data = column.as_column(data, dtype=dtype)
 
         super().__init__(data, **kwargs)
+
+    def is_numeric(self):
+        return True
+
+    def is_boolean(self):
+        return False
+
+    def is_integer(self):
+        return True
+
+    def is_floating(self):
+        return False
+
+    def is_object(self):
+        return False
+
+    def is_categorical(self):
+        return False
+
+    def is_interval(self):
+        return False
 
 
 class Int8Index(NumericIndex):
@@ -1254,6 +1443,12 @@ class Float32Index(NumericIndex):
 
     _dtype = np.float32
 
+    def is_integer(self):
+        return False
+
+    def is_floating(self):
+        return True
+
 
 class Float64Index(NumericIndex):
     """
@@ -1278,6 +1473,12 @@ class Float64Index(NumericIndex):
     """
 
     _dtype = np.float64
+
+    def is_integer(self):
+        return False
+
+    def is_floating(self):
+        return True
 
 
 class DatetimeIndex(GenericIndex):
@@ -1654,6 +1855,9 @@ class DatetimeIndex(GenericIndex):
         )
         return as_index(out_column, name=self.name)
 
+    def is_boolean(self):
+        return False
+
 
 class TimedeltaIndex(GenericIndex):
     """
@@ -1782,6 +1986,9 @@ class TimedeltaIndex(GenericIndex):
         """
         raise NotImplementedError("inferred_freq is not yet supported")
 
+    def is_boolean(self):
+        return False
+
 
 class CategoricalIndex(GenericIndex):
     """
@@ -1893,6 +2100,12 @@ class CategoricalIndex(GenericIndex):
         The categories of this categorical.
         """
         return as_index(self._values.categories)
+
+    def is_boolean(self):
+        return False
+
+    def is_categorical(self):
+        return True
 
 
 def interval_range(
@@ -2025,7 +2238,7 @@ def interval_range(
     if len(right_col) == 0 or len(left_col) == 0:
         dtype = IntervalDtype("int64", closed)
         data = column.column_empty_like_same_mask(left_col, dtype)
-        return cudf.IntervalIndex(data, closed=closed)
+        return IntervalIndex(data, closed=closed)
 
     interval_col = column.build_interval_column(
         left_col, right_col, closed=closed
@@ -2122,6 +2335,12 @@ class IntervalIndex(GenericIndex):
 
         return IntervalIndex(interval_col, name=name)
 
+    def is_interval(self):
+        return True
+
+    def is_boolean(self):
+        return False
+
 
 class StringIndex(GenericIndex):
     """String defined indices into another Column
@@ -2181,6 +2400,12 @@ class StringIndex(GenericIndex):
             return self.fillna(cudf._NA_REP)
         else:
             return self
+
+    def is_boolean(self):
+        return False
+
+    def is_object(self):
+        return True
 
 
 def as_index(arbitrary, **kwargs) -> BaseIndex:
@@ -2370,3 +2595,21 @@ def _concat_range_index(indexes: List[RangeIndex]) -> BaseIndex:
 
     stop = non_empty_indexes[-1].stop if next_ is None else next_
     return RangeIndex(start, stop, step)
+
+
+def _extended_gcd(a: int, b: int) -> Tuple[int, int, int]:
+    """
+    Extended Euclidean algorithms to solve Bezout's identity:
+       a*x + b*y = gcd(x, y)
+    Finds one particular solution for x, y: s, t
+    Returns: gcd, s, t
+    """
+    s, old_s = 0, 1
+    t, old_t = 1, 0
+    r, old_r = b, a
+    while r:
+        quotient = old_r // r
+        old_r, r = r, old_r - quotient * r
+        old_s, s = s, old_s - quotient * s
+        old_t, t = t, old_t - quotient * t
+    return old_r, old_s, old_t
