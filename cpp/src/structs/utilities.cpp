@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-#include <thrust/iterator/counting_iterator.h>
-
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -26,9 +25,13 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <structs/utilities.hpp>
+
+#include <rmm/device_buffer.hpp>
+
+#include <thrust/iterator/counting_iterator.h>
 
 #include <bitset>
+#include <iterator>
 
 namespace cudf {
 namespace structs {
@@ -85,28 +88,38 @@ bool is_or_has_nested_lists(cudf::column_view const& col)
  * @brief Flattens struct columns to constituent non-struct columns in the input table.
  *
  */
-struct flattened_table {
+struct table_flattener {
+  table_view input;
   // reference variables
-  table_view const& input;
   std::vector<order> const& column_order;
   std::vector<null_order> const& null_precedence;
   // output
   std::vector<std::unique_ptr<column>> validity_as_column;
+  std::vector<rmm::device_buffer> superimposed_nullmasks;
   std::vector<column_view> flat_columns;
   std::vector<order> flat_column_order;
   std::vector<null_order> flat_null_precedence;
   column_nullability nullability;
 
-  flattened_table(table_view const& input,
+  table_flattener(table_view const& input,
                   std::vector<order> const& column_order,
                   std::vector<null_order> const& null_precedence,
                   column_nullability nullability)
-    : input(input),
-      column_order(column_order),
-      null_precedence(null_precedence),
-      nullability(nullability)
+    : column_order(column_order), null_precedence(null_precedence), nullability(nullability)
   {
+    superimpose_nulls(input);
     fail_if_unsupported_types(input);
+  }
+
+  /**
+   * @brief Pushes down nulls from struct columns to children, saves the resulting
+   * column to `input`, and generated null masks to `superimposed_nullmasks`.
+   */
+  void superimpose_nulls(table_view const& input_table)
+  {
+    auto [table, null_masks]     = superimpose_parent_nulls(input_table);
+    this->input                  = table;
+    this->superimposed_nullmasks = std::move(null_masks);
   }
 
   void fail_if_unsupported_types(table_view const& input) const
@@ -176,29 +189,23 @@ struct flattened_table {
       }
     }
 
-    return std::make_tuple(table_view{flat_columns},
+    return flattened_table{table_view{flat_columns},
                            std::move(flat_column_order),
                            std::move(flat_null_precedence),
-                           std::move(validity_as_column));
+                           std::move(validity_as_column),
+                           std::move(superimposed_nullmasks)};
   }
 };
 
-std::tuple<table_view,
-           std::vector<order>,
-           std::vector<null_order>,
-           std::vector<std::unique_ptr<column>>>
-flatten_nested_columns(table_view const& input,
-                       std::vector<order> const& column_order,
-                       std::vector<null_order> const& null_precedence,
-                       column_nullability nullability)
+flattened_table flatten_nested_columns(table_view const& input,
+                                       std::vector<order> const& column_order,
+                                       std::vector<null_order> const& null_precedence,
+                                       column_nullability nullability)
 {
   auto const has_struct = std::any_of(input.begin(), input.end(), is_struct);
-  if (not has_struct) {
-    return std::make_tuple(
-      input, column_order, null_precedence, std::vector<std::unique_ptr<column>>{});
-  }
+  if (not has_struct) { return flattened_table{input, column_order, null_precedence, {}, {}}; }
 
-  return flattened_table{input, column_order, null_precedence, nullability}();
+  return table_flattener{input, column_order, null_precedence, nullability}();
 }
 
 namespace {
@@ -413,6 +420,21 @@ std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_paren
                                      parent.offset(),
                                      ret_children),
                          std::move(ret_validity_buffers));
+}
+
+std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> superimpose_parent_nulls(
+  table_view const& table, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
+{
+  auto superimposed_columns   = std::vector<column_view>{};
+  auto superimposed_nullmasks = std::vector<rmm::device_buffer>{};
+  for (auto col : table) {
+    auto [superimposed_col, null_masks] = superimpose_parent_nulls(col);
+    superimposed_columns.push_back(superimposed_col);
+    superimposed_nullmasks.insert(superimposed_nullmasks.begin(),
+                                  std::make_move_iterator(null_masks.begin()),
+                                  std::make_move_iterator(null_masks.end()));
+  }
+  return {table_view{superimposed_columns}, std::move(superimposed_nullmasks)};
 }
 
 }  // namespace detail

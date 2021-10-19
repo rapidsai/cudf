@@ -18,7 +18,7 @@ from numba.cuda.cudadecl import registry as cuda_decl_registry
 from pandas._libs.missing import NAType as _NAType
 
 from cudf.core.udf import api
-from cudf.core.udf._ops import arith_ops, comparison_ops
+from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
 
 
 class MaskedType(types.Type):
@@ -223,6 +223,15 @@ class MaskedScalarArithOp(AbstractTemplate):
             return nb_signature(MaskedType(return_type), args[0], args[1])
 
 
+class MaskedScalarUnaryOp(AbstractTemplate):
+    def generic(self, args, kws):
+        if len(args) == 1 and isinstance(args[0], MaskedType):
+            return_type = self.context.resolve_function_type(
+                self.key, (args[0].value_type,), kws
+            ).return_type
+            return nb_signature(MaskedType(return_type), args[0])
+
+
 class MaskedScalarNullOp(AbstractTemplate):
     def generic(self, args, kws):
         """
@@ -311,8 +320,11 @@ class UnpackReturnToMasked(AbstractTemplate):
             return nb_signature(return_type, args[0])
 
 
-for op in arith_ops + comparison_ops:
+for binary_op in arith_ops + comparison_ops:
     # Every op shares the same typing class
-    cuda_decl_registry.register_global(op)(MaskedScalarArithOp)
-    cuda_decl_registry.register_global(op)(MaskedScalarNullOp)
-    cuda_decl_registry.register_global(op)(MaskedScalarScalarOp)
+    cuda_decl_registry.register_global(binary_op)(MaskedScalarArithOp)
+    cuda_decl_registry.register_global(binary_op)(MaskedScalarNullOp)
+    cuda_decl_registry.register_global(binary_op)(MaskedScalarScalarOp)
+
+for unary_op in unary_ops:
+    cuda_decl_registry.register_global(unary_op)(MaskedScalarUnaryOp)

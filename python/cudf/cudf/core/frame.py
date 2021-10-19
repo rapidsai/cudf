@@ -2926,25 +2926,6 @@ class Frame:
         * Ascending can be a list of bools to control per column
         """
 
-        # This needs to be updated to handle list of bools for ascending
-        if ascending is True:
-            if na_position == "last":
-                na_position = 0
-            elif na_position == "first":
-                na_position = 1
-        elif ascending is False:
-            if na_position == "last":
-                na_position = 1
-            elif na_position == "first":
-                na_position = 0
-        else:
-            warnings.warn(
-                "When using a sequence of booleans for `ascending`, "
-                "`na_position` flag is not yet supported and defaults to "
-                "treating nulls as greater than all numbers"
-            )
-            na_position = 0
-
         to_sort = (
             self
             if by is None

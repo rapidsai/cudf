@@ -266,6 +266,9 @@ inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
  *
  * Currently only supports 'rmm_mode' string parameter, which set the rmm
  * allocation mode. The default value of the parameter is 'pool'.
+ * Environment variable 'CUDF_TEST_RMM_MODE' can also be used to set the rmm
+ * allocation mode. If both are set, the value of 'rmm_mode' string parameter
+ * takes precedence.
  *
  * @return Parsing results in the form of unordered map
  */
@@ -273,9 +276,12 @@ inline auto parse_cudf_test_opts(int argc, char** argv)
 {
   try {
     cxxopts::Options options(argv[0], " - cuDF tests command line options");
+    const char* env_rmm_mode = std::getenv("GTEST_CUDF_RMM_MODE");  // Overridden by CLI options
+    auto default_rmm_mode    = env_rmm_mode ? env_rmm_mode : "pool";
     options.allow_unrecognised_options().add_options()(
-      "rmm_mode", "RMM allocation mode", cxxopts::value<std::string>()->default_value("pool"));
-
+      "rmm_mode",
+      "RMM allocation mode",
+      cxxopts::value<std::string>()->default_value(default_rmm_mode));
     return options.parse(argc, argv);
   } catch (const cxxopts::OptionException& e) {
     CUDF_FAIL("Error parsing command line options");

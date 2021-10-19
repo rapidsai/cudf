@@ -86,6 +86,17 @@ def test_roundtrip_from_dask_index_false(tmpdir):
     dd.assert_eq(ddf.reset_index(drop=False), ddf2)
 
 
+def test_roundtrip_from_dask_none_index_false(tmpdir):
+    tmpdir = str(tmpdir)
+    path = os.path.join(tmpdir, "test.parquet")
+
+    df2 = ddf.reset_index(drop=True).compute()
+    df2.to_parquet(path, engine="pyarrow")
+
+    ddf3 = dask_cudf.read_parquet(path, index=False)
+    dd.assert_eq(df2, ddf3)
+
+
 @pytest.mark.parametrize("write_meta", [True, False])
 def test_roundtrip_from_dask_cudf(tmpdir, write_meta):
     tmpdir = str(tmpdir)

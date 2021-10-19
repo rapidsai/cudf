@@ -281,6 +281,27 @@ def test_dataframe_multi_column_nulls(
     )
 
 
+@pytest.mark.parametrize(
+    "ascending", list(product((True, False), (True, False)))
+)
+@pytest.mark.parametrize("na_position", ["first", "last"])
+def test_dataframe_multi_column_nulls_multiple_ascending(
+    ascending, na_position
+):
+    pdf = pd.DataFrame(
+        {"a": [3, 1, None, 2, 2, None, 1], "b": [1, 2, 3, 4, 5, 6, 7]}
+    )
+    gdf = DataFrame.from_pandas(pdf)
+    expect = pdf.sort_values(
+        by=["a", "b"], ascending=ascending, na_position=na_position
+    )
+    actual = gdf.sort_values(
+        by=["a", "b"], ascending=ascending, na_position=na_position
+    )
+
+    assert_eq(actual, expect)
+
+
 @pytest.mark.parametrize("nelem", [1, 100])
 def test_series_nlargest_nelem(nelem):
     np.random.seed(0)

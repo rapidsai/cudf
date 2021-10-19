@@ -941,6 +941,27 @@ class MultiIndex(Frame, BaseIndex):
         level_values = as_index(self._data[level], name=self.names[level_idx])
         return level_values
 
+    def is_numeric(self):
+        return False
+
+    def is_boolean(self):
+        return False
+
+    def is_integer(self):
+        return False
+
+    def is_floating(self):
+        return False
+
+    def is_object(self):
+        return False
+
+    def is_categorical(self):
+        return False
+
+    def is_interval(self):
+        return False
+
     @classmethod
     def _concat(cls, objs):
 
@@ -1651,3 +1672,74 @@ class MultiIndex(Frame, BaseIndex):
         mask = cupy.full(self._data.nrows, False)
         mask[true_inds] = True
         return mask
+
+    def _get_reconciled_name_object(self, other) -> MultiIndex:
+        """
+        If the result of a set operation will be self,
+        return self, unless the names change, in which
+        case make a shallow copy of self.
+        """
+        names = self._maybe_match_names(other)
+        if self.names != names:
+            return self.rename(names)
+        return self
+
+    def _maybe_match_names(self, other):
+        """
+        Try to find common names to attach to the result of an operation
+        between a and b. Return a consensus list of names if they match
+        at least partly or list of None if they have completely
+        different names.
+        """
+        if len(self.names) != len(other.names):
+            return [None] * len(self.names)
+        return [
+            self_name if self_name == other_name else None
+            for self_name, other_name in zip(self.names, other.names)
+        ]
+
+    def _union(self, other, sort=None):
+        # TODO: When to_frame is refactored to return a
+        # deep copy in future, we should push most of the common
+        # logic between MultiIndex._union & BaseIndex._union into
+        # GenericIndex._union.
+        other_df = other.copy(deep=True).to_frame(index=False)
+        self_df = self.copy(deep=True).to_frame(index=False)
+        col_names = list(range(0, self.nlevels))
+        self_df.columns = col_names
+        other_df.columns = col_names
+        self_df["order"] = self_df.index
+        other_df["order"] = other_df.index
+
+        result_df = self_df.merge(other_df, on=col_names, how="outer")
+        result_df = result_df.sort_values(
+            by=result_df.columns[self.nlevels :], ignore_index=True
+        )
+
+        midx = MultiIndex.from_frame(result_df.iloc[:, : self.nlevels])
+        midx.names = self.names if self.names == other.names else None
+        if sort is None and len(other):
+            return midx.sort_values()
+        return midx
+
+    def _intersection(self, other, sort=None):
+        if self.names != other.names:
+            deep = True
+            col_names = list(range(0, self.nlevels))
+            res_name = (None,) * self.nlevels
+        else:
+            deep = False
+            col_names = None
+            res_name = self.names
+
+        other_df = other.copy(deep=deep).to_frame(index=False)
+        self_df = self.copy(deep=deep).to_frame(index=False)
+        if col_names is not None:
+            other_df.columns = col_names
+            self_df.columns = col_names
+
+        result_df = cudf.merge(self_df, other_df, how="inner")
+        midx = self.__class__.from_frame(result_df, names=res_name)
+        if sort is None and len(other):
+            return midx.sort_values()
+        return midx
