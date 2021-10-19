@@ -508,6 +508,7 @@ def test_serialize_list_columns(data):
         ],
         [[[1, 2, 3], [4, None, 6]], [], None, [[7, 8], [], None, [9]]],
         [[1, 2, 3], [4, None, 6], [7, 8], [], None, [9]],
+        [[1.0, 2.0, 3.0], [4.0, None, 6.0], [7.0, 8.0], [], None, [9.0]],
     ],
 )
 def test_listcol_as_string(data):
