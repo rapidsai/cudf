@@ -10,7 +10,6 @@ from typing import (
     Any,
     Dict,
     List,
-    Literal,
     MutableSequence,
     Optional,
     Sequence,
@@ -26,6 +25,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from numba import cuda
+from typing_extensions import Literal
 
 import cudf
 from cudf import _lib as libcudf
@@ -450,22 +450,12 @@ class ColumnBase(Column, Serializable):
             result = libcudf.copying.copy_column(self)
             return cast(T, result._with_type_metadata(self.dtype))
         else:
-            data = (
-                self.base_data
-                if self.base_data is None
-                else self.base_data.copy(deep=False)
-            )
-            mask = (
-                self.base_mask
-                if self.base_mask is None
-                else self.base_mask.copy(deep=False)
-            )
             return cast(
                 T,
                 build_column(
-                    data=data,
+                    data=self.base_data,
                     dtype=self.dtype,
-                    mask=mask,
+                    mask=self.base_mask,
                     size=self.size,
                     offset=self.offset,
                     children=self.base_children,

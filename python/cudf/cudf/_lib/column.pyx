@@ -312,13 +312,22 @@ cdef class Column:
         object with the Buffers and attributes from the other column.
         """
         if inplace:
-            other_col = other_col.copy(deep=False)
             self._offset = other_col.offset
             self._size = other_col.size
             self._dtype = other_col._dtype
-            self.set_base_data(other_col.base_data)
+            self.set_base_data(
+                other_col.base_data
+                if other_col.base_data is None
+                else other_col.base_data.copy(deep=False)
+            )
+            self.set_base_mask(
+                other_col.base_mask
+                if other_col.base_mask is None
+                else other_col.base_mask.copy(deep=False)
+            )
+
+            # TODO: need to call mimic_inplace on each child here.
             self.set_base_children(other_col.base_children)
-            self.set_base_mask(other_col.base_mask)
         else:
             return other_col
 
