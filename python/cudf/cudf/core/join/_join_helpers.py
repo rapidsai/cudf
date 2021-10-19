@@ -42,7 +42,7 @@ class _Indexer:
         else:
             if obj._index is not None:
                 return obj._index._data[self.name]
-        raise KeyError()
+        raise KeyError
 
     def set(self, obj: Frame, value: ColumnBase, validate=False):
         # set the colum in `obj`
@@ -54,7 +54,8 @@ class _Indexer:
                     self.name, value, validate=validate
                 )
             else:
-                raise KeyError()
+                raise KeyError
+        # TODO: Why is it OK for control flow to get here?
 
 
 def _frame_select_by_indexers(frame: Frame, indexers: Iterable[_Indexer]):
@@ -78,9 +79,8 @@ def _frame_select_by_indexers(frame: Frame, indexers: Iterable[_Indexer]):
 def _match_join_keys(
     lcol: ColumnBase, rcol: ColumnBase, how: str
 ) -> Tuple[ColumnBase, ColumnBase]:
-    # returns the common dtype that lcol and rcol should be casted to,
-    # before they can be used as left and right join keys.
-    # If no casting is necessary, returns None
+    # Casts lcol and rcol to a common dtype for use as join keys. If no casting
+    # is necessary, they are returned as is.
 
     common_type = None
 
