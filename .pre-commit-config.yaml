@@ -70,6 +70,11 @@ repos:
         hooks:
               - id: pydocstyle
                 args: ["--config=python/.flake8"]
+      - repo: https://github.com/cheshirekow/cmake-format-precommit
+        rev: v0.6.13
+        hooks:
+            - id: cmake-format
+              args: ["-i", "--config-files", "cpp/cmake/config.json", "cpp/build/release/_deps/rapids-cmake-src/cmake-format-rapids-cmake.json", "--"]
 
 
 default_language_version:
