@@ -84,9 +84,15 @@ Conversion
    :toctree: api/
 
    Index.astype
+   Index.to_array
+   Index.to_arrow
    Index.to_list
    Index.to_series
    Index.to_frame
+   Index.to_pandas
+   Index.to_dlpack
+   Index.from_pandas
+   Index.from_arrow
 
 Sorting
 ~~~~~~~
@@ -249,7 +255,13 @@ Time/date components
    DatetimeIndex.minute
    DatetimeIndex.second
    DatetimeIndex.dayofweek
+   DatetimeIndex.dayofyear
+   DatetimeIndex.day_of_year
    DatetimeIndex.weekday
+   DatetimeIndex.is_leap_year
+   DatetimeIndex.quarter
+   DatetimeIndex.isocalendar
+
 
 Time-specific operations
 ~~~~~~~~~~~~~~~~~~~~~~~~

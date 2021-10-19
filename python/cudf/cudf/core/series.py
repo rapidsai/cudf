@@ -728,7 +728,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         See Also
         --------
-        cudf.core.reshape.concat : General function to concatenate DataFrame or
+        cudf.concat : General function to concatenate DataFrame or
             Series objects.
 
         Examples
