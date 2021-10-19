@@ -45,7 +45,7 @@ from cudf.core.column import (
     serialize_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.join import merge
+from cudf.core.join import Merge, MergeSemi
 from cudf.core.udf.pipeline import compile_or_get
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
@@ -3611,7 +3611,11 @@ class Frame:
             left_index, right_index = right_index, left_index
             suffixes = (suffixes[1], suffixes[0])
 
-        return merge(
+        if how in {"leftsemi", "leftanti"}:
+            merge_cls = MergeSemi
+        else:
+            merge_cls = Merge
+        return merge_cls(
             lhs,
             rhs,
             on=on,
@@ -3623,7 +3627,7 @@ class Frame:
             sort=sort,
             indicator=indicator,
             suffixes=suffixes,
-        )
+        ).perform_merge()
 
     def _is_sorted(self, ascending=None, null_position=None):
         """
@@ -5508,7 +5512,7 @@ class Frame:
 
     def rmul(self, other, axis, level=None, fill_value=None):
         """
-        Get Multiplication of dataframe or series and other, element-wise 
+        Get Multiplication of dataframe or series and other, element-wise
         (binary operator `rmul`).
 
         Equivalent to ``other * frame``, but with support to substitute a
