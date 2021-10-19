@@ -3603,6 +3603,7 @@ class Frame:
         suffixes=("_x", "_y"),
     ):
         lhs, rhs = self, right
+        merge_cls = Merge
         if how == "right":
             # Merge doesn't support right, so just swap
             how = "left"
@@ -3610,11 +3611,9 @@ class Frame:
             left_on, right_on = right_on, left_on
             left_index, right_index = right_index, left_index
             suffixes = (suffixes[1], suffixes[0])
-
-        if how in {"leftsemi", "leftanti"}:
+        elif how in {"leftsemi", "leftanti"}:
             merge_cls = MergeSemi
-        else:
-            merge_cls = Merge
+
         return merge_cls(
             lhs,
             rhs,

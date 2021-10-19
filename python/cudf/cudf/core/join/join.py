@@ -18,44 +18,10 @@ if TYPE_CHECKING:
     from cudf.core.frame import Frame
 
 
-def merge(
-    lhs,
-    rhs,
-    *,
-    on,
-    left_on,
-    right_on,
-    left_index,
-    right_index,
-    how,
-    sort,
-    indicator,
-    suffixes,
-):
-    if how in {"leftsemi", "leftanti"}:
-        merge_cls = MergeSemi
-    else:
-        merge_cls = Merge
-    mergeobj = merge_cls(
-        lhs,
-        rhs,
-        on=on,
-        left_on=left_on,
-        right_on=right_on,
-        left_index=left_index,
-        right_index=right_index,
-        how=how,
-        sort=sort,
-        indicator=indicator,
-        suffixes=suffixes,
-    )
-    return mergeobj.perform_merge()
-
-
 _JoinKeys = namedtuple("JoinKeys", ["left", "right"])
 
 
-class Merge(object):
+class Merge:
     # A namedtuple of indexers representing the left and right keys
     _keys: _JoinKeys
 
@@ -148,18 +114,14 @@ class Merge(object):
             self.lsuffix, self.rsuffix = suffixes
         self._compute_join_keys()
 
-    @property
-    def _out_class(self):
-        # type of the result
-        out_class = cudf.DataFrame
-
-        if isinstance(self.lhs, cudf.MultiIndex) or isinstance(
-            self.rhs, cudf.MultiIndex
+        if isinstance(lhs, cudf.MultiIndex) or isinstance(
+            rhs, cudf.MultiIndex
         ):
-            out_class = cudf.MultiIndex
-        elif isinstance(self.lhs, cudf.BaseIndex):
-            out_class = self.lhs.__class__
-        return out_class
+            self._out_class = cudf.MultiIndex
+        elif isinstance(lhs, cudf.BaseIndex):
+            self._out_class = lhs.__class__
+        else:
+            self._out_class = cudf.DataFrame
 
     def perform_merge(self) -> Frame:
         lhs, rhs = self._match_key_dtypes(self.lhs, self.rhs)
@@ -185,7 +147,9 @@ class Merge(object):
                 right_rows, nullify=True, keep_index=gather_index
             )
 
-        result = self._merge_results(left_result, right_result)
+        result = self._out_class._from_data(
+            *self._merge_results(left_result, right_result)
+        )
 
         if self.sort:
             result = self._sort_result(result)
@@ -260,7 +224,7 @@ class Merge(object):
 
         self._keys = _JoinKeys(left=left_keys, right=right_keys)
 
-    def _merge_results(self, left_result: Frame, right_result: Frame) -> Frame:
+    def _merge_results(self, left_result: Frame, right_result: Frame):
         # Merge the Frames `left_result` and `right_result` into a single
         # `Frame`, suffixing column names if necessary.
 
@@ -322,22 +286,19 @@ class Merge(object):
                 right_names[rcol], right_result._data[rcol], validate=False
             )
 
-        # Index of the result:
-        if self.left_index and self.right_index:
+        # The index of the left result takes precedence if we join on both left
+        # and right keys, which is also true if we only join on right_index.
+        if self.right_index:
+            # right_index and left_on
             index = left_result._index
         elif self.left_index:
             # left_index and right_on
             index = right_result._index
-        elif self.right_index:
-            # right_index and left_on
-            index = left_result._index
         else:
             index = None
 
         # Construct result from data and index:
-        result = self._out_class._from_data(data=data, index=index)
-
-        return result
+        return data, index
 
     def _sort_result(self, result: Frame) -> Frame:
         # Pandas sorts on the key columns in the
@@ -407,7 +368,7 @@ class Merge(object):
         if (isinstance(lhs, cudf.Series) and not lhs.name) or (
             isinstance(rhs, cudf.Series) and not rhs.name
         ):
-            raise ValueError("Can not merge on unnamed Series")
+            raise ValueError("Cannot merge on unnamed Series")
 
         # If nothing specified, must have common cols to use implicitly
         same_named_columns = set(lhs._data) & set(rhs._data)
@@ -484,9 +445,11 @@ class MergeSemi(Merge):
             libcudf.join.semi_join, how=kwargs["how"]
         )
 
-    def _merge_results(self, lhs: Frame, rhs: Frame) -> Frame:
+    def _merge_results(self, lhs: Frame, rhs: Frame):
         # semi-join result includes only lhs columns
-        if issubclass(self._out_class, cudf.Index):
-            return self._out_class._from_data(lhs._data)
-        else:
-            return self._out_class._from_data(lhs._data, index=lhs._index)
+        return (
+            lhs._data,
+            lhs._index
+            if not issubclass(self._out_class, cudf.Index)
+            else None,
+        )
