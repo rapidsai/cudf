@@ -2375,3 +2375,101 @@ def test_range_index_concat(objs):
     for obj in objs[1:]:
         expected = expected.append(obj)
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "idx1, idx2",
+    [
+        (pd.RangeIndex(0, 10), pd.RangeIndex(3, 7)),
+        (pd.RangeIndex(0, 10), pd.RangeIndex(10, 20)),
+        (pd.RangeIndex(0, 10, 2), pd.RangeIndex(1, 5, 3)),
+        (pd.RangeIndex(1, 5, 3), pd.RangeIndex(0, 10, 2)),
+        (pd.RangeIndex(1, 10, 3), pd.RangeIndex(1, 5, 2)),
+        (pd.RangeIndex(1, 5, 2), pd.RangeIndex(1, 10, 3)),
+        (pd.RangeIndex(1, 100, 3), pd.RangeIndex(1, 50, 3)),
+        (pd.RangeIndex(1, 100, 3), pd.RangeIndex(1, 50, 6)),
+        (pd.RangeIndex(1, 100, 6), pd.RangeIndex(1, 50, 3)),
+        (pd.RangeIndex(0, 10, name="a"), pd.RangeIndex(90, 100, name="b")),
+        (pd.Index([0, 1, 2, 30], name="a"), pd.Index([90, 100])),
+        (pd.Index([0, 1, 2, 30], name="a"), [90, 100]),
+        (pd.Index([0, 1, 2, 30]), pd.Index([0, 10, 1.0, 11])),
+        (pd.Index(["a", "b", "c", "d", "c"]), pd.Index(["a", "c", "z"])),
+    ],
+)
+@pytest.mark.parametrize("sort", [None, False])
+def test_union_index(idx1, idx2, sort):
+    expected = idx1.union(idx2, sort=sort)
+
+    idx1 = cudf.from_pandas(idx1) if isinstance(idx1, pd.Index) else idx1
+    idx2 = cudf.from_pandas(idx2) if isinstance(idx2, pd.Index) else idx2
+
+    actual = idx1.union(idx2, sort=sort)
+
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "idx1, idx2",
+    [
+        (pd.RangeIndex(0, 10), pd.RangeIndex(3, 7)),
+        (pd.RangeIndex(0, 10), pd.RangeIndex(-10, 20)),
+        (pd.RangeIndex(0, 10, name="a"), pd.RangeIndex(90, 100, name="b")),
+        (pd.Index([0, 1, 2, 30], name="a"), pd.Index([30, 0, 90, 100])),
+        (pd.Index([0, 1, 2, 30], name="a"), [90, 100]),
+        (pd.Index([0, 1, 2, 30]), pd.Index([0, 10, 1.0, 11])),
+        (pd.Index(["a", "b", "c", "d", "c"]), pd.Index(["a", "c", "z"])),
+        (
+            pd.Index(["a", "b", "c", "d", "c"]),
+            pd.Index(["a", "b", "c", "d", "c"]),
+        ),
+        (pd.Index([True, False, True, True]), pd.Index([10, 11, 12, 0, 1, 2])),
+        (pd.Index([True, False, True, True]), pd.Index([True, True])),
+    ],
+)
+@pytest.mark.parametrize("sort", [None, False])
+def test_intersection_index(idx1, idx2, sort):
+
+    expected = idx1.intersection(idx2, sort=sort)
+
+    idx1 = cudf.from_pandas(idx1) if isinstance(idx1, pd.Index) else idx1
+    idx2 = cudf.from_pandas(idx2) if isinstance(idx2, pd.Index) else idx2
+
+    actual = idx1.intersection(idx2, sort=sort)
+
+    assert_eq(expected, actual, exact=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3],
+        ["a", "v", "d"],
+        [234.243, 2432.3, None],
+        [True, False, True],
+        pd.Series(["a", " ", "v"], dtype="category"),
+        pd.IntervalIndex.from_breaks([0, 1, 2, 3]),
+    ],
+)
+@pytest.mark.parametrize(
+    "func",
+    [
+        "is_numeric",
+        "is_boolean",
+        "is_integer",
+        "is_floating",
+        "is_object",
+        "is_categorical",
+        "is_interval",
+    ],
+)
+def test_index_type_methods(data, func):
+    pidx = pd.Index(data)
+    gidx = cudf.from_pandas(pidx)
+
+    expected = getattr(pidx, func)()
+    actual = getattr(gidx, func)()
+
+    if gidx.dtype == np.dtype("bool") and func == "is_object":
+        assert_eq(False, actual)
+    else:
+        assert_eq(expected, actual)
