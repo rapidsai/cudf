@@ -336,6 +336,7 @@ strings and apply several methods to it. These can be accessed like
    count
    detokenize
    edit_distance
+   edit_distance_matrix
    endswith
    extract
    filter_alphanum
