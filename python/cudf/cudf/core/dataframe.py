@@ -917,8 +917,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         string              object
         dtype: object
         """
-        return cudf.utils.utils._create_pandas_series(
-            data=[x.dtype for x in self._data.columns], index=self._data.names,
+        return pd.Series(self._dtypes)
+
+    @property
+    def _dtypes(self):
+        return dict(
+            zip(self._data.names, (col.dtype for col in self._data.columns))
         )
 
     @property
@@ -2155,18 +2159,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if index is not None:
             index = cudf.core.index.as_index(index)
 
-            if isinstance(index, cudf.MultiIndex):
-                idx_dtype_match = all(
-                    left_dtype == right_dtype
-                    for left_dtype, right_dtype in zip(
-                        (col.dtype for col in df.index._data.columns),
-                        (col.dtype for col in index._data.columns),
-                    )
+            idx_dtype_match = (df.index.nlevels == index.nlevels) and all(
+                left_dtype == right_dtype
+                for left_dtype, right_dtype in zip(
+                    (col.dtype for col in df.index._data.columns),
+                    (col.dtype for col in index._data.columns),
                 )
-            else:
-                idx_dtype_match = df.index.dtype == index.dtype
+            )
 
             if not idx_dtype_match:
+                # TODO: This should be an early return
                 columns = (
                     columns if columns is not None else list(df._column_names)
                 )
@@ -2205,7 +2207,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self._mimic_inplace(result, inplace=inplace)
 
     def reindex(
-        self, labels=None, axis=0, index=None, columns=None, copy=True
+        self, labels=None, axis=None, index=None, columns=None, copy=True
     ):
         """
         Return a new DataFrame whose axes conform to a new index
@@ -2254,22 +2256,33 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if labels is None and index is None and columns is None:
             return self.copy(deep=copy)
 
-        dtypes = dict(self.dtypes)
-        idx = labels if index is None and axis in (0, "index") else index
-        cols = (
-            labels if columns is None and axis in (1, "columns") else columns
-        )
+        # pandas simply ignores the labels keyword if it is provided in
+        # addition to index and columns, but it prohibits the axis arg.
+        if (index is not None or columns is not None) and axis is not None:
+            raise TypeError(
+                "Cannot specify both 'axis' and any of 'index' or 'columns'."
+            )
+
+        axis = self._get_axis_from_axis_arg(axis)
+        if axis == 0:
+            if index is None:
+                index = labels
+        else:
+            if columns is None:
+                columns = labels
         df = (
             self
-            if cols is None
-            else self[list(set(self._column_names) & set(cols))]
+            if columns is None
+            else self[list(set(self._column_names) & set(columns))]
         )
 
-        result = df._reindex(
-            columns=cols, dtypes=dtypes, deep=copy, index=idx, inplace=False
+        return df._reindex(
+            columns=columns,
+            dtypes=self._dtypes,
+            deep=copy,
+            index=index,
+            inplace=False,
         )
-
-        return result
 
     def set_index(
         self,
