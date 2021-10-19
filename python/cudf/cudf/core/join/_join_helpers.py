@@ -3,12 +3,12 @@ from __future__ import annotations
 
 import collections
 import warnings
-from typing import TYPE_CHECKING, Any, Iterable, Tuple
+from typing import TYPE_CHECKING, Any, Iterable, Tuple, cast
 
 import numpy as np
-import pandas as pd
 
 import cudf
+from cudf.api.types import is_dtype_equal
 from cudf.core.dtypes import CategoricalDtype
 
 if TYPE_CHECKING:
@@ -91,12 +91,22 @@ def _match_join_keys(
     rtype = rcol.dtype
 
     # if either side is categorical, different logic
-    if isinstance(ltype, CategoricalDtype) or isinstance(
-        rtype, CategoricalDtype
-    ):
-        return _match_categorical_dtypes(lcol, rcol, how)
+    left_is_categorical = isinstance(ltype, CategoricalDtype)
+    right_is_categorical = isinstance(rtype, CategoricalDtype)
+    if left_is_categorical and right_is_categorical:
+        return _match_categorical_dtypes_both(
+            cast(CategoricalColumn, lcol), cast(CategoricalColumn, rcol), how
+        )
+    elif left_is_categorical or right_is_categorical:
+        if left_is_categorical:
+            if how in {"left", "leftsemi", "leftanti"}:
+                return lcol, rcol.astype(ltype)
+            common_type = ltype.categories.dtype
+        else:
+            common_type = rtype.categories.dtype
+        return lcol.astype(common_type), rcol.astype(common_type)
 
-    if pd.api.types.is_dtype_equal(ltype, rtype):
+    if is_dtype_equal(ltype, rtype):
         return lcol, rcol
 
     if isinstance(ltype, cudf.Decimal64Dtype) or isinstance(
@@ -131,34 +141,9 @@ def _match_join_keys(
     return lcol.astype(common_type), rcol.astype(common_type)
 
 
-def _match_categorical_dtypes(
-    lcol: ColumnBase, rcol: ColumnBase, how: str
-) -> Tuple[ColumnBase, ColumnBase]:
-    # cast the keys lcol and rcol to a common dtype
-    # when at least one of them is a categorical type
-    ltype, rtype = lcol.dtype, rcol.dtype
-
-    if isinstance(lcol, cudf.core.column.CategoricalColumn) and isinstance(
-        rcol, cudf.core.column.CategoricalColumn
-    ):
-        # if both are categoricals, logic is complicated:
-        return _match_categorical_dtypes_both(lcol, rcol, how)
-
-    if isinstance(ltype, CategoricalDtype):
-        if how in {"left", "leftsemi", "leftanti"}:
-            return lcol, rcol.astype(ltype)
-        common_type = ltype.categories.dtype
-    elif isinstance(rtype, CategoricalDtype):
-        common_type = rtype.categories.dtype
-    return lcol.astype(common_type), rcol.astype(common_type)
-
-
 def _match_categorical_dtypes_both(
     lcol: CategoricalColumn, rcol: CategoricalColumn, how: str
 ) -> Tuple[ColumnBase, ColumnBase]:
-    # The commontype depends on both `how` and the specifics of the
-    # categorical variables to be merged.
-
     ltype, rtype = lcol.dtype, rcol.dtype
 
     # when both are ordered and both have the same categories,
@@ -183,9 +168,6 @@ def _match_categorical_dtypes_both(
             "different categories is only valid when "
             "neither side is ordered"
         )
-
-    # the following should now always hold
-    assert not ltype.ordered and not rtype.ordered
 
     if how == "inner":
         # cast to category types -- we must cast them back later
