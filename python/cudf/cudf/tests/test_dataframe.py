@@ -8932,3 +8932,29 @@ def test_frame_series_where_other(data):
     expected = gdf.where(gdf["b"] == 1, 0)
     actual = pdf.where(pdf["b"] == 1, 0)
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+            "val1": [5, 4, 6, 4, 8, 7, 4, 5, 2],
+            "val2": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+            "val3": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+        },
+        {
+            "id": [0] * 4 + [1] * 3,
+            "a": [10, 3, 4, 2, -3, 9, 10],
+            "b": [10, 23, -4, 2, -3, 9, 19],
+            "c": [10, -23, -4, 21, -3, 19, 19],
+        },
+    ],
+)
+def test_dataframe_pearson_corr(data):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    expected = gdf.groupby("id").corr()
+    actual = pdf.groupby("id").corr()
+    assert_eq(expected, actual)
