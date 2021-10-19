@@ -729,18 +729,17 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
-std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_column,
+std::unique_ptr<column> drop_list_duplicates(lists_column_view const& input,
                                              null_equality nulls_equal,
                                              nan_equality nans_equal,
-                                             duplicate_keep_option keep_option,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
-  return drop_list_duplicates(lists_column,
-                              lists_column,
+  return drop_list_duplicates(input,
+                              input,
                               nulls_equal,
                               nans_equal,
-                              keep_option,
+                              duplicate_keep_option::KEEP_FIRST,
                               rmm::cuda_stream_default,
                               mr)
     .first;
@@ -766,15 +765,13 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
 /**
  * @copydoc cudf::lists::drop_list_duplicates
  */
-std::unique_ptr<column> drop_list_duplicates(lists_column_view const& lists_column,
+std::unique_ptr<column> drop_list_duplicates(lists_column_view const& input,
                                              null_equality nulls_equal,
                                              nan_equality nans_equal,
-                                             duplicate_keep_option keep_option,
                                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::drop_list_duplicates(
-    lists_column, nulls_equal, nans_equal, keep_option, rmm::cuda_stream_default, mr);
+  return detail::drop_list_duplicates(input, nulls_equal, nans_equal, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace lists

@@ -30,10 +30,9 @@ namespace detail {
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> drop_list_duplicates(
-  lists_column_view const& lists_column,
+  lists_column_view const& input,
   null_equality nulls_equal,
   nan_equality nans_equal,
-  duplicate_keep_option keep_option,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
