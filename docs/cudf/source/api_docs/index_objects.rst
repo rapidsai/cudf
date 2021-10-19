@@ -23,6 +23,7 @@ Properties
 
    Index.empty
    Index.gpu_values
+   Index.has_duplicates
    Index.is_monotonic
    Index.is_monotonic_increasing
    Index.is_monotonic_decreasing
@@ -46,6 +47,14 @@ Modifying and computations
    Index.drop_duplicates
    Index.equals
    Index.factorize
+   Index.is_boolean
+   Index.is_categorical
+   Index.is_floating
+   Index.is_integer
+   Index.is_interval
+   Index.is_mixed
+   Index.is_numeric
+   Index.is_object
    Index.min
    Index.max
    Index.rename
@@ -116,6 +125,8 @@ Combining / joining / set operations
    :toctree: api/
 
    Index.append
+   Index.union
+   Index.intersection
    Index.join
    Index.difference
 
