@@ -41,7 +41,7 @@ namespace strings {
  * s1 = format_list_column(l1)
  * s1 is now ["[[a,b,c],[d,e]]", "[[f,g],[h]]"]
  *
- * l2 = { [[a,b,c], [d,e]], [NULL], [[f,g], NULL [h]] }
+ * l2 = { [[a,b,c], [d,e]], [NULL], [[f,g], NULL, [h]] }
  * s2 = format_list_column(l1, '-', [':', '{', '}'])
  * s2 is now ["{{a:b:c}:{d:e}}", "{-}", "{{f:g}:-:{h}}"]
  * @endcode
