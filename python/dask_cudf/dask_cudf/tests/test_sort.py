@@ -81,5 +81,5 @@ def test_sort_values_with_nulls(data, by, ascending, na_position):
             by=by, ascending=ascending, na_position=na_position
         )
 
-    # cudf index ordering for nulls is non-deterministic
-    dd.assert_eq(got, expect, check_index=False)
+    # cudf ordering for nulls is non-deterministic
+    dd.assert_eq(got[by], expect[by], check_index=False)
