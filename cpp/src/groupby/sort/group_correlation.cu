@@ -63,6 +63,8 @@ struct type_casted_accessor {
     if constexpr (column_device_view::has_element_accessor<Element>() and
                   std::is_convertible_v<Element, CastType>)
       return static_cast<CastType>(col.element<Element>(i));
+    (void)i;
+    (void)col;
     return {};
   }
 };

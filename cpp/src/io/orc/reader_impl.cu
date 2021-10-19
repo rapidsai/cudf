@@ -1177,6 +1177,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                        const std::vector<std::vector<size_type>>& stripes,
                                        rmm::cuda_stream_view stream)
 {
+  // Selected columns at different levels of nesting are stored in different elements
+  // of `_selected_columns`; thus, size == 1 means no nested columns
   CUDF_EXPECTS(skip_rows == 0 or _selected_columns.size() == 1,
                "skip_rows is not supported by nested columns");
 
