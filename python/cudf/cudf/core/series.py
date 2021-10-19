@@ -918,6 +918,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         e    14
         dtype: int64
         """
+        warnings.warn(
+            "Series.set_index is deprecated and will be removed in the future",
+            FutureWarning,
+        )
         index = index if isinstance(index, BaseIndex) else as_index(index)
         return self._from_data(self._data, index, self.name)
 
