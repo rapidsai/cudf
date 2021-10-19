@@ -192,10 +192,6 @@ std::unique_ptr<table> drop_duplicates(table_view const& input,
     return empty_like(input);
   }
 
-  CUDF_EXPECTS(
-    keep != duplicate_keep_option::KEEP_ANY,
-    "The option `duplicate_keep_option::KEEP_ANY_ONE` is not yet supported in `drop_duplicates`");
-
   auto keys_view = input.select(keys);
 
   // The values will be filled into this column
