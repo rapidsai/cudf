@@ -27,18 +27,18 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast, strings as libstrings
 from cudf._lib.column import Column
-from cudf.core.buffer import Buffer
-from cudf.core.column import column, datetime
-from cudf.core.column.methods import ColumnMethods, ParentType
-from cudf.utils import utils
-from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import (
-    can_convert_to_column,
+from cudf.api.types import (
     is_integer,
     is_list_dtype,
     is_scalar,
     is_string_dtype,
 )
+from cudf.core.buffer import Buffer
+from cudf.core.column import column, datetime
+from cudf.core.column.methods import ColumnMethods, ParentType
+from cudf.utils import utils
+from cudf.utils.docutils import copy_docstring
+from cudf.utils.dtypes import can_convert_to_column
 
 
 def str_to_boolean(column: StringColumn):
@@ -352,7 +352,9 @@ class StringMethods(ColumnMethods):
 
         if len(data) == 1 and data.null_count == 1:
             data = [""]
-        out = self._return_or_inplace(data)
+        # We only want to keep the index if we are adding something to each
+        # row, not if we are joining all the rows into a single string.
+        out = self._return_or_inplace(data, retain_index=others is not None)
         if len(out) == 1 and others is None:
             if isinstance(out, cudf.Series):
                 out = out.iloc[0]
@@ -5208,10 +5210,10 @@ class StringColumn(column.ColumnBase):
         """
         Return a CuPy representation of the StringColumn.
         """
-        raise NotImplementedError(
-            "String Arrays is not yet implemented in cudf"
-        )
+        raise TypeError("String Arrays is not yet implemented in cudf")
 
+    # TODO: This method is deprecated and should be removed when the associated
+    # Frame methods are removed.
     def to_array(self, fillna: bool = None) -> np.ndarray:
         """Get a dense numpy array for the data.
 
@@ -5407,7 +5409,7 @@ class StringColumn(column.ColumnBase):
         else:
             raise TypeError(f"cannot broadcast {type(other)}")
 
-    def default_na_value(self) -> ScalarLike:
+    def _default_na_value(self) -> ScalarLike:
         return None
 
     def binary_operator(

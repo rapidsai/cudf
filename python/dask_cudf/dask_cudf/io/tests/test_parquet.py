@@ -486,3 +486,24 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
     # before computing, and "int" after
     dd.assert_eq(ddf1.compute(), ddf2)
     dd.assert_eq(ddf1.compute(), ddf2.compute())
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        ["dog", "cat", "fish"],
+        [[0], [1, 2], [3]],
+        [None, [1, 2], [3]],
+        [{"f1": 1}, {"f1": 0, "f2": "dog"}, {"f2": "cat"}],
+        [None, {"f1": 0, "f2": "dog"}, {"f2": "cat"}],
+    ],
+)
+def test_cudf_dtypes_from_pandas(tmpdir, data):
+    # Simple test that we can read in list and struct types
+    fn = str(tmpdir.join("test.parquet"))
+    dfp = pd.DataFrame({"data": data})
+    dfp.to_parquet(fn, engine="pyarrow", index=True)
+    # Use `split_row_groups=True` to avoid "fast path" where
+    # schema is not is passed through in older Dask versions
+    ddf2 = dask_cudf.read_parquet(fn, split_row_groups=True)
+    dd.assert_eq(cudf.from_pandas(dfp), ddf2)

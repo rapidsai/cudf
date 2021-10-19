@@ -9,8 +9,6 @@ from cudf.api.types import is_list_like
 from cudf.core.column import as_column, build_categorical_column
 from cudf.core.index import IntervalIndex, interval_range
 
-# from cudf._lib.filling import sequence
-
 
 def cut(
     x,

@@ -43,7 +43,7 @@ def test_applymap_round(nelem, masked):
 
     # Check
     expect = np.round(data)
-    got = out.to_array()
+    got = out.to_numpy()
     np.testing.assert_array_almost_equal(expect, got)
 
 
@@ -58,5 +58,5 @@ def test_applymap_change_out_dtype():
 
     # Check
     expect = np.array(data, dtype=float)
-    got = out.to_array()
+    got = out.to_numpy()
     np.testing.assert_array_equal(expect, got)

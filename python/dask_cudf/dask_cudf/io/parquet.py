@@ -1,9 +1,11 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 import warnings
+from contextlib import ExitStack
 from functools import partial
 from io import BufferedWriter, BytesIO, IOBase
 
 import numpy as np
+import pyarrow as pa
 from pyarrow import dataset as pa_ds, parquet as pq
 
 from dask import dataframe as dd
@@ -28,24 +30,22 @@ class CudfEngine(ArrowDatasetEngine):
         meta, stats, parts, index = ArrowDatasetEngine.read_metadata(
             *args, **kwargs
         )
+        new_meta = cudf.from_pandas(meta)
         if parts:
             # Re-set "object" dtypes align with pa schema
             set_object_dtypes_from_pa_schema(
-                meta, parts[0].get("common_kwargs", {}).get("schema", None),
+                new_meta,
+                parts[0].get("common_kwargs", {}).get("schema", None),
             )
 
         # If `strings_to_categorical==True`, convert objects to int32
         strings_to_cats = kwargs.get("strings_to_categorical", False)
-
-        new_meta = cudf.DataFrame(index=meta.index)
-        for col in meta.columns:
-            if meta[col].dtype == "O":
-                new_meta[col] = as_column(
-                    meta[col], dtype="int32" if strings_to_cats else "object"
-                )
-            else:
-                new_meta[col] = as_column(meta[col])
-
+        for col in new_meta._data.names:
+            if (
+                isinstance(new_meta._data[col], cudf.core.column.StringColumn)
+                and strings_to_cats
+            ):
+                new_meta._data[col] = new_meta._data[col].astype("int32")
         return (new_meta, stats, parts, index)
 
     @classmethod
@@ -68,15 +68,33 @@ class CudfEngine(ArrowDatasetEngine):
         **kwargs,
     ):
 
-        # Use cudf to read in data
-        df = cudf.read_parquet(
-            paths,
-            engine="cudf",
-            columns=columns,
-            row_groups=row_groups if row_groups else None,
-            strings_to_categorical=strings_to_categorical,
-            **kwargs,
-        )
+        # Simplify row_groups if all None
+        if row_groups == [None for path in paths]:
+            row_groups = None
+
+        with ExitStack() as stack:
+
+            # Non-local filesystem handling
+            paths_or_fobs = paths
+            if not cudf.utils.ioutils._is_local_filesystem(fs):
+
+                # Convert paths to file objects for remote data
+                paths_or_fobs = [
+                    stack.enter_context(
+                        fs.open(path, mode="rb", cache_type="none")
+                    )
+                    for path in paths
+                ]
+
+            # Use cudf to read in data
+            df = cudf.read_parquet(
+                paths_or_fobs,
+                engine="cudf",
+                columns=columns,
+                row_groups=row_groups if row_groups else None,
+                strings_to_categorical=strings_to_categorical,
+                **kwargs,
+            )
 
         if partitions and partition_keys is None:
 
@@ -135,101 +153,76 @@ class CudfEngine(ArrowDatasetEngine):
         categories=(),
         partitions=(),
         partitioning=None,
+        schema=None,
         **kwargs,
     ):
+
         if columns is not None:
             columns = [c for c in columns]
         if isinstance(index, list):
             columns += index
+
+        # Check if we are actually selecting any columns
+        read_columns = columns
+        if schema and columns:
+            ignored = set(schema.names) - set(columns)
+            if not ignored:
+                read_columns = None
 
         if not isinstance(pieces, list):
             pieces = [pieces]
 
         strings_to_cats = kwargs.get("strings_to_categorical", False)
 
-        if len(pieces) > 1:
+        # Assume multi-peice read
+        paths = []
+        rgs = []
+        last_partition_keys = None
+        dfs = []
 
-            # Multi-peice read
-            paths = []
-            rgs = []
-            last_partition_keys = None
-            dfs = []
+        for i, piece in enumerate(pieces):
 
-            for i, piece in enumerate(pieces):
-
-                (path, row_group, partition_keys) = piece
-                row_group = None if row_group == [None] else row_group
-
-                if i > 0 and partition_keys != last_partition_keys:
-                    dfs.append(
-                        cls._read_paths(
-                            paths,
-                            fs,
-                            columns=columns,
-                            row_groups=rgs if rgs else None,
-                            strings_to_categorical=strings_to_cats,
-                            partitions=partitions,
-                            partitioning=partitioning,
-                            partition_keys=last_partition_keys,
-                            **kwargs.get("read", {}),
-                        )
-                    )
-                    paths = rgs = []
-                    last_partition_keys = None
-                paths.append(path)
-                rgs.append(
-                    [row_group]
-                    if not isinstance(row_group, list)
-                    else row_group
-                )
-                last_partition_keys = partition_keys
-
-            dfs.append(
-                cls._read_paths(
-                    paths,
-                    fs,
-                    columns=columns,
-                    row_groups=rgs if rgs else None,
-                    strings_to_categorical=strings_to_cats,
-                    partitions=partitions,
-                    partitioning=partitioning,
-                    partition_keys=last_partition_keys,
-                    **kwargs.get("read", {}),
-                )
-            )
-            df = cudf.concat(dfs)
-
-        else:
-
-            # Single-piece read
-            (path, row_group, partition_keys) = pieces[0]
+            (path, row_group, partition_keys) = piece
             row_group = None if row_group == [None] else row_group
 
-            if cudf.utils.ioutils._is_local_filesystem(fs):
-                df = cls._read_paths(
-                    path,
-                    fs,
-                    columns=columns,
-                    row_groups=row_group,
-                    strings_to_categorical=strings_to_cats,
-                    partitions=partitions,
-                    partitioning=partitioning,
-                    partition_keys=partition_keys,
-                    **kwargs.get("read", {}),
-                )
-            else:
-                with fs.open(path, mode="rb") as f:
-                    df = cls._read_paths(
-                        f,
+            if i > 0 and partition_keys != last_partition_keys:
+                dfs.append(
+                    cls._read_paths(
+                        paths,
                         fs,
-                        columns=columns,
-                        row_groups=row_group,
+                        columns=read_columns,
+                        row_groups=rgs if rgs else None,
                         strings_to_categorical=strings_to_cats,
                         partitions=partitions,
                         partitioning=partitioning,
-                        partition_keys=partition_keys,
+                        partition_keys=last_partition_keys,
                         **kwargs.get("read", {}),
                     )
+                )
+                paths = rgs = []
+                last_partition_keys = None
+            paths.append(path)
+            rgs.append(
+                [row_group]
+                if not isinstance(row_group, list) and row_group is not None
+                else row_group
+            )
+            last_partition_keys = partition_keys
+
+        dfs.append(
+            cls._read_paths(
+                paths,
+                fs,
+                columns=read_columns,
+                row_groups=rgs if rgs else None,
+                strings_to_categorical=strings_to_cats,
+                partitions=partitions,
+                partitioning=partitioning,
+                partition_keys=last_partition_keys,
+                **kwargs.get("read", {}),
+            )
+        )
+        df = cudf.concat(dfs) if len(dfs) > 1 else dfs[0]
 
         # Re-set "object" dtypes align with pa schema
         set_object_dtypes_from_pa_schema(df, kwargs.get("schema", None))
@@ -338,11 +331,14 @@ def set_object_dtypes_from_pa_schema(df, schema):
     # "object" dtypes to agree with a specific
     # pyarrow schema.
     if schema:
-        for name in df.columns:
-            if name in schema.names and df[name].dtype == "O":
-                df[name] = df[name].astype(
-                    cudf_dtype_from_pa_type(schema.field(name).type)
-                )
+        for col_name, col in df._data.items():
+            typ = schema.field(col_name).type
+            if (
+                col_name in schema.names
+                and not isinstance(typ, (pa.ListType, pa.StructType))
+                and isinstance(col, cudf.core.column.StringColumn)
+            ):
+                df._data[col_name] = col.astype(cudf_dtype_from_pa_type(typ))
 
 
 def read_parquet(

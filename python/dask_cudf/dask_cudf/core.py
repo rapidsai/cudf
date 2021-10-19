@@ -169,7 +169,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             or isinstance(divisions, (cudf.DataFrame, cudf.Series))
             or (
                 isinstance(other, str)
-                and cudf.utils.dtypes.is_string_dtype(self[other].dtype)
+                and cudf.api.types.is_string_dtype(self[other].dtype)
             )
         ):
 
@@ -420,7 +420,7 @@ class Series(_Frame, dd.core.Series):
 
 
 class Index(Series, dd.core.Index):
-    _partition_type = cudf.Index
+    _partition_type = cudf.Index  # type: ignore
 
 
 def _naive_var(ddf, meta, skipna, ddof, split_every, out):

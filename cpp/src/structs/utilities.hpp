@@ -57,6 +57,14 @@ std::vector<std::vector<column_view>> extract_ordered_struct_children(
   host_span<column_view const> struct_cols);
 
 /**
+ * @brief Check whether the specified column is of type LIST, or any LISTs in its descendent
+ * columns.
+ * @param col column to check for lists.
+ * @return true if the column or any of it's children is a list, false otherwise.
+ */
+bool is_or_has_nested_lists(cudf::column_view const& col);
+
+/**
  * @brief Flatten table with struct columns to table with constituent columns of struct columns.
  *
  * If a table does not have struct columns, same input arguments are returned.

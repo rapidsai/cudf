@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 
-#include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/copy_if_else.cuh>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/detail/scatter.cuh>
+#include <cudf/detail/scatter.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/traits.hpp>
 
@@ -44,13 +43,13 @@ struct copy_if_else_functor_impl {
  */
 struct get_iterable_device_view {
   template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, cudf::column_view>)>
-  auto operator()(T const& input)
+  auto operator()(T const& input, rmm::cuda_stream_view stream)
   {
-    return cudf::column_device_view::create(input);
+    return cudf::column_device_view::create(input, stream);
   }
 
   template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, cudf::scalar>)>
-  auto operator()(T const& input)
+  auto operator()(T const& input, rmm::cuda_stream_view)
   {
     return &input;
   }
@@ -68,8 +67,8 @@ struct copy_if_else_functor_impl<T, std::enable_if_t<is_rep_layout_compatible<T>
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    auto p_lhs      = get_iterable_device_view{}(lhs_h);
-    auto p_rhs      = get_iterable_device_view{}(rhs_h);
+    auto p_lhs      = get_iterable_device_view{}(lhs_h, stream);
+    auto p_rhs      = get_iterable_device_view{}(rhs_h, stream);
     auto const& lhs = *p_lhs;
     auto const& rhs = *p_rhs;
 
@@ -115,8 +114,8 @@ struct copy_if_else_functor_impl<string_view> {
   {
     using T = string_view;
 
-    auto p_lhs      = get_iterable_device_view{}(lhs_h);
-    auto p_rhs      = get_iterable_device_view{}(rhs_h);
+    auto p_lhs      = get_iterable_device_view{}(lhs_h, stream);
+    auto p_rhs      = get_iterable_device_view{}(rhs_h, stream);
     auto const& lhs = *p_lhs;
     auto const& rhs = *p_rhs;
 
@@ -181,23 +180,24 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::column_view const& lh
                                                      rmm::cuda_stream_view stream,
                                                      rmm::mr::device_memory_resource* mr)
 {
-  auto scatter_map = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
-  auto const scatter_map_end = thrust::copy_if(rmm::exec_policy(stream),
-                                               thrust::make_counting_iterator(size_type{0}),
-                                               thrust::make_counting_iterator(size_type{size}),
-                                               scatter_map.begin(),
-                                               is_left);
+  auto gather_map = rmm::device_uvector<size_type>{static_cast<std::size_t>(size), stream};
+  auto const gather_map_end = thrust::copy_if(rmm::exec_policy(stream),
+                                              thrust::make_counting_iterator(size_type{0}),
+                                              thrust::make_counting_iterator(size_type{size}),
+                                              gather_map.begin(),
+                                              is_left);
+
+  gather_map.resize(thrust::distance(gather_map.begin(), gather_map_end), stream);
 
   auto const scatter_src_lhs = cudf::detail::gather(table_view{std::vector<column_view>{lhs}},
-                                                    scatter_map.begin(),
-                                                    scatter_map_end,
+                                                    gather_map,
                                                     out_of_bounds_policy::DONT_CHECK,
+                                                    negative_index_policy::NOT_ALLOWED,
                                                     stream);
 
   auto result = cudf::detail::scatter(
     table_view{std::vector<column_view>{scatter_src_lhs->get_column(0).view()}},
-    scatter_map.begin(),
-    scatter_map_end,
+    gather_map,
     table_view{std::vector<column_view>{rhs}},
     false,
     stream,
@@ -227,8 +227,12 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::scalar const& lhs,
                                                    static_cast<cudf::size_type>(scatter_map_size),
                                                    scatter_map.begin()};
 
-  auto result = cudf::scatter(
-    scatter_source, scatter_map_column_view, table_view{std::vector<column_view>{rhs}}, false, mr);
+  auto result = cudf::detail::scatter(scatter_source,
+                                      scatter_map_column_view,
+                                      table_view{std::vector<column_view>{rhs}},
+                                      false,
+                                      stream,
+                                      mr);
 
   return std::move(result->release()[0]);
 }

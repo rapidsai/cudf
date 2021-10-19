@@ -201,7 +201,7 @@ def test_series_basic():
     a1 = np.arange(10, dtype=np.float64)
     series = cudf.Series(a1)
     assert len(series) == 10
-    np.testing.assert_equal(series.to_array(), np.hstack([a1]))
+    np.testing.assert_equal(series.to_numpy(), np.hstack([a1]))
 
 
 def test_series_from_cupy_scalars():
@@ -265,13 +265,13 @@ def test_dataframe_basic():
 
     # Populate with cuda memory
     df["keys"] = np.arange(10, dtype=np.float64)
-    np.testing.assert_equal(df["keys"].to_array(), np.arange(10))
+    np.testing.assert_equal(df["keys"].to_numpy(), np.arange(10))
     assert len(df) == 10
 
     # Populate with numpy array
     rnd_vals = np.random.random(10)
     df["vals"] = rnd_vals
-    np.testing.assert_equal(df["vals"].to_array(), rnd_vals)
+    np.testing.assert_equal(df["vals"].to_numpy(), rnd_vals)
     assert len(df) == 10
     assert tuple(df.columns) == ("keys", "vals")
 
@@ -287,11 +287,11 @@ def test_dataframe_basic():
     hkeys = np.asarray(np.arange(10, dtype=np.float64).tolist() + [123])
     hvals = np.asarray(rnd_vals.tolist() + [321])
 
-    np.testing.assert_equal(df["keys"].to_array(), hkeys)
-    np.testing.assert_equal(df["vals"].to_array(), hvals)
+    np.testing.assert_equal(df["keys"].to_numpy(), hkeys)
+    np.testing.assert_equal(df["vals"].to_numpy(), hvals)
 
     # As matrix
-    mat = df.as_matrix()
+    mat = df.values_host
 
     expect = np.vstack([hkeys, hvals]).T
 
@@ -301,7 +301,7 @@ def test_dataframe_basic():
     df_tup = cudf.DataFrame()
     data = np.arange(10)
     df_tup[(1, "foobar")] = data
-    np.testing.assert_equal(data, df_tup[(1, "foobar")].to_array())
+    np.testing.assert_equal(data, df_tup[(1, "foobar")].to_numpy())
 
     df = cudf.DataFrame(pd.DataFrame({"a": [1, 2, 3], "c": ["a", "b", "c"]}))
     pdf = pd.DataFrame(pd.DataFrame({"a": [1, 2, 3], "c": ["a", "b", "c"]}))
@@ -715,7 +715,7 @@ def test_dataframe_astype(nelem):
     assert df["a"].dtype is np.dtype(np.int32)
     df["b"] = df["a"].astype(np.float32)
     assert df["b"].dtype is np.dtype(np.float32)
-    np.testing.assert_equal(df["a"].to_array(), df["b"].to_array())
+    np.testing.assert_equal(df["a"].to_numpy(), df["b"].to_numpy())
 
 
 def test_astype_dict():
@@ -738,12 +738,12 @@ def test_index_astype(nelem):
     df.index = df.index.astype(np.float32)
     assert df.index.dtype is np.dtype(np.float32)
     df["a"] = df["a"].astype(np.float32)
-    np.testing.assert_equal(df.index.to_array(), df["a"].to_array())
+    np.testing.assert_equal(df.index.to_numpy(), df["a"].to_numpy())
     df["b"] = df["a"]
     df = df.set_index("b")
     df["a"] = df["a"].astype(np.int16)
     df.index = df.index.astype(np.int16)
-    np.testing.assert_equal(df.index.to_array(), df["a"].to_array())
+    np.testing.assert_equal(df.index.to_numpy(), df["a"].to_numpy())
 
 
 def test_dataframe_to_string():
@@ -786,9 +786,9 @@ def test_dataframe_to_string():
     # check data
     values = masked.copy()
     validids = [0, 2, 3, 5]
-    densearray = masked.to_array()
+    densearray = masked.dropna().to_numpy()
     np.testing.assert_equal(data[validids], densearray)
-    # valid position is corret
+    # valid position is correct
 
     for i in validids:
         assert data[i] == values[i]
@@ -941,12 +941,13 @@ def test_dataframe_dir_and_getattr():
         df.not_a_column
 
 
-@pytest.mark.parametrize("order", ["C", "F"])
-def test_empty_dataframe_as_gpu_matrix(order):
+def test_empty_dataframe_to_array():
     df = cudf.DataFrame()
 
     # Check fully empty dataframe.
-    mat = df.as_gpu_matrix(order=order).copy_to_host()
+    mat = df.to_cupy()
+    assert mat.shape == (0, 0)
+    mat = df.to_numpy()
     assert mat.shape == (0, 0)
 
     df = cudf.DataFrame()
@@ -955,12 +956,11 @@ def test_empty_dataframe_as_gpu_matrix(order):
         df[k] = np.random.random(nelem)
 
     # Check all columns in empty dataframe.
-    mat = df.head(0).as_gpu_matrix(order=order).copy_to_host()
+    mat = df.head(0).to_cupy()
     assert mat.shape == (0, 3)
 
 
-@pytest.mark.parametrize("order", ["C", "F"])
-def test_dataframe_as_gpu_matrix(order):
+def test_dataframe_to_cupy():
     df = cudf.DataFrame()
 
     nelem = 123
@@ -968,20 +968,20 @@ def test_dataframe_as_gpu_matrix(order):
         df[k] = np.random.random(nelem)
 
     # Check all columns
-    mat = df.as_gpu_matrix(order=order).copy_to_host()
+    mat = df.to_numpy()
     assert mat.shape == (nelem, 4)
     for i, k in enumerate(df.columns):
-        np.testing.assert_array_equal(df[k].to_array(), mat[:, i])
+        np.testing.assert_array_equal(df[k].to_numpy(), mat[:, i])
 
     # Check column subset
-    mat = df.as_gpu_matrix(order=order, columns=["a", "c"]).copy_to_host()
+    mat = df[["a", "c"]].to_cupy().get()
     assert mat.shape == (nelem, 2)
 
     for i, k in enumerate("ac"):
-        np.testing.assert_array_equal(df[k].to_array(), mat[:, i])
+        np.testing.assert_array_equal(df[k].to_numpy(), mat[:, i])
 
 
-def test_dataframe_as_gpu_matrix_null_values():
+def test_dataframe_to_cupy_null_values():
     df = cudf.DataFrame()
 
     nelem = 123
@@ -999,14 +999,15 @@ def test_dataframe_as_gpu_matrix_null_values():
         refvalues[k] = data
 
     # Check null value causes error
-    with pytest.raises(ValueError) as raises:
-        df.as_gpu_matrix()
-    raises.match("column 'a' has null values")
+    with pytest.raises(ValueError):
+        df.to_cupy()
+    with pytest.raises(ValueError):
+        df.to_numpy()
 
     for k in df.columns:
         df[k] = df[k].fillna(na)
 
-    mat = df.as_gpu_matrix().copy_to_host()
+    mat = df.to_numpy()
     for i, k in enumerate(df.columns):
         np.testing.assert_array_equal(refvalues[k], mat[:, i])
 
@@ -1082,7 +1083,7 @@ def test_dataframe_setitem_index_len1():
     gdf["a"] = [1]
     gdf["b"] = gdf.index._values
 
-    np.testing.assert_equal(gdf.b.to_array(), [0])
+    np.testing.assert_equal(gdf.b.to_numpy(), [0])
 
 
 def test_empty_dataframe_setitem_df():
@@ -1098,7 +1099,7 @@ def test_assign():
     assert list(gdf.columns) == ["x"]
     assert list(gdf2.columns) == ["x", "y"]
 
-    np.testing.assert_equal(gdf2.y.to_array(), [2, 3, 4])
+    np.testing.assert_equal(gdf2.y.to_numpy(), [2, 3, 4])
 
 
 @pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
@@ -1150,7 +1151,7 @@ def test_dataframe_hash_partition(nrows, nparts, nkeys):
     for p in got:
         if len(p):
             # Take rows of the keycolumns and build a set of the key-values
-            unique_keys = set(map(tuple, p.as_matrix(columns=keycols)))
+            unique_keys = set(map(tuple, p[keycols].values_host))
             # Ensure that none of the key-values have occurred in other groups
             assert not (unique_keys & part_unique_keys)
             part_unique_keys |= unique_keys
@@ -1241,7 +1242,7 @@ def test_dataframe_concat_different_numerical_columns(dtype1, dtype2):
     else:
         pres = pd.concat([df1, df2])
         gres = cudf.concat([cudf.from_pandas(df1), cudf.from_pandas(df2)])
-        assert_eq(pres, gres, check_dtype=False)
+        assert_eq(pres, gres, check_dtype=False, check_index_type=True)
 
 
 def test_dataframe_concat_different_column_types():
@@ -1269,7 +1270,7 @@ def test_concat_empty_dataframe(df_1, df_2):
     # ignoring dtypes as pandas upcasts int to float
     # on concatenation with empty dataframes
 
-    assert_eq(got, expect, check_dtype=False)
+    assert_eq(got, expect, check_dtype=False, check_index_type=True)
 
 
 @pytest.mark.parametrize(
@@ -1307,7 +1308,7 @@ def test_concat_different_column_dataframe(df1_d, df2_d):
     for col in numeric_cols:
         got[col] = got[col].astype(np.float64).fillna(np.nan)
 
-    assert_eq(got, expect, check_dtype=False)
+    assert_eq(got, expect, check_dtype=False, check_index_type=True)
 
 
 @pytest.mark.parametrize(
@@ -1318,7 +1319,7 @@ def test_concat_empty_series(ser_1, ser_2):
     got = cudf.concat([cudf.Series(ser_1), cudf.Series(ser_2)])
     expect = pd.concat([ser_1, ser_2])
 
-    assert_eq(got, expect)
+    assert_eq(got, expect, check_index_type=True)
 
 
 def test_concat_with_axis():
@@ -1331,7 +1332,7 @@ def test_concat_with_axis():
 
     # concat only dataframes
     concat_cdf = cudf.concat([cdf1, cdf2], axis=1)
-    assert_eq(concat_cdf, concat_df)
+    assert_eq(concat_cdf, concat_df, check_index_type=True)
 
     # concat only series
     concat_s = pd.concat([df1.x, df1.y], axis=1)
@@ -1339,7 +1340,7 @@ def test_concat_with_axis():
     cs2 = cudf.Series.from_pandas(df1.y)
     concat_cdf_s = cudf.concat([cs1, cs2], axis=1)
 
-    assert_eq(concat_cdf_s, concat_s)
+    assert_eq(concat_cdf_s, concat_s, check_index_type=True)
 
     # concat series and dataframes
     s3 = pd.Series(np.random.random(5))
@@ -1347,7 +1348,7 @@ def test_concat_with_axis():
 
     concat_cdf_all = cudf.concat([cdf1, cs3, cdf2], axis=1)
     concat_df_all = pd.concat([df1, s3, df2], axis=1)
-    assert_eq(concat_cdf_all, concat_df_all)
+    assert_eq(concat_cdf_all, concat_df_all, check_index_type=True)
 
     # concat manual multi index
     midf1 = cudf.from_pandas(df1)
@@ -1361,10 +1362,20 @@ def test_concat_with_axis():
     mipdf1 = midf1.to_pandas()
     mipdf2 = midf2.to_pandas()
 
-    assert_eq(cudf.concat([midf1, midf2]), pd.concat([mipdf1, mipdf2]))
-    assert_eq(cudf.concat([midf2, midf1]), pd.concat([mipdf2, mipdf1]))
     assert_eq(
-        cudf.concat([midf1, midf2, midf1]), pd.concat([mipdf1, mipdf2, mipdf1])
+        cudf.concat([midf1, midf2]),
+        pd.concat([mipdf1, mipdf2]),
+        check_index_type=True,
+    )
+    assert_eq(
+        cudf.concat([midf2, midf1]),
+        pd.concat([mipdf2, mipdf1]),
+        check_index_type=True,
+    )
+    assert_eq(
+        cudf.concat([midf1, midf2, midf1]),
+        pd.concat([mipdf1, mipdf2, mipdf1]),
+        check_index_type=True,
     )
 
     # concat groupby multi index
@@ -1382,8 +1393,16 @@ def test_concat_with_axis():
     pdg1 = gdg1.to_pandas()
     pdg2 = gdg2.to_pandas()
 
-    assert_eq(cudf.concat([gdg1, gdg2]), pd.concat([pdg1, pdg2]))
-    assert_eq(cudf.concat([gdg2, gdg1]), pd.concat([pdg2, pdg1]))
+    assert_eq(
+        cudf.concat([gdg1, gdg2]),
+        pd.concat([pdg1, pdg2]),
+        check_index_type=True,
+    )
+    assert_eq(
+        cudf.concat([gdg2, gdg1]),
+        pd.concat([pdg2, pdg1]),
+        check_index_type=True,
+    )
 
     # series multi index concat
     gdgz1 = gdg1.z
@@ -1391,8 +1410,16 @@ def test_concat_with_axis():
     pdgz1 = gdgz1.to_pandas()
     pdgz2 = gdgz2.to_pandas()
 
-    assert_eq(cudf.concat([gdgz1, gdgz2]), pd.concat([pdgz1, pdgz2]))
-    assert_eq(cudf.concat([gdgz2, gdgz1]), pd.concat([pdgz2, pdgz1]))
+    assert_eq(
+        cudf.concat([gdgz1, gdgz2]),
+        pd.concat([pdgz1, pdgz2]),
+        check_index_type=True,
+    )
+    assert_eq(
+        cudf.concat([gdgz2, gdgz1]),
+        pd.concat([pdgz2, pdgz1]),
+        check_index_type=True,
+    )
 
 
 @pytest.mark.parametrize("nrows", [0, 3, 10, 100, 1000])
@@ -1567,7 +1594,7 @@ def test_from_arrow(nelem, data_type):
 
     # For some reason PyArrow to_pandas() converts to numpy array and has
     # better type compatibility
-    np.testing.assert_array_equal(s.to_pandas(), gs.to_array())
+    np.testing.assert_array_equal(s.to_pandas(), gs.to_numpy())
 
 
 @pytest.mark.parametrize("nelem", [0, 2, 3, 100, 1000])
@@ -1707,7 +1734,7 @@ def test_from_python_array(data_type):
 
     gs = cudf.Series(data)
 
-    np.testing.assert_equal(gs.to_array(), np_arr)
+    np.testing.assert_equal(gs.to_numpy(), np_arr)
 
 
 def test_series_shape():
@@ -2174,11 +2201,11 @@ def test_series_hash_encode(nrows):
 
     encoded_series = s.hash_encode(num_features)
     assert isinstance(encoded_series, cudf.Series)
-    enc_arr = encoded_series.to_array()
+    enc_arr = encoded_series.to_numpy()
     assert np.all(enc_arr >= 0)
     assert np.max(enc_arr) < num_features
 
-    enc_with_name_arr = s.hash_encode(num_features, use_name=True).to_array()
+    enc_with_name_arr = s.hash_encode(num_features, use_name=True).to_numpy()
     assert enc_with_name_arr[0] != enc_arr[0]
 
 
@@ -2365,7 +2392,7 @@ def test_series_digitize(num_rows, num_bins, right, dtype, series_bins):
     else:
         indices = s.digitize(bins, right)
     np.testing.assert_array_equal(
-        np.digitize(data, bins, right), indices.to_array()
+        np.digitize(data, bins, right), indices.to_numpy()
     )
 
 
@@ -2872,20 +2899,34 @@ def test_dataframe_empty_sort_index():
     expect = pdf.sort_index()
     got = gdf.sort_index()
 
-    assert_eq(expect, got)
+    assert_eq(expect, got, check_index_type=True)
 
 
+@pytest.mark.parametrize(
+    "index",
+    [
+        pd.RangeIndex(0, 3, 1),
+        [3.0, 1.0, np.nan],
+        pytest.param(
+            pd.RangeIndex(2, -1, -1),
+            marks=[
+                pytest.mark.xfail(
+                    reason="https://github.com/pandas-dev/pandas/issues/43591"
+                )
+            ],
+        ),
+    ],
+)
 @pytest.mark.parametrize("axis", [0, 1, "index", "columns"])
 @pytest.mark.parametrize("ascending", [True, False])
 @pytest.mark.parametrize("ignore_index", [True, False])
 @pytest.mark.parametrize("inplace", [True, False])
 @pytest.mark.parametrize("na_position", ["first", "last"])
 def test_dataframe_sort_index(
-    axis, ascending, inplace, ignore_index, na_position
+    index, axis, ascending, inplace, ignore_index, na_position
 ):
     pdf = pd.DataFrame(
-        {"b": [1, 3, 2], "a": [1, 4, 3], "c": [4, 1, 5]},
-        index=[3.0, 1.0, np.nan],
+        {"b": [1, 3, 2], "a": [1, 4, 3], "c": [4, 1, 5]}, index=index,
     )
     gdf = cudf.DataFrame.from_pandas(pdf)
 
@@ -2905,9 +2946,9 @@ def test_dataframe_sort_index(
     )
 
     if inplace is True:
-        assert_eq(pdf, gdf)
+        assert_eq(pdf, gdf, check_index_type=True)
     else:
-        assert_eq(expected, got)
+        assert_eq(expected, got, check_index_type=True)
 
 
 @pytest.mark.parametrize("axis", [0, 1, "index", "columns"])
@@ -2946,6 +2987,7 @@ def test_dataframe_mulitindex_sort_index(
     gdf = cudf.DataFrame.from_pandas(pdf)
 
     # ignore_index is supported in v.1.0
+
     expected = pdf.sort_index(
         axis=axis,
         level=level,
@@ -3187,15 +3229,6 @@ def test_array_ufunc():
     assert_eq(np.sqrt(gdf.x), np.sqrt(pdf.x))
 
 
-@pytest.mark.parametrize("nan_value", [-5, -5.0, 0, 5, 5.0, None, "pandas"])
-def test_series_to_gpu_array(nan_value):
-
-    s = cudf.Series([0, 1, None, 3])
-    np.testing.assert_array_equal(
-        s.to_array(nan_value), s.to_gpu_array(nan_value).copy_to_host()
-    )
-
-
 def test_dataframe_describe_exclude():
     np.random.seed(12)
     data_length = 10000
@@ -3433,8 +3466,6 @@ def test_dataframe_round(decimals):
     expected = pdf.round(pdecimals)
 
     assert_eq(result, expected)
-    for c in gdf.columns:
-        np.array_equal(gdf[c].nullmask.to_array(), result[c].to_array())
 
 
 @pytest.mark.parametrize(
@@ -4020,8 +4051,7 @@ def test_series_values_host_property(data):
             marks=pytest.mark.xfail(raises=NotImplementedError),
         ),
         pytest.param(
-            ["m", "a", "d", "v"],
-            marks=pytest.mark.xfail(raises=NotImplementedError),
+            ["m", "a", "d", "v"], marks=pytest.mark.xfail(raises=TypeError),
         ),
     ],
 )
@@ -4429,7 +4459,7 @@ def test_isin_dataframe(data, values):
     pdf = data
     gdf = cudf.from_pandas(pdf)
 
-    if cudf.utils.dtypes.is_scalar(values):
+    if cudf.api.types.is_scalar(values):
         assert_exceptions_equal(
             lfunc=pdf.isin,
             rfunc=gdf.isin,
@@ -5678,7 +5708,7 @@ def test_df_sr_mask_where(data, condition, other, error, inplace):
                 expect_where.cat.codes,
                 got_where.cat.codes.astype(expect_where.cat.codes.dtype)
                 .fillna(-1)
-                .to_array(),
+                .to_numpy(),
             )
             assert_eq(expect_where.cat.categories, got_where.cat.categories)
 
@@ -5686,7 +5716,7 @@ def test_df_sr_mask_where(data, condition, other, error, inplace):
                 expect_mask.cat.codes,
                 got_mask.cat.codes.astype(expect_mask.cat.codes.dtype)
                 .fillna(-1)
-                .to_array(),
+                .to_numpy(),
             )
             assert_eq(expect_mask.cat.categories, got_mask.cat.categories)
         else:
@@ -7234,9 +7264,8 @@ def test_cudf_arrow_array_error():
 
     with pytest.raises(
         TypeError,
-        match="Implicit conversion to a host PyArrow Table via __arrow_array__"
-        " is not allowed, To explicitly construct a PyArrow Table, consider "
-        "using .to_arrow()",
+        match="Implicit conversion to a host PyArrow object via "
+        "__arrow_array__ is not allowed. Consider using .to_arrow()",
     ):
         df.__arrow_array__()
 
@@ -7244,18 +7273,16 @@ def test_cudf_arrow_array_error():
 
     with pytest.raises(
         TypeError,
-        match="Implicit conversion to a host PyArrow Array via __arrow_array__"
-        " is not allowed, To explicitly construct a PyArrow Array, consider "
-        "using .to_arrow()",
+        match="Implicit conversion to a host PyArrow object via "
+        "__arrow_array__ is not allowed. Consider using .to_arrow()",
     ):
         sr.__arrow_array__()
 
     sr = cudf.Series(["a", "b", "c"])
     with pytest.raises(
         TypeError,
-        match="Implicit conversion to a host PyArrow Array via __arrow_array__"
-        " is not allowed, To explicitly construct a PyArrow Array, consider "
-        "using .to_arrow()",
+        match="Implicit conversion to a host PyArrow object via "
+        "__arrow_array__ is not allowed. Consider using .to_arrow()",
     ):
         sr.__arrow_array__()
 

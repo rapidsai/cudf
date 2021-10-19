@@ -29,7 +29,6 @@ def merge(
     right_index,
     how,
     sort,
-    method,
     indicator,
     suffixes,
 ):
@@ -47,7 +46,6 @@ def merge(
         right_index=right_index,
         how=how,
         sort=sort,
-        method=method,
         indicator=indicator,
         suffixes=suffixes,
     )
@@ -87,7 +85,6 @@ class Merge(object):
         right_index,
         how,
         sort,
-        method,
         indicator,
         suffixes,
     ):

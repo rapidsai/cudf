@@ -36,7 +36,7 @@ def test_categorical_basic():
     assert pdsr.cat.ordered == sr.cat.ordered
 
     np.testing.assert_array_equal(
-        pdsr.cat.codes.values, sr.cat.codes.to_array()
+        pdsr.cat.codes.values, sr.cat.codes.to_numpy()
     )
 
     string = str(sr)
@@ -48,7 +48,7 @@ s c
 t a
 """
     assert all(x == y for x, y in zip(string.split(), expect_str.split()))
-    assert_eq(cat.codes, cudf_cat.codes.to_array())
+    assert_eq(cat.codes, cudf_cat.codes.to_numpy())
 
 
 def test_categorical_integer():
@@ -58,13 +58,13 @@ def test_categorical_integer():
     pdsr = pd.Series(cat)
     sr = cudf.Series(cat)
     np.testing.assert_array_equal(
-        cat.codes, sr.cat.codes.astype(cat.codes.dtype).fillna(-1).to_array()
+        cat.codes, sr.cat.codes.astype(cat.codes.dtype).fillna(-1).to_numpy()
     )
     assert sr.null_count == 2
 
     np.testing.assert_array_equal(
         pdsr.cat.codes.values,
-        sr.cat.codes.astype(pdsr.cat.codes.dtype).fillna(-1).to_array(),
+        sr.cat.codes.astype(pdsr.cat.codes.dtype).fillna(-1).to_numpy(),
     )
 
     string = str(sr)
@@ -90,12 +90,12 @@ def test_categorical_compare_unordered():
     out = sr == sr
     assert out.dtype == np.bool_
     assert type(out[0]) == np.bool_
-    assert np.all(out.to_array())
+    assert np.all(out.to_numpy())
     assert np.all(pdsr == pdsr)
 
     # test inequality
     out = sr != sr
-    assert not np.any(out.to_array())
+    assert not np.any(out.to_numpy())
     assert not np.any(pdsr != pdsr)
 
     assert not pdsr.cat.ordered
@@ -126,20 +126,20 @@ def test_categorical_compare_ordered():
     out = sr1 == sr1
     assert out.dtype == np.bool_
     assert type(out[0]) == np.bool_
-    assert np.all(out.to_array())
+    assert np.all(out.to_numpy())
     assert np.all(pdsr1 == pdsr1)
 
     # test inequality
     out = sr1 != sr1
-    assert not np.any(out.to_array())
+    assert not np.any(out.to_numpy())
     assert not np.any(pdsr1 != pdsr1)
 
     assert pdsr1.cat.ordered
     assert sr1.cat.ordered
 
     # test using ordered operators
-    np.testing.assert_array_equal(pdsr1 < pdsr2, (sr1 < sr2).to_array())
-    np.testing.assert_array_equal(pdsr1 > pdsr2, (sr1 > sr2).to_array())
+    np.testing.assert_array_equal(pdsr1 < pdsr2, (sr1 < sr2).to_numpy())
+    np.testing.assert_array_equal(pdsr1 > pdsr2, (sr1 > sr2).to_numpy())
 
 
 def test_categorical_binary_add():
@@ -198,7 +198,7 @@ def test_categorical_masking():
     got_matches = sr == "a"
 
     np.testing.assert_array_equal(
-        expect_matches.values, got_matches.to_array()
+        expect_matches.values, got_matches.to_numpy()
     )
 
     # mask series
@@ -320,14 +320,14 @@ def test_categorical_empty():
     cat = pd.Categorical([])
     pdsr = pd.Series(cat)
     sr = cudf.Series(cat)
-    np.testing.assert_array_equal(cat.codes, sr.cat.codes.to_array())
+    np.testing.assert_array_equal(cat.codes, sr.cat.codes.to_numpy())
 
     # Test attributes
     assert_eq(pdsr.cat.categories, sr.cat.categories)
     assert pdsr.cat.ordered == sr.cat.ordered
 
     np.testing.assert_array_equal(
-        pdsr.cat.codes.values, sr.cat.codes.to_array()
+        pdsr.cat.codes.values, sr.cat.codes.to_numpy()
     )
 
 

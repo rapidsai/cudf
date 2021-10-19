@@ -13,8 +13,9 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from fsspec.core import get_fs_token_paths
 from packaging import version
-from pyarrow import parquet as pq
+from pyarrow import fs as pa_fs, parquet as pq
 
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
@@ -676,6 +677,33 @@ def test_parquet_reader_filepath_or_buffer(parquet_path_or_buf, src):
     got = cudf.read_parquet(parquet_path_or_buf(src))
 
     assert_eq(expect, got)
+
+
+def test_parquet_reader_arrow_nativefile(parquet_path_or_buf):
+    # Check that we can read a file opened with the
+    # Arrow FileSystem inferface
+    expect = cudf.read_parquet(parquet_path_or_buf("filepath"))
+    fs, path = pa_fs.FileSystem.from_uri(parquet_path_or_buf("filepath"))
+    with fs.open_input_file(path) as fil:
+        got = cudf.read_parquet(fil)
+
+    assert_eq(expect, got)
+
+
+def test_parquet_reader_use_python_file_object(parquet_path_or_buf):
+    # Check that the non-default `use_python_file_object=True`
+    # option works as expected
+    expect = cudf.read_parquet(parquet_path_or_buf("filepath"))
+    fs, _, paths = get_fs_token_paths(parquet_path_or_buf("filepath"))
+
+    # Pass open fsspec file
+    with fs.open(paths[0], mode="rb") as fil:
+        got1 = cudf.read_parquet(fil, use_python_file_object=True)
+    assert_eq(expect, got1)
+
+    # Pass path only
+    got2 = cudf.read_parquet(paths[0], use_python_file_object=True)
+    assert_eq(expect, got2)
 
 
 def create_parquet_source(df, src_type, fname):
@@ -2036,6 +2064,7 @@ def test_parquet_writer_nulls_pandas_read(tmpdir, pdf):
     gdf = cudf.from_pandas(pdf)
 
     num_rows = len(gdf)
+
     if num_rows > 0:
         for col in gdf.columns:
             gdf[col][random.randint(0, num_rows - 1)] = None
