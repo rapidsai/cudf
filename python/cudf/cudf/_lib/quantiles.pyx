@@ -7,7 +7,6 @@ from libcpp.vector cimport vector
 
 from cudf._lib.column cimport Column
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.table cimport Table, table_view_from_table
 from cudf._lib.types cimport (
     underlying_type_t_interpolation,
     underlying_type_t_null_order,
@@ -32,7 +31,7 @@ from cudf._lib.cpp.types cimport (
     order_info,
     sorted,
 )
-from cudf._lib.utils cimport data_from_unique_ptr
+from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
 
 def quantile(
@@ -75,7 +74,7 @@ def quantile(
     return Column.from_unique_ptr(move(c_result))
 
 
-def quantiles(Table source_table,
+def quantiles(source_table,
               vector[double] q,
               object interp,
               object is_input_sorted,

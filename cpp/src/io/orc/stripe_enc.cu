@@ -21,6 +21,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <io/utilities/block_utils.cuh>
+#include <io/utilities/time_utils.cuh>
 
 #include <cub/cub.cuh>
 #include <rmm/cuda_stream_view.hpp>
@@ -614,12 +615,6 @@ inline __device__ void lengths_to_positions(volatile T* vals, uint32_t numvals, 
   }
 }
 
-/**
- * @brief Timestamp scale table (powers of 10)
- */
-static const __device__ __constant__ int32_t kTimeScale[10] = {
-  1000000000, 100000000, 10000000, 1000000, 100000, 10000, 1000, 100, 10, 1};
-
 template <int block_size, typename Storage>
 static __device__ void encode_null_mask(orcenc_state_s* s,
                                         bitmask_type const* pushdown_mask,
@@ -771,7 +766,8 @@ __global__ void __launch_bounds__(block_size)
   auto const column = *s->chunk.column;
   while (s->cur_row < s->chunk.num_rows || s->numvals + s->numlengths != 0) {
     // Fetch non-null values
-    if (s->chunk.type_kind != LIST && !s->stream.data_ptrs[CI_DATA]) {
+    auto const length_stream_only = s->chunk.type_kind == LIST or s->chunk.type_kind == MAP;
+    if (not length_stream_only && s->stream.data_ptrs[CI_DATA] == nullptr) {
       // Pass-through
       __syncthreads();
       if (!t) {
@@ -808,7 +804,7 @@ __global__ void __launch_bounds__(block_size)
           case BYTE: s->vals.u8[nz_idx] = column.element<uint8_t>(row); break;
           case TIMESTAMP: {
             int64_t ts       = column.element<int64_t>(row);
-            int32_t ts_scale = kTimeScale[min(s->chunk.scale, 9)];
+            int32_t ts_scale = powers_of_ten[9 - min(s->chunk.scale, 9)];
             int64_t seconds  = ts / ts_scale;
             int64_t nanos    = (ts - seconds * ts_scale);
             // There is a bug in the ORC spec such that for negative timestamps, it is understood
@@ -822,7 +818,7 @@ __global__ void __launch_bounds__(block_size)
             if (nanos != 0) {
               // Trailing zeroes are encoded in the lower 3-bits
               uint32_t zeroes = 0;
-              nanos *= kTimeScale[9 - min(s->chunk.scale, 9)];
+              nanos *= powers_of_ten[min(s->chunk.scale, 9)];
               if (!(nanos % 100)) {
                 nanos /= 100;
                 zeroes = 1;
@@ -852,7 +848,8 @@ __global__ void __launch_bounds__(block_size)
             // Reusing the lengths array for the scale stream
             // Note: can be written in a faster manner, given that all values are equal
           case DECIMAL: s->lengths.u32[nz_idx] = zigzag(s->chunk.scale); break;
-          case LIST: {
+          case LIST:
+          case MAP: {
             auto const& offsets = column.child(lists_column_view::offsets_column_index);
             // Compute list length from the offsets
             s->lengths.u32[nz_idx] = offsets.element<size_type>(row + 1 + column.offset()) -
@@ -892,7 +889,7 @@ __global__ void __launch_bounds__(block_size)
         s->nnz += nz;
         s->numvals += nz;
         s->numlengths += (s->chunk.type_kind == TIMESTAMP || s->chunk.type_kind == DECIMAL ||
-                          s->chunk.type_kind == LIST ||
+                          s->chunk.type_kind == LIST || s->chunk.type_kind == MAP ||
                           (s->chunk.type_kind == STRING && s->chunk.encoding_kind != DICTIONARY_V2))
                            ? nz
                            : 0;
@@ -969,6 +966,7 @@ __global__ void __launch_bounds__(block_size)
             break;
           case DECIMAL:
           case LIST:
+          case MAP:
           case STRING:
             n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
               s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u32);

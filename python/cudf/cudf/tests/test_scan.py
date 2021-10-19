@@ -38,7 +38,7 @@ def test_cumsum(dtype, nelem):
     gs = cudf.Series(data)
     ps = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gs.cumsum().to_array(), ps.cumsum(), decimal=decimal
+        gs.cumsum().to_numpy(), ps.cumsum(), decimal=decimal
     )
 
     # dataframe series (named series)
@@ -47,7 +47,7 @@ def test_cumsum(dtype, nelem):
     pdf = pd.DataFrame()
     pdf["a"] = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gdf.a.cumsum().to_array(), pdf.a.cumsum(), decimal=decimal
+        gdf.a.cumsum().to_numpy(), pdf.a.cumsum(), decimal=decimal
     )
 
 
@@ -96,7 +96,7 @@ def test_cummin(dtype, nelem):
     gs = cudf.Series(data)
     ps = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gs.cummin().to_array(), ps.cummin(), decimal=decimal
+        gs.cummin().to_numpy(), ps.cummin(), decimal=decimal
     )
 
     # dataframe series (named series)
@@ -105,7 +105,7 @@ def test_cummin(dtype, nelem):
     pdf = pd.DataFrame()
     pdf["a"] = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gdf.a.cummin().to_array(), pdf.a.cummin(), decimal=decimal
+        gdf.a.cummin().to_numpy(), pdf.a.cummin(), decimal=decimal
     )
 
 
@@ -153,7 +153,7 @@ def test_cummax(dtype, nelem):
     gs = cudf.Series(data)
     ps = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gs.cummax().to_array(), ps.cummax(), decimal=decimal
+        gs.cummax().to_numpy(), ps.cummax(), decimal=decimal
     )
 
     # dataframe series (named series)
@@ -162,7 +162,7 @@ def test_cummax(dtype, nelem):
     pdf = pd.DataFrame()
     pdf["a"] = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gdf.a.cummax().to_array(), pdf.a.cummax(), decimal=decimal
+        gdf.a.cummax().to_numpy(), pdf.a.cummax(), decimal=decimal
     )
 
 
@@ -210,7 +210,7 @@ def test_cumprod(dtype, nelem):
     gs = cudf.Series(data)
     ps = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gs.cumprod().to_array(), ps.cumprod(), decimal=decimal
+        gs.cumprod().to_numpy(), ps.cumprod(), decimal=decimal
     )
 
     # dataframe series (named series)
@@ -219,7 +219,7 @@ def test_cumprod(dtype, nelem):
     pdf = pd.DataFrame()
     pdf["a"] = pd.Series(data)
     np.testing.assert_array_almost_equal(
-        gdf.a.cumprod().to_array(), pdf.a.cumprod(), decimal=decimal
+        gdf.a.cumprod().to_numpy(), pdf.a.cumprod(), decimal=decimal
     )
 
 
