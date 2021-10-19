@@ -9,10 +9,11 @@ import numpy as np
 
 import cudf
 from cudf.api.types import is_dtype_equal
+from cudf.core.column import CategoricalColumn
 from cudf.core.dtypes import CategoricalDtype
 
 if TYPE_CHECKING:
-    from cudf.core.column import CategoricalColumn, ColumnBase
+    from cudf.core.column import ColumnBase
     from cudf.core.frame import Frame
 
 
@@ -56,25 +57,22 @@ class _Indexer:
                 raise KeyError()
 
 
-def _frame_select_by_indexers(
-    frame: Frame, indexers: Iterable[_Indexer]
-) -> Frame:
+def _frame_select_by_indexers(frame: Frame, indexers: Iterable[_Indexer]):
     # Select columns from the given `Frame` using `indexers`,
     # and return a new `Frame`.
-    index_data = frame._data.__class__()
-    data = frame._data.__class__()
+    index_data = {}
+    data = {}
 
     for idx in indexers:
         if idx.index:
-            index_data.set_by_label(idx.name, idx.get(frame), validate=False)
+            index_data[idx.name] = idx.get(frame)
         else:
-            data.set_by_label(idx.name, idx.get(frame), validate=False)
+            data[idx.name] = idx.get(frame)
 
-    result_index = (
-        cudf.core.index._index_from_data(index_data) if index_data else None
+    return (
+        data,
+        cudf.core.index._index_from_data(index_data) if index_data else None,
     )
-    result = cudf.core.frame.Frame(data=data, index=result_index)
-    return result
 
 
 def _match_join_keys(

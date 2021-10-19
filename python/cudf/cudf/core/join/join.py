@@ -130,8 +130,12 @@ class Merge:
             if rcol is not rcol_casted:
                 right_key.set(rhs, rcol_casted, validate=False)
 
-        left_table = _frame_select_by_indexers(lhs, self._left_keys)
-        right_table = _frame_select_by_indexers(rhs, self._right_keys)
+        left_table = cudf.core.frame.Frame(
+            *_frame_select_by_indexers(lhs, self._left_keys)
+        )
+        right_table = cudf.core.frame.Frame(
+            *_frame_select_by_indexers(rhs, self._right_keys)
+        )
 
         left_rows, right_rows = self._joiner(
             left_table, right_table, how=self.how,
