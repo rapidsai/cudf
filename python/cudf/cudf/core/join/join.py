@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import functools
-from collections import namedtuple
 from typing import TYPE_CHECKING, Callable, Tuple
 
 import cudf
@@ -18,13 +17,7 @@ if TYPE_CHECKING:
     from cudf.core.frame import Frame
 
 
-_JoinKeys = namedtuple("JoinKeys", ["left", "right"])
-
-
 class Merge:
-    # A namedtuple of indexers representing the left and right keys
-    _keys: _JoinKeys
-
     # The joiner function must have the following signature:
     #
     #     def joiner(
@@ -126,8 +119,8 @@ class Merge:
     def perform_merge(self) -> Frame:
         lhs, rhs = self._match_key_dtypes(self.lhs, self.rhs)
 
-        left_table = _frame_select_by_indexers(lhs, self._keys.left)
-        right_table = _frame_select_by_indexers(rhs, self._keys.right)
+        left_table = _frame_select_by_indexers(lhs, self._left_keys)
+        right_table = _frame_select_by_indexers(rhs, self._right_keys)
 
         left_rows, right_rows = self._joiner(
             left_table, right_table, how=self.how,
@@ -156,7 +149,6 @@ class Merge:
         return result
 
     def _compute_join_keys(self):
-        # Computes self._keys
         left_keys = []
         right_keys = []
         if (
@@ -222,7 +214,7 @@ class Merge:
                 "Merge operands must have same number of join key columns"
             )
 
-        self._keys = _JoinKeys(left=left_keys, right=right_keys)
+        self._left_keys, self._right_keys = left_keys, right_keys
 
     def _merge_results(self, left_result: Frame, right_result: Frame):
         # Merge the Frames `left_result` and `right_result` into a single
@@ -234,7 +226,7 @@ class Merge:
         # by filling nulls in the left key column with corresponding values
         # from the right key column:
         if self.how == "outer":
-            for lkey, rkey in zip(*self._keys):
+            for lkey, rkey in zip(self._left_keys, self._right_keys):
                 if lkey.name == rkey.name:
                     # fill nulls in lhs from values in the rhs
                     lkey.set(
@@ -261,7 +253,7 @@ class Merge:
         else:
             key_columns_with_same_name = [
                 lkey.name
-                for lkey, rkey in zip(*self._keys)
+                for lkey, rkey in zip(self._left_keys, self._right_keys)
                 if (
                     (lkey.index, rkey.index) == (False, False)
                     and lkey.name == rkey.name
@@ -399,7 +391,7 @@ class Merge:
         # Match the dtypes of the key columns from lhs and rhs
         out_lhs = lhs.copy(deep=False)
         out_rhs = rhs.copy(deep=False)
-        for left_key, right_key in zip(*self._keys):
+        for left_key, right_key in zip(self._left_keys, self._right_keys):
             lcol, rcol = left_key.get(lhs), right_key.get(rhs)
             lcol_casted, rcol_casted = _match_join_keys(
                 lcol, rcol, how=self.how
@@ -419,7 +411,7 @@ class Merge:
         out_lhs = lhs.copy(deep=False)
         out_rhs = rhs.copy(deep=False)
         if self.how == "inner":
-            for left_key, right_key in zip(*self._keys):
+            for left_key, right_key in zip(self._left_keys, self._right_keys):
                 if isinstance(
                     left_key.get(self.lhs).dtype, cudf.CategoricalDtype
                 ) and isinstance(
