@@ -902,7 +902,13 @@ class ColumnBase(Column, Serializable):
         if method != "sort":
             msg = "non sort based distinct_count() not implemented yet"
             raise NotImplementedError(msg)
-        return cpp_distinct_count(self, ignore_nulls=dropna)
+        try:
+            return self._distinct_count[dropna]
+        except KeyError:
+            self._distinct_count[dropna] = cpp_distinct_count(
+                self, ignore_nulls=dropna
+            )
+            return self._distinct_count[dropna]
 
     def can_cast_safely(self, to_dtype: Dtype) -> bool:
         raise NotImplementedError()
@@ -1130,6 +1136,12 @@ class ColumnBase(Column, Serializable):
         """
         Get unique values in the data
         """
+        # TODO: We could avoid performing `drop_duplicates` for
+        # columns with values that already are unique.
+        # Few things to note before we can do this optimization is
+        # the following issue resolved:
+        # https://github.com/rapidsai/cudf/issues/5286
+
         return (
             self.as_frame()
             .drop_duplicates(keep="first", ignore_index=True)
