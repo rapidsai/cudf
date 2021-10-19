@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/logical.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
@@ -27,13 +25,20 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
+
 #include <rmm/exec_policy.hpp>
+
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/logical.h>
+
 #include <type_traits>
 
 namespace cudf {
 namespace lists {
 
 namespace {
+
+auto constexpr absent_index = size_type{-1};
 
 auto get_search_keys_device_iterable_view(cudf::column_view const& search_keys,
                                           rmm::cuda_stream_view stream)
@@ -47,9 +52,77 @@ auto get_search_keys_device_iterable_view(cudf::scalar const& search_key, rmm::c
 }
 
 /**
+ * @brief Choice of nullification semantics to be used with `cudf::lists::detail::index_of<>`.
+ *
+ * `index_of()` and `contains()` are similar in their semantics. While `index_of()` returns
+ * the position of a search key in each list row, `contains()` returns an equivalent `bool`,
+ * indicating whether the list row contains the search key.
+ *
+ * The nullification semantics of `index_of()` and `contains()` differ crucially in the case
+ * where both the following conditions are met:
+ *  1. The list row does not contain the search key
+ *  2. *and* the list row also contains nulls
+ *
+ * For any list row where both the above hold true:
+ *  1. `contains()` returns `null` for that row
+ *  2. `index_of()` returns `-1`, indicating that the row wasn't found.
+ *
+ * The `if_lists_contain_nulls` enum facilitates the choice of strategy in
+ * `cudf::lists::detail::index_of()`, used to implement both `index_of()` and `contains()`.
+ */
+enum if_lists_contain_nulls : bool { DONT_NULLIFY = false, NULLIFY = true };
+
+/**
+ * @brief Enum to indicate whether the `search_key` scalar/column contains nulls.
+ */
+enum search_key_nulls : bool { NO_NULLS = false, HAS_NULLS = true };
+
+/**
+ * @brief __device__ functor to search for a key in a `list_device_view`.
+ */
+template <duplicate_find_option = duplicate_find_option::FIND_FIRST>
+struct finder {
+  template <typename ElementType>
+  __device__ thrust::pair<size_type, bool> operator()(list_device_view const& list,
+                                                      ElementType const& search_key) const
+  {
+    auto const list_begin = list.pair_rep_begin<ElementType>();
+    auto const list_end   = list.pair_rep_end<ElementType>();
+    auto const find_iter  = thrust::find_if(
+      thrust::seq, list_begin, list_end, [search_key] __device__(auto element_and_validity) {
+        return element_and_validity.second &&
+               cudf::equality_compare(element_and_validity.first, search_key);
+      });
+    auto const is_found = find_iter != list_end;
+    auto const position = is_found ? (find_iter - list_begin) : absent_index;
+    return {position, is_found};
+  };
+};
+
+template <>
+struct finder<duplicate_find_option::FIND_LAST> {
+  template <typename ElementType>
+  __device__ thrust::pair<size_type, bool> operator()(list_device_view const& list,
+                                                      ElementType const& search_key) const
+  {
+    auto const begin = thrust::make_reverse_iterator(list.pair_rep_end<ElementType>());
+    auto const end   = thrust::make_reverse_iterator(list.pair_rep_begin<ElementType>());
+    auto const find_iter =
+      thrust::find_if(thrust::seq, begin, end, [search_key] __device__(auto element_and_validity) {
+        return element_and_validity.second &&
+               cudf::equality_compare(element_and_validity.first, search_key);
+      });
+    auto const is_found = find_iter != end;
+    auto const position = is_found ? (end - find_iter - 1) : absent_index;
+    return {position, is_found};
+  };
+};
+
+/**
  * @brief Functor to search each list row for the specified search keys.
  */
-template <bool search_keys_have_nulls>
+template <search_key_nulls search_keys_have_nulls,
+          if_lists_contain_nulls nullify_if_lists_contain_nulls = if_lists_contain_nulls::NULLIFY>
 struct lookup_functor {
   template <typename ElementType>
   struct is_supported {
@@ -63,13 +136,15 @@ struct lookup_functor {
     Args&&...) const
   {
     CUDF_FAIL(
-      "lists::contains() is only supported on numeric types, decimals, chrono types, and strings.");
+      "List search operations are only supported on numeric types, decimals, chrono types, and "
+      "strings.");
   }
 
-  std::pair<rmm::device_buffer, size_type> construct_null_mask(lists_column_view const& input_lists,
-                                                               column_view const& result_validity,
-                                                               rmm::cuda_stream_view stream,
-                                                               rmm::mr::device_memory_resource* mr)
+  std::pair<rmm::device_buffer, size_type> construct_null_mask(
+    lists_column_view const& input_lists,
+    column_view const& result_validity,
+    rmm::cuda_stream_view stream,
+    rmm::mr::device_memory_resource* mr) const
   {
     if (!search_keys_have_nulls && !input_lists.has_nulls() && !input_lists.child().has_nulls()) {
       return {rmm::device_buffer{0, stream, mr}, size_type{0}};
@@ -85,50 +160,38 @@ struct lookup_functor {
   template <typename ElementType, typename SearchKeyPairIter>
   void search_each_list_row(cudf::detail::lists_column_device_view const& d_lists,
                             SearchKeyPairIter search_key_pair_iter,
-                            cudf::mutable_column_device_view mutable_ret_bools,
-                            cudf::mutable_column_device_view mutable_ret_validity,
-                            rmm::cuda_stream_view stream,
-                            rmm::mr::device_memory_resource*)
+                            duplicate_find_option find_option,
+                            cudf::mutable_column_device_view ret_positions,
+                            cudf::mutable_column_device_view ret_validity,
+                            rmm::cuda_stream_view stream) const
   {
-    thrust::for_each(
-      rmm::exec_policy(stream),
-      thrust::make_counting_iterator(0),
-      thrust::make_counting_iterator(d_lists.size()),
-      [d_lists,
-       search_key_pair_iter,
-       d_bools    = mutable_ret_bools.data<bool>(),
-       d_validity = mutable_ret_validity.data<bool>()] __device__(auto row_index) {
-        auto search_key_and_validity    = search_key_pair_iter[row_index];
-        auto const& search_key_is_valid = search_key_and_validity.second;
+    auto output_iterator = thrust::make_zip_iterator(
+      thrust::make_tuple(ret_positions.data<size_type>(), ret_validity.data<bool>()));
 
-        if (search_keys_have_nulls && !search_key_is_valid) {
-          d_bools[row_index]    = false;
-          d_validity[row_index] = false;
-          return;
-        }
+    thrust::tabulate(
+      rmm::exec_policy(stream),
+      output_iterator,
+      output_iterator + d_lists.size(),
+      [d_lists, search_key_pair_iter, absent_index = absent_index, find_option] __device__(
+        auto row_index) -> thrust::pair<size_type, bool> {
+        auto [search_key, search_key_is_valid] = search_key_pair_iter[row_index];
+
+        if (search_keys_have_nulls && !search_key_is_valid) { return {absent_index, false}; }
 
         auto list = cudf::list_device_view(d_lists, row_index);
-        if (list.is_null()) {
-          d_bools[row_index]    = false;
-          d_validity[row_index] = false;
-          return;
-        }
+        if (list.is_null()) { return {absent_index, false}; }
 
-        auto search_key = search_key_and_validity.first;
-        d_bools[row_index] =
-          thrust::find_if(thrust::seq,
-                          list.pair_rep_begin<ElementType>(),
-                          list.pair_rep_end<ElementType>(),
-                          [search_key] __device__(auto element_and_validity) {
-                            return element_and_validity.second &&
-                                   cudf::equality_compare(element_and_validity.first, search_key);
-                          }) != list.pair_rep_end<ElementType>();
-        d_validity[row_index] =
-          d_bools[row_index] ||
+        auto const [position, is_found] =
+          find_option == duplicate_find_option::FIND_FIRST
+            ? finder<duplicate_find_option::FIND_FIRST>{}(list, search_key)
+            : finder<duplicate_find_option::FIND_LAST>{}(list, search_key);
+        bool is_valid =
+          is_found || !nullify_if_lists_contain_nulls ||
           thrust::none_of(thrust::seq,
                           thrust::make_counting_iterator(size_type{0}),
                           thrust::make_counting_iterator(list.size()),
                           [&list] __device__(auto const& i) { return list.is_null(i); });
+        return {position, is_valid};
       });
   }
 
@@ -136,74 +199,184 @@ struct lookup_functor {
   std::enable_if_t<is_supported<ElementType>::value, std::unique_ptr<column>> operator()(
     cudf::lists_column_view const& lists,
     SearchKeyType const& search_key,
+    duplicate_find_option find_option,
     rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const
   {
     using namespace cudf;
     using namespace cudf::detail;
 
     CUDF_EXPECTS(!cudf::is_nested(lists.child().type()),
-                 "Nested types not supported in lists::contains()");
+                 "Nested types not supported in list search operations.");
     CUDF_EXPECTS(lists.child().type() == search_key.type(),
                  "Type/Scale of search key does not match list column element type.");
     CUDF_EXPECTS(search_key.type().id() != type_id::EMPTY, "Type cannot be empty.");
 
     auto constexpr search_key_is_scalar = std::is_same_v<SearchKeyType, cudf::scalar>;
 
-    if (search_keys_have_nulls && search_key_is_scalar) {
-      return make_fixed_width_column(data_type(type_id::BOOL8),
-                                     lists.size(),
-                                     cudf::create_null_mask(lists.size(), mask_state::ALL_NULL, mr),
-                                     lists.size(),
-                                     stream,
-                                     mr);
+    if constexpr (search_keys_have_nulls && search_key_is_scalar) {
+      return make_numeric_column(data_type(type_id::INT32),
+                                 lists.size(),
+                                 cudf::create_null_mask(lists.size(), mask_state::ALL_NULL, mr),
+                                 lists.size(),
+                                 stream,
+                                 mr);
     }
 
     auto const device_view = column_device_view::create(lists.parent(), stream);
-    auto const d_lists     = lists_column_device_view(*device_view);
+    auto const d_lists     = lists_column_device_view{*device_view};
     auto const d_skeys     = get_search_keys_device_iterable_view(search_key, stream);
 
-    auto result_validity = make_fixed_width_column(
+    auto result_positions = make_numeric_column(
+      data_type{type_id::INT32}, lists.size(), cudf::mask_state::UNALLOCATED, stream, mr);
+    auto result_validity = make_numeric_column(
       data_type{type_id::BOOL8}, lists.size(), cudf::mask_state::UNALLOCATED, stream, mr);
-    auto result_bools = make_fixed_width_column(
-      data_type{type_id::BOOL8}, lists.size(), cudf::mask_state::UNALLOCATED, stream, mr);
-    auto mutable_result_bools =
-      mutable_column_device_view::create(result_bools->mutable_view(), stream);
+    auto mutable_result_positions =
+      mutable_column_device_view::create(result_positions->mutable_view(), stream);
     auto mutable_result_validity =
       mutable_column_device_view::create(result_validity->mutable_view(), stream);
     auto search_key_iter =
       cudf::detail::make_pair_rep_iterator<ElementType, search_keys_have_nulls>(*d_skeys);
 
-    search_each_list_row<ElementType>(
-      d_lists, search_key_iter, *mutable_result_bools, *mutable_result_validity, stream, mr);
+    search_each_list_row<ElementType>(d_lists,
+                                      search_key_iter,
+                                      find_option,
+                                      *mutable_result_positions,
+                                      *mutable_result_validity,
+                                      stream);
 
-    rmm::device_buffer null_mask;
-    size_type num_nulls;
-
-    std::tie(null_mask, num_nulls) =
-      construct_null_mask(lists, result_validity->view(), stream, mr);
-    result_bools->set_null_mask(std::move(null_mask), num_nulls);
-
-    return result_bools;
+    auto [null_mask, num_nulls] = construct_null_mask(lists, result_validity->view(), stream, mr);
+    result_positions->set_null_mask(std::move(null_mask), num_nulls);
+    return result_positions;
   }
 };
 
+/**
+ * @brief Converts key-positions vector (from index_of()) to a BOOL8 vector, indicating if
+ * the search key was found.
+ */
+std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
+                                    rmm::cuda_stream_view stream,
+                                    rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(key_positions->type().id() == type_id::INT32,
+               "Expected input column of type INT32.");
+  // If position == -1, the list did not contain the search key.
+  auto const num_rows        = key_positions->size();
+  auto const positions_begin = key_positions->view().begin<size_type>();
+  auto result =
+    make_numeric_column(data_type{type_id::BOOL8}, num_rows, mask_state::UNALLOCATED, stream, mr);
+  thrust::transform(rmm::exec_policy(stream),
+                    positions_begin,
+                    positions_begin + num_rows,
+                    result->mutable_view().begin<bool>(),
+                    [] __device__(auto i) { return i != absent_index; });
+  auto [_, null_mask, __] = key_positions->release();
+  result->set_null_mask(std::move(*null_mask));
+  return result;
+}
 }  // namespace
 
 namespace detail {
+/**
+ * @copydoc cudf::lists::index_of(cudf::lists_column_view const&,
+ *                                cudf::scalar const&,
+ *                                duplicate_find_option,
+ *                                rmm::mr::device_memory_resource*)
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @tparam nullify Choice of nullification semantics:
+ *   1. Whether to nullify the output if the search key is not found *and* the list
+ *      contains null elements, as in `cudf::lists::contains()`
+ *   2. Not to nullify the output even if the search key isn't found.
+ */
+template <if_lists_contain_nulls nullify = if_lists_contain_nulls::DONT_NULLIFY>
+std::unique_ptr<column> index_of(
+  cudf::lists_column_view const& lists,
+  cudf::scalar const& search_key,
+  duplicate_find_option find_option,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  return search_key.is_valid(stream)
+           ? cudf::type_dispatcher(search_key.type(),
+                                   lookup_functor<search_key_nulls::NO_NULLS, nullify>{},
+                                   lists,
+                                   search_key,
+                                   find_option,
+                                   stream,
+                                   mr)
+           : cudf::type_dispatcher(search_key.type(),
+                                   lookup_functor<search_key_nulls::HAS_NULLS, nullify>{},
+                                   lists,
+                                   search_key,
+                                   find_option,
+                                   stream,
+                                   mr);
+}
 
+/**
+ * @copydoc cudf::lists::index_of(cudf::lists_column_view const&,
+ *                                cudf::column_view const&,
+ *                                duplicate_find_option,
+ *                                rmm::mr::device_memory_resource*)
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @tparam nullify Choice of nullification semantics:
+ *   1. Whether to nullify the output if the search key is not found *and* the list
+ *      contains null elements, as in `cudf::lists::contains()`
+ *   2. Not to nullify the output even if the search key isn't found as with
+ *      `cudf::lists::index_of()`.
+ */
+template <if_lists_contain_nulls nullify = if_lists_contain_nulls::DONT_NULLIFY>
+std::unique_ptr<column> index_of(
+  cudf::lists_column_view const& lists,
+  cudf::column_view const& search_keys,
+  duplicate_find_option find_option,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+{
+  CUDF_EXPECTS(search_keys.size() == lists.size(),
+               "Number of search keys must match list column size.");
+
+  return search_keys.has_nulls()
+           ? cudf::type_dispatcher(search_keys.type(),
+                                   lookup_functor<search_key_nulls::HAS_NULLS, nullify>{},
+                                   lists,
+                                   search_keys,
+                                   find_option,
+                                   stream,
+                                   mr)
+           : cudf::type_dispatcher(search_keys.type(),
+                                   lookup_functor<search_key_nulls::NO_NULLS, nullify>{},
+                                   lists,
+                                   search_keys,
+                                   find_option,
+                                   stream,
+                                   mr);
+}
+
+/**
+ * @copydoc cudf::lists::contains(cudf::lists_column_view const&,
+ *                                cudf::scalar const&,
+ *                                rmm::mr::device_memory_resource*)
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
 std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
                                  cudf::scalar const& search_key,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  return search_key.is_valid(stream)
-           ? cudf::type_dispatcher(
-               search_key.type(), lookup_functor<false>{}, lists, search_key, stream, mr)
-           : cudf::type_dispatcher(
-               search_key.type(), lookup_functor<true>{}, lists, search_key, stream, mr);
+  return to_contains(index_of<if_lists_contain_nulls::NULLIFY>(
+                       lists, search_key, duplicate_find_option::FIND_FIRST, stream),
+                     stream,
+                     mr);
 }
 
+/**
+ * @copydoc cudf::lists::contains(cudf::lists_column_view const&,
+ *                                cudf::column_view const&,
+ *                                rmm::mr::device_memory_resource*)
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
 std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
                                  cudf::column_view const& search_keys,
                                  rmm::cuda_stream_view stream,
@@ -212,11 +385,10 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
   CUDF_EXPECTS(search_keys.size() == lists.size(),
                "Number of search keys must match list column size.");
 
-  return search_keys.has_nulls()
-           ? cudf::type_dispatcher(
-               search_keys.type(), lookup_functor<true>{}, lists, search_keys, stream, mr)
-           : cudf::type_dispatcher(
-               search_keys.type(), lookup_functor<false>{}, lists, search_keys, stream, mr);
+  return to_contains(index_of<if_lists_contain_nulls::NULLIFY>(
+                       lists, search_keys, duplicate_find_option::FIND_FIRST, stream),
+                     stream,
+                     mr);
 }
 
 }  // namespace detail
@@ -235,6 +407,24 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
 {
   CUDF_FUNC_RANGE();
   return detail::contains(lists, search_keys, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
+                                 cudf::scalar const& search_key,
+                                 duplicate_find_option find_option,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::index_of(lists, search_key, find_option, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
+                                 cudf::column_view const& search_keys,
+                                 duplicate_find_option find_option,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::index_of(lists, search_keys, find_option, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace lists
