@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import functools
-from typing import TYPE_CHECKING, Callable, Tuple
+from typing import TYPE_CHECKING, Callable
 
 import cudf
 from cudf import _lib as libcudf
@@ -117,7 +117,18 @@ class Merge:
             self._out_class = cudf.DataFrame
 
     def perform_merge(self) -> Frame:
-        lhs, rhs = self._match_key_dtypes(self.lhs, self.rhs)
+        # Match the dtypes of the key columns from lhs and rhs
+        lhs = self.lhs.copy(deep=False)
+        rhs = self.rhs.copy(deep=False)
+        for left_key, right_key in zip(self._left_keys, self._right_keys):
+            lcol, rcol = left_key.get(lhs), right_key.get(rhs)
+            lcol_casted, rcol_casted = _match_join_keys(
+                lcol, rcol, how=self.how
+            )
+            if lcol is not lcol_casted:
+                left_key.set(lhs, lcol_casted, validate=False)
+            if rcol is not rcol_casted:
+                right_key.set(rhs, rcol_casted, validate=False)
 
         left_table = _frame_select_by_indexers(lhs, self._left_keys)
         right_table = _frame_select_by_indexers(rhs, self._right_keys)
@@ -125,7 +136,29 @@ class Merge:
         left_rows, right_rows = self._joiner(
             left_table, right_table, how=self.how,
         )
-        lhs, rhs = self._restore_categorical_keys(lhs, rhs)
+
+        # For inner joins, any categorical keys in `self.lhs` and `self.rhs`
+        # were casted to their category type to produce `lhs` and `rhs`.
+        # Here, we cast them back.
+        if self.how == "inner":
+            for left_key, right_key in zip(self._left_keys, self._right_keys):
+                # Note that we check self.lhs and self.rhs rather than lhs and
+                # rhs here because _match_key_dtypes has already modified them.
+                if isinstance(
+                    left_key.get(self.lhs).dtype, cudf.CategoricalDtype
+                ) and isinstance(
+                    right_key.get(self.rhs).dtype, cudf.CategoricalDtype
+                ):
+                    left_key.set(
+                        lhs,
+                        left_key.get(lhs).astype("category"),
+                        validate=False,
+                    )
+                    right_key.set(
+                        rhs,
+                        right_key.get(rhs).astype("category"),
+                        validate=False,
+                    )
 
         left_result = cudf.core.frame.Frame()
         right_result = cudf.core.frame.Frame()
@@ -386,48 +419,6 @@ class Merge:
                         "there are overlapping columns but "
                         "lsuffix and rsuffix are not defined"
                     )
-
-    def _match_key_dtypes(self, lhs: Frame, rhs: Frame) -> Tuple[Frame, Frame]:
-        # Match the dtypes of the key columns from lhs and rhs
-        out_lhs = lhs.copy(deep=False)
-        out_rhs = rhs.copy(deep=False)
-        for left_key, right_key in zip(self._left_keys, self._right_keys):
-            lcol, rcol = left_key.get(lhs), right_key.get(rhs)
-            lcol_casted, rcol_casted = _match_join_keys(
-                lcol, rcol, how=self.how
-            )
-            if lcol is not lcol_casted:
-                left_key.set(out_lhs, lcol_casted, validate=False)
-            if rcol is not rcol_casted:
-                right_key.set(out_rhs, rcol_casted, validate=False)
-        return out_lhs, out_rhs
-
-    def _restore_categorical_keys(
-        self, lhs: Frame, rhs: Frame
-    ) -> Tuple[Frame, Frame]:
-        # For inner joins, any categorical keys in `self.lhs` and `self.rhs`
-        # were casted to their category type to produce `lhs` and `rhs`.
-        # Here, we cast them back.
-        out_lhs = lhs.copy(deep=False)
-        out_rhs = rhs.copy(deep=False)
-        if self.how == "inner":
-            for left_key, right_key in zip(self._left_keys, self._right_keys):
-                if isinstance(
-                    left_key.get(self.lhs).dtype, cudf.CategoricalDtype
-                ) and isinstance(
-                    right_key.get(self.rhs).dtype, cudf.CategoricalDtype
-                ):
-                    left_key.set(
-                        out_lhs,
-                        left_key.get(out_lhs).astype("category"),
-                        validate=False,
-                    )
-                    right_key.set(
-                        out_rhs,
-                        right_key.get(out_rhs).astype("category"),
-                        validate=False,
-                    )
-        return out_lhs, out_rhs
 
 
 class MergeSemi(Merge):
