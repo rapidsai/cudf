@@ -16,6 +16,8 @@
 # Usage:
 # bash run-cmake-format.sh {cmake-format,cmake-lint} infile [infile ...]
 
+# Note that pre-commit always runs from the root of the repository, so paths
+# are automatically relative to the repo root.
 DEFAULT_FORMAT_FILE=cpp/build/release/_deps/rapids-cmake-src/cmake-format-rapids-cmake.json
 RAPIDS_CMAKE_FORMAT_FILE=${RAPIDS_CMAKE_FORMAT_FILE:-${DEFAULT_FORMAT_FILE}}
 
