@@ -126,19 +126,21 @@ struct hash_circular_buffer {
   CUDA_DEVICE_CALLABLE const uint8_t& operator[](int idx) const { return storage[idx]; }
 };
 
-template <typename Key>
-auto CUDA_DEVICE_CALLABLE get_data(Key const& k)
+// Get a uint8_t pointer to a column element and its size as a pair.
+template <typename Element>
+auto CUDA_DEVICE_CALLABLE get_element_pointer_and_size(Element const& element)
 {
-  if constexpr (is_fixed_width<Key>() && !is_chrono<Key>()) {
-    return thrust::make_pair(reinterpret_cast<uint8_t const*>(&k), sizeof(Key));
+  if constexpr (is_fixed_width<Element>() && !is_chrono<Element>()) {
+    return thrust::make_pair(reinterpret_cast<uint8_t const*>(&element), sizeof(Element));
   } else {
     cudf_assert(false && "Unsupported type.");
   }
 }
 
-auto CUDA_DEVICE_CALLABLE get_data(string_view const& k)
+template <>
+auto CUDA_DEVICE_CALLABLE get_element_pointer_and_size(string_view const& element)
 {
-  return thrust::make_pair(reinterpret_cast<uint8_t const*>(k.data()), k.size_bytes());
+  return thrust::make_pair(reinterpret_cast<uint8_t const*>(element.data()), element.size_bytes());
 }
 
 struct MD5Hasher {
@@ -173,12 +175,12 @@ struct MD5Hasher {
   MD5Hasher(MD5Hasher&&)                 = delete;
   MD5Hasher& operator=(MD5Hasher&&) = delete;
 
-  template <typename Key>
-  void CUDA_DEVICE_CALLABLE process(Key const& key)
+  template <typename Element>
+  void CUDA_DEVICE_CALLABLE process(Element const& element)
   {
-    auto const normalized_key = normalize_nans_and_zeros(key);
-    auto const [data, size]   = get_data(normalized_key);
-    buffer.put(data, size);
+    auto const normalized_element  = normalize_nans_and_zeros(element);
+    auto const [element_ptr, size] = get_element_pointer_and_size(normalized_element);
+    buffer.put(element_ptr, size);
     message_length += size;
   }
 
@@ -245,12 +247,12 @@ struct HasherDispatcher {
   Hasher* hasher;
   column_device_view const& input_col;
 
-  template <typename Key>
+  template <typename Element>
   void CUDA_DEVICE_CALLABLE operator()(size_type const row_index) const
   {
-    if constexpr ((is_fixed_width<Key>() && !is_chrono<Key>()) ||
-                  std::is_same_v<Key, string_view>) {
-      hasher->process(input_col.element<Key>(row_index));
+    if constexpr ((is_fixed_width<Element>() && !is_chrono<Element>()) ||
+                  std::is_same_v<Element, string_view>) {
+      hasher->process(input_col.element<Element>(row_index));
     } else {
       cudf_assert(false && "Unsupported type for hash function.");
     }
@@ -262,14 +264,14 @@ struct ListHasherDispatcher {
   Hasher* hasher;
   column_device_view const& input_col;
 
-  template <typename Key>
+  template <typename Element>
   void CUDA_DEVICE_CALLABLE operator()(size_type const offset_begin,
                                        size_type const offset_end) const
   {
-    if constexpr ((is_fixed_width<Key>() && !is_chrono<Key>()) ||
-                  std::is_same_v<Key, string_view>) {
+    if constexpr ((is_fixed_width<Element>() && !is_chrono<Element>()) ||
+                  std::is_same_v<Element, string_view>) {
       for (size_type i = offset_begin; i < offset_end; i++) {
-        if (input_col.is_valid(i)) { hasher->process(input_col.element<Key>(i)); }
+        if (input_col.is_valid(i)) { hasher->process(input_col.element<Element>(i)); }
       }
     } else {
       cudf_assert(false && "Unsupported type for hash function.");
