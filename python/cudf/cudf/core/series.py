@@ -728,7 +728,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         See Also
         --------
-        cudf.core.reshape.concat : General function to concatenate DataFrame or
+        cudf.concat : General function to concatenate DataFrame or
             Series objects.
 
         Examples
@@ -2879,6 +2879,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
 
         Apply a basic function to a series with nulls
+
         >>> sr = cudf.Series([1,cudf.NA,3])
         >>> def f(x):
         ...     return x + 1
@@ -2890,6 +2891,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         Use a function that does something conditionally,
         based on if the value is or is not null
+
         >>> sr = cudf.Series([1,cudf.NA,3])
         >>> def f(x):
         ...     if x is cudf.NA:
@@ -3501,7 +3503,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2     30
         dtype: int64
         >>> series.hash_values(method="murmur3")
-        array([-1930516747,   422619251,  -941520876], dtype=int32)
+        0   -1930516747
+        1     422619251
+        2    -941520876
+        dtype: int32
+        >>> series.hash_values(method="md5")
+        0    7be4bbacbfdb05fb3044e36c22b41e8b
+        1    947ca8d2c5f0f27437f156cfbfab0969
+        2    d0580ef52d27c043c8e341fd5039b166
+        dtype: object
         """
         return Series._from_data(
             {None: self._hash(method=method)}, index=self.index
@@ -3509,6 +3519,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     def hash_encode(self, stop, use_name=False):
         """Encode column values as ints in [0, stop) using hash function.
+
+        This method is deprecated. Replace ``series.hash_encode(stop,
+        use_name=False)`` with ``series.hash_values(method="murmur3") % stop``.
 
         Parameters
         ----------
@@ -3544,6 +3557,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2     76
         dtype: int32
         """
+        warnings.warn(
+            "The `hash_encode` method will be removed in a future cuDF "
+            "release. Replace `series.hash_encode(stop, use_name=False)` "
+            'with `series.hash_values(method="murmur3") % stop`.',
+            FutureWarning,
+        )
+
         if not stop > 0:
             raise ValueError("stop must be a positive integer.")
 

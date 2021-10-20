@@ -134,12 +134,12 @@ class SubwordTokenizer:
         Examples
         --------
         >>> import cudf
-        >>> from cudf.utils.hash_vocab_utils  import hash_vocab
+        >>> from cudf.utils.hash_vocab_utils import hash_vocab
         >>> hash_vocab('bert-base-cased-vocab.txt', 'voc_hash.txt')
 
 
         >>> from cudf.core.subword_tokenizer import SubwordTokenizer
-        >>> cudf_tokenizer  = SubwordTokenizer('voc_hash.txt',
+        >>> cudf_tokenizer = SubwordTokenizer('voc_hash.txt',
         ...                                    do_lower_case=True)
         >>> str_series = cudf.Series(['This is the', 'best book'])
         >>> tokenizer_output = cudf_tokenizer(str_series,
