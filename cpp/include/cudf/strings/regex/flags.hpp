@@ -31,13 +31,13 @@ namespace strings {
  * These types can be or'd to combine them.
  */
 enum regex_flags : uint32_t {
-  DEFAULT     = 0,  /// default
-  SINGLE_LINE = 1,  /// the '^' and '$' ignore new-line characters
-  DOT_ALL     = 2   /// the '.' matching includes new-line characters
+  DEFAULT   = 0,  /// default
+  MULTILINE = 1,  /// the '^' and '$' honor new-line characters
+  DOTALL    = 2   /// the '.' matching includes new-line characters
 };
 
-#define IS_SINGLE_LINE(f) ((f & regex_flags::SINGLE_LINE) == regex_flags::SINGLE_LINE)
-#define IS_DOT_ALL(f)     ((f & regex_flags::DOT_ALL) == regex_flags::DOT_ALL)
+#define IS_MULTILINE(f) ((f & regex_flags::MULTILINE) == regex_flags::MULTILINE)
+#define IS_DOTALL(f)    ((f & regex_flags::DOTALL) == regex_flags::DOTALL)
 
 /** @} */  // end of doxygen group
 }  // namespace strings

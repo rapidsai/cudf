@@ -79,7 +79,7 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   rmm::cuda_stream_view stream)
 {
   return reprog_device::create(
-    pattern, regex_flags::DEFAULT, codepoint_flags, strings_count, stream);
+    pattern, regex_flags::MULTILINE, codepoint_flags, strings_count, stream);
 }
 
 // Create instance of the reprog that can be passed into a device kernel
