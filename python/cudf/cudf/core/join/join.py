@@ -206,6 +206,8 @@ class Merge:
                 left_keys.extend(
                     [
                         _Indexer(name=on, column=True)
+                        if on in self.lhs._data
+                        else _Indexer(name=on, index=True)
                         for on in _coerce_to_tuple(self.left_on)
                     ]
                 )
@@ -221,6 +223,8 @@ class Merge:
                 right_keys.extend(
                     [
                         _Indexer(name=on, column=True)
+                        if on in self.rhs._data
+                        else _Indexer(name=on, index=True)
                         for on in _coerce_to_tuple(self.right_on)
                     ]
                 )
