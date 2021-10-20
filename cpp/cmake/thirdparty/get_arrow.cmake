@@ -120,6 +120,13 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
             set(ArrowCUDA_DIR "${Arrow_DIR}")
             find_package(Arrow REQUIRED QUIET)
             find_package(ArrowCUDA REQUIRED QUIET)
+            if(ENABLE_PARQUET AND NOT Parquet_DIR)
+                # Set this to enable `find_package(Parquet)`
+                set(Parquet_DIR "${Arrow_DIR}")
+            endif()
+            # Set this to enable `find_package(ArrowDataset)`
+            set(ArrowDataset_DIR "${Arrow_DIR}")
+            find_package(ArrowDataset REQUIRED QUIET)
         elseif(Arrow_ADDED)
             # Copy these files so we can avoid adding paths in
             # Arrow_BINARY_DIR to target_include_directories.
@@ -157,40 +164,64 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     endif()
 
     if(Arrow_ADDED)
-        set(arrow_code_string
-        [=[
-        if (TARGET cudf::arrow_shared AND (NOT TARGET arrow_shared))
-            add_library(arrow_shared ALIAS cudf::arrow_shared)
-        endif()
-        if (TARGET cudf::arrow_static AND (NOT TARGET arrow_static))
-            add_library(arrow_static ALIAS cudf::arrow_static)
-        endif()
-        ]=]
-        )
-        set(arrow_cuda_code_string
-        [=[
-        if (TARGET cudf::arrow_cuda_shared AND (NOT TARGET arrow_cuda_shared))
-            add_library(arrow_cuda_shared ALIAS cudf::arrow_cuda_shared)
-        endif()
-        if (TARGET cudf::arrow_cuda_static AND (NOT TARGET arrow_cuda_static))
-            add_library(arrow_cuda_static ALIAS cudf::arrow_cuda_static)
-        endif()
-        ]=]
-        )
 
         rapids_export(BUILD Arrow
           VERSION ${VERSION}
           EXPORT_SET arrow_targets
           GLOBAL_TARGETS arrow_shared arrow_static
           NAMESPACE cudf::
-          FINAL_CODE_BLOCK arrow_code_string)
+          FINAL_CODE_BLOCK [=[
+            if (TARGET cudf::arrow_shared AND (NOT TARGET arrow_shared))
+                add_library(arrow_shared ALIAS cudf::arrow_shared)
+            endif()
+            if (TARGET cudf::arrow_static AND (NOT TARGET arrow_static))
+                add_library(arrow_static ALIAS cudf::arrow_static)
+            endif()
+          ]=])
 
         rapids_export(BUILD ArrowCUDA
           VERSION ${VERSION}
           EXPORT_SET arrow_cuda_targets
           GLOBAL_TARGETS arrow_cuda_shared arrow_cuda_static
           NAMESPACE cudf::
-          FINAL_CODE_BLOCK arrow_cuda_code_string)
+          FINAL_CODE_BLOCK [=[
+            if (TARGET cudf::arrow_cuda_shared AND (NOT TARGET arrow_cuda_shared))
+                add_library(arrow_cuda_shared ALIAS cudf::arrow_cuda_shared)
+            endif()
+            if (TARGET cudf::arrow_cuda_static AND (NOT TARGET arrow_cuda_static))
+                add_library(arrow_cuda_static ALIAS cudf::arrow_cuda_static)
+            endif()
+          ]=])
+
+        rapids_export(BUILD ArrowDataset
+          VERSION ${VERSION}
+          EXPORT_SET arrow_dataset_targets
+          GLOBAL_TARGETS arrow_dataset_shared arrow_dataset_static
+          NAMESPACE cudf::
+          FINAL_CODE_BLOCK [=[
+            if (TARGET cudf::arrow_dataset_shared AND (NOT TARGET arrow_dataset_shared))
+                add_library(arrow_dataset_shared ALIAS cudf::arrow_dataset_shared)
+            endif()
+            if (TARGET cudf::arrow_dataset_static AND (NOT TARGET arrow_dataset_static))
+                add_library(arrow_dataset_static ALIAS cudf::arrow_dataset_static)
+            endif()
+          ]=])
+
+        if(ENABLE_PARQUET)
+            rapids_export(BUILD Parquet
+              VERSION ${VERSION}
+              EXPORT_SET parquet_targets
+              GLOBAL_TARGETS parquet_shared parquet_static
+              NAMESPACE cudf::
+              FINAL_CODE_BLOCK [=[
+                if (TARGET cudf::parquet_shared AND (NOT TARGET parquet_shared))
+                    add_library(parquet_shared ALIAS cudf::parquet_shared)
+                endif()
+                if (TARGET cudf::parquet_static AND (NOT TARGET parquet_static))
+                    add_library(parquet_static ALIAS cudf::parquet_static)
+                endif()
+              ]=])
+        endif()
     endif()
     # We generate the arrow-config and arrowcuda-config files
     # when we built arrow locally, so always do `find_dependency`
@@ -202,10 +233,18 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     # was found, since Arrow packages ArrowCUDA.config in a non-standard
     # location
     rapids_export_package(BUILD ArrowCUDA cudf-exports)
+    if(ENABLE_PARQUET)
+        rapids_export_package(BUILD Parquet cudf-exports)
+    endif()
+    rapids_export_package(BUILD ArrowDataset cudf-exports)
 
     include("${rapids-cmake-dir}/export/find_package_root.cmake")
     rapids_export_find_package_root(BUILD Arrow [=[${CMAKE_CURRENT_LIST_DIR}]=] cudf-exports)
     rapids_export_find_package_root(BUILD ArrowCUDA [=[${CMAKE_CURRENT_LIST_DIR}]=] cudf-exports)
+    if(ENABLE_PARQUET)
+        rapids_export_find_package_root(BUILD Parquet [=[${CMAKE_CURRENT_LIST_DIR}]=] cudf-exports)
+    endif()
+    rapids_export_find_package_root(BUILD ArrowDataset [=[${CMAKE_CURRENT_LIST_DIR}]=] cudf-exports)
 
     set(ARROW_FOUND "${ARROW_FOUND}" PARENT_SCOPE)
     set(ARROW_LIBRARIES "${ARROW_LIBRARIES}" PARENT_SCOPE)
