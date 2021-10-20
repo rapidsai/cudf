@@ -17,6 +17,7 @@
 
 #include <strings/regex/regcomp.h>
 
+#include <cudf/strings/regex/flags.hpp>
 #include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -104,6 +105,27 @@ class reprog_device {
    */
   static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> create(
     std::string const& pattern,
+    const uint8_t* cp_flags,
+    int32_t strings_count,
+    rmm::cuda_stream_view stream);
+
+  /**
+   * @brief Create device program instance from a regex pattern.
+   *
+   * The number of strings is needed to compute the state data size required when evaluating the
+   * regex.
+   *
+   * @param pattern The regex pattern to compile.
+   * @param cp_flags The code-point lookup table for character types.
+   * @param strings_count Number of strings that will be evaluated.
+   * @param stream CUDA stream for asynchronous memory allocations. To ensure correct
+   * synchronization on destruction, the same stream should be used for all operations with the
+   * created objects.
+   * @return The program device object.
+   */
+  static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> create(
+    std::string const& pattern,
+    regex_flags const re_flags,
     const uint8_t* cp_flags,
     int32_t strings_count,
     rmm::cuda_stream_view stream);

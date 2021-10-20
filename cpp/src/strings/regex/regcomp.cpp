@@ -15,6 +15,7 @@
  */
 
 #include <strings/regex/regcomp.h>
+
 #include <cudf/utilities/error.hpp>
 
 #include <string.h>
@@ -523,6 +524,8 @@ class regex_compiler {
   bool lastwasand;
   int nbra;
 
+  regex_flags flags;
+
   inline void pushand(int f, int l) { andstack.push_back({f, l}); }
 
   inline Node popand(int op)
@@ -567,11 +570,11 @@ class regex_compiler {
         case LBRA: /* must have been RBRA */
           op1                                    = popand('(');
           id_inst2                               = m_prog.add_inst(RBRA);
-          m_prog.inst_at(id_inst2).u1.subid      = ator.subid;  // subidstack[subidstack.size()-1];
+          m_prog.inst_at(id_inst2).u1.subid      = ator.subid;
           m_prog.inst_at(op1.id_last).u2.next_id = id_inst2;
           id_inst1                               = m_prog.add_inst(LBRA);
-          m_prog.inst_at(id_inst1).u1.subid   = ator.subid;  // subidstack[subidstack.size() - 1];
-          m_prog.inst_at(id_inst1).u2.next_id = op1.id_first;
+          m_prog.inst_at(id_inst1).u1.subid      = ator.subid;
+          m_prog.inst_at(id_inst1).u2.next_id    = op1.id_first;
           pushand(id_inst1, id_inst2);
           return;
         case OR:
@@ -664,10 +667,13 @@ class regex_compiler {
   {
     if (lastwasand) Operator(CAT); /* catenate is implicit */
     int inst_id = m_prog.add_inst(t);
-    if (t == CCLASS || t == NCCLASS)
+    if (t == CCLASS || t == NCCLASS) {
       m_prog.inst_at(inst_id).u1.cls_id = yyclass_id;
-    else if (t == CHAR || t == BOL || t == EOL)
+    } else if (t == CHAR) {
       m_prog.inst_at(inst_id).u1.c = yy;
+    } else if (t == BOL || t == EOL) {
+      m_prog.inst_at(inst_id).u1.c = IS_SINGLE_LINE(flags) ? '\n' : yy;
+    }
     pushand(inst_id, inst_id);
     lastwasand = true;
   }
@@ -766,13 +772,20 @@ class regex_compiler {
   }
 
  public:
-  regex_compiler(const char32_t* pattern, int dot_type, reprog& prog)
-    : m_prog(prog), cursubid(0), pushsubid(0), lastwasand(false), nbra(0), yy(0), yyclass_id(0)
+  regex_compiler(const char32_t* pattern, regex_flags const flags, reprog& prog)
+    : m_prog(prog),
+      cursubid(0),
+      pushsubid(0),
+      lastwasand(false),
+      nbra(0),
+      flags(flags),
+      yy(0),
+      yyclass_id(0)
   {
     // Parse
     std::vector<regex_parser::Item> items;
     {
-      regex_parser parser(pattern, dot_type, m_prog);
+      regex_parser parser(pattern, IS_DOT_ALL(flags) ? ANYNL : ANY, m_prog);
 
       // Expand counted repetitions
       if (parser.m_has_counted)
@@ -822,11 +835,12 @@ class regex_compiler {
 };
 
 // Convert pattern into program
-reprog reprog::create_from(const char32_t* pattern)
+reprog reprog::create_from(const char32_t* pattern, regex_flags const flags)
 {
   reprog rtn;
-  regex_compiler compiler(pattern, ANY, rtn);  // future feature: ANYNL
-  // rtn->print();
+  // regex_compiler compiler(pattern, ANY, rtn);  // future feature: ANYNL
+  regex_compiler compiler(pattern, flags, rtn);
+  if (std::getenv("CUDF_REGEX_DEBUG")) rtn.print();
   return rtn;
 }
 
@@ -941,8 +955,24 @@ void reprog::print()
       case ANY: printf("ANY, nextid= %d", inst.u2.next_id); break;
       case ANYNL: printf("ANYNL, nextid= %d", inst.u2.next_id); break;
       case NOP: printf("NOP, nextid= %d", inst.u2.next_id); break;
-      case BOL: printf("BOL, c = '%c', nextid= %d", inst.u1.c, inst.u2.next_id); break;
-      case EOL: printf("EOL, c = '%c', nextid= %d", inst.u1.c, inst.u2.next_id); break;
+      case BOL: {
+        printf("BOL, c = ");
+        if (inst.u1.c == '\n')
+          printf("'\\n'");
+        else
+          printf("'%c'", inst.u1.c);
+        printf(", nextid= %d", inst.u2.next_id);
+        break;
+      }
+      case EOL: {
+        printf("EOL, c = ");
+        if (inst.u1.c == '\n')
+          printf("'\\n'");
+        else
+          printf("'%c'", inst.u1.c);
+        printf(", nextid= %d", inst.u2.next_id);
+        break;
+      }
       case CCLASS: printf("CCLASS, cls_id=%d , nextid= %d", inst.u1.cls_id, inst.u2.next_id); break;
       case NCCLASS:
         printf("NCCLASS, cls_id=%d , nextid= %d", inst.u1.cls_id, inst.u2.next_id);
