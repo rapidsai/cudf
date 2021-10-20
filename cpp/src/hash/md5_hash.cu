@@ -241,18 +241,16 @@ struct MD5Hasher {
 };
 
 template <typename Hasher>
-struct ListHasherDispatcher {
+struct HasherDispatcher {
   Hasher* hasher;
-  column_device_view col;
+  column_device_view const& input_col;
 
   template <typename Key>
-  void CUDA_DEVICE_CALLABLE operator()(size_type offset_begin, size_type offset_end) const
+  void CUDA_DEVICE_CALLABLE operator()(size_type row_index) const
   {
     if constexpr ((is_fixed_width<Key>() && !is_chrono<Key>()) ||
                   std::is_same_v<Key, string_view>) {
-      for (size_type i = offset_begin; i < offset_end; i++) {
-        if (col.is_valid(i)) { hasher->process(col.element<Key>(i)); }
-      }
+      hasher->process(input_col.element<Key>(row_index));
     } else {
       cudf_assert(false && "Unsupported type for hash function.");
     }
@@ -260,16 +258,18 @@ struct ListHasherDispatcher {
 };
 
 template <typename Hasher>
-struct HasherDispatcher {
+struct ListHasherDispatcher {
   Hasher* hasher;
-  column_device_view col;
+  column_device_view const& input_col;
 
   template <typename Key>
-  void CUDA_DEVICE_CALLABLE operator()(size_type row_index) const
+  void CUDA_DEVICE_CALLABLE operator()(size_type offset_begin, size_type offset_end) const
   {
     if constexpr ((is_fixed_width<Key>() && !is_chrono<Key>()) ||
                   std::is_same_v<Key, string_view>) {
-      hasher->process(col.element<Key>(row_index));
+      for (size_type i = offset_begin; i < offset_end; i++) {
+        if (input_col.is_valid(i)) { hasher->process(input_col.element<Key>(i)); }
+      }
     } else {
       cudf_assert(false && "Unsupported type for hash function.");
     }
