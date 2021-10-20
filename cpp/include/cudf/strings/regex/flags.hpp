@@ -29,11 +29,13 @@ namespace strings {
  * @brief Regex flags.
  *
  * These types can be or'd to combine them.
+ * The values are chosen to leave room for future flags
+ * and to match the Python flag values.
  */
 enum regex_flags : uint32_t {
   DEFAULT   = 0,  /// default
-  MULTILINE = 1,  /// the '^' and '$' honor new-line characters
-  DOTALL    = 2   /// the '.' matching includes new-line characters
+  MULTILINE = 8,  /// the '^' and '$' honor new-line characters
+  DOTALL    = 16  /// the '.' matching includes new-line characters
 };
 
 #define IS_MULTILINE(f) ((f & regex_flags::MULTILINE) == regex_flags::MULTILINE)

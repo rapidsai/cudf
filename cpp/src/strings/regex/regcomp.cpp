@@ -840,7 +840,7 @@ reprog reprog::create_from(const char32_t* pattern, regex_flags const flags)
   reprog rtn;
   // regex_compiler compiler(pattern, ANY, rtn);  // future feature: ANYNL
   regex_compiler compiler(pattern, flags, rtn);
-  if (std::getenv("CUDF_REGEX_DEBUG")) rtn.print();
+  if (std::getenv("CUDF_REGEX_DEBUG")) rtn.print(flags);
   return rtn;
 }
 
@@ -926,8 +926,9 @@ void reprog::optimize2()
   _startinst_ids.push_back(-1);  // terminator mark
 }
 
-void reprog::print()
+void reprog::print(regex_flags const flags)
 {
+  printf("Flags = 0x%02x\n", static_cast<uint32_t>(flags));
   printf("Instructions:\n");
   for (std::size_t i = 0; i < _insts.size(); i++) {
     const reinst& inst = _insts[i];

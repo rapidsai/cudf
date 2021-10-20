@@ -116,7 +116,7 @@ class reprog {
 
   void optimize1();
   void optimize2();
-  void print();  // for debugging
+  void print(regex_flags const flags);
 
  private:
   std::vector<reinst> _insts;

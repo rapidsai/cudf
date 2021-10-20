@@ -731,8 +731,6 @@ class StringMethods(ColumnMethods):
         """  # noqa W605
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
-        elif flags != 0:
-            raise NotImplementedError("`flags` parameter is not yet supported")
         elif na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
 
@@ -742,7 +740,7 @@ class StringMethods(ColumnMethods):
             )
         elif is_scalar(pat):
             if regex is True:
-                result_col = libstrings.contains_re(self._column, pat)
+                result_col = libstrings.contains_re(self._column, pat, flags)
             else:
                 result_col = libstrings.contains(
                     self._column, cudf.Scalar(pat, "str")
@@ -3325,10 +3323,10 @@ class StringMethods(ColumnMethods):
         >>> index.str.count('a')
         Int64Index([0, 0, 2, 1], dtype='int64')
         """  # noqa W605
-        if flags != 0:
-            raise NotImplementedError("`flags` parameter is not yet supported")
 
-        return self._return_or_inplace(libstrings.count_re(self._column, pat))
+        return self._return_or_inplace(
+            libstrings.count_re(self._column, pat, flags)
+        )
 
     def findall(
         self, pat: str, flags: int = 0, expand: bool = True
@@ -3879,10 +3877,10 @@ class StringMethods(ColumnMethods):
         """
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
-        if flags != 0:
-            raise NotImplementedError("`flags` parameter is not yet supported")
 
-        return self._return_or_inplace(libstrings.match_re(self._column, pat))
+        return self._return_or_inplace(
+            libstrings.match_re(self._column, pat, flags)
+        )
 
     def url_decode(self) -> SeriesOrIndex:
         """

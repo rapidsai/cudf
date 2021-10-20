@@ -19,12 +19,15 @@ cdef extern from "cudf/strings/contains.hpp" namespace "cudf::strings" nogil:
 
     cdef unique_ptr[column] contains_re(
         column_view source_strings,
-        string pattern) except +
+        string pattern,
+        regex_flags) except +
 
     cdef unique_ptr[column] count_re(
         column_view source_strings,
-        string pattern) except +
+        string pattern,
+        regex_flags) except +
 
     cdef unique_ptr[column] matches_re(
         column_view source_strings,
-        string pattern) except +
+        string pattern,
+        regex_flags) except +
