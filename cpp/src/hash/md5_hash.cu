@@ -246,7 +246,7 @@ struct HasherDispatcher {
   column_device_view const& input_col;
 
   template <typename Key>
-  void CUDA_DEVICE_CALLABLE operator()(size_type row_index) const
+  void CUDA_DEVICE_CALLABLE operator()(size_type const row_index) const
   {
     if constexpr ((is_fixed_width<Key>() && !is_chrono<Key>()) ||
                   std::is_same_v<Key, string_view>) {
@@ -263,7 +263,8 @@ struct ListHasherDispatcher {
   column_device_view const& input_col;
 
   template <typename Key>
-  void CUDA_DEVICE_CALLABLE operator()(size_type offset_begin, size_type offset_end) const
+  void CUDA_DEVICE_CALLABLE operator()(size_type const offset_begin,
+                                       size_type const offset_end) const
   {
     if constexpr ((is_fixed_width<Key>() && !is_chrono<Key>()) ||
                   std::is_same_v<Key, string_view>) {
