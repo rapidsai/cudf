@@ -107,7 +107,7 @@ struct DeviceMin {
   static constexpr T identity()
   {
     CUDF_FAIL("fixed_point does not yet support DeviceMin identity");
-    return std::numeric_limits<T>::max();
+    return cuda::std::numeric_limits<T>::max();
   }
 
   // @brief identity specialized for string_view
@@ -138,6 +138,7 @@ struct DeviceMax {
                               !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
+    if constexpr (cudf::is_chrono<T>()) return std::numeric_limits<T>::lowest();
     return cuda::std::numeric_limits<T>::lowest();
   }
 
@@ -145,7 +146,7 @@ struct DeviceMax {
   static constexpr T identity()
   {
     CUDF_FAIL("fixed_point does not yet support DeviceMax identity");
-    return std::numeric_limits<T>::lowest();
+    return cuda::std::numeric_limits<T>::lowest();
   }
 
   template <typename T, typename std::enable_if_t<std::is_same_v<T, cudf::string_view>>* = nullptr>
