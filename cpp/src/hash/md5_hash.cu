@@ -247,6 +247,11 @@ struct HasherDispatcher {
   Hasher* hasher;
   column_device_view const& input_col;
 
+  CUDA_DEVICE_CALLABLE HasherDispatcher(Hasher* hasher, column_device_view const& input_col)
+    : hasher{hasher}, input_col{input_col}
+  {
+  }
+
   template <typename Element>
   void CUDA_DEVICE_CALLABLE operator()(size_type const row_index) const
   {
@@ -263,6 +268,11 @@ template <typename Hasher>
 struct ListHasherDispatcher {
   Hasher* hasher;
   column_device_view const& input_col;
+
+  CUDA_DEVICE_CALLABLE ListHasherDispatcher(Hasher* hasher, column_device_view const& input_col)
+    : hasher{hasher}, input_col{input_col}
+  {
+  }
 
   template <typename Element>
   void CUDA_DEVICE_CALLABLE operator()(size_type const offset_begin,
@@ -325,33 +335,31 @@ std::unique_ptr<column> md5_hash(table_view const& input,
   auto const device_input = table_device_view::create(input, stream);
 
   // Hash each row, hashing each element sequentially left to right
-  thrust::for_each(rmm::exec_policy(stream),
-                   thrust::make_counting_iterator(0),
-                   thrust::make_counting_iterator(input.num_rows()),
-                   [d_chars, device_input = *device_input] __device__(auto row_index) {
-                     MD5Hasher hasher(d_chars + (row_index * digest_size));
-                     for (auto const& col : device_input) {
-                       if (col.is_valid(row_index)) {
-                         if (col.type().id() == type_id::LIST) {
-                           auto const data_col = col.child(lists_column_view::child_column_index);
-                           auto const offsets  = col.child(lists_column_view::offsets_column_index);
-                           if (data_col.type().id() == type_id::LIST) {
-                             cudf_assert(false && "Nested list unsupported");
-                           }
-                           auto const offset_begin = offsets.element<size_type>(row_index);
-                           auto const offset_end   = offsets.element<size_type>(row_index + 1);
-                           cudf::type_dispatcher<dispatch_storage_type>(
-                             data_col.type(),
-                             ListHasherDispatcher<MD5Hasher>{&hasher, data_col},
-                             offset_begin,
-                             offset_end);
-                         } else {
-                           cudf::type_dispatcher<dispatch_storage_type>(
-                             col.type(), HasherDispatcher<MD5Hasher>{&hasher, col}, row_index);
-                         }
-                       }
-                     }
-                   });
+  thrust::for_each(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator(0),
+    thrust::make_counting_iterator(input.num_rows()),
+    [d_chars, device_input = *device_input] __device__(auto row_index) {
+      MD5Hasher hasher(d_chars + (row_index * digest_size));
+      for (auto const& col : device_input) {
+        if (col.is_valid(row_index)) {
+          if (col.type().id() == type_id::LIST) {
+            auto const data_col = col.child(lists_column_view::child_column_index);
+            auto const offsets  = col.child(lists_column_view::offsets_column_index);
+            if (data_col.type().id() == type_id::LIST) {
+              cudf_assert(false && "Nested list unsupported");
+            }
+            auto const offset_begin = offsets.element<size_type>(row_index);
+            auto const offset_end   = offsets.element<size_type>(row_index + 1);
+            cudf::type_dispatcher<dispatch_storage_type>(
+              data_col.type(), ListHasherDispatcher(&hasher, data_col), offset_begin, offset_end);
+          } else {
+            cudf::type_dispatcher<dispatch_storage_type>(
+              col.type(), HasherDispatcher(&hasher, col), row_index);
+          }
+        }
+      }
+    });
 
   return make_strings_column(
     input.num_rows(), std::move(offsets_column), std::move(chars_column), 0, std::move(null_mask));
