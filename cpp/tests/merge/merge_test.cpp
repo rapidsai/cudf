@@ -453,7 +453,7 @@ TYPED_TEST(MergeTest_, Merge1KeyNullColumns)
     } else {
       return row * 2;
     }
-        });
+  });
   auto valid_sequence1 = cudf::detail::make_counting_transform_iterator(
     0, [inputRows](auto row) { return (row < inputRows - 1); });
   cudf::test::fixed_width_column_wrapper<TypeParam, typename decltype(sequence1)::value_type>
@@ -698,7 +698,7 @@ TEST_F(MergeTest, KeysWithNulls)
   cudf::size_type nrows = 13200;  // Ensures that thrust::merge uses more than one tile/block
   auto data_iter        = thrust::make_counting_iterator<int32_t>(0);
   auto valids1          = cudf::detail::make_counting_transform_iterator(
-             0, [](auto row) { return (row % 10 == 0) ? false : true; });
+    0, [](auto row) { return (row % 10 == 0) ? false : true; });
   cudf::test::fixed_width_column_wrapper<int32_t> data1(data_iter, data_iter + nrows, valids1);
   auto valids2 = cudf::detail::make_counting_transform_iterator(
     0, [](auto row) { return (row % 15 == 0) ? false : true; });

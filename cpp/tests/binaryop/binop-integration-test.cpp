@@ -2034,7 +2034,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpAdd)
 
   auto begin      = cudf::detail::make_counting_transform_iterator(1, [](auto i) {
     return decimalXX{i, scale_type{0}};
-       });
+  });
   auto const vec1 = std::vector<decimalXX>(begin, begin + sz);
   auto const vec2 = std::vector<decimalXX>(sz, decimalXX{2, scale_type{0}});
   auto expected   = std::vector<decimalXX>(sz);
@@ -2067,7 +2067,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpMultiply)
 
   auto begin      = cudf::detail::make_counting_transform_iterator(1, [](auto i) {
     return decimalXX{i, scale_type{0}};
-       });
+  });
   auto const vec1 = std::vector<decimalXX>(begin, begin + sz);
   auto const vec2 = std::vector<decimalXX>(sz, decimalXX{2, scale_type{0}});
   auto expected   = std::vector<decimalXX>(sz);

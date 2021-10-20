@@ -1390,7 +1390,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionQuantile)
     for (auto const i : {0, 1, 2, 3, 4}) {
       auto const expected = decimalXX{scaled_integer<RepType>{i + 1, scale}};
       auto const result   = cudf::reduce(
-          column, cudf::make_quantile_aggregation({i / 4.0}, cudf::interpolation::LINEAR), out_type);
+        column, cudf::make_quantile_aggregation({i / 4.0}, cudf::interpolation::LINEAR), out_type);
       auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
       EXPECT_EQ(result_scalar->fixed_point_value(), expected);
     }
@@ -1413,7 +1413,7 @@ TYPED_TEST(FixedPointTestAllReps, FixedPointReductionNthElement)
     for (auto const i : {0, 1, 2, 3}) {
       auto const expected = decimalXX{scaled_integer<RepType>{values[i], scale}};
       auto const result   = cudf::reduce(
-          column, cudf::make_nth_element_aggregation(i, cudf::null_policy::INCLUDE), out_type);
+        column, cudf::make_nth_element_aggregation(i, cudf::null_policy::INCLUDE), out_type);
       auto const result_scalar = static_cast<cudf::scalar_type_t<decimalXX>*>(result.get());
       EXPECT_EQ(result_scalar->fixed_point_value(), expected);
     }

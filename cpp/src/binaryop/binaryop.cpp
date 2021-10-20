@@ -597,7 +597,7 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
   auto new_mask = bitmask_and(table_view({lhs, rhs}), stream, mr);
   auto out      = make_fixed_width_column(
-         output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+    output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
 
   // Check for 0 sized data
   if (lhs.is_empty() or rhs.is_empty()) return out;

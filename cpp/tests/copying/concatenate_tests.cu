@@ -361,7 +361,7 @@ TEST_F(OverflowTest, OverflowTest)
     auto offsets    = cudf::test::fixed_width_column_wrapper<offset_type>{0, size};
     auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, size);
     auto col        = cudf::make_strings_column(
-             1, offsets.release(), std::move(many_chars), 0, rmm::device_buffer{});
+      1, offsets.release(), std::move(many_chars), 0, rmm::device_buffer{});
 
     table_view tbl({*col});
     EXPECT_THROW(cudf::concatenate(std::vector<table_view>({tbl, tbl, tbl, tbl, tbl, tbl})),
@@ -376,7 +376,7 @@ TEST_F(OverflowTest, OverflowTest)
     auto many_offsets = cudf::make_fixed_width_column(data_type{type_id::INT32}, size + 1);
     auto chars        = cudf::test::fixed_width_column_wrapper<int8_t>{0, 1, 2};
     auto col          = cudf::make_strings_column(
-               size, std::move(many_offsets), chars.release(), 0, rmm::device_buffer{});
+      size, std::move(many_offsets), chars.release(), 0, rmm::device_buffer{});
 
     table_view tbl({*col});
     EXPECT_THROW(cudf::concatenate(std::vector<table_view>({tbl, tbl, tbl, tbl, tbl, tbl})),
@@ -484,7 +484,7 @@ TEST_F(OverflowTest, Presliced)
     cudf::test::fixed_width_column_wrapper<int> offsets(offset_gen, offset_gen + num_rows + 1);
     auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, total_chars_size);
     auto col        = cudf::make_strings_column(
-             num_rows, offsets.release(), std::move(many_chars), 0, rmm::device_buffer{});
+      num_rows, offsets.release(), std::move(many_chars), 0, rmm::device_buffer{});
 
     auto sliced = cudf::split(*col, {(num_rows / 2) - 1});
 
@@ -515,7 +515,7 @@ TEST_F(OverflowTest, Presliced)
                            offsets->mutable_view().begin<offset_type>());
     auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, total_chars_size);
     auto col        = cudf::make_strings_column(
-             num_rows, std::move(offsets), std::move(many_chars), 0, rmm::device_buffer{});
+      num_rows, std::move(offsets), std::move(many_chars), 0, rmm::device_buffer{});
 
     // should pass (with 2 rows to spare)
     // leaving this disabled as it typically runs out of memory on a T4
@@ -684,7 +684,7 @@ TEST_F(OverflowTest, BigColumnsSmallSlices)
                            offsets->mutable_view().begin<offset_type>());
     auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, inner_size);
     auto col        = cudf::make_strings_column(
-             num_rows, std::move(offsets), std::move(many_chars), 0, rmm::device_buffer{});
+      num_rows, std::move(offsets), std::move(many_chars), 0, rmm::device_buffer{});
 
     auto sliced = cudf::slice(*col, {16, 32});
 
@@ -712,7 +712,7 @@ TEST_F(OverflowTest, BigColumnsSmallSlices)
                            offsets->mutable_view().begin<offset_type>());
     auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, inner_size);
     auto col        = cudf::make_lists_column(
-             num_rows, std::move(offsets), std::move(many_chars), 0, rmm::device_buffer{});
+      num_rows, std::move(offsets), std::move(many_chars), 0, rmm::device_buffer{});
 
     auto sliced = cudf::slice(*col, {16, 32});
 
@@ -740,7 +740,7 @@ TEST_F(OverflowTest, BigColumnsSmallSlices)
                            offsets->mutable_view().begin<offset_type>());
     auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, inner_size);
     auto list_col   = cudf::make_lists_column(
-        num_rows, std::move(offsets), std::move(many_chars), 0, rmm::device_buffer{});
+      num_rows, std::move(offsets), std::move(many_chars), 0, rmm::device_buffer{});
 
     // struct
     std::vector<std::unique_ptr<column>> children;

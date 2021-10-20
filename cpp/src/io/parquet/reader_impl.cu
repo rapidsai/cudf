@@ -752,9 +752,9 @@ class aggregate_metadata {
           // Check if the path exists in our selected_columns and if not, add it.
           auto const& name_to_find = path[depth];
           auto found_col           = std::find_if(
-                      array_to_find_in->begin(),
-                      array_to_find_in->end(),
-                      [&name_to_find](column_name_info const& col) { return col.name == name_to_find; });
+            array_to_find_in->begin(),
+            array_to_find_in->end(),
+            [&name_to_find](column_name_info const& col) { return col.name == name_to_find; });
           if (found_col == array_to_find_in->end()) {
             auto& col        = array_to_find_in->emplace_back(name_to_find);
             array_to_find_in = &col.children;
