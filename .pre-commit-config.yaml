@@ -59,10 +59,22 @@ repos:
                 language: system
                 files: \.(cu|cuh|h|hpp|cpp|inl)$
                 args: ['-fallback-style=none']
-              - id: cmake-format-with-download
-                name: cmake-format-with-download
-                entry: bash cpp/scripts/run-cmake-format.sh
-                language: system
+              - id: cmake-format
+                name: cmake-format
+                entry: bash cpp/scripts/run-cmake-format.sh cmake-format
+                language: python
+                # Note that pre-commit autoupdate does not update the versions
+                # of dependencies, so we'll have to update this manually.
+                additional_dependencies:
+                  - cmakelang==0.6.13
+              - id: cmake-lint
+                name: cmake-lint
+                entry: bash cpp/scripts/run-cmake-format.sh cmake-lint
+                language: python
+                # Note that pre-commit autoupdate does not update the versions
+                # of dependencies, so we'll have to update this manually.
+                additional_dependencies:
+                  - cmakelang==0.6.13
       - repo: https://github.com/pre-commit/mirrors-mypy
         rev: 'v0.782'
         hooks:
@@ -74,12 +86,6 @@ repos:
         hooks:
               - id: pydocstyle
                 args: ["--config=python/.flake8"]
-      - repo: https://github.com/cheshirekow/cmake-format-precommit
-        rev: v0.6.13
-        hooks:
-            - id: cmake-format
-              args: ["-i", "--config-files", "cpp/cmake/config.json", "cpp/build/release/_deps/rapids-cmake-src/cmake-format-rapids-cmake.json", "--"]
-              stages: [manual]
 
 
 default_language_version:
