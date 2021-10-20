@@ -466,22 +466,19 @@ class aggregate_orc_metadata {
    * @param types A vector of schema types of columns.
    * @param level current level of nesting.
    * @param id current column id that needs to be added.
-   * @param has_timestamp_column True if timestamp column present and false otherwise.
    */
   void add_column(std::vector<std::vector<orc_column_meta>>& selection,
                   std::vector<SchemaType> const& types,
                   const size_t level,
-                  const uint32_t id,
-                  bool& has_timestamp_column)
+                  const uint32_t id)
   {
     if (level == selection.size()) { selection.emplace_back(); }
     selection[level].push_back({id, static_cast<uint32_t>(types[id].subtypes.size())});
-    if (types[id].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
 
     for (const auto child_id : types[id].subtypes) {
       // Since nested column needs to be processed before its child can be processed,
       // child column is being added to next level
-      add_column(selection, types, level + 1, child_id, has_timestamp_column);
+      add_column(selection, types, level + 1, child_id);
     }
   }
 
@@ -489,12 +486,10 @@ class aggregate_orc_metadata {
    * @brief Filters and reduces down to a selection of columns
    *
    * @param use_names List of column names to select
-   * @param has_timestamp_column True if timestamp column present and false otherwise
-   *
    * @return Vector of list of ORC column meta-data
    */
-  std::vector<std::vector<orc_column_meta>> select_columns(
-    std::vector<std::string> const& use_names, bool& has_timestamp_column)
+  std::vector<std::vector<orc_column_meta>> select_columns2(
+    std::vector<std::string> const& use_names)
   {
     auto const& pfm = per_file_metadata[0];
     std::vector<std::vector<orc_column_meta>> selection;
@@ -511,7 +506,7 @@ class aggregate_orc_metadata {
           auto col_id = pfm.ff.types[0].subtypes[index];
           if (pfm.get_column_name(col_id) == use_name) {
             name_found = true;
-            add_column(selection, pfm.ff.types, 0, col_id, has_timestamp_column);
+            add_column(selection, pfm.ff.types, 0, col_id);
             // Should start with next index
             index = i + 1;
             break;
@@ -521,7 +516,49 @@ class aggregate_orc_metadata {
       }
     } else {
       for (auto const& col_id : pfm.ff.types[0].subtypes) {
-        add_column(selection, pfm.ff.types, 0, col_id, has_timestamp_column);
+        add_column(selection, pfm.ff.types, 0, col_id);
+      }
+    }
+
+    return selection;
+  }
+
+  /**
+   * @brief Filters and reduces down to a selection of columns
+   *
+   * @param use_names List of column names to select
+   *
+   * @return Vector of list of ORC column meta-data
+   */
+  std::vector<std::vector<orc_column_meta>> select_columns(
+    std::vector<std::string> const& use_names)
+  {
+    auto const& pfm = per_file_metadata[0];
+    std::vector<std::vector<orc_column_meta>> selection;
+
+    if (not use_names.empty()) {
+      uint32_t index = 0;
+      // Have to check only parent columns
+      auto const num_columns = pfm.ff.types[0].subtypes.size();
+
+      for (const auto& use_name : use_names) {
+        bool name_found = false;
+        for (uint32_t i = 0; i < num_columns; ++i, ++index) {
+          if (index >= num_columns) { index = 0; }
+          auto col_id = pfm.ff.types[0].subtypes[index];
+          if (pfm.get_column_name(col_id) == use_name) {
+            name_found = true;
+            add_column(selection, pfm.ff.types, 0, col_id);
+            // Should start with next index
+            index = i + 1;
+            break;
+          }
+        }
+        CUDF_EXPECTS(name_found, "Unknown column name : " + std::string(use_name));
+      }
+    } else {
+      for (auto const& col_id : pfm.ff.types[0].subtypes) {
+        add_column(selection, pfm.ff.types, 0, col_id);
       }
     }
 
@@ -1155,7 +1192,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
   _metadata = std::make_unique<aggregate_orc_metadata>(_sources);
 
   // Select only columns required by the options
-  _selected_columns = _metadata->select_columns(options.get_columns(), _has_timestamp_column);
+  _selected_columns = _metadata->select_columns2(options.get_columns());
 
   // Override output timestamp resolution if requested
   if (options.get_timestamp_type().id() != type_id::EMPTY) {
@@ -1170,6 +1207,24 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
 
   // Control decimals conversion (float64 or int64 with optional scale)
   _decimal_cols_as_float = options.get_decimal_cols_as_float();
+}
+
+timezone_table reader::impl::compute_timezone_table(
+  const std::vector<cudf::io::orc::metadata::stripe_source_mapping>& selected_stripes,
+  rmm::cuda_stream_view stream)
+{
+  if (selected_stripes.empty()) return {};
+
+  auto const has_timestamp_column =
+    std::any_of(_selected_columns.cbegin(), _selected_columns.cend(), [&](auto& col_lvl) {
+      return std::any_of(col_lvl.cbegin(), col_lvl.cend(), [&](auto& col_meta) {
+        return _metadata->get_col_type(col_meta.id).kind == TypeKind::TIMESTAMP;
+      });
+    });
+  if (not has_timestamp_column) return {};
+
+  return build_timezone_transition_table(selected_stripes[0].stripe_info[0].second->writerTimezone,
+                                         stream);
 }
 
 table_with_metadata reader::impl::read(size_type skip_rows,
@@ -1195,6 +1250,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 
   // Select only stripes required (aka row groups)
   const auto selected_stripes = _metadata->select_stripes(stripes, skip_rows, num_rows);
+
+  auto const tz_table = compute_timezone_table(selected_stripes, stream);
 
   // Iterates through levels of nested columns, child column will be one level down
   // compared to parent column.
@@ -1470,13 +1527,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                     stream);
           }
         }
-
-        // Setup table for converting timestamp columns from local to UTC time
-        auto const tz_table =
-          _has_timestamp_column
-            ? build_timezone_transition_table(
-                selected_stripes[0].stripe_info[0].second->writerTimezone, stream)
-            : timezone_table{};
 
         for (size_t i = 0; i < column_types.size(); ++i) {
           bool is_nullable = false;

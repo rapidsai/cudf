@@ -205,6 +205,15 @@ class reader::impl {
                                               column_name_info& schema_info,
                                               rmm::cuda_stream_view stream);
 
+  /**
+   * @brief Setup table for converting timestamp columns from local to UTC time
+   *
+   * @return Timezone table with timestamp offsets
+   */
+  timezone_table compute_timezone_table(
+    const std::vector<cudf::io::orc::metadata::stripe_source_mapping>& selected_stripes,
+    rmm::cuda_stream_view stream);
+
  private:
   rmm::mr::device_memory_resource* _mr = nullptr;
   std::vector<std::unique_ptr<datasource>> _sources;
@@ -212,9 +221,8 @@ class reader::impl {
   // _output_columns associated schema indices
   std::vector<std::vector<orc_column_meta>> _selected_columns;
 
-  bool _use_index            = true;
-  bool _use_np_dtypes        = true;
-  bool _has_timestamp_column = false;
+  bool _use_index     = true;
+  bool _use_np_dtypes = true;
   std::vector<std::string> _decimal_cols_as_float;
   data_type _timestamp_type{type_id::EMPTY};
   reader_column_meta _col_meta;
