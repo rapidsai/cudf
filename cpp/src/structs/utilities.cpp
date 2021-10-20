@@ -29,7 +29,6 @@
 #include <structs/utilities.hpp>
 
 #include <bitset>
-#include "cudf/binaryop.hpp"
 
 namespace cudf {
 namespace structs {

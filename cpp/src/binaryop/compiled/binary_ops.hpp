@@ -215,6 +215,38 @@ void dispatch_equality_op(mutable_column_device_view& outd,
                           bool is_rhs_scalar,
                           binary_operator op,
                           rmm::cuda_stream_view stream);
+
+/**
+ * @brief
+ *
+ * @param lhs
+ * @param rhs
+ * @param output_type
+ * @param stream
+ * @param mr
+ * @return std::unique_ptr<column>
+ */
+std::unique_ptr<column> struct_binary_op(
+  column_view const& lhs,
+  column_view const& rhs,
+  binary_operator op,
+  data_type output_type,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief binary op functionality for structs, limited to comparison binops
+ *
+ * @param out
+ * @param lhs
+ * @param rhs
+ * @param stream
+ */
+void struct_binary_operation(mutable_column_view& out,
+                             column_view const& lhs,
+                             column_view const& rhs,
+                             binary_operator op,
+                             rmm::cuda_stream_view stream);
 }  // namespace compiled
 }  // namespace binops
 }  // namespace cudf
