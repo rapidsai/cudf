@@ -27,23 +27,38 @@ namespace strings {
 namespace detail {
 namespace {
 
+// position of enclosure strings (e.g. []) within the separators column
 constexpr offset_type left_brace_index  = 1;
 constexpr offset_type right_brace_index = 2;
 
 enum class item_separator { DEFAULT, ELEMENT, LIST };
 
+/**
+ * @brief Stack item used to manage nested lists.
+ *
+ * Each item includes the current range and the
+ * pending separator.
+ */
 struct alignas(8) stack_item {
   size_type left_idx;
   size_type right_idx;
   item_separator separator{item_separator::DEFAULT};
 };
 
+/**
+ * @brief Formatting lists functor.
+ *
+ * This formats the input list column into individual strings
+ * using the specified separators and null-representation string.
+ *
+ * Recursion is simulated by using stack allocating per output string.
+ */
 struct format_lists_fn {
   column_device_view const d_input;
   column_device_view const d_separators;
   string_view const d_na_rep;
   stack_item* d_stack;
-  size_type max_depth;
+  size_type const max_depth;
   size_type* d_offsets{};
   char* d_chars{};
 
@@ -83,14 +98,14 @@ struct format_lists_fn {
     size_type bytes = 0;
     for (size_type idx = left_idx; idx < right_idx; ++idx) {
       if (col.is_null(idx)) {
-        bytes += write_na_rep(d_output);  // None
+        bytes += write_na_rep(d_output);  // e.g. NULL
       } else {
         auto d_str = col.element<string_view>(idx);
         if (d_output) d_output = copy_string(d_output, d_str);
         bytes += d_str.size_bytes();
       }
       if (idx + 1 < right_idx) {
-        bytes += write_separator(d_output);  // ,
+        bytes += write_separator(d_output);  // e.g. ','
       }
     }
     return bytes;
@@ -109,10 +124,8 @@ struct format_lists_fn {
     // process until stack is empty
     while (stack_idx > 0) {
       --stack_idx;  // pop from stack
-      auto item      = item_stack[stack_idx];
-      auto view      = get_nested_child(stack_idx);
-      auto left_idx  = item.left_idx;
-      auto right_idx = item.right_idx;
+      auto const item = item_stack[stack_idx];
+      auto const view = get_nested_child(stack_idx);
 
       auto offsets   = view.child(cudf::lists_column_view::offsets_column_index);
       auto d_offsets = offsets.data<offset_type>() + view.offset();
@@ -125,12 +138,12 @@ struct format_lists_fn {
       }
 
       // loop through the child elements for the current view
-      for (auto jdx = left_idx; jdx < right_idx; ++jdx) {
-        auto lhs = d_offsets[jdx];
-        auto rhs = d_offsets[jdx + 1];
+      for (auto jdx = item.left_idx; jdx < item.right_idx; ++jdx) {
+        auto const lhs = d_offsets[jdx];
+        auto const rhs = d_offsets[jdx + 1];
 
         if (view.is_null(jdx)) {
-          bytes += write_na_rep(d_output);  // e.g. 'None'
+          bytes += write_na_rep(d_output);  // e.g. 'NULL'
         } else if (lhs == rhs) {            // e.g. "[]"
           bytes += write_separator(d_output, left_brace_index);
           bytes += write_separator(d_output, right_brace_index);
@@ -143,24 +156,24 @@ struct format_lists_fn {
             // push current state to the stack
             item_stack[stack_idx++] =
               stack_item{jdx + 1,
-                         right_idx,
-                         jdx + 1 < right_idx ? item_separator::ELEMENT : item_separator::LIST};
+                         item.right_idx,
+                         jdx + 1 < item.right_idx ? item_separator::ELEMENT : item_separator::LIST};
             // push child to the stack
             item_stack[stack_idx++] = stack_item{lhs, rhs};
             break;  // back to the stack (while-loop)
           }
 
-          // otherwise, the child is a strings column
+          // otherwise, the child is a strings column;
           // write out the string elements
-          auto size = write_strings(child, lhs, rhs, d_output);
+          auto const size = write_strings(child, lhs, rhs, d_output);
           bytes += size;
           if (d_output) d_output += size;
 
           bytes += write_separator(d_output, right_brace_index);
         }
 
-        // write element separator (e.g. comma ',') if we are not at the end
-        if (jdx + 1 < right_idx) { bytes += write_separator(d_output); }
+        // write element separator (e.g. comma ',') if not at the end
+        if (jdx + 1 < item.right_idx) { bytes += write_separator(d_output); }
       }
     }
 
@@ -193,9 +206,9 @@ std::unique_ptr<column> format_list_column(lists_column_view const& input,
   // create stack memory for processing nested lists
   auto stack_buffer = rmm::device_uvector<stack_item>(input.size() * depth, stream);
 
-  auto d_input      = column_device_view::create(input.parent(), stream);
-  auto d_separators = column_device_view::create(separators.parent(), stream);
-  auto d_na_rep     = na_rep.value(stream);
+  auto const d_input      = column_device_view::create(input.parent(), stream);
+  auto const d_separators = column_device_view::create(separators.parent(), stream);
+  auto const d_na_rep     = na_rep.value(stream);
 
   format_lists_fn functor{*d_input, *d_separators, d_na_rep, stack_buffer.data(), depth};
 
