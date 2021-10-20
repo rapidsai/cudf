@@ -30,9 +30,9 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/null_mask.hpp>
 #include <structs/utilities.hpp>
-#include "cudf/binaryop.hpp"
-#include "groupby/sort/group_scan.hpp"
 
+// #include "binary_op/compiled/binary_ops.hpp"
+#include <binaryop/compiled/binary_ops.hpp>
 namespace cudf::test {
 
 /**
@@ -512,13 +512,15 @@ template <typename T>
 struct TypedBinopStructCompare : StructUtilitiesTest {
 };
 
-TYPED_TEST_SUITE(TypedBinopStructCompare, cudf::test::NumericTypes);
-TYPED_TEST(TypedBinopStructCompare, binopcompare_out_type)
+using NumericTypesNotBool =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
+TYPED_TEST_SUITE(TypedBinopStructCompare, NumericTypesNotBool);
+TYPED_TEST(TypedBinopStructCompare, binopcompare_no_nulls)
 {
   using T = TypeParam;
 
-  auto col1 = fixed_width_column_wrapper<uint32_t>{26, 0, 14, 116, 89, 62, 63, 0, 121};
-  auto col2 = fixed_width_column_wrapper<uint32_t>{117, 34, 23, 29, 2, 37, 63, 0, 121};
+  auto col1 = fixed_width_column_wrapper<T>{26, 0, 14, 116, 89, 62, 63, 0, 121};
+  auto col2 = fixed_width_column_wrapper<T>{117, 34, 23, 29, 2, 37, 63, 0, 121};
 
   auto strings1 = strings_column_wrapper{"0a", "1c", "2d", "3b", "5c", "6", "7d", "9g", "0h"};
   auto strings2 = strings_column_wrapper{"0b", "0c", "2d", "3a", "4c", "6", "8e", "9f", "0h"};
@@ -532,9 +534,9 @@ TYPED_TEST(TypedBinopStructCompare, binopcompare_out_type)
   rhs_columns.push_back(strings2.release());
   auto rhs_col = cudf::make_structs_column(9, std::move(rhs_columns), 0, rmm::device_buffer{});
 
-  auto lhs = lhs_col->view();
-  auto rhs = rhs_col->view();
-  auto dt  = cudf::data_type(cudf::type_to_id<T>());
+  auto lhs     = lhs_col->view();
+  auto rhs     = rhs_col->view();
+  data_type dt = cudf::data_type(type_id::BOOL8);
 
   auto res_eq  = cudf::structs::detail::struct_binary_op(lhs, rhs, binary_operator::EQUAL, dt);
   auto res_neq = cudf::structs::detail::struct_binary_op(lhs, rhs, binary_operator::NOT_EQUAL, dt);
@@ -545,12 +547,12 @@ TYPED_TEST(TypedBinopStructCompare, binopcompare_out_type)
   auto res_lteq =
     cudf::structs::detail::struct_binary_op(lhs, rhs, binary_operator::LESS_EQUAL, dt);
 
-  auto expected_eq   = fixed_width_column_wrapper<T>{0, 0, 0, 0, 0, 0, 0, 0, 1};
-  auto expected_neq  = fixed_width_column_wrapper<T>{1, 1, 1, 1, 1, 1, 1, 1, 0};
-  auto expected_lt   = fixed_width_column_wrapper<T>{1, 1, 1, 0, 0, 0, 1, 0, 0};
-  auto expected_gteq = fixed_width_column_wrapper<T>{0, 0, 0, 1, 1, 1, 0, 1, 1};
-  auto expected_gt   = fixed_width_column_wrapper<T>{0, 0, 0, 1, 1, 1, 0, 1, 0};
-  auto expected_lteq = fixed_width_column_wrapper<T>{1, 1, 1, 0, 0, 0, 1, 0, 1};
+  auto expected_eq   = fixed_width_column_wrapper<bool>{0, 0, 0, 0, 0, 0, 0, 0, 1};
+  auto expected_neq  = fixed_width_column_wrapper<bool>{1, 1, 1, 1, 1, 1, 1, 1, 0};
+  auto expected_lt   = fixed_width_column_wrapper<bool>{1, 1, 1, 0, 0, 0, 1, 0, 0};
+  auto expected_gteq = fixed_width_column_wrapper<bool>{0, 0, 0, 1, 1, 1, 0, 1, 1};
+  auto expected_gt   = fixed_width_column_wrapper<bool>{0, 0, 0, 1, 1, 1, 0, 1, 0};
+  auto expected_lteq = fixed_width_column_wrapper<bool>{1, 1, 1, 0, 0, 0, 1, 0, 1};
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_eq, expected_eq);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*res_neq, expected_neq);
@@ -610,10 +612,6 @@ TYPED_TEST(TypedBinopStructCompare, binopcompare_with_nulls)
   auto res_gt = cudf::structs::detail::struct_binary_op(lhs, rhs, binary_operator::GREATER, dt);
   auto res_lteq =
     cudf::structs::detail::struct_binary_op(lhs, rhs, binary_operator::LESS_EQUAL, dt);
-
-  // c1 vs c2 lt, gt, eq, lt, gt, eq, lt, gt, eq, eq, eq, eq, eq, eq, eq, eq, eq, eq, eq, eq, eq
-  // s1 vs s2 gt, eq, lt, eq, lt, gt, lt, gt, eq, gt, lt, eq, gt, lt, eq, gt, lt, eq, eq, eq, eq
-  //          lt, gt, lt, lt, gt, gt, lt, gt, eq,   gt, lt, eq, gt, lt, eq, gt, lt, eq, nu, nu, nu
 
   auto expected_eq = fixed_width_column_wrapper<bool>{
     {0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1},

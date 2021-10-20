@@ -26,6 +26,8 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <structs/utilities.hpp>
+
 namespace cudf {
 namespace binops {
 namespace compiled {
@@ -351,10 +353,14 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       rmm::cuda_stream_view stream)
 {
-  auto lhsd = column_device_view::create(lhs, stream);
-  auto rhsd = column_device_view::create(rhs, stream);
-  auto outd = mutable_column_device_view::create(out, stream);
-  operator_dispatcher(*outd, *lhsd, *rhsd, false, false, op, stream);
+  if (lhs.type().id() == type_id::STRUCT && rhs.type().id() == type_id::STRUCT) {
+    structs::detail::struct_binary_operation(out, lhs, rhs, op, stream);
+  } else {
+    auto lhsd = column_device_view::create(lhs, stream);
+    auto rhsd = column_device_view::create(rhs, stream);
+    auto outd = mutable_column_device_view::create(out, stream);
+    operator_dispatcher(*outd, *lhsd, *rhsd, false, false, op, stream);
+  }
 }
 // scalar_vector
 void binary_operation(mutable_column_view& out,
@@ -363,10 +369,15 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       rmm::cuda_stream_view stream)
 {
-  auto [lhsd, aux] = scalar_to_column_device_view(lhs, stream);
-  auto rhsd        = column_device_view::create(rhs, stream);
-  auto outd        = mutable_column_device_view::create(out, stream);
-  operator_dispatcher(*outd, *lhsd, *rhsd, true, false, op, stream);
+  if (lhs.type().id() == type_id::STRUCT && rhs.type().id() == type_id::STRUCT) {
+    auto lhs_col = make_column_from_scalar(lhs, rhs.size(), stream);
+    structs::detail::struct_binary_operation(out, lhs_col->view(), rhs, op, stream);
+  } else {
+    auto [lhsd, aux] = scalar_to_column_device_view(lhs, stream);
+    auto rhsd        = column_device_view::create(rhs, stream);
+    auto outd        = mutable_column_device_view::create(out, stream);
+    operator_dispatcher(*outd, *lhsd, *rhsd, true, false, op, stream);
+  }
 }
 // vector_scalar
 void binary_operation(mutable_column_view& out,
@@ -375,10 +386,15 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       rmm::cuda_stream_view stream)
 {
-  auto lhsd        = column_device_view::create(lhs, stream);
-  auto [rhsd, aux] = scalar_to_column_device_view(rhs, stream);
-  auto outd        = mutable_column_device_view::create(out, stream);
-  operator_dispatcher(*outd, *lhsd, *rhsd, false, true, op, stream);
+  if (lhs.type().id() == type_id::STRUCT && rhs.type().id() == type_id::STRUCT) {
+    auto rhs_col = make_column_from_scalar(rhs, lhs.size(), stream);
+    structs::detail::struct_binary_operation(out, lhs, rhs_col->view(), op, stream);
+  } else {
+    auto lhsd        = column_device_view::create(lhs, stream);
+    auto [rhsd, aux] = scalar_to_column_device_view(rhs, stream);
+    auto outd        = mutable_column_device_view::create(out, stream);
+    operator_dispatcher(*outd, *lhsd, *rhsd, false, true, op, stream);
+  }
 }
 
 }  // namespace compiled
