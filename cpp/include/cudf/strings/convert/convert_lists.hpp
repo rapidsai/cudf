@@ -33,8 +33,8 @@ namespace strings {
  *
  * The `separators` column should contain 3 strings elements in the following order:
  * - element separator (default is comma `,`)
- * - left-hand separator (default is `[`)
- * - right-hand separator (default is `]`)
+ * - left-hand enclosure (default is `[`)
+ * - right-hand enclosure (default is `]`)
  *
  * @code{.pseudo}
  * l1 = { [[a,b,c], [d,e]], [[f,g], [h]] }
@@ -46,11 +46,11 @@ namespace strings {
  * s2 is now ["{{a:b:c}:{d:e}}", "{-}", "{{f:g}:-:{h}}"]
  * @endcode
  *
- * @throw cudf::logic_error if the input column is not LIST type with a STRINGS child.
+ * @throw cudf::logic_error if the input column is not a LIST type with a STRING child.
  *
- * @param input Lists column to convert.
- * @param separator Strings to use for list components and elements.
+ * @param input Lists column to format.
  * @param na_rep Replacment string for null elements.
+ * @param separator Strings to use for enclosing list components and separating elements.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
