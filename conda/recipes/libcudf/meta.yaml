@@ -189,7 +189,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/convert/convert_integers.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_ipv4.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_lists.hpp
-    - test -f $PREFIX/include/cudf/strings/convert/convert_urls.hpp    
+    - test -f $PREFIX/include/cudf/strings/convert/convert_urls.hpp
     - test -f $PREFIX/include/cudf/strings/detail/combine.hpp
     - test -f $PREFIX/include/cudf/strings/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/strings/detail/converters.hpp
