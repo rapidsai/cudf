@@ -44,7 +44,6 @@ Conversion
    Series.copy
    Series.to_list
    Series.__array__
-   Series.as_index
    Series.as_mask
    Series.scale
 
@@ -99,6 +98,7 @@ Function application, GroupBy & window
 .. autosummary::
    :toctree: api/
 
+   Series.apply
    Series.applymap
    Series.map
    Series.groupby
@@ -250,6 +250,7 @@ Datetime, Timedelta         :ref:`dt <api.series.dt>`
 String                      :ref:`str <api.series.str>`
 Categorical                 :ref:`cat <api.series.cat>`
 List                        :ref:`list <api.series.list>`
+Struct                      :ref:`struct <api.series.struct>`
 =========================== =================================
 
 .. _api.series.dt:
@@ -270,12 +271,23 @@ Datetime properties
 
    day
    dayofweek
+   dayofyear
+   days_in_month
+   day_of_year
    hour
    minute
    month
    second
    weekday
    year
+   is_leap_year
+   is_month_start
+   is_month_end
+   is_quarter_start
+   is_quarter_end
+   is_year_start
+   is_year_end
+   quarter
 
 Datetime methods
 ^^^^^^^^^^^^^^^^
@@ -284,6 +296,7 @@ Datetime methods
    :toctree: api/
 
    strftime
+   isocalendar
 
 
 Timedelta properties
@@ -324,6 +337,7 @@ strings and apply several methods to it. These can be accessed like
    count
    detokenize
    edit_distance
+   edit_distance_matrix
    endswith
    extract
    filter_alphanum
@@ -452,6 +466,23 @@ lists and apply list methods to it. These can be accessed like
    sort_values
    take
    unique
+
+
+.. _api.series.struct:
+
+Struct handling
+~~~~~~~~~~~~~~~
+
+``Series.struct`` can be used to access the values of the series as
+Structs and apply struct methods to it. These can be accessed like
+``Series.struct.<function/property>``.
+
+.. currentmodule:: cudf.core.column.struct.StructMethods
+.. autosummary::
+   :toctree: api/
+
+   field
+   explode
 
 
 Serialization / IO / conversion
