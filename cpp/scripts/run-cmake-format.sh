@@ -10,8 +10,9 @@
 # while also being sufficiently flexible to allow users to maintain the config
 # file independently of a build directory. This script provides the minimal
 # functionality to enable those use cases. While this script can be invoked
-# directly, it is advisable to instead use the pre-commit hooks via
-# `pre-commit run (cmake-format)|(cmake-format)`
+# directly (but only from the repo root since all paths are relative to that),
+# it is advisable to instead use the pre-commit hooks via
+# `pre-commit run (cmake-format)|(cmake-format)`.
 #
 # Usage:
 # bash run-cmake-format.sh {cmake-format,cmake-lint} infile [infile ...]
