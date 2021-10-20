@@ -1383,6 +1383,7 @@ void writer::impl::write(table_view const& table)
       (stats_granularity_ == statistics_freq::STATISTICS_PAGE) ? page_stats.data() : nullptr,
       (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? page_stats.data() + num_pages
                                                                : nullptr);
+    std::vector<std::future<void>> write_tasks;
     for (; r < rnext; r++, global_r++) {
       for (auto i = 0; i < num_columns; i++) {
         gpu::EncColumnChunk* ck = &chunks[r][i];
@@ -1396,7 +1397,8 @@ void writer::impl::write(table_view const& table)
 
         if (out_sink_->is_device_write_preferred(ck->compressed_size)) {
           // let the writer do what it wants to retrieve the data from the gpu.
-          out_sink_->device_write(dev_bfr + ck->ck_stat_size, ck->compressed_size, stream);
+          write_tasks.push_back(
+            out_sink_->device_write_async(dev_bfr + ck->ck_stat_size, ck->compressed_size, stream));
           // we still need to do a (much smaller) memcpy for the statistics.
           if (ck->ck_stat_size != 0) {
             md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
@@ -1441,6 +1443,9 @@ void writer::impl::write(table_view const& table)
         md.row_groups[global_r].columns[i].meta_data.total_compressed_size   = ck->compressed_size;
         current_chunk_offset += ck->compressed_size;
       }
+    }
+    for (auto const& task : write_tasks) {
+      task.wait();
     }
   }
 }

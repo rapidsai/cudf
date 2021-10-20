@@ -268,6 +268,40 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
                            input.null_count(),
                            std::move(null_mask));
 }
+
+std::unique_ptr<column> stable_sort_lists(lists_column_view const& input,
+                                          order column_order,
+                                          null_order null_precedence,
+                                          rmm::cuda_stream_view stream,
+                                          rmm::mr::device_memory_resource* mr)
+{
+  if (input.is_empty()) { return empty_like(input.parent()); }
+
+  auto output_offset = make_numeric_column(
+    input.offsets().type(), input.size() + 1, mask_state::UNALLOCATED, stream, mr);
+  thrust::transform(rmm::exec_policy(stream),
+                    input.offsets_begin(),
+                    input.offsets_end(),
+                    output_offset->mutable_view().template begin<size_type>(),
+                    [first = input.offsets_begin()] __device__(auto offset_index) {
+                      return offset_index - *first;
+                    });
+
+  auto const child              = input.get_sliced_child(stream);
+  auto const sorted_child_table = stable_segmented_sort_by_key(table_view{{child}},
+                                                               table_view{{child}},
+                                                               output_offset->view(),
+                                                               {column_order},
+                                                               {null_precedence},
+                                                               stream,
+                                                               mr);
+
+  return make_lists_column(input.size(),
+                           std::move(output_offset),
+                           std::move(sorted_child_table->release().front()),
+                           input.null_count(),
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr));
+}
 }  // namespace detail
 
 std::unique_ptr<column> sort_lists(lists_column_view const& input,
@@ -277,6 +311,16 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
 {
   CUDF_FUNC_RANGE();
   return detail::sort_lists(input, column_order, null_precedence, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> stable_sort_lists(lists_column_view const& input,
+                                          order column_order,
+                                          null_order null_precedence,
+                                          rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::stable_sort_lists(
+    input, column_order, null_precedence, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace lists

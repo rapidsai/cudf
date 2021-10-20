@@ -195,10 +195,10 @@ def test_get_dummies_with_nan():
     )
     expected = cudf.DataFrame(
         {
+            "a_null": [0, 0, 0, 1],
             "a_1.0": [1, 0, 0, 0],
             "a_2.0": [0, 1, 0, 0],
             "a_nan": [0, 0, 1, 0],
-            "a_null": [0, 0, 0, 1],
         },
         dtype="uint8",
     )
@@ -220,7 +220,7 @@ def test_get_dummies_with_nan():
 @pytest.mark.parametrize("prefix", [None, "hi"])
 @pytest.mark.parametrize("dtype", ["uint8", "int16"])
 def test_get_dummies_array_like(data, prefix_sep, prefix, dtype):
-    expected = cudf.get_dummies(
+    actual = cudf.get_dummies(
         data, prefix=prefix, prefix_sep=prefix_sep, dtype=dtype
     )
     if isinstance(data, (cudf.Series, cudf.BaseIndex)):
@@ -228,7 +228,7 @@ def test_get_dummies_array_like(data, prefix_sep, prefix, dtype):
     else:
         pd_data = data
 
-    actual = pd.get_dummies(
+    expected = pd.get_dummies(
         pd_data, prefix=prefix, prefix_sep=prefix_sep, dtype=dtype
     )
     utils.assert_eq(expected, actual)

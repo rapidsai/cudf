@@ -372,7 +372,7 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
    * fixed_width_column_wrapper<int32_t> w{{1, 2, 3, 4}};
    * @endcode
    *
-   * @param element_list The list of elements
+   * @param elements The list of elements
    */
   template <typename ElementFrom>
   fixed_width_column_wrapper(std::initializer_list<ElementFrom> elements)
@@ -943,7 +943,7 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    * // keys = {1, 2, 3}, indices = {0, 1, 2, 0}
    * @endcode
    *
-   * @param element_list The list of elements
+   * @param elements The list of elements
    */
   template <typename ElementFrom>
   dictionary_column_wrapper(std::initializer_list<ElementFrom> elements)
@@ -1714,7 +1714,7 @@ class structs_column_wrapper : public detail::column_wrapper {
    * auto struct_col {struct_column_wrapper.release()};
    * @endcode
    *
-   * @param child_columns_wrappers The list of child column wrappers
+   * @param child_column_wrappers The list of child column wrappers
    * @param validity The vector of bools representing the column validity values
    */
   structs_column_wrapper(
@@ -1747,8 +1747,8 @@ class structs_column_wrapper : public detail::column_wrapper {
    * auto struct_col {struct_column_wrapper.release()};
    * @endcode
    *
-   * @param child_columns_wrappers The list of child column wrappers
-   * @param validity Iterator returning the per-row validity bool
+   * @param child_column_wrappers The list of child column wrappers
+   * @param validity_iter Iterator returning the per-row validity bool
    */
   template <typename V>
   structs_column_wrapper(

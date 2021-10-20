@@ -16,7 +16,7 @@
 
 cmake_minimum_required(VERSION 3.20.1 FATAL_ERROR)
 
-file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-21.10/RAPIDS.cmake
+file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-21.12/RAPIDS.cmake
     ${CMAKE_BINARY_DIR}/RAPIDS.cmake)
 include(${CMAKE_BINARY_DIR}/RAPIDS.cmake)
 
@@ -97,6 +97,11 @@ rapids_find_package(CUDAToolkit REQUIRED
     INSTALL_EXPORT_SET cudf-exports)
 include(cmake/Modules/ConfigureCUDA.cmake) # set other CUDA compilation flags
 
+# ctest cuda memcheck
+find_program(CUDA_SANITIZER compute-sanitizer)
+set(MEMORYCHECK_COMMAND ${CUDA_SANITIZER})
+set(MEMORYCHECK_TYPE CudaSanitizer)
+set(CUDA_SANITIZER_COMMAND_OPTIONS "--tool memcheck")
 
 ###################################################################################################
 # - dependencies ----------------------------------------------------------------------------------
@@ -219,6 +224,7 @@ add_library(cudf
     src/groupby/sort/group_argmax.cu
     src/groupby/sort/group_argmin.cu
     src/groupby/sort/group_collect.cu
+    src/groupby/sort/group_correlation.cu
     src/groupby/sort/group_count.cu
     src/groupby/sort/group_m2.cu
     src/groupby/sort/group_max.cu
@@ -320,6 +326,7 @@ add_library(cudf
     src/partitioning/partitioning.cu
     src/partitioning/round_robin.cu
     src/quantiles/tdigest/tdigest.cu
+    src/quantiles/tdigest/tdigest_column_view.cpp
     src/quantiles/quantile.cu
     src/quantiles/quantiles.cu
     src/reductions/all.cu
@@ -437,6 +444,7 @@ add_library(cudf
     src/transform/encode.cu
     src/transform/mask_to_bools.cu
     src/transform/nans_to_nulls.cu
+    src/transform/one_hot_encode.cu
     src/transform/row_bit_count.cu
     src/transform/transform.cpp
     src/transpose/transpose.cu
@@ -717,7 +725,7 @@ get_target_property(all_includes cudf::cudf INTERFACE_INCLUDE_DIRECTORIES)
 set(system_includes )
 set(normal_includes )
 foreach(include IN LISTS all_includes)
-  if(include MATCHES "/include/libcudf/")
+  if(include MATCHES "/libcudacxx")
     list(APPEND normal_includes "${include}")
   else()
     list(APPEND system_includes "${include}")

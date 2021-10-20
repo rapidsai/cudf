@@ -59,9 +59,9 @@ rmm::device_buffer scalar_col_valid_mask_and(column_view const& col,
 {
   if (col.is_empty()) return rmm::device_buffer{0, stream, mr};
 
-  if (not s.is_valid()) {
+  if (not s.is_valid(stream)) {
     return cudf::detail::create_null_mask(col.size(), mask_state::ALL_NULL, stream, mr);
-  } else if (s.is_valid() and col.nullable()) {
+  } else if (s.is_valid(stream) and col.nullable()) {
     return cudf::detail::copy_bitmask(col, stream, mr);
   } else {
     return rmm::device_buffer{0, stream, mr};
@@ -152,7 +152,7 @@ void binary_operation(mutable_column_view& out,
                out.null_mask(),
                lhs.null_mask(),
                lhs.offset(),
-               rhs.is_valid());
+               rhs.is_valid(stream));
   } else {
     std::string kernel_name =
       jitify2::reflection::Template("cudf::binops::jit::kernel_v_s")  //

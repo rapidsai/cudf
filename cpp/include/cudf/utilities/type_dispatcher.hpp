@@ -565,6 +565,7 @@ struct double_type_dispatcher_first_type {
  * parameter of the callable `F`
  * @param type2 The `data_type` used to dispatch a type for the second template
  * parameter of the callable `F`
+ * @param f The callable whose `operator()` template is invoked
  * @param args Parameter pack forwarded to the `operator()` invocation `F`.
  */
 #pragma nv_exec_check_disable

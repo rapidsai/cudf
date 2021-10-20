@@ -373,7 +373,8 @@ TYPED_TEST(SegmentedGatherTest, GatherSliced)
     auto const split_a = cudf::split(a, {3});
 
     {
-      auto const gather_map = lists_column_view{LCW<int>{{1, 2}, {0, 2}, {0, 1}}};
+      auto const list       = LCW<int>{{1, 2}, {0, 2}, {0, 1}};
+      auto const gather_map = lists_column_view{list};
       auto const result     = segmented_gather(lists_column_view{split_a[0]}, gather_map);
       auto const expected   = LCW<T>{
         {{2, 2}, {3, 3}},
@@ -384,9 +385,9 @@ TYPED_TEST(SegmentedGatherTest, GatherSliced)
     }
 
     {
-      auto const gather_map =
-        lists_column_view{LCW<int>{{0, 1}, LCW<int>{}, LCW<int>{}, {0, 1}, LCW<int>{}}};
-      auto const result = segmented_gather(lists_column_view{split_a[1]}, gather_map);
+      auto const list       = LCW<int>{{0, 1}, LCW<int>{}, LCW<int>{}, {0, 1}, LCW<int>{}};
+      auto const gather_map = lists_column_view{list};
+      auto const result     = segmented_gather(lists_column_view{split_a[1]}, gather_map);
       auto const expected =
         LCW<T>{{{10, 10, 10}, {11, 11}}, LCW<T>{}, LCW<T>{}, {{50, 50, 50, 50}, {6, 13}}, LCW<T>{}};
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
