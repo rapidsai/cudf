@@ -4,7 +4,7 @@ Implementation of the dataframe exchange protocol.
 Public API
 ----------
 
-from_dataframe : construct a pandas.DataFrame from an input data frame which
+from_dataframe : construct a cudf.DataFrame from an input data frame which
                  implements the exchange protocol
 
 Notes
@@ -58,8 +58,7 @@ def _from_dataframe(df : DataFrameObject) :
     if df.num_chunks() > 1:
         raise NotImplementedError
 
-    # We need a dict of columns here, with each column being a numpy array (at
-    # least for now, deal with non-numpy dtypes later).
+    # We need a dict of columns here, with each column being a cudf column column.
     columns = dict()
     _k = _DtypeKind
     _buffers = []  # hold on to buffers, keeps memory alive
@@ -67,7 +66,7 @@ def _from_dataframe(df : DataFrameObject) :
         col = df.get_column_by_name(name)
 
         if col.dtype[0] in (_k.INT, _k.UINT, _k.FLOAT, _k.BOOL):
-            columns[name], _buf = convert_to_cudf_column(col)
+            columns[name], _buf = _protocol_column_to_cudf_column_numeric(col)
 
         elif col.dtype[0] == _k.CATEGORICAL:
             columns[name], _buf = convert_to_cudf_categorical(col)
@@ -95,22 +94,21 @@ class _DtypeKind(enum.IntEnum):
     DATETIME = 22
     CATEGORICAL = 23
 
-
-def convert_to_cudf_column(col:ColumnObject) -> cp.ndarray:
+def _protocol_column_to_cudf_column_numeric(col:ColumnObject):
     """
-    Convert an int, uint, float or bool column to a numpy array
+    Convert an int, uint, float or bool protocol column to the corresponding cudf column
     """
     if col.offset != 0:
         raise NotImplementedError("column.offset > 0 not handled yet")
 
     _dbuffer, _ddtype = col.get_buffers()['data']
-    check_data_is_on_gpu(_dbuffer)
+    _check_data_is_on_gpu(_dbuffer)
     dcol = build_column(Buffer(_dbuffer.ptr, _dbuffer.bufsize), 
                         protocol_dtypes_to_cupy_dtype(_ddtype))        
-    return set_missing_values(col, dcol), _dbuffer
+    return _set_missing_values(col, dcol), _dbuffer
 
-def check_data_is_on_gpu(buffer):
-  
+
+def _check_data_is_on_gpu(buffer):
     if buffer.__dlpack_device__()[0] != 2 and not buffer._allow_copy:
         raise TypeError("This operation must copy data from CPU to GPU."
                             "Set `allow_copy=True` to allow it.")
@@ -126,15 +124,15 @@ def buffer_to_cupy_ndarray(_buffer, _dtype) -> cp.ndarray:
 
     return x
 
-def set_missing_values(col, dcol):
-    null_kind, null_value = col.describe_null
+def _set_missing_values(protocol_col, cudf_col):
+    null_kind, null_value = protocol_col.describe_null
     if  null_kind != 0:
         assert null_kind == 3, f"cudf supports only bit mask, null_kind should be 3 ." 
-        _mask_buffer, _mask_dtype = col.get_buffers()["validity"]
+        _mask_buffer, _mask_dtype = protocol_col.get_buffers()["validity"]
         bitmask = cp.asarray(Buffer(_mask_buffer.ptr, _mask_buffer.bufsize), cp.bool8) 
-        dcol[~bitmask] = None
+        cudf_col[~bitmask] = None
 
-    return dcol
+    return cudf_col
 
 def _gpu_buffer_to_cupy(_buffer, _dtype):
     _k = _DtypeKind
@@ -187,14 +185,14 @@ def convert_to_cudf_categorical(col : ColumnObject) :
 
     categories = as_column(mapping.values())
     codes_buffer, codes_dtype = col.get_buffers()['data']
-    check_data_is_on_gpu(codes_buffer)
+    _check_data_is_on_gpu(codes_buffer)
     cdtype = protocol_dtypes_to_cupy_dtype(codes_dtype)
     codes = build_column(Buffer(codes_buffer.ptr, codes_buffer.bufsize), cdtype)
     
     col1 = build_categorical_column(categories=categories,codes=codes,mask=codes.base_mask,
                                     size=codes.size,ordered=ordered)
 
-    return set_missing_values(col, col1), codes_buffer
+    return _set_missing_values(col, col1), codes_buffer
 
 
 def convert_to_cudf_string(col : ColumnObject) :
@@ -206,7 +204,7 @@ def convert_to_cudf_string(col : ColumnObject) :
 
     # Retrieve the data buffer containing the UTF-8 code units
     dbuffer, bdtype = buffers["data"]
-    check_data_is_on_gpu(dbuffer)
+    _check_data_is_on_gpu(dbuffer)
     encoded_string = build_column(Buffer(dbuffer.ptr, dbuffer.bufsize),
                         protocol_dtypes_to_cupy_dtype(bdtype)
                         )
@@ -219,7 +217,7 @@ def convert_to_cudf_string(col : ColumnObject) :
     
     col_str = build_column(None, dtype=cp.dtype('O'), children=(offsets, encoded_string))
 
-    return set_missing_values(col, col_str), buffers
+    return _set_missing_values(col, col_str), buffers
 
 
 
