@@ -6,6 +6,7 @@ from libcpp.string cimport string
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 
+
 cdef extern from "cudf/strings/regex/flags.hpp" \
         namespace "cudf::strings" nogil:
 
