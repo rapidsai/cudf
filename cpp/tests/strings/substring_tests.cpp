@@ -467,61 +467,6 @@ TEST_F(StringsSubstringsTest, SearchScalarDelimiter)
   }
 }
 
-// struct StringsSubstringsColumnDelimiterTest : public cudf::test::BaseFixture {
-//};
-
-// TEST_F(StringsSubstringsColumnDelimiterTest, GenerateExceptions)
-//{
-//  auto col0      = cudf::test::strings_column_wrapper({"", "", "", "", ""});
-//  auto delim_col = cudf::test::strings_column_wrapper({"", "foo", "bar", "."});
-//
-//  EXPECT_THROW(cudf::strings::slice_strings(
-//                 cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, -1),
-//               cudf::logic_error);
-//}
-
-// TEST_F(StringsSubstringsColumnDelimiterTest, ColumnAllEmpty)
-// {
-//   auto col0      = cudf::test::strings_column_wrapper({"", "", "", "", ""});
-//   auto delim_col = cudf::test::strings_column_wrapper({"", "foo", "bar", ".", "/"});
-//
-//   auto exp_results = cudf::test::strings_column_wrapper({"", "", "", "", ""});
-//
-//   auto results = cudf::strings::slice_strings(
-//     cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, -1);
-//   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
-// }
-
-// TEST_F(StringsSubstringsColumnDelimiterTest, DelimiterAllEmptyAndInvalid)
-// {
-//   auto col0 = cudf::test::strings_column_wrapper(
-//     {"Héllo", "thesé", "", "lease", "tést strings", ""}, {true, true, false, true, true, true});
-//   auto delim_col = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
-//                                                       {true, false, true, false, true, false});
-//
-//   auto exp_results = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
-//                                                         {true, true, false, true, true, true});
-//
-//   auto results = cudf::strings::slice_strings(
-//     cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, 1);
-//   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
-// }
-
-// TEST_F(StringsSubstringsColumnDelimiterTest, ZeroDelimiterCount)
-// {
-//   auto col0 = cudf::test::strings_column_wrapper(
-//     {"Héllo", "thesé", "", "lease", "tést strings", ""}, {true, true, false, true, true, true});
-//   auto delim_col = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
-//                                                       {true, false, true, false, true, false});
-//
-//   auto exp_results = cudf::test::strings_column_wrapper({"", "", "", "", "", ""},
-//                                                         {true, true, false, true, true, true});
-//
-//   auto results = cudf::strings::slice_strings(
-//     cudf::strings_column_view{col0}, cudf::strings_column_view{delim_col}, 0);
-//   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, exp_results, verbosity);
-// }
-
 TEST_F(StringsSubstringsTest, SearchColumnDelimiter)
 {
   {
