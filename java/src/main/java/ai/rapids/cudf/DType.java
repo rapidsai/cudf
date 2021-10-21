@@ -23,6 +23,7 @@ public final class DType {
 
   public static final int DECIMAL32_MAX_PRECISION = 9;
   public static final int DECIMAL64_MAX_PRECISION = 18;
+  public static final int DECIMAL128_MAX_PRECISION = 38;
 
   /* enum representing various types. Whenever a new non-decimal type is added please make sure
   below sections are updated as well:
@@ -77,7 +78,8 @@ public final class DType {
     LIST(0, 24),
     DECIMAL32(4, 25),
     DECIMAL64(8, 26),
-    STRUCT(0, 27);
+    DECIMAL128(16, 27),
+    STRUCT(0, 28);
 
     final int sizeInBytes;
     final int nativeId;
@@ -167,6 +169,7 @@ public final class DType {
       LIST,
       null, // DECIMAL32
       null, // DECIMAL64
+      null, // DECIMAL128
       STRUCT
   };
 
@@ -276,6 +279,13 @@ public final class DType {
         }
         return new DType(DTypeEnum.DECIMAL64, scale);
       }
+      if (nativeId == DTypeEnum.DECIMAL128.nativeId) {
+        if (-scale > DECIMAL128_MAX_PRECISION) {
+          throw new IllegalArgumentException(
+              "Scale " + (-scale) + " exceeds DECIMAL128_MAX_PRECISION " + DECIMAL128_MAX_PRECISION);
+        }
+        return new DType(DTypeEnum.DECIMAL128, scale);
+      }
     }
     throw new IllegalArgumentException("Could not translate " + nativeId + " into a DType");
   }
@@ -293,6 +303,8 @@ public final class DType {
       return new DType(DTypeEnum.DECIMAL32, -dec.scale());
     } else if (dec.precision() <= DECIMAL64_MAX_PRECISION) {
       return new DType(DTypeEnum.DECIMAL64, -dec.scale());
+    } else if (dec.precision() <= DECIMAL128_MAX_PRECISION) {
+      return new DType(DTypeEnum.DECIMAL128, -dec.scale());
     }
     throw new IllegalArgumentException("Precision " + dec.precision() +
         " exceeds max precision cuDF can support " + DECIMAL64_MAX_PRECISION);
@@ -450,7 +462,8 @@ public final class DType {
 
   private static final EnumSet<DTypeEnum> DECIMALS = EnumSet.of(
       DTypeEnum.DECIMAL32,
-      DTypeEnum.DECIMAL64
+      DTypeEnum.DECIMAL64,
+      DTypeEnum.DECIMAL128
   );
 
   private static final EnumSet<DTypeEnum> NESTED_TYPE = EnumSet.of(

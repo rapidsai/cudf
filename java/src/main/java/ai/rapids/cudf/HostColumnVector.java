@@ -526,6 +526,23 @@ public final class HostColumnVector extends HostColumnVectorCore {
   }
 
   /**
+   * Create a new decimal vector from unscaled values (BigInteger array) and scale.
+   * The created vector is of type DType.DECIMAL128.
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static HostColumnVector decimalFromBigIntegers(int scale, BigInteger... values) {
+    return build(DType.create(DType.DTypeEnum.DECIMAL128, scale), values.length, (b) -> {
+      for (BigInteger v : values) {
+        if (v == null) {
+          b.appendNull();
+        } else {
+          b.appendUnscaledDecimal(v);
+        }
+      }
+    });
+  }
+
+  /**
    * Create a new decimal vector from double floats with specific DecimalType and RoundingMode.
    * All doubles will be rescaled if necessary, according to scale of input DecimalType and RoundingMode.
    * If any overflow occurs in extracting integral part, an IllegalArgumentException will be thrown.
@@ -1222,7 +1239,12 @@ public final class HostColumnVector extends HostColumnVectorCore {
         data.setInt(currentIndex * type.getSizeInBytes(), unscaledVal.intValueExact());
       } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
         data.setLong(currentIndex * type.getSizeInBytes(), unscaledVal.longValueExact());
-      } else {
+      } else if (type.typeId == DType.DTypeEnum.DECIMAL128) {
+        assert currentIndex < rows;
+        byte[] unscaledValueBytes = value.unscaledValue().toByteArray();
+        byte[] result = convertDecimal128FromJavaToCudf(unscaledValueBytes);
+        data.setBytes(currentIndex*DType.DTypeEnum.DECIMAL128.sizeInBytes, result, 0, result.length);
+      }  else {
         throw new IllegalStateException(type + " is not a supported decimal type.");
       }
       currentIndex++;
@@ -1450,7 +1472,7 @@ public final class HostColumnVector extends HostColumnVectorCore {
      */
     public final Builder append(BigDecimal value, RoundingMode roundingMode) {
       assert type.isDecimalType();
-      assert currentIndex < rows;
+      assert currentIndex < rows: "appended too many values " + currentIndex + " out of total rows " + rows;
       BigInteger unscaledValue = value.setScale(-type.getScale(), roundingMode).unscaledValue();
       if (type.typeId == DType.DTypeEnum.DECIMAL32) {
         assert value.precision() <= DType.DECIMAL32_MAX_PRECISION : "value exceeds maximum precision for DECIMAL32";
@@ -1458,6 +1480,10 @@ public final class HostColumnVector extends HostColumnVectorCore {
       } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
         assert value.precision() <= DType.DECIMAL64_MAX_PRECISION : "value exceeds maximum precision for DECIMAL64 ";
         data.setLong(currentIndex * type.getSizeInBytes(), unscaledValue.longValueExact());
+      } else if (type.typeId == DType.DTypeEnum.DECIMAL128) {
+        assert value.precision() <= DType.DECIMAL128_MAX_PRECISION : "value exceeds maximum precision for DECIMAL128 ";
+        appendUnscaledDecimal(value.unscaledValue());
+        return this;
       } else {
         throw new IllegalStateException(type + " is not a supported decimal type.");
       }
@@ -1477,6 +1503,16 @@ public final class HostColumnVector extends HostColumnVectorCore {
       assert type.typeId == DType.DTypeEnum.DECIMAL64;
       assert currentIndex < rows;
       data.setLong(currentIndex * type.getSizeInBytes(), value);
+      currentIndex++;
+      return this;
+    }
+
+    public final Builder appendUnscaledDecimal(BigInteger value) {
+      assert type.typeId == DType.DTypeEnum.DECIMAL128;
+      assert currentIndex < rows;
+      byte[] unscaledValueBytes = value.toByteArray();
+      byte[] result = convertDecimal128FromJavaToCudf(unscaledValueBytes);
+      data.setBytes(currentIndex*DType.DTypeEnum.DECIMAL128.sizeInBytes, result, 0, result.length);
       currentIndex++;
       return this;
     }

@@ -109,6 +109,20 @@ JNIEXPORT jdouble JNICALL Java_ai_rapids_cudf_Scalar_getDouble(JNIEnv *env, jcla
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jbyteArray JNICALL Java_ai_rapids_cudf_Scalar_getBigIntegerBytes(JNIEnv *env, jclass,
+                                                                           jlong scalar_handle) {
+  try {
+    cudf::jni::auto_set_device(env);
+    using ScalarType = cudf::scalar_type_t<__int128_t>;
+    auto s = reinterpret_cast<ScalarType *>(scalar_handle);
+    auto val = s->value();
+    jbyte const *ptr = reinterpret_cast<jbyte const *>(&val);
+    cudf::jni::native_jbyteArray jbytes{env, ptr, sizeof(__int128_t)};
+    return jbytes.get_jArray();
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jbyteArray JNICALL Java_ai_rapids_cudf_Scalar_getUTF8(JNIEnv *env, jclass,
                                                                 jlong scalar_handle) {
   try {
@@ -449,6 +463,23 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDecimal64Scalar(JNIEnv *e
     auto const scale_ = numeric::scale_type{static_cast<int32_t>(scale)};
     std::unique_ptr<cudf::scalar> s =
         cudf::make_fixed_point_scalar<numeric::decimal64>(value_, scale_);
+    s->set_valid_async(is_valid);
+    return reinterpret_cast<jlong>(s.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Scalar_makeDecimal128Scalar(JNIEnv *env, jclass,
+                                                                        jbyteArray value,
+                                                                        jint scale,
+                                                                        jboolean is_valid) {
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const scale_ = numeric::scale_type{static_cast<int32_t>(scale)};
+    cudf::jni::native_jbyteArray jbytes{env, value};
+    auto const value_ = reinterpret_cast<__int128_t *>(jbytes.data());
+    std::unique_ptr<cudf::scalar> s =
+        cudf::make_fixed_point_scalar<numeric::decimal128>(*value_, scale_);
     s->set_valid_async(is_valid);
     return reinterpret_cast<jlong>(s.release());
   }

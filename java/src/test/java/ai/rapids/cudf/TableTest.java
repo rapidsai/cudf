@@ -45,6 +45,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -222,6 +223,10 @@ public class TableTest extends CudfTestBase {
           case TIMESTAMP_SECONDS:
           case DECIMAL64:
             assertEquals(expected.getLong(expectedRow), cv.getLong(tableRow),
+                "Column " + colName + " Row " + tableRow);
+            break;
+          case DECIMAL128:
+            assertEquals(expected.getBigDecimal(expectedRow), cv.getBigDecimal(tableRow),
                 "Column " + colName + " Row " + tableRow);
             break;
           case FLOAT32:
@@ -3656,6 +3661,97 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupByMinMaxDecimal() {
+    try (Table t1 = new Table.TestBuilder()
+        .column( "1",  "1", "1", "1", "2")
+        .column(0, 1, 3 , 3, 4)
+        .decimal128Column(-4, RoundingMode.HALF_UP,
+            new BigInteger("123456789123456789"),
+            new BigInteger("7979879879879798"),
+            new BigInteger("17979879879879798"),
+            new BigInteger("2234563472398472398"),
+            null)
+        .build()) {
+      try (Table result = t1
+          .groupBy(GroupByOptions.builder()
+              .withKeysSorted(true)
+              .withKeysDescending(false, false)
+              .build(), 0, 1)
+          .scan(GroupByScanAggregation.min().onColumn(2),
+              GroupByScanAggregation.max().onColumn(2));
+           Table expected = new Table.TestBuilder()
+               .column( "1",  "1", "1", "1", "2")
+               .column(0, 1, 3, 3, 4)
+               .decimal128Column(-4, RoundingMode.HALF_UP,
+                   new BigInteger("123456789123456789"),
+                   new BigInteger("7979879879879798"),
+                   new BigInteger("17979879879879798"),
+                   new BigInteger("17979879879879798"),
+                   null)
+               .decimal128Column(-4, RoundingMode.HALF_UP,
+                   new BigInteger("123456789123456789"),
+                   new BigInteger("7979879879879798"),
+                   new BigInteger("17979879879879798"),
+                   new BigInteger("2234563472398472398"),
+                   null)
+               .build()) {
+        assertTablesAreEqual(expected, result);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByMinMaxDecimalAgg() {
+    try (Table t1 = new Table.TestBuilder()
+        .column(-341142443, 48424546)
+        .decimal128Column(-2, RoundingMode.HALF_DOWN,
+            new BigInteger("2978603952268112009"),
+            new BigInteger("571526248386900094"))
+        .build()) {
+      try (Table result = t1
+          .groupBy(GroupByOptions.builder()
+              .build(), 0)
+          .aggregate(GroupByAggregation.max().onColumn(1));
+           Table expected = new Table.TestBuilder()
+               .column(-341142443, 48424546)
+               .decimal128Column(-2, RoundingMode.HALF_DOWN,
+                   new BigInteger("2978603952268112009"),
+                   new BigInteger("571526248386900094"))
+               .build()) {
+        assertTablesAreEqual(expected, result);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByCountDecimal() {
+    try (Table t1 = new Table.TestBuilder()
+        .column( "1",  "1", "1", "1", "2")
+        .column(0, 1, 3 , 3, 4)
+        .decimal128Column(-4, RoundingMode.HALF_UP,
+            new BigInteger("123456789123456789"),
+            new BigInteger("7979879879879798"),
+            new BigInteger("17979879879879798"),
+            new BigInteger("2234563472398472398"),
+            null)
+        .build()) {
+      try (Table result = t1
+          .groupBy(GroupByOptions.builder()
+              .withKeysSorted(true)
+              .withKeysDescending(false, false)
+              .build(), 0, 1)
+          .aggregate(GroupByAggregation.count().onColumn(2));
+           Table expected = new Table.TestBuilder()
+               .column( "1",  "1", "1", "2")
+               .column(0, 1, 3, 4)
+               .column(1, 1, 2, 0)
+               .build()) {
+        assertTablesAreEqual(expected, result);
+      }
+    }
+  }
+
+  @Test
   void testGroupByUniqueCount() {
     try (Table t1 = new Table.TestBuilder()
             .column( "1",  "1",  "1",  "1",  "1",  "1")
@@ -3672,6 +3768,33 @@ public class TableTest extends CudfTestBase {
                    .column(   1,    1,    1,    1)
                    .build()) {
         assertTablesAreEqual(expected, sorted);
+      }
+    }
+  }
+
+  @Test
+  void testOrderByDecimal() {
+    try (Table t1 = new Table.TestBuilder()
+        .column( "1",  "1", "1", "1")
+        .column(0, 1, 3 , 3)
+        .decimal64Column(4,
+            123456L,
+            124567L,
+            125678L,
+            126789L)
+        .build()) {
+      try (Table sorted = t1.orderBy(OrderByArg.asc(0), OrderByArg.asc(1), OrderByArg.asc(2));
+           Table expected = new Table.TestBuilder()
+               .column( "1",  "1", "1", "1")
+               .column(   0,    1, 3, 3)
+               .decimal64Column(4,
+                   123456L,
+                   124567L,
+                   125678L,
+                   126789L)
+               .build()) {
+        assertTablesAreEqual(expected, sorted);
+
       }
     }
   }

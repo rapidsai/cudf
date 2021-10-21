@@ -83,7 +83,6 @@ public interface BinaryOperable {
       // Here scale is created with value 0 as `scale` is required to create DType of
       // decimal type. Dtype is discarded for binary operations for decimal types in cudf as a new
       // DType is created for output type with new scale. New scale for output depends upon operator.
-      int scale = 0;
       if (a.typeId == DType.DTypeEnum.DECIMAL32) {
         if (b.typeId == DType.DTypeEnum.DECIMAL32) {
           return DType.create(DType.DTypeEnum.DECIMAL32,
@@ -93,7 +92,20 @@ public interface BinaryOperable {
         }
       } else if (a.typeId == DType.DTypeEnum.DECIMAL64) {
         if (b.typeId == DType.DTypeEnum.DECIMAL64) {
-          return DType.create(DType.DTypeEnum.DECIMAL64,
+          int fixedPointOutputScale = ColumnView.getFixedPointOutputScale(op, lhs.getType(), rhs.getType());
+          if (fixedPointOutputScale <= DType.DECIMAL64_MAX_PRECISION) {
+            return DType.create(DType.DTypeEnum.DECIMAL64,
+                fixedPointOutputScale);
+          } else {
+            return DType.create(DType.DTypeEnum.DECIMAL128,
+                fixedPointOutputScale);
+          }
+        } else {
+          throw new IllegalArgumentException("Both columns must be of the same fixed_point type");
+        }
+      } else if (a.typeId == DType.DTypeEnum.DECIMAL128) {
+        if (b.typeId == DType.DTypeEnum.DECIMAL128) {
+          return DType.create(DType.DTypeEnum.DECIMAL128,
               ColumnView.getFixedPointOutputScale(op, lhs.getType(), rhs.getType()));
         } else {
           throw new IllegalArgumentException("Both columns must be of the same fixed_point type");

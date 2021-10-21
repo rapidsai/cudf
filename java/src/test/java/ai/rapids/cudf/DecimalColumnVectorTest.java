@@ -51,6 +51,10 @@ public class DecimalColumnVectorTest extends CudfTestBase {
   private final BigDecimal[] overflowDecimal64 = new BigDecimal[]{
       BigDecimal.valueOf(Long.MAX_VALUE), BigDecimal.valueOf(Long.MIN_VALUE)};
 
+  private final BigDecimal[] overflowDecimal128 = new BigDecimal[]{
+      new BigDecimal("340282367000000000000000000000000000001"),
+      new BigDecimal("-340282367000000000000000000000000000001")};
+
   @BeforeAll
   public static void setup() {
     for (int i = 0; i < decimal32Zoo.length; i++) {
@@ -139,7 +143,8 @@ public class DecimalColumnVectorTest extends CudfTestBase {
   @Test
   public void testDecimalValidation() {
     // precision overflow
-    assertThrows(IllegalArgumentException.class, () -> HostColumnVector.fromDecimals(overflowDecimal64));
+    assertThrows(IllegalArgumentException.class, () -> HostColumnVector.fromDecimals(overflowDecimal128));
+
     assertThrows(IllegalArgumentException.class, () -> {
       try (ColumnVector ignored = ColumnVector.decimalFromInts(
           -(DType.DECIMAL32_MAX_PRECISION + 1), unscaledDec32Zoo)) {
@@ -153,13 +158,13 @@ public class DecimalColumnVectorTest extends CudfTestBase {
     // precision overflow due to rescaling by min scale
     assertThrows(IllegalArgumentException.class, () -> {
       try (ColumnVector ignored = ColumnVector.fromDecimals(
-          BigDecimal.valueOf(1.23e10), BigDecimal.valueOf(1.2e-7))) {
+          BigDecimal.valueOf(1.23e30), BigDecimal.valueOf(1.2e-7))) {
       }
     });
-    // exactly hit the MAX_PRECISION_DECIMAL64 after rescaling
+    // exactly hit the MAX_PRECISION_DECIMAL128 after rescaling
     assertDoesNotThrow(() -> {
       try (ColumnVector ignored = ColumnVector.fromDecimals(
-          BigDecimal.valueOf(1.23e10), BigDecimal.valueOf(1.2e-6))) {
+          BigDecimal.valueOf(1.23e30), BigDecimal.valueOf(1.2e-6))) {
       }
     });
   }
@@ -169,6 +174,10 @@ public class DecimalColumnVectorTest extends CudfTestBase {
     // Safe max precision of Decimal32 is 9, so integers have 10 digits will be backed by DECIMAL64.
     try (ColumnVector cv = ColumnVector.fromDecimals(overflowDecimal32)) {
       assertEquals(DType.create(DType.DTypeEnum.DECIMAL64, 0), cv.getType());
+    }
+
+    try (ColumnVector cv = ColumnVector.fromDecimals(overflowDecimal64)) {
+      assertEquals(DType.create(DType.DTypeEnum.DECIMAL128, 0), cv.getType());
     }
     // Create DECIMAL64 vector with small values
     try (ColumnVector cv =  ColumnVector.decimalFromLongs(0, 0L)) {

@@ -27,6 +27,8 @@ import ai.rapids.cudf.ast.CompiledExpression;
 
 import java.io.File;
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.MathContext;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.*;
@@ -3808,6 +3810,16 @@ public final class Table implements AutoCloseable {
       return this;
     }
 
+    public TestBuilder decimal128Column(int scale, RoundingMode mode, BigInteger... values) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL128, scale)));
+      BigDecimal[] data = Arrays.stream(values).map((x) -> {
+        if (x == null) return null;
+        return new BigDecimal(x, scale, new MathContext(38, mode));
+      }).toArray(BigDecimal[]::new);
+      typeErasedData.add(data);
+      return this;
+    }
+
     private static ColumnVector from(DType type, Object dataArray) {
       ColumnVector ret = null;
       switch (type.typeId) {
@@ -3852,6 +3864,7 @@ public final class Table implements AutoCloseable {
           break;
         case DECIMAL32:
         case DECIMAL64:
+        case DECIMAL128:
           int scale = type.getScale();
           if (dataArray instanceof Integer[]) {
             BigDecimal[] data = Arrays.stream(((Integer[]) dataArray))
