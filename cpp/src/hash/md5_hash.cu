@@ -38,6 +38,9 @@ namespace detail {
 
 namespace {
 
+// The MD5 algorithm and its hash/shift constants are officially specified in
+// RFC 1321. For convenience, these values can also be found on Wikipedia:
+// https://en.wikipedia.org/wiki/MD5
 const __constant__ uint32_t md5_shift_constants[16] = {
   7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21};
 
