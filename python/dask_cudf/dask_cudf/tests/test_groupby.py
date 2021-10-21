@@ -11,10 +11,10 @@ import cudf
 from cudf.core._compat import PANDAS_GE_120
 
 import dask_cudf
-from dask_cudf.groupby import _is_supported
+from dask_cudf.groupby import SUPPORTED_AGGS, _is_supported
 
 
-@pytest.mark.parametrize("aggregation", ["sum", "mean", "count", "min", "max"])
+@pytest.mark.parametrize("aggregation", SUPPORTED_AGGS)
 def test_groupby_basic_aggs(aggregation):
     pdf = pd.DataFrame(
         {
@@ -100,31 +100,6 @@ def test_groupby_agg_empty_partition(tmpdir, split_out):
     [lambda df: df.groupby("x").std(), lambda df: df.groupby("x").y.std()],
 )
 def test_groupby_std(func):
-    pdf = pd.DataFrame(
-        {
-            "x": np.random.randint(0, 5, size=10000),
-            "y": np.random.normal(size=10000),
-        }
-    )
-
-    gdf = cudf.DataFrame.from_pandas(pdf)
-
-    ddf = dask_cudf.from_cudf(gdf, npartitions=5)
-
-    a = func(gdf).to_pandas()
-    b = func(ddf).compute().to_pandas()
-
-    dd.assert_eq(a, b)
-
-
-@pytest.mark.parametrize(
-    "func",
-    [
-        lambda df: df.groupby("x").agg({"y": "collect"}),
-        lambda df: df.groupby("x").y.agg("collect"),
-    ],
-)
-def test_groupby_collect(func):
     pdf = pd.DataFrame(
         {
             "x": np.random.randint(0, 5, size=10000),

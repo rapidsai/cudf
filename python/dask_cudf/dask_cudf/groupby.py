@@ -19,6 +19,19 @@ from dask.highlevelgraph import HighLevelGraph
 
 import cudf
 
+SUPPORTED_AGGS = {
+    "count",
+    "mean",
+    "std",
+    "var",
+    "sum",
+    "min",
+    "max",
+    "collect",
+    "first",
+    "last",
+}
+
 
 class CudfDataFrameGroupBy(DataFrameGroupBy):
     def __init__(self, *args, **kwargs):
@@ -47,6 +60,19 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         g._meta = g._meta[key]
         return g
 
+    def collect(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.index,
+            {c: "collect" for c in self.obj.columns if c not in self.index},
+            split_every=split_every,
+            split_out=split_out,
+            dropna=self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )
+
     def mean(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -65,18 +91,6 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             return self.size()
         arg = _redirect_aggs(arg)
 
-        _supported = {
-            "count",
-            "mean",
-            "std",
-            "var",
-            "sum",
-            "min",
-            "max",
-            "collect",
-            "first",
-            "last",
-        }
         if (
             isinstance(self.obj, DaskDataFrame)
             and (
@@ -86,7 +100,7 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
                     and all(isinstance(x, str) for x in self.index)
                 )
             )
-            and _is_supported(arg, _supported)
+            and _is_supported(arg, SUPPORTED_AGGS)
         ):
             if isinstance(self._meta.grouping.keys, cudf.MultiIndex):
                 keys = self._meta.grouping.keys.names
@@ -134,23 +148,10 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             return self.size()
         arg = _redirect_aggs(arg)
 
-        _supported = {
-            "count",
-            "mean",
-            "std",
-            "var",
-            "sum",
-            "min",
-            "max",
-            "collect",
-            "first",
-            "last",
-        }
-
         if (
             isinstance(self.obj, DaskDataFrame)
             and isinstance(self.index, (str, list))
-            and _is_supported({self._slice: arg}, _supported)
+            and _is_supported({self._slice: arg}, SUPPORTED_AGGS)
         ):
             return groupby_agg(
                 self.obj,
@@ -201,21 +202,9 @@ def groupby_agg(
     """
     # Assert that aggregations are supported
     aggs = _redirect_aggs(aggs_in)
-    _supported = {
-        "count",
-        "mean",
-        "std",
-        "var",
-        "sum",
-        "min",
-        "max",
-        "collect",
-        "first",
-        "last",
-    }
-    if not _is_supported(aggs, _supported):
+    if not _is_supported(aggs, SUPPORTED_AGGS):
         raise ValueError(
-            f"Supported aggs include {_supported} for groupby_agg API. "
+            f"Supported aggs include {SUPPORTED_AGGS} for groupby_agg API. "
             f"Aggregations must be specified with dict or list syntax."
         )
 
@@ -478,7 +467,7 @@ def _tree_node_agg(dfs, gb_cols, split_out, dropna, sort, sep):
         agg = col.split(sep)[-1]
         if agg in ("count", "sum"):
             agg_dict[col] = ["sum"]
-        elif agg in ("min", "max", "collect"):
+        elif agg in SUPPORTED_AGGS:
             agg_dict[col] = [agg]
         else:
             raise ValueError(f"Unexpected aggregation: {agg}")
