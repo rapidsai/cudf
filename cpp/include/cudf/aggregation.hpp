@@ -508,7 +508,7 @@ std::unique_ptr<Base> make_merge_m2_aggregation();
  *        the number of non-null observations.
  */
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_covariance_aggregation(size_type min_periods=1, size_type ddof=1);
+std::unique_ptr<Base> make_covariance_aggregation(size_type min_periods = 1, size_type ddof = 1);
 
 /**
  * @brief Factory to create a CORRELATION aggregation
@@ -520,7 +520,8 @@ std::unique_ptr<Base> make_covariance_aggregation(size_type min_periods=1, size_
  * @param min_periods Minimum number of non-null observations required to produce a result.
  */
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_correlation_aggregation(correlation_type type, size_type min_periods=1);
+std::unique_ptr<Base> make_correlation_aggregation(correlation_type type,
+                                                   size_type min_periods = 1);
 
 /**
  * @brief Factory to create a TDIGEST aggregation

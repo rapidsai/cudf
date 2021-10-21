@@ -142,8 +142,13 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
 
   auto d_values_0 = column_device_view::create(values_0, stream);
   auto d_values_1 = column_device_view::create(values_1, stream);
-  covariance_transform<result_type> covariance_transform_op{
-    *d_values_0, *d_values_1, mean0_ptr, mean1_ptr, count.data<size_type>(), group_labels.begin(), ddof};
+  covariance_transform<result_type> covariance_transform_op{*d_values_0,
+                                                            *d_values_1,
+                                                            mean0_ptr,
+                                                            mean1_ptr,
+                                                            count.data<size_type>(),
+                                                            group_labels.begin(),
+                                                            ddof};
 
   auto result = make_numeric_column(
     data_type(type_to_id<result_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);

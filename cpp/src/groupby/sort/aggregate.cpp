@@ -642,7 +642,7 @@ void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation 
   auto const count = cache.get_result(values_child0, *count_agg);
 
   // Compute covariance here to avoid repeated computation of mean & count
-  auto cov_agg = make_covariance_aggregation(corr_agg._min_periods);
+  auto cov_agg            = make_covariance_aggregation(corr_agg._min_periods);
   auto const& cov_agg_obj = dynamic_cast<cudf::detail::covariance_aggregation const&>(*cov_agg);
   cache.add_result(values,
                    *cov_agg,
