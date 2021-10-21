@@ -96,18 +96,17 @@ class Merge:
         self.rhs = rhs
         self.how = how
         self.sort = sort
-        if suffixes:
-            self.lsuffix, self.rsuffix = suffixes
+        self.lsuffix, self.rsuffix = suffixes
 
         # At this point validation guarantees that if on is not None we
         # don't have any other args, so we can apply it directly to left_on and
         # right_on.
         self._using_left_index = bool(left_index)
-        self.left_on = (
+        left_on = (
             lhs.index._data.names if left_index else left_on if left_on else on
         )
         self._using_right_index = bool(right_index)
-        self.right_on = (
+        right_on = (
             rhs.index._data.names
             if right_index
             else right_on
@@ -115,22 +114,18 @@ class Merge:
             else on
         )
 
-        if self.left_on or self.right_on:
+        if left_on or right_on:
             self._left_keys = [
                 _Indexer(name=on, column=True)
                 if not self._using_left_index and on in self.lhs._data
                 else _Indexer(name=on, index=True)
-                for on in (
-                    _coerce_to_tuple(self.left_on) if self.left_on else []
-                )
+                for on in (_coerce_to_tuple(left_on) if left_on else [])
             ]
             self._right_keys = [
                 _Indexer(name=on, column=True)
                 if not self._using_right_index and on in self.rhs._data
                 else _Indexer(name=on, index=True)
-                for on in (
-                    _coerce_to_tuple(self.right_on) if self.right_on else []
-                )
+                for on in (_coerce_to_tuple(right_on) if right_on else [])
             ]
             if len(self._left_keys) != len(self._right_keys):
                 raise ValueError(
@@ -157,7 +152,17 @@ class Merge:
         else:
             self._out_class = cudf.DataFrame
 
-        self._key_columns_with_same_name = on if on else None
+        self._key_columns_with_same_name = (
+            on
+            if on
+            else []
+            if (self._using_left_index or self._using_right_index)
+            else [
+                lkey.name
+                for lkey, rkey in zip(self._left_keys, self._right_keys)
+                if lkey.name == rkey.name
+            ]
+        )
 
     def perform_merge(self) -> Frame:
         # Match the dtypes of the key columns from lhs and rhs
@@ -258,17 +263,9 @@ class Merge:
         # - if they are key columns, keep only the left column
         # - if they are not key columns, use suffixes to differentiate them
         #   in the final result
-        common_names = set(left_names) & set(right_names)
-
-        if self._key_columns_with_same_name is None:
-            self._key_columns_with_same_name = [
-                lkey.name
-                for lkey, rkey in zip(self._left_keys, self._right_keys)
-                if (
-                    (lkey.index, rkey.index) == (False, False)
-                    and lkey.name == rkey.name
-                )
-            ]
+        common_names = set(left_result._data.names) & set(
+            right_result._data.names
+        )
 
         for name in common_names:
             if name not in self._key_columns_with_same_name:
@@ -278,16 +275,16 @@ class Merge:
                 del right_names[name]
 
         # Assemble the data columns of the result:
-        data = left_result._data.__class__()
-
-        for lcol in left_names:
-            data.set_by_label(
-                left_names[lcol], left_result._data[lcol], validate=False
-            )
-        for rcol in right_names:
-            data.set_by_label(
-                right_names[rcol], right_result._data[rcol], validate=False
-            )
+        data = {
+            **{
+                new_name: left_result._data[orig_name]
+                for orig_name, new_name in left_names.items()
+            },
+            **{
+                new_name: right_result._data[orig_name]
+                for orig_name, new_name in right_names.items()
+            },
+        }
 
         # TODO: There is a bug here, we actually need to pull the index columns
         # from both if both left_index and right_index were True.
@@ -312,14 +309,10 @@ class Merge:
         if self._using_left_index and self._using_right_index:
             if result._index is not None:
                 by.extend(result._index._data.columns)
-        if not self._using_left_index and self.left_on:
-            by.extend(
-                [result._data[col] for col in _coerce_to_tuple(self.left_on)]
-            )
-        if not self._using_right_index and self.right_on:
-            by.extend(
-                [result._data[col] for col in _coerce_to_tuple(self.right_on)]
-            )
+        if not self._using_left_index:
+            by.extend([result._data[col.name] for col in self._left_keys])
+        if not self._using_right_index:
+            by.extend([result._data[col.name] for col in self._right_keys])
         if by:
             to_sort = cudf.DataFrame._from_data(dict(enumerate(by)))
             sort_order = to_sort.argsort()
