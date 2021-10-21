@@ -117,7 +117,7 @@ class NumericalColumn(NumericalBaseColumn):
 
         return output
 
-    def unary_operator(self, unaryop: str) -> ColumnBase:
+    def unary_operator(self, unaryop: Union[str, Callable]) -> ColumnBase:
         if callable(unaryop):
             return libcudf.transform.transform(self, unaryop)
 
@@ -404,7 +404,7 @@ class NumericalColumn(NumericalBaseColumn):
                 # cast safely to the same dtype as self
                 if fill_value.dtype != col.dtype:
                     new_fill_value = fill_value.astype(col.dtype)
-                    if not (fill_value == fill_value).all():
+                    if not (new_fill_value == fill_value).all():
                         raise TypeError(
                             f"Cannot safely cast non-equivalent "
                             f"{col.dtype.type.__name__} to "
