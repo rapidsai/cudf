@@ -393,7 +393,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    */
   public final long getLong(long offset) {
     long requestedAddress = this.address + offset;
-    addressOutOfBoundsCheck(requestedAddress, 8, "setLong");
+    addressOutOfBoundsCheck(requestedAddress, 8, "getLong");
     return UnsafeMemoryAccessor.getLong(requestedAddress);
   }
 
@@ -404,7 +404,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    */
   public final void setLong(long offset, long value) {
     long requestedAddress = this.address + offset;
-    addressOutOfBoundsCheck(requestedAddress, 8, "getLong");
+    addressOutOfBoundsCheck(requestedAddress, 8, "setLong");
     UnsafeMemoryAccessor.setLong(requestedAddress, value);
   }
 
