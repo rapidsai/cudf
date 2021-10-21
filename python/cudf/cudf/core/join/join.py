@@ -190,12 +190,9 @@ class Merge:
     def _compute_join_keys(self):
         left_keys = []
         right_keys = []
-        if (
-            self.left_index
-            or self.right_index
-            or self.left_on
-            or self.right_on
-        ):
+        left_on = self.left_on if self.left_on else self.on
+        right_on = self.right_on if self.right_on else self.on
+        if self.left_index or self.right_index or left_on or right_on:
             if self.left_index:
                 left_keys.extend(
                     [
@@ -203,14 +200,14 @@ class Merge:
                         for on in self.lhs.index._data.names
                     ]
                 )
-            if self.left_on:
+            if left_on:
                 # TODO: require left_on or left_index to be specified
                 left_keys.extend(
                     [
                         _Indexer(name=on, column=True)
                         if on in self.lhs._data
                         else _Indexer(name=on, index=True)
-                        for on in _coerce_to_tuple(self.left_on)
+                        for on in _coerce_to_tuple(left_on)
                     ]
                 )
             if self.right_index:
@@ -220,30 +217,16 @@ class Merge:
                         for on in self.rhs.index._data.names
                     ]
                 )
-            if self.right_on:
+            if right_on:
                 # TODO: require right_on or right_index to be specified
                 right_keys.extend(
                     [
                         _Indexer(name=on, column=True)
                         if on in self.rhs._data
                         else _Indexer(name=on, index=True)
-                        for on in _coerce_to_tuple(self.right_on)
+                        for on in _coerce_to_tuple(right_on)
                     ]
                 )
-        elif self.on:
-            on_names = _coerce_to_tuple(self.on)
-            for on in on_names:
-                # If `on` is provided, Merge on columns if present,
-                # otherwise default to indexes.
-                if on in self.lhs._data:
-                    left_keys.append(_Indexer(name=on, column=True))
-                else:
-                    left_keys.append(_Indexer(name=on, index=True))
-                if on in self.rhs._data:
-                    right_keys.append(_Indexer(name=on, column=True))
-                else:
-                    right_keys.append(_Indexer(name=on, index=True))
-
         else:
             # if `on` is not provided and we're not merging
             # index with column or on both indexes, then use
