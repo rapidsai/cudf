@@ -27,11 +27,16 @@ namespace strings {
 namespace detail {
 namespace {
 
+// position of element separator string (e.g. comma ',') within the separators column
+constexpr size_type separator_index = 0;
 // position of enclosure strings (e.g. []) within the separators column
-constexpr offset_type left_brace_index  = 1;
-constexpr offset_type right_brace_index = 2;
+constexpr size_type left_brace_index  = 1;
+constexpr size_type right_brace_index = 2;
 
-enum class item_separator { DEFAULT, ELEMENT, LIST };
+/**
+ * @brief Pending separator type for `stack_item`
+ */
+enum class item_separator { NONE, ELEMENT, LIST };
 
 /**
  * @brief Stack item used to manage nested lists.
@@ -42,7 +47,7 @@ enum class item_separator { DEFAULT, ELEMENT, LIST };
 struct alignas(8) stack_item {
   size_type left_idx;
   size_type right_idx;
-  item_separator separator{item_separator::DEFAULT};
+  item_separator separator{item_separator::NONE};
 };
 
 /**
@@ -72,7 +77,7 @@ struct format_lists_fn {
     return current;
   }
 
-  __device__ size_type write_separator(char*& d_output, int sep_idx = 0)
+  __device__ size_type write_separator(char*& d_output, size_type sep_idx = separator_index)
   {
     auto d_str = [&] {
       if (d_separators.size() > sep_idx) return d_separators.element<string_view>(sep_idx);
@@ -98,14 +103,14 @@ struct format_lists_fn {
     size_type bytes = 0;
     for (size_type idx = left_idx; idx < right_idx; ++idx) {
       if (col.is_null(idx)) {
-        bytes += write_na_rep(d_output);  // e.g. NULL
+        bytes += write_na_rep(d_output);  // e.g. 'NULL'
       } else {
         auto d_str = col.element<string_view>(idx);
         if (d_output) d_output = copy_string(d_output, d_str);
         bytes += d_str.size_bytes();
       }
       if (idx + 1 < right_idx) {
-        bytes += write_separator(d_output);  // e.g. ','
+        bytes += write_separator(d_output);  // e.g. comma ','
       }
     }
     return bytes;
@@ -144,14 +149,14 @@ struct format_lists_fn {
 
         if (view.is_null(jdx)) {
           bytes += write_na_rep(d_output);  // e.g. 'NULL'
-        } else if (lhs == rhs) {            // e.g. "[]"
+        } else if (lhs == rhs) {            // e.g. '[]'
           bytes += write_separator(d_output, left_brace_index);
           bytes += write_separator(d_output, right_brace_index);
         } else {
           auto child = view.child(cudf::lists_column_view::child_column_index);
           bytes += write_separator(d_output, left_brace_index);
 
-          // if child is a list, then pseudo recurse into it
+          // if child is a list type, then recurse into it
           if (child.type().id() == type_id::LIST) {
             // push current state to the stack
             item_stack[stack_idx++] =
