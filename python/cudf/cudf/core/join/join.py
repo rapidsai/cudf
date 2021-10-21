@@ -96,9 +96,11 @@ class Merge:
 
         self.lhs = lhs
         self.rhs = rhs
-        self.on = on
-        self.left_on = left_on
-        self.right_on = right_on
+        # At this point validation guarantees that if on is not None we
+        # don't have any other args, so we can apply it directly to left_on and
+        # right_on.
+        self.left_on = left_on if left_on else on
+        self.right_on = right_on if right_on else on
         self.left_index = left_index
         self.right_index = right_index
         self.how = how
@@ -116,7 +118,7 @@ class Merge:
         else:
             self._out_class = cudf.DataFrame
 
-        self._key_columns_with_same_name = self.on if self.on else None
+        self._key_columns_with_same_name = on if on else None
 
     def perform_merge(self) -> Frame:
         # Match the dtypes of the key columns from lhs and rhs
@@ -190,9 +192,12 @@ class Merge:
     def _compute_join_keys(self):
         left_keys = []
         right_keys = []
-        left_on = self.left_on if self.left_on else self.on
-        right_on = self.right_on if self.right_on else self.on
-        if self.left_index or self.right_index or left_on or right_on:
+        if (
+            self.left_index
+            or self.right_index
+            or self.left_on
+            or self.right_on
+        ):
             if self.left_index:
                 left_keys.extend(
                     [
@@ -200,14 +205,14 @@ class Merge:
                         for on in self.lhs.index._data.names
                     ]
                 )
-            if left_on:
+            if self.left_on:
                 # TODO: require left_on or left_index to be specified
                 left_keys.extend(
                     [
                         _Indexer(name=on, column=True)
                         if on in self.lhs._data
                         else _Indexer(name=on, index=True)
-                        for on in _coerce_to_tuple(left_on)
+                        for on in _coerce_to_tuple(self.left_on)
                     ]
                 )
             if self.right_index:
@@ -217,14 +222,14 @@ class Merge:
                         for on in self.rhs.index._data.names
                     ]
                 )
-            if right_on:
+            if self.right_on:
                 # TODO: require right_on or right_index to be specified
                 right_keys.extend(
                     [
                         _Indexer(name=on, column=True)
                         if on in self.rhs._data
                         else _Indexer(name=on, index=True)
-                        for on in _coerce_to_tuple(right_on)
+                        for on in _coerce_to_tuple(self.right_on)
                     ]
                 )
         else:
@@ -322,17 +327,17 @@ class Merge:
         # same order as given in 'on'. If the indices are used as
         # keys, the index will be sorted. If one index is specified,
         # the key columns on the other side will be used to sort.
-        left_on = self.left_on if self.left_on else self.on
-        right_on = self.right_on if self.right_on else self.on
         by = []
         if self.left_index and self.right_index:
             if result._index is not None:
                 by.extend(result._index._data.columns)
-        if left_on:
-            by.extend([result._data[col] for col in _coerce_to_tuple(left_on)])
-        if right_on:
+        if self.left_on:
             by.extend(
-                [result._data[col] for col in _coerce_to_tuple(right_on)]
+                [result._data[col] for col in _coerce_to_tuple(self.left_on)]
+            )
+        if self.right_on:
+            by.extend(
+                [result._data[col] for col in _coerce_to_tuple(self.right_on)]
             )
         if by:
             to_sort = cudf.DataFrame._from_columns(by)
