@@ -32,7 +32,7 @@ def _set_partitions_pre(s, divisions, ascending=True, na_position="last"):
     partitions[(partitions < 0) | (partitions >= len(divisions) - 1)] = (
         0 if ascending else (len(divisions) - 2)
     )
-    partitions[s._columns[0].isna().values] = (
+    partitions[s._columns[0].isnull().values] = (
         len(divisions) - 2 if na_position == "last" else 0
     )
     return partitions
