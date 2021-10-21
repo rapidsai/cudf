@@ -39,23 +39,7 @@ namespace detail {
 namespace {
 
 static const __device__ __constant__ uint32_t md5_shift_constants[16] = {
-  7,
-  12,
-  17,
-  22,
-  5,
-  9,
-  14,
-  20,
-  4,
-  11,
-  16,
-  23,
-  6,
-  10,
-  15,
-  21,
-};
+  7, 12, 17, 22, 5, 9, 14, 20, 4, 11, 16, 23, 6, 10, 15, 21};
 
 static const __device__ __constant__ uint32_t md5_hash_constants[64] = {
   0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee, 0xf57c0faf, 0x4787c62a, 0xa8304613, 0xfd469501,
