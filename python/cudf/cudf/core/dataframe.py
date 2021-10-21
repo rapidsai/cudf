@@ -45,6 +45,7 @@ from cudf.core.abc import Serializable
 from cudf.core.column import (
     as_column,
     build_categorical_column,
+    build_column,
     column_empty,
     concat_columns,
 )
@@ -978,7 +979,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         2  2  2  2
         3  3  3  3
         >>> df[-5:]  # get last 5 rows of all columns
-            a   b   c
+             a   b   c
         15  15  15  15
         16  16  16  16
         17  17  17  17
@@ -1233,7 +1234,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ...              for t in dtypes])
         >>> df = cudf.DataFrame(data)
         >>> df.head()
-            int64  float64  object  bool
+           int64  float64  object  bool
         0      1      1.0     1.0  True
         1      1      1.0     1.0  True
         2      1      1.0     1.0  True
@@ -1611,7 +1612,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         b      int64
         dtype: object
         >>> df.astype({'a': 'float32'})
-            a  b
+              a  b
         0  10.0  1
         1  20.0  2
         2  30.0  3
@@ -4385,6 +4386,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def hash_columns(self, columns=None, method="murmur3"):
         """Hash the given *columns* and return a new device array
 
+        This method is deprecated. Replace ``df.hash_columns(columns, method)``
+        with ``df[columns].hash_values(method)``.
+
         Parameters
         ----------
         columns : sequence of str; optional
@@ -4400,14 +4404,54 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Series
             Hash values for each row.
         """
-        table_to_hash = (
-            self
-            if columns is None
-            else Frame(data={k: self._data[k] for k in columns})
+        warnings.warn(
+            "The `hash_columns` method will be removed in a future cuDF "
+            "release. Replace `df.hash_columns(columns, method)` with "
+            "`df[columns].hash_values(method)`.",
+            FutureWarning,
         )
+        if columns is None:
+            # Slice by [:] to keep all columns.
+            columns = slice(None, None, None)
+        return self[columns].hash_values(method=method)
 
+    def hash_values(self, method="murmur3"):
+        """Compute the hash of values in each row.
+
+        Parameters
+        ----------
+        method : {'murmur3', 'md5'}, default 'murmur3'
+            Hash function to use:
+            * murmur3: MurmurHash3 hash function.
+            * md5: MD5 hash function.
+
+        Returns
+        -------
+        Series
+            A Series with hash values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"a": [10, 120, 30], "b": [0.0, 0.25, 0.50]})
+        >>> df
+             a     b
+        0   10  0.00
+        1  120  0.25
+        2   30  0.50
+        >>> df.hash_values(method="murmur3")
+        0    -330519225
+        1    -397962448
+        2   -1345834934
+        dtype: int32
+        >>> df.hash_values(method="md5")
+        0    57ce879751b5169c525907d5c563fae1
+        1    948d6221a7c4963d4be411bcead7e32b
+        2    fe061786ea286a515b772d91b0dfcd70
+        dtype: object
+        """
         return Series._from_data(
-            {None: table_to_hash._hash(method=method)}, index=self.index
+            {None: self._hash(method=method)}, index=self.index
         )
 
     def partition_by_hash(self, columns, nparts, keep_index=True):
@@ -4846,7 +4890,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         dtype: object
         >>> pdf = df.to_pandas(nullable=False)
         >>> pdf
-            a      b
+             a      b
         0  0.0   True
         1  NaN  False
         2  2.0   None
@@ -5330,7 +5374,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         b    3.7
         Name: 0.1, dtype: float64
         >>> df.quantile([.1, .5])
-            a     b
+               a     b
         0.1  1.3   3.7
         0.5  2.5  55.0
         """  # noqa: E501
@@ -6294,7 +6338,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         See Also
         --------
-        cudf.core.reshape.concat : General function to concatenate DataFrame or
+        cudf.concat : General function to concatenate DataFrame or
             objects.
 
         Notes
@@ -6895,7 +6939,9 @@ def _reassign_categories(categories, cols, col_idxs):
         if idx in categories:
             cols[name] = build_categorical_column(
                 categories=categories[idx],
-                codes=as_column(cols[name].base_data, dtype=cols[name].dtype),
+                codes=build_column(
+                    cols[name].base_data, dtype=cols[name].dtype
+                ),
                 mask=cols[name].base_mask,
                 offset=cols[name].offset,
                 size=cols[name].size,

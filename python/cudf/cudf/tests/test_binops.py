@@ -2875,7 +2875,7 @@ def generate_test_null_equals_columnops_data():
     "lcol,rcol,ans,case", generate_test_null_equals_columnops_data()
 )
 def test_null_equals_columnops(lcol, rcol, ans, case):
-    assert lcol._null_equals(rcol).all() == ans
+    assert lcol.equals(rcol).all() == ans
 
 
 def test_add_series_to_dataframe():

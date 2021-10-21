@@ -48,6 +48,52 @@ def test_arith_masked_vs_masked(op):
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
 
+@pytest.mark.parametrize(
+    "dtype_l",
+    ["datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"],
+)
+@pytest.mark.parametrize(
+    "dtype_r",
+    [
+        "timedelta64[ns]",
+        "timedelta64[us]",
+        "timedelta64[ms]",
+        "timedelta64[s]",
+        "datetime64[ns]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[s]",
+    ],
+)
+@pytest.mark.parametrize("op", [operator.add, operator.sub])
+def test_arith_masked_vs_masked_datelike(op, dtype_l, dtype_r):
+    # Datetime version of the above
+    # does not test all dtype combinations for now
+    if "datetime" in dtype_l and "datetime" in dtype_r and op is operator.add:
+        # don't try adding datetimes to datetimes.
+        pytest.skip("Adding datetime to datetime is not valid")
+
+    def func_pdf(row):
+        x = row["a"]
+        y = row["b"]
+        return op(x, y)
+
+    def func_gdf(row):
+        x = row["a"]
+        y = row["b"]
+        return op(x, y)
+
+    gdf = cudf.DataFrame(
+        {
+            "a": ["2011-01-01", cudf.NA, "2011-03-01", cudf.NA],
+            "b": [4, 5, cudf.NA, cudf.NA],
+        }
+    )
+    gdf["a"] = gdf["a"].astype(dtype_l)
+    gdf["b"] = gdf["b"].astype(dtype_r)
+    run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
+
+
 @pytest.mark.parametrize("op", comparison_ops)
 def test_compare_masked_vs_masked(op):
     # this test should test all the

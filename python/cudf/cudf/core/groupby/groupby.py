@@ -860,6 +860,38 @@ class GroupBy(Serializable):
         """Get the last non-null value in each group."""
         return self.agg("last")
 
+    def diff(self, periods=1, axis=0):
+        """Get the difference between the values in each group.
+
+        Parameters
+        ----------
+        periods : int, default 1
+            Periods to shift for calculating difference,
+            accepts negative values.
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            Take difference over rows (0) or columns (1).
+            Only row-wise (0) shift is supported.
+
+        Returns
+        -------
+        Series or DataFrame
+            First differences of the Series or DataFrame.
+        """
+
+        if not axis == 0:
+            raise NotImplementedError("Only axis=0 is supported.")
+
+        # grouped values
+        value_columns = self.grouping.values
+        _, (data, index), _ = self._groupby.groups(
+            cudf.core.frame.Frame(value_columns._data)
+        )
+        grouped = self.obj.__class__._from_data(data, index)
+        grouped = self._mimic_pandas_order(grouped)
+
+        result = grouped - self.shift(periods=periods)
+        return result._copy_type_metadata(value_columns)
+
     def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
         """Internal implementation for `ffill` and `bfill`
         """
