@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import pickle
 import warnings
+from itertools import chain
 from collections import abc
 from typing import (
     Any,
@@ -114,6 +115,13 @@ class Frame:
     def _columns(self) -> List[Any]:  # TODO: List[Column]?
         return self._data.columns
 
+    def _column_name_to_indices(self, column_names, include_index=True):
+        column_names = set(column_names)
+        idx_len = len(self._index._data) if include_index and self._index is not None else 0
+        return [
+            i + idx_len for i, name in enumerate(self._data.keys()) if name in column_names
+        ]
+
     def serialize(self):
         header = {
             "type-serialized": pickle.dumps(type(self)),
@@ -138,6 +146,30 @@ class Frame:
         obj = cls.__new__(cls)
         Frame.__init__(obj, data, index)
         return obj
+
+    @classmethod
+    def _from_maybe_indexed_columns(
+        cls,
+        columns: List[ColumnBase],
+        column_names: List[str],
+        index_names: Optional[List[str]] = None
+    ):
+        # First construct the index, if any
+        index = (
+            cudf.core.index._index_from_data(dict(zip(index_names, columns)))
+            if index_names is not None
+            else None
+        )
+        n_index_columns = len(index_names) if index_names is not None else 0
+        data = {
+            name: columns[i + n_index_columns]
+            for i, name in enumerate(column_names)
+        }
+
+        return cls._from_data(
+            data, index
+        )
+
 
     def _mimic_inplace(
         self: T, result: Frame, inplace: bool = False
@@ -1381,10 +1413,8 @@ class Frame:
         diff = set(subset) - set(self._data)
         if len(diff) != 0:
             raise KeyError(f"columns {diff} do not exist")
-        subset_cols = [
-            name for name, col in self._data.items() if name in subset
-        ]
-        if len(subset_cols) == 0:
+
+        if len(subset) == 0:
             return self.copy(deep=True)
 
         frame = self.copy(deep=False)
@@ -1397,10 +1427,15 @@ class Frame:
                 else:
                     frame._data[name] = col
 
-        result = self.__class__._from_data(
-            *libcudf.stream_compaction.drop_nulls(
-                frame, how=how, keys=subset, thresh=thresh
-            )
+        result = self.__class__._from_maybe_indexed_columns(
+            libcudf.stream_compaction.drop_nulls(
+                tuple(self._index._data.columns + frame._columns),
+                how=how,
+                keys=self._column_name_to_indices(subset),
+                thresh=thresh,
+            ),
+            self._column_names,
+            self._index.names
         )
         result._copy_type_metadata(frame)
         if self._index is not None:

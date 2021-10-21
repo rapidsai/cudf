@@ -34,7 +34,10 @@ from cudf._lib.null_mask import (
     create_null_mask,
 )
 from cudf._lib.scalar import as_device_scalar
-from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
+from cudf._lib.stream_compaction import (
+    distinct_count as cpp_distinct_count,
+    drop_nulls,
+)
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
@@ -217,10 +220,7 @@ class ColumnBase(Column, Serializable):
             col = self.nans_to_nulls()
         else:
             col = self
-        dropped_col = (
-            col.as_frame()._drop_na_rows(drop_nan=drop_nan)._as_column()
-        )
-        return dropped_col
+        return drop_nulls((self,))[0]
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array

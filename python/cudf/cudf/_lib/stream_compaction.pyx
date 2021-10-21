@@ -24,16 +24,21 @@ from cudf._lib.cpp.types cimport (
     null_policy,
     size_type,
 )
-from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
+from cudf._lib.utils cimport (
+    data_from_unique_ptr,
+    table_view_from_columns,
+    table_view_from_table,
+    columns_from_unique_ptr,
+)
 
 
-def drop_nulls(source_table, how="any", keys=None, thresh=None):
+def drop_nulls(data: tuple, how="any", keys=None, thresh=None):
     """
     Drops null rows from cols depending on key columns.
 
     Parameters
     ----------
-    source_table : source table whose null rows are dropped to form new table
+    data : tuple of columns
     how  : "any" or "all". If thresh is None, drops rows of cols that have any
            nulls or all nulls (respectively) in subset (default: "any")
     keys : List of Column names. If set, then these columns are checked for
@@ -45,20 +50,7 @@ def drop_nulls(source_table, how="any", keys=None, thresh=None):
     Frame with null rows dropped
     """
 
-    num_index_columns = (
-        0 if source_table._index is None else
-        source_table._index._num_columns)
-    # shifting the index number by number of index columns
-    cdef vector[size_type] cpp_keys = (
-        [
-            num_index_columns + source_table._column_names.index(name)
-            for name in keys
-        ]
-        if keys is not None
-        else range(
-            num_index_columns, num_index_columns + source_table._num_columns
-        )
-    )
+    cdef vector[size_type] cpp_keys = keys if keys is not None else range(len(data))
 
     cdef size_type c_keep_threshold = cpp_keys.size()
     if thresh is not None:
@@ -67,7 +59,7 @@ def drop_nulls(source_table, how="any", keys=None, thresh=None):
         c_keep_threshold = 1
 
     cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = table_view_from_table(source_table)
+    cdef table_view source_table_view = table_view_from_columns(data)
 
     with nogil:
         c_result = move(
@@ -78,12 +70,8 @@ def drop_nulls(source_table, how="any", keys=None, thresh=None):
             )
         )
 
-    return data_from_unique_ptr(
-        move(c_result),
-        column_names=source_table._column_names,
-        index_names=(
-            None if source_table._index is None
-            else source_table._index_names)
+    return columns_from_unique_ptr(
+        move(c_result)
     )
 
 

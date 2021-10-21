@@ -36,7 +36,6 @@ PARQUET_META_TYPE_MAP = {
     for cudf_dtype, pandas_dtype in np_dtypes_to_pandas_dtypes.items()
 }
 
-
 cdef table_view table_view_from_columns(columns) except*:
     """Create a cudf::table_view from an iterable of Columns."""
     cdef vector[column_view] column_views
@@ -290,6 +289,20 @@ cdef data_from_unique_ptr(
     }
     return data, index
 
+cdef columns_from_unique_ptr(
+    unique_ptr[table] c_tbl
+):
+    """
+    """
+    cdef vector[unique_ptr[column]] c_columns = move(c_tbl.get().release())
+    cdef vector[unique_ptr[column]].iterator it = c_columns.begin()
+
+    cdef size_t i
+
+    columns = [Column.from_unique_ptr(move(dereference(it+i)))
+               for i in range(c_columns.size())]
+
+    return columns
 
 cdef data_from_table_view(
     table_view tv,
