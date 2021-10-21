@@ -68,7 +68,10 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
     set(ENV{CUDA_LIB_PATH} "${CUDAToolkit_LIBRARY_DIR}/stubs")
 
     rapids_cpm_find(Arrow ${VERSION}
-        GLOBAL_TARGETS arrow_shared arrow_cuda_shared
+        GLOBAL_TARGETS  arrow_shared
+                        parquet_shared
+                        arrow_cuda_shared
+                        arrow_dataset_shared
         CPM_ARGS
         GIT_REPOSITORY  https://github.com/apache/arrow.git
         GIT_TAG         apache-arrow-${VERSION}
