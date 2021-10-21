@@ -175,7 +175,7 @@ std::unique_ptr<column> join_list_elements(lists_column_view const& lists_string
 {
   CUDF_EXPECTS(lists_strings_column.child().type().id() == type_id::STRING,
                "The input column must be a column of lists of strings");
-  CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be a valid string_scalar");
+  CUDF_EXPECTS(separator.is_valid(stream), "Parameter separator must be a valid string_scalar");
 
   auto const num_rows = lists_strings_column.size();
   if (num_rows == 0) { return make_empty_column(data_type{type_id::STRING}); }

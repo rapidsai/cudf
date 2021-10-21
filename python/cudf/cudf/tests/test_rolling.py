@@ -9,6 +9,7 @@ import pytest
 import cudf
 from cudf.core._compat import PANDAS_GE_110
 from cudf.testing._utils import assert_eq
+from cudf.testing.dataset_generator import rand_dataframe
 
 
 @pytest.mark.parametrize(
@@ -20,20 +21,23 @@ from cudf.testing._utils import assert_eq
         ([1, 2, 4, 9, 9, 4], ["a", "b", "c", "d", "e", "f"]),
     ],
 )
-@pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count"])
+@pytest.mark.parametrize(
+    "agg", ["sum", "min", "max", "mean", "count", "std", "var"]
+)
 @pytest.mark.parametrize("nulls", ["none", "one", "some", "all"])
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_series_basic(data, index, agg, nulls, center):
+    rng = np.random.default_rng(1)
     if PANDAS_GE_110:
         kwargs = {"check_freq": False}
     else:
         kwargs = {}
     if len(data) > 0:
         if nulls == "one":
-            p = np.random.randint(0, len(data))
+            p = rng.integers(0, len(data))
             data[p] = np.nan
         elif nulls == "some":
-            p1, p2 = np.random.randint(0, len(data), (2,))
+            p1, p2 = rng.integers(0, len(data), (2,))
             data[p1] = np.nan
             data[p2] = np.nan
         elif nulls == "all":
@@ -64,19 +68,22 @@ def test_rolling_series_basic(data, index, agg, nulls, center):
         },
     ],
 )
-@pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count"])
+@pytest.mark.parametrize(
+    "agg", ["sum", "min", "max", "mean", "count", "std", "var"]
+)
 @pytest.mark.parametrize("nulls", ["none", "one", "some", "all"])
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_dataframe_basic(data, agg, nulls, center):
+    rng = np.random.default_rng(0)
     pdf = pd.DataFrame(data)
 
     if len(pdf) > 0:
         for col_name in pdf.columns:
             if nulls == "one":
-                p = np.random.randint(0, len(data))
+                p = rng.integers(0, len(data))
                 pdf[col_name][p] = np.nan
             elif nulls == "some":
-                p1, p2 = np.random.randint(0, len(data), (2,))
+                p1, p2 = rng.integers(0, len(data), (2,))
                 pdf[col_name][p1] = np.nan
                 pdf[col_name][p2] = np.nan
             elif nulls == "all":
@@ -102,6 +109,8 @@ def test_rolling_dataframe_basic(data, agg, nulls, center):
         pytest.param("max"),
         pytest.param("mean"),
         pytest.param("count"),
+        pytest.param("std"),
+        pytest.param("var"),
     ],
 )
 def test_rolling_with_offset(agg):
@@ -122,6 +131,90 @@ def test_rolling_with_offset(agg):
         getattr(gsr.rolling("2s"), agg)().fillna(-1),
         check_dtype=False,
     )
+
+
+@pytest.mark.parametrize("agg", ["std", "var"])
+@pytest.mark.parametrize("ddof", [0, 1])
+@pytest.mark.parametrize("center", [True, False])
+@pytest.mark.parametrize("seed", [100, 2000])
+@pytest.mark.parametrize("window_size", [2, 10, 100])
+def test_rolling_var_std_large(agg, ddof, center, seed, window_size):
+    if PANDAS_GE_110:
+        kwargs = {"check_freq": False}
+    else:
+        kwargs = {}
+
+    iupper_bound = math.sqrt(np.iinfo(np.int64).max / window_size)
+    ilower_bound = -math.sqrt(abs(np.iinfo(np.int64).min) / window_size)
+
+    fupper_bound = math.sqrt(np.finfo(np.float64).max / window_size)
+    flower_bound = -math.sqrt(abs(np.finfo(np.float64).min) / window_size)
+
+    n_rows = 1_000
+    data = rand_dataframe(
+        dtypes_meta=[
+            {
+                "dtype": "int64",
+                "null_frequency": 0.4,
+                "cardinality": n_rows,
+                "min_bound": ilower_bound,
+                "max_bound": iupper_bound,
+            },
+            {
+                "dtype": "float64",
+                "null_frequency": 0.4,
+                "cardinality": n_rows,
+                "min_bound": flower_bound,
+                "max_bound": fupper_bound,
+            },
+            {
+                "dtype": "decimal64",
+                "null_frequency": 0.4,
+                "cardinality": n_rows,
+                "min_bound": ilower_bound,
+                "max_bound": iupper_bound,
+            },
+        ],
+        rows=n_rows,
+        use_threads=False,
+        seed=seed,
+    )
+    pdf = data.to_pandas()
+    gdf = cudf.from_pandas(pdf)
+
+    expect = getattr(pdf.rolling(window_size, 1, center), agg)(ddof=ddof)
+    got = getattr(gdf.rolling(window_size, 1, center), agg)(ddof=ddof)
+
+    import platform
+
+    if platform.machine() == "aarch64":
+        # Due to pandas-37051, pandas rolling var/std on uniform window is
+        # not reliable. Skipping these rows when comparing.
+        for col in expect:
+            mask = (got[col].fillna(-1) != 0).to_pandas()
+            expect[col] = expect[col][mask]
+            got[col] = got[col][mask]
+            assert_eq(expect[col], got[col], **kwargs)
+    else:
+        assert_eq(expect, got, **kwargs)
+
+
+@pytest.mark.xfail
+def test_rolling_var_uniform_window():
+    """
+    Pandas adopts an online variance calculation algorithm. This gives a
+    floating point artifact.
+    https://github.com/pandas-dev/pandas/issues/37051
+
+    In cudf, each window is computed independently from the previous window,
+    this gives better numeric precision.
+    """
+
+    s = pd.Series([1e8, 5, 5, 5])
+    expected = s.rolling(3).var()
+    got = cudf.from_pandas(s).rolling(3).var()
+
+    assert_eq(expected, got)
 
 
 def test_rolling_count_with_offset():
@@ -300,7 +393,9 @@ def test_rolling_numba_udf_with_offset():
     )
 
 
-@pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count"])
+@pytest.mark.parametrize(
+    "agg", ["sum", "min", "max", "mean", "count", "var", "std"]
+)
 def test_rolling_groupby_simple(agg):
     pdf = pd.DataFrame(
         {
@@ -330,7 +425,9 @@ def test_rolling_groupby_simple(agg):
         assert_eq(expect, got, check_dtype=False)
 
 
-@pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count"])
+@pytest.mark.parametrize(
+    "agg", ["sum", "min", "max", "mean", "count", "var", "std"]
+)
 def test_rolling_groupby_multi(agg):
     pdf = pd.DataFrame(
         {
@@ -351,7 +448,9 @@ def test_rolling_groupby_multi(agg):
         assert_eq(expect, got, check_dtype=False)
 
 
-@pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count"])
+@pytest.mark.parametrize(
+    "agg", ["sum", "min", "max", "mean", "count", "var", "std"]
+)
 @pytest.mark.parametrize(
     "window_size", ["1d", "2d", "3d", "4d", "5d", "6d", "7d"]
 )

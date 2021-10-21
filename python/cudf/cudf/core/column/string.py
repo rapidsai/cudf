@@ -27,18 +27,18 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast, strings as libstrings
 from cudf._lib.column import Column
-from cudf.core.buffer import Buffer
-from cudf.core.column import column, datetime
-from cudf.core.column.methods import ColumnMethods, ParentType
-from cudf.utils import utils
-from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import (
-    can_convert_to_column,
+from cudf.api.types import (
     is_integer,
     is_list_dtype,
     is_scalar,
     is_string_dtype,
 )
+from cudf.core.buffer import Buffer
+from cudf.core.column import column, datetime
+from cudf.core.column.methods import ColumnMethods, ParentType
+from cudf.utils import utils
+from cudf.utils.docutils import copy_docstring
+from cudf.utils.dtypes import can_convert_to_column
 
 
 def str_to_boolean(column: StringColumn):
@@ -352,7 +352,9 @@ class StringMethods(ColumnMethods):
 
         if len(data) == 1 and data.null_count == 1:
             data = [""]
-        out = self._return_or_inplace(data)
+        # We only want to keep the index if we are adding something to each
+        # row, not if we are joining all the rows into a single string.
+        out = self._return_or_inplace(data, retain_index=others is not None)
         if len(out) == 1 and others is None:
             if isinstance(out, cudf.Series):
                 out = out.iloc[0]
@@ -538,7 +540,7 @@ class StringMethods(ColumnMethods):
 
         offset_col = self._column.children[0]
 
-        res = cudf.core.column.ListColumn(
+        return cudf.core.column.ListColumn(
             size=len(self._column),
             dtype=cudf.ListDtype(self._column.dtype),
             mask=self._column.mask,
@@ -546,7 +548,6 @@ class StringMethods(ColumnMethods):
             null_count=self._column.null_count,
             children=(offset_col, result_col),
         )
-        return res
 
     def extract(
         self, pat: str, flags: int = 0, expand: bool = True
@@ -1862,6 +1863,30 @@ class StringMethods(ColumnMethods):
         dtype: object
         """
         return self._return_or_inplace(libstrings.title(self._column))
+
+    def istitle(self) -> SeriesOrIndex:
+        """
+        Check whether each string is title formatted.
+        The first letter of each word should be uppercase and the rest
+        should be lowercase.
+
+        Equivalent to :meth:`str.istitle`.
+
+        Returns : Series or Index of object
+
+        Examples
+        --------
+        >>> import cudf
+        >>> data = ['leopard', 'Golden Eagle', 'SNAKE', ''])
+        >>> s = cudf.Series(data)
+        >>> s.str.istitle()
+        0    False
+        1     True
+        2    False
+        3    False
+        dtype: bool
+        """
+        return self._return_or_inplace(libstrings.is_title(self._column))
 
     def filter_alphanum(
         self, repl: str = None, keep: bool = True
@@ -4593,7 +4618,7 @@ class StringMethods(ColumnMethods):
         This function requires about 21x the number of character bytes
         in the input strings column as working memory.
 
-        ``ser.str.subword_tokenize`` will be depreciated in future versions.
+        ``Series.str.subword_tokenize`` is deprecated and will be removed.
         Use ``cudf.core.subword_tokenizer.SubwordTokenizer`` instead.
 
         Parameters
@@ -4649,7 +4674,7 @@ class StringMethods(ColumnMethods):
         Examples
         --------
         >>> import cudf
-        >>> from cudf.utils.hash_vocab_utils  import hash_vocab
+        >>> from cudf.utils.hash_vocab_utils import hash_vocab
         >>> hash_vocab('bert-base-uncased-vocab.txt', 'voc_hash.txt')
         >>> ser = cudf.Series(['this is the', 'best book'])
         >>> stride, max_length = 8, 8
@@ -4667,14 +4692,13 @@ class StringMethods(ColumnMethods):
         array([[0, 0, 2],
                [1, 0, 1]], dtype=uint32)
         """
-        warning_message = (
-            "`ser.str.subword_tokenize` API will be depreciated"
-            " in future versions of cudf.\n"
-            "Use `cudf.core.subword_tokenizer.SubwordTokenizer` "
-            "instead"
+        warnings.warn(
+            "`Series.str.subword_tokenize` is deprecated and will be removed "
+            "in future versions of cudf. Use "
+            "`cudf.core.subword_tokenizer.SubwordTokenizer` instead.",
+            FutureWarning,
         )
 
-        warnings.warn(warning_message, FutureWarning)
         tokens, masks, metadata = libstrings.subword_tokenize_vocab_file(
             self._column,
             hash_file,
@@ -5093,15 +5117,7 @@ class StringColumn(column.ColumnBase):
                 "StringColumns do not use data attribute of Column, use "
                 "`set_base_children` instead"
             )
-        else:
-            super().set_base_data(value)
-
-    def set_base_mask(self, value: Optional[Buffer]):
-        super().set_base_mask(value)
-
-    def set_base_children(self, value: Tuple["column.ColumnBase", ...]):
-        # TODO: Implement dtype validation of the children here somehow
-        super().set_base_children(value)
+        super().set_base_data(value)
 
     def __contains__(self, item: ScalarLike) -> bool:
         if is_scalar(item):
@@ -5174,7 +5190,7 @@ class StringColumn(column.ColumnBase):
                 )
             else:
                 format = datetime.infer_format(
-                    self.apply_boolean_mask(self.notna()).element_indexing(0)
+                    self.apply_boolean_mask(self.notnull()).element_indexing(0)
                 )
 
         return self._as_datetime_or_timedelta_column(out_dtype, format)
@@ -5208,10 +5224,10 @@ class StringColumn(column.ColumnBase):
         """
         Return a CuPy representation of the StringColumn.
         """
-        raise NotImplementedError(
-            "String Arrays is not yet implemented in cudf"
-        )
+        raise TypeError("String Arrays is not yet implemented in cudf")
 
+    # TODO: This method is deprecated and should be removed when the associated
+    # Frame methods are removed.
     def to_array(self, fillna: bool = None) -> np.ndarray:
         """Get a dense numpy array for the data.
 
@@ -5349,7 +5365,7 @@ class StringColumn(column.ColumnBase):
         df = cudf.DataFrame({"old": to_replace_col, "new": replacement_col})
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:
-            res = self.fillna(df._data["new"][df._data["old"].isna()][0])
+            res = self.fillna(df._data["new"][df._data["old"].isnull()][0])
             df = df.dropna(subset=["old"])
         else:
             res = self
@@ -5407,7 +5423,7 @@ class StringColumn(column.ColumnBase):
         else:
             raise TypeError(f"cannot broadcast {type(other)}")
 
-    def default_na_value(self) -> ScalarLike:
+    def _default_na_value(self) -> ScalarLike:
         return None
 
     def binary_operator(

@@ -915,9 +915,9 @@ class rolling_aggregation_postprocessor final : public cudf::detail::aggregation
  * @param output Output column device view
  * @param output_valid_count Output count of valid values
  * @param device_operator The operator used to perform a single window operation
- * @param preceding_window_begin[in] Rolling window size iterator, accumulates from
+ * @param[in] preceding_window_begin Rolling window size iterator, accumulates from
  *                in_col[i-preceding_window] to in_col[i] inclusive
- * @param following_window_begin[in] Rolling window size iterator in the forward
+ * @param[in] following_window_begin Rolling window size iterator in the forward
  *                direction, accumulates from in_col[i] to
  *                in_col[i+following_window] inclusive
  */

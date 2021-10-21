@@ -9,8 +9,8 @@ from pyarrow import orc as orc
 
 import cudf
 from cudf._lib import orc as liborc
+from cudf.api.types import is_list_like
 from cudf.utils import ioutils
-from cudf.utils.dtypes import is_list_like
 from cudf.utils.metadata import (  # type: ignore
     orc_column_statistics_pb2 as cs_pb2,
 )
@@ -41,37 +41,90 @@ def _parse_column_statistics(cs, column_statistics_blob):
         column_statistics["number_of_values"] = cs.numberOfValues
     if cs.HasField("hasNull"):
         column_statistics["has_null"] = cs.hasNull
+
     if cs.HasField("intStatistics"):
-        column_statistics["minimum"] = cs.intStatistics.minimum
-        column_statistics["maximum"] = cs.intStatistics.maximum
-        column_statistics["sum"] = cs.intStatistics.sum
+        column_statistics["minimum"] = (
+            cs.intStatistics.minimum
+            if cs.intStatistics.HasField("minimum")
+            else None
+        )
+        column_statistics["maximum"] = (
+            cs.intStatistics.maximum
+            if cs.intStatistics.HasField("maximum")
+            else None
+        )
+        column_statistics["sum"] = (
+            cs.intStatistics.sum if cs.intStatistics.HasField("sum") else None
+        )
+
     elif cs.HasField("doubleStatistics"):
-        column_statistics["minimum"] = cs.doubleStatistics.minimum
-        column_statistics["maximum"] = cs.doubleStatistics.maximum
-        column_statistics["sum"] = cs.doubleStatistics.sum
+        column_statistics["minimum"] = (
+            cs.doubleStatistics.minimum
+            if cs.doubleStatistics.HasField("minimum")
+            else None
+        )
+        column_statistics["maximum"] = (
+            cs.doubleStatistics.maximum
+            if cs.doubleStatistics.HasField("maximum")
+            else None
+        )
+        column_statistics["sum"] = (
+            cs.doubleStatistics.sum
+            if cs.doubleStatistics.HasField("sum")
+            else None
+        )
+
     elif cs.HasField("stringStatistics"):
-        column_statistics["minimum"] = cs.stringStatistics.minimum
-        column_statistics["maximum"] = cs.stringStatistics.maximum
+        column_statistics["minimum"] = (
+            cs.stringStatistics.minimum
+            if cs.stringStatistics.HasField("minimum")
+            else None
+        )
+        column_statistics["maximum"] = (
+            cs.stringStatistics.maximum
+            if cs.stringStatistics.HasField("maximum")
+            else None
+        )
         column_statistics["sum"] = cs.stringStatistics.sum
+
     elif cs.HasField("bucketStatistics"):
         column_statistics["true_count"] = cs.bucketStatistics.count[0]
         column_statistics["false_count"] = (
             column_statistics["number_of_values"]
             - column_statistics["true_count"]
         )
+
     elif cs.HasField("decimalStatistics"):
-        column_statistics["minimum"] = cs.decimalStatistics.minimum
-        column_statistics["maximum"] = cs.decimalStatistics.maximum
+        column_statistics["minimum"] = (
+            cs.decimalStatistics.minimum
+            if cs.decimalStatistics.HasField("minimum")
+            else None
+        )
+        column_statistics["maximum"] = (
+            cs.decimalStatistics.maximum
+            if cs.decimalStatistics.HasField("maximum")
+            else None
+        )
         column_statistics["sum"] = cs.decimalStatistics.sum
+
     elif cs.HasField("dateStatistics"):
-        column_statistics["minimum"] = datetime.datetime.fromtimestamp(
-            datetime.timedelta(cs.dateStatistics.minimum).total_seconds(),
-            datetime.timezone.utc,
+        column_statistics["minimum"] = (
+            datetime.datetime.fromtimestamp(
+                datetime.timedelta(cs.dateStatistics.minimum).total_seconds(),
+                datetime.timezone.utc,
+            )
+            if cs.dateStatistics.HasField("minimum")
+            else None
         )
-        column_statistics["maximum"] = datetime.datetime.fromtimestamp(
-            datetime.timedelta(cs.dateStatistics.maximum).total_seconds(),
-            datetime.timezone.utc,
+        column_statistics["maximum"] = (
+            datetime.datetime.fromtimestamp(
+                datetime.timedelta(cs.dateStatistics.maximum).total_seconds(),
+                datetime.timezone.utc,
+            )
+            if cs.dateStatistics.HasField("maximum")
+            else None
         )
+
     elif cs.HasField("timestampStatistics"):
         # Before ORC-135, the local timezone offset was included and they were
         # stored as minimum and maximum. After ORC-135, the timestamp is
@@ -87,6 +140,7 @@ def _parse_column_statistics(cs, column_statistics_blob):
             column_statistics["maximum"] = datetime.datetime.fromtimestamp(
                 cs.timestampStatistics.maximumUtc / 1000, datetime.timezone.utc
             )
+
     elif cs.HasField("binaryStatistics"):
         column_statistics["sum"] = cs.binaryStatistics.sum
 
@@ -233,6 +287,7 @@ def read_orc(
     use_index=True,
     decimal_cols_as_float=None,
     timestamp_type=None,
+    use_python_file_object=True,
     **kwargs,
 ):
     """{docstring}"""
@@ -267,7 +322,10 @@ def read_orc(
             source = fs.sep.join([source, "*.orc"])
 
         tmp_source, compression = ioutils.get_filepath_or_buffer(
-            path_or_data=source, compression=None, **kwargs,
+            path_or_data=source,
+            compression=None,
+            use_python_file_object=use_python_file_object,
+            **kwargs,
         )
         if compression is not None:
             raise ValueError(
@@ -333,16 +391,25 @@ def read_orc(
 
 
 @ioutils.doc_to_orc()
-def to_orc(df, fname, compression=None, enable_statistics=True, **kwargs):
+def to_orc(
+    df,
+    fname,
+    compression=None,
+    enable_statistics=True,
+    stripe_size_bytes=None,
+    stripe_size_rows=None,
+    row_index_stride=None,
+    **kwargs,
+):
     """{docstring}"""
 
     for col in df._data.columns:
         if isinstance(col, cudf.core.column.StructColumn):
-            raise NotImplementedError(
-                "Writing to ORC format is not yet supported with "
-                "Struct columns."
+            warnings.warn(
+                "Support for writing tables with struct columns is "
+                "currently experimental."
             )
-        elif isinstance(col, cudf.core.column.CategoricalColumn):
+        if isinstance(col, cudf.core.column.CategoricalColumn):
             raise NotImplementedError(
                 "Writing to ORC format is not yet supported with "
                 "Categorical columns."
@@ -360,9 +427,25 @@ def to_orc(df, fname, compression=None, enable_statistics=True, **kwargs):
     if ioutils.is_fsspec_open_file(path_or_buf):
         with path_or_buf as file_obj:
             file_obj = ioutils.get_IOBase_writer(file_obj)
-            liborc.write_orc(df, file_obj, compression, enable_statistics)
+            liborc.write_orc(
+                df,
+                file_obj,
+                compression,
+                enable_statistics,
+                stripe_size_bytes,
+                stripe_size_rows,
+                row_index_stride,
+            )
     else:
-        liborc.write_orc(df, path_or_buf, compression, enable_statistics)
+        liborc.write_orc(
+            df,
+            path_or_buf,
+            compression,
+            enable_statistics,
+            stripe_size_bytes,
+            stripe_size_rows,
+            row_index_stride,
+        )
 
 
 ORCWriter = liborc.ORCWriter

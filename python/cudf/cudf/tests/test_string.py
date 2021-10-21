@@ -82,7 +82,7 @@ def test_string_export(ps_gs):
     assert_eq(expect, got)
 
     expect = np.array(ps)
-    got = gs.to_array()
+    got = gs.to_numpy()
     assert_eq(expect, got)
 
     expect = pa.Array.from_pandas(ps)
@@ -1384,6 +1384,26 @@ def test_string_char_case(case_op, data):
     assert_eq(gs.str.isspace(), ps.str.isspace())
 
     assert_eq(gs.str.isempty(), ps == "")
+
+
+def test_string_is_title():
+    data = [
+        "leopard",
+        "Golden Eagle",
+        "SNAKE",
+        "",
+        "!A",
+        "hello World",
+        "A B C",
+        "#",
+        "AƻB",
+        "Ⓑⓖ",
+        "Art of War",
+    ]
+    gs = cudf.Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(gs.str.istitle(), ps.str.istitle())
 
 
 @pytest.mark.parametrize(

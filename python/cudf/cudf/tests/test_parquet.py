@@ -13,8 +13,9 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from fsspec.core import get_fs_token_paths
 from packaging import version
-from pyarrow import parquet as pq
+from pyarrow import fs as pa_fs, parquet as pq
 
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
@@ -23,6 +24,7 @@ from cudf.testing._utils import (
     TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    random_bitmask,
 )
 
 
@@ -31,7 +33,7 @@ def datadir(datadir):
     return datadir / "parquet"
 
 
-@pytest.fixture(params=[1, 5, 10, 100])
+@pytest.fixture(params=[1, 5, 10, 100000])
 def simple_pdf(request):
     types = [
         "bool",
@@ -148,12 +150,12 @@ def build_pdf(num_columns, day_resolution_timestamps):
     return test_pdf
 
 
-@pytest.fixture(params=[0, 1, 10, 100])
+@pytest.fixture(params=[0, 1, 10, 10000])
 def pdf(request):
     return build_pdf(request, False)
 
 
-@pytest.fixture(params=[0, 1, 10, 100])
+@pytest.fixture(params=[0, 1, 10, 10000])
 def pdf_day_timestamps(request):
     return build_pdf(request, True)
 
@@ -371,6 +373,9 @@ def test_parquet_reader_pandas_metadata(tmpdir, columns, pandas_compat):
 
 
 def test_parquet_read_metadata(tmpdir, pdf):
+    if len(pdf) > 100:
+        pytest.skip("Skipping long setup test")
+
     def num_row_groups(rows, group_size):
         return max(1, (rows + (group_size - 1)) // group_size)
 
@@ -504,6 +509,9 @@ def test_parquet_read_filtered_complex_predicate(
 
 @pytest.mark.parametrize("row_group_size", [1, 5, 100])
 def test_parquet_read_row_groups(tmpdir, pdf, row_group_size):
+    if len(pdf) > 100:
+        pytest.skip("Skipping long setup test")
+
     if "col_category" in pdf.columns:
         pdf = pdf.drop(columns=["col_category"])
     fname = tmpdir.join("row_group.parquet")
@@ -528,6 +536,9 @@ def test_parquet_read_row_groups(tmpdir, pdf, row_group_size):
 
 @pytest.mark.parametrize("row_group_size", [1, 5, 100])
 def test_parquet_read_row_groups_non_contiguous(tmpdir, pdf, row_group_size):
+    if len(pdf) > 100:
+        pytest.skip("Skipping long setup test")
+
     fname = tmpdir.join("row_group.parquet")
     pdf.to_parquet(fname, compression="gzip", row_group_size=row_group_size)
 
@@ -553,6 +564,9 @@ def test_parquet_read_row_groups_non_contiguous(tmpdir, pdf, row_group_size):
 
 @pytest.mark.parametrize("row_group_size", [1, 4, 33])
 def test_parquet_read_rows(tmpdir, pdf, row_group_size):
+    if len(pdf) > 100:
+        pytest.skip("Skipping long setup test")
+
     fname = tmpdir.join("row_group.parquet")
     pdf.to_parquet(fname, compression="None", row_group_size=row_group_size)
 
@@ -676,6 +690,33 @@ def test_parquet_reader_filepath_or_buffer(parquet_path_or_buf, src):
     got = cudf.read_parquet(parquet_path_or_buf(src))
 
     assert_eq(expect, got)
+
+
+def test_parquet_reader_arrow_nativefile(parquet_path_or_buf):
+    # Check that we can read a file opened with the
+    # Arrow FileSystem inferface
+    expect = cudf.read_parquet(parquet_path_or_buf("filepath"))
+    fs, path = pa_fs.FileSystem.from_uri(parquet_path_or_buf("filepath"))
+    with fs.open_input_file(path) as fil:
+        got = cudf.read_parquet(fil)
+
+    assert_eq(expect, got)
+
+
+def test_parquet_reader_use_python_file_object(parquet_path_or_buf):
+    # Check that the non-default `use_python_file_object=True`
+    # option works as expected
+    expect = cudf.read_parquet(parquet_path_or_buf("filepath"))
+    fs, _, paths = get_fs_token_paths(parquet_path_or_buf("filepath"))
+
+    # Pass open fsspec file
+    with fs.open(paths[0], mode="rb") as fil:
+        got1 = cudf.read_parquet(fil, use_python_file_object=True)
+    assert_eq(expect, got1)
+
+    # Pass path only
+    got2 = cudf.read_parquet(paths[0], use_python_file_object=True)
+    assert_eq(expect, got2)
 
 
 def create_parquet_source(df, src_type, fname):
@@ -1839,6 +1880,10 @@ def test_parquet_allnull_str(tmpdir, engine):
 
 
 def normalized_equals(value1, value2):
+    if value1 is pd.NA or value1 is pd.NaT:
+        value1 = None
+    if value2 is pd.NA or value2 is pd.NaT:
+        value2 = None
     if isinstance(value1, pd.Timestamp):
         value1 = value1.to_pydatetime()
     if isinstance(value2, pd.Timestamp):
@@ -1859,15 +1904,22 @@ def normalized_equals(value1, value2):
     return value1 == value2
 
 
-def test_parquet_writer_statistics(tmpdir, pdf):
+@pytest.mark.parametrize("add_nulls", [True, False])
+def test_parquet_writer_statistics(tmpdir, pdf, add_nulls):
     file_path = tmpdir.join("cudf.parquet")
     if "col_category" in pdf.columns:
         pdf = pdf.drop(columns=["col_category", "col_bool"])
 
-    for t in TIMEDELTA_TYPES:
-        pdf["col_" + t] = pd.Series(np.arange(len(pdf.index))).astype(t)
+    if not add_nulls:
+        # Timedelta types convert NA to None when reading from parquet into
+        # pandas which interferes with series.max()/min()
+        for t in TIMEDELTA_TYPES:
+            pdf["col_" + t] = pd.Series(np.arange(len(pdf.index))).astype(t)
 
     gdf = cudf.from_pandas(pdf)
+    if add_nulls:
+        for col in gdf:
+            gdf[col] = gdf[col].set_mask(random_bitmask(len(gdf)))
     gdf.to_parquet(file_path, index=False)
 
     # Read back from pyarrow
@@ -1887,6 +1939,9 @@ def test_parquet_writer_statistics(tmpdir, pdf):
             actual_max = pd_slice[col].max()
             stats_max = stats.max
             assert normalized_equals(actual_max, stats_max)
+
+            assert stats.null_count == pd_slice[col].isna().sum()
+            assert stats.num_values == pd_slice[col].count()
 
 
 def test_parquet_writer_list_statistics(tmpdir):
@@ -2036,6 +2091,7 @@ def test_parquet_writer_nulls_pandas_read(tmpdir, pdf):
     gdf = cudf.from_pandas(pdf)
 
     num_rows = len(gdf)
+
     if num_rows > 0:
         for col in gdf.columns:
             gdf[col][random.randint(0, num_rows - 1)] = None

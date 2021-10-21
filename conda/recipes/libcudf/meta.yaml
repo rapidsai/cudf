@@ -93,6 +93,8 @@ test:
     - test -f $PREFIX/include/cudf/detail/sequence.hpp
     - test -f $PREFIX/include/cudf/detail/sorting.hpp
     - test -f $PREFIX/include/cudf/detail/stream_compaction.hpp
+    - test -f $PREFIX/include/cudf/detail/structs/utilities.hpp
+    - test -f $PREFIX/include/cudf/detail/tdigest/tdigest.hpp
     - test -f $PREFIX/include/cudf/detail/transform.hpp
     - test -f $PREFIX/include/cudf/detail/transpose.hpp
     - test -f $PREFIX/include/cudf/detail/unary.hpp
@@ -217,6 +219,7 @@ test:
     - test -f $PREFIX/include/cudf/structs/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/table/table.hpp
     - test -f $PREFIX/include/cudf/table/table_view.hpp
+    - test -f $PREFIX/include/cudf/tdigest/tdigest_column_view.cuh
     - test -f $PREFIX/include/cudf/transform.hpp
     - test -f $PREFIX/include/cudf/transpose.hpp
     - test -f $PREFIX/include/cudf/types.hpp
@@ -238,6 +241,7 @@ test:
     - test -f $PREFIX/include/cudf_test/cudf_gtest.hpp
     - test -f $PREFIX/include/cudf_test/cxxopts.hpp
     - test -f $PREFIX/include/cudf_test/file_utilities.hpp
+    - test -f $PREFIX/include/cudf_test/io_metadata_utilities.hpp
     - test -f $PREFIX/include/cudf_test/iterator_utilities.hpp
     - test -f $PREFIX/include/cudf_test/table_utilities.hpp
     - test -f $PREFIX/include/cudf_test/timestamp_utilities.cuh

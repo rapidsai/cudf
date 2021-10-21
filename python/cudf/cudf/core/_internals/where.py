@@ -10,9 +10,10 @@ import cudf
 from cudf._typing import ColumnLike, ScalarLike
 from cudf.core.column import ColumnBase
 from cudf.core.dataframe import DataFrame
-from cudf.core.frame import Frame, SingleColumnFrame
+from cudf.core.frame import Frame
 from cudf.core.index import Index
 from cudf.core.series import Series
+from cudf.core.single_column_frame import SingleColumnFrame
 
 
 def _normalize_scalars(col: ColumnBase, other: ScalarLike) -> ScalarLike:
@@ -41,10 +42,10 @@ def _check_and_cast_columns_with_other(
     Returns type-casted column `source_col` & scalar `other_scalar`
     based on `inplace` parameter.
     """
-    if cudf.utils.dtypes.is_categorical_dtype(source_col.dtype):
+    if cudf.api.types.is_categorical_dtype(source_col.dtype):
         return source_col, other
 
-    if cudf.utils.dtypes.is_scalar(other):
+    if cudf.api.types.is_scalar(other):
         device_obj = _normalize_scalars(source_col, other)
     else:
         device_obj = other
@@ -66,10 +67,8 @@ def _check_and_cast_columns_with_other(
         return source_col, device_obj.astype(source_col.dtype)
     else:
         if (
-            cudf.utils.dtypes.is_scalar(other)
-            and cudf.utils.dtypes._is_non_decimal_numeric_dtype(
-                source_col.dtype
-            )
+            cudf.api.types.is_scalar(other)
+            and cudf.api.types._is_non_decimal_numeric_dtype(source_col.dtype)
             and cudf.utils.dtypes._can_cast(other, source_col.dtype)
         ):
             common_dtype = source_col.dtype
@@ -82,11 +81,11 @@ def _check_and_cast_columns_with_other(
                 [
                     source_col.dtype,
                     np.min_scalar_type(other)
-                    if cudf.utils.dtypes.is_scalar(other)
+                    if cudf.api.types.is_scalar(other)
                     else other.dtype,
                 ]
             )
-            if cudf.utils.dtypes.is_scalar(device_obj):
+            if cudf.api.types.is_scalar(device_obj):
                 device_obj = cudf.Scalar(other, dtype=common_dtype)
             else:
                 device_obj = device_obj.astype(common_dtype)
@@ -132,9 +131,9 @@ def _normalize_columns_and_scalars_type(
             other_df._data[self_col] = other_col
         return source_df, other_df
 
-    elif isinstance(
-        frame, (Series, Index)
-    ) and not cudf.utils.dtypes.is_scalar(other):
+    elif isinstance(frame, (Series, Index)) and not cudf.api.types.is_scalar(
+        other
+    ):
         other = cudf.core.column.as_column(other)
         input_col = frame._data[frame.name]
         return _check_and_cast_columns_with_other(
@@ -142,7 +141,7 @@ def _normalize_columns_and_scalars_type(
         )
     else:
         # Handles scalar or list/array like scalars
-        if isinstance(frame, (Series, Index)) and cudf.utils.dtypes.is_scalar(
+        if isinstance(frame, (Series, Index)) and cudf.api.types.is_scalar(
             other
         ):
             input_col = frame._data[frame.name]
@@ -162,7 +161,7 @@ def _normalize_columns_and_scalars_type(
                 ) = _check_and_cast_columns_with_other(
                     source_col=source_df._data[col_name],
                     other=other
-                    if cudf.utils.dtypes.is_scalar(other)
+                    if cudf.api.types.is_scalar(other)
                     else other[i],
                     inplace=inplace,
                 )
@@ -284,7 +283,7 @@ def where(
             other_column = others[i]
             if column_name in cond._data:
                 if isinstance(input_col, cudf.core.column.CategoricalColumn):
-                    if cudf.utils.dtypes.is_scalar(other_column):
+                    if cudf.api.types.is_scalar(other_column):
                         try:
                             other_column = input_col._encode(other_column)
                         except ValueError:
@@ -310,7 +309,7 @@ def where(
                 ):
                     result = cudf.core.column.build_categorical_column(
                         categories=frame._data[column_name].categories,
-                        codes=cudf.core.column.as_column(
+                        codes=cudf.core.column.build_column(
                             result.base_data, dtype=result.dtype
                         ),
                         mask=result.base_mask,
@@ -346,7 +345,7 @@ def where(
         )
 
         if isinstance(input_col, cudf.core.column.CategoricalColumn):
-            if cudf.utils.dtypes.is_scalar(other):
+            if cudf.api.types.is_scalar(other):
                 try:
                     other = input_col._encode(other)
                 except ValueError:
@@ -369,7 +368,7 @@ def where(
                     cudf.core.column.CategoricalColumn,
                     frame._data[frame.name],
                 ).categories,
-                codes=cudf.core.column.as_column(
+                codes=cudf.core.column.build_column(
                     result.base_data, dtype=result.dtype
                 ),
                 mask=result.base_mask,

@@ -5,7 +5,9 @@ Test related to MultiIndex
 """
 import itertools
 import operator
+import pickle
 import re
+from io import BytesIO
 
 import cupy as cp
 import numpy as np
@@ -1553,3 +1555,183 @@ def test_multiIndex_duplicate_names():
     )
 
     assert_eq(gi, pi)
+
+
+def test_difference():
+    midx = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
+        names=["x", "y"],
+    )
+    midx2 = cudf.MultiIndex(
+        levels=[[1, 3, 4, 5], [1, 2, 5]],
+        codes=[[0, 0, 1, 2, 3, 3], [0, 2, 1, 1, 0, 2]],
+        names=["x", "y"],
+    )
+
+    expected = midx2.to_pandas().difference(midx.to_pandas())
+    actual = midx2.difference(midx)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "idx1, idx2",
+    [
+        (
+            pd.MultiIndex.from_arrays(
+                [[1, 1, 2, 2], ["Red", "Blue", "Red", "Blue"]]
+            ),
+            pd.MultiIndex.from_arrays(
+                [[3, 3, 2, 2], ["Red", "Green", "Red", "Green"]]
+            ),
+        ),
+        (
+            pd.MultiIndex.from_arrays(
+                [[1, 2, 3, 4], ["Red", "Blue", "Red", "Blue"]],
+                names=["a", "b"],
+            ),
+            pd.MultiIndex.from_arrays(
+                [[3, 3, 2, 4], ["Red", "Green", "Red", "Green"]],
+                names=["x", "y"],
+            ),
+        ),
+        (
+            pd.MultiIndex.from_arrays(
+                [[1, 2, 3, 4], [5, 6, 7, 10], [11, 12, 12, 13]],
+                names=["a", "b", "c"],
+            ),
+            pd.MultiIndex.from_arrays(
+                [[3, 3, 2, 4], [0.2, 0.4, 1.4, 10], [3, 3, 2, 4]]
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("sort", [None, False])
+def test_union_mulitIndex(idx1, idx2, sort):
+    expected = idx1.union(idx2, sort=sort)
+
+    idx1 = cudf.from_pandas(idx1)
+    idx2 = cudf.from_pandas(idx2)
+
+    actual = idx1.union(idx2, sort=sort)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "idx1, idx2",
+    [
+        (
+            pd.MultiIndex.from_arrays(
+                [[1, 1, 2, 2], ["Red", "Blue", "Red", "Blue"]]
+            ),
+            pd.MultiIndex.from_arrays(
+                [[1, 3, 2, 2], ["Red", "Green", "Red", "Green"]]
+            ),
+        ),
+        (
+            pd.MultiIndex.from_arrays(
+                [[1, 2, 3, 4], ["Red", "Blue", "Red", "Blue"]],
+                names=["a", "b"],
+            ),
+            pd.MultiIndex.from_arrays(
+                [[3, 3, 2, 4], ["Red", "Green", "Red", "Green"]],
+                names=["x", "y"],
+            ),
+        ),
+        (
+            pd.MultiIndex.from_arrays(
+                [[1, 2, 3, 4], [5, 6, 7, 10], [11, 12, 12, 13]],
+                names=["a", "b", "c"],
+            ),
+            pd.MultiIndex.from_arrays(
+                [[3, 3, 2, 4], [0.2, 0.4, 1.4, 10], [3, 3, 2, 4]]
+            ),
+        ),
+        (
+            pd.MultiIndex.from_arrays(
+                [[1, 2, 3, 4], [5, 6, 7, 10], [11, 12, 12, 13]],
+                names=["a", "b", "c"],
+            ),
+            pd.MultiIndex.from_arrays(
+                [[1, 2, 3, 4], [5, 6, 7, 10], [11, 12, 12, 13]],
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize("sort", [None, False])
+def test_intersection_mulitIndex(idx1, idx2, sort):
+    expected = idx1.intersection(idx2, sort=sort)
+
+    idx1 = cudf.from_pandas(idx1)
+    idx2 = cudf.from_pandas(idx2)
+
+    actual = idx1.intersection(idx2, sort=sort)
+    assert_eq(expected, actual, exact=False)
+
+
+@pytest.mark.parametrize(
+    "names",
+    [
+        ["a", "b", "c"],
+        [None, None, None],
+        ["aa", "aa", "aa"],
+        ["bb", "aa", "aa"],
+        None,
+    ],
+)
+def test_pickle_roundtrip_multiIndex(names):
+    df = cudf.DataFrame(
+        {
+            "one": [1, 2, 3],
+            "two": [True, False, True],
+            "three": ["ab", "cd", "ef"],
+            "four": [0.2, 0.1, -10.2],
+        }
+    )
+    expected_df = df.set_index(["one", "two", "three"])
+    expected_df.index.names = names
+    local_file = BytesIO()
+
+    pickle.dump(expected_df, local_file)
+    local_file.seek(0)
+    actual_df = pickle.load(local_file)
+    assert_eq(expected_df, actual_df)
+
+
+@pytest.mark.parametrize(
+    "pidx",
+    [
+        pd.MultiIndex.from_arrays(
+            [[1, 1, 2, 2], ["Red", "Blue", "Red", "Blue"]]
+        ),
+        pd.MultiIndex.from_arrays(
+            [[1, 2, 3, 4], [5, 6, 7, 10], [11, 12, 12, 13]],
+            names=["a", "b", "c"],
+        ),
+        pd.MultiIndex.from_arrays(
+            [[1.0, 2, 3, 4], [5, 6, 7.8, 10], [11, 12, 12, 13]],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "func",
+    [
+        "is_numeric",
+        "is_boolean",
+        "is_integer",
+        "is_floating",
+        "is_object",
+        "is_categorical",
+        "is_interval",
+    ],
+)
+def test_multiIndex_type_methods(pidx, func):
+    gidx = cudf.from_pandas(pidx)
+
+    expected = getattr(pidx, func)()
+    actual = getattr(gidx, func)()
+
+    if func == "is_object":
+        assert_eq(False, actual)
+    else:
+        assert_eq(expected, actual)

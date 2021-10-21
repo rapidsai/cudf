@@ -436,6 +436,17 @@ public class RmmTest {
             false, 1024, 2048));
   }
 
+  @Test
+  public void testCudaMemoryBuffer() {
+    Rmm.initialize(RmmAllocationMode.ARENA, false, 1024);
+    try (CudaMemoryBuffer one = CudaMemoryBuffer.allocate(512);
+         CudaMemoryBuffer two = CudaMemoryBuffer.allocate(1024)) {
+      assertEquals(512, one.length);
+      assertEquals(1024, two.length);
+      assertEquals(0, Rmm.getTotalBytesAllocated());
+    }
+  }
+
   private static class AllocFailException extends RuntimeException {
   }
 

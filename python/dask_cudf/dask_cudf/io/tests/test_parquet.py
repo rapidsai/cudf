@@ -86,6 +86,17 @@ def test_roundtrip_from_dask_index_false(tmpdir):
     dd.assert_eq(ddf.reset_index(drop=False), ddf2)
 
 
+def test_roundtrip_from_dask_none_index_false(tmpdir):
+    tmpdir = str(tmpdir)
+    path = os.path.join(tmpdir, "test.parquet")
+
+    df2 = ddf.reset_index(drop=True).compute()
+    df2.to_parquet(path, engine="pyarrow")
+
+    ddf3 = dask_cudf.read_parquet(path, index=False)
+    dd.assert_eq(df2, ddf3)
+
+
 @pytest.mark.parametrize("write_meta", [True, False])
 def test_roundtrip_from_dask_cudf(tmpdir, write_meta):
     tmpdir = str(tmpdir)
@@ -491,6 +502,7 @@ def test_create_metadata_file_inconsistent_schema(tmpdir):
 @pytest.mark.parametrize(
     "data",
     [
+        ["dog", "cat", "fish"],
         [[0], [1, 2], [3]],
         [None, [1, 2], [3]],
         [{"f1": 1}, {"f1": 0, "f2": "dog"}, {"f2": "cat"}],
@@ -502,5 +514,7 @@ def test_cudf_dtypes_from_pandas(tmpdir, data):
     fn = str(tmpdir.join("test.parquet"))
     dfp = pd.DataFrame({"data": data})
     dfp.to_parquet(fn, engine="pyarrow", index=True)
-    ddf2 = dask_cudf.read_parquet(fn)
+    # Use `split_row_groups=True` to avoid "fast path" where
+    # schema is not is passed through in older Dask versions
+    ddf2 = dask_cudf.read_parquet(fn, split_row_groups=True)
     dd.assert_eq(cudf.from_pandas(dfp), ddf2)

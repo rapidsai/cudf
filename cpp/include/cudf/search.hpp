@@ -100,7 +100,7 @@ std::unique_ptr<column> lower_bound(
  *   result =  {  5 }
  * @endcode
  *
- * @param column          Table to search
+ * @param search_table    Table to search
  * @param values          Find insert locations for these values
  * @param column_order    Vector of column sort order
  * @param null_precedence Vector of null_precedence enums values
@@ -109,7 +109,7 @@ std::unique_ptr<column> lower_bound(
  * @return A non-nullable column of cudf::size_type elements containing the insertion points.
  */
 std::unique_ptr<column> upper_bound(
-  table_view const& t,
+  table_view const& search_table,
   table_view const& values,
   std::vector<order> const& column_order,
   std::vector<null_order> const& null_precedence,

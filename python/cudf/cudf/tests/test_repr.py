@@ -40,14 +40,6 @@ def test_null_series(nrows, dtype):
     psrepr = psrepr.replace("NaN", "<NA>")
     psrepr = psrepr.replace("NaT", "<NA>")
     psrepr = psrepr.replace("None", "<NA>")
-    if (
-        dtype.startswith("int")
-        or dtype.startswith("uint")
-        or dtype.startswith("long")
-    ):
-        psrepr = psrepr.replace(
-            str(sr._column.default_na_value()) + "\n", "<NA>\n"
-        )
     if "UInt" in psrepr:
         psrepr = psrepr.replace("UInt", "uint")
     elif "Int" in psrepr:
@@ -1153,7 +1145,7 @@ def test_timedelta_index_repr(index, expected_repr):
     ],
 )
 @pytest.mark.parametrize("max_seq_items", [None, 1, 2, 5, 10, 100])
-def test_mulitIndex_repr(pmi, max_seq_items):
+def test_multiIndex_repr(pmi, max_seq_items):
     pd.set_option("display.max_seq_items", max_seq_items)
     gmi = cudf.from_pandas(pmi)
 
@@ -1398,7 +1390,7 @@ def test_mulitIndex_repr(pmi, max_seq_items):
         ),
     ],
 )
-def test_mulitIndex_null_repr(gdi, expected_repr):
+def test_multiIndex_null_repr(gdi, expected_repr):
     actual_repr = gdi.__repr__()
 
     assert actual_repr.split() == expected_repr.split()
