@@ -61,7 +61,7 @@ def transpose(source):
     if cats is not None:
         data= [
             (name, cudf.core.column.column.build_categorical_column(
-                codes=cudf.core.column.column.as_column(
+                codes=cudf.core.column.column.build_column(
                     col.base_data, dtype=col.dtype),
                 mask=col.base_mask,
                 size=col.size,

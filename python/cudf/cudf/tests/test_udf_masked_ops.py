@@ -1,42 +1,21 @@
+import math
 import operator
 
 import pandas as pd
 import pytest
+from numba import cuda
 
 import cudf
-from cudf.core.udf.pipeline import nulludf
+from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
 from cudf.testing._utils import NUMERIC_TYPES, assert_eq
-
-arith_ops = [
-    operator.add,
-    operator.sub,
-    operator.mul,
-    operator.truediv,
-    operator.floordiv,
-    operator.mod,
-    operator.pow,
-]
-
-comparison_ops = [
-    operator.eq,
-    operator.ne,
-    operator.lt,
-    operator.le,
-    operator.gt,
-    operator.ge,
-]
 
 
 def run_masked_udf_test(func_pdf, func_gdf, data, **kwargs):
     gdf = data
     pdf = data.to_pandas(nullable=True)
 
-    expect = pdf.apply(
-        lambda row: func_pdf(*[row[i] for i in data.columns]), axis=1
-    )
-    obtain = gdf.apply(
-        lambda row: func_gdf(*[row[i] for i in data.columns]), axis=1
-    )
+    expect = pdf.apply(func_pdf, axis=1)
+    obtain = gdf.apply(func_gdf, axis=1)
     assert_eq(expect, obtain, **kwargs)
 
 
@@ -54,14 +33,63 @@ def test_arith_masked_vs_masked(op):
     # This test should test all the typing
     # and lowering for arithmetic ops between
     # two columns
-    def func_pdf(x, y):
+    def func_pdf(row):
+        x = row["a"]
+        y = row["b"]
         return op(x, y)
 
-    @nulludf
-    def func_gdf(x, y):
+    def func_gdf(row):
+        x = row["a"]
+        y = row["b"]
         return op(x, y)
 
     gdf = cudf.DataFrame({"a": [1, None, 3, None], "b": [4, 5, None, None]})
+    run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "dtype_l",
+    ["datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"],
+)
+@pytest.mark.parametrize(
+    "dtype_r",
+    [
+        "timedelta64[ns]",
+        "timedelta64[us]",
+        "timedelta64[ms]",
+        "timedelta64[s]",
+        "datetime64[ns]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[s]",
+    ],
+)
+@pytest.mark.parametrize("op", [operator.add, operator.sub])
+def test_arith_masked_vs_masked_datelike(op, dtype_l, dtype_r):
+    # Datetime version of the above
+    # does not test all dtype combinations for now
+    if "datetime" in dtype_l and "datetime" in dtype_r and op is operator.add:
+        # don't try adding datetimes to datetimes.
+        pytest.skip("Adding datetime to datetime is not valid")
+
+    def func_pdf(row):
+        x = row["a"]
+        y = row["b"]
+        return op(x, y)
+
+    def func_gdf(row):
+        x = row["a"]
+        y = row["b"]
+        return op(x, y)
+
+    gdf = cudf.DataFrame(
+        {
+            "a": ["2011-01-01", cudf.NA, "2011-03-01", cudf.NA],
+            "b": [4, 5, cudf.NA, cudf.NA],
+        }
+    )
+    gdf["a"] = gdf["a"].astype(dtype_l)
+    gdf["b"] = gdf["b"].astype(dtype_r)
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
 
@@ -71,11 +99,14 @@ def test_compare_masked_vs_masked(op):
     # typing and lowering for comparisons
     # between columns
 
-    def func_pdf(x, y):
+    def func_pdf(row):
+        x = row["a"]
+        y = row["b"]
         return op(x, y)
 
-    @nulludf
-    def func_gdf(x, y):
+    def func_gdf(row):
+        x = row["a"]
+        y = row["b"]
         return op(x, y)
 
     # we should get:
@@ -90,11 +121,12 @@ def test_compare_masked_vs_masked(op):
 @pytest.mark.parametrize("constant", [1, 1.5, True, False])
 @pytest.mark.parametrize("data", [[1, 2, cudf.NA]])
 def test_arith_masked_vs_constant(op, constant, data):
-    def func_pdf(x):
+    def func_pdf(row):
+        x = row["data"]
         return op(x, constant)
 
-    @nulludf
-    def func_gdf(x):
+    def func_gdf(row):
+        x = row["data"]
         return op(x, constant)
 
     gdf = cudf.DataFrame({"data": data})
@@ -119,11 +151,12 @@ def test_arith_masked_vs_constant(op, constant, data):
 @pytest.mark.parametrize("constant", [1, 1.5, True, False])
 @pytest.mark.parametrize("data", [[2, 3, cudf.NA], [1, cudf.NA, 1]])
 def test_arith_masked_vs_constant_reflected(op, constant, data):
-    def func_pdf(x):
+    def func_pdf(row):
+        x = row["data"]
         return op(constant, x)
 
-    @nulludf
-    def func_gdf(x):
+    def func_gdf(row):
+        x = row["data"]
         return op(constant, x)
 
     # Just a single column -> result will be all NA
@@ -141,11 +174,12 @@ def test_arith_masked_vs_constant_reflected(op, constant, data):
 @pytest.mark.parametrize("op", arith_ops)
 @pytest.mark.parametrize("data", [[1, cudf.NA, 3], [2, 3, cudf.NA]])
 def test_arith_masked_vs_null(op, data):
-    def func_pdf(x):
+    def func_pdf(row):
+        x = row["data"]
         return op(x, pd.NA)
 
-    @nulludf
-    def func_gdf(x):
+    def func_gdf(row):
+        x = row["data"]
         return op(x, cudf.NA)
 
     gdf = cudf.DataFrame({"data": data})
@@ -158,26 +192,59 @@ def test_arith_masked_vs_null(op, data):
 
 @pytest.mark.parametrize("op", arith_ops)
 def test_arith_masked_vs_null_reflected(op):
-    def func_pdf(x):
+    def func_pdf(row):
+        x = row["data"]
         return op(pd.NA, x)
 
-    @nulludf
-    def func_gdf(x):
+    def func_gdf(row):
+        x = row["data"]
         return op(cudf.NA, x)
 
     gdf = cudf.DataFrame({"data": [1, None, 3]})
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
 
+@pytest.mark.parametrize("op", unary_ops)
+def test_unary_masked(op):
+    # This test should test all the typing
+    # and lowering for unary ops
+    def func_pdf(row):
+        x = row["a"]
+        return op(x) if x is not pd.NA else pd.NA
+
+    def func_gdf(row):
+        x = row["a"]
+        return op(x) if x is not cudf.NA else cudf.NA
+
+    if "log" in op.__name__:
+        gdf = cudf.DataFrame({"a": [0.1, 1.0, None, 3.5, 1e8]})
+    elif op.__name__ in {"asin", "acos"}:
+        gdf = cudf.DataFrame({"a": [0.0, 0.5, None, 1.0]})
+    elif op.__name__ in {"atanh"}:
+        gdf = cudf.DataFrame({"a": [0.0, -0.5, None, 0.8]})
+    elif op.__name__ in {"acosh", "sqrt", "lgamma"}:
+        gdf = cudf.DataFrame({"a": [1.0, 2.0, None, 11.0]})
+    elif op.__name__ in {"gamma"}:
+        gdf = cudf.DataFrame({"a": [0.1, 2, None, 4]})
+    elif op.__name__ in {"invert"}:
+        gdf = cudf.DataFrame({"a": [-100, 128, None, 0]}, dtype="int64")
+    else:
+        gdf = cudf.DataFrame({"a": [-125.60, 395.2, 0.0, None]})
+    run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
+
+
 def test_masked_is_null_conditional():
-    def func_pdf(x, y):
+    def func_pdf(row):
+        x = row["a"]
+        y = row["b"]
         if x is pd.NA:
             return y
         else:
             return x + y
 
-    @nulludf
-    def func_gdf(x, y):
+    def func_gdf(row):
+        x = row["a"]
+        y = row["b"]
         if x is cudf.NA:
             return y
         else:
@@ -196,11 +263,14 @@ def test_apply_mixed_dtypes(dtype_a, dtype_b):
     values and nulls
     """
     # TODO: Parameterize over the op here
-    def func_pdf(x, y):
+    def func_pdf(row):
+        x = row["a"]
+        y = row["b"]
         return x + y
 
-    @nulludf
-    def func_gdf(x, y):
+    def func_gdf(row):
+        x = row["a"]
+        y = row["b"]
         return x + y
 
     gdf = cudf.DataFrame({"a": [1.5, None, 3, None], "b": [4, 5, None, None]})
@@ -218,14 +288,17 @@ def test_apply_return_literal(val):
     to a MaskedType
     """
 
-    def func_pdf(x, y):
+    def func_pdf(row):
+        x = row["a"]
+        y = row["b"]
         if x is not pd.NA and x < 2:
             return val
         else:
             return x + y
 
-    @nulludf
-    def func_gdf(x, y):
+    def func_gdf(row):
+        x = row["a"]
+        y = row["b"]
         if x is not cudf.NA and x < 2:
             return val
         else:
@@ -241,14 +314,15 @@ def test_apply_return_null():
     Tests casting / unification of Masked and NA
     """
 
-    def func_pdf(x):
+    def func_pdf(row):
+        x = row["a"]
         if x is pd.NA:
             return pd.NA
         else:
             return x
 
-    @nulludf
-    def func_gdf(x):
+    def func_gdf(row):
+        x = row["a"]
         if x is cudf.NA:
             return cudf.NA
         else:
@@ -259,14 +333,15 @@ def test_apply_return_null():
 
 
 def test_apply_return_either_null_or_literal():
-    def func_pdf(x):
+    def func_pdf(row):
+        x = row["a"]
         if x > 5:
             return 2
         else:
             return pd.NA
 
-    @nulludf
-    def func_gdf(x):
+    def func_gdf(row):
+        x = row["a"]
         if x > 5:
             return 2
         else:
@@ -280,7 +355,6 @@ def test_apply_return_literal_only():
     def func_pdf(x):
         return 5
 
-    @nulludf
     def func_gdf(x):
         return 5
 
@@ -289,7 +363,11 @@ def test_apply_return_literal_only():
 
 
 def test_apply_everything():
-    def func_pdf(w, x, y, z):
+    def func_pdf(row):
+        w = row["a"]
+        x = row["b"]
+        y = row["c"]
+        z = row["d"]
         if x is pd.NA:
             return w + y - z
         elif ((z > y) is not pd.NA) and z > y:
@@ -298,11 +376,21 @@ def test_apply_everything():
             return z / x
         elif x + y is pd.NA:
             return 2.5
+        elif w > 100:
+            return (
+                math.sin(x)
+                + math.sqrt(y)
+                - (-z)
+                + math.lgamma(x) * math.fabs(-0.8) / math.radians(3.14)
+            )
         else:
             return y > 2
 
-    @nulludf
-    def func_gdf(w, x, y, z):
+    def func_gdf(row):
+        w = row["a"]
+        x = row["b"]
+        y = row["c"]
+        z = row["d"]
         if x is cudf.NA:
             return w + y - z
         elif ((z > y) is not cudf.NA) and z > y:
@@ -311,15 +399,17 @@ def test_apply_everything():
             return z / x
         elif x + y is cudf.NA:
             return 2.5
+        elif w > 100:
+            return math.sin(x) + math.sqrt(y) - operator.neg(z)
         else:
             return y > 2
 
     gdf = cudf.DataFrame(
         {
-            "a": [1, 3, 6, 0, None, 5, None],
-            "b": [3.0, 2.5, None, 5.0, 1.0, 5.0, 11.0],
-            "c": [2, 3, 6, 0, None, 5, None],
-            "d": [4, None, 6, 0, None, 5, None],
+            "a": [1, 3, 6, 0, None, 5, None, 101],
+            "b": [3.0, 2.5, None, 5.0, 1.0, 5.0, 11.0, 1.0],
+            "c": [2, 3, 6, 0, None, 5, None, 6],
+            "d": [4, None, 6, 0, None, 5, None, 7.5],
         }
     )
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
@@ -430,3 +520,69 @@ def test_series_masked_is_null_conditional():
     data = cudf.Series([1, cudf.NA, 3, cudf.NA])
 
     run_masked_udf_series(func_psr, func_gsr, data, check_dtype=False)
+
+
+@pytest.mark.parametrize("op", arith_ops + comparison_ops)
+def test_masked_udf_lambda_support(op):
+    func = lambda row: op(row["a"], row["b"])  # noqa: E731
+
+    data = cudf.DataFrame(
+        {"a": [1, cudf.NA, 3, cudf.NA], "b": [1, 2, cudf.NA, cudf.NA]}
+    )
+
+    run_masked_udf_test(func, func, data, check_dtype=False)
+
+
+@pytest.mark.parametrize("op", arith_ops + comparison_ops)
+def test_masked_udf_nested_function_support(op):
+    """
+    Nested functions need to be explicitly jitted by the user
+    for numba to recognize them. Unfortunately the object
+    representing the jitted function can not itself be used in
+    pandas udfs.
+    """
+
+    def inner(x, y):
+        return op(x, y)
+
+    def outer(row):
+        x = row["a"]
+        y = row["b"]
+        return inner(x, y)
+
+    data = cudf.DataFrame(
+        {"a": [1, cudf.NA, 3, cudf.NA], "b": [1, 2, cudf.NA, cudf.NA]}
+    )
+
+    with pytest.raises(AttributeError):
+        run_masked_udf_test(outer, outer, data, check_dtype=False)
+
+    inner_gpu = cuda.jit(device=True)(inner)
+
+    def outer_gpu(row):
+        x = row["a"]
+        y = row["b"]
+        return inner_gpu(x, y)
+
+    run_masked_udf_test(outer, outer_gpu, data, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]},
+        {"a": [1, 2, 3], "c": [4, 5, 6], "b": [7, 8, 9]},
+        pytest.param(
+            {"a": [1, 2, 3], "b": [4, 5, 6], "c": ["a", "b", "c"]},
+            marks=pytest.mark.xfail(
+                reason="Until cudf/9359 is merged, this will fail"
+            ),
+        ),
+    ],
+)
+def test_masked_udf_subset_selection(data):
+    def func(row):
+        return row["a"] + row["b"]
+
+    data = cudf.DataFrame(data)
+    run_masked_udf_test(func, func, data)

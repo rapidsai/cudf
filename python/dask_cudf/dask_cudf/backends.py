@@ -313,11 +313,7 @@ def union_categoricals_cudf(
 
 
 def safe_hash(frame):
-    index = frame.index
-    if isinstance(frame, cudf.DataFrame):
-        return cudf.Series(frame.hash_columns(), index=index)
-    else:
-        return cudf.Series(frame.hash_values(), index=index)
+    return cudf.Series(frame.hash_values(), index=frame.index)
 
 
 @hash_object_dispatch.register((cudf.DataFrame, cudf.Series))
