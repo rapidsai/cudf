@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <stream_compaction/drop_duplicates.cuh>
+
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/gather.hpp>
@@ -33,7 +35,6 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/binary_search.h>
-#include <thrust/copy.h>
 #include <thrust/transform.h>
 
 namespace cudf {
@@ -441,6 +442,7 @@ struct get_unique_entries_dispatch {
                           null_equality,
                           nan_equality,
                           bool,
+                          duplicate_keep_option,
                           rmm::cuda_stream_view) const
   {
     CUDF_FAIL(
@@ -455,6 +457,7 @@ struct get_unique_entries_dispatch {
                           null_equality nulls_equal,
                           nan_equality nans_equal,
                           bool has_nulls,
+                          duplicate_keep_option keep_option,
                           rmm::cuda_stream_view stream) const noexcept
   {
     auto const d_view = column_device_view::create(all_lists_entries, stream);
@@ -464,11 +467,12 @@ struct get_unique_entries_dispatch {
                                                      nulls_equal,
                                                      has_nulls,
                                                      nans_equal == nan_equality::ALL_EQUAL};
-    return thrust::unique_copy(rmm::exec_policy(stream),
-                               thrust::make_counting_iterator(0),
-                               thrust::make_counting_iterator(num_entries),
-                               output_begin,
-                               comp);
+    return cudf::detail::unique_copy(thrust::make_counting_iterator(0),
+                                     thrust::make_counting_iterator(num_entries),
+                                     output_begin,
+                                     comp,
+                                     keep_option,
+                                     stream);
   }
 
   template <class Type, std::enable_if_t<std::is_same_v<Type, cudf::struct_view>>* = nullptr>
@@ -479,6 +483,7 @@ struct get_unique_entries_dispatch {
                           null_equality nulls_equal,
                           nan_equality nans_equal,
                           bool has_nulls,
+                          duplicate_keep_option keep_option,
                           rmm::cuda_stream_view stream) const noexcept
   {
     auto const entries_tview       = table_view{{all_lists_entries}};
@@ -495,12 +500,12 @@ struct get_unique_entries_dispatch {
                                               nulls_equal,
                                               has_nulls,
                                               nans_equal == nan_equality::ALL_EQUAL};
-
-    return thrust::unique_copy(rmm::exec_policy(stream),
-                               thrust::make_counting_iterator(0),
-                               thrust::make_counting_iterator(num_entries),
-                               output_begin,
-                               comp);
+    return cudf::detail::unique_copy(thrust::make_counting_iterator(0),
+                                     thrust::make_counting_iterator(num_entries),
+                                     output_begin,
+                                     comp,
+                                     keep_option,
+                                     stream);
   }
 };
 
@@ -527,6 +532,7 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_offsets(
   column_view const& entries_list_offsets,
   null_equality nulls_equal,
   nan_equality nans_equal,
+  duplicate_keep_option keep_option,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
@@ -544,6 +550,7 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_offsets(
                                           nulls_equal,
                                           nans_equal,
                                           keys_entries.has_nulls(),
+                                          keep_option,
                                           stream);
 
   auto gather_map = column_view(data_type{type_to_id<offset_type>()},
@@ -697,11 +704,11 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
   }();
 
   // If the input keys and values columns are the same, we only need to sort the keys column.
-  auto const input_table = has_values
-                             ? table_view{{keys_child, values.value().get_sliced_child(stream)}}
-                             : table_view{{keys_child}};
+  auto const sorting_table = has_values
+                               ? table_view{{keys_child, values.value().get_sliced_child(stream)}}
+                               : table_view{{keys_child}};
 
-  auto const sorted_table = cudf::detail::gather(input_table,
+  auto const sorted_table = cudf::detail::gather(sorting_table,
                                                  sorted_order->view(),
                                                  out_of_bounds_policy::DONT_CHECK,
                                                  cudf::detail::negative_index_policy::NOT_ALLOWED,
@@ -719,6 +726,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
                                                 entries_list_offsets->view(),
                                                 nulls_equal,
                                                 nans_equal,
+                                                keep_option,
                                                 stream,
                                                 mr);
 
