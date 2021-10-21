@@ -85,9 +85,9 @@ namespace lists {
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates(
   lists_column_view const& keys,
   lists_column_view const& values,
+  duplicate_keep_option keep_option   = duplicate_keep_option::KEEP_FIRST,
   null_equality nulls_equal           = null_equality::EQUAL,
   nan_equality nans_equal             = nan_equality::UNEQUAL,
-  duplicate_keep_option keep_option   = duplicate_keep_option::KEEP_FIRST,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
