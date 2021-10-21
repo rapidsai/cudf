@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf_test/column_utilities.hpp>
-
 #include <stream_compaction/drop_duplicates.cuh>
 
 #include <cudf/column/column_factories.hpp>
@@ -555,10 +553,6 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_offsets(
                                 static_cast<size_type>(thrust::distance(output_begin, output_end)),
                                 unique_indices.data());
 
-  printf("line %d\n", __LINE__);
-  printf("map size %d\n", gather_map.size());
-  cudf::test::print(gather_map);
-
   auto const entries_offsets_view = column_view(data_type{type_to_id<offset_type>()},
                                                 static_cast<size_type>(entries_list_offsets.size()),
                                                 entries_list_offsets.data());
@@ -613,27 +607,6 @@ std::unique_ptr<column> generate_output_offsets(
                                          list_sizes.begin());
   auto const num_uniques = thrust::distance(unique_entry_offsets.begin(), end.first);
 
-  printf("line %d\n", __LINE__);
-  printf("size %d\n", entries_list_offsets.size());
-  cudf::test::print(entries_list_offsets);
-
-  stream.synchronize();
-  {
-    auto const view = column_view(data_type{type_to_id<offset_type>()},
-                                  static_cast<size_type>(unique_entry_offsets.size()),
-                                  unique_entry_offsets.data());
-    printf("line %d\n", __LINE__);
-    cudf::test::print(view);
-  }
-
-  {
-    auto const view = column_view(data_type{type_to_id<offset_type>()},
-                                  static_cast<size_type>(unique_entry_offsets.size()),
-                                  list_sizes.data());
-    printf("line %d\n", __LINE__);
-    cudf::test::print(view);
-  }
-
   auto new_offsets         = make_numeric_column(data_type{type_to_id<offset_type>()},
                                          original_offsets.size(),
                                          mask_state::UNALLOCATED,
@@ -648,62 +621,10 @@ std::unique_ptr<column> generate_output_offsets(
                   unique_entry_offsets.begin(),
                   d_new_offsets);
 
-  {
-    printf("line %d\n", __LINE__);
-    cudf::test::print(new_offsets->view());
-  }
-
   thrust::inclusive_scan(
     rmm::exec_policy(stream), d_new_offsets, d_new_offsets + new_offsets->size(), d_new_offsets);
 
-  {
-    printf("line %d\n", __LINE__);
-    cudf::test::print(new_offsets->view());
-  }
-
   return new_offsets;
-
-#if 0
-  // Firstly, generate temporary list offsets for the unique entries, ignoring empty lists (if any).
-  // If entries_list_offsets = {1, 1, 1, 1, 2, 3, 3, 3, 4, 4 }, num_entries = 10,
-  // then new_offsets = { 0, 4, 5, 8, 10 }.
-  auto const new_offsets = allocate_like(
-    original_offsets, mask_allocation_policy::NEVER, rmm::mr::get_current_device_resource());
-  thrust::copy_if(rmm::exec_policy(stream),
-                  thrust::make_counting_iterator<offset_type>(0),
-                  thrust::make_counting_iterator<offset_type>(num_entries + 1),
-                  new_offsets->mutable_view().begin<offset_type>(),
-                  [num_entries, offsets_ptr = entries_list_offsets.begin<offset_type>()] __device__(
-                    auto i) -> bool {
-                    return i == 0 || i == num_entries || offsets_ptr[i] != offsets_ptr[i - 1];
-                  });
-
-  // Generate a prefix sum of number of empty lists, storing inplace to the original lists
-  // offsets.
-  // If the original list offsets is { 0, 0, 5, 5, 6, 6 } (there are 2 empty lists),
-  // and new_offsets = { 0, 4, 5 }, then output = { 0, 1, 1, 2, 2, 3}.
-  auto const iter_trans_begin = cudf::detail::make_counting_transform_iterator(
-    0, [offsets = original_offsets.begin<offset_type>()] __device__(auto i) {
-      return (i > 0 && offsets[i] == offsets[i - 1]) ? 1 : 0;
-    });
-  thrust::inclusive_scan(rmm::exec_policy(stream),
-                         iter_trans_begin,
-                         iter_trans_begin + original_offsets.size(),
-                         original_offsets.begin<offset_type>());
-
-  // Generate the final list offsets.
-  // If the original list offsets are { 0, 0, 5, 5, 6, 6 }, the new offsets are { 0, 4, 5 },
-  // and the prefix sums of empty lists are { 0, 1, 1, 2, 2, 3 },
-  // then output = { 0, 0, 4, 4, 5, 5 }.
-  thrust::transform(rmm::exec_policy(stream),
-                    thrust::make_counting_iterator<offset_type>(0),
-                    thrust::make_counting_iterator<offset_type>(original_offsets.size()),
-                    original_offsets.begin<offset_type>(),
-                    [prefix_sum_empty_lists = original_offsets.begin<offset_type>(),
-                     offsets = new_offsets->view().begin<offset_type>()] __device__(auto i) {
-                      return offsets[i - prefix_sum_empty_lists[i]];
-                    });
-#endif
 }
 
 std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates_common(
@@ -787,16 +708,8 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
 
   auto const sorted_keys_entries = sorted_table->get_column(0).view();
 
-  printf("line %d\n", __LINE__);
-  cudf::test::print(sorted_keys_entries);
-
   auto const sorted_values_entries =
     has_values ? std::optional<column_view>(sorted_table->get_column(1).view()) : std::nullopt;
-
-  if (sorted_values_entries.has_value()) {
-    printf("line %d\n", __LINE__);
-    cudf::test::print(sorted_values_entries.value());
-  }
 
   // Copy non-duplicated entries (along with their list offsets) to new arrays.
   auto unique_entries_and_list_offsets =
@@ -816,23 +729,6 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
                                     lists_offsets,
                                     stream,
                                     mr);
-
-  printf("line %d\n", __LINE__);
-  cudf::test::print(unique_entries_and_list_offsets[0]->view());
-  printf("size %d\n", unique_entries_and_list_offsets[0]->size());
-
-  printf("line %d\n", __LINE__);
-  printf("size %d\n", unique_entries_and_list_offsets[1]->size());
-  cudf::test::print(unique_entries_and_list_offsets[1]->view());
-
-  if (unique_entries_and_list_offsets.size() == 3) {
-    printf("line %d\n", __LINE__);
-    printf("size %d\n", unique_entries_and_list_offsets[2]->size());
-    cudf::test::print(unique_entries_and_list_offsets[2]->view());
-  }
-
-  printf("line %d\n", __LINE__);
-  cudf::test::print(output_offsets->view());
 
   // If the input values lists column is not given, its corresponding output will be nullptr.
   auto out_values =

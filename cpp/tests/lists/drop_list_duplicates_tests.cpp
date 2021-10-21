@@ -101,14 +101,12 @@ TEST_F(DropListDuplicatesTest, FloatingPointTestsWithInf)
   auto const vals          = IntListsCol{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
   auto const expected_keys = FloatListsCol{neg_Inf, 0, Inf};
 
-  printf("line %d\n", __LINE__);
   // Remove duplicates only from keys.
   {
     auto const results = cudf::lists::drop_list_duplicates(cudf::lists_column_view{keys});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected_keys, verbosity);
   }
 
-  printf("line %d\n", __LINE__);
   // Remove duplicates with KEEP_FIRST.
   {
     auto const expected_vals = IntListsCol{3, 2, 1};
@@ -119,8 +117,6 @@ TEST_F(DropListDuplicatesTest, FloatingPointTestsWithInf)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_keys->view(), expected_keys, verbosity);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_vals->view(), expected_vals, verbosity);
   }
-
-  printf("line %d\n", __LINE__);
 
   // Remove duplicates with KEEP_LAST.
   {
@@ -391,16 +387,9 @@ TYPED_TEST(DropListDuplicatesTypedTest, NonNullInputTests)
         cudf::lists::drop_list_duplicates(cudf::lists_column_view{keys},
                                           cudf::lists_column_view{vals},
                                           cudf::duplicate_keep_option::KEEP_NONE);
-      printf("line %d\n", __LINE__);
-      cudf::test::print(results_keys->view());
-      printf("line %d\n", __LINE__);
-      cudf::test::print(results_vals->view());
-      fflush(stdout);
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_keys->view(), expected, verbosity);
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_vals->view(), expected, verbosity);
     }
-
-    //    exit(0);
   }
 
   // Sliced list column.
