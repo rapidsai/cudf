@@ -31,7 +31,7 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <structs/utilities.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 
 namespace cudf {
 namespace binops {
@@ -302,8 +302,8 @@ void struct_binary_operation(mutable_column_view& out,
     has_struct_nulls ? structs::detail::column_nullability::FORCE
                      : structs::detail::column_nullability::MATCH_INCOMING);
 
-  table_view lhs_flat = std::get<0>(lhs_flattener);
-  table_view rhs_flat = std::get<0>(rhs_flattener);
+  auto lhs_flat = lhs_flattener.flattened_columns();
+  auto rhs_flat = rhs_flattener.flattened_columns();
 
   auto d_out     = column_device_view::create(out, stream);
   auto d_lhs     = table_device_view::create(lhs_flat);
