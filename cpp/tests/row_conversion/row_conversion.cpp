@@ -457,46 +457,65 @@ TEST_F(RowToColumnTests, AllTypesLarge)
   auto d = cudf::detail::make_counting_transform_iterator(
     0, [&](auto i) -> double { return rand_double(re); });
 
+  auto all_valid  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return 1; });
+  auto none_valid = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return 0; });
+  auto most_valid = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return rand() % 2 == 0 ? 0 : 1; });
+  auto few_valid = cudf::detail::make_counting_transform_iterator(
+    0, [](auto i) { return rand() % 13 == 0 ? 1 : 0; });
+
   for (int i = 0; i < 10; ++i) {
-    cols.push_back(
-      *cudf::test::fixed_width_column_wrapper<int8_t>(r, r + num_rows).release().release());
+    cols.push_back(*cudf::test::fixed_width_column_wrapper<int8_t>(r, r + num_rows, all_valid)
+                      .release()
+                      .release());
     schema.push_back(cudf::data_type{cudf::type_id::INT8});
   }
 
   for (int i = 0; i < 10; ++i) {
-    cols.push_back(
-      *cudf::test::fixed_width_column_wrapper<int16_t>(r, r + num_rows).release().release());
+    cols.push_back(*cudf::test::fixed_width_column_wrapper<int16_t>(r, r + num_rows, few_valid)
+                      .release()
+                      .release());
     schema.push_back(cudf::data_type{cudf::type_id::INT16});
   }
 
   for (int i = 0; i < 10; ++i) {
-    cols.push_back(
-      *cudf::test::fixed_width_column_wrapper<int32_t>(r, r + num_rows).release().release());
+    if (i < 5) {
+      cols.push_back(*cudf::test::fixed_width_column_wrapper<int32_t>(r, r + num_rows, few_valid)
+                        .release()
+                        .release());
+    } else {
+      cols.push_back(*cudf::test::fixed_width_column_wrapper<int32_t>(r, r + num_rows, none_valid)
+                        .release()
+                        .release());
+    }
     schema.push_back(cudf::data_type{cudf::type_id::INT32});
   }
 
   for (int i = 0; i < 10; ++i) {
-    cols.push_back(
-      *cudf::test::fixed_width_column_wrapper<float>(d, d + num_rows).release().release());
+    cols.push_back(*cudf::test::fixed_width_column_wrapper<float>(d, d + num_rows, most_valid)
+                      .release()
+                      .release());
     schema.push_back(cudf::data_type{cudf::type_id::FLOAT32});
   }
 
   for (int i = 0; i < 10; ++i) {
-    cols.push_back(
-      *cudf::test::fixed_width_column_wrapper<double>(d, d + num_rows).release().release());
+    cols.push_back(*cudf::test::fixed_width_column_wrapper<double>(d, d + num_rows, most_valid)
+                      .release()
+                      .release());
     schema.push_back(cudf::data_type{cudf::type_id::FLOAT64});
   }
 
   for (int i = 0; i < 10; ++i) {
-    cols.push_back(
-      *cudf::test::fixed_width_column_wrapper<bool>(r, r + num_rows).release().release());
+    cols.push_back(*cudf::test::fixed_width_column_wrapper<bool>(r, r + num_rows, few_valid)
+                      .release()
+                      .release());
     schema.push_back(cudf::data_type{cudf::type_id::BOOL8});
   }
 
   for (int i = 0; i < 10; ++i) {
     cols.push_back(
       *cudf::test::fixed_width_column_wrapper<cudf::timestamp_ms, cudf::timestamp_ms::rep>(
-         r, r + num_rows)
+         r, r + num_rows, all_valid)
          .release()
          .release());
     schema.push_back(cudf::data_type{cudf::type_id::TIMESTAMP_MILLISECONDS});
@@ -505,25 +524,25 @@ TEST_F(RowToColumnTests, AllTypesLarge)
   for (int i = 0; i < 10; ++i) {
     cols.push_back(
       *cudf::test::fixed_width_column_wrapper<cudf::timestamp_D, cudf::timestamp_D::rep>(
-         r, r + num_rows)
+         r, r + num_rows, most_valid)
          .release()
          .release());
     schema.push_back(cudf::data_type{cudf::type_id::TIMESTAMP_DAYS});
   }
 
   for (int i = 0; i < 10; ++i) {
-    cols.push_back(
-      *cudf::test::fixed_point_column_wrapper<int32_t>(r, r + num_rows, numeric::scale_type{-2})
-         .release()
-         .release());
+    cols.push_back(*cudf::test::fixed_point_column_wrapper<int32_t>(
+                      r, r + num_rows, all_valid, numeric::scale_type{-2})
+                      .release()
+                      .release());
     schema.push_back(cudf::data_type{cudf::type_id::DECIMAL32});
   }
 
   for (int i = 0; i < 10; ++i) {
-    cols.push_back(
-      *cudf::test::fixed_point_column_wrapper<int64_t>(r, r + num_rows, numeric::scale_type{-1})
-         .release()
-         .release());
+    cols.push_back(*cudf::test::fixed_point_column_wrapper<int64_t>(
+                      r, r + num_rows, most_valid, numeric::scale_type{-1})
+                      .release()
+                      .release());
     schema.push_back(cudf::data_type{cudf::type_id::DECIMAL64});
   }
 
