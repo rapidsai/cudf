@@ -741,12 +741,6 @@ def test_merge_sort(ons, hows):
     [
         {"left_on": ["a"], "left_index": False, "right_index": True},
         {"right_on": ["b"], "left_index": True, "right_index": False},
-        {
-            "left_on": ["a"],
-            "right_on": ["b"],
-            "left_index": True,
-            "right_index": True,
-        },
     ],
 )
 def test_merge_sort_on_indexes(kwargs):
@@ -1784,12 +1778,6 @@ def test_typecast_on_join_indexes_matching_categorical():
         {"left_index": True, "right_on": "b"},
         {"left_on": "a", "right_index": True},
         {"left_index": True, "right_index": True},
-        {
-            "left_on": "a",
-            "right_on": "b",
-            "left_index": True,
-            "right_index": True,
-        },
     ],
 )
 def test_series_dataframe_mixed_merging(lhs, rhs, how, kwargs):

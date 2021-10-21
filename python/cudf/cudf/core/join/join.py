@@ -368,9 +368,23 @@ class Merge:
                     'Can only pass argument "on" OR "left_on" '
                     'and "right_on", not a combination of both.'
                 )
+            elif left_index or right_index:
+                # Passing 'on' with 'left_index' or 'right_index' is ambiguous
+                raise ValueError(
+                    'Can only pass argument "on" OR "left_index" '
+                    'and "right_index", not a combination of both.'
+                )
             else:
                 # the validity of 'on' being checked by _Indexer
                 return
+        elif left_on and left_index:
+            raise ValueError(
+                'Can only pass argument "left_on" OR "left_index" not both.'
+            )
+        elif right_on and right_index:
+            raise ValueError(
+                'Can only pass argument "right_on" OR "right_index" not both.'
+            )
 
         # Can't merge on unnamed Series
         if (isinstance(lhs, cudf.Series) and not lhs.name) or (
