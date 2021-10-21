@@ -116,6 +116,8 @@ class Merge:
         else:
             self._out_class = cudf.DataFrame
 
+        self._key_columns_with_same_name = self.on if self.on else None
+
     def perform_merge(self) -> Frame:
         # Match the dtypes of the key columns from lhs and rhs
         lhs = self.lhs.copy(deep=False)
@@ -289,10 +291,8 @@ class Merge:
         #   in the final result
         common_names = set(left_names) & set(right_names)
 
-        if self.on:
-            key_columns_with_same_name = self.on
-        else:
-            key_columns_with_same_name = [
+        if self._key_columns_with_same_name is None:
+            self._key_columns_with_same_name = [
                 lkey.name
                 for lkey, rkey in zip(self._left_keys, self._right_keys)
                 if (
@@ -300,8 +300,9 @@ class Merge:
                     and lkey.name == rkey.name
                 )
             ]
+
         for name in common_names:
-            if name not in key_columns_with_same_name:
+            if name not in self._key_columns_with_same_name:
                 left_names[name] = f"{name}{self.lsuffix}"
                 right_names[name] = f"{name}{self.rsuffix}"
             else:
