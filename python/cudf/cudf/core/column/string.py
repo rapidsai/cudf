@@ -21,6 +21,7 @@ import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import regex as rex
 from numba import cuda
 
 import cudf
@@ -651,9 +652,11 @@ class StringMethods(ColumnMethods):
 
         Notes
         -----
-        The parameters `case`, `flags`, and `na` are not yet supported and
-        will raise a NotImplementedError if anything other than the default
+        The parameters `case` and `na` are not yet supported and will
+        raise a NotImplementedError if anything other than the default
         value is set.
+        The `flags` parameter currently only supports re.DOTALL and
+        re.MULTILINE.
 
         Examples
         --------
@@ -731,8 +734,10 @@ class StringMethods(ColumnMethods):
         """  # noqa W605
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
-        elif na is not np.nan:
+        if na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
+        if flags != 0 and (flags & (rex.MULTILINE | rex.DOTALL) == 0):
+            raise NotImplementedError("invalid `flags` parameter value")
 
         if pat is None:
             result_col = column.column_empty(
@@ -3286,7 +3291,8 @@ class StringMethods(ColumnMethods):
 
         Notes
         -----
-            -  `flags` parameter is currently not supported.
+            -  `flags` parameter currently only supports re.DOTALL
+               and re.MULTILINE.
             -  Some characters need to be escaped when passing
                in pat. eg. ``'$'`` has a special meaning in regex
                and must be escaped when finding this literal character.
@@ -3323,6 +3329,8 @@ class StringMethods(ColumnMethods):
         >>> index.str.count('a')
         Int64Index([0, 0, 2, 1], dtype='int64')
         """  # noqa W605
+        if flags != 0 and (flags & (rex.MULTILINE | rex.DOTALL) == 0):
+            raise NotImplementedError("invalid `flags` parameter value")
 
         return self._return_or_inplace(
             libstrings.count_re(self._column, pat, flags)
@@ -3852,7 +3860,10 @@ class StringMethods(ColumnMethods):
 
         Notes
         -----
-        Parameters currently not supported are: `case`, `flags` and `na`.
+        Parameters `case` and `na` are currently not supported.
+        The `flags` parameter currently only supports re.DOTALL and
+        re.MULTILINE.
+
 
         Examples
         --------
@@ -3877,6 +3888,8 @@ class StringMethods(ColumnMethods):
         """
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
+        if flags != 0 and (flags & (rex.MULTILINE | rex.DOTALL) == 0):
+            raise NotImplementedError("invalid `flags` parameter value")
 
         return self._return_or_inplace(
             libstrings.match_re(self._column, pat, flags)

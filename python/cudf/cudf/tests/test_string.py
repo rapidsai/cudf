@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+import regex as rex
 
 import cudf
 from cudf import concat
@@ -834,7 +835,7 @@ def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
         ("FGHI", False),
     ],
 )
-@pytest.mark.parametrize("flags,flags_raise", [(0, 0), (8, 0)])
+@pytest.mark.parametrize("flags,flags_raise", [(0, 0), (24, 0), (1, 1)])
 @pytest.mark.parametrize("na,na_raise", [(np.nan, 0), (None, 1), ("", 1)])
 def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
     ps, gs = ps_gs
@@ -1728,15 +1729,22 @@ def test_string_wrap(data, width):
         ["23", "³", "⅕", ""],
         [" ", "\t\r\n ", ""],
         ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
-        ["line to be wrapped", "another line to be wrapped"],
+        ["line\nto be wrapped", "another\nline\nto be wrapped"],
     ],
 )
-@pytest.mark.parametrize("pat", ["a", " ", "\t", "another", "0", r"\$"])
-def test_string_count(data, pat):
+@pytest.mark.parametrize(
+    "pat", ["a", " ", "\t", "another", "0", r"\$", "^line$", "line.*be"]
+)
+@pytest.mark.parametrize("flags", [0, rex.MULTILINE, rex.DOTALL])
+def test_string_count(data, pat, flags):
     gs = cudf.Series(data)
     ps = pd.Series(data)
 
-    assert_eq(gs.str.count(pat=pat), ps.str.count(pat=pat), check_dtype=False)
+    assert_eq(
+        gs.str.count(pat=pat, flags=flags),
+        ps.str.count(pat=pat, flags=flags),
+        check_dtype=False,
+    )
     assert_eq(as_index(gs).str.count(pat=pat), pd.Index(ps).str.count(pat=pat))
 
 
