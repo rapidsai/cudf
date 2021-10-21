@@ -116,6 +116,34 @@ struct ceil_timestamp {
   }
 };
 
+struct floor_timestamp {
+  template <typename Timestamp>
+  CUDA_DEVICE_CALLABLE Timestamp operator()(Timestamp const ts) const
+  {
+    using namespace cuda::std::chrono;
+    // want to use this with D, H, T (minute), S, L (millisecond), U
+    switch (COMPONENT) {
+      case datetime_component::DAY:
+        return time_point_cast<typename Timestamp::duration>(floor<duration_D>(ts));
+      case datetime_component::HOUR:
+        return time_point_cast<typename Timestamp::duration>(floor<duration_h>(ts));
+      case datetime_component::MINUTE:
+        return time_point_cast<typename Timestamp::duration>(floor<duration_m>(ts));
+      case datetime_component::SECOND:
+        return time_point_cast<typename Timestamp::duration>(floor<duration_s>(ts));
+      case datetime_component::MILLISECOND:
+        return time_point_cast<typename Timestamp::duration>(floor<duration_ms>(ts));
+      case datetime_component::MICROSECOND:
+        return time_point_cast<typename Timestamp::duration>(floor<duration_us>(ts));
+      case datetime_component::NANOSECOND:
+        return time_point_cast<typename Timestamp::duration>(floor<duration_ns>(ts));
+      default: cudf_assert(false && "Unexpected resolution");
+    }
+
+    return {};
+  }
+};
+
 // Number of days until month indexed by leap year and month (0-based index)
 static __device__ int16_t const days_until_month[2][13] = {
   {0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334, 365},  // For non leap years
