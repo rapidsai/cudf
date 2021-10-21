@@ -89,6 +89,10 @@ ConfigureBench(CONTIGUOUS_SPLIT_BENCH copying/contiguous_split_benchmark.cu)
 ConfigureBench(SHIFT_BENCH copying/shift_benchmark.cu)
 
 ###################################################################################################
+# - copy-if-else benchmark -----------------------------------------------------------------------------
+ConfigureBench(COPY_IF_ELSE_BENCH copying/copy_if_else_benchmark.cpp)
+
+###################################################################################################
 # - transpose benchmark ---------------------------------------------------------------------------
 ConfigureBench(TRANSPOSE_BENCH transpose/transpose_benchmark.cu)
 
@@ -141,7 +145,8 @@ ConfigureBench(REDUCTION_BENCH
 ###################################################################################################
 # - reduction benchmark ---------------------------------------------------------------------------
 ConfigureBench(REPLACE_BENCH
-  replace/clamp_benchmark.cpp)
+  replace/clamp_benchmark.cpp
+  replace/nans_benchmark.cpp)
 
 ###################################################################################################
 # - filling benchmark -----------------------------------------------------------------------------

@@ -19,6 +19,8 @@
 #include <cudf/detail/aggregation/result_cache.hpp>
 #include <cudf/detail/groupby.hpp>
 #include <cudf/utilities/span.hpp>
+
+#include <memory>
 #include <vector>
 
 namespace cudf {
@@ -30,10 +32,24 @@ inline std::vector<aggregation_result> extract_results(host_span<RequestType con
                                                        cudf::detail::result_cache& cache)
 {
   std::vector<aggregation_result> results(requests.size());
-
+  std::unordered_map<std::pair<column_view, std::reference_wrapper<aggregation const>>,
+                     column_view,
+                     cudf::detail::pair_column_aggregation_hash,
+                     cudf::detail::pair_column_aggregation_equal_to>
+    repeated_result;
   for (size_t i = 0; i < requests.size(); i++) {
     for (auto&& agg : requests[i].aggregations) {
-      results[i].results.emplace_back(cache.release_result(i, *agg));
+      if (cache.has_result(requests[i].values, *agg)) {
+        results[i].results.emplace_back(cache.release_result(requests[i].values, *agg));
+        repeated_result[{requests[i].values, *agg}] = results[i].results.back()->view();
+      } else {
+        auto it = repeated_result.find({requests[i].values, *agg});
+        if (it != repeated_result.end()) {
+          results[i].results.emplace_back(std::make_unique<column>(it->second));
+        } else {
+          CUDF_FAIL("Cannot extract result from the cache");
+        }
+      }
     }
   }
   return results;

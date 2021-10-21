@@ -67,7 +67,7 @@ class writer::impl {
   /**
    * @brief Constructor with writer options.
    *
-   * @param filepath Filepath if storing dataset to a file
+   * @param sink data_sink for storing dataset
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -82,7 +82,7 @@ class writer::impl {
   /**
    * @brief Constructor with chunked writer options.
    *
-   * @param filepath Filepath if storing dataset to a file
+   * @param sink data_sink for storing dataset
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches

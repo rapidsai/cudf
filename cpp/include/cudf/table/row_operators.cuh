@@ -280,8 +280,6 @@ class element_relational_comparator {
    *
    * @param lhs_element_index The index of the first element
    * @param rhs_element_index The index of the second element
-   * @param null_precedence Indicates how null values are ordered with other
-   * values
    * @return weak_ordering Indicates the relationship between the elements in
    * the `lhs` and `rhs` columns.
    */
