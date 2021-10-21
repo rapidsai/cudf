@@ -176,6 +176,7 @@ struct MD5Hasher {
       for (int j = 0; j < message_chunk_size; j++) {
         uint32_t F;
         uint32_t g;
+        // No default case is needed because j < 64. j / 16 is always 0, 1, 2, or 3.
         switch (j / 16) {
           case 0:
             F = (B & C) | ((~B) & D);
