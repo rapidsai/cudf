@@ -164,7 +164,7 @@ std::optional<data_type> get_common_type(data_type out, data_type lhs, data_type
  * @param out output type of the binary operation
  * @param lhs first operand type of the binary operation
  * @param rhs second operand type of the binary operation
- * @param op binary operator enum.
+ * @param op binary operator enum
  * @return true if given binary operator supports given input and output types.
  */
 bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op);
@@ -175,7 +175,7 @@ bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_
  * @param out output type of the binary operation
  * @param lhs left column of the binary operation
  * @param rhs right column of the binary operation
- * @param op binary operator enum.
+ * @param op binary operator enum
  * @return true if given binary operator supports given input and output types.
  */
 bool struct_children_support_operation(data_type out,

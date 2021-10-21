@@ -16,15 +16,9 @@
 
 #include <binaryop/compiled/binary_ops.hpp>
 
-#include <cstdint>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
-
-#include <cudf/column/column_factories.hpp>
-#include "cudf/binaryop.hpp"
-#include "cudf/types.hpp"
 
 namespace cudf::test {
 template <typename T>
@@ -257,11 +251,9 @@ TYPED_TEST(TypedBinopStructCompare, binopcompare_scalars)
   auto col2 =
     fixed_width_column_wrapper<T>{{26, 0, 14, 116, 89, 62, 63, 0, 121, 5, 115, 18, 0, 88, 18},
                                   {0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0}};
-
   auto s1 = strings_column_wrapper{
     {"6S", "5G", "4a", "5G", "", "5Z", "5e", "9a", "5G", "5", "5Gs", "5G", "", "5G2", "5G"},
     {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0}};
-
   auto struct_col1 = structs_column_wrapper{col2, s1};
   auto nested_col1 = structs_column_wrapper{col1, struct_col1}.release();
   auto col_val     = nested_col1->view();
@@ -303,7 +295,7 @@ struct BinopStructCompareFailures : public cudf::test::BaseFixture {
   void attempt_struct_binop(binary_operator op,
                             data_type dt = cudf::data_type(cudf::type_id::BOOL8))
   {
-    auto col    = fixed_width_column_wrapper<uint32_t>{0, 89, 121};
+    auto col        = fixed_width_column_wrapper<uint32_t>{0, 89, 121};
     auto struct_col = structs_column_wrapper{col};
     binary_operation(struct_col, struct_col, op, dt);
   }
