@@ -359,7 +359,7 @@ class fixed_point_scalar : public scalar {
   rep_type value(rmm::cuda_stream_view stream = rmm::cuda_stream_default) const;
 
   /**
-   * @brief Get the decimal32 or decimal64.
+   * @brief Get the decimal32, decimal64 or decimal128.
    *
    * @param stream CUDA stream used for device memory operations.
    */

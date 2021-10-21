@@ -21,6 +21,7 @@
 #include <cudf/detail/round.hpp>
 #include <cudf/detail/unary.hpp>
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/fixed_point/temporary.hpp>
 #include <cudf/round.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -46,26 +47,26 @@ inline double __device__ generic_round_half_even(double d) { return rint(d); }
 inline float __device__ generic_modf(float a, float* b) { return modff(a, b); }
 inline double __device__ generic_modf(double a, double* b) { return modf(a, b); }
 
-template <typename T, typename std::enable_if_t<std::is_signed<T>::value>* = nullptr>
+template <typename T, typename std::enable_if_t<cuda::std::is_signed<T>::value>* = nullptr>
 T __device__ generic_abs(T value)
 {
-  return abs(value);
+  return numeric::detail::abs(value);
 }
 
-template <typename T, typename std::enable_if_t<not std::is_signed<T>::value>* = nullptr>
+template <typename T, typename std::enable_if_t<not cuda::std::is_signed<T>::value>* = nullptr>
 T __device__ generic_abs(T value)
 {
   return value;
 }
 
-template <typename T, typename std::enable_if_t<std::is_signed<T>::value>* = nullptr>
+template <typename T, typename std::enable_if_t<cuda::std::is_signed<T>::value>* = nullptr>
 int16_t __device__ generic_sign(T value)
 {
   return value < 0 ? -1 : 1;
 }
 
 // this is needed to suppress warning: pointless comparison of unsigned integer with zero
-template <typename T, typename std::enable_if_t<not std::is_signed<T>::value>* = nullptr>
+template <typename T, typename std::enable_if_t<not cuda::std::is_signed<T>::value>* = nullptr>
 int16_t __device__ generic_sign(T)
 {
   return 1;
@@ -86,7 +87,7 @@ struct half_up_zero {
     return generic_round(e);
   }
 
-  template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
+  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
   __device__ U operator()(U)
   {
     assert(false);  // Should never get here. Just for compilation
@@ -105,7 +106,7 @@ struct half_up_positive {
     return integer_part + generic_round(fractional_part * n) / n;
   }
 
-  template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
+  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
   __device__ U operator()(U)
   {
     assert(false);  // Should never get here. Just for compilation
@@ -122,7 +123,7 @@ struct half_up_negative {
     return generic_round(e / n) * n;
   }
 
-  template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
+  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
   __device__ U operator()(U e)
   {
     auto const down = (e / n) * n;  // result from rounding down
@@ -139,7 +140,7 @@ struct half_even_zero {
     return generic_round_half_even(e);
   }
 
-  template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
+  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
   __device__ U operator()(U)
   {
     assert(false);  // Should never get here. Just for compilation
@@ -158,7 +159,7 @@ struct half_even_positive {
     return integer_part + generic_round_half_even(fractional_part * n) / n;
   }
 
-  template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
+  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
   __device__ U operator()(U)
   {
     assert(false);  // Should never get here. Just for compilation
@@ -175,7 +176,7 @@ struct half_even_negative {
     return generic_round_half_even(e / n) * n;
   }
 
-  template <typename U = T, typename std::enable_if_t<std::is_integral<U>::value>* = nullptr>
+  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
   __device__ U operator()(U e)
   {
     auto const down_over_n = e / n;            // use this to determine HALF_EVEN case

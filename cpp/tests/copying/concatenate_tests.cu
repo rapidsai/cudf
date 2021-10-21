@@ -1549,15 +1549,15 @@ TEST_F(ListsColumnTest, ListOfStructs)
 }
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
 struct FixedPointTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_CASE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointConcatentate)
+TYPED_TEST(FixedPointTestAllReps, FixedPointConcatentate)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;

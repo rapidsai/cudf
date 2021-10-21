@@ -1065,8 +1065,8 @@ template <typename Source, aggregation::Kind k>
 struct target_type_impl<
   Source,
   k,
-  std::enable_if_t<is_fixed_width<Source>() && not is_chrono<Source>() &&
-                   not is_fixed_point<Source>() && (k == aggregation::MEAN)>> {
+  std::enable_if_t<is_fixed_width<Source>() and not is_chrono<Source>() and
+                   not is_fixed_point<Source>() and (k == aggregation::MEAN)>> {
   using type = double;
 };
 
@@ -1093,12 +1093,22 @@ struct target_type_impl<
   using type = int64_t;
 };
 
-// Summing fixed_point numbers, always use the decimal64 accumulator
+// Summing fixed_point numbers
 template <typename Source, aggregation::Kind k>
-struct target_type_impl<Source,
-                        k,
-                        std::enable_if_t<is_fixed_point<Source>() && (k == aggregation::SUM)>> {
+struct target_type_impl<
+  Source,
+  k,
+  std::enable_if_t<cudf::is_fixed_point<Source>() &&
+                   not std::is_same_v<Source, numeric::decimal128> && (k == aggregation::SUM)>> {
   using type = numeric::decimal64;
+};
+
+template <typename Source, aggregation::Kind k>
+struct target_type_impl<
+  Source,
+  k,
+  std::enable_if_t<std::is_same_v<Source, numeric::decimal128> && (k == aggregation::SUM)>> {
+  using type = numeric::decimal128;
 };
 
 // Summing/Multiplying float/doubles, use same type accumulator

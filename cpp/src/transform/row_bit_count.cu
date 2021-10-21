@@ -205,7 +205,7 @@ struct flatten_functor {
                   thrust::optional<int> parent_index)
   {
     // track branch depth as we reach this list and after we pass it
-    size_type const branch_depth_start = cur_branch_depth;
+    auto const branch_depth_start = cur_branch_depth;
     auto const is_list_inside_struct =
       parent_index && out[parent_index.value()].type().id() == type_id::STRUCT;
     if (is_list_inside_struct) {

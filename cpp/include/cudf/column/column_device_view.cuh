@@ -457,6 +457,24 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   }
 
   /**
+   * @brief Returns a `numeric::decimal128` element at the specified index for a `fixed_point`
+   * column.
+   *
+   * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
+   * then any attempt to use the result will lead to undefined behavior.
+   *
+   * @param element_index Position of the desired element
+   * @return numeric::decimal128 representing the element at this index
+   */
+  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, numeric::decimal128>)>
+  __device__ T element(size_type element_index) const noexcept
+  {
+    using namespace numeric;
+    auto const scale = scale_type{_type.scale()};
+    return decimal128{scaled_integer<__int128_t>{data<__int128_t>()[element_index], scale}};
+  }
+
+  /**
    * @brief For a given `T`, indicates if `column_device_view::element<T>()` has a valid overload.
    *
    */

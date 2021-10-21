@@ -77,8 +77,7 @@ struct in_place_fill_range_dispatch {
     auto unscaled = static_cast<cudf::fixed_point_scalar<T> const&>(value).value(stream);
     using RepType = typename T::rep;
     auto s        = cudf::numeric_scalar<RepType>(unscaled, value.is_valid(stream));
-    auto view     = cudf::bit_cast(destination, s.type());
-    in_place_fill<RepType>(view, begin, end, s, stream);
+    in_place_fill<RepType>(destination, begin, end, s, stream);
   }
 
   template <typename T, typename... Args>
@@ -93,13 +92,15 @@ struct out_of_place_fill_range_dispatch {
   cudf::column_view const& input;
 
   template <typename T, typename... Args>
-  std::enable_if_t<not cudf::is_rep_layout_compatible<T>(), std::unique_ptr<cudf::column>>
+  std::enable_if_t<not cudf::is_rep_layout_compatible<T>() and not cudf::is_fixed_point<T>(),
+                   std::unique_ptr<cudf::column>>
   operator()(Args...)
   {
     CUDF_FAIL("Unsupported type in fill.");
   }
 
-  template <typename T, CUDF_ENABLE_IF(cudf::is_rep_layout_compatible<T>())>
+  template <typename T,
+            CUDF_ENABLE_IF(cudf::is_rep_layout_compatible<T>() or cudf::is_fixed_point<T>())>
   std::unique_ptr<cudf::column> operator()(
     cudf::size_type begin,
     cudf::size_type end,
@@ -116,8 +117,9 @@ struct out_of_place_fill_range_dispatch {
           0);
       }
 
-      auto ret_view = p_ret->mutable_view();
-      in_place_fill<T>(ret_view, begin, end, value, stream);
+      auto ret_view    = p_ret->mutable_view();
+      using DeviceType = cudf::device_storage_type_t<T>;
+      in_place_fill<DeviceType>(ret_view, begin, end, value, stream);
     }
 
     return p_ret;
