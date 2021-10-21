@@ -117,7 +117,38 @@ class Merge:
             else on
         )
 
-        self._compute_join_keys()
+        if self.left_on or self.right_on:
+            self._left_keys = [
+                _Indexer(name=on, column=True)
+                if not self._using_left_index and on in self.lhs._data
+                else _Indexer(name=on, index=True)
+                for on in (
+                    _coerce_to_tuple(self.left_on) if self.left_on else []
+                )
+            ]
+            self._right_keys = [
+                _Indexer(name=on, column=True)
+                if not self._using_right_index and on in self.rhs._data
+                else _Indexer(name=on, index=True)
+                for on in (
+                    _coerce_to_tuple(self.right_on) if self.right_on else []
+                )
+            ]
+            if len(self._left_keys) != len(self._right_keys):
+                raise ValueError(
+                    "Merge operands must have same number of join key columns"
+                )
+        else:
+            # if `on` is not provided and we're not merging
+            # index with column or on both indexes, then use
+            # the intersection  of columns in both frames
+            on_names = set(self.lhs._data) & set(self.rhs._data)
+            self._left_keys = [
+                _Indexer(name=on, column=True) for on in on_names
+            ]
+            self._right_keys = [
+                _Indexer(name=on, column=True) for on in on_names
+            ]
 
         if isinstance(lhs, cudf.MultiIndex) or isinstance(
             rhs, cudf.MultiIndex
@@ -198,45 +229,6 @@ class Merge:
         if self.sort:
             result = self._sort_result(result)
         return result
-
-    def _compute_join_keys(self):
-        left_keys = []
-        right_keys = []
-        if self.left_on or self.right_on:
-            if self.left_on:
-                # TODO: require left_on or left_index to be specified
-                left_keys.extend(
-                    [
-                        _Indexer(name=on, column=True)
-                        if not self._using_left_index and on in self.lhs._data
-                        else _Indexer(name=on, index=True)
-                        for on in _coerce_to_tuple(self.left_on)
-                    ]
-                )
-            if self.right_on:
-                # TODO: require right_on or right_index to be specified
-                right_keys.extend(
-                    [
-                        _Indexer(name=on, column=True)
-                        if not self._using_right_index and on in self.rhs._data
-                        else _Indexer(name=on, index=True)
-                        for on in _coerce_to_tuple(self.right_on)
-                    ]
-                )
-        else:
-            # if `on` is not provided and we're not merging
-            # index with column or on both indexes, then use
-            # the intersection  of columns in both frames
-            on_names = set(self.lhs._data) & set(self.rhs._data)
-            left_keys = [_Indexer(name=on, column=True) for on in on_names]
-            right_keys = [_Indexer(name=on, column=True) for on in on_names]
-
-        if len(left_keys) != len(right_keys):
-            raise ValueError(
-                "Merge operands must have same number of join key columns"
-            )
-
-        self._left_keys, self._right_keys = left_keys, right_keys
 
     def _merge_results(self, left_result: Frame, right_result: Frame):
         # Merge the Frames `left_result` and `right_result` into a single
