@@ -391,6 +391,32 @@ class Merge:
                 'Can only pass argument "right_on" OR "right_index" not both.'
             )
 
+        # Can't merge on a column name that is present in both a frame and its
+        # indexes.
+        if on:
+            for key in on:
+                if (key in lhs._data and key in lhs.index._data) or (
+                    key in rhs._data and key in rhs.index._data
+                ):
+                    raise ValueError(
+                        f"{key} is both an index level and a "
+                        "column label, which is ambiguous."
+                    )
+        if left_on:
+            for key in left_on:
+                if key in lhs._data and key in lhs.index._data:
+                    raise ValueError(
+                        f"{key} is both an index level and a "
+                        "column label, which is ambiguous."
+                    )
+        if right_on:
+            for key in right_on:
+                if key in rhs._data and key in rhs.index._data:
+                    raise ValueError(
+                        f"{key} is both an index level and a "
+                        "column label, which is ambiguous."
+                    )
+
         # Can't merge on unnamed Series
         if (isinstance(lhs, cudf.Series) and not lhs.name) or (
             isinstance(rhs, cudf.Series) and not rhs.name
