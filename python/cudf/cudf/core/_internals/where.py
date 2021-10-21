@@ -10,9 +10,10 @@ import cudf
 from cudf._typing import ColumnLike, ScalarLike
 from cudf.core.column import ColumnBase
 from cudf.core.dataframe import DataFrame
-from cudf.core.frame import Frame, SingleColumnFrame
+from cudf.core.frame import Frame
 from cudf.core.index import Index
 from cudf.core.series import Series
+from cudf.core.single_column_frame import SingleColumnFrame
 
 
 def _normalize_scalars(col: ColumnBase, other: ScalarLike) -> ScalarLike:

@@ -1110,17 +1110,41 @@ def test_dataframe_hash_columns(nrows, method):
     data[0] = data[-1]  # make first and last the same
     gdf["a"] = data
     gdf["b"] = gdf.a + 100
-    out = gdf.hash_columns(["a", "b"])
+    with pytest.warns(FutureWarning):
+        out = gdf.hash_columns(["a", "b"])
     assert isinstance(out, cudf.Series)
     assert len(out) == nrows
     assert out.dtype == np.int32
 
     # Check default
-    out_all = gdf.hash_columns()
+    with pytest.warns(FutureWarning):
+        out_all = gdf.hash_columns()
     assert_eq(out, out_all)
 
     # Check single column
-    out_one = gdf.hash_columns(["a"], method=method)
+    with pytest.warns(FutureWarning):
+        out_one = gdf.hash_columns(["a"], method=method)
+    # First matches last
+    assert out_one.iloc[0] == out_one.iloc[-1]
+    # Equivalent to the cudf.Series.hash_values()
+    assert_eq(gdf["a"].hash_values(method=method), out_one)
+
+
+@pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
+@pytest.mark.parametrize("method", ["murmur3", "md5"])
+def test_dataframe_hash_values(nrows, method):
+    gdf = cudf.DataFrame()
+    data = np.asarray(range(nrows))
+    data[0] = data[-1]  # make first and last the same
+    gdf["a"] = data
+    gdf["b"] = gdf.a + 100
+    out = gdf.hash_values()
+    assert isinstance(out, cudf.Series)
+    assert len(out) == nrows
+    assert out.dtype == np.int32
+
+    # Check single column
+    out_one = gdf[["a"]].hash_values(method=method)
     # First matches last
     assert out_one.iloc[0] == out_one.iloc[-1]
     # Equivalent to the cudf.Series.hash_values()
@@ -2068,6 +2092,24 @@ def test_unaryops_df(pdf, gdf, unaryop):
     assert_eq(d, g)
 
 
+@pytest.mark.parametrize("unary_func", ["abs", "floor", "ceil"])
+def test_unary_func_df(pdf, unary_func):
+    np.random.seed(0)
+    disturbance = pd.Series(np.random.rand(10))
+    pdf = pdf - 5 + disturbance
+    d = pdf.apply(getattr(np, unary_func))
+    g = getattr(cudf.from_pandas(pdf), unary_func)()
+    assert_eq(d, g)
+
+
+def test_scale_df(gdf):
+    got = (gdf - 5).scale()
+    expect = cudf.DataFrame(
+        {"x": np.linspace(0.0, 1.0, 10), "y": np.linspace(0.0, 1.0, 10)}
+    )
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "func",
     [
@@ -2200,14 +2242,32 @@ def test_series_hash_encode(nrows):
     s = cudf.Series(data, name=1)
     num_features = 1000
 
-    encoded_series = s.hash_encode(num_features)
+    with pytest.warns(FutureWarning):
+        encoded_series = s.hash_encode(num_features)
     assert isinstance(encoded_series, cudf.Series)
     enc_arr = encoded_series.to_numpy()
     assert np.all(enc_arr >= 0)
     assert np.max(enc_arr) < num_features
 
-    enc_with_name_arr = s.hash_encode(num_features, use_name=True).to_numpy()
+    with pytest.warns(FutureWarning):
+        enc_with_name_arr = s.hash_encode(
+            num_features, use_name=True
+        ).to_numpy()
     assert enc_with_name_arr[0] != enc_arr[0]
+
+
+def test_series_hash_encode_reproducible_results():
+    # Regression test to ensure that hash_encode outputs are reproducible
+    data = cudf.Series([0, 1, 2])
+    with pytest.warns(FutureWarning):
+        hash_result = data.hash_encode(stop=2 ** 16, use_name=False)
+    expected_result = cudf.Series([42165, 55037, 7341])
+    assert_eq(hash_result, expected_result)
+
+    with pytest.warns(FutureWarning):
+        hash_result_with_name = data.hash_encode(stop=2 ** 16, use_name=True)
+    expected_result_with_name = cudf.Series([36137, 39649, 58673])
+    assert_eq(hash_result_with_name, expected_result_with_name)
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["bool"])

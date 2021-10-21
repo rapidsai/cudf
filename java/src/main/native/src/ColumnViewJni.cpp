@@ -61,7 +61,9 @@
 #include <cudf/strings/strip.hpp>
 #include <cudf/strings/substring.hpp>
 #include <cudf/structs/structs_column_view.hpp>
+#include <cudf/tdigest/tdigest_column_view.cuh>
 #include <cudf/transform.hpp>
+#include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <map_lookup.hpp>
@@ -295,14 +297,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_approxPercentile(JNIEnv *
   JNI_NULL_CHECK(env, input_column, "input_column native handle is null", 0);
   JNI_NULL_CHECK(env, percentiles_column, "percentiles_column native handle is null", 0);
   try {
-    cudf::jni::auto_set_device(env);
-    cudf::column_view *n_input_column = reinterpret_cast<cudf::column_view *>(input_column);
-    std::unique_ptr<cudf::structs_column_view> input_view =
-        std::make_unique<cudf::structs_column_view>(*n_input_column);
-    cudf::column_view *n_percentiles_column =
-        reinterpret_cast<cudf::column_view *>(percentiles_column);
-    std::unique_ptr<cudf::column> result =
-        cudf::percentile_approx(*input_view, *n_percentiles_column);
+    using namespace cudf;
+    using tdigest_column_view = cudf::tdigest::tdigest_column_view;
+    jni::auto_set_device(env);
+    auto const tdigest_view =
+        tdigest_column_view{structs_column_view{*reinterpret_cast<column_view *>(input_column)}};
+    auto const p_percentiles = reinterpret_cast<column_view *>(percentiles_column);
+    auto result = percentile_approx(tdigest_view, *p_percentiles);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
