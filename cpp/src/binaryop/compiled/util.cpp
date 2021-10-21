@@ -191,20 +191,18 @@ bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_
   return double_type_dispatcher(lhs, rhs, is_supported_operation_functor{}, out, op);
 }
 
-bool is_supported_struct_operation(data_type out,
-                                   column_view const& lhs,
-                                   column_view const& rhs,
-                                   binary_operator op)
+bool struct_children_support_operation(data_type out,
+                                       column_view const& lhs,
+                                       column_view const& rhs,
+                                       binary_operator op)
 {
   if (lhs.type().id() == type_id::STRUCT && rhs.type().id() == type_id::STRUCT) {
     return lhs.num_children() == rhs.num_children() &&
-           (op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL ||
-            op == binary_operator::LESS || op == binary_operator::LESS_EQUAL ||
-            op == binary_operator::GREATER || op == binary_operator::GREATER_EQUAL) &&
            std::all_of(thrust::counting_iterator<size_type>(0),
                        thrust::counting_iterator<size_type>(lhs.num_children()),
                        [&](size_type i) {
-                         return is_supported_struct_operation(out, lhs.child(i), rhs.child(i), op);
+                         return struct_children_support_operation(
+                           out, lhs.child(i), rhs.child(i), op);
                        });
 
   } else {

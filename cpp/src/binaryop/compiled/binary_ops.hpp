@@ -169,6 +169,20 @@ std::optional<data_type> get_common_type(data_type out, data_type lhs, data_type
  */
 bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op);
 
+/**
+ * @brief Check if input binary operation is supported for the given input and output types.
+ *
+ * @param out output type of the binary operation
+ * @param lhs left column of the binary operation
+ * @param rhs right column of the binary operation
+ * @param op binary operator enum.
+ * @return true if given binary operator supports given input and output types.
+ */
+bool struct_children_support_operation(data_type out,
+                                       column_view const& lhs,
+                                       column_view const& rhs,
+                                       binary_operator op);
+
 // Defined in individual .cu files.
 /**
  * @brief Deploys single type or double type dispatcher that runs binary operation on each element
@@ -215,38 +229,6 @@ void dispatch_equality_op(mutable_column_device_view& outd,
                           bool is_rhs_scalar,
                           binary_operator op,
                           rmm::cuda_stream_view stream);
-
-/**
- * @brief
- *
- * @param lhs
- * @param rhs
- * @param output_type
- * @param stream
- * @param mr
- * @return std::unique_ptr<column>
- */
-std::unique_ptr<column> struct_binary_op(
-  column_view const& lhs,
-  column_view const& rhs,
-  binary_operator op,
-  data_type output_type,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief binary op functionality for structs, limited to comparison binops
- *
- * @param out
- * @param lhs
- * @param rhs
- * @param stream
- */
-void struct_binary_operation(mutable_column_view& out,
-                             column_view const& lhs,
-                             column_view const& rhs,
-                             binary_operator op,
-                             rmm::cuda_stream_view stream);
 }  // namespace compiled
 }  // namespace binops
 }  // namespace cudf

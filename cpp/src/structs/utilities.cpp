@@ -415,10 +415,10 @@ std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_paren
                          std::move(ret_validity_buffers));
 }
 
-bool contains_struct_nulls(column_view const& struct_col)
+bool contains_struct_nulls(column_view const& col)
 {
-  return (struct_col.type().id() == type_id::STRUCT && struct_col.has_nulls()) ||
-         std::all_of(struct_col.child_begin(), struct_col.child_end(), [](auto const& child) {
+  return (col.type().id() == type_id::STRUCT && col.has_nulls()) ||
+         std::all_of(col.child_begin(), col.child_end(), [](auto const& child) {
            return contains_struct_nulls(child);
          });
 }

@@ -19,6 +19,7 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/detail/utilities.cuh>
@@ -256,39 +257,26 @@ rmm::device_uvector<order> get_orders(binary_operator op,
   return cudf::detail::make_device_uvector_async(op_modifier, stream);
 }
 
-template <typename comparator>
+template <typename Comparator, typename OptionalOutIter>
 void struct_compare_tabulation(mutable_column_view& out,
-                               comparator compare,
+                               Comparator compare,
                                binary_operator op,
+                               OptionalOutIter optional_iter,
                                rmm::cuda_stream_view stream)
 {
-  auto d_out = mutable_column_device_view::create(out, stream);
-
   (op == binary_operator::EQUAL || op == binary_operator::LESS || op == binary_operator::GREATER)
     ? thrust::tabulate(rmm::exec_policy(stream),
-                       d_out->begin<bool>(),
-                       d_out->end<bool>(),
-                       [compare] __device__(auto i) { return compare(i, i); })
+                       out.begin<bool>(),
+                       out.end<bool>(),
+                       [optional_iter, compare] __device__(size_type i) {
+                         return optional_iter[i].has_value() and compare(i, i);
+                       })
     : thrust::tabulate(rmm::exec_policy(stream),
-                       d_out->begin<bool>(),
-                       d_out->end<bool>(),
-                       [compare] __device__(auto i) { return not compare(i, i); });
-}
-
-}  // namespace
-
-std::unique_ptr<column> struct_binary_op(column_view const& lhs,
-                                         column_view const& rhs,
-                                         binary_operator op,
-                                         data_type output_type,
-                                         rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
-{
-  auto out      = make_fixed_width_column_for_output(lhs, rhs, op, output_type, stream, mr);
-  auto out_view = out->mutable_view();
-  struct_binary_operation(out_view, lhs, rhs, op, stream);
-
-  return out;
+                       out.begin<bool>(),
+                       out.end<bool>(),
+                       [optional_iter, compare] __device__(size_type i) {
+                         return optional_iter[i].has_value() and not compare(i, i);
+                       });
 }
 
 void struct_binary_operation(mutable_column_view& out,
@@ -317,34 +305,53 @@ void struct_binary_operation(mutable_column_view& out,
   table_view lhs_flat = std::get<0>(lhs_flattener);
   table_view rhs_flat = std::get<0>(rhs_flattener);
 
+  auto d_out     = column_device_view::create(out, stream);
   auto d_lhs     = table_device_view::create(lhs_flat);
   auto d_rhs     = table_device_view::create(rhs_flat);
   bool has_nulls = has_nested_nulls(lhs_flat) || has_nested_nulls(rhs_flat);
 
   if (op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL) {
     if (has_nulls) {
-      auto equal = row_equality_comparator<true>{*d_lhs, *d_rhs, true};
-      struct_compare_tabulation(out, equal, op, stream);
+      auto out_iter = cudf::detail::make_optional_iterator<bool>(
+        *d_out, contains_nulls::DYNAMIC{}, out.has_nulls());
+      struct_compare_tabulation(
+        out, row_equality_comparator<true>{*d_lhs, *d_rhs, true}, op, out_iter, stream);
     } else {
-      auto equal = row_equality_comparator<false>{*d_lhs, *d_rhs, true};
-      struct_compare_tabulation(out, equal, op, stream);
+      auto out_iter = cudf::detail::make_optional_iterator<bool>(
+        *d_out, contains_nulls::DYNAMIC{}, out.has_nulls());
+      struct_compare_tabulation(
+        out, row_equality_comparator<false>{*d_lhs, *d_rhs, true}, op, out_iter, stream);
     }
   } else if (op == binary_operator::LESS || op == binary_operator::LESS_EQUAL ||
              op == binary_operator::GREATER || op == binary_operator::GREATER_EQUAL) {
     if (has_nulls) {
-      auto compare = row_lexicographic_comparator<true>{
-        *d_lhs, *d_rhs, get_orders(op, lhs_flat.num_columns(), stream).data()};
-      struct_compare_tabulation(out, compare, op, stream);
+      auto out_iter = cudf::detail::make_optional_iterator<bool>(
+        *d_out, contains_nulls::DYNAMIC{}, out.has_nulls());
+      struct_compare_tabulation(
+        out,
+        row_lexicographic_comparator<true>{
+          *d_lhs, *d_rhs, get_orders(op, lhs_flat.num_columns(), stream).data()},
+        op,
+        out_iter,
+        stream);
     } else {
-      auto compare = row_lexicographic_comparator<false>{
-        *d_lhs, *d_rhs, get_orders(op, lhs_flat.num_columns(), stream).data()};
-      struct_compare_tabulation(out, compare, op, stream);
+      auto out_iter = cudf::detail::make_optional_iterator<bool>(
+        *d_out, contains_nulls::DYNAMIC{}, out.has_nulls());
+      struct_compare_tabulation(
+        out,
+        row_lexicographic_comparator<false>{
+          *d_lhs, *d_rhs, get_orders(op, lhs_flat.num_columns(), stream).data()},
+        op,
+        out_iter,
+        stream);
     }
     //  } else if (op == binary_operator::NULL_EQUALS) {
   } else {
     CUDF_FAIL("Unsupported operator for these types");
   }
 }
+
+}  // namespace
 
 std::unique_ptr<column> string_null_min_max(scalar const& lhs,
                                             column_view const& rhs,
@@ -457,6 +464,8 @@ void binary_operation(mutable_column_view& out,
                       rmm::cuda_stream_view stream)
 {
   if (lhs.type().id() == type_id::STRUCT && rhs.type().id() == type_id::STRUCT) {
+    CUDF_EXPECTS(struct_children_support_operation(out.type(), lhs, rhs, op),
+                 "Unsupported operator for these types");
     struct_binary_operation(out, lhs, rhs, op, stream);
   } else {
     auto lhsd = column_device_view::create(lhs, stream);
@@ -474,6 +483,8 @@ void binary_operation(mutable_column_view& out,
 {
   if (lhs.type().id() == type_id::STRUCT && rhs.type().id() == type_id::STRUCT) {
     auto lhs_col = make_column_from_scalar(lhs, rhs.size(), stream);
+    CUDF_EXPECTS(struct_children_support_operation(out.type(), lhs_col->view(), rhs, op),
+                 "Unsupported operator for these types");
     struct_binary_operation(out, lhs_col->view(), rhs, op, stream);
   } else {
     auto [lhsd, aux] = scalar_to_column_device_view(lhs, stream);
@@ -491,6 +502,9 @@ void binary_operation(mutable_column_view& out,
 {
   if (lhs.type().id() == type_id::STRUCT && rhs.type().id() == type_id::STRUCT) {
     auto rhs_col = make_column_from_scalar(rhs, lhs.size(), stream);
+    CUDF_EXPECTS(struct_children_support_operation(out.type(), lhs, rhs_col->view(), op),
+                 "Unsupported operator for these types");
+
     struct_binary_operation(out, lhs, rhs_col->view(), op, stream);
   } else {
     auto lhsd        = column_device_view::create(lhs, stream);

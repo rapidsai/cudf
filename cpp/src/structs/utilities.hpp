@@ -15,7 +15,6 @@
  */
 #pragma once
 
-#include <cudf/binaryop.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -158,13 +157,18 @@ std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_paren
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief
+ * @brief Checks if column or any of its children are struct columns with structs that are null.
  *
- * @param struct_col
- * @return true
- * @return false
+ * This function searchings for structs that are null and differentiates between them and structs
+ * containing null values. Struct nulls add a column to the table result of the flatten column
+ * utility. The existence of struct nulls necessitates the use of column_nullability::FORCE when
+ * flattening the column for comparison.
+ *
+ * @param col Column to check for structs containing nulls
+ * @return true If the column is or contains a struct column with struct nulls
+ * @return false If the column is not a struct column or does not contain struct nulls
  */
-bool contains_struct_nulls(column_view const& struct_col);
+bool contains_struct_nulls(column_view const& col);
 
 }  // namespace detail
 }  // namespace structs
