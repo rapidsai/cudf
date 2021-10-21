@@ -133,7 +133,7 @@ struct MD5Hasher {
   {
     // On destruction, finalize the message buffer and write out the current
     // hexadecimal hash value to the result location.
-    // Add a one bit flag (10000000) to signal the end of the message.
+    // Add a one byte flag 0b10000000 to signal the end of the message.
     uint8_t constexpr end_of_message = 0x80;
     // The message length is appended to the end of the last chunk processed.
     uint64_t const message_length_in_bits = message_length * 8;
