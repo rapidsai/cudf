@@ -469,6 +469,7 @@ __global__ void copy_from_columns(const size_type num_rows,
       // more appealing to copy element-wise from input data into shared matching the end layout
       // and do row-based memcopies out.
 
+      auto const shared_buffer_base = shared[fetch % stages_count];
       for (auto el = (int)threadIdx.x; el < num_elements_in_block; el += blockDim.x) {
         auto const relative_col = el / num_fetch_rows;
         auto const relative_row = el % num_fetch_rows;
@@ -493,14 +494,36 @@ __global__ void copy_from_columns(const size_type num_rows,
           printf("block %lu to shared chunk %lu. %p <- %p(0x%x) - %d bytes\n",
                  fetch,
                  fetch % stages_count,
-                 &shared[fetch % stages_count][shared_offset],
+                 &shared_buffer_base[shared_offset],
                  input_src,
                  *input_src,
                  col_size);
 
         // copy the element from global memory
-        cuda::memcpy_async(
-          &shared[fetch % stages_count][shared_offset], input_src, col_size, fetch_barrier);
+        switch (col_size) {
+          case 2:
+            cuda::memcpy_async(&shared_buffer_base[shared_offset],
+                               input_src,
+                               cuda::aligned_size_t<2>(col_size),
+                               fetch_barrier);
+            break;
+          case 4:
+            cuda::memcpy_async(&shared_buffer_base[shared_offset],
+                               input_src,
+                               cuda::aligned_size_t<4>(col_size),
+                               fetch_barrier);
+            break;
+          case 8:
+            cuda::memcpy_async(&shared_buffer_base[shared_offset],
+                               input_src,
+                               cuda::aligned_size_t<8>(col_size),
+                               fetch_barrier);
+            break;
+          default:
+            cuda::memcpy_async(
+              &shared_buffer_base[shared_offset], input_src, col_size, fetch_barrier);
+            break;
+        }
       }
     }
 
@@ -511,15 +534,15 @@ __global__ void copy_from_columns(const size_type num_rows,
     if (debug_print)
       printf("reading block %lu\n", blockIdx.x * NUM_BLOCKS_PER_KERNEL_FROM_COLUMNS + subset);
 
-    auto const block_row_size = block.get_shared_row_size(col_offsets, col_sizes);
-    auto const column_offset  = col_offsets[block.start_col];
+    auto const block_row_size      = block.get_shared_row_size(col_offsets, col_sizes);
+    auto const column_offset       = col_offsets[block.start_col];
+    auto const block_output_buffer = output_data[block.buffer_num];
 
     // copy entire rows to final dest
     for (auto absolute_row = block.start_row + threadIdx.x; absolute_row <= block.end_row;
          absolute_row += blockDim.x) {
       auto const relative_row = absolute_row - block.start_row;
-      auto const output_dest =
-        output_data[block.buffer_num] + row_offsets[absolute_row] + column_offset;
+      auto const output_dest  = block_output_buffer + row_offsets[absolute_row] + column_offset;
       if (debug_print)
         printf("processing row %d\noutput data[%d] is address %p\n",
                absolute_row,
@@ -533,8 +556,10 @@ __global__ void copy_from_columns(const size_type num_rows,
                block_row_size,
                absolute_row);
 
-      cuda::memcpy_async(
-        output_dest, &shared[subset % stages_count][shared_offset], block_row_size, subset_barrier);
+      cuda::memcpy_async(output_dest,
+                         &shared[subset % stages_count][shared_offset],
+                         cuda::aligned_size_t<8>(block_row_size),
+                         subset_barrier);
     }
   }
 
@@ -641,8 +666,8 @@ __global__ void copy_validity_from_columns(const size_type num_rows,
     auto const num_block_cols = block.num_cols();
     auto const num_block_rows = block.num_rows();
 
-    auto const num_sections_x = (num_block_cols + 31) / 32;
-    auto const num_sections_y = (num_block_rows + 7) / 8;
+    auto const num_sections_x = util::div_rounding_up_unsafe(num_block_cols, 32);
+    auto const num_sections_y = util::div_rounding_up_unsafe(num_block_rows, 32);
     auto const validity_data_row_length =
       align_offset(util::div_rounding_up_unsafe(num_block_cols, 8), 8);
     auto const total_sections = num_sections_x * num_sections_y;
@@ -690,7 +715,7 @@ __global__ void copy_validity_from_columns(const size_type num_rows,
                my_section_idx,
                total_sections);
       auto const relative_col = section_x * 32 + lane_id;
-      auto const relative_row = section_y * 8;
+      auto const relative_row = section_y * 32;
       auto const absolute_col = relative_col + block.start_col;
       auto const absolute_row = relative_row + block.start_row;
       auto const cols_left    = num_columns - absolute_col;
@@ -720,15 +745,15 @@ __global__ void copy_validity_from_columns(const size_type num_rows,
             absolute_row,
             relative_col,
             absolute_col);
-        auto my_byte =
-          input_nm[absolute_col] != nullptr ? input_nm[absolute_col][absolute_row / 32] : 0xFF;
+        auto my_data = input_nm[absolute_col] != nullptr ? input_nm[absolute_col][absolute_row / 32]
+                                                         : std::numeric_limits<uint32_t>::max();
 
         if (print_debug)
           printf(
-            "thread %d's byte is 0x%x, participation mask is 0x%x for relative row %d(%d real), "
+            "thread %d's bytes are 0x%x, participation mask is 0x%x for relative row %d(%d real), "
             "relative col %d(%d absolute)\n",
             threadIdx.x,
-            my_byte & 0xFF,
+            my_data,
             participation_mask,
             relative_row,
             absolute_row,
@@ -738,8 +763,9 @@ __global__ void copy_validity_from_columns(const size_type num_rows,
         // every thread that is participating in the warp has a byte, but it's column-based
         // data and we need it in row-based. So we shuffle the bits around with ballot_sync to
         // make the bytes we actually write.
-        for (int i = 0, byte_mask = 1; i < 8 && relative_row + i < num_rows; ++i, byte_mask <<= 1) {
-          auto validity_data = __ballot_sync(participation_mask, my_byte & byte_mask);
+        bitmask_type dw_mask = 1;
+        for (int i = 0; i < 32 && relative_row + i < num_rows; ++i, dw_mask <<= 1) {
+          auto validity_data = __ballot_sync(participation_mask, my_data & dw_mask);
           // lead thread in each warp writes data
           auto const validity_write_offset =
             validity_data_row_length * (relative_row + i) + relative_col / 8;
@@ -750,8 +776,8 @@ __global__ void copy_validity_from_columns(const size_type num_rows,
                 "0x%x\n",
                 threadIdx.x,
                 blockIdx.x,
-                byte_mask,
-                my_byte & byte_mask,
+                dw_mask,
+                my_data & dw_mask,
                 validity_block % NUM_VALIDITY_BLOCKS_PER_KERNEL_LOADED,
                 validity_write_offset,
                 validity_data);
@@ -804,6 +830,9 @@ __global__ void copy_validity_from_columns(const size_type num_rows,
     // make sure entire block has finished copy
     group.sync();
 
+    auto const output_data_base =
+      output_data[block.buffer_num] + validity_offset + block.start_col / 8;
+
     // now async memcpy the shared memory out to the final destination
     for (int row = block.start_row + threadIdx.x; row <= block.end_row; row += blockDim.x) {
       auto const relative_row = row - block.start_row;
@@ -835,9 +864,8 @@ __global__ void copy_validity_from_columns(const size_type num_rows,
             word_index(block.start_col),
           this_shared_block[validity_data_row_length * relative_row]);
       }
-      auto const output_ptr =
-        output_data[block.buffer_num] + row_offsets[row] + validity_offset + block.start_col / 8;
-      auto const num_bytes = util::div_rounding_up_unsafe(num_block_cols, 8);
+      auto const output_ptr = output_data_base + row_offsets[row];
+      auto const num_bytes  = util::div_rounding_up_unsafe(num_block_cols, 8);
 
       cuda::memcpy_async(
         output_ptr,
@@ -970,11 +998,20 @@ static __device__ void fetch_blocks_for_row_to_column(
          row += blockDim.x) {
       auto shared_offset = (row - fetch_block_start_row) * fetch_block_row_size + shared_row_offset;
       if (debug_print)
-        printf("fetching block %lu to shared chunk %lu. %p <- %p\n",
-               fetch_index,
-               fetch_index % max_resident_blocks,
-               &shared[fetch_index % max_resident_blocks][shared_offset],
-               &input_data[row_offsets[row] + starting_col_offset]);
+        printf(
+          "%d - fetching block %lu to shared chunk %lu. %p(shared[%d %% %d][%d]) <- %p(row %d, row "
+          "offset %d starting col offset %d)\n",
+          threadIdx.x,
+          fetch_index,
+          fetch_index % max_resident_blocks,
+          &shared[fetch_index % max_resident_blocks][shared_offset],
+          (int)fetch_index,
+          max_resident_blocks,
+          shared_offset,
+          &input_data[row_offsets[row] + starting_col_offset],
+          row,
+          row_offsets[row],
+          starting_col_offset);
       // copy the main
       cuda::memcpy_async(&shared[fetch_index % max_resident_blocks][shared_offset],
                          &input_data[row_offsets[row] + starting_col_offset],
@@ -1021,7 +1058,7 @@ __global__ void copy_to_columns(const size_type num_rows,
   // to speed up some of the random access memory we do, we copy col_sizes and col_offsets
   // to shared memory for each of the blocks that we work on
 
-  /*constexpr*/ bool debug_print  = false;  // threadIdx.x == 0 && blockIdx.x == 0;
+  constexpr bool debug_print      = false;  // threadIdx.x == 2 && blockIdx.x == 0;
   constexpr unsigned stages_count = NUM_BLOCKS_PER_KERNEL_LOADED;
   auto group                      = cooperative_groups::this_thread_block();
   extern __shared__ int8_t shared_data[];
@@ -1094,12 +1131,12 @@ __global__ void copy_to_columns(const size_type num_rows,
 
     auto& subset_barrier = block_barrier[subset % NUM_BLOCKS_PER_KERNEL_LOADED];
     // ensure our data is ready
-    if (debug_print && group.thread_rank() == 0 && blockIdx.x == 0)
+    if (debug_print)
       printf("%d-%d waiting at barrier %p\n", threadIdx.x, blockIdx.x, &subset_barrier);
     subset_barrier.arrive_and_wait();
 
     auto block = block_infos[blockIdx.x * NUM_BLOCKS_PER_KERNEL_TO_COLUMNS + subset];
-    if (debug_print && group.thread_rank() == 0 && blockIdx.x == 0)
+    if (debug_print)
       printf("%d-%d reading block %lu at address %p\n",
              threadIdx.x,
              blockIdx.x,
@@ -1159,19 +1196,19 @@ __global__ void copy_to_columns(const size_type num_rows,
 
       if (debug_print) {
         printf(
-          "relative_col: %d, relative_row: %d, absolute_col: %d, absolute_row: %d, "
-          "shared_mmeory_row_offset: %d, shared_memory_offset: %d,"
-          " column_size: %d, shmem_src: %p, dst: %p\n",//, uint32 is %u\n",
-          relative_col,
-          relative_row,
-          absolute_col,
-          absolute_row,
-          shared_memory_row_offset,
-          shared_memory_offset,
-          column_size,
-          shmem_src,
-          dst/*,
-          *reinterpret_cast<uint32_t*>(shmem_src)*/);
+           "relative_col: %d, relative_row: %d, absolute_col: %d, absolute_row: %d, "
+           "shared_mmeory_row_offset: %d, shared_memory_offset: %d,"
+           " column_size: %d, shmem_src: %p, dst: %p\n",//, uint32 is %u\n",
+           relative_col,
+           relative_row,
+           absolute_col,
+           absolute_row,
+           shared_memory_row_offset,
+           shared_memory_offset,
+           column_size,
+           shmem_src,
+           dst/*,
+           *reinterpret_cast<uint32_t*>(shmem_src)*/);
         printf("memcpy_async(%p, %p, %d, subset_barrier);\n", dst, shmem_src, column_size);
       }
       if (debug_print && absolute_col == 0 && absolute_row == 51) {
@@ -1185,7 +1222,7 @@ __global__ void copy_to_columns(const size_type num_rows,
       cuda::memcpy_async(dst, shmem_src, column_size, subset_barrier);
     }
     group.sync();
-    if (debug_print && group.thread_rank() == 0 && blockIdx.x == 0)
+    if (debug_print)
       printf(
         "%d-%d copy to main memory with barrier %p\n", threadIdx.x, blockIdx.x, &subset_barrier);
   }
@@ -1224,9 +1261,7 @@ __global__ void copy_validity_to_columns(const size_type num_rows,
   int8_t* shared_blocks[NUM_VALIDITY_BLOCKS_PER_KERNEL_LOADED] = {
     shared_data, shared_data + shmem_used_per_block / 2};
 
-  bool print_debug = false;  // threadIdx.x == 0 && blockIdx.x == 0;
-  // bool print_debug = false;
-  //  if (blockIdx.x != 3 || threadIdx.x / 32 != 0) return;
+  constexpr bool print_debug = false;  // threadIdx.x == 0 && blockIdx.x == 0;
   if (print_debug) {
     printf("%d %d - %d rows, %d columns\n", threadIdx.x, blockIdx.x, num_rows, num_columns);
     printf("%d %d - block infos are at %p and my index is %d\n",
@@ -1246,10 +1281,6 @@ __global__ void copy_validity_to_columns(const size_type num_rows,
       output_nm,
       row_offsets,
       block_infos);
-    /*    printf("Row Offsets:\n");
-    for (int i=0; i<num_rows; ++i) {
-    printf("%d: %d\n", i, row_offsets[i]);
-    }*/
   }
   // else { return; }
 
@@ -1407,14 +1438,15 @@ __global__ void copy_validity_to_columns(const size_type num_rows,
       auto const starting_address = output_nm[col] + word_index(block_start_row);
 
       if (print_debug)
-        printf("%d %d - col %d memcpy_async(%p(offset %d), %p, %d, subset_barrier);\n",
+        printf("%d %d - col %d memcpy_async(%p(offset %d), %p, %d, subset_barrier); - 0x%x\n",
                threadIdx.x,
                blockIdx.x,
                col,
                starting_address,
                word_index(block_start_row),
                &this_shared_block[validity_data_col_length * relative_col],
-               words_to_copy * 4);
+               words_to_copy * 4,
+               this_shared_block[validity_data_col_length * relative_col]);
       cuda::memcpy_async(
         output_nm[col] + word_index(block_start_row),
         &this_shared_block[validity_data_col_length * relative_col],
@@ -1627,7 +1659,7 @@ static size_type compute_column_information(iterator begin,
     fixed_width_size_per_row += col_size;
   }
 
-  auto validity_offset = detail::align_offset(fixed_width_size_per_row, 4);
+  auto validity_offset = fixed_width_size_per_row;
   column_starts.push_back(validity_offset);
 
   return fixed_width_size_per_row;
