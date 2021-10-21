@@ -835,7 +835,9 @@ def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
         ("FGHI", False),
     ],
 )
-@pytest.mark.parametrize("flags,flags_raise", [(0, 0), (24, 0), (1, 1)])
+@pytest.mark.parametrize(
+    "flags,flags_raise", [(0, 0), (rex.MULTILINE | rex.DOTALL, 0), (1, 1)]
+)
 @pytest.mark.parametrize("na,na_raise", [(np.nan, 0), (None, 1), ("", 1)])
 def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
     ps, gs = ps_gs
