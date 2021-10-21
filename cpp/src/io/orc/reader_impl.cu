@@ -493,28 +493,25 @@ class aggregate_orc_metadata {
     add_column_and_nested(selected_columns, metadata.ff.types, id);
   }
 
-  void levelize(std::map<int32_t, std::vector<int32_t>>& selected_columns,
-                int32_t id,
-                int32_t level,
-                std::vector<std::vector<orc_column_meta>>& sorted_levels)
-  {
-    if (static_cast<int32_t>(sorted_levels.size()) == level) sorted_levels.emplace_back();
-
-    sorted_levels[level].push_back({id, static_cast<int32_t>(selected_columns[id].size())});
-
-    for (auto child_id : selected_columns[id]) {
-      // Since nested column needs to be processed before its child can be processed,
-      // child column is being added to next level
-      levelize(selected_columns, child_id, level + 1, sorted_levels);
-    }
-  }
-
   std::vector<std::vector<orc_column_meta>> sort_into_levels(
     std::map<int32_t, std::vector<int32_t>>& selected_columns)
   {
     std::vector<std::vector<orc_column_meta>> sorted_levels;
+
+    std::function<void(int32_t, int32_t)> levelize = [&](int32_t id, int32_t level) {
+      if (static_cast<int32_t>(sorted_levels.size()) == level) sorted_levels.emplace_back();
+
+      sorted_levels[level].push_back({id, static_cast<int32_t>(selected_columns[id].size())});
+
+      for (auto child_id : selected_columns[id]) {
+        // Since nested column needs to be processed before its child can be processed,
+        // child column is being added to next level
+        levelize(child_id, level + 1);
+      }
+    };
+
     for (auto col_id : selected_columns[0]) {
-      levelize(selected_columns, col_id, 0, sorted_levels);
+      levelize(col_id, 0);
     }
     return sorted_levels;
   }
