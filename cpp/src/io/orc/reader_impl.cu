@@ -467,13 +467,16 @@ class aggregate_orc_metadata {
     return selected_stripes_mapping;
   }
 
-  void add_column_and_nested(std::map<int32_t, std::vector<int32_t>>& selected_columns,
-                             std::vector<SchemaType> const& types,
-                             int32_t id)
+  void add_nested_columns(std::map<int32_t, std::vector<int32_t>>& selected_columns,
+                          std::vector<SchemaType> const& types,
+                          int32_t id)
   {
     for (auto child_id : types[id].subtypes) {
-      selected_columns[id].push_back(child_id);
-      add_column_and_nested(selected_columns, types, child_id);
+      if (std::find(selected_columns[id].cbegin(), selected_columns[id].cend(), child_id) ==
+          selected_columns[id].end()) {
+        selected_columns[id].push_back(child_id);
+        add_nested_columns(selected_columns, types, child_id);
+      }
     }
   }
 
@@ -481,8 +484,17 @@ class aggregate_orc_metadata {
                              cudf::io::orc::metadata const& metadata,
                              int32_t id)
   {
-    selected_columns[0].push_back(id);
-    // TODO walk back up the tree and update
+    auto current_id = id;
+    auto parent_id  = metadata.parent_id(current_id);
+    while (parent_id != -1) {
+      if (std::find(selected_columns[parent_id].cbegin(),
+                    selected_columns[parent_id].cend(),
+                    current_id) == selected_columns[parent_id].end()) {
+        selected_columns[parent_id].push_back(current_id);
+      }
+      current_id = parent_id;
+      parent_id  = metadata.parent_id(current_id);
+    }
   }
 
   void add_column_to_mapping(std::map<int32_t, std::vector<int32_t>>& selected_columns,
@@ -490,7 +502,7 @@ class aggregate_orc_metadata {
                              int32_t id)
   {
     update_parent_mapping(selected_columns, metadata, id);
-    add_column_and_nested(selected_columns, metadata.ff.types, id);
+    add_nested_columns(selected_columns, metadata.ff.types, id);
   }
 
   std::vector<std::vector<orc_column_meta>> sort_into_levels(
@@ -545,13 +557,6 @@ class aggregate_orc_metadata {
         CUDF_EXPECTS(name_found, "Unknown column name : " + std::string(use_name));
       }
     }
-    /*
-    for (auto [k, v] : sel) {
-      std::cout << "key: " << k << std::endl;
-      for (auto& ev : v)
-        std::cout << ev << ' ';
-      std::cout << std::endl;
-    }*/
     return sort_into_levels(selected_columns_map);
   }
 };
@@ -1183,13 +1188,6 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
 
   // Select only columns required by the options
   _selected_columns = _metadata->select_columns(options.get_columns());
-  /*
-    for (auto& lvl : _selected_columns) {
-      for (auto& c : lvl)
-        std::cout << c.id << ',' << c.num_children << ' ';
-      std::cout << std::endl;
-    }*/
-  // CUDF_FAIL("stop");
 
   // Override output timestamp resolution if requested
   if (options.get_timestamp_type().id() != type_id::EMPTY) {

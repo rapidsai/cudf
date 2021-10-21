@@ -586,17 +586,11 @@ class metadata {
   size_t get_total_rows() const { return ff.numberOfRows; }
   int get_num_stripes() const { return ff.stripes.size(); }
   int get_num_columns() const { return ff.types.size(); }
-  std::string const& get_column_name(int32_t column_id) const
-  {
-    if (column_names.empty() && get_num_columns() != 0) { init_column_names(); }
-    return column_names[column_id];
-  }
-  std::string const& get_column_path(int32_t column_id) const
-  {
-    if (column_paths.empty() && get_num_columns() != 0) { init_column_names(); }
-    return column_paths[column_id];
-  }
+  std::string const& get_column_name(int32_t column_id) const { return column_names[column_id]; }
+  std::string const& get_column_path(int32_t column_id) const { return column_paths[column_id]; }
   int get_row_index_stride() const { return ff.rowIndexStride; }
+
+  int32_t parent_id(int32_t column_id) const { return schema[column_id].parent; }
 
  public:
   PostScript ps;
@@ -607,15 +601,16 @@ class metadata {
   datasource* const source;
 
  private:
-  struct schema_indexes {
+  struct column_schema_indexes {
     int32_t parent = -1;
     int32_t field  = -1;
   };
-  std::vector<schema_indexes> get_schema_indexes() const;
-  void init_column_names() const;
+  void init_schema();
+  std::vector<column_schema_indexes> schema;
 
-  mutable std::vector<std::string> column_names;
-  mutable std::vector<std::string> column_paths;
+  void init_column_names();
+  std::vector<std::string> column_names;
+  std::vector<std::string> column_paths;
 };
 
 /**

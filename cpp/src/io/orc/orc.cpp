@@ -459,20 +459,19 @@ metadata::metadata(datasource* const src) : source(src)
   auto md_data     = decompressor->Decompress(buffer->data(), ps.metadataLength, &md_length);
   orc::ProtobufReader(md_data, md_length).read(md);
 
-  // Initialize the column names
+  init_schema();
   init_column_names();
 }
 
-void metadata::init_column_names() const
+void metadata::init_column_names()
 {
-  auto const schema_idxs = get_schema_indexes();
-  auto const& types      = ff.types;
+  auto const& types = ff.types;
   // root ORC column
   column_names.push_back("");
   column_paths.push_back("");
   for (int32_t col_id = 1; col_id < get_num_columns(); ++col_id) {
-    auto const parent_idx = schema_idxs[col_id].parent;
-    auto const field_idx  = schema_idxs[col_id].field;
+    auto const parent_idx = schema[col_id].parent;
+    auto const field_idx  = schema[col_id].field;
     if (field_idx >= 0 and field_idx < static_cast<int32_t>(types[parent_idx].fieldNames.size())) {
       column_names.push_back(types[parent_idx].fieldNames[field_idx]);
     } else {
@@ -485,26 +484,22 @@ void metadata::init_column_names() const
   }
 }
 
-std::vector<metadata::schema_indexes> metadata::get_schema_indexes() const
+void metadata::init_schema()
 {
-  std::vector<schema_indexes> result(ff.types.size());
+  auto const schema_size = static_cast<uint32_t>(ff.types.size());
+  schema.resize(schema_size);
 
-  auto const schema_size = static_cast<uint32_t>(result.size());
   for (uint32_t i = 0; i < schema_size; i++) {
     auto const& subtypes    = ff.types[i].subtypes;
     auto const num_children = static_cast<uint32_t>(subtypes.size());
-    if (result[i].parent == -1) {  // Not initialized
-      result[i].parent = i;        // set root node as its own parent
-    }
     for (uint32_t j = 0; j < num_children; j++) {
       auto const column_id = subtypes[j];
       CUDF_EXPECTS(column_id > i && column_id < schema_size, "Invalid column id");
-      CUDF_EXPECTS(result[column_id].parent == -1, "Same node referenced twice");
-      result[column_id].parent = i;
-      result[column_id].field  = j;
+      CUDF_EXPECTS(schema[column_id].parent == -1, "Same node referenced twice");
+      schema[column_id].parent = i;
+      schema[column_id].field  = j;
     }
   }
-  return result;
 }
 
 }  // namespace orc
