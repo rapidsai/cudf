@@ -19,7 +19,7 @@ from dask.highlevelgraph import HighLevelGraph
 
 import cudf
 
-SUPPORTED_AGGS = {
+SUPPORTED_AGGS = (
     "count",
     "mean",
     "std",
@@ -30,7 +30,7 @@ SUPPORTED_AGGS = {
     "collect",
     "first",
     "last",
-}
+)
 
 
 class CudfDataFrameGroupBy(DataFrameGroupBy):
