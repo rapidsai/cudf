@@ -781,8 +781,74 @@ class GroupBy(Serializable):
         """Get the column-wise median of the values in each group."""
         return self.agg("median")
 
-    def corr(self):
-        # breakpoint()
+    def corr(self, method="pearson"):
+        """
+        Compute pairwise correlation of columns, excluding NA/null values.
+
+        Parameters
+        ----------
+        method: Method of correlation
+            {‘pearson’, ‘kendall’, ‘spearman’} or callable
+
+            pearson : standard correlation coefficient
+
+            kendall : Kendall Tau correlation coefficient
+
+            spearman : Spearman rank correlation
+
+            callable: callable with input two 1d ndarrays and returning
+            float. Note that the returned matrix from corr will have 1
+            along the diagonals and will be symmetric regardless of the
+            callable’s behavior.
+
+        min_periods: int, optional
+            Minimum number of observations required per pair of columns
+            to have a valid result.
+
+        Returns
+        ----------
+        DataFrame
+            Correlation matrix.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gdf = cudf.DataFrame({
+        ...             "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+        ...             "val1": [5, 4, 6, 4, 8, 7, 4, 5, 2],
+        ...             "val2": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+        ...             "val3": [4, 5, 6, 1, 2, 9, 8, 5, 1]})
+        >>> gdf
+        id  val1  val2  val3
+        0  a     5     4     4
+        1  a     4     5     5
+        2  a     6     6     6
+        3  b     4     1     1
+        4  b     8     2     2
+        5  b     7     9     9
+        6  c     4     8     8
+        7  c     5     5     5
+        8  c     2     1     1
+        >>> gdf.groupby("id").corr(method="pearson")
+                    val1      val2      val3
+        id
+        a   val1  1.000000  0.500000  0.500000
+            val2  0.500000  1.000000  1.000000
+            val3  0.500000  1.000000  1.000000
+        b   val1  1.000000  0.385727  0.385727
+            val2  0.385727  1.000000  1.000000
+            val3  0.385727  1.000000  1.000000
+        c   val1  1.000000  0.714575  0.714575
+            val2  0.714575  1.000000  1.000000
+            val3  0.714575  1.000000  1.000000
+
+        """
+
+        if method in ["kendall", "spearman"]:
+            raise NotImplementedError(
+                "Only pearson correlation is currently supported"
+            )
+
         _cols = self.grouping.values.columns.tolist()
         new_df = cudf.DataFrame({self.grouping.keys.names: self.grouping.keys})
         new_df._data.multiindex = False
