@@ -467,37 +467,13 @@ class aggregate_orc_metadata {
     return selected_stripes_mapping;
   }
 
-  /**
-   * @brief Adds column as per the request and saves metadata about children.
-   *        Children of a column will be added to the next level.
-   *
-   * @param selection A vector that saves list of columns as per levels of nesting.
-   * @param types A vector of schema types of columns.
-   * @param level current level of nesting.
-   * @param id current column id that needs to be added.
-   */
-  void add_column(std::vector<std::vector<orc_column_meta>>& selection,
+  void add_column(std::map<int32_t, std::vector<int32_t>>& selection,
                   std::vector<SchemaType> const& types,
-                  size_t level,
                   int32_t id)
-  {
-    if (level == selection.size()) { selection.emplace_back(); }
-    selection[level].push_back({id, static_cast<int32_t>(types[id].subtypes.size())});
-
-    for (const auto child_id : types[id].subtypes) {
-      // Since nested column needs to be processed before its child can be processed,
-      // child column is being added to next level
-      add_column(selection, types, level + 1, child_id);
-    }
-  }
-
-  void add_column_new(std::map<int32_t, std::vector<int32_t>>& selection,
-                      std::vector<SchemaType> const& types,
-                      int32_t id)
   {
     for (auto child_id : types[id].subtypes) {
       selection[id].push_back(child_id);
-      add_column_new(selection, types, child_id);
+      add_column(selection, types, child_id);
     }
   }
 
@@ -538,26 +514,25 @@ class aggregate_orc_metadata {
   {
     auto const& pfm = per_file_metadata[0];
 
+    std::map<int32_t, std::vector<int32_t>> selected_columns_map;
     if (use_names.empty()) {
-      std::vector<std::vector<orc_column_meta>> selection;
       for (auto const& col_id : pfm.ff.types[0].subtypes) {
-        add_column(selection, pfm.ff.types, 0, col_id);
+        selected_columns_map[0].push_back(col_id);
+        add_column(selected_columns_map, pfm.ff.types, col_id);
       }
-      return selection;
-    }
-
-    std::map<int32_t, std::vector<int32_t>> selected_column_map;
-    for (const auto& use_name : use_names) {
-      bool name_found = false;
-      for (auto col_id = 1; col_id < pfm.get_num_columns(); ++col_id) {
-        if (pfm.get_column_path(col_id) == use_name) {
-          name_found = true;
-          selected_column_map[0].push_back(col_id);
-          add_column_new(selected_column_map, pfm.ff.types, col_id);
-          break;
+    } else {
+      for (const auto& use_name : use_names) {
+        bool name_found = false;
+        for (auto col_id = 1; col_id < pfm.get_num_columns(); ++col_id) {
+          if (pfm.get_column_path(col_id) == use_name) {
+            name_found = true;
+            selected_columns_map[0].push_back(col_id);
+            add_column(selected_columns_map, pfm.ff.types, col_id);
+            break;
+          }
         }
+        CUDF_EXPECTS(name_found, "Unknown column name : " + std::string(use_name));
       }
-      CUDF_EXPECTS(name_found, "Unknown column name : " + std::string(use_name));
     }
     /*
     for (auto [k, v] : sel) {
@@ -566,7 +541,7 @@ class aggregate_orc_metadata {
         std::cout << ev << ' ';
       std::cout << std::endl;
     }*/
-    return sort_into_levels(selected_column_map);
+    return sort_into_levels(selected_columns_map);
   }
 };
 
