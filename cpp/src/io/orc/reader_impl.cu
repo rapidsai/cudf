@@ -467,38 +467,54 @@ class aggregate_orc_metadata {
     return selected_stripes_mapping;
   }
 
-  void add_column(std::map<int32_t, std::vector<int32_t>>& selection,
-                  std::vector<SchemaType> const& types,
-                  int32_t id)
+  void add_column_and_nested(std::map<int32_t, std::vector<int32_t>>& selected_columns,
+                             std::vector<SchemaType> const& types,
+                             int32_t id)
   {
     for (auto child_id : types[id].subtypes) {
-      selection[id].push_back(child_id);
-      add_column(selection, types, child_id);
+      selected_columns[id].push_back(child_id);
+      add_column_and_nested(selected_columns, types, child_id);
     }
   }
 
-  void levelize(std::map<int32_t, std::vector<int32_t>>& selection,
+  void update_parent_mapping(std::map<int32_t, std::vector<int32_t>>& selected_columns,
+                             cudf::io::orc::metadata const& metadata,
+                             int32_t id)
+  {
+    selected_columns[0].push_back(id);
+    // TODO walk back up the tree and update
+  }
+
+  void add_column_to_mapping(std::map<int32_t, std::vector<int32_t>>& selected_columns,
+                             cudf::io::orc::metadata const& metadata,
+                             int32_t id)
+  {
+    update_parent_mapping(selected_columns, metadata, id);
+    add_column_and_nested(selected_columns, metadata.ff.types, id);
+  }
+
+  void levelize(std::map<int32_t, std::vector<int32_t>>& selected_columns,
                 int32_t id,
                 int32_t level,
                 std::vector<std::vector<orc_column_meta>>& sorted_levels)
   {
     if (static_cast<int32_t>(sorted_levels.size()) == level) sorted_levels.emplace_back();
 
-    sorted_levels[level].push_back({id, static_cast<int32_t>(selection[id].size())});
+    sorted_levels[level].push_back({id, static_cast<int32_t>(selected_columns[id].size())});
 
-    for (auto child_id : selection[id]) {
+    for (auto child_id : selected_columns[id]) {
       // Since nested column needs to be processed before its child can be processed,
       // child column is being added to next level
-      levelize(selection, child_id, level + 1, sorted_levels);
+      levelize(selected_columns, child_id, level + 1, sorted_levels);
     }
   }
 
   std::vector<std::vector<orc_column_meta>> sort_into_levels(
-    std::map<int32_t, std::vector<int32_t>>& selection)
+    std::map<int32_t, std::vector<int32_t>>& selected_columns)
   {
     std::vector<std::vector<orc_column_meta>> sorted_levels;
-    for (auto col_id : selection[0]) {
-      levelize(selection, col_id, 0, sorted_levels);
+    for (auto col_id : selected_columns[0]) {
+      levelize(selected_columns, col_id, 0, sorted_levels);
     }
     return sorted_levels;
   }
@@ -517,8 +533,7 @@ class aggregate_orc_metadata {
     std::map<int32_t, std::vector<int32_t>> selected_columns_map;
     if (use_names.empty()) {
       for (auto const& col_id : pfm.ff.types[0].subtypes) {
-        selected_columns_map[0].push_back(col_id);
-        add_column(selected_columns_map, pfm.ff.types, col_id);
+        add_column_to_mapping(selected_columns_map, pfm, col_id);
       }
     } else {
       for (const auto& use_name : use_names) {
@@ -526,8 +541,7 @@ class aggregate_orc_metadata {
         for (auto col_id = 1; col_id < pfm.get_num_columns(); ++col_id) {
           if (pfm.get_column_path(col_id) == use_name) {
             name_found = true;
-            selected_columns_map[0].push_back(col_id);
-            add_column(selected_columns_map, pfm.ff.types, col_id);
+            add_column_to_mapping(selected_columns_map, pfm, col_id);
             break;
           }
         }
