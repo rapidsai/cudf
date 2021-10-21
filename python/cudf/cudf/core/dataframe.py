@@ -596,9 +596,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             if is_list_like(data):
                 if len(data) > 0 and is_scalar(data[0]):
-                    new_df = self._from_columns(
-                        [data], index=index, columns=columns
-                    )
+                    if columns is not None:
+                        data = dict(zip(columns, [data]))
+                    else:
+                        data = dict(enumerate([data]))
+                    new_df = DataFrame(data=data, index=index)
+
                     self._data = new_df._data
                     self.index = new_df._index
                     self.columns = new_df.columns
@@ -5273,18 +5276,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             df._index = as_index(index)
         return df
-
-    @classmethod
-    def _from_columns(cls, cols, index=None, columns=None):
-        """
-        Construct a DataFrame from a list of Columns
-        """
-        if columns is not None:
-            data = dict(zip(columns, cols))
-        else:
-            data = dict(enumerate(cols))
-
-        return cls(data=data, index=index,)
 
     def interpolate(
         self,

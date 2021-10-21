@@ -55,7 +55,6 @@ class _Indexer:
                 )
             else:
                 raise KeyError
-        # TODO: Why is it OK for control flow to get here?
 
 
 def _frame_select_by_indexers(frame: Frame, indexers: Iterable[_Indexer]):

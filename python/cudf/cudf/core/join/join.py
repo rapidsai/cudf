@@ -340,7 +340,7 @@ class Merge:
                 [result._data[col] for col in _coerce_to_tuple(self.right_on)]
             )
         if by:
-            to_sort = cudf.DataFrame._from_columns(by)
+            to_sort = cudf.DataFrame._from_data(dict(enumerate(by)))
             sort_order = to_sort.argsort()
             result = result._gather(
                 sort_order, keep_index=self.left_index or self.right_index
