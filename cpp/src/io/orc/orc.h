@@ -555,8 +555,8 @@ class OrcDecompressor {
  *
  */
 struct orc_column_meta {
-  uint32_t id;            // orc id for the column
-  uint32_t num_children;  // number of children at the same level of nesting in case of struct
+  int32_t id;            // orc id for the column
+  int32_t num_children;  // number of children at the same level of nesting in case of struct
 };
 
 /**

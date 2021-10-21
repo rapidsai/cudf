@@ -359,6 +359,15 @@ class aggregate_orc_metadata {
     return per_file_metadata[source_idx].get_column_name(column_idx);
   }
 
+  auto get_column_path(const int source_idx, const int column_idx) const
+  {
+    CUDF_EXPECTS(source_idx <= static_cast<int>(per_file_metadata.size()),
+                 "Out of range source_idx provided");
+    CUDF_EXPECTS(column_idx <= per_file_metadata[source_idx].get_num_columns(),
+                 "Out of range column_idx provided");
+    return per_file_metadata[source_idx].get_column_path(column_idx);
+  }
+
   auto is_row_grp_idx_present() const { return row_grp_idx_present; }
 
   std::vector<cudf::io::orc::metadata::stripe_source_mapping> select_stripes(
@@ -469,11 +478,11 @@ class aggregate_orc_metadata {
    */
   void add_column(std::vector<std::vector<orc_column_meta>>& selection,
                   std::vector<SchemaType> const& types,
-                  const size_t level,
-                  const uint32_t id)
+                  size_t level,
+                  int32_t id)
   {
     if (level == selection.size()) { selection.emplace_back(); }
-    selection[level].push_back({id, static_cast<uint32_t>(types[id].subtypes.size())});
+    selection[level].push_back({id, static_cast<int32_t>(types[id].subtypes.size())});
 
     for (const auto child_id : types[id].subtypes) {
       // Since nested column needs to be processed before its child can be processed,
@@ -482,87 +491,82 @@ class aggregate_orc_metadata {
     }
   }
 
-  /**
-   * @brief Filters and reduces down to a selection of columns
-   *
-   * @param use_names List of column names to select
-   * @return Vector of list of ORC column meta-data
-   */
-  std::vector<std::vector<orc_column_meta>> select_columns2(
-    std::vector<std::string> const& use_names)
+  void add_column_new(std::map<int32_t, std::vector<int32_t>>& selection,
+                      std::vector<SchemaType> const& types,
+                      int32_t id)
   {
-    auto const& pfm = per_file_metadata[0];
-    std::vector<std::vector<orc_column_meta>> selection;
-
-    if (not use_names.empty()) {
-      uint32_t index = 0;
-      // Have to check only parent columns
-      auto const num_columns = pfm.ff.types[0].subtypes.size();
-
-      for (const auto& use_name : use_names) {
-        bool name_found = false;
-        for (uint32_t i = 0; i < num_columns; ++i, ++index) {
-          if (index >= num_columns) { index = 0; }
-          auto col_id = pfm.ff.types[0].subtypes[index];
-          if (pfm.get_column_name(col_id) == use_name) {
-            name_found = true;
-            add_column(selection, pfm.ff.types, 0, col_id);
-            // Should start with next index
-            index = i + 1;
-            break;
-          }
-        }
-        CUDF_EXPECTS(name_found, "Unknown column name : " + std::string(use_name));
-      }
-    } else {
-      for (auto const& col_id : pfm.ff.types[0].subtypes) {
-        add_column(selection, pfm.ff.types, 0, col_id);
-      }
+    for (auto child_id : types[id].subtypes) {
+      selection[id].push_back(child_id);
+      add_column_new(selection, types, child_id);
     }
+  }
 
-    return selection;
+  void levelize(std::map<int32_t, std::vector<int32_t>>& selection,
+                int32_t id,
+                int32_t level,
+                std::vector<std::vector<orc_column_meta>>& sorted_levels)
+  {
+    if (static_cast<int32_t>(sorted_levels.size()) == level) sorted_levels.emplace_back();
+
+    sorted_levels[level].push_back({id, static_cast<int32_t>(selection[id].size())});
+
+    for (auto child_id : selection[id]) {
+      // Since nested column needs to be processed before its child can be processed,
+      // child column is being added to next level
+      levelize(selection, child_id, level + 1, sorted_levels);
+    }
+  }
+
+  std::vector<std::vector<orc_column_meta>> sort_into_levels(
+    std::map<int32_t, std::vector<int32_t>>& selection)
+  {
+    std::vector<std::vector<orc_column_meta>> sorted_levels;
+    for (auto col_id : selection[0]) {
+      levelize(selection, col_id, 0, sorted_levels);
+    }
+    return sorted_levels;
   }
 
   /**
    * @brief Filters and reduces down to a selection of columns
    *
    * @param use_names List of column names to select
-   *
    * @return Vector of list of ORC column meta-data
    */
   std::vector<std::vector<orc_column_meta>> select_columns(
     std::vector<std::string> const& use_names)
   {
     auto const& pfm = per_file_metadata[0];
-    std::vector<std::vector<orc_column_meta>> selection;
 
-    if (not use_names.empty()) {
-      uint32_t index = 0;
-      // Have to check only parent columns
-      auto const num_columns = pfm.ff.types[0].subtypes.size();
-
-      for (const auto& use_name : use_names) {
-        bool name_found = false;
-        for (uint32_t i = 0; i < num_columns; ++i, ++index) {
-          if (index >= num_columns) { index = 0; }
-          auto col_id = pfm.ff.types[0].subtypes[index];
-          if (pfm.get_column_name(col_id) == use_name) {
-            name_found = true;
-            add_column(selection, pfm.ff.types, 0, col_id);
-            // Should start with next index
-            index = i + 1;
-            break;
-          }
-        }
-        CUDF_EXPECTS(name_found, "Unknown column name : " + std::string(use_name));
-      }
-    } else {
+    if (use_names.empty()) {
+      std::vector<std::vector<orc_column_meta>> selection;
       for (auto const& col_id : pfm.ff.types[0].subtypes) {
         add_column(selection, pfm.ff.types, 0, col_id);
       }
+      return selection;
     }
 
-    return selection;
+    std::map<int32_t, std::vector<int32_t>> selected_column_map;
+    for (const auto& use_name : use_names) {
+      bool name_found = false;
+      for (auto col_id = 1; col_id < pfm.get_num_columns(); ++col_id) {
+        if (pfm.get_column_path(col_id) == use_name) {
+          name_found = true;
+          selected_column_map[0].push_back(col_id);
+          add_column_new(selected_column_map, pfm.ff.types, col_id);
+          break;
+        }
+      }
+      CUDF_EXPECTS(name_found, "Unknown column name : " + std::string(use_name));
+    }
+    /*
+    for (auto [k, v] : sel) {
+      std::cout << "key: " << k << std::endl;
+      for (auto& ev : v)
+        std::cout << ev << ' ';
+      std::cout << std::endl;
+    }*/
+    return sort_into_levels(selected_column_map);
   }
 };
 
@@ -1004,7 +1008,7 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
         for (size_t rowgroup_id = 0; rowgroup_id < stripe_num_row_groups;
              rowgroup_id++, processed_row_groups++) {
           const auto child_rows = row_groups[processed_row_groups][parent_col_idx].num_child_rows;
-          for (uint32_t id = 0; id < p_col.num_children; id++) {
+          for (int32_t id = 0; id < p_col.num_children; id++) {
             const auto child_col_idx                                  = index + id;
             rwgrp_meta[processed_row_groups][child_col_idx].start_row = processed_child_rows;
             rwgrp_meta[processed_row_groups][child_col_idx].num_rows  = child_rows;
@@ -1015,7 +1019,7 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
 
       // Aggregate start row, number of rows per chunk and total number of rows in a column
       const auto child_rows = chunks[stripe_id][parent_col_idx].num_child_rows;
-      for (uint32_t id = 0; id < p_col.num_children; id++) {
+      for (int32_t id = 0; id < p_col.num_children; id++) {
         const auto child_col_idx = index + id;
 
         num_child_rows[child_col_idx] += child_rows;
@@ -1033,7 +1037,7 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
     auto parent_valid_map  = out_buffers[parent_col_idx].null_mask();
     auto num_rows          = out_buffers[parent_col_idx].size;
 
-    for (uint32_t id = 0; id < p_col.num_children; id++) {
+    for (int32_t id = 0; id < p_col.num_children; id++) {
       const auto child_col_idx                     = index + id;
       _col_meta.parent_column_index[child_col_idx] = parent_col_idx;
       if (type == type_id::STRUCT) {
@@ -1192,7 +1196,14 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
   _metadata = std::make_unique<aggregate_orc_metadata>(_sources);
 
   // Select only columns required by the options
-  _selected_columns = _metadata->select_columns2(options.get_columns());
+  _selected_columns = _metadata->select_columns(options.get_columns());
+  /*
+    for (auto& lvl : _selected_columns) {
+      for (auto& c : lvl)
+        std::cout << c.id << ',' << c.num_children << ' ';
+      std::cout << std::endl;
+    }*/
+  // CUDF_FAIL("stop");
 
   // Override output timestamp resolution if requested
   if (options.get_timestamp_type().id() != type_id::EMPTY) {
