@@ -72,6 +72,7 @@ template <int capacity, typename hash_step_callable>
 struct hash_circular_buffer {
   uint8_t storage[capacity];
   uint8_t* cur;
+  int available_space{capacity};
   hash_step_callable hash_step;
 
   CUDA_DEVICE_CALLABLE hash_circular_buffer(hash_step_callable hash_step)
@@ -79,48 +80,38 @@ struct hash_circular_buffer {
   {
   }
 
-  CUDA_DEVICE_CALLABLE uint8_t* begin() { return storage; }
-  CUDA_DEVICE_CALLABLE const uint8_t* begin() const { return storage; }
-
-  CUDA_DEVICE_CALLABLE int size() const
-  {
-    return std::distance(begin(), static_cast<const uint8_t*>(cur));
-  }
-
-  CUDA_DEVICE_CALLABLE int available_space() const { return capacity - size(); }
-
   CUDA_DEVICE_CALLABLE void put(uint8_t const* in, int size)
   {
-    int space      = available_space();
     int copy_start = 0;
-    while (size >= space) {
+    while (size >= available_space) {
       // The buffer will be filled by this chunk of data. Copy a chunk of the
       // data to fill the buffer and trigger a hash step.
-      memcpy(cur, in + copy_start, space);
+      memcpy(cur, in + copy_start, available_space);
       hash_step(storage);
-      size -= space;
-      copy_start += space;
-      cur   = begin();
-      space = available_space();
+      size -= available_space;
+      copy_start += available_space;
+      cur             = storage;
+      available_space = capacity;
     }
     // The buffer will not be filled by the remaining data. That is, `size >= 0
     // && size < capacity`. We copy the remaining data into the buffer but do
     // not trigger a hash step.
     memcpy(cur, in + copy_start, size);
     cur += size;
+    available_space -= size;
   }
 
-  CUDA_DEVICE_CALLABLE void pad(int space_to_leave)
+  CUDA_DEVICE_CALLABLE void pad(int const space_to_leave)
   {
-    int space = available_space();
-    if (space_to_leave > space) {
-      memset(cur, 0x00, space);
+    if (space_to_leave > available_space) {
+      memset(cur, 0x00, available_space);
       hash_step(storage);
-      cur   = begin();
-      space = available_space();
+      cur             = storage;
+      available_space = capacity;
     }
-    memset(cur, 0x00, space - space_to_leave);
-    cur += space - space_to_leave;
+    memset(cur, 0x00, available_space - space_to_leave);
+    cur += available_space - space_to_leave;
+    available_space = space_to_leave;
   }
 
   CUDA_DEVICE_CALLABLE const uint8_t& operator[](int idx) const { return storage[idx]; }
