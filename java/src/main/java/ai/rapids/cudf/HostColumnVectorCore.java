@@ -347,7 +347,7 @@ public class HostColumnVectorCore implements AutoCloseable {
       int sizeInBytes = DType.DTypeEnum.DECIMAL128.sizeInBytes;
       byte[] dst = new byte[sizeInBytes];
       // We need to switch the endianness for decimal128 byte arrays between java and native code.
-      offHeap.data.getBytes(dst, 0, ((index) * sizeInBytes), sizeInBytes);
+      offHeap.data.getBytes(dst, 0, (index * sizeInBytes), sizeInBytes);
       convertInPlaceToBigEndian(dst);
       return new BigDecimal(new BigInteger(dst), -type.getScale());
     } else {
