@@ -52,7 +52,6 @@ namespace cudf {
  * @param begin The starting index of the fill range (inclusive)
  * @param end The index of the last element in the fill range (exclusive)
  * @param value The scalar value to fill
- * @return void
  */
 void fill_in_place(mutable_column_view& destination,
                    size_type begin,
@@ -162,7 +161,7 @@ std::unique_ptr<table> repeat(
  * step = 2
  * return = [0, 2, 4]
  * ```
- * @throws cudf::logic_error if @p init and @p @step are not the same type.
+ * @throws cudf::logic_error if @p init and @p step are not the same type.
  * @throws cudf::logic_error if scalar types are not numeric.
  * @throws cudf::logic_error if @p size is < 0.
  *

@@ -1898,8 +1898,8 @@ static __device__ void ProcessCommands(debrotli_state_s* s, const brotli_diction
  *
  * blockDim = {block_size,1,1}
  *
- * @param inputs[in] Source/Destination buffer information per block
- * @param outputs[out] Decompressor status per block
+ * @param[in] inputs Source/Destination buffer information per block
+ * @param[out] outputs Decompressor status per block
  * @param scratch Intermediate device memory heap space (will be dynamically shared between blocks)
  * @param scratch_size Size of scratch heap space (smaller sizes may result in serialization between
  *blocks)

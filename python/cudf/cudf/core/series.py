@@ -2,28 +2,38 @@
 
 from __future__ import annotations
 
+import functools
+import inspect
 import pickle
 import warnings
 from collections import abc as abc
+from hashlib import sha256
 from numbers import Number
 from shutil import get_terminal_size
-from typing import Any, MutableMapping, Optional, Set
+from typing import Any, MutableMapping, Optional, Set, Union
 from uuid import uuid4
 
 import cupy
 import numpy as np
 import pandas as pd
+from numba import cuda
 from pandas._config import get_option
 
 import cudf
 from cudf import _lib as libcudf
+from cudf._lib.scalar import _is_null_host_scalar
 from cudf._lib.transform import bools_to_mask
+from cudf._typing import ColumnLike, DataFrameOrSeries, ScalarLike
 from cudf.api.types import (
+    _is_non_decimal_numeric_dtype,
+    _is_scalar_or_zero_d_array,
     is_bool_dtype,
     is_categorical_dtype,
     is_decimal_dtype,
     is_dict_like,
     is_dtype_equal,
+    is_integer,
+    is_integer_dtype,
     is_interval_dtype,
     is_list_dtype,
     is_list_like,
@@ -48,10 +58,16 @@ from cudf.core.column.lists import ListMethods
 from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.frame import Frame, SingleColumnFrame, _drop_rows_by_labels
+from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import SeriesGroupBy, _get_groupby
 from cudf.core.index import BaseIndex, RangeIndex, as_index
-from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
+from cudf.core.indexed_frame import (
+    IndexedFrame,
+    _FrameIndexer,
+    _get_label_range_or_mask,
+    _indices_from_labels,
+)
+from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils import cudautils, docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -63,10 +79,168 @@ from cudf.utils.dtypes import (
 from cudf.utils.utils import (
     get_appropriate_dispatched_func,
     get_relevant_submodule,
+    to_cudf_compatible_scalar,
 )
 
 
-class Series(SingleColumnFrame, Serializable):
+def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
+    """Append a scalar `value` to the end of `col` inplace.
+       Cast to common type if possible
+    """
+    to_type = find_common_type([type(value), col.dtype])
+    val_col = as_column(value, dtype=to_type)
+    old_col = col.astype(to_type)
+
+    col._mimic_inplace(concat_columns([old_col, val_col]), inplace=True)
+
+
+class _SeriesIlocIndexer(_FrameIndexer):
+    """
+    For integer-location based selection.
+    """
+
+    def __getitem__(self, arg):
+        if isinstance(arg, tuple):
+            arg = list(arg)
+        data = self._frame._column[arg]
+
+        if (
+            isinstance(data, (dict, list))
+            or _is_scalar_or_zero_d_array(data)
+            or _is_null_host_scalar(data)
+        ):
+            return data
+        return self._frame._from_data(
+            {self._frame.name: data},
+            index=cudf.Index(self._frame.index.take(arg)),
+        )
+
+    def __setitem__(self, key, value):
+        from cudf.core.column import column
+
+        if isinstance(key, tuple):
+            key = list(key)
+
+        # coerce value into a scalar or column
+        if is_scalar(value):
+            value = to_cudf_compatible_scalar(value)
+        elif not (
+            isinstance(value, (list, dict))
+            and isinstance(
+                self._frame._column.dtype, (cudf.ListDtype, cudf.StructDtype)
+            )
+        ):
+            value = column.as_column(value)
+
+        if (
+            not isinstance(
+                self._frame._column.dtype,
+                (cudf.Decimal64Dtype, cudf.CategoricalDtype),
+            )
+            and hasattr(value, "dtype")
+            and _is_non_decimal_numeric_dtype(value.dtype)
+        ):
+            # normalize types if necessary:
+            if not is_integer(key):
+                to_dtype = np.result_type(
+                    value.dtype, self._frame._column.dtype
+                )
+                value = value.astype(to_dtype)
+                self._frame._column._mimic_inplace(
+                    self._frame._column.astype(to_dtype), inplace=True
+                )
+
+        self._frame._column[key] = value
+
+
+class _SeriesLocIndexer(_FrameIndexer):
+    """
+    Label-based selection
+    """
+
+    def __getitem__(self, arg: Any) -> Union[ScalarLike, DataFrameOrSeries]:
+        if isinstance(arg, pd.MultiIndex):
+            arg = cudf.from_pandas(arg)
+
+        if isinstance(self._frame.index, cudf.MultiIndex) and not isinstance(
+            arg, cudf.MultiIndex
+        ):
+            result = self._frame.index._get_row_major(self._frame, arg)
+            if (
+                isinstance(arg, tuple)
+                and len(arg) == self._frame._index.nlevels
+                and not any((isinstance(x, slice) for x in arg))
+            ):
+                result = result.iloc[0]
+            return result
+        try:
+            arg = self._loc_to_iloc(arg)
+        except (TypeError, KeyError, IndexError, ValueError):
+            raise KeyError(arg)
+
+        return self._frame.iloc[arg]
+
+    def __setitem__(self, key, value):
+        try:
+            key = self._loc_to_iloc(key)
+        except KeyError as e:
+            if (
+                is_scalar(key)
+                and not isinstance(self._frame.index, cudf.MultiIndex)
+                and is_scalar(value)
+            ):
+                _append_new_row_inplace(self._frame.index._values, key)
+                _append_new_row_inplace(self._frame._column, value)
+                return
+            else:
+                raise e
+        if isinstance(value, (pd.Series, cudf.Series)):
+            value = cudf.Series(value)
+            value = value._align_to_index(self._frame.index, how="right")
+        self._frame.iloc[key] = value
+
+    def _loc_to_iloc(self, arg):
+        if _is_scalar_or_zero_d_array(arg):
+            if not _is_non_decimal_numeric_dtype(self._frame.index.dtype):
+                # TODO: switch to cudf.utils.dtypes.is_integer(arg)
+                if isinstance(arg, cudf.Scalar) and is_integer_dtype(
+                    arg.dtype
+                ):
+                    found_index = arg.value
+                    return found_index
+                elif is_integer(arg):
+                    found_index = arg
+                    return found_index
+            try:
+                found_index = self._frame.index._values.find_first_value(
+                    arg, closest=False
+                )
+                return found_index
+            except (TypeError, KeyError, IndexError, ValueError):
+                raise KeyError("label scalar is out of bound")
+
+        elif isinstance(arg, slice):
+            return _get_label_range_or_mask(
+                self._frame.index, arg.start, arg.stop, arg.step
+            )
+        elif isinstance(arg, (cudf.MultiIndex, pd.MultiIndex)):
+            if isinstance(arg, pd.MultiIndex):
+                arg = cudf.MultiIndex.from_pandas(arg)
+
+            return _indices_from_labels(self._frame, arg)
+
+        else:
+            arg = cudf.core.series.Series(cudf.core.column.as_column(arg))
+            if arg.dtype in (bool, np.bool_):
+                return arg
+            else:
+                indices = _indices_from_labels(self._frame, arg)
+                if indices.null_count > 0:
+                    raise KeyError("label scalar is out of bound")
+                return indices
+
+
+class Series(SingleColumnFrame, IndexedFrame, Serializable):
     """
     One-dimensional GPU array (including time series).
 
@@ -110,6 +284,8 @@ class Series(SingleColumnFrame, Serializable):
     """
 
     _accessors: Set[Any] = set()
+    _loc_indexer_type = _SeriesLocIndexer
+    _iloc_indexer_type = _SeriesIlocIndexer
 
     # The `constructor*` properties are used by `dask` (and `dask_cudf`)
     @property
@@ -378,7 +554,7 @@ class Series(SingleColumnFrame, Serializable):
                 "21.10 or older will no longer be deserializable "
                 "after version 21.12. Please load and resave any "
                 "pickles before upgrading to version 22.02.",
-                DeprecationWarning,
+                FutureWarning,
             )
             header["columns"] = [header.pop("column")]
             header["column_names"] = pickle.dumps(
@@ -790,7 +966,7 @@ class Series(SingleColumnFrame, Serializable):
     def set_mask(self, mask, null_count=None):
         warnings.warn(
             "Series.set_mask is deprecated and will be removed in the future.",
-            DeprecationWarning,
+            FutureWarning,
         )
         return self._from_data(
             {self.name: self._column.set_mask(mask)}, self._index
@@ -1192,655 +1368,6 @@ class Series(SingleColumnFrame, Serializable):
             if operands is not NotImplemented
             else NotImplemented
         )
-
-    def add(self, other, fill_value=None, axis=0):
-        """
-        Addition of series and other, element-wise
-        (binary operator add).
-
-        Parameters
-        ----------
-        other : Series or scalar value
-        fill_value : None or value
-            Value to fill nulls with before computation. If data in both
-            corresponding Series locations is null the result will be null
-
-        Returns
-        -------
-        Series
-            The result of the addition.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> a = cudf.Series([1, 1, 1, None], index=['a', 'b', 'c', 'd'])
-        >>> a
-        a       1
-        b       1
-        c       1
-        d    <NA>
-        dtype: int64
-        >>> b = cudf.Series([1, None, 1, None], index=['a', 'b', 'd', 'e'])
-        >>> b
-        a       1
-        b    <NA>
-        d       1
-        e    <NA>
-        dtype: int64
-        >>> a.add(b)
-        a       2
-        b    <NA>
-        c    <NA>
-        d    <NA>
-        e    <NA>
-        dtype: int64
-        >>> a.add(b, fill_value=0)
-        a       2
-        b       1
-        c       1
-        d       1
-        e    <NA>
-        dtype: int64
-        """
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "add", fill_value)
-
-    def radd(self, other, fill_value=None, axis=0):
-        """Addition of series and other, element-wise
-        (binary operator radd).
-
-        Parameters
-        ----------
-        other : Series or scalar value
-        fill_value : None or value
-            Value to fill nulls with before computation. If data in both
-            corresponding Series locations is null the result will be null
-
-        Returns
-        -------
-        Series
-            The result of the operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> a = cudf.Series([1, 2, 3, None], index=['a', 'b', 'c', 'd'])
-        >>> a
-        a       1
-        b       2
-        c       3
-        d    <NA>
-        dtype: int64
-        >>> b = cudf.Series([1, None, 1, None], index=['a', 'b', 'd', 'e'])
-        >>> b
-        a       1
-        b    <NA>
-        d       1
-        e    <NA>
-        dtype: int64
-        >>> a.add(b, fill_value=0)
-        a       2
-        b       2
-        c       3
-        d       1
-        e    <NA>
-        dtype: int64
-        """
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(
-            other, "add", fill_value=fill_value, reflect=True
-        )
-
-    def subtract(self, other, fill_value=None, axis=0):
-        """Subtraction of series and other, element-wise
-        (binary operator sub).
-
-        Parameters
-        ----------
-        other : Series or scalar value
-        fill_value : None or value
-            Value to fill nulls with before computation. If data in both
-            corresponding Series locations is null the result will be null
-
-        Returns
-        -------
-        Series
-            The result of the operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> a = cudf.Series([10, 20, None, 30, None], index=['a', 'b', 'c', 'd', 'e'])
-        >>> a
-        a      10
-        b      20
-        c    <NA>
-        d      30
-        e    <NA>
-        dtype: int64
-        >>> b = cudf.Series([1, None, 2, 30], index=['a', 'c', 'b', 'd'])
-        >>> b
-        a       1
-        c    <NA>
-        b       2
-        d      30
-        dtype: int64
-        >>> a.subtract(b, fill_value=2)
-        a       9
-        b      18
-        c    <NA>
-        d       0
-        e    <NA>
-        dtype: int64
-        """  # noqa: E501
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "sub", fill_value)
-
-    sub = subtract
-
-    def rsub(self, other, fill_value=None, axis=0):
-        """Subtraction of series and other, element-wise
-        (binary operator rsub).
-
-        Parameters
-        ----------
-        other : Series or scalar value
-        fill_value : None or value
-            Value to fill nulls with before computation. If data in both
-            corresponding Series locations is null the result will be null
-
-        Returns
-        -------
-        Series
-            The result of the operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> a = cudf.Series([1, 2, 3, None], index=['a', 'b', 'c', 'd'])
-        >>> a
-        a       1
-        b       2
-        c       3
-        d    <NA>
-        dtype: int64
-        >>> b = cudf.Series([1, None, 2, None], index=['a', 'b', 'd', 'e'])
-        >>> b
-        a       1
-        b    <NA>
-        d       2
-        e    <NA>
-        dtype: int64
-        >>> a.rsub(b, fill_value=10)
-        a       0
-        b       8
-        c       7
-        d      -8
-        e    <NA>
-        dtype: int64
-        """
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "sub", fill_value, reflect=True)
-
-    def multiply(self, other, fill_value=None, axis=0):
-        """Multiplication of series and other, element-wise
-        (binary operator mul).
-
-        Parameters
-        ----------
-        other : Series or scalar value
-        fill_value : None or value
-            Value to fill nulls with before computation. If data in both
-            corresponding Series locations is null the result will be null
-
-        Returns
-        -------
-        Series
-            The result of the operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> a = cudf.Series([1, 2, 3, None], index=['a', 'b', 'c', 'd'])
-        >>> a
-        a       1
-        b       2
-        c       3
-        d    <NA>
-        dtype: int64
-        >>> b = cudf.Series([1, None, 2, None], index=['a', 'b', 'd', 'e'])
-        >>> b
-        a       1
-        b    <NA>
-        d       2
-        e    <NA>
-        dtype: int64
-        >>> a.multiply(b, fill_value=0)
-        a       1
-        b       0
-        c       0
-        d       0
-        e    <NA>
-        dtype: int64
-        """
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "mul", fill_value=fill_value)
-
-    mul = multiply
-
-    def rmul(self, other, fill_value=None, axis=0):
-        """Multiplication of series and other, element-wise
-        (binary operator rmul).
-
-        Parameters
-        ----------
-        other : Series or scalar value
-        fill_value : None or value
-            Value to fill nulls with before computation. If data in both
-            corresponding Series locations is null the result will be null
-
-        Returns
-        -------
-        Series
-            The result of the operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> a = cudf.Series([10, 20, None, 30, 40], index=['a', 'b', 'c', 'd', 'e'])
-        >>> a
-        a      10
-        b      20
-        c    <NA>
-        d      30
-        e      40
-        dtype: int64
-        >>> b = cudf.Series([None, 1, 20, 5, 4], index=['a', 'b', 'd', 'e', 'f'])
-        >>> b
-        a    <NA>
-        b       1
-        d      20
-        e       5
-        f       4
-        dtype: int64
-        >>> a.rmul(b, fill_value=2)
-        a      20
-        b      20
-        c    <NA>
-        d     600
-        e     200
-        f       8
-        dtype: int64
-        """  # noqa: E501
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "mul", fill_value, True)
-
-    def mod(self, other, fill_value=None, axis=0):
-        """Modulo of series and other, element-wise
-        (binary operator mod).
-
-        Parameters
-        ----------
-        other : Series or scalar value
-        fill_value : None or value
-            Value to fill nulls with before computation. If data in both
-            corresponding Series locations is null the result will be null
-
-        Returns
-        -------
-        Series
-            The result of the operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([10, 20, 30])
-        >>> series
-        0    10
-        1    20
-        2    30
-        dtype: int64
-        >>> series.mod(4)
-        0    2
-        1    0
-        2    2
-        dtype: int64
-        """
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "mod", fill_value)
-
-    def rmod(self, other, fill_value=None, axis=0):
-        """Modulo of series and other, element-wise
-        (binary operator rmod).
-
-        Parameters
-        ----------
-        other : Series or scalar value
-        fill_value : None or value
-            Value to fill nulls with before computation. If data in both
-            corresponding Series locations is null the result will be null
-
-        Returns
-        -------
-        Series
-            The result of the operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> a = cudf.Series([10, 20, None, 30, 40], index=['a', 'b', 'c', 'd', 'e'])
-        >>> a
-        a      10
-        b      20
-        c    <NA>
-        d      30
-        e      40
-        dtype: int64
-        >>> b = cudf.Series([None, 1, 20, 5, 4], index=['a', 'b', 'd', 'e', 'f'])
-        >>> b
-        a    <NA>
-        b       1
-        d      20
-        e       5
-        f       4
-        dtype: int64
-        >>> a.rmod(b, fill_value=10)
-        a       0
-        b       1
-        c    <NA>
-        d      20
-        e       5
-        f       4
-        dtype: int64
-        """  # noqa: E501
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "mod", fill_value, True)
-
-    def pow(self, other, fill_value=None, axis=0):
-        """Exponential power of series and other, element-wise
-        (binary operator pow).
-
-        Parameters
-        ----------
-        other : Series or scalar value
-        fill_value : None or value
-            Value to fill nulls with before computation. If data in both
-            corresponding Series locations is null the result will be null
-
-        Returns
-        -------
-        Series
-            The result of the operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> a = cudf.Series([1, 2, 3, None], index=['a', 'b', 'c', 'd'])
-        >>> a
-        a       1
-        b       2
-        c       3
-        d    <NA>
-        dtype: int64
-        >>> b = cudf.Series([10, None, 12, None], index=['a', 'b', 'd', 'e'])
-        >>> b
-        a      10
-        b    <NA>
-        d      12
-        e    <NA>
-        dtype: int64
-        >>> a.pow(b, fill_value=0)
-        a       1
-        b       1
-        c       1
-        d       0
-        e    <NA>
-        dtype: int64
-        """
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "pow", fill_value)
-
-    def rpow(self, other, fill_value=None, axis=0):
-        """Exponential power of series and other, element-wise
-        (binary operator rpow).
-
-        Parameters
-        ----------
-        other : Series or scalar value
-        fill_value : None or value
-            Value to fill nulls with before computation. If data in both
-            corresponding Series locations is null the result will be null
-
-        Returns
-        -------
-        Series
-            The result of the operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> a = cudf.Series([1, 2, 3, None], index=['a', 'b', 'c', 'd'])
-        >>> a
-        a       1
-        b       2
-        c       3
-        d    <NA>
-        dtype: int64
-        >>> b = cudf.Series([10, None, 12, None], index=['a', 'b', 'd', 'e'])
-        >>> b
-        a      10
-        b    <NA>
-        d      12
-        e    <NA>
-        dtype: int64
-        >>> a.rpow(b, fill_value=0)
-        a      10
-        b       0
-        c       0
-        d       1
-        e    <NA>
-        dtype: int64
-        """
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "pow", fill_value, True)
-
-    def floordiv(self, other, fill_value=None, axis=0):
-        """Integer division of series and other, element-wise
-        (binary operator floordiv).
-
-        Parameters
-        ----------
-        other : Series or scalar value
-        fill_value : None or value
-            Value to fill nulls with before computation. If data in both
-            corresponding Series locations is null the result will be null
-
-        Returns
-        -------
-        Series
-            The result of the operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> a = cudf.Series([1, 1, 1, None], index=['a', 'b', 'c', 'd'])
-        >>> a
-        a       1
-        b       1
-        c       1
-        d    <NA>
-        dtype: int64
-        >>> b = cudf.Series([1, None, 1, None], index=['a', 'b', 'd', 'e'])
-        >>> b
-        a       1
-        b    <NA>
-        d       1
-        e    <NA>
-        dtype: int64
-        >>> a.floordiv(b)
-        a       1
-        b    <NA>
-        c    <NA>
-        d    <NA>
-        e    <NA>
-        dtype: int64
-        """
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "floordiv", fill_value)
-
-    def rfloordiv(self, other, fill_value=None, axis=0):
-        """Integer division of series and other, element-wise
-        (binary operator rfloordiv).
-
-        Parameters
-        ----------
-        other : Series or scalar value
-        fill_value : None or value
-            Value to fill nulls with before computation. If data in both
-            corresponding Series locations is null the result will be null
-
-        Returns
-        -------
-        Series
-            Result of the arithmetic operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([1, 2, 10, 17])
-        >>> s
-        0     1
-        1     2
-        2    10
-        3    17
-        dtype: int64
-        >>> s.rfloordiv(100)
-        0    100
-        1     50
-        2     10
-        3      5
-        dtype: int64
-        >>> s = cudf.Series([10, 20, None])
-        >>> s
-        0      10
-        1      20
-        2    <NA>
-        dtype: int64
-        >>> s.rfloordiv(200)
-        0      20
-        1      10
-        2    <NA>
-        dtype: int64
-        >>> s.rfloordiv(200, fill_value=2)
-        0     20
-        1     10
-        2    100
-        dtype: int64
-        """
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "floordiv", fill_value, True)
-
-    def truediv(self, other, fill_value=None, axis=0):
-        """Floating division of series and other, element-wise
-        (binary operator truediv).
-
-        Parameters
-        ----------
-        other : Series or scalar value
-        fill_value : None or value
-            Value to fill nulls with before computation. If data in both
-            corresponding Series locations is null the result will be null
-
-        Returns
-        -------
-        Series
-            The reuslt of the operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> a = cudf.Series([1, 10, 20, None], index=['a', 'b', 'c', 'd'])
-        >>> a
-        a       1
-        b      10
-        c      20
-        d    <NA>
-        dtype: int64
-        >>> b = cudf.Series([1, None, 2, None], index=['a', 'b', 'd', 'e'])
-        >>> b
-        a       1
-        b    <NA>
-        d       2
-        e    <NA>
-        dtype: int64
-        >>> a.truediv(b, fill_value=0)
-        a     1.0
-        b     Inf
-        c     Inf
-        d     0.0
-        e    <NA>
-        dtype: float64
-        """
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "truediv", fill_value)
-
-    def rtruediv(self, other, fill_value=None, axis=0):
-        """Floating division of series and other, element-wise
-        (binary operator rtruediv).
-
-        Parameters
-        ----------
-        other : Series or scalar value
-        fill_value : None or value
-            Value to fill nulls with before computation. If data in both
-            corresponding Series locations is null the result will be null
-
-        Returns
-        -------
-        Series
-            The result of the operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> a = cudf.Series([10, 20, None, 30], index=['a', 'b', 'c', 'd'])
-        >>> a
-        a      10
-        b      20
-        c    <NA>
-        d      30
-        dtype: int64
-        >>> b = cudf.Series([1, None, 2, 3], index=['a', 'b', 'd', 'e'])
-        >>> b
-        a       1
-        b    <NA>
-        d       2
-        e       3
-        dtype: int64
-        >>> a.rtruediv(b, fill_value=0)
-        a            0.1
-        b            0.0
-        c           <NA>
-        d    0.066666667
-        e            Inf
-        dtype: float64
-        """
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(other, "truediv", fill_value, True)
 
     def logical_and(self, other):
         return self._binaryop(other, "l_and").astype(np.bool_)
@@ -2484,7 +2011,7 @@ class Series(SingleColumnFrame, Serializable):
         warnings.warn(
             "The to_array method will be removed in a future cuDF "
             "release. Consider using `to_numpy` instead.",
-            DeprecationWarning,
+            FutureWarning,
         )
         return self._column.to_array(fillna=fillna)
 
@@ -2600,52 +2127,6 @@ class Series(SingleColumnFrame, Serializable):
     @index.setter
     def index(self, _index):
         self._index = as_index(_index)
-
-    @property
-    def loc(self):
-        """
-        Select values by label.
-
-        See also
-        --------
-        cudf.DataFrame.loc
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([10, 11, 12], index=['a', 'b', 'c'])
-        >>> series
-        a    10
-        b    11
-        c    12
-        dtype: int64
-        >>> series.loc['b']
-        11
-        """
-        return _SeriesLocIndexer(self)
-
-    @property
-    def iloc(self):
-        """
-        Select values by position.
-
-        See also
-        --------
-        cudf.DataFrame.iloc
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([10, 20, 30])
-        >>> s
-        0    10
-        1    20
-        2    30
-        dtype: int64
-        >>> s.iloc[2]
-        30
-        """
-        return _SeriesIlocIndexer(self)
 
     @property
     def nullmask(self):
@@ -3171,7 +2652,7 @@ class Series(SingleColumnFrame, Serializable):
     def reverse(self):
         warnings.warn(
             "Series.reverse is deprecated and will be removed in the future.",
-            DeprecationWarning,
+            FutureWarning,
         )
         rinds = column.arange((self._column.size - 1), -1, -1, dtype=np.int32)
         return self._from_data(
@@ -3219,28 +2700,41 @@ class Series(SingleColumnFrame, Serializable):
         3    0.0
         dtype: float64]
         """
+
+        warnings.warn(
+            "Series.one_hot_encoding is deprecated and will be removed in "
+            "future, use `get_dummies` instead.",
+            FutureWarning,
+        )
+
         if hasattr(cats, "to_arrow"):
             cats = cats.to_pandas()
         else:
             cats = pd.Series(cats, dtype="object")
         dtype = cudf.dtype(dtype)
 
-        def encode(cat):
-            if cat is None:
-                if self.dtype.kind == "f":
-                    # Need to ignore `np.nan` values incase
-                    # of a float column
-                    return self.__class__(
-                        libcudf.unary.is_null((self._column))
-                    )
-                else:
-                    return self.isnull()
-            elif np.issubdtype(type(cat), np.floating) and np.isnan(cat):
-                return self.__class__(libcudf.unary.is_nan(self._column))
-            else:
-                return (self == cat).fillna(False)
+        try:
+            cats_col = as_column(cats, nan_as_null=False, dtype=self.dtype)
+        except TypeError:
+            raise ValueError("Cannot convert `cats` as cudf column.")
 
-        return [encode(cat).astype(dtype) for cat in cats]
+        if self._column.size * cats_col.size >= np.iinfo("int32").max:
+            raise ValueError(
+                "Size limitation exceeded: series.size * category.size < "
+                "np.iinfo('int32').max. Consider reducing size of category"
+            )
+
+        res = libcudf.transform.one_hot_encode(self._column, cats_col)
+        if dtype.type == np.bool_:
+            return [
+                Series._from_data({None: x}, index=self._index)
+                for x in list(res.values())
+            ]
+        else:
+            return [
+                Series._from_data({None: x.astype(dtype)}, index=self._index)
+                for x in list(res.values())
+            ]
 
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):
         """Perform label encoding
@@ -3295,9 +2789,9 @@ class Series(SingleColumnFrame, Serializable):
         """
 
         warnings.warn(
-            "Series.label_encoding is deprecated and will be removed in the future.\
-                 Consider using cuML's LabelEncoder instead",
-            DeprecationWarning,
+            "Series.label_encoding is deprecated and will be removed in the "
+            "future. Consider using cuML's LabelEncoder instead.",
+            FutureWarning,
         )
 
         def _return_sentinel_series():
@@ -3366,7 +2860,10 @@ class Series(SingleColumnFrame, Serializable):
         Notes
         -----
         UDFs are cached in memory to avoid recompilation. The first
-        call to the UDF will incur compilation overhead.
+        call to the UDF will incur compilation overhead. `func` may
+        call nested functions that are decorated with the decorator
+        `numba.cuda.jit(device=True)`, otherwise numba will raise a
+        typing error.
 
         Examples
         --------
@@ -3419,16 +2916,21 @@ class Series(SingleColumnFrame, Serializable):
         1    <NA>
         2     4.5
         dtype: float64
-
-
-
         """
         if args or kwargs:
             raise ValueError(
                 "UDFs using *args or **kwargs are not yet supported."
             )
 
-        return super()._apply(func)
+        # these functions are generally written as functions of scalar
+        # values rather than rows. Rather than writing an entirely separate
+        # numba kernel that is not built around a row object, its simpler
+        # to just turn this into the equivalent single column dataframe case
+        name = self.name or "__temp_srname"
+        df = cudf.DataFrame({name: self})
+        f_ = cuda.jit(device=True)(func)
+
+        return df.apply(lambda row: f_(row[name]))
 
     def applymap(self, udf, out_dtype=None):
         """Apply an elementwise function to transform the values in the Column.
@@ -3640,8 +3142,11 @@ class Series(SingleColumnFrame, Serializable):
         return Series(val_counts.index.sort_values(), name=self.name)
 
     def round(self, decimals=0, how="half_even"):
-        if not isinstance(decimals, int):
-            raise ValueError("decimals must be an int")
+        if not is_integer(decimals):
+            raise ValueError(
+                f"decimals must be an int, got {type(decimals).__name__}"
+            )
+        decimals = int(decimals)
         return super().round(decimals, how)
 
     def cov(self, other, min_periods=None):
@@ -3971,137 +3476,20 @@ class Series(SingleColumnFrame, Serializable):
             res = res / float(res._column.sum())
         return res
 
-    def scale(self):
-        """
-        Scale values to [0, 1] in float64
+    def hash_values(self, method="murmur3"):
+        """Compute the hash of values in this column.
+
+        Parameters
+        ----------
+        method : {'murmur3', 'md5'}, default 'murmur3'
+            Hash function to use:
+            * murmur3: MurmurHash3 hash function.
+            * md5: MD5 hash function.
 
         Returns
         -------
         Series
-            A new series with values scaled to [0, 1].
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([10, 11, 12, 0.5, 1])
-        >>> series
-        0    10.0
-        1    11.0
-        2    12.0
-        3     0.5
-        4     1.0
-        dtype: float64
-        >>> series.scale()
-        0    0.826087
-        1    0.913043
-        2    1.000000
-        3    0.000000
-        4    0.043478
-        dtype: float64
-        """
-        vmin = self.min()
-        vmax = self.max()
-        scaled = (self - vmin) / (vmax - vmin)
-        scaled._index = self._index.copy(deep=False)
-        return scaled
-
-    # Absolute
-    def abs(self):
-        """Absolute value of each element of the series.
-
-        Returns
-        -------
-        abs
-            Series containing the absolute value of each element.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([-1.10, 2, -3.33, 4])
-        >>> series
-        0   -1.10
-        1    2.00
-        2   -3.33
-        3    4.00
-        dtype: float64
-        >>> series.abs()
-        0    1.10
-        1    2.00
-        2    3.33
-        3    4.00
-        dtype: float64
-        """
-        return self._unaryop("abs")
-
-    # Rounding
-    def ceil(self):
-        """
-        Rounds each value upward to the smallest integral value not less
-        than the original.
-
-        Returns
-        -------
-        res
-            Returns a new Series with ceiling value of each element.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([1.1, 2.8, 3.5, 4.5])
-        >>> series
-        0    1.1
-        1    2.8
-        2    3.5
-        3    4.5
-        dtype: float64
-        >>> series.ceil()
-        0    2.0
-        1    3.0
-        2    4.0
-        3    5.0
-        dtype: float64
-        """
-        return self._unaryop("ceil")
-
-    def floor(self):
-        """Rounds each value downward to the largest integral value not greater
-        than the original.
-
-        Returns
-        -------
-        res
-            Returns a new Series with floor of each element.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([-1.9, 2, 0.2, 1.5, 0.0, 3.0])
-        >>> series
-        0   -1.9
-        1    2.0
-        2    0.2
-        3    1.5
-        4    0.0
-        5    3.0
-        dtype: float64
-        >>> series.floor()
-        0   -2.0
-        1    2.0
-        2    0.0
-        3    1.0
-        4    0.0
-        5    3.0
-        dtype: float64
-        """
-        return self._unaryop("floor")
-
-    def hash_values(self):
-        """Compute the hash of values in this column.
-
-        Returns
-        -------
-        cupy array
-            A cupy array with hash values.
+            A Series with hash values.
 
         Examples
         --------
@@ -4112,13 +3500,18 @@ class Series(SingleColumnFrame, Serializable):
         1    120
         2     30
         dtype: int64
-        >>> series.hash_values()
+        >>> series.hash_values(method="murmur3")
         array([-1930516747,   422619251,  -941520876], dtype=int32)
         """
-        return Series(self._hash()).values
+        return Series._from_data(
+            {None: self._hash(method=method)}, index=self.index
+        )
 
     def hash_encode(self, stop, use_name=False):
         """Encode column values as ints in [0, stop) using hash function.
+
+        This method is deprecated. Replace ``series.hash_encode(stop,
+        use_name=False)`` with ``series.hash_values(method="murmur3") % stop``.
 
         Parameters
         ----------
@@ -4154,17 +3547,41 @@ class Series(SingleColumnFrame, Serializable):
         2     76
         dtype: int32
         """
+        warnings.warn(
+            "The `hash_encode` method will be removed in a future cuDF "
+            "release. Replace `series.hash_encode(stop, use_name=False)` "
+            'with `series.hash_values(method="murmur3") % stop`.',
+            FutureWarning,
+        )
+
         if not stop > 0:
             raise ValueError("stop must be a positive integer.")
 
-        initial_hash = [hash(self.name) & 0xFFFFFFFF] if use_name else None
-        hashed_values = Series(self._hash(initial_hash))
+        if use_name:
+            name_hasher = sha256()
+            name_hasher.update(str(self.name).encode())
+            name_hash_bytes = name_hasher.digest()[:4]
+            name_hash_int = (
+                int.from_bytes(name_hash_bytes, "little", signed=False)
+                & 0xFFFFFFFF
+            )
+            initial_hash = [name_hash_int]
+        else:
+            initial_hash = None
+
+        hashed_values = Series._from_data(
+            {
+                self.name: self._hash(
+                    method="murmur3", initial_hash=initial_hash
+                )
+            },
+            self.index,
+        )
 
         if hashed_values.has_nulls:
             raise ValueError("Column must have no nulls.")
 
-        mod_vals = hashed_values % stop
-        return Series(mod_vals._column, index=self.index, name=self.name)
+        return hashed_values % stop
 
     def quantile(
         self, q=0.5, interpolation="linear", exact=True, quant_index=True
@@ -4787,6 +4204,52 @@ class Series(SingleColumnFrame, Serializable):
         diff = data.diff(periods=periods)
         change = diff / data.shift(periods=periods, freq=freq)
         return change
+
+
+def make_binop_func(op):
+    wrapped_func = getattr(Frame, op)
+
+    @functools.wraps(wrapped_func)
+    def wrapper(self, other, level=None, fill_value=None, axis=0):
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 supported at this time.")
+        return wrapped_func(self, other, axis, level, fill_value)
+
+    # functools.wraps copies module level attributes to `wrapper` and sets
+    # __wrapped__ attributes to `wrapped_func`. Cpython looks up the signature
+    # string of a function by recursively delving into __wrapped__ until
+    # it hits the first function that has __signature__ attribute set. To make
+    # the signature stirng of `wrapper` matches with its actual parameter list,
+    # we directly set the __signature__ attribute of `wrapper` below.
+
+    new_sig = inspect.signature(
+        lambda self, other, level=None, fill_value=None, axis=0: None
+    )
+    wrapper.__signature__ = new_sig
+    return wrapper
+
+
+for binop in (
+    "add",
+    "radd",
+    "subtract",
+    "sub",
+    "rsub",
+    "multiply",
+    "mul",
+    "rmul",
+    "mod",
+    "rmod",
+    "pow",
+    "rpow",
+    "floordiv",
+    "rfloordiv",
+    "truediv",
+    "div",
+    "rtruediv",
+    "rdiv",
+):
+    setattr(Series, binop, make_binop_func(binop))
 
 
 class DatetimeProperties(object):

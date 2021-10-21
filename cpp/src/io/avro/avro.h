@@ -32,7 +32,7 @@ namespace io {
 namespace avro {
 
 /**
- * @Brief AVRO schema entry
+ * @brief AVRO schema entry
  */
 struct schema_entry {
   explicit schema_entry(type_kind_e kind_, int32_t parent_idx_ = -1, int32_t num_children_ = 0)
@@ -47,7 +47,7 @@ struct schema_entry {
 };
 
 /**
- * @Brief AVRO output column
+ * @brief AVRO output column
  */
 struct column_desc {
   int32_t schema_data_idx  = -1;  // schema index of data column
@@ -57,7 +57,7 @@ struct column_desc {
 };
 
 /**
- * @Brief AVRO file metadata struct
+ * @brief AVRO file metadata struct
  */
 struct file_metadata {
   std::map<std::string, std::string> user_data;
@@ -74,7 +74,7 @@ struct file_metadata {
 };
 
 /**
- * @Brief Extract AVRO schema from JSON string
+ * @brief Extract AVRO schema from JSON string
  */
 class schema_parser {
  protected:
@@ -95,7 +95,7 @@ class schema_parser {
 };
 
 /**
- * @Brief AVRO file container parsing class
+ * @brief AVRO file container parsing class
  */
 class container {
  public:

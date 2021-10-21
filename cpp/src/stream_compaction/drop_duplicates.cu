@@ -137,8 +137,9 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
                                        null_order null_precedence,
                                        rmm::cuda_stream_view stream)
 {
-  // sort only indices
-  auto sorted_indices = sorted_order(
+  // Sort only the indices.
+  // Note that stable sort must be used to maintain the order of duplicate elements.
+  auto sorted_indices = stable_sorted_order(
     keys,
     std::vector<order>{},
     std::vector<null_order>{static_cast<uint64_t>(keys.num_columns()), null_precedence},
