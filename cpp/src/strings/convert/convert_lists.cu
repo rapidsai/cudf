@@ -27,9 +27,9 @@ namespace strings {
 namespace detail {
 namespace {
 
-// position of element separator string (e.g. comma ',') within the separators column
+// position of the element separator string (e.g. comma ',') within the separators column
 constexpr size_type separator_index = 0;
-// position of enclosure strings (e.g. []) within the separators column
+// position of the enclosure strings (e.g. []) within the separators column
 constexpr size_type left_brace_index  = 1;
 constexpr size_type right_brace_index = 2;
 
@@ -41,8 +41,7 @@ enum class item_separator { NONE, ELEMENT, LIST };
 /**
  * @brief Stack item used to manage nested lists.
  *
- * Each item includes the current range and the
- * pending separator.
+ * Each item includes the current range and the pending separator.
  */
 struct alignas(8) stack_item {
   size_type left_idx;
@@ -53,8 +52,8 @@ struct alignas(8) stack_item {
 /**
  * @brief Formatting lists functor.
  *
- * This formats the input list column into individual strings
- * using the specified separators and null-representation string.
+ * This formats the input list column into individual strings using the
+ * specified separators and null-representation (na_rep) string.
  *
  * Recursion is simulated by using stack allocating per output string.
  */
