@@ -339,33 +339,24 @@ class Merge:
         # same order as given in 'on'. If the indices are used as
         # keys, the index will be sorted. If one index is specified,
         # the key columns on the other side will be used to sort.
-        if self.on:
-            if isinstance(result, cudf.BaseIndex):
-                sort_order = result._get_sorted_inds()
-            else:
-                # need a list instead of a tuple here because
-                # _get_sorted_inds calls down to ColumnAccessor.get_by_label
-                # which handles lists and tuples differently
-                sort_order = result._get_sorted_inds(
-                    list(_coerce_to_tuple(self.on))
-                )
-            return result._gather(sort_order, keep_index=False)
+        left_on = self.left_on if self.left_on else self.on
+        right_on = self.right_on if self.right_on else self.on
         by = []
         if self.left_index and self.right_index:
             if result._index is not None:
                 by.extend(result._index._data.columns)
-        if self.left_on:
+        if left_on:
+            by.extend([result._data[col] for col in _coerce_to_tuple(left_on)])
+        if right_on:
             by.extend(
-                [result._data[col] for col in _coerce_to_tuple(self.left_on)]
-            )
-        if self.right_on:
-            by.extend(
-                [result._data[col] for col in _coerce_to_tuple(self.right_on)]
+                [result._data[col] for col in _coerce_to_tuple(right_on)]
             )
         if by:
             to_sort = cudf.DataFrame._from_columns(by)
             sort_order = to_sort.argsort()
-            result = result._gather(sort_order)
+            result = result._gather(
+                sort_order, keep_index=self.left_index or self.right_index
+            )
         return result
 
     @staticmethod
