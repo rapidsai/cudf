@@ -250,6 +250,11 @@ struct parquet_column_device_view : stats_column_desc {
                                //!< col.nullable() in case of chunked writing.
 };
 
+struct partition_info {
+  size_type start_row;
+  size_type num_rows;
+};
+
 constexpr int max_page_fragment_size = 5000;  //!< Max number of rows in a page fragment
 
 /**
@@ -262,8 +267,11 @@ struct PageFragment {
   uint32_t start_value_idx;
   uint32_t num_leaf_values;  //!< Number of leaf values in fragment. Does not include nulls at
                              //!< non-leaf level
-  uint16_t num_rows;         //!< Number of rows in fragment
-  uint16_t num_dict_vals;    //!< Number of unique dictionary entries
+
+  // Add a start_row member because fragments no longer 5000 rows each
+  uint16_t start_row;      //!< First row in fragment
+  uint16_t num_rows;       //!< Number of rows in fragment
+  uint16_t num_dict_vals;  //!< Number of unique dictionary entries
 };
 
 /// Size of hash used for building dictionaries
@@ -301,6 +309,8 @@ struct EncPage;
 struct EncColumnChunk {
   parquet_column_device_view const* col_desc;  //!< Column description
   size_type col_desc_id;
+
+  // Add a num fragments
   PageFragment* fragments;        //!< First fragment in chunk
   uint8_t* uncompressed_bfr;      //!< Uncompressed page data
   uint8_t* compressed_bfr;        //!< Compressed page data
@@ -469,6 +479,8 @@ dremel_data get_dremel_data(column_view h_col,
  */
 void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
                        device_span<parquet_column_device_view const> col_desc,
+                       device_span<gpu::partition_info const> partitions,
+                       device_span<int const> first_frag_in_part,
                        uint32_t fragment_size,
                        uint32_t num_rows,
                        rmm::cuda_stream_view stream);
@@ -502,6 +514,7 @@ void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_st
  * @param stream CUDA stream to use
  */
 void populate_chunk_hash_maps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                              cudf::detail::device_2dspan<gpu::PageFragment const> frags,
                               size_type num_rows,
                               rmm::cuda_stream_view stream);
 

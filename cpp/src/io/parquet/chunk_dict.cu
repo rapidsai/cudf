@@ -335,6 +335,7 @@ void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_st
 }
 
 void populate_chunk_hash_maps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                              cudf::detail::device_2dspan<gpu::PageFragment const> frags,
                               size_type num_rows,
                               rmm::cuda_stream_view stream)
 {
@@ -343,6 +344,11 @@ void populate_chunk_hash_maps(cudf::detail::device_2dspan<EncColumnChunk> chunks
   auto const num_columns   = chunks.size().second;
   dim3 const dim_grid(grid_x.num_blocks, num_columns);
 
+  // Convert to a per-fragment kernel. It is like that already and I know we cannot avoid fragments
+  // anymore. The only other alternative is using row_bit_count to find per-row size and then use it
+  // to calculate rowgroup boundaries. And that one doesn't exclude null data size. Maybe in the
+  // future we can remove fragments and allow rowgroups to have less than 5000 rows but it's not
+  // important right now
   populate_chunk_hash_maps_kernel<block_size>
     <<<dim_grid, block_size, 0, stream.value()>>>(chunks, num_rows);
 }

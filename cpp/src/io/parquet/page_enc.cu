@@ -24,6 +24,7 @@
 
 #include <cub/cub.cuh>
 
+#include <thrust/binary_search.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <cub/cub.cuh>
@@ -48,6 +49,7 @@ constexpr uint32_t rle_buffer_size = (1 << 9);
 struct frag_init_state_s {
   parquet_column_device_view col;
   PageFragment frag;
+  // TODO: replace this with frag.start_value
   size_type start_value_idx;
 };
 
@@ -112,8 +114,10 @@ template <int block_size>
 __global__ void __launch_bounds__(block_size)
   gpuInitPageFragments(device_2dspan<PageFragment> frag,
                        device_span<parquet_column_device_view const> col_desc,
+                       device_span<gpu::partition_info const> partitions,
+                       device_span<int const> part_frag_offset,
                        uint32_t fragment_size,
-                       uint32_t max_num_rows)
+                       uint32_t max_num_rows)  // TODO: remove
 {
   __shared__ __align__(16) frag_init_state_s state_g;
 
@@ -122,15 +126,22 @@ __global__ void __launch_bounds__(block_size)
 
   frag_init_state_s* const s = &state_g;
   uint32_t t                 = threadIdx.x;
-  uint32_t start_row, dtype_len, dtype;
+  int frag_y                 = blockIdx.y;
+  uint32_t dtype_len, dtype;
 
   if (t == 0) s->col = col_desc[blockIdx.x];
   __syncthreads();
-  start_row = blockIdx.y * fragment_size;
   if (!t) {
-    // frag.num_rows = fragment_size except for the last page fragment which can be smaller.
+    // Find which partition this fragment came from
+    auto it =
+      thrust::upper_bound(thrust::seq, part_frag_offset.begin(), part_frag_offset.end(), frag_y);
+    int p             = it - part_frag_offset.begin() - 1;
+    int part_end_row  = partitions[p].start_row + partitions[p].num_rows;
+    s->frag.start_row = (frag_y - part_frag_offset[p]) * fragment_size + partitions[p].start_row;
+
+    // frag.num_rows = fragment_size except for the last fragment in partition which can be smaller.
     // num_rows is fixed but fragment size could be larger if the data is strings or nested.
-    s->frag.num_rows           = min(fragment_size, max_num_rows - min(start_row, max_num_rows));
+    s->frag.num_rows           = min(fragment_size, part_end_row - s->frag.start_row);
     s->frag.num_dict_vals      = 0;
     s->frag.fragment_data_size = 0;
     s->frag.dict_data_size     = 0;
@@ -140,12 +151,12 @@ __global__ void __launch_bounds__(block_size)
     // off_11 = off[i], off_12 = off[i+50]
     // off_21 = child.off[off_11], off_22 = child.off[off_12]
     // etc...
-    size_type end_value_idx = start_row + s->frag.num_rows;
+    size_type end_value_idx = s->frag.start_row + s->frag.num_rows;
     if (s->col.parent_column == nullptr) {
-      s->start_value_idx = start_row;
+      s->start_value_idx = s->frag.start_row;
     } else {
       auto col                     = *(s->col.parent_column);
-      auto current_start_value_idx = start_row;
+      auto current_start_value_idx = s->frag.start_row;
       while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
         if (col.type().id() == type_id::STRUCT) {
           current_start_value_idx += col.offset();
@@ -168,8 +179,8 @@ __global__ void __launch_bounds__(block_size)
       // For nested schemas, the number of values in a fragment is not directly related to the
       // number of encoded data elements or the number of rows.  It is simply the number of
       // repetition/definition values which together encode validity and nesting information.
-      size_type first_level_val_idx = s->col.level_offsets[start_row];
-      size_type last_level_val_idx  = s->col.level_offsets[start_row + s->frag.num_rows];
+      size_type first_level_val_idx = s->col.level_offsets[s->frag.start_row];
+      size_type last_level_val_idx  = s->col.level_offsets[s->frag.start_row + s->frag.num_rows];
       s->frag.num_values            = last_level_val_idx - first_level_val_idx;
     } else {
       s->frag.num_values = s->frag.num_rows;
@@ -1944,6 +1955,8 @@ dremel_data get_dremel_data(column_view h_col,
  */
 void InitPageFragments(device_2dspan<PageFragment> frag,
                        device_span<parquet_column_device_view const> col_desc,
+                       device_span<gpu::partition_info const> partitions,
+                       device_span<int const> part_frag_offset,
                        uint32_t fragment_size,
                        uint32_t num_rows,
                        rmm::cuda_stream_view stream)
@@ -1951,8 +1964,8 @@ void InitPageFragments(device_2dspan<PageFragment> frag,
   auto num_columns              = frag.size().first;
   auto num_fragments_per_column = frag.size().second;
   dim3 dim_grid(num_columns, num_fragments_per_column);  // 1 threadblock per fragment
-  gpuInitPageFragments<512>
-    <<<dim_grid, 512, 0, stream.value()>>>(frag, col_desc, fragment_size, num_rows);
+  gpuInitPageFragments<512><<<dim_grid, 512, 0, stream.value()>>>(
+    frag, col_desc, partitions, part_frag_offset, fragment_size, num_rows);
 }
 
 /**
