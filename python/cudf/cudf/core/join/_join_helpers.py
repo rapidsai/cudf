@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import collections
 import warnings
-from typing import TYPE_CHECKING, Any, Iterable, Tuple, cast
+from typing import TYPE_CHECKING, Any, Tuple, cast
 
 import numpy as np
 
@@ -55,24 +55,6 @@ class _Indexer:
                 )
             else:
                 raise KeyError
-
-
-def _frame_select_by_indexers(frame: Frame, indexers: Iterable[_Indexer]):
-    # Select columns from the given `Frame` using `indexers`,
-    # and return a new `Frame`.
-    index_data = {}
-    data = {}
-
-    for idx in indexers:
-        if idx.index:
-            index_data[idx.name] = idx.get(frame)
-        else:
-            data[idx.name] = idx.get(frame)
-
-    return (
-        data,
-        cudf.core.index._index_from_data(index_data) if index_data else None,
-    )
 
 
 def _match_join_keys(

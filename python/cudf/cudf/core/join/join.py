@@ -7,7 +7,6 @@ import cudf
 from cudf import _lib as libcudf
 from cudf.core.join._join_helpers import (
     _coerce_to_tuple,
-    _frame_select_by_indexers,
     _Indexer,
     _match_join_keys,
 )
@@ -179,10 +178,10 @@ class Merge:
                 right_key.set(rhs, rcol_casted, validate=False)
 
         left_table = cudf.core.frame.Frame(
-            *_frame_select_by_indexers(lhs, self._left_keys)
+            {idx.name: idx.get(lhs) for idx in self._left_keys},
         )
         right_table = cudf.core.frame.Frame(
-            *_frame_select_by_indexers(rhs, self._right_keys)
+            {idx.name: idx.get(rhs) for idx in self._right_keys},
         )
 
         left_rows, right_rows = self._joiner(
