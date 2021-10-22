@@ -4412,15 +4412,9 @@ class StringMethods(ColumnMethods):
 
         # convert the output to a list by just generating the
         # offsets for the output list column
-        s1 = self.len() - (n - 1)
-        s2 = s1.clip(0, 10)
-        s3 = s2.fillna(0)
+        sn = (self.len() - (n - 1)).clip(0, None).fillna(0)  # type: ignore
         sizes = libcudf.concat.concat_columns(
-            [
-                column.as_column(0, dtype=np.int32, length=1),
-                # (self.len()-(n-1)).clip(0, None).fillna(0)._column,
-                s3._column,
-            ]
+            [column.as_column(0, dtype=np.int32, length=1), sn._column]
         )
         oc = libcudf.reduce.scan("cumsum", sizes, False)
         lc = cudf.core.column.ListColumn(
