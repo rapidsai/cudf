@@ -1750,9 +1750,6 @@ class Frame:
         result._copy_type_metadata(self)
         return result
 
-    def _reverse(self):
-        return self.__class__._from_data(*libcudf.copying.reverse(self))
-
     def _fill(self, fill_values, begin, end, inplace):
         col_and_fill = zip(self._columns, fill_values)
 
@@ -1823,7 +1820,7 @@ class Frame:
         ...     columns=['dogs', 'cats']
         ... )
         >>> df
-            dogs  cats
+           dogs  cats
         0  0.21  0.32
         1  0.01  0.67
         2  0.66  0.03
@@ -1833,7 +1830,7 @@ class Frame:
         of decimal places
 
         >>> df.round(1)
-            dogs  cats
+           dogs  cats
         0   0.2   0.3
         1   0.0   0.7
         2   0.7   0.0
@@ -1844,7 +1841,7 @@ class Frame:
         places as value
 
         >>> df.round({'dogs': 1, 'cats': 0})
-            dogs  cats
+           dogs  cats
         0   0.2   0.0
         1   0.0   1.0
         2   0.7   0.0
@@ -1856,7 +1853,7 @@ class Frame:
 
         >>> decimals = cudf.Series([0, 1], index=['cats', 'dogs'])
         >>> df.round(decimals)
-            dogs  cats
+           dogs  cats
         0   0.2   0.0
         1   0.0   1.0
         2   0.7   0.0
@@ -2634,7 +2631,7 @@ class Frame:
         1     6  1939-05-27 00:00:00.000000  Batman  Batmobile
         2  <NA>  1940-04-25 00:00:00.000000              Joker
         >>> df.isnull()
-            age   born   name    toy
+             age   born   name    toy
         0  False   True  False   True
         1  False  False  False  False
         2   True  False  False  False
@@ -2926,25 +2923,6 @@ class Frame:
         * Not supporting: inplace, kind
         * Ascending can be a list of bools to control per column
         """
-
-        # This needs to be updated to handle list of bools for ascending
-        if ascending is True:
-            if na_position == "last":
-                na_position = 0
-            elif na_position == "first":
-                na_position = 1
-        elif ascending is False:
-            if na_position == "last":
-                na_position = 1
-            elif na_position == "first":
-                na_position = 0
-        else:
-            warnings.warn(
-                "When using a sequence of booleans for `ascending`, "
-                "`na_position` flag is not yet supported and defaults to "
-                "treating nulls as greater than all numbers"
-            )
-            na_position = 0
 
         to_sort = (
             self
@@ -3486,6 +3464,127 @@ class Frame:
         Float64Index([nan, 10.0, 25.0], dtype='float64')
         """
         return self._unaryop("sqrt")
+
+    def abs(self):
+        """
+        Return a Series/DataFrame with absolute numeric value of each element.
+
+        This function only applies to elements that are all numeric.
+
+        Returns
+        -------
+        DataFrame/Series
+            Absolute value of each element.
+
+        Examples
+        --------
+        Absolute numeric values in a Series
+
+        >>> s = cudf.Series([-1.10, 2, -3.33, 4])
+        >>> s.abs()
+        0    1.10
+        1    2.00
+        2    3.33
+        3    4.00
+        dtype: float64
+        """
+        return self._unaryop("abs")
+
+    # Rounding
+    def ceil(self):
+        """
+        Rounds each value upward to the smallest integral value not less
+        than the original.
+
+        Returns
+        -------
+        DataFrame or Series
+            Ceiling value of each element.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([1.1, 2.8, 3.5, 4.5])
+        >>> series
+        0    1.1
+        1    2.8
+        2    3.5
+        3    4.5
+        dtype: float64
+        >>> series.ceil()
+        0    2.0
+        1    3.0
+        2    4.0
+        3    5.0
+        dtype: float64
+        """
+        return self._unaryop("ceil")
+
+    def floor(self):
+        """Rounds each value downward to the largest integral value not greater
+        than the original.
+
+        Returns
+        -------
+        DataFrame or Series
+            Flooring value of each element.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([-1.9, 2, 0.2, 1.5, 0.0, 3.0])
+        >>> series
+        0   -1.9
+        1    2.0
+        2    0.2
+        3    1.5
+        4    0.0
+        5    3.0
+        dtype: float64
+        >>> series.floor()
+        0   -2.0
+        1    2.0
+        2    0.0
+        3    1.0
+        4    0.0
+        5    3.0
+        dtype: float64
+        """
+        return self._unaryop("floor")
+
+    def scale(self):
+        """
+        Scale values to [0, 1] in float64
+
+        Returns
+        -------
+        DataFrame or Series
+            Values scaled to [0, 1].
+
+        Examples
+        --------
+        >>> import cudf
+        >>> series = cudf.Series([10, 11, 12, 0.5, 1])
+        >>> series
+        0    10.0
+        1    11.0
+        2    12.0
+        3     0.5
+        4     1.0
+        dtype: float64
+        >>> series.scale()
+        0    0.826087
+        1    0.913043
+        2    1.000000
+        3    0.000000
+        4    0.043478
+        dtype: float64
+        """
+        vmin = self.min()
+        vmax = self.max()
+        scaled = (self - vmin) / (vmax - vmin)
+        scaled._index = self._index.copy(deep=False)
+        return scaled
 
     def _merge(
         self,
@@ -4978,12 +5077,12 @@ class Frame:
         >>> df['a'] = cudf.Series([1, None, np.nan], nan_as_null=False)
         >>> df['b'] = cudf.Series([None, 3.14, np.nan], nan_as_null=False)
         >>> df
-            a     b
+              a     b
         0   1.0  <NA>
         1  <NA>  3.14
         2   NaN   NaN
         >>> df.nans_to_nulls()
-            a     b
+              a     b
         0   1.0  <NA>
         1  <NA>  3.14
         2  <NA>  <NA>

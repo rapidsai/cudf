@@ -374,9 +374,8 @@ constexpr bool Exists = ExistsImpl<NEEDLE, HAYSACK>::value;
  *== false_type
  *
  * // Used as a predicate
- * using MyTypes = RemoveIf<ContainedIn<Types<Types<char, char>>,
- *                                      Types<Types<char, char>,
- *Types<float,int>>>
+ * using MyTypes = RemoveIf<ContainedIn<Types<Types<char, char>>>,
+ *                          Types<Types<char, char>, Types<float,int>>>;
  * // MyTypes == Types<float, int>
  *
  * ```
@@ -421,9 +420,8 @@ struct RemoveIfImpl<PRED, Types<HEAD, TAIL...>> {
  * RemoveIf<AllSame, Types<Types<int, float, int>>> ==  Types<Types<int, float,
  *int>>
  *
- * using MyTypes = RemoveIf<ContainedIn<Types<Types<char, char>>,
- *                                      Types<Types<char, char>,
- *Types<float,int>>>
+ * using MyTypes = RemoveIf<ContainedIn<Types<Types<char, char>>>,
+ *                          Types<Types<char, char>, Types<float,int>>>;
  * // MyTypes == Types<float, int>
  * ```
  *

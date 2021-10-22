@@ -728,7 +728,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         See Also
         --------
-        cudf.core.reshape.concat : General function to concatenate DataFrame or
+        cudf.concat : General function to concatenate DataFrame or
             Series objects.
 
         Examples
@@ -2879,6 +2879,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
 
         Apply a basic function to a series with nulls
+
         >>> sr = cudf.Series([1,cudf.NA,3])
         >>> def f(x):
         ...     return x + 1
@@ -2890,6 +2891,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         Use a function that does something conditionally,
         based on if the value is or is not null
+
         >>> sr = cudf.Series([1,cudf.NA,3])
         >>> def f(x):
         ...     if x is cudf.NA:
@@ -3476,130 +3478,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             res = res / float(res._column.sum())
         return res
 
-    def scale(self):
-        """
-        Scale values to [0, 1] in float64
-
-        Returns
-        -------
-        Series
-            A new series with values scaled to [0, 1].
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([10, 11, 12, 0.5, 1])
-        >>> series
-        0    10.0
-        1    11.0
-        2    12.0
-        3     0.5
-        4     1.0
-        dtype: float64
-        >>> series.scale()
-        0    0.826087
-        1    0.913043
-        2    1.000000
-        3    0.000000
-        4    0.043478
-        dtype: float64
-        """
-        vmin = self.min()
-        vmax = self.max()
-        scaled = (self - vmin) / (vmax - vmin)
-        scaled._index = self._index.copy(deep=False)
-        return scaled
-
-    # Absolute
-    def abs(self):
-        """Absolute value of each element of the series.
-
-        Returns
-        -------
-        abs
-            Series containing the absolute value of each element.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([-1.10, 2, -3.33, 4])
-        >>> series
-        0   -1.10
-        1    2.00
-        2   -3.33
-        3    4.00
-        dtype: float64
-        >>> series.abs()
-        0    1.10
-        1    2.00
-        2    3.33
-        3    4.00
-        dtype: float64
-        """
-        return self._unaryop("abs")
-
-    # Rounding
-    def ceil(self):
-        """
-        Rounds each value upward to the smallest integral value not less
-        than the original.
-
-        Returns
-        -------
-        res
-            Returns a new Series with ceiling value of each element.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([1.1, 2.8, 3.5, 4.5])
-        >>> series
-        0    1.1
-        1    2.8
-        2    3.5
-        3    4.5
-        dtype: float64
-        >>> series.ceil()
-        0    2.0
-        1    3.0
-        2    4.0
-        3    5.0
-        dtype: float64
-        """
-        return self._unaryop("ceil")
-
-    def floor(self):
-        """Rounds each value downward to the largest integral value not greater
-        than the original.
-
-        Returns
-        -------
-        res
-            Returns a new Series with floor of each element.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([-1.9, 2, 0.2, 1.5, 0.0, 3.0])
-        >>> series
-        0   -1.9
-        1    2.0
-        2    0.2
-        3    1.5
-        4    0.0
-        5    3.0
-        dtype: float64
-        >>> series.floor()
-        0   -2.0
-        1    2.0
-        2    0.0
-        3    1.0
-        4    0.0
-        5    3.0
-        dtype: float64
-        """
-        return self._unaryop("floor")
-
     def hash_values(self, method="murmur3"):
         """Compute the hash of values in this column.
 
@@ -3630,7 +3508,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2     30
         dtype: int64
         >>> series.hash_values(method="murmur3")
-        array([-1930516747,   422619251,  -941520876], dtype=int32)
+        0   -1930516747
+        1     422619251
+        2    -941520876
+        dtype: int32
+        >>> series.hash_values(method="md5")
+        0    7be4bbacbfdb05fb3044e36c22b41e8b
+        1    947ca8d2c5f0f27437f156cfbfab0969
+        2    d0580ef52d27c043c8e341fd5039b166
+        dtype: object
         """
         return Series._from_data(
             {None: self._hash(method=method)}, index=self.index
@@ -3638,6 +3524,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     def hash_encode(self, stop, use_name=False):
         """Encode column values as ints in [0, stop) using hash function.
+
+        This method is deprecated. Replace ``series.hash_encode(stop,
+        use_name=False)`` with ``series.hash_values(method="murmur3") % stop``.
 
         Parameters
         ----------
@@ -3673,6 +3562,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2     76
         dtype: int32
         """
+        warnings.warn(
+            "The `hash_encode` method will be removed in a future cuDF "
+            "release. Replace `series.hash_encode(stop, use_name=False)` "
+            'with `series.hash_values(method="murmur3") % stop`.',
+            FutureWarning,
+        )
+
         if not stop > 0:
             raise ValueError("stop must be a positive integer.")
 
@@ -5630,8 +5526,8 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     result_col = column.as_column(result)
 
     if a_col.null_count and b_col.null_count:
-        a_nulls = a_col.isna()
-        b_nulls = b_col.isna()
+        a_nulls = a_col.isnull()
+        b_nulls = b_col.isnull()
         null_values = a_nulls | b_nulls
 
         if equal_nan is True:
@@ -5639,9 +5535,9 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
         del a_nulls, b_nulls
     elif a_col.null_count:
-        null_values = a_col.isna()
+        null_values = a_col.isnull()
     elif b_col.null_count:
-        null_values = b_col.isna()
+        null_values = b_col.isnull()
     else:
         return Series(result_col, index=index)
 
