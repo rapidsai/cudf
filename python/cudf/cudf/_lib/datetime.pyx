@@ -85,6 +85,7 @@ def ceil_datetime(Column col, object field):
     result = Column.from_unique_ptr(move(c_result))
     return result
 
+
 def floor_datetime(Column col, object field):
     cdef unique_ptr[column] c_result
     cdef column_view col_view = col.view()
