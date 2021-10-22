@@ -94,6 +94,9 @@ class _DtypeKind(enum.IntEnum):
     DATETIME = 22
     CATEGORICAL = 23
 
+
+
+
 def _protocol_column_to_cudf_column_numeric(col:ColumnObject):
     """
     Convert an int, uint, float or bool protocol column to the corresponding cudf column
@@ -113,17 +116,6 @@ def _check_data_is_on_gpu(buffer):
         raise TypeError("This operation must copy data from CPU to GPU."
                             "Set `allow_copy=True` to allow it.")
 
-def buffer_to_cupy_ndarray(_buffer, _dtype) -> cp.ndarray:
-    if _buffer.__dlpack_device__()[0] == 2: # dataframe is on GPU/CUDA
-        x = _gpu_buffer_to_cupy(_buffer, _dtype)
-    else:
-        if not _buffer._allow_copy:
-            raise TypeError("This operation must copy data from CPU to GPU."
-                            "Set `allow_copy=True` to allow it.")
-        x = _cpu_buffer_to_cupy(_buffer, _dtype)
-
-    return x
-
 def _set_missing_values(protocol_col, cudf_col):
     null_kind, null_value = protocol_col.describe_null
     if  null_kind != 0:
@@ -133,16 +125,6 @@ def _set_missing_values(protocol_col, cudf_col):
         cudf_col[~bitmask] = None
 
     return cudf_col
-
-def _gpu_buffer_to_cupy(_buffer, _dtype):
-    _k = _DtypeKind
-    if _dtype[0] in (_k.INT, _k.UINT, _k.FLOAT, _k.CATEGORICAL):
-        x = cp.fromDlpack(_buffer.__dlpack__())
-    elif _dtype[0] == _k.BOOL: 
-        x = cp.fromDlpack(_buffer.__dlpack__()).astype(cp.bool_)
-    else:
-        raise NotImplementedError(f"Data type {_dtype[0]} not handled yet")
-    return x
 
 def protocol_dtypes_to_cupy_dtype(_dtype):
     kind = _dtype[0]
@@ -157,23 +139,6 @@ def protocol_dtypes_to_cupy_dtype(_dtype):
     _floats = {32: cp.float32, 64: cp.float64}
     _cp_dtypes = {0: _ints, 1: _uints, 2: _floats, 20: {8: bool}}
     return _cp_dtypes[kind][bitwidth]
-
-def _cpu_buffer_to_cupy(_buffer, _dtype):
-    # Handle the dtype
-   
-    column_dtype = protocol_dtypes_to_cupy_dtype(_dtype)
-    # No DLPack yet, so need to construct a new ndarray from the data pointer
-    # and size in the buffer plus the dtype on the column
-    ctypes_type = np.ctypeslib.as_ctypes_type(column_dtype)
-    data_pointer = ctypes.cast(_buffer.ptr, ctypes.POINTER(ctypes_type))
-
-    # NOTE: `x` does not own its memory, so the caller of this function must
-    #       either make a copy or hold on to a reference of the column or
-    #       buffer! (not done yet, this is pretty awful ...)
-    x = np.ctypeslib.as_array(data_pointer,
-                              shape=(_buffer.bufsize // (bitwidth//8),))
-    return cp.asarray(x, dtype=column_dtype)
-
 
 def _protocol_column_to_cudf_column_categorical(col : ColumnObject) :
     """
