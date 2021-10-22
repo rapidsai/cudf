@@ -738,12 +738,22 @@ set_target_properties(cudf_non_system_includes PROPERTIES INTERFACE_INCLUDE_DIRE
 set(install_code_string
     [=[
 set(ArrowCUDA_DIR "${Arrow_DIR}")
-if(NOT Parquet_DIR)
-  set(Parquet_DIR "${Arrow_DIR}")
-endif()
-set(ArrowDataset_DIR "${Arrow_DIR}")
 find_dependency(ArrowCUDA)
-find_dependency(ArrowDataset)
+]=])
+
+if(CUDF_ENABLE_ARROW_PARQUET)
+  string(APPEND install_code_string
+    [=[
+  if(NOT Parquet_DIR)
+    set(Parquet_DIR "${Arrow_DIR}")
+  endif()
+  set(ArrowDataset_DIR "${Arrow_DIR}")
+  find_dependency(ArrowDataset)
+  ]=])
+endif()
+
+string(APPEND install_code_string
+    [=[
 if(testing IN_LIST cudf_FIND_COMPONENTS)
   enable_language(CUDA)
   if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-testing-dependencies.cmake")
