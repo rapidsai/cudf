@@ -1659,3 +1659,4 @@ def test_floor(data, time_type, resolution):
     expect = ps.dt.floor(resolution)
     got = gs.dt.floor(resolution)
     assert_eq(expect, got)
+    
