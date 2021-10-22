@@ -4181,7 +4181,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> df = cudf.DataFrame({
         ...     'a': [1, 3, 5]
         ... })
-        >>> df.apply(f)
+        >>> df.apply(f, axis=1)
         0    1.5
         1    1.5
         2    5.0
