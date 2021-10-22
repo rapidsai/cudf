@@ -149,11 +149,9 @@ class Merge:
         right_join_cols = {}
 
         for left_key, right_key in zip(self._left_keys, self._right_keys):
-            lcol_casted, rcol_casted = _match_join_keys(
-                left_key.get(self.output_lhs),
-                right_key.get(self.output_rhs),
-                how=self.how,
-            )
+            lcol = left_key.get(self.output_lhs)
+            rcol = right_key.get(self.output_rhs)
+            lcol_casted, rcol_casted = _match_join_keys(lcol, rcol, self.how)
             left_join_cols[left_key.name] = lcol_casted
             right_join_cols[left_key.name] = rcol_casted
 
@@ -161,12 +159,8 @@ class Merge:
             # type that was returned by _match_join_keys.
             if (
                 self.how == "inner"
-                and isinstance(
-                    left_key.get(self.lhs).dtype, cudf.CategoricalDtype
-                )
-                and isinstance(
-                    right_key.get(self.rhs).dtype, cudf.CategoricalDtype
-                )
+                and isinstance(lcol.dtype, cudf.CategoricalDtype)
+                and isinstance(rcol.dtype, cudf.CategoricalDtype)
             ):
                 lcol_casted = lcol_casted.astype("category")
                 rcol_casted = rcol_casted.astype("category")
@@ -233,6 +227,8 @@ class Merge:
         # is simply dropped. For outer joins, the two key columns are combined
         # by filling nulls in the left key column with corresponding values
         # from the right key column:
+        # TODO: Move this to the creation of the output_lhs in the constructor
+        # as well.
         if self.how == "outer":
             for lkey, rkey in zip(self._left_keys, self._right_keys):
                 if lkey.name == rkey.name:
