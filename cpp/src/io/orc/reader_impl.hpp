@@ -71,6 +71,15 @@ struct reader_column_meta {
   std::vector<row_group_meta> rwgrp_meta;  // rowgroup metadata [rowgroup][column]
 };
 
+struct column_hierarchy {
+  using nesting_map = std::map<int32_t, std::vector<int32_t>>;
+  nesting_map children;
+  std::vector<std::vector<orc_column_meta>> levels;
+
+  column_hierarchy(nesting_map child_map);
+  auto num_levels() const { return levels.size(); }
+};
+
 /**
  * @brief Implementation for ORC reader
  */
@@ -218,8 +227,7 @@ class reader::impl {
   rmm::mr::device_memory_resource* _mr = nullptr;
   std::vector<std::unique_ptr<datasource>> _sources;
   std::unique_ptr<aggregate_orc_metadata> _metadata;
-  // _output_columns associated schema indices
-  std::vector<std::vector<orc_column_meta>> _selected_columns;
+  column_hierarchy selected_columns;
 
   bool _use_index     = true;
   bool _use_np_dtypes = true;
