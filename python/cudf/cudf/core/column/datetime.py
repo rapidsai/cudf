@@ -494,7 +494,7 @@ class DatetimeColumn(column.ColumnBase):
         na_value = np.datetime64("nat", self.time_unit)
         out_col = cudf._lib.replace.replace(
             self,
-            as_column(
+            column.build_column(
                 Buffer(np.array([na_value], dtype=self.dtype).view("|u1")),
                 dtype=self.dtype,
             ),
