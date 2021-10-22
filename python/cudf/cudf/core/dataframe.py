@@ -4111,7 +4111,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ...             return row['a'] + 1
         ...
         >>> df = cudf.DataFrame({'a': [1, cudf.NA, 3]})
-        >>> df.apply(f)
+        >>> df.apply(f, axis=1)
         0    2
         1    0
         2    4
@@ -4146,7 +4146,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ...     'a': [1, 2, 3],
         ...     'b': [2, 1, 1]
         ... })
-        >>> df.apply(f)
+        >>> df.apply(f, axis=1)
         0       3
         1       3
         2    <NA>
@@ -4162,7 +4162,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ...     'a': [1, 2, 3],
         ...     'b': [0.5, cudf.NA, 3.14]
         ... })
-        >>> df.apply(f)
+        >>> df.apply(f, axis=1)
         0     1.5
         1    <NA>
         2    6.14
@@ -4202,7 +4202,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ...     'd': [8, 7, 8],
         ...     'e': [7, 1, 6]
         ... })
-        >>> df.apply(f)
+        >>> df.apply(f, axis=1)
         0    <NA>
         1     4.8
         2     5.0
