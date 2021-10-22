@@ -489,8 +489,8 @@ class aggregate_orc_metadata {
       if (std::find(selected_columns[id].cbegin(), selected_columns[id].cend(), child_id) ==
           selected_columns[id].end()) {
         selected_columns[id].push_back(child_id);
-        add_nested_columns(selected_columns, types, child_id);
       }
+      add_nested_columns(selected_columns, types, child_id);
     }
   }
 
