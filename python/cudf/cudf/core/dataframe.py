@@ -45,6 +45,7 @@ from cudf.core.abc import Serializable
 from cudf.core.column import (
     as_column,
     build_categorical_column,
+    build_column,
     column_empty,
     concat_columns,
 )
@@ -978,7 +979,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         2  2  2  2
         3  3  3  3
         >>> df[-5:]  # get last 5 rows of all columns
-            a   b   c
+             a   b   c
         15  15  15  15
         16  16  16  16
         17  17  17  17
@@ -1233,7 +1234,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ...              for t in dtypes])
         >>> df = cudf.DataFrame(data)
         >>> df.head()
-            int64  float64  object  bool
+           int64  float64  object  bool
         0      1      1.0     1.0  True
         1      1      1.0     1.0  True
         2      1      1.0     1.0  True
@@ -1611,7 +1612,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         b      int64
         dtype: object
         >>> df.astype({'a': 'float32'})
-            a  b
+              a  b
         0  10.0  1
         1  20.0  2
         2  30.0  3
@@ -4900,7 +4901,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         dtype: object
         >>> pdf = df.to_pandas(nullable=False)
         >>> pdf
-            a      b
+             a      b
         0  0.0   True
         1  NaN  False
         2  2.0   None
@@ -5384,7 +5385,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         b    3.7
         Name: 0.1, dtype: float64
         >>> df.quantile([.1, .5])
-            a     b
+               a     b
         0.1  1.3   3.7
         0.5  2.5  55.0
         """  # noqa: E501
@@ -6348,7 +6349,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         See Also
         --------
-        cudf.core.reshape.concat : General function to concatenate DataFrame or
+        cudf.concat : General function to concatenate DataFrame or
             objects.
 
         Notes
@@ -6949,7 +6950,9 @@ def _reassign_categories(categories, cols, col_idxs):
         if idx in categories:
             cols[name] = build_categorical_column(
                 categories=categories[idx],
-                codes=as_column(cols[name].base_data, dtype=cols[name].dtype),
+                codes=build_column(
+                    cols[name].base_data, dtype=cols[name].dtype
+                ),
                 mask=cols[name].base_mask,
                 offset=cols[name].offset,
                 size=cols[name].size,

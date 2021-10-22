@@ -728,7 +728,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         See Also
         --------
-        cudf.core.reshape.concat : General function to concatenate DataFrame or
+        cudf.concat : General function to concatenate DataFrame or
             Series objects.
 
         Examples
@@ -2879,6 +2879,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
 
         Apply a basic function to a series with nulls
+
         >>> sr = cudf.Series([1,cudf.NA,3])
         >>> def f(x):
         ...     return x + 1
@@ -2890,6 +2891,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         Use a function that does something conditionally,
         based on if the value is or is not null
+
         >>> sr = cudf.Series([1,cudf.NA,3])
         >>> def f(x):
         ...     if x is cudf.NA:
@@ -5519,8 +5521,8 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     result_col = column.as_column(result)
 
     if a_col.null_count and b_col.null_count:
-        a_nulls = a_col.isna()
-        b_nulls = b_col.isna()
+        a_nulls = a_col.isnull()
+        b_nulls = b_col.isnull()
         null_values = a_nulls | b_nulls
 
         if equal_nan is True:
@@ -5528,9 +5530,9 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
         del a_nulls, b_nulls
     elif a_col.null_count:
-        null_values = a_col.isna()
+        null_values = a_col.isnull()
     elif b_col.null_count:
-        null_values = b_col.isna()
+        null_values = b_col.isnull()
     else:
         return Series(result_col, index=index)
 
