@@ -12,6 +12,8 @@ from numba import cuda
 
 
 
+
+
 # Implementation of interchange protocol classes
 # ----------------------------------------------
 
@@ -23,7 +25,17 @@ class _DtypeKind(enum.IntEnum):
     STRING = 21   # UTF-8
     DATETIME = 22
     CATEGORICAL = 23
-    
+
+class Device(enum.IntEnum):
+    CPU = 1
+    CUDA = 2
+    CPU_PINNED = 3
+    OPENCL = 4
+    VULKAN = 7
+    METAL = 8
+    VPI = 9
+    ROCM = 10
+
 
 class _CuDFBuffer:
     """
@@ -61,6 +73,7 @@ class _CuDFBuffer:
         try: 
             cudarray = cuda.as_cuda_array(self._buf).view(self._cudf_dtype)
             res = cp.asarray(cudarray).toDlpack()
+
         except ValueError:
             raise TypeError(f'dtype {self._cudf_dtype} unsupported by `dlpack`')
 
@@ -70,9 +83,6 @@ class _CuDFBuffer:
         """
         Device type and device ID for where the data in the buffer resides.
         """
-        class Device(enum.IntEnum):
-             CUDA = 2
-
         return (Device.CUDA, cp.asarray(self._buf).device.id)
 
     def __repr__(self) -> str:
@@ -485,7 +495,6 @@ class _CuDFDataFrame:
         """
         return (self,)
 
-
 """
 Implementation of the dataframe exchange protocol.
 
@@ -519,7 +528,7 @@ _FLOATS = {32: cp.float32, 64: cp.float64}
 _CP_DTYPES = {0: _INTS, 1: _UINTS, 2: _FLOATS, 20: {8: bool}}
 
 
-def from_dataframe(df : DataFrameObject, allow_copy: bool = False) :
+def from_dataframe(df : DataFrameObject, allow_copy: bool = False) -> _CuDFDataFrame :
     """
     Construct a cudf DataFrame from ``df`` if it supports ``__dataframe__``
     """
@@ -538,7 +547,7 @@ def _from_dataframe(df : DataFrameObject) :
     """
     # Check number of chunks, if there's more than one we need to iterate
     if df.num_chunks() > 1:
-        raise NotImplementedError
+        raise NotImplementedError("More than one chunk not handled yet")
 
     # We need a dict of columns here, with each column being a cudf column column.
     columns = dict()
@@ -581,7 +590,7 @@ def _protocol_column_to_cudf_column_numeric(col:ColumnObject):
 
 
 def _check_data_is_on_gpu(buffer):
-    if buffer.__dlpack_device__()[0] != 2 and not buffer._allow_copy:
+    if buffer.__dlpack_device__()[0] != Device.CUDA and not buffer._allow_copy:
         raise TypeError("This operation must copy data from CPU to GPU."
                             "Set `allow_copy=True` to allow it.")
 
@@ -673,3 +682,4 @@ def __dataframe__(self, nan_as_null : bool = False,
     """
     return _CuDFDataFrame(
         self, nan_as_null=nan_as_null, allow_copy=allow_copy)
+
