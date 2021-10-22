@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import builtins
 import pickle
+import re as rex
 import warnings
 from typing import (
     TYPE_CHECKING,
@@ -21,7 +22,6 @@ import cupy
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-import regex as rex
 from numba import cuda
 
 import cudf

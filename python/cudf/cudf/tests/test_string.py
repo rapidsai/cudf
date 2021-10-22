@@ -2,6 +2,7 @@
 
 import json
 import re
+import re as rex
 import urllib.parse
 from contextlib import ExitStack as does_not_raise
 from decimal import Decimal
@@ -12,7 +13,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-import regex as rex
 
 import cudf
 from cudf import concat
