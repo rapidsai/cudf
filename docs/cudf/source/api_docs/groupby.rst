@@ -77,6 +77,7 @@ application to columns of a specific data type.
    DataFrameGroupBy.cummin
    DataFrameGroupBy.cumsum
    DataFrameGroupBy.describe
+   DataFrameGroupBy.diff
    DataFrameGroupBy.ffill
    DataFrameGroupBy.fillna
    DataFrameGroupBy.idxmax
