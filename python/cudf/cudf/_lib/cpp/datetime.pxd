@@ -24,7 +24,7 @@ cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:
     ) except +
     cdef unique_ptr[column] ceil_nanosecond(
         const column_view& column
-        ) except +
+    ) except +
     cdef unique_ptr[column] floor_day(const column_view& column) except +
     cdef unique_ptr[column] floor_hour(const column_view& column) except +
     cdef unique_ptr[column] floor_minute(const column_view& column) except +
@@ -37,7 +37,7 @@ cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:
     ) except +
     cdef unique_ptr[column] floor_nanosecond(
         const column_view& column
-        ) except +
+    ) except +
     cdef unique_ptr[column] add_calendrical_months(
         const column_view& timestamps,
         const column_view& months
