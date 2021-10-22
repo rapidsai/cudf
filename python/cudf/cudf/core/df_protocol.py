@@ -69,10 +69,10 @@ def _from_dataframe(df : DataFrameObject) :
             columns[name], _buf = _protocol_column_to_cudf_column_numeric(col)
 
         elif col.dtype[0] == _k.CATEGORICAL:
-            columns[name], _buf = convert_to_cudf_categorical(col)
+            columns[name], _buf = _protocol_column_to_cudf_column_categorical(col)
 
         elif col.dtype[0] == _k.STRING:
-            columns[name], _buf = convert_to_cudf_string(col)
+            columns[name], _buf = _protocol_column_to_cudf_column_string(col)
             
         else:
             raise NotImplementedError(f"Data type {col.dtype[0]} not handled yet")
@@ -175,7 +175,7 @@ def _cpu_buffer_to_cupy(_buffer, _dtype):
     return cp.asarray(x, dtype=column_dtype)
 
 
-def convert_to_cudf_categorical(col : ColumnObject) :
+def _protocol_column_to_cudf_column_categorical(col : ColumnObject) :
     """
     Convert a categorical column to a Series instance
     """
@@ -195,7 +195,7 @@ def convert_to_cudf_categorical(col : ColumnObject) :
     return _set_missing_values(col, col1), codes_buffer
 
 
-def convert_to_cudf_string(col : ColumnObject) :
+def _protocol_column_to_cudf_column_string(col : ColumnObject) :
     """
     Convert a string ColumnObject to cudf Column object.
     """
