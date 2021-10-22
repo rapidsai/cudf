@@ -827,4 +827,30 @@ TEST_F(BasicDatetimeOpsTest, TestQuarter)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*extract_quarter(timestamps_s), quarter);
 }
 
+TYPED_TEST(TypedDatetimeOpsTest, TestFloorDatetime)
+{
+  using T = TypeParam;
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace cuda::std::chrono;
+
+  // Time in seconds since epoch
+  // Dates converted using epochconverter.com
+  auto timestamps_s =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{{
+      978307485L,  // 2001-01-01 00:04:45 GMT
+      978307498L,  // 2001-01-01 00:04:58 GMT
+      978307504L,  // 2001-01-01 00:05:04 GMT
+    }};
+
+  auto expected_minute =
+    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{{
+      978307500L,  // 2001-01-01 00:05:00 GMT
+      978307500L,  // 2001-01-01 00:05:00 GMT
+      978307560L,  // 2001-01-01 00:06:00 GMT
+    }};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*floor_day(timestamps_s), expected_minute);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
