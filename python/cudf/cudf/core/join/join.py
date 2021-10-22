@@ -142,6 +142,41 @@ class Merge:
                 _Indexer(name=on, column=True) for on in on_names
             ]
 
+        self.output_lhs = self.lhs.copy(deep=False)
+        self.output_rhs = self.rhs.copy(deep=False)
+
+        left_join_cols = {}
+        right_join_cols = {}
+
+        for left_key, right_key in zip(self._left_keys, self._right_keys):
+            lcol_casted, rcol_casted = _match_join_keys(
+                left_key.get(self.output_lhs),
+                right_key.get(self.output_rhs),
+                how=self.how,
+            )
+            left_join_cols[left_key.name] = lcol_casted
+            right_join_cols[left_key.name] = rcol_casted
+
+            # Categorical dtypes must be cast back from the underlying codes
+            # type that was returned by _match_join_keys.
+            if (
+                self.how == "inner"
+                and isinstance(
+                    left_key.get(self.lhs).dtype, cudf.CategoricalDtype
+                )
+                and isinstance(
+                    right_key.get(self.rhs).dtype, cudf.CategoricalDtype
+                )
+            ):
+                lcol_casted = lcol_casted.astype("category")
+                rcol_casted = rcol_casted.astype("category")
+
+            left_key.set(self.output_lhs, lcol_casted, validate=False)
+            right_key.set(self.output_rhs, rcol_casted, validate=False)
+
+        self._left_join_table = cudf.core.frame.Frame(left_join_cols)
+        self._right_join_table = cudf.core.frame.Frame(right_join_cols)
+
         if isinstance(lhs, cudf.MultiIndex) or isinstance(
             rhs, cudf.MultiIndex
         ):
@@ -164,63 +199,20 @@ class Merge:
         )
 
     def perform_merge(self) -> Frame:
-        # Match the dtypes of the key columns from lhs and rhs
-        lhs = self.lhs.copy(deep=False)
-        rhs = self.rhs.copy(deep=False)
-        for left_key, right_key in zip(self._left_keys, self._right_keys):
-            lcol, rcol = left_key.get(lhs), right_key.get(rhs)
-            lcol_casted, rcol_casted = _match_join_keys(
-                lcol, rcol, how=self.how
-            )
-            if lcol is not lcol_casted:
-                left_key.set(lhs, lcol_casted, validate=False)
-            if rcol is not rcol_casted:
-                right_key.set(rhs, rcol_casted, validate=False)
-
-        left_table = cudf.core.frame.Frame(
-            {idx.name: idx.get(lhs) for idx in self._left_keys},
-        )
-        right_table = cudf.core.frame.Frame(
-            {idx.name: idx.get(rhs) for idx in self._right_keys},
-        )
-
         left_rows, right_rows = self._joiner(
-            left_table, right_table, how=self.how,
+            self._left_join_table, self._right_join_table, how=self.how,
         )
-
-        # For inner joins, any categorical keys in `self.lhs` and `self.rhs`
-        # were casted to their category type to produce `lhs` and `rhs`.
-        # Here, we cast them back.
-        if self.how == "inner":
-            for left_key, right_key in zip(self._left_keys, self._right_keys):
-                # Note that we check self.lhs and self.rhs rather than lhs and
-                # rhs here because _match_key_dtypes has already modified them.
-                if isinstance(
-                    left_key.get(self.lhs).dtype, cudf.CategoricalDtype
-                ) and isinstance(
-                    right_key.get(self.rhs).dtype, cudf.CategoricalDtype
-                ):
-                    left_key.set(
-                        lhs,
-                        left_key.get(lhs).astype("category"),
-                        validate=False,
-                    )
-                    right_key.set(
-                        rhs,
-                        right_key.get(rhs).astype("category"),
-                        validate=False,
-                    )
 
         left_result = cudf.core.frame.Frame()
         right_result = cudf.core.frame.Frame()
 
         gather_index = self._using_left_index or self._using_right_index
         if left_rows is not None:
-            left_result = lhs._gather(
+            left_result = self.output_lhs._gather(
                 left_rows, nullify=True, keep_index=gather_index
             )
         if right_rows is not None:
-            right_result = rhs._gather(
+            right_result = self.output_rhs._gather(
                 right_rows, nullify=True, keep_index=gather_index
             )
 
