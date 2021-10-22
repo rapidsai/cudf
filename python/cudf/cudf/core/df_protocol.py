@@ -513,6 +513,12 @@ DataFrameObject = Any
 ColumnObject = Any
 
 
+_INTS = {8: cp.int8, 16: cp.int16, 32: cp.int32, 64: cp.int64}
+_UINTS = {8: cp.uint8, 16: cp.uint16, 32: cp.uint32, 64: cp.uint64}
+_FLOATS = {32: cp.float32, 64: cp.float64}
+_CP_DTYPES = {0: _INTS, 1: _UINTS, 2: _FLOATS, 20: {8: bool}}
+
+
 def from_dataframe(df : DataFrameObject, allow_copy: bool = False) :
     """
     Construct a cudf DataFrame from ``df`` if it supports ``__dataframe__``
@@ -596,12 +602,8 @@ def protocol_dtypes_to_cupy_dtype(_dtype):
     if _dtype[0] not in (_k.INT, _k.UINT, _k.FLOAT, _k.BOOL,_k.CATEGORICAL,
                          _k.STRING, _k.DATETIME):
         raise RuntimeError(f"Data type {_dtype[0]} not handled yet")
-
-    _ints = {8: cp.int8, 16: cp.int16, 32: cp.int32, 64: cp.int64}
-    _uints = {8: cp.uint8, 16: cp.uint16, 32: cp.uint32, 64: cp.uint64}
-    _floats = {32: cp.float32, 64: cp.float64}
-    _cp_dtypes = {0: _ints, 1: _uints, 2: _floats, 20: {8: bool}}
-    return _cp_dtypes[kind][bitwidth]
+   
+    return _CP_DTYPES[kind][bitwidth]
 
 def _protocol_column_to_cudf_column_categorical(col : ColumnObject) :
     """
