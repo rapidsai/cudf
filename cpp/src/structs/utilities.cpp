@@ -440,7 +440,7 @@ std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> superimpose_parent
 bool contains_struct_nulls(column_view const& col)
 {
   return (col.type().id() == type_id::STRUCT && col.has_nulls()) ||
-         std::all_of(col.child_begin(), col.child_end(), [](auto const& child) {
+         std::any_of(col.child_begin(), col.child_end(), [](auto const& child) {
            return contains_struct_nulls(child);
          });
 }

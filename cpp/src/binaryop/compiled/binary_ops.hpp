@@ -173,18 +173,23 @@ std::optional<data_type> get_common_type(data_type out, data_type lhs, data_type
 bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op);
 
 /**
- * @brief Check if input binary operation is supported for the given input and output types.
+ * @brief Check if input binary operation is supported for the given input columns and output types.
+ *
+ * If the left and right columns are struct columns, recursively checks if the input columns have
+ * the same number of children and the corresponding child columns are supported for the specified
+ * operation and output type. If either input column is not a struct, returns the result of
+ * is_supported_operation for the input column types.
  *
  * @param out output type of the binary operation
  * @param lhs left column of the binary operation
  * @param rhs right column of the binary operation
  * @param op binary operator enum
- * @return true if given binary operator supports given input and output types.
+ * @return true if given binary operator supports given input columns and output types.
  */
-bool struct_children_support_operation(data_type out,
-                                       column_view const& lhs,
-                                       column_view const& rhs,
-                                       binary_operator op);
+bool is_supported_struct_operation(data_type out,
+                                   column_view const& lhs,
+                                   column_view const& rhs,
+                                   binary_operator op);
 
 // Defined in individual .cu files.
 /**

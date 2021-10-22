@@ -249,14 +249,14 @@ std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> superimpose_parent
 /**
  * @brief Checks if column or any of its children are struct columns with structs that are null.
  *
- * This function searchings for structs that are null and differentiates between them and structs
- * containing null values. Struct nulls add a column to the table result of the flatten column
- * utility. The existence of struct nulls necessitates the use of column_nullability::FORCE when
- * flattening the column for comparison.
+ * This function searches for structs that are null -- differentiating between structs that are null
+ * and structs containing null values. Null structs add a column to the result of the flatten column
+ * utility and necessitates column_nullability::FORCE when flattening the column for comparison
+ * operations.
  *
- * @param col Column to check for structs containing nulls
- * @return true If the column is or contains a struct column with struct nulls
- * @return false If the column is not a struct column or does not contain struct nulls
+ * @param col Column to check for null structs
+ * @return true If the column is or contains a struct column with null structs
+ * @return false If the column is not a struct column or does not contain null structs
  */
 bool contains_struct_nulls(column_view const& col);
 }  // namespace detail

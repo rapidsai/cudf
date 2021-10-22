@@ -464,7 +464,7 @@ void binary_operation(mutable_column_view& out,
                       rmm::cuda_stream_view stream)
 {
   if (lhs.type().id() == type_id::STRUCT && rhs.type().id() == type_id::STRUCT) {
-    CUDF_EXPECTS(struct_children_support_operation(out.type(), lhs, rhs, op),
+    CUDF_EXPECTS(is_supported_struct_operation(out.type(), lhs, rhs, op),
                  "Unsupported operator for these types");
     struct_binary_operation(out, lhs, rhs, op, stream);
   } else {
@@ -483,7 +483,7 @@ void binary_operation(mutable_column_view& out,
 {
   if (lhs.type().id() == type_id::STRUCT && rhs.type().id() == type_id::STRUCT) {
     auto lhs_col = make_column_from_scalar(lhs, rhs.size(), stream);
-    CUDF_EXPECTS(struct_children_support_operation(out.type(), lhs_col->view(), rhs, op),
+    CUDF_EXPECTS(is_supported_struct_operation(out.type(), lhs_col->view(), rhs, op),
                  "Unsupported operator for these types");
     struct_binary_operation(out, lhs_col->view(), rhs, op, stream);
   } else {
@@ -502,7 +502,7 @@ void binary_operation(mutable_column_view& out,
 {
   if (lhs.type().id() == type_id::STRUCT && rhs.type().id() == type_id::STRUCT) {
     auto rhs_col = make_column_from_scalar(rhs, lhs.size(), stream);
-    CUDF_EXPECTS(struct_children_support_operation(out.type(), lhs, rhs_col->view(), op),
+    CUDF_EXPECTS(is_supported_struct_operation(out.type(), lhs, rhs_col->view(), op),
                  "Unsupported operator for these types");
 
     struct_binary_operation(out, lhs, rhs_col->view(), op, stream);
