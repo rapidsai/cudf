@@ -4416,7 +4416,7 @@ class StringMethods(ColumnMethods):
         sizes = libcudf.concat.concat_columns(
             [column.as_column(0, dtype=np.int32, length=1), sn._column]
         )
-        oc = libcudf.reduce.scan("cumsum", sizes, False)
+        oc = libcudf.reduce.scan("cumsum", sizes, True)
         lc = cudf.core.column.ListColumn(
             size=self._column.size,
             dtype=cudf.ListDtype(self._column.dtype),
