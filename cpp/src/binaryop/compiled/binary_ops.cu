@@ -287,31 +287,25 @@ void struct_binary_operation(mutable_column_view& out,
 {
   bool const has_struct_nulls =
     structs::detail::contains_struct_nulls(lhs) || structs::detail::contains_struct_nulls(rhs);
-  auto const lhs_superimposed = structs::detail::superimpose_parent_nulls(lhs);
-  auto const rhs_superimposed = structs::detail::superimpose_parent_nulls(rhs);
-  auto const lhs_flattener    = structs::detail::flatten_nested_columns(
-    table_view{{std::get<0>(lhs_superimposed)}},
+  auto const lhs_flattened = structs::detail::flatten_nested_columns(
+    table_view{{lhs}},
     {},
     {},
     has_struct_nulls ? structs::detail::column_nullability::FORCE
-                        : structs::detail::column_nullability::MATCH_INCOMING);
-  auto const rhs_flattener = structs::detail::flatten_nested_columns(
-    table_view{{std::get<0>(rhs_superimposed)}},
+                     : structs::detail::column_nullability::MATCH_INCOMING);
+  auto const rhs_flattened = structs::detail::flatten_nested_columns(
+    table_view{{rhs}},
     {},
     {},
     has_struct_nulls ? structs::detail::column_nullability::FORCE
                      : structs::detail::column_nullability::MATCH_INCOMING);
 
-  auto lhs_flat = lhs_flattener.flattened_columns();
-  auto rhs_flat = rhs_flattener.flattened_columns();
-
-  auto d_lhs     = table_device_view::create(lhs_flat);
-  auto d_rhs     = table_device_view::create(rhs_flat);
-  bool has_nulls = has_nested_nulls(lhs_flat) || has_nested_nulls(rhs_flat);
-
+  auto d_lhs = table_device_view::create(lhs_flattened);
+  auto d_rhs = table_device_view::create(rhs_flattened);
   auto d_out = column_device_view::create(out, stream);
   auto out_iter =
     cudf::detail::make_optional_iterator<bool>(*d_out, contains_nulls::DYNAMIC{}, out.has_nulls());
+  bool has_nulls = has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened);
 
   if (op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL) {
     has_nulls ? struct_compare_tabulation(
@@ -320,20 +314,20 @@ void struct_binary_operation(mutable_column_view& out,
                   out, row_equality_comparator<false>{*d_lhs, *d_rhs, true}, op, out_iter, stream);
   } else if (op == binary_operator::LESS || op == binary_operator::LESS_EQUAL ||
              op == binary_operator::GREATER || op == binary_operator::GREATER_EQUAL) {
-    has_nulls ? struct_compare_tabulation(
-                  out,
-                  row_lexicographic_comparator<true>{
-                    *d_lhs, *d_rhs, get_orders(op, lhs_flat.num_columns(), stream).data()},
-                  op,
-                  out_iter,
-                  stream)
-              : struct_compare_tabulation(
-                  out,
-                  row_lexicographic_comparator<false>{
-                    *d_lhs, *d_rhs, get_orders(op, lhs_flat.num_columns(), stream).data()},
-                  op,
-                  out_iter,
-                  stream);
+    auto const num_columns = lhs_flattened.flattened_columns().num_columns();
+    has_nulls
+      ? struct_compare_tabulation(out,
+                                  row_lexicographic_comparator<true>{
+                                    *d_lhs, *d_rhs, get_orders(op, num_columns, stream).data()},
+                                  op,
+                                  out_iter,
+                                  stream)
+      : struct_compare_tabulation(out,
+                                  row_lexicographic_comparator<false>{
+                                    *d_lhs, *d_rhs, get_orders(op, num_columns, stream).data()},
+                                  op,
+                                  out_iter,
+                                  stream);
     // } else if (op == binary_operator::NULL_EQUALS) {
   } else {
     CUDF_FAIL("Unsupported operator for these types");
