@@ -224,7 +224,7 @@ class DatetimeColumn(column.ColumnBase):
 
     def ceil(self, field: str) -> ColumnBase:
         return libcudf.datetime.ceil_datetime(self, field)
-    
+
     def floor(self, field: str) -> ColumnBase:
         return libcudf.datetime.floor_datetime(self, field)
 
@@ -350,8 +350,7 @@ class DatetimeColumn(column.ColumnBase):
             )
 
     def _default_na_value(self) -> DatetimeLikeScalar:
-        """Returns the default NA value for this column
-        """
+        """Returns the default NA value for this column"""
         return np.datetime64("nat", self.time_unit)
 
     def mean(self, skipna=None, dtype=np.float64) -> ScalarLike:

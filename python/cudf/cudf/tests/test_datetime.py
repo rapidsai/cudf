@@ -580,7 +580,11 @@ def test_datetime_dataframe():
             dtype="datetime64[ns]",
             freq=None,
         ),
-        pd.DatetimeIndex([], dtype="datetime64[ns]", freq=None,),
+        pd.DatetimeIndex(
+            [],
+            dtype="datetime64[ns]",
+            freq=None,
+        ),
         pd.Series([1, 2, 3]).astype("datetime64[ns]"),
         pd.Series([1, 2, 3]).astype("datetime64[us]"),
         pd.Series([1, 2, 3]).astype("datetime64[ms]"),
@@ -681,7 +685,11 @@ def test_to_datetime_not_implemented():
         pd.Series([0, 1, -1]),
         pd.Series([0, 1, -1, 100, 200, 47637]),
         [10, 12, 1200, 15003],
-        pd.DatetimeIndex([], dtype="datetime64[ns]", freq=None,),
+        pd.DatetimeIndex(
+            [],
+            dtype="datetime64[ns]",
+            freq=None,
+        ),
         pd.Index([1, 2, 3, 4]),
     ],
 )
@@ -941,7 +949,8 @@ def test_datetime_subtract(data, other, data_dtype, other_dtype):
 )
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)
 @pytest.mark.parametrize(
-    "op", ["add", "sub"],
+    "op",
+    ["add", "sub"],
 )
 def test_datetime_series_ops_with_scalars(data, other_scalars, dtype, op):
     gsr = cudf.Series(data=data, dtype=dtype)
@@ -1632,6 +1641,7 @@ def test_ceil(data, time_type, resolution):
     got = gs.dt.ceil(resolution)
     assert_eq(expect, got)
 
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -1659,4 +1669,3 @@ def test_floor(data, time_type, resolution):
     expect = ps.dt.floor(resolution)
     got = gs.dt.floor(resolution)
     assert_eq(expect, got)
-    

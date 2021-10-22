@@ -85,7 +85,7 @@ from cudf.utils.utils import (
 
 def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
     """Append a scalar `value` to the end of `col` inplace.
-       Cast to common type if possible
+    Cast to common type if possible
     """
     to_type = find_common_type([type(value), col.dtype])
     val_col = as_column(value, dtype=to_type)
@@ -392,7 +392,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return cls(data=col)
 
     def __init__(
-        self, data=None, index=None, dtype=None, name=None, nan_as_null=True,
+        self,
+        data=None,
+        index=None,
+        dtype=None,
+        name=None,
+        nan_as_null=True,
     ):
         if isinstance(data, pd.Series):
             if name is None:
@@ -1363,7 +1368,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         operands = lhs._make_operands_for_binop(other, fill_value, reflect)
         return (
             lhs._from_data(
-                data=lhs._colwise_binop(operands, fn), index=lhs._index,
+                data=lhs._colwise_binop(operands, fn),
+                index=lhs._index,
             )
             if operands is not NotImplemented
             else NotImplemented
@@ -2120,8 +2126,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @property
     def index(self):
-        """The index object
-        """
+        """The index object"""
         return self._index
 
     @index.setter
@@ -2130,8 +2135,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @property
     def nullmask(self):
-        """The gpu buffer for the null-mask
-        """
+        """The gpu buffer for the null-mask"""
         return cudf.Series(self._column.nullmask)
 
     def as_mask(self):
@@ -3649,7 +3653,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             index = np.asarray(q)
             if len(self) == 0:
                 result = column_empty_like(
-                    index, dtype=self.dtype, masked=True, newsize=len(index),
+                    index,
+                    dtype=self.dtype,
+                    masked=True,
+                    newsize=len(index),
                 )
         else:
             index = None
@@ -3702,7 +3709,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             data = _format_stats_values(data)
 
             return Series(
-                data=data, index=index, nan_as_null=False, name=self.name,
+                data=data,
+                index=index,
+                nan_as_null=False,
+                name=self.name,
             )
 
         def _describe_timedelta(self):
@@ -4693,7 +4703,9 @@ class DatetimeProperties(object):
             np.int8
         )
         return Series._from_data(
-            {None: res}, index=self.series._index, name=self.series.name,
+            {None: res},
+            index=self.series._index,
+            name=self.series.name,
         )
 
     def isocalendar(self):
@@ -4886,7 +4898,9 @@ class DatetimeProperties(object):
 
         result = ((day == cudf.Scalar(1)) & first_month).fillna(False)
         return Series._from_data(
-            {None: result}, index=self.series._index, name=self.series.name,
+            {None: result},
+            index=self.series._index,
+            name=self.series.name,
         )
 
     @property
@@ -4934,7 +4948,9 @@ class DatetimeProperties(object):
 
         result = ((day == last_day) & last_month).fillna(False)
         return Series._from_data(
-            {None: result}, index=self.series._index, name=self.series.name,
+            {None: result},
+            index=self.series._index,
+            name=self.series.name,
         )
 
     @property
@@ -5004,7 +5020,9 @@ class DatetimeProperties(object):
         result = cudf._lib.copying.copy_if_else(leap, non_leap, leap_dates)
         result = result.fillna(False)
         return Series._from_data(
-            {None: result}, index=self.series._index, name=self.series.name,
+            {None: result},
+            index=self.series._index,
+            name=self.series.name,
         )
 
     def _get_dt_field(self, field):
@@ -5019,7 +5037,7 @@ class DatetimeProperties(object):
         return Series(
             data=out_column, index=self.series._index, name=self.series.name
         )
-        
+
     def floor(self, field):
         out_column = self.series._column.floor(field)
 
