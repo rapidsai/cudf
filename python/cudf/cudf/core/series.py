@@ -5019,6 +5019,13 @@ class DatetimeProperties(object):
         return Series(
             data=out_column, index=self.series._index, name=self.series.name
         )
+        
+    def floor(self, field):
+        out_column = self.series._column.floor(field)
+
+        return Series(
+            data=out_column, index=self.series._index, name=self.series.name
+        )
 
     def strftime(self, date_format, *args, **kwargs):
         """
