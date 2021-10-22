@@ -15,9 +15,12 @@
  */
 
 #include "orc.h"
-#include <string>
 #include "orc_field_reader.hpp"
 #include "orc_field_writer.hpp"
+
+#include <thrust/tabulate.h>
+
+#include <string>
 
 namespace cudf {
 namespace io {
@@ -459,48 +462,47 @@ metadata::metadata(datasource* const src) : source(src)
   auto md_data     = decompressor->Decompress(buffer->data(), ps.metadataLength, &md_length);
   orc::ProtobufReader(md_data, md_length).read(md);
 
-  init_schema();
+  init_parent_descriptors();
   init_column_names();
 }
 
 void metadata::init_column_names()
 {
-  // root ORC column
-  column_names.push_back("");
-  column_paths.push_back("");
+  column_names.resize(get_num_columns());
+  thrust::tabulate(column_names.begin(), column_names.end(), [&](auto col_id) {
+    auto const parent_id = parents[col_id].id;
+    if (parent_id < 0) return std::string{};
+    auto const& parent_field_names = ff.types[parent_id].fieldNames;
+    auto const field_idx           = parents[col_id].field_idx;
+    // Child columns of lists don't have a name in ORC files, generate placeholder in that case
+    return field_idx < static_cast<int32_t>(parent_field_names.size())
+             ? parent_field_names[field_idx]
+             : std::to_string(col_id);
+  });
 
-  for (int32_t col_id = 1; col_id < get_num_columns(); ++col_id) {
-    auto const& types              = ff.types;
-    auto const parent_idx          = schema[col_id].parent;
-    auto const& parent_field_names = types[parent_idx].fieldNames;
-    auto const field_idx           = schema[col_id].field;
-    if (field_idx >= 0 and field_idx < static_cast<int32_t>(parent_field_names.size())) {
-      column_names.push_back(parent_field_names[field_idx]);
-    } else {
-      // If we have no name, generate a name
-      column_names.push_back("_col" + std::to_string(col_id));
-    }
-
+  column_paths.resize(get_num_columns());
+  thrust::tabulate(column_paths.begin(), column_paths.end(), [&](auto col_id) {
+    auto const parent_id = parents[col_id].id;
+    if (parent_id < 0) return std::string{};
     // Don't include ORC root column name in path
-    column_paths.push_back((parent_idx == 0 ? "" : column_paths[parent_idx] + ".") +
-                           column_names.back());
-  }
+    return (parent_id == 0 ? "" : column_paths[parent_id] + ".") + column_names[col_id];
+  });
 }
 
-void metadata::init_schema()
+void metadata::init_parent_descriptors()
 {
-  auto const schema_size = static_cast<uint32_t>(ff.types.size());
-  schema.resize(schema_size);
+  auto const num_columns = static_cast<uint32_t>(ff.types.size());
+  parents.resize(num_columns);
 
-  for (uint32_t i = 0; i < schema_size; i++) {
-    auto const& subtypes    = ff.types[i].subtypes;
+  for (uint32_t col_id = 0; col_id < num_columns; ++col_id) {
+    auto const& subtypes    = ff.types[col_id].subtypes;
     auto const num_children = static_cast<uint32_t>(subtypes.size());
-    for (uint32_t j = 0; j < num_children; j++) {
-      auto const column_id = subtypes[j];
-      CUDF_EXPECTS(column_id > i && column_id < schema_size, "Invalid column id");
-      CUDF_EXPECTS(schema[column_id].parent == -1, "Same node referenced twice");
-      schema[column_id].parent = i;
-      schema[column_id].field  = j;
+    for (uint32_t field_idx = 0; field_idx < num_children; ++field_idx) {
+      auto const child_id = subtypes[field_idx];
+      CUDF_EXPECTS(child_id > col_id && child_id < num_columns, "Invalid column id");
+      CUDF_EXPECTS(parents[child_id].id == -1, "Same node referenced twice");
+      parents[child_id].id        = col_id;
+      parents[child_id].field_idx = field_idx;
     }
   }
 }
