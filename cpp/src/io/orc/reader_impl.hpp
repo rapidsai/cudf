@@ -71,9 +71,14 @@ struct reader_column_meta {
   std::vector<row_group_meta> rwgrp_meta;  // rowgroup metadata [rowgroup][column]
 };
 
+/**
+ * @brief Describes a column hierarchy, which may exclude some input columns.
+ */
 struct column_hierarchy {
   using nesting_map = std::map<int32_t, std::vector<int32_t>>;
+  // Children IDs of each column
   nesting_map children;
+  // Each element contains column at the given nesting level
   std::vector<std::vector<orc_column_meta>> levels;
 
   column_hierarchy(nesting_map child_map);

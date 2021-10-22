@@ -245,6 +245,7 @@ bool should_convert_decimal_column_to_float(const std::vector<std::string>& colu
 
 column_hierarchy::column_hierarchy(nesting_map child_map) : children{std::move(child_map)}
 {
+  // Sort columns by nesting levels
   std::function<void(int32_t, int32_t)> levelize = [&](int32_t id, int32_t level) {
     if (static_cast<int32_t>(levels.size()) == level) levels.emplace_back();
 
@@ -260,6 +261,7 @@ column_hierarchy::column_hierarchy(nesting_map child_map) : children{std::move(c
   }
 }
 
+// TODO: move class to a separate hpp/cpp files
 /**
  * @brief In order to support multiple input files/buffers we need to gather
  * the metadata across all of those input(s). This class provides a place
@@ -267,6 +269,56 @@ column_hierarchy::column_hierarchy(nesting_map child_map) : children{std::move(c
  */
 class aggregate_orc_metadata {
   using OrcStripeInfo = std::pair<const StripeInformation*, const StripeFooter*>;
+
+  /**
+   * @brief Goes up to the root to include the column with the given id and its parents.
+   */
+  void update_parent_mapping(std::map<int32_t, std::vector<int32_t>>& selected_columns,
+                             cudf::io::orc::metadata const& metadata,
+                             int32_t id)
+  {
+    auto current_id = id;
+    auto parent_id  = metadata.parent_id(current_id);
+    while (parent_id != -1) {
+      if (std::find(selected_columns[parent_id].cbegin(),
+                    selected_columns[parent_id].cend(),
+                    current_id) == selected_columns[parent_id].end()) {
+        selected_columns[parent_id].push_back(current_id);
+      }
+      current_id = parent_id;
+      parent_id  = metadata.parent_id(current_id);
+    }
+  }
+
+  /**
+   * @brief Adds all columns nested under the column with the given id to the nesting map.
+   */
+  void add_nested_columns(std::map<int32_t, std::vector<int32_t>>& selected_columns,
+                          std::vector<SchemaType> const& types,
+                          int32_t id)
+  {
+    for (auto child_id : types[id].subtypes) {
+      if (std::find(selected_columns[id].cbegin(), selected_columns[id].cend(), child_id) ==
+          selected_columns[id].end()) {
+        selected_columns[id].push_back(child_id);
+      }
+      add_nested_columns(selected_columns, types, child_id);
+    }
+  }
+
+  /**
+   * @brief Adds the column with the given id to the mapping
+   *
+   * All nested columns and direct ancestors of column `id` are included.
+   * Columns that are not on the direct path are excluded, which may result in prunning.
+   */
+  void add_column_to_mapping(std::map<int32_t, std::vector<int32_t>>& selected_columns,
+                             cudf::io::orc::metadata const& metadata,
+                             int32_t id)
+  {
+    update_parent_mapping(selected_columns, metadata, id);
+    add_nested_columns(selected_columns, metadata.ff.types, id);
+  }
 
  public:
   mutable std::vector<cudf::io::orc::metadata> per_file_metadata;
@@ -364,22 +416,18 @@ class aggregate_orc_metadata {
 
   int get_row_index_stride() const { return per_file_metadata[0].ff.rowIndexStride; }
 
-  auto get_column_name(const int source_idx, const int column_idx) const
+  auto get_column_name(const int source_idx, const int column_id) const
   {
     CUDF_EXPECTS(source_idx <= static_cast<int>(per_file_metadata.size()),
                  "Out of range source_idx provided");
-    CUDF_EXPECTS(column_idx <= per_file_metadata[source_idx].get_num_columns(),
-                 "Out of range column_idx provided");
-    return per_file_metadata[source_idx].get_column_name(column_idx);
+    return per_file_metadata[source_idx].get_column_name(column_id);
   }
 
-  auto get_column_path(const int source_idx, const int column_idx) const
+  auto get_column_path(const int source_idx, const int column_id) const
   {
     CUDF_EXPECTS(source_idx <= static_cast<int>(per_file_metadata.size()),
                  "Out of range source_idx provided");
-    CUDF_EXPECTS(column_idx <= per_file_metadata[source_idx].get_num_columns(),
-                 "Out of range column_idx provided");
-    return per_file_metadata[source_idx].get_column_path(column_idx);
+    return per_file_metadata[source_idx].get_column_path(column_id);
   }
 
   auto is_row_grp_idx_present() const { return row_grp_idx_present; }
@@ -479,44 +527,6 @@ class aggregate_orc_metadata {
     }
 
     return selected_stripes_mapping;
-  }
-
-  void add_nested_columns(std::map<int32_t, std::vector<int32_t>>& selected_columns,
-                          std::vector<SchemaType> const& types,
-                          int32_t id)
-  {
-    for (auto child_id : types[id].subtypes) {
-      if (std::find(selected_columns[id].cbegin(), selected_columns[id].cend(), child_id) ==
-          selected_columns[id].end()) {
-        selected_columns[id].push_back(child_id);
-      }
-      add_nested_columns(selected_columns, types, child_id);
-    }
-  }
-
-  void update_parent_mapping(std::map<int32_t, std::vector<int32_t>>& selected_columns,
-                             cudf::io::orc::metadata const& metadata,
-                             int32_t id)
-  {
-    auto current_id = id;
-    auto parent_id  = metadata.parent_id(current_id);
-    while (parent_id != -1) {
-      if (std::find(selected_columns[parent_id].cbegin(),
-                    selected_columns[parent_id].cend(),
-                    current_id) == selected_columns[parent_id].end()) {
-        selected_columns[parent_id].push_back(current_id);
-      }
-      current_id = parent_id;
-      parent_id  = metadata.parent_id(current_id);
-    }
-  }
-
-  void add_column_to_mapping(std::map<int32_t, std::vector<int32_t>>& selected_columns,
-                             cudf::io::orc::metadata const& metadata,
-                             int32_t id)
-  {
-    update_parent_mapping(selected_columns, metadata, id);
-    add_nested_columns(selected_columns, metadata.ff.types, id);
   }
 
   /**
