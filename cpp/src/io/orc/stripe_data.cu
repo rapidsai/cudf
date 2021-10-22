@@ -1721,6 +1721,8 @@ __global__ void __launch_bounds__(block_size)
             case INT: static_cast<uint32_t*>(data_out)[row] = s->vals.u32[t + vals_skipped]; break;
             case DOUBLE:
             case LONG:
+              static_cast<uint64_t*>(data_out)[row] = s->vals.u64[t + vals_skipped];
+              break;
             case DECIMAL:
               static_cast<__uint128_t*>(data_out)[row] = s->vals.u64[t + vals_skipped];
               break;

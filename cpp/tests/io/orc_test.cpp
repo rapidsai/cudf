@@ -341,9 +341,9 @@ TEST_F(OrcWriterTest, MultiColumn)
   auto col3_data = random_values<int32_t>(num_rows);
   auto col4_data = random_values<float>(num_rows);
   auto col5_data = random_values<double>(num_rows);
-  auto col6_vals = random_values<int32_t>(num_rows);
+  auto col6_vals = random_values<int64_t>(num_rows);
   auto col6_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return numeric::decimal64{col6_vals[i], numeric::scale_type{2}};
+    return numeric::decimal128{col6_vals[i], numeric::scale_type{2}};
   });
   auto validity  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
@@ -353,7 +353,7 @@ TEST_F(OrcWriterTest, MultiColumn)
   column_wrapper<int32_t> col3{col3_data.begin(), col3_data.end(), validity};
   column_wrapper<float> col4{col4_data.begin(), col4_data.end(), validity};
   column_wrapper<double> col5{col5_data.begin(), col5_data.end(), validity};
-  column_wrapper<numeric::decimal64> col6{col6_data, col6_data + num_rows, validity};
+  column_wrapper<numeric::decimal128> col6{col6_data, col6_data + num_rows, validity};
 
   cudf::test::lists_column_wrapper<int64_t> col7{
     {9, 8}, {7, 6, 5}, {}, {4}, {3, 2, 1, 0}, {20, 21, 22, 23, 24}, {}, {66, 666}, {}, {-1, -2}};
@@ -401,7 +401,7 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls)
   auto col5_data = random_values<double>(num_rows);
   auto col6_vals = random_values<int32_t>(num_rows);
   auto col6_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return numeric::decimal64{col6_vals[i], numeric::scale_type{2}};
+    return numeric::decimal128{col6_vals[i], numeric::scale_type{2}};
   });
   auto col0_mask =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2); });
@@ -423,7 +423,7 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls)
   column_wrapper<int32_t> col3{col3_data.begin(), col3_data.end(), col3_mask};
   column_wrapper<float> col4{col4_data.begin(), col4_data.end(), col4_mask};
   column_wrapper<double> col5{col5_data.begin(), col5_data.end(), col5_mask};
-  column_wrapper<numeric::decimal64> col6{col6_data, col6_data + num_rows, col6_mask};
+  column_wrapper<numeric::decimal128> col6{col6_data, col6_data + num_rows, col6_mask};
   cudf::test::lists_column_wrapper<int32_t> col7{
     {{9, 8}, {7, 6, 5}, {}, {4}, {3, 2, 1, 0}, {20, 21, 22, 23, 24}, {}, {66, 666}, {}, {-1, -2}},
     col0_mask};
