@@ -43,6 +43,8 @@
 #include <numeric>
 #include <utility>
 
+#include <cuda/std/limits>
+
 namespace cudf {
 namespace io {
 namespace detail {
@@ -124,10 +126,11 @@ constexpr int32_t to_clockscale(cudf::type_id timestamp_id)
  */
 constexpr auto orc_precision(cudf::type_id decimal_id)
 {
+  using namespace numeric;
   switch (decimal_id) {
-    case cudf::type_id::DECIMAL32: return 9;
-    case cudf::type_id::DECIMAL64: return 18;
-    case cudf::type_id::DECIMAL128: return 38;
+    case cudf::type_id::DECIMAL32: return cuda::std::numeric_limits<decimal32::rep>::digits10;
+    case cudf::type_id::DECIMAL64: return cuda::std::numeric_limits<decimal64::rep>::digits10;
+    case cudf::type_id::DECIMAL128: return cuda::std::numeric_limits<decimal128::rep>::digits10;
     default: return 0;
   }
 }
