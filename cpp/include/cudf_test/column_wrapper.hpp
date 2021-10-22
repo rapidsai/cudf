@@ -511,7 +511,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
 
     auto const size      = cudf::distance(begin, end);
     auto const elements  = thrust::host_vector<Rep>(begin, end);
-    auto const id        = type_to_id<numeric::fixed_point<Rep, numeric::Radix::BASE_10> >();
+    auto const id        = type_to_id<numeric::fixed_point<Rep, numeric::Radix::BASE_10>>();
     auto const data_type = cudf::data_type{id, static_cast<int32_t>(scale)};
 
     wrapped.reset(new cudf::column{
@@ -575,7 +575,7 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
 
     auto const size      = cudf::distance(begin, end);
     auto const elements  = thrust::host_vector<Rep>(begin, end);
-    auto const id        = type_to_id<numeric::fixed_point<Rep, numeric::Radix::BASE_10> >();
+    auto const id        = type_to_id<numeric::fixed_point<Rep, numeric::Radix::BASE_10>>();
     auto const data_type = cudf::data_type{id, static_cast<int32_t>(scale)};
 
     wrapped.reset(new cudf::column{
