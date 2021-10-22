@@ -465,22 +465,25 @@ metadata::metadata(datasource* const src) : source(src)
 
 void metadata::init_column_names()
 {
-  auto const& types = ff.types;
   // root ORC column
   column_names.push_back("");
   column_paths.push_back("");
+
   for (int32_t col_id = 1; col_id < get_num_columns(); ++col_id) {
-    auto const parent_idx = schema[col_id].parent;
-    auto const field_idx  = schema[col_id].field;
-    if (field_idx >= 0 and field_idx < static_cast<int32_t>(types[parent_idx].fieldNames.size())) {
-      column_names.push_back(types[parent_idx].fieldNames[field_idx]);
+    auto const& types              = ff.types;
+    auto const parent_idx          = schema[col_id].parent;
+    auto const& parent_field_names = types[parent_idx].fieldNames;
+    auto const field_idx           = schema[col_id].field;
+    if (field_idx >= 0 and field_idx < static_cast<int32_t>(parent_field_names.size())) {
+      column_names.push_back(parent_field_names[field_idx]);
     } else {
       // If we have no name, generate a name
-      column_names.push_back("col" + std::to_string(col_id));
+      column_names.push_back("_col" + std::to_string(col_id));
     }
 
-    column_paths.push_back(column_paths[parent_idx] +
-                           (column_paths[parent_idx].empty() ? "" : ".") + column_names.back());
+    // Don't include ORC root column name in path
+    column_paths.push_back((parent_idx == 0 ? "" : column_paths[parent_idx] + ".") +
+                           column_names.back());
   }
 }
 

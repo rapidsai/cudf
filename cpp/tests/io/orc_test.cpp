@@ -1000,7 +1000,7 @@ TEST_F(OrcStatisticsTest, Basic)
   auto const stats = cudf_io::read_parsed_orc_statistics(cudf_io::source_info{filepath});
 
   auto const expected_column_names =
-    std::vector<std::string>{"col0", "_col0", "_col1", "_col2", "_col3", "_col4"};
+    std::vector<std::string>{"", "_col0", "_col1", "_col2", "_col3", "_col4"};
   EXPECT_EQ(stats.column_names, expected_column_names);
 
   auto validate_statistics = [&](std::vector<cudf_io::column_statistics> const& stats) {
