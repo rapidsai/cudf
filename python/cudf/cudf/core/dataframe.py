@@ -4104,14 +4104,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Simple function of a single variable which could be NA
 
-        >>> def f(x):
-        ...     if x is cudf.NA:
+        >>> def f(row):
+        ...     if row['a'] is cudf.NA:
         ...             return 0
         ...     else:
-        ...             return x + 1
+        ...             return row['a'] + 1
         ...
         >>> df = cudf.DataFrame({'a': [1, cudf.NA, 3]})
-        >>> df.apply(lambda row: f(row['a']))
+        >>> df.apply(f)
         0    2
         1    0
         2    4
@@ -4120,14 +4120,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Function of multiple variables will operate in
         a null aware manner
 
-        >>> def f(x, y):
-        ...     return x - y
+        >>> def f(row):
+        ...     return row['a'] - row['b']
         ...
         >>> df = cudf.DataFrame({
         ...     'a': [1, cudf.NA, 3, cudf.NA],
         ...     'b': [5, 6, cudf.NA, cudf.NA]
         ... })
-        >>> df.apply(lambda row: f(row['a'], row['b']))
+        >>> df.apply(f)
         0      -4
         1    <NA>
         2    <NA>
@@ -4136,17 +4136,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Functions may conditionally return NA as in pandas
 
-        >>> def f(x, y):
-        ...     if x + y > 3:
+        >>> def f(row):
+        ...     if row['a'] + row['b'] > 3:
         ...             return cudf.NA
         ...     else:
-        ...             return x + y
+        ...             return row['a'] + row['b']
         ...
         >>> df = cudf.DataFrame({
         ...     'a': [1, 2, 3],
         ...     'b': [2, 1, 1]
         ... })
-        >>> df.apply(lambda row: f(row['a'], row['b']))
+        >>> df.apply(f)
         0       3
         1       3
         2    <NA>
@@ -4155,14 +4155,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Mixed types are allowed, but will return the common
         type, rather than object as in pandas
 
-        >>> def f(x, y):
-        ...     return x + y
+        >>> def f(row):
+        ...     return row['a'] + row['b']
         ...
         >>> df = cudf.DataFrame({
         ...     'a': [1, 2, 3],
         ...     'b': [0.5, cudf.NA, 3.14]
         ... })
-        >>> df.apply(lambda row: f(row['a'], row['b']))
+        >>> df.apply(f)
         0     1.5
         1    <NA>
         2    6.14
@@ -4172,16 +4172,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         result will be promoted to a safe type regardless of
         the data
 
-        >>> def f(x):
-        ...     if x > 3:
-        ...             return x
+        >>> def f(row):
+        ...     if row['a'] > 3:
+        ...             return row['a']
         ...     else:
         ...             return 1.5
         ...
         >>> df = cudf.DataFrame({
         ...     'a': [1, 3, 5]
         ... })
-        >>> df.apply(lambda row: f(row['a']))
+        >>> df.apply(f)
         0    1.5
         1    1.5
         2    5.0
@@ -4189,7 +4189,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Ops against N columns are supported generally
 
-        >>> def f(v, w, x, y, z):
+        >>> def f(row):
+        ...     v, w, x, y, z = (
+        ...         row['a'], row['b'], row['c'], row['d'], row['e']
+        ...     )
         ...     return x + (y - (z / w)) % v
         ...
         >>> df = cudf.DataFrame({
@@ -4199,15 +4202,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ...     'd': [8, 7, 8],
         ...     'e': [7, 1, 6]
         ... })
-        >>> df.apply(
-        ...     lambda row: f(
-        ...             row['a'],
-        ...             row['b'],
-        ...             row['c'],
-        ...             row['d'],
-        ...             row['e']
-        ...     )
-        ... )
+        >>> df.apply(f)
         0    <NA>
         1     4.8
         2     5.0
