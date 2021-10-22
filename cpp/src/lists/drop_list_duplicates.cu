@@ -596,31 +596,52 @@ std::unique_ptr<column> generate_output_offsets(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  auto unique_entry_offsets = rmm::device_uvector<offset_type>(original_offsets.size() - 1, stream);
-  auto list_sizes           = rmm::device_uvector<offset_type>(original_offsets.size() - 1, stream);
+  // Let consider an example:
+  // Given the original offsets of the input lists column is [0, 4, 5, 6, 7, 10, 11, 13].
+  // The original entries_list_offsets is [1, 1, 1, 1, 2, 3, 4, 5, 5, 5, 6, 7, 7], and after
+  // copying unique entries we have the entries_list_offsets becomes [1, 1, 1, 4, 5, 5, 5, 7, 7] and
+  // num_entries is 9.
+  //
+  // That means, one entry in the list index 0 has been removed, and entries in the lists with
+  // indices {1, 2, 5} have been removed completely.
 
-  auto const end         = thrust::reduce_by_key(rmm::exec_policy(stream),
+  // Store the offsets of the unique entries, only one offset value per list, for non-empty lists.
+  // Given the example above, we will have this array contains the values [1, 4, 5, 7]
+  auto unique_entry_offsets = rmm::device_uvector<offset_type>(original_offsets.size() - 1, stream);
+
+  // Store the non-zero numbers of unique entries per list.
+  // Given the example above, we will have this array contains the values [3, 1, 3, 2]
+  auto list_sizes = rmm::device_uvector<offset_type>(original_offsets.size() - 1, stream);
+
+  auto const end                 = thrust::reduce_by_key(rmm::exec_policy(stream),
                                          entries_list_offsets.template begin<offset_type>(),
                                          entries_list_offsets.template end<offset_type>(),
                                          thrust::make_constant_iterator<offset_type>(1),
                                          unique_entry_offsets.begin(),
                                          list_sizes.begin());
-  auto const num_uniques = thrust::distance(unique_entry_offsets.begin(), end.first);
+  auto const num_non_empty_lists = thrust::distance(unique_entry_offsets.begin(), end.first);
 
+  // The output offsets for the output lists column(s).
   auto new_offsets         = make_numeric_column(data_type{type_to_id<offset_type>()},
                                          original_offsets.size(),
                                          mask_state::UNALLOCATED,
                                          stream,
                                          mr);
   auto const d_new_offsets = new_offsets->mutable_view().template begin<offset_type>();
+
   thrust::uninitialized_fill_n(
     rmm::exec_policy(stream), d_new_offsets, original_offsets.size(), offset_type{0});
+
+  // Scatter non-zero sizes of the output lists into the correct positions.
+  // Given the example above, we will have new_offsets = [0, 3, 0, 0, 1, 3, 0, 2]
   thrust::scatter(rmm::exec_policy(stream),
                   list_sizes.begin(),
-                  list_sizes.begin() + num_uniques,
+                  list_sizes.begin() + num_non_empty_lists,
                   unique_entry_offsets.begin(),
                   d_new_offsets);
 
+  // Generate offsets from sizes.
+  // Given the example above, we will have new_offsets = [0, 3, 3, 3, 4, 7, 7, 9]
   thrust::inclusive_scan(
     rmm::exec_policy(stream), d_new_offsets, d_new_offsets + new_offsets->size(), d_new_offsets);
 
