@@ -541,7 +541,7 @@ def from_dataframe(df : DataFrameObject, allow_copy: bool = False) -> _CuDFDataF
     return _from_dataframe(df.__dataframe__(allow_copy=allow_copy))
 
 
-def _from_dataframe(df : DataFrameObject) :
+def _from_dataframe(df : DataFrameObject) -> _CuDFDataFrame :
     """
     Create a cudf DataFrame object from DataFrameObject.
     """
@@ -575,7 +575,8 @@ def _from_dataframe(df : DataFrameObject) :
     return df_new
 
 
-def _protocol_column_to_cudf_column_numeric(col:ColumnObject):
+def _protocol_column_to_cudf_column_numeric(col:ColumnObject) -> \
+                    Tuple[cudf.core.column.NumericalColumn, _CuDFBuffer]:
     """
     Convert an int, uint, float or bool protocol column to the corresponding cudf column
     """
@@ -585,26 +586,26 @@ def _protocol_column_to_cudf_column_numeric(col:ColumnObject):
     _dbuffer, _ddtype = col.get_buffers()['data']
     _check_data_is_on_gpu(_dbuffer)
     dcol = build_column(Buffer(_dbuffer.ptr, _dbuffer.bufsize), 
-                        protocol_dtypes_to_cupy_dtype(_ddtype))        
+                        protocol_dtype_to_cupy_dtype(_ddtype))        
     return _set_missing_values(col, dcol), _dbuffer
 
 
-def _check_data_is_on_gpu(buffer):
+def _check_data_is_on_gpu(buffer) -> None:
     if buffer.__dlpack_device__()[0] != Device.CUDA and not buffer._allow_copy:
         raise TypeError("This operation must copy data from CPU to GPU."
                             "Set `allow_copy=True` to allow it.")
 
-def _set_missing_values(protocol_col, cudf_col):
+def _set_missing_values(protocol_col, cudf_col) -> cudf.core.column.ColumnBase:
     null_kind, null_value = protocol_col.describe_null
     if  null_kind != 0:
-        assert null_kind == 3, f"cudf supports only bit mask, null_kind should be 3 ." 
+        assert null_kind == 3, f"cudf supports only bit mask, null_kind should be 3, got: {null_kind}." 
         _mask_buffer, _mask_dtype = protocol_col.get_buffers()["validity"]
         bitmask = cp.asarray(Buffer(_mask_buffer.ptr, _mask_buffer.bufsize), cp.bool8) 
         cudf_col[~bitmask] = None
 
     return cudf_col
 
-def protocol_dtypes_to_cupy_dtype(_dtype):
+def protocol_dtype_to_cupy_dtype(_dtype) -> cp.dtype:
     kind = _dtype[0]
     bitwidth = _dtype[1]
     _k = _DtypeKind
@@ -614,7 +615,8 @@ def protocol_dtypes_to_cupy_dtype(_dtype):
    
     return _CP_DTYPES[kind][bitwidth]
 
-def _protocol_column_to_cudf_column_categorical(col : ColumnObject) :
+def _protocol_column_to_cudf_column_categorical(col : ColumnObject) -> \
+    Tuple[cudf.core.column.CategoricalColumn, _CuDFBuffer] :
     """
     Convert a categorical column to a Series instance
     """
@@ -625,16 +627,17 @@ def _protocol_column_to_cudf_column_categorical(col : ColumnObject) :
     categories = as_column(mapping.values())
     codes_buffer, codes_dtype = col.get_buffers()['data']
     _check_data_is_on_gpu(codes_buffer)
-    cdtype = protocol_dtypes_to_cupy_dtype(codes_dtype)
+    cdtype = protocol_dtype_to_cupy_dtype(codes_dtype)
     codes = build_column(Buffer(codes_buffer.ptr, codes_buffer.bufsize), cdtype)
     
-    col1 = build_categorical_column(categories=categories,codes=codes,mask=codes.base_mask,
+    cudfcol = build_categorical_column(categories=categories,codes=codes,mask=codes.base_mask,
                                     size=codes.size,ordered=ordered)
 
-    return _set_missing_values(col, col1), codes_buffer
+    return _set_missing_values(col, cudfcol), codes_buffer
 
 
-def _protocol_column_to_cudf_column_string(col : ColumnObject) :
+def _protocol_column_to_cudf_column_string(col : ColumnObject) -> \
+    Tuple[cudf.core.column.StringColumn, Tuple[_CuDFBuffer]] :
     """
     Convert a string ColumnObject to cudf Column object.
     """
@@ -645,13 +648,13 @@ def _protocol_column_to_cudf_column_string(col : ColumnObject) :
     dbuffer, bdtype = buffers["data"]
     _check_data_is_on_gpu(dbuffer)
     encoded_string = build_column(Buffer(dbuffer.ptr, dbuffer.bufsize),
-                        protocol_dtypes_to_cupy_dtype(bdtype)
+                        protocol_dtype_to_cupy_dtype(bdtype)
                         )
 
     # Retrieve the offsets buffer containing the index offsets demarcating the beginning and end of each string
     obuffer, odtype = buffers["offsets"]
     offsets = build_column(Buffer(obuffer.ptr, obuffer.bufsize), 
-                           protocol_dtypes_to_cupy_dtype(odtype)
+                           protocol_dtype_to_cupy_dtype(odtype)
                            )
     
     col_str = build_column(None, dtype=cp.dtype('O'), children=(offsets, encoded_string))
@@ -661,7 +664,7 @@ def _protocol_column_to_cudf_column_string(col : ColumnObject) :
 
 
 def __dataframe__(self, nan_as_null : bool = False,
-                  allow_copy : bool = True) -> dict:
+                  allow_copy : bool = True) -> _CuDFDataFrame:
     """
     The public method to attach to cudf.DataFrame.
 
