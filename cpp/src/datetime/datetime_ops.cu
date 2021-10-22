@@ -116,6 +116,7 @@ struct ceil_timestamp {
   }
 };
 
+template <datetime_component COMPONENT>
 struct floor_timestamp {
   template <typename Timestamp>
   CUDA_DEVICE_CALLABLE Timestamp operator()(Timestamp const ts) const
@@ -224,7 +225,7 @@ struct is_leap_year_op {
 
 // Specific function for applying ceil/floor date ops
 template <typename TransformFunctor>
-struct dispatch_ceil {
+struct dispatch_ceil_or_floor {
   template <typename Timestamp>
   std::enable_if_t<cudf::is_timestamp<Timestamp>(), std::unique_ptr<cudf::column>> operator()(
     cudf::column_view const& column,
@@ -431,7 +432,19 @@ std::unique_ptr<column> ceil_general(column_view const& column,
                                      rmm::mr::device_memory_resource* mr)
 {
   return cudf::type_dispatcher(
-    column.type(), dispatch_ceil<detail::ceil_timestamp<Component>>{}, column, stream, mr);
+    column.type(), dispatch_ceil_or_floor<detail::ceil_timestamp<Component>>{}, column, stream, mr);
+}
+
+template <datetime_component Component>
+std::unique_ptr<column> floor_general(column_view const& column,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
+{
+  return cudf::type_dispatcher(column.type(),
+                               dispatch_ceil_or_floor<detail::floor_timestamp<Component>>{},
+                               column,
+                               stream,
+                               mr);
 }
 
 std::unique_ptr<column> extract_year(column_view const& column,
@@ -585,6 +598,58 @@ std::unique_ptr<column> ceil_nanosecond(column_view const& column,
 {
   CUDF_FUNC_RANGE();
   return detail::ceil_general<detail::datetime_component::NANOSECOND>(
+    column, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> floor_day(column_view const& column, rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::floor_general<detail::datetime_component::DAY>(
+    column, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> floor_hour(column_view const& column, rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::floor_general<detail::datetime_component::HOUR>(
+    column, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> floor_minute(column_view const& column, rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::floor_general<detail::datetime_component::MINUTE>(
+    column, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> floor_second(column_view const& column, rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::floor_general<detail::datetime_component::SECOND>(
+    column, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> floor_millisecond(column_view const& column,
+                                          rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::floor_general<detail::datetime_component::MILLISECOND>(
+    column, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> floor_microsecond(column_view const& column,
+                                          rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::floor_general<detail::datetime_component::MICROSECOND>(
+    column, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> floor_nanosecond(column_view const& column,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::floor_general<detail::datetime_component::NANOSECOND>(
     column, rmm::cuda_stream_default, mr);
 }
 
