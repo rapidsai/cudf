@@ -1122,7 +1122,7 @@ column_buffer&& reader::impl::assemble_buffer(const int32_t orc_col_id,
   switch (kind) {
     case orc::LIST:
     case orc::STRUCT:
-      for (auto const& col : _metadata->get_col_type(orc_col_id).subtypes) {
+      for (auto const& col : selected_columns.children[orc_col_id]) {
         col_buffer.children.emplace_back(assemble_buffer(col, col_buffers, level + 1, stream));
       }
 
@@ -1130,9 +1130,9 @@ column_buffer&& reader::impl::assemble_buffer(const int32_t orc_col_id,
     case orc::MAP: {
       std::vector<column_buffer> child_col_buffers;
       // Get child buffers
-      for (size_t idx = 0; idx < _metadata->get_col_type(orc_col_id).subtypes.size(); idx++) {
+      for (size_t idx = 0; idx < selected_columns.children[orc_col_id].size(); idx++) {
         auto name = get_map_child_col_name(idx);
-        auto col  = _metadata->get_col_type(orc_col_id).subtypes[idx];
+        auto col  = selected_columns.children[orc_col_id][idx];
         child_col_buffers.emplace_back(assemble_buffer(col, col_buffers, level + 1, stream));
         child_col_buffers.back().name = name;
       }
