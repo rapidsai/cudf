@@ -2,7 +2,6 @@
 
 import json
 import re
-import re as rex
 import urllib.parse
 from contextlib import ExitStack as does_not_raise
 from decimal import Decimal
@@ -836,7 +835,7 @@ def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
     ],
 )
 @pytest.mark.parametrize(
-    "flags,flags_raise", [(0, 0), (rex.MULTILINE | rex.DOTALL, 0), (1, 1)]
+    "flags,flags_raise", [(0, 0), (re.MULTILINE | re.DOTALL, 0), (1, 1)]
 )
 @pytest.mark.parametrize("na,na_raise", [(np.nan, 0), (None, 1), ("", 1)])
 def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
@@ -1737,7 +1736,7 @@ def test_string_wrap(data, width):
 @pytest.mark.parametrize(
     "pat", ["a", " ", "\t", "another", "0", r"\$", "^line$", "line.*be"]
 )
-@pytest.mark.parametrize("flags", [0, rex.MULTILINE, rex.DOTALL])
+@pytest.mark.parametrize("flags", [0, re.MULTILINE, re.DOTALL])
 def test_string_count(data, pat, flags):
     gs = cudf.Series(data)
     ps = pd.Series(data)
