@@ -1722,7 +1722,7 @@ __global__ void __launch_bounds__(block_size)
             case DOUBLE:
             case LONG:
             case DECIMAL:
-              static_cast<uint64_t*>(data_out)[row] = s->vals.u64[t + vals_skipped];
+              static_cast<__uint128_t*>(data_out)[row] = s->vals.u64[t + vals_skipped];
               break;
             case MAP:
             case LIST: {
