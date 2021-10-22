@@ -28,6 +28,7 @@ void result_cache::add_result(column_view const& input,
                               aggregation const& agg,
                               std::unique_ptr<column>&& col)
 {
+  if (has_result(input, agg)) return;
   // We can't guarantee that agg will outlive the cache, so we need to take ownership of a copy.
   // To allow lookup by reference, make the key a reference and keep the owner in the value pair.
   auto owned_agg       = agg.clone();
