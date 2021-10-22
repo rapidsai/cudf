@@ -24,7 +24,50 @@ def _read_orc_stripe(fs, path, stripe, columns, kwargs=None):
     return df_stripe
 
 
-def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
+def _prepare_filters_with_cache(filters):
+    # Coerce filters into list of lists of tuples
+    if isinstance(filters[0][0], str):
+        filters = [filters]
+
+    return filters
+
+
+def _prepare_filters(filters):
+    return _prepare_filters_with_cache(
+        tuple([tuple(conjunction) for conjunction in filters])
+    )
+
+
+def _filters_to_query(filters):
+    query_string = ""
+    local_dict = {}
+
+    is_first_conjunction = True
+    for conjunction in filters:
+        # Generate or
+        if is_first_conjunction:
+            is_first_conjunction = False
+        else:
+            query_string += " or "
+
+        # Generate string for conjunction
+        query_string += "("
+        is_first_predicate = True
+        for i, (col, op, val) in enumerate(conjunction):
+            if i > 0:
+                query_string += " and "
+            query_string += "("
+            # TODO: Add backticks around column name when cuDF query
+            # function supports them
+            query_string += col + " " + op + " @var" + str(i)
+            query_string += ")"
+            local_dict["var" + str(i)] = val
+        query_string += ")"
+
+    return query_string, local_dict
+
+
+def read_orc(path, columns=None, filters=None, storage_options=None, filtering_columns_first=False, **kwargs):
     """Read cudf dataframe from ORC file(s).
 
     Note that this function is mostly borrowed from upstream Dask.
@@ -50,8 +93,13 @@ def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
         as a list of tuples. This form is interpreted as a single conjunction.
         To express OR in predicates, one must use the (preferred) notation of
         list of lists of tuples.
+    filtering_columns_first : bool, default False
+        If True, reads in the columns referenced in `filters` first and uses
+        that to determine what are the relevant stripes to read from other
+        columns.
     storage_options: None or dict
         Further parameters to pass to the bytes backend.
+    
 
     Returns
     -------
@@ -92,35 +140,90 @@ def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
             **kwargs,
         )
 
+    # Read in filtering columns first
+    if filters is None:
+        filtering_columns_first = False
+    is_filtered_partition_empty = None
+    query_string = None
+    local_dict = None
+    if filtering_columns_first:
+        import numpy as np
+
+        # Read in only the columns relevant to the filtering
+        filters = _prepare_filters(filters)
+        query_string, local_dict = _filters_to_query(filters)
+        print(f"{query_string=}")
+        columns_in_predicate = [
+            col for conjunction in filters for (col, op, val) in conjunction
+        ]
+        print(f"{columns_in_predicate=}")
+        columns = [c for c in columns if c not in columns_in_predicate]
+        filtered_df = read_orc(
+            path, columns=columns_in_predicate, filters=None, storage_options=None, **kwargs
+        ).query(query_string, local_dict=local_dict)
+
+        # Since the call to `read_orc` results in a partition for each relevant
+        # stripe, we can simply check which partitions are empty. Then we can read
+        # in only those relevant stripes.
+        filtered_partition_lens = filtered_df.map_partitions(len).compute()
+        is_filtered_partition_empty = filtered_partition_lens == 0
+
+        # Finally we repartition so that we can horizontally concatenate with
+        # the remaining columns
+        filtered_df = filtered_df.repartition(np.count_nonzero(is_filtered_partition_empty)).reset_index(drop=True)
+
+    print(f"{columns=}")
+
     name = "read-orc-" + tokenize(fs_token, path, columns, **kwargs)
     dsk = {}
     N = 0
+    filtered_partition_idx = 0
     for path, n in zip(paths, nstripes_per_file):
         for stripe in (
             range(n)
             if filters is None
             else cudf.io.orc._filter_stripes(filters, path)
         ):
-            dsk[(name, N)] = (
-                _read_orc_stripe,
-                fs,
-                path,
-                stripe,
-                columns,
-                kwargs,
-            )
-            N += 1
+            if not filtering_columns_first or not is_filtered_partition_empty[filtered_partition_idx]:
+                dsk[(name, N)] = (
+                    _read_orc_stripe,
+                    fs,
+                    path,
+                    stripe,
+                    columns,
+                    kwargs,
+                )
+                N += 1
+            filtered_partition_idx += 1
 
     divisions = [None] * (len(dsk) + 1)
-    return dd.core.new_dd_object(dsk, name, meta, divisions)
+    res = dd.core.new_dd_object(dsk, name, meta, divisions)
+
+    return res if not filtering_columns_first else dd.concat([filtered_df, res.repartition(npartitions=N).reset_index(drop=True).query(query_string, local_dict=local_dict)], axis=1)
 
 
-def write_orc_partition(df, path, fs, filename, compression=None):
+def write_orc_partition(
+    df,
+    path,
+    fs,
+    filename,
+    compression,
+    stripe_size_bytes,
+    stripe_size_rows,
+    row_index_stride,
+):
     full_path = fs.sep.join([path, filename])
     with fs.open(full_path, mode="wb") as out_file:
         if not isinstance(out_file, IOBase):
             out_file = BufferedWriter(out_file)
-        cudf.io.to_orc(df, out_file, compression=compression)
+        cudf.io.to_orc(
+            df,
+            out_file,
+            compression=compression,
+            stripe_size_bytes=stripe_size_bytes,
+            stripe_size_rows=stripe_size_rows,
+            row_index_stride=row_index_stride,
+        )
     return full_path
 
 
@@ -130,6 +233,9 @@ def to_orc(
     write_index=True,
     storage_options=None,
     compression=None,
+    stripe_size_bytes=None,
+    stripe_size_rows=None,
+    row_index_stride=None,
     compute=True,
     **kwargs,
 ):
@@ -146,6 +252,15 @@ def to_orc(
     storage_options: None or dict
         Further parameters to pass to the bytes backend.
     compression : string or dict, optional
+    stripe_size_bytes: integer or None, default None
+        Maximum size of each stripe of the output.
+        If None, 67108864 (64MB) will be used.
+    stripe_size_rows: integer or None, default None 1000000
+        Maximum number of rows of each stripe of the output.
+        If None, 1000000 will be used.
+    row_index_stride: integer or None, default None 10000
+        Row index stride (maximum number of rows in each row group).
+        If None, 10000 will be used.
     compute : bool, optional
         If True (default) then the result is computed immediately. If False
         then a ``dask.delayed`` object is returned for future computation.
@@ -178,7 +293,16 @@ def to_orc(
     # write parts
     dwrite = delayed(write_orc_partition)
     parts = [
-        dwrite(d, path, fs, filename, compression=compression)
+        dwrite(
+            d,
+            path,
+            fs,
+            filename,
+            compression,
+            stripe_size_bytes,
+            stripe_size_rows,
+            row_index_stride,
+        )
         for d, filename in zip(df.to_delayed(), filenames)
     ]
 
