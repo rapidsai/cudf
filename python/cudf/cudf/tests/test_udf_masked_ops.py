@@ -1,3 +1,4 @@
+import math
 import operator
 
 import pytest
@@ -5,27 +6,13 @@ from numba import cuda
 
 import cudf
 from cudf.core.scalar import NA
-from cudf.core.udf._ops import bitwise_ops
+from cudf.core.udf._ops import (
+    arith_ops,
+    bitwise_ops,
+    comparison_ops,
+    unary_ops,
+)
 from cudf.testing._utils import NUMERIC_TYPES, assert_eq
-
-arith_ops = [
-    operator.add,
-    operator.sub,
-    operator.mul,
-    operator.truediv,
-    operator.floordiv,
-    operator.mod,
-    operator.pow,
-]
-
-comparison_ops = [
-    operator.eq,
-    operator.ne,
-    operator.lt,
-    operator.le,
-    operator.gt,
-    operator.ge,
-]
 
 
 def run_masked_udf_test(func_pdf, func_gdf, data, **kwargs):
@@ -77,6 +64,52 @@ def test_bitwise_masked_vs_masked(op):
         }
     )
     run_masked_udf_test(func, func, gdf, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "dtype_l",
+    ["datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"],
+)
+@pytest.mark.parametrize(
+    "dtype_r",
+    [
+        "timedelta64[ns]",
+        "timedelta64[us]",
+        "timedelta64[ms]",
+        "timedelta64[s]",
+        "datetime64[ns]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[s]",
+    ],
+)
+@pytest.mark.parametrize("op", [operator.add, operator.sub])
+def test_arith_masked_vs_masked_datelike(op, dtype_l, dtype_r):
+    # Datetime version of the above
+    # does not test all dtype combinations for now
+    if "datetime" in dtype_l and "datetime" in dtype_r and op is operator.add:
+        # don't try adding datetimes to datetimes.
+        pytest.skip("Adding datetime to datetime is not valid")
+
+    def func_pdf(row):
+        x = row["a"]
+        y = row["b"]
+        return op(x, y)
+
+    def func_gdf(row):
+        x = row["a"]
+        y = row["b"]
+        return op(x, y)
+
+    gdf = cudf.DataFrame(
+        {
+            "a": ["2011-01-01", cudf.NA, "2011-03-01", cudf.NA],
+            "b": [4, 5, cudf.NA, cudf.NA],
+        }
+    )
+    gdf["a"] = gdf["a"].astype(dtype_l)
+    gdf["b"] = gdf["b"].astype(dtype_r)
+    run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
 
 @pytest.mark.parametrize("op", comparison_ops)
@@ -166,6 +199,32 @@ def test_arith_masked_vs_null_reflected(op):
         return op(NA, x)
 
     gdf = cudf.DataFrame({"data": [1, None, 3]})
+    run_masked_udf_test(func, func, gdf, check_dtype=False)
+
+
+@pytest.mark.parametrize("op", unary_ops)
+def test_unary_masked(op):
+    # This test should test all the typing
+    # and lowering for unary ops
+
+    def func(row):
+        x = row["a"]
+        return op(x) if x is not NA else NA
+
+    if "log" in op.__name__:
+        gdf = cudf.DataFrame({"a": [0.1, 1.0, None, 3.5, 1e8]})
+    elif op.__name__ in {"asin", "acos"}:
+        gdf = cudf.DataFrame({"a": [0.0, 0.5, None, 1.0]})
+    elif op.__name__ in {"atanh"}:
+        gdf = cudf.DataFrame({"a": [0.0, -0.5, None, 0.8]})
+    elif op.__name__ in {"acosh", "sqrt", "lgamma"}:
+        gdf = cudf.DataFrame({"a": [1.0, 2.0, None, 11.0]})
+    elif op.__name__ in {"gamma"}:
+        gdf = cudf.DataFrame({"a": [0.1, 2, None, 4]})
+    elif op.__name__ in {"invert"}:
+        gdf = cudf.DataFrame({"a": [-100, 128, None, 0]}, dtype="int64")
+    else:
+        gdf = cudf.DataFrame({"a": [-125.60, 395.2, 0.0, None]})
     run_masked_udf_test(func, func, gdf, check_dtype=False)
 
 
@@ -274,15 +333,22 @@ def test_apply_everything():
             return z / x
         elif x + y is NA:
             return 2.5
+        elif w > 100:
+            return (
+                math.sin(x)
+                + math.sqrt(y)
+                - (-z)
+                + math.lgamma(x) * math.fabs(-0.8) / math.radians(3.14)
+            )
         else:
             return y > 2
 
     gdf = cudf.DataFrame(
         {
-            "a": [1, 3, 6, 0, None, 5, None],
-            "b": [3.0, 2.5, None, 5.0, 1.0, 5.0, 11.0],
-            "c": [2, 3, 6, 0, None, 5, None],
-            "d": [4, None, 6, 0, None, 5, None],
+            "a": [1, 3, 6, 0, None, 5, None, 101],
+            "b": [3.0, 2.5, None, 5.0, 1.0, 5.0, 11.0, 1.0],
+            "c": [2, 3, 6, 0, None, 5, None, 6],
+            "d": [4, None, 6, 0, None, 5, None, 7.5],
         }
     )
     run_masked_udf_test(func, func, gdf, check_dtype=False)
