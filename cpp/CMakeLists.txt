@@ -350,7 +350,6 @@ add_library(cudf
     src/rolling/rolling.cu
     src/rolling/rolling_collect_list.cu
     src/round/round.cu
-    src/row_conversion/row_conversion.cu
     src/scalar/scalar.cpp
     src/scalar/scalar_factories.cpp
     src/search/search.cu

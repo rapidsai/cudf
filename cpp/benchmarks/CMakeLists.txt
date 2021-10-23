@@ -250,7 +250,3 @@ ConfigureBench(JSON_BENCH
 # - io benchmark ---------------------------------------------------------------------
 ConfigureBench(MULTIBYTE_SPLIT_BENCHMARK
   io/text/multibyte_split_benchmark.cpp)
-
-###################################################################################################
-# - row conversion benchmark ---------------------------------------------------------
-ConfigureBench(ROW_CONVERSION_BENCH row_conversion/row_conversion.cpp)
