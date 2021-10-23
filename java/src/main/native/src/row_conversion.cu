@@ -50,7 +50,7 @@
 #include <thrust/iterator/transform_iterator.h>
 
 #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
-constexpr auto NUM_BLOCKS_PER_KERNEL_FROM_ROWS = 8;
+constexpr auto NUM_BLOCKS_PER_KERNEL_FROM_ROWS = 2;
 constexpr auto NUM_BLOCKS_PER_KERNEL_TO_ROWS = 2;
 constexpr auto NUM_BLOCKS_PER_KERNEL_LOADED = 2;
 constexpr auto NUM_VALIDITY_BLOCKS_PER_KERNEL = 8;
@@ -409,7 +409,7 @@ __global__ void copy_to_rows(const size_type num_rows, const size_type num_colum
       auto &fetch_barrier = block_barrier[fetch % NUM_BLOCKS_PER_KERNEL_LOADED];
 
       // wait for the last use of the memory to be completed
-      if (fetch > NUM_BLOCKS_PER_KERNEL_LOADED) {
+      if (fetch >= NUM_BLOCKS_PER_KERNEL_LOADED) {
         fetch_barrier.arrive_and_wait();
       }
 
@@ -525,7 +525,7 @@ __global__ void copy_validity_to_rows(
   group.sync();
 
   for (int validity_block = 0; validity_block < blocks_remaining; ++validity_block) {
-    if (validity_block != validity_block % NUM_VALIDITY_BLOCKS_PER_KERNEL_LOADED) {
+    if (validity_block >= NUM_VALIDITY_BLOCKS_PER_KERNEL_LOADED) {
       shared_block_barriers[validity_block % NUM_VALIDITY_BLOCKS_PER_KERNEL_LOADED]
           .arrive_and_wait();
     }
@@ -645,10 +645,10 @@ get_admin_data_sizes(size_t col_size_size, size_t col_offset_size, int const num
  *
  */
 __global__ void copy_from_rows(const size_type num_rows, const size_type num_columns,
-                                const size_type shmem_used_per_block, const size_type *row_offsets,
-                                int8_t **output_data, const size_type *_col_sizes,
-                                const size_type *_col_offsets, const block_info *block_infos,
-                                const size_type num_block_infos, const int8_t *input_data) {
+                               const size_type shmem_used_per_block, const size_type *row_offsets,
+                               int8_t **output_data, const size_type *_col_sizes,
+                               const size_type *_col_offsets, const block_info *block_infos,
+                               const size_type num_block_infos, const int8_t *input_data) {
   // We are going to copy the data in two passes.
   // The first pass copies a chunk of data into shared memory.
   // The second pass copies that chunk from shared memory out to the final location.
@@ -819,8 +819,8 @@ __global__ void copy_validity_from_rows(
   group.sync();
 
   for (int validity_block = 0; validity_block < blocks_remaining; ++validity_block) {
-    auto const validity_index = validity_block % NUM_VALIDITY_BLOCKS_PER_KERNEL_LOADED;
-    if (validity_block != validity_index) {
+    if (validity_block >= NUM_VALIDITY_BLOCKS_PER_KERNEL_LOADED) {
+      auto const validity_index = validity_block % NUM_VALIDITY_BLOCKS_PER_KERNEL_LOADED;
       shared_block_barriers[validity_index].arrive_and_wait();
     }
     int8_t *this_shared_block = shared_blocks[validity_block % 2];
@@ -1251,7 +1251,7 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows(cudf::table_view cons
 
   // TODO: why?
   total_shmem -= 1024;
-  int shmem_limit_per_block = total_shmem / NUM_VALIDITY_BLOCKS_PER_KERNEL_LOADED;
+  int shmem_limit_per_block = total_shmem / NUM_BLOCKS_PER_KERNEL_LOADED;
 
   // break up the work into blocks, which are a starting and ending row/col #.
   // this window size is calculated based on the shared memory size available
@@ -1368,7 +1368,7 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows(cudf::table_view cons
   std::vector<detail::block_info> block_infos =
       build_block_infos(column_sizes, column_starts, row_batches, num_rows, shmem_limit_per_block);
 
-  auto dev_block_infos = make_device_uvector_async(block_infos, stream, mr);
+  auto dev_block_infos = make_device_uvector_async(block_infos, stream);
 
   // blast through the entire table and convert it
   dim3 blocks(util::div_rounding_up_unsafe(block_infos.size(), NUM_BLOCKS_PER_KERNEL_TO_ROWS));
@@ -1382,12 +1382,11 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows(cudf::table_view cons
   auto validity_block_infos =
       build_validity_block_infos(num_columns, num_rows, shmem_limit_per_block, row_batches);
 
-  auto dev_validity_block_infos = make_device_uvector_async(validity_block_infos, stream, mr);
+  auto dev_validity_block_infos = make_device_uvector_async(validity_block_infos, stream);
   dim3 validity_blocks(
-      util::div_rounding_up_unsafe(validity_block_infos.size(), NUM_BLOCKS_PER_KERNEL_TO_ROWS));
+      util::div_rounding_up_unsafe(validity_block_infos.size(), NUM_VALIDITY_BLOCKS_PER_KERNEL));
   dim3 validity_threads(std::min(validity_block_infos.size() * 32, 128lu));
-  detail::copy_validity_to_rows<<<validity_blocks, validity_threads, total_shmem,
-                                       stream.value()>>>(
+  detail::copy_validity_to_rows<<<validity_blocks, validity_threads, total_shmem, stream.value()>>>(
       num_rows, num_columns, shmem_limit_per_block, dev_row_offsets.data(), dev_output_data.data(),
       column_starts.back(), dev_validity_block_infos.data(), validity_block_infos.size(),
       dev_input_nm.data());
@@ -1508,7 +1507,7 @@ std::unique_ptr<cudf::table> convert_from_rows(cudf::lists_column_view const &in
 
   // TODO why?
   total_shmem -= 1024;
-  int shmem_limit_per_block = total_shmem / NUM_VALIDITY_BLOCKS_PER_KERNEL_LOADED;
+  int shmem_limit_per_block = total_shmem / NUM_BLOCKS_PER_KERNEL_LOADED;
 
   std::vector<cudf::size_type> column_starts;
   std::vector<cudf::size_type> column_sizes;
@@ -1590,7 +1589,7 @@ std::unique_ptr<cudf::table> convert_from_rows(cudf::lists_column_view const &in
   }
   auto dev_validity_block_infos = make_device_uvector_async(validity_block_infos, stream, mr);
   dim3 validity_blocks(
-      util::div_rounding_up_unsafe(validity_block_infos.size(), NUM_BLOCKS_PER_KERNEL_FROM_ROWS));
+      util::div_rounding_up_unsafe(validity_block_infos.size(), NUM_VALIDITY_BLOCKS_PER_KERNEL));
 
   dim3 validity_threads(std::min(validity_block_infos.size() * 32, 128lu));
   detail::

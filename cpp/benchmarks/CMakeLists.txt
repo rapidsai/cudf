@@ -110,21 +110,10 @@ ConfigureBench(APPLY_BOOLEAN_MASK_BENCH stream_compaction/apply_boolean_mask_ben
 # * stream_compaction benchmark -------------------------------------------------------------------
 ConfigureBench(STREAM_COMPACTION_BENCH stream_compaction/drop_duplicates_benchmark.cpp)
 
-<<<<<<< HEAD
 # ##################################################################################################
 # * join benchmark --------------------------------------------------------------------------------
 ConfigureBench(JOIN_BENCH join/join_benchmark.cu join/conditional_join_benchmark.cu)
 ConfigureNVBench(JOIN_NVBENCH join/join_nvbench.cu)
-=======
-###################################################################################################
-# - join benchmark --------------------------------------------------------------------------------
-<<<<<<< HEAD
-ConfigureBench(JOIN_BENCH join/join_benchmark.cu)
->>>>>>> working on row and column conversions
-=======
-ConfigureBench(JOIN_BENCH join/join_benchmark.cu join/conditional_join_benchmark.cu)
-ConfigureNVBench(JOIN_NVBENCH join/join_nvbench.cu)
->>>>>>> Fixing merge issue
 
 # ##################################################################################################
 # * iterator benchmark ----------------------------------------------------------------------------
@@ -215,7 +204,6 @@ ConfigureBench(CSV_WRITER_BENCH io/csv/csv_writer_benchmark.cpp)
 # * ast benchmark ---------------------------------------------------------------------------------
 ConfigureBench(AST_BENCH ast/transform_benchmark.cpp)
 
-<<<<<<< HEAD
 # ##################################################################################################
 # * binaryop benchmark ----------------------------------------------------------------------------
 ConfigureBench(
@@ -227,18 +215,6 @@ ConfigureBench(
 # * nvtext benchmark -------------------------------------------------------------------
 ConfigureBench(
   TEXT_BENCH
-=======
-###################################################################################################
-# - binaryop benchmark ----------------------------------------------------------------------------
-ConfigureBench(BINARYOP_BENCH
-  binaryop/binaryop_benchmark.cpp
-  binaryop/compiled_binaryop_benchmark.cpp
-  binaryop/jit_binaryop_benchmark.cpp)
-
-###################################################################################################
-# - nvtext benchmark -------------------------------------------------------------------
-ConfigureBench(TEXT_BENCH
->>>>>>> Fixing merge issue
   text/ngrams_benchmark.cpp
   text/normalize_benchmark.cpp
   text/normalize_spaces_benchmark.cpp
@@ -272,7 +248,6 @@ ConfigureBench(
   string/url_decode_benchmark.cpp
 )
 
-<<<<<<< HEAD
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------
 ConfigureBench(JSON_BENCH string/json_benchmark.cpp)
@@ -280,13 +255,3 @@ ConfigureBench(JSON_BENCH string/json_benchmark.cpp)
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------
 ConfigureBench(MULTIBYTE_SPLIT_BENCHMARK io/text/multibyte_split_benchmark.cpp)
-=======
-###################################################################################################
-# - io benchmark ---------------------------------------------------------------------
-ConfigureBench(MULTIBYTE_SPLIT_BENCHMARK
-  io/text/multibyte_split_benchmark.cpp)
-
-###################################################################################################
-# - row conversion benchmark ---------------------------------------------------------
-ConfigureBench(ROW_CONVERSION_BENCH row_conversion/row_conversion.cpp)
->>>>>>> working on row and column conversions
