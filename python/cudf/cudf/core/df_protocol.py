@@ -42,9 +42,10 @@ class _CuDFBuffer:
     Data in the buffer is guaranteed to be contiguous in memory.
     """
 
-    def __init__(self, buf : Buffer, cudf_dtype, allow_copy : bool = True) -> None:
+    def __init__(self, buf : cudf.core.buffer.Buffer, 
+                 cudf_dtype: cp.dtype, allow_copy : bool = True) -> None:
         """
-        Use cudf Buffer object.
+        Use cudf.core.buffer.Buffer object.
         """
         # Store the cudf buffer where the data resides as a private
         # attribute, so we can use it to retrieve the public attributes
@@ -66,7 +67,7 @@ class _CuDFBuffer:
         """
         return self._buf.ptr
         
-    def __dlpack__(self):
+    def __dlpack__(self) :
         """
         DLPack not implemented in NumPy yet, so leave it out here.
         """
@@ -107,7 +108,7 @@ class _CuDFColumn:
 
     """
 
-    def __init__(self, column,
+    def __init__(self, column: cudf.core.column.ColumnBase,
                  nan_as_null : bool = True, 
                  allow_copy: bool = True) -> None:
         """
@@ -217,7 +218,7 @@ class _CuDFColumn:
         return (kind, bitwidth, format_str, endianness)
 
     @property
-    def describe_categorical(self) -> Tuple[Any, bool, Dict[int, Any]]:
+    def describe_categorical(self) -> Tuple[bool, bool, Dict[int, Any]]:
         """
         If the dtype is categorical, there are two options:
 
@@ -313,7 +314,7 @@ class _CuDFColumn:
         """
         return (self,)
 
-    def get_buffers(self) -> Dict[str, Any]:
+    def get_buffers(self) -> Dict[str, _CuDFBuffer]:
         """
         Return a dictionary containing the underlying buffers.
 
@@ -432,7 +433,8 @@ class _CuDFDataFrame:
     ``cudf.DataFrame.__dataframe__`` as objects with the methods and
     attributes defined on this class.
     """
-    def __init__(self, df, nan_as_null : bool = True,
+    def __init__(self, df : 'cudf.core.dataframe.DataFrame',
+                 nan_as_null : bool = True,
                  allow_copy : bool = True) -> None:
         """
         Constructor - an instance of this (private) class is returned from
@@ -494,6 +496,31 @@ class _CuDFDataFrame:
         Return an iterator yielding the chunks.
         """
         return (self,)
+
+
+def __dataframe__(self, nan_as_null : bool = False,
+                  allow_copy : bool = True) -> _CuDFDataFrame:
+    """
+    The public method to attach to cudf.DataFrame.
+
+    We'll attach it via monkey-patching here for demo purposes. If Pandas adopts
+    the protocol, this will be a regular method on pandas.DataFrame.
+
+    ``nan_as_null`` is a keyword intended for the consumer to tell the
+    producer to overwrite null values in the data with ``NaN`` (or ``NaT``).
+    This currently has no effect; once support for nullable extension
+    dtypes is added, this value should be propagated to columns.
+
+    ``allow_copy`` is a keyword that defines whether or not the library is
+    allowed to make a copy of the data. For example, copying data would be
+    necessary if a library supports strided buffers, given that this protocol
+    specifies contiguous buffers.
+    Currently, if the flag is set to ``False`` and a copy is needed, a
+    ``RuntimeError`` will be raised.
+    """
+    return _CuDFDataFrame(
+        self, nan_as_null=nan_as_null, allow_copy=allow_copy)
+
 
 """
 Implementation of the dataframe exchange protocol.
@@ -590,12 +617,15 @@ def _protocol_column_to_cudf_column_numeric(col:ColumnObject) -> \
     return _set_missing_values(col, dcol), _dbuffer
 
 
-def _check_data_is_on_gpu(buffer) -> None:
+def _check_data_is_on_gpu(buffer : _CuDFBuffer) -> None:
     if buffer.__dlpack_device__()[0] != Device.CUDA and not buffer._allow_copy:
         raise TypeError("This operation must copy data from CPU to GPU."
                             "Set `allow_copy=True` to allow it.")
 
-def _set_missing_values(protocol_col, cudf_col) -> cudf.core.column.ColumnBase:
+def _set_missing_values(protocol_col: _CuDFColumn, 
+                        cudf_col:'cudf.core.dataframe.DataFrame') \
+                        -> cudf.core.column.ColumnBase:
+
     null_kind, null_value = protocol_col.describe_null
     if  null_kind != 0:
         assert null_kind == 3, f"cudf supports only bit mask, null_kind should be 3, got: {null_kind}." 
@@ -660,29 +690,3 @@ def _protocol_column_to_cudf_column_string(col : ColumnObject) -> \
     col_str = build_column(None, dtype=cp.dtype('O'), children=(offsets, encoded_string))
 
     return _set_missing_values(col, col_str), buffers
-
-
-
-def __dataframe__(self, nan_as_null : bool = False,
-                  allow_copy : bool = True) -> _CuDFDataFrame:
-    """
-    The public method to attach to cudf.DataFrame.
-
-    We'll attach it via monkey-patching here for demo purposes. If Pandas adopts
-    the protocol, this will be a regular method on pandas.DataFrame.
-
-    ``nan_as_null`` is a keyword intended for the consumer to tell the
-    producer to overwrite null values in the data with ``NaN`` (or ``NaT``).
-    This currently has no effect; once support for nullable extension
-    dtypes is added, this value should be propagated to columns.
-
-    ``allow_copy`` is a keyword that defines whether or not the library is
-    allowed to make a copy of the data. For example, copying data would be
-    necessary if a library supports strided buffers, given that this protocol
-    specifies contiguous buffers.
-    Currently, if the flag is set to ``False`` and a copy is needed, a
-    ``RuntimeError`` will be raised.
-    """
-    return _CuDFDataFrame(
-        self, nan_as_null=nan_as_null, allow_copy=allow_copy)
-
