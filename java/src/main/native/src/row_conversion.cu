@@ -34,7 +34,6 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_device_view.cuh>
-#include <cudf/row_conversion.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
@@ -49,12 +48,17 @@
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 
+#include "row_conversion.hpp"
+
 #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
 constexpr auto NUM_BLOCKS_PER_KERNEL_FROM_ROWS = 2;
 constexpr auto NUM_BLOCKS_PER_KERNEL_TO_ROWS = 2;
 constexpr auto NUM_BLOCKS_PER_KERNEL_LOADED = 2;
 constexpr auto NUM_VALIDITY_BLOCKS_PER_KERNEL = 8;
 constexpr auto NUM_VALIDITY_BLOCKS_PER_KERNEL_LOADED = 2;
+
+// needed to suppress warning about cuda::barrier
+#pragma diag_suppress static_var_with_dynamic_init
 #endif
 
 using cudf::detail::make_device_uvector_async;
