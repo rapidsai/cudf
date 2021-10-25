@@ -826,7 +826,8 @@ reprog reprog::create_from(const char32_t* pattern)
 {
   reprog rtn;
   regex_compiler compiler(pattern, ANY, rtn);  // future feature: ANYNL
-  if (std::getenv("CUDF_REGEX_DEBUG")) rtn.print();
+  // for debugging, it can be helpful to call rtn.print() here to dump
+  // out the instructions that have been created from the given pattern
   return rtn;
 }
 
@@ -912,6 +913,7 @@ void reprog::optimize2()
   _startinst_ids.push_back(-1);  // terminator mark
 }
 
+#ifndef NDEBUG
 void reprog::print()
 {
   printf("Instructions:\n");
@@ -992,6 +994,7 @@ void reprog::print()
   }
   if (_num_capturing_groups) printf("Number of capturing groups: %d\n", _num_capturing_groups);
 }
+#endif
 
 }  // namespace detail
 }  // namespace strings
