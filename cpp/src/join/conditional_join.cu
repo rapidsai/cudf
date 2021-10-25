@@ -92,8 +92,11 @@ conditional_join(table_view const& left,
   auto left_table  = table_device_view::create(left, stream);
   auto right_table = table_device_view::create(right, stream);
 
-  // Allocate storage for the counter used to get the size of the join output
-  detail::grid_1d config(left_table->num_rows(), DEFAULT_JOIN_BLOCK_SIZE);
+  // For inner joins we support optimizing the join by launching one thread for
+  // whichever table is larger rather than always using the left table.
+  auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right.num_rows() > left.num_rows());
+  detail::grid_1d config(swap_tables ? right_table->num_rows() : left_table->num_rows(),
+                         DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
   join_kind kernel_join_type = join_type == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : join_type;
 
@@ -102,16 +105,27 @@ conditional_join(table_view const& left,
   if (output_size.has_value()) {
     join_size = *output_size;
   } else {
+    // Allocate storage for the counter used to get the size of the join output
     rmm::device_scalar<std::size_t> size(0, stream, mr);
     CHECK_CUDA(stream.value());
     if (has_nulls) {
       compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-          *left_table, *right_table, kernel_join_type, parser.device_expression_data, size.data());
+          *left_table,
+          *right_table,
+          kernel_join_type,
+          parser.device_expression_data,
+          size.data(),
+          swap_tables);
     } else {
       compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-          *left_table, *right_table, kernel_join_type, parser.device_expression_data, size.data());
+          *left_table,
+          *right_table,
+          kernel_join_type,
+          parser.device_expression_data,
+          size.data(),
+          swap_tables);
     }
     CHECK_CUDA(stream.value());
     join_size = size.value(stream);
@@ -224,23 +238,39 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
   auto left_table  = table_device_view::create(left, stream);
   auto right_table = table_device_view::create(right, stream);
 
+  // For inner joins we support optimizing the join by launching one thread for
+  // whichever table is larger rather than always using the left table.
+  auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right.num_rows() > left.num_rows());
+  detail::grid_1d config(swap_tables ? right_table->num_rows() : left_table->num_rows(),
+                         DEFAULT_JOIN_BLOCK_SIZE);
+  auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
+
+  assert(join_type != join_kind::FULL_JOIN);
+
   // Allocate storage for the counter used to get the size of the join output
   rmm::device_scalar<std::size_t> size(0, stream, mr);
   CHECK_CUDA(stream.value());
-  detail::grid_1d config(left_table->num_rows(), DEFAULT_JOIN_BLOCK_SIZE);
-  auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
 
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
-  assert(join_type != join_kind::FULL_JOIN);
   if (has_nulls) {
     compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        *left_table, *right_table, join_type, parser.device_expression_data, size.data());
+        *left_table,
+        *right_table,
+        join_type,
+        parser.device_expression_data,
+        size.data(),
+        swap_tables);
   } else {
     compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
-        *left_table, *right_table, join_type, parser.device_expression_data, size.data());
+        *left_table,
+        *right_table,
+        join_type,
+        parser.device_expression_data,
+        size.data(),
+        swap_tables);
   }
   CHECK_CUDA(stream.value());
 

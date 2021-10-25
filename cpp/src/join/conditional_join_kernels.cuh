@@ -51,7 +51,8 @@ __global__ void compute_conditional_join_output_size(
   table_device_view right_table,
   join_kind join_type,
   ast::detail::expression_device_view device_expression_data,
-  std::size_t* output_size)
+  std::size_t* output_size,
+  bool swap_tables)
 {
   // The (required) extern storage of the shared memory array leads to
   // conflicting declarations between different templates. The easiest
@@ -64,19 +65,23 @@ __global__ void compute_conditional_join_output_size(
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
 
   std::size_t thread_counter{0};
-  cudf::size_type const left_start_idx = threadIdx.x + blockIdx.x * blockDim.x;
-  cudf::size_type const left_stride    = blockDim.x * gridDim.x;
+  cudf::size_type const start_idx      = threadIdx.x + blockIdx.x * blockDim.x;
+  cudf::size_type const stride         = blockDim.x * gridDim.x;
   cudf::size_type const left_num_rows  = left_table.num_rows();
   cudf::size_type const right_num_rows = right_table.num_rows();
+  auto const outer_num_rows            = (swap_tables ? right_num_rows : left_num_rows);
+  auto const inner_num_rows            = (swap_tables ? left_num_rows : right_num_rows);
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
 
-  for (cudf::size_type left_row_index = left_start_idx; left_row_index < left_num_rows;
-       left_row_index += left_stride) {
+  for (cudf::size_type outer_row_index = start_idx; outer_row_index < outer_num_rows;
+       outer_row_index += stride) {
     bool found_match = false;
-    for (cudf::size_type right_row_index = 0; right_row_index < right_num_rows; right_row_index++) {
-      auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
+    for (cudf::size_type inner_row_index = 0; inner_row_index < inner_num_rows; inner_row_index++) {
+      auto output_dest           = cudf::ast::detail::value_expression_result<bool, has_nulls>();
+      auto const left_row_index  = swap_tables ? inner_row_index : outer_row_index;
+      auto const right_row_index = swap_tables ? outer_row_index : inner_row_index;
       evaluator.evaluate(
         output_dest, left_row_index, right_row_index, 0, thread_intermediate_storage);
       if (output_dest.is_valid() && output_dest.value()) {
