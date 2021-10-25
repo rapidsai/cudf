@@ -270,6 +270,7 @@ add_library(cudf
     src/io/functions.cpp
     src/io/json/json_gpu.cu
     src/io/json/reader_impl.cu
+    src/io/orc/aggregate_orc_metadata.cpp
     src/io/orc/dict_enc.cu
     src/io/orc/orc.cpp
     src/io/orc/reader_impl.cu

@@ -16,6 +16,7 @@
 
 #pragma once
 
+#include "aggregate_orc_metadata.hpp"
 #include "orc.h"
 #include "orc_gpu.h"
 
@@ -38,7 +39,6 @@ namespace io {
 namespace detail {
 namespace orc {
 using namespace cudf::io::orc;
-using namespace cudf::io;
 
 // Forward declarations
 class metadata;
@@ -46,7 +46,6 @@ namespace {
 struct orc_stream_info;
 struct stripe_source_mapping;
 }  // namespace
-class aggregate_orc_metadata;
 
 /**
  * @brief Keeps track of orc mapping and child column details.
@@ -69,20 +68,6 @@ struct reader_column_meta {
   };
   // num_rowgroups * num_columns
   std::vector<row_group_meta> rwgrp_meta;  // rowgroup metadata [rowgroup][column]
-};
-
-/**
- * @brief Describes a column hierarchy, which may exclude some input columns.
- */
-struct column_hierarchy {
-  using nesting_map = std::map<int32_t, std::vector<int32_t>>;
-  // Children IDs of each column
-  nesting_map children;
-  // Each element contains column at the given nesting level
-  std::vector<std::vector<orc_column_meta>> levels;
-
-  column_hierarchy(nesting_map child_map);
-  auto num_levels() const { return levels.size(); }
 };
 
 /**
@@ -231,8 +216,8 @@ class reader::impl {
  private:
   rmm::mr::device_memory_resource* _mr = nullptr;
   std::vector<std::unique_ptr<datasource>> _sources;
-  std::unique_ptr<aggregate_orc_metadata> _metadata;
-  column_hierarchy selected_columns;
+  cudf::io::orc::detail::aggregate_orc_metadata _metadata;
+  cudf::io::orc::detail::column_hierarchy selected_columns;
 
   bool _use_index     = true;
   bool _use_np_dtypes = true;
