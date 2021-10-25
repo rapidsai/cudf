@@ -101,11 +101,9 @@ class Merge:
         # At this point validation guarantees that if on is not None we
         # don't have any other args, so we can apply it directly to left_on and
         # right_on.
-        self._using_left_index = bool(left_index)
         left_on = (
             lhs.index._data.names if left_index else left_on if left_on else on
         )
-        self._using_right_index = bool(right_index)
         right_on = (
             rhs.index._data.names
             if right_index
@@ -117,13 +115,13 @@ class Merge:
         if left_on or right_on:
             self._left_keys = [
                 _ColumnIndexer(name=on)
-                if not self._using_left_index and on in lhs._data
+                if on in lhs._data
                 else _IndexIndexer(name=on)
                 for on in (_coerce_to_tuple(left_on) if left_on else [])
             ]
             self._right_keys = [
                 _ColumnIndexer(name=on)
-                if not self._using_right_index and on in rhs._data
+                if on in rhs._data
                 else _IndexIndexer(name=on)
                 for on in (_coerce_to_tuple(right_on) if right_on else [])
             ]
@@ -131,6 +129,12 @@ class Merge:
                 raise ValueError(
                     "Merge operands must have same number of join key columns"
                 )
+            self._using_left_index = any(
+                isinstance(idx, _IndexIndexer) for idx in self._left_keys
+            )
+            self._using_right_index = any(
+                isinstance(idx, _IndexIndexer) for idx in self._right_keys
+            )
         else:
             # if `on` is not provided and we're not merging
             # index with column or on both indexes, then use
@@ -138,6 +142,8 @@ class Merge:
             on_names = set(lhs._data) & set(rhs._data)
             self._left_keys = [_ColumnIndexer(name=on) for on in on_names]
             self._right_keys = [_ColumnIndexer(name=on) for on in on_names]
+            self._using_left_index = False
+            self._using_right_index = False
 
         if isinstance(lhs, cudf.MultiIndex) or isinstance(
             rhs, cudf.MultiIndex
