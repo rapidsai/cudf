@@ -834,23 +834,58 @@ TYPED_TEST(TypedDatetimeOpsTest, TestFloorDatetime)
   using namespace cudf::datetime;
   using namespace cuda::std::chrono;
 
-  // Time in seconds since epoch
-  // Dates converted using epochconverter.com
-  auto timestamps_s =
-    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{{
-      978307485L,  // 2001-01-01 00:04:45 GMT
-      978307498L,  // 2001-01-01 00:04:58 GMT
-      978307504L,  // 2001-01-01 00:05:04 GMT
-    }};
+  auto start = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
+  auto stop_ = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
 
-  auto expected_minute =
-    cudf::test::fixed_width_column_wrapper<cudf::timestamp_s, cudf::timestamp_s::rep>{{
-      978307500L,  // 2001-01-01 00:05:00 GMT
-      978307500L,  // 2001-01-01 00:05:00 GMT
-      978307560L,  // 2001-01-01 00:06:00 GMT
-    }};
+  auto input = generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop_));
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*floor_day(timestamps_s), expected_minute);
+  auto host_val                     = to_host<T>(input);
+  thrust::host_vector<T> timestamps = host_val.first;
+
+
+  thrust::host_vector<T> floored_day(timestamps.size());
+  thrust::transform(timestamps.begin(), timestamps.end(), floored_day.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(floor<days>(i));
+  });
+  auto expected_day =
+    fixed_width_column_wrapper<T, typename T::duration::rep>(floored_day.begin(), floored_day.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*floor_day(input), expected_day);
+
+
+  thrust::host_vector<T> floored_hour(timestamps.size());
+  thrust::transform(timestamps.begin(), timestamps.end(), floored_hour.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(floor<hours>(i));
+  });
+  auto expected_hour = fixed_width_column_wrapper<T, typename T::duration::rep>(floored_hour.begin(),
+                                                                                floored_hour.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*floor_hour(input), expected_hour);
+
+
+  std::vector<T> floored_minute(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), floored_minute.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(floor<minutes>(i));
+  });
+  auto expected_minute = fixed_width_column_wrapper<T, typename T::duration::rep>(
+    floored_minute.begin(), floored_minute.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*floor_minute(input), expected_minute);
+
+
+  std::vector<T> floored_second(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), floored_second.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(floor<seconds>(i));
+  });
+  auto expected_second = fixed_width_column_wrapper<T, typename T::duration::rep>(
+    floored_second.begin(), floored_second.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*floor_second(input), expected_second);
+
+
+  std::vector<T> floored_millisecond(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), floored_millisecond.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(floor<milliseconds>(i));
+  });
+  auto expected_millisecond = fixed_width_column_wrapper<T, typename T::duration::rep>(
+    floored_millisecond.begin(), floored_millisecond.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*floor_millisecond(input), expected_millisecond);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
