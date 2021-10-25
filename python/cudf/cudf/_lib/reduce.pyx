@@ -2,7 +2,6 @@
 
 import cudf
 from cudf.api.types import is_decimal_dtype
-from cudf.core.dtypes import Decimal64Dtype
 
 from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
@@ -80,7 +79,7 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
         scale = -c_result.get()[0].type().scale()
         precision = _reduce_precision(col_dtype, reduction_op, len(incol))
         py_result = DeviceScalar.from_unique_ptr(
-            move(c_result), dtype=cudf.Decimal64Dtype(precision, scale)
+            move(c_result), dtype=col_dtype.__class__(precision, scale)
         )
     else:
         py_result = DeviceScalar.from_unique_ptr(move(c_result))
@@ -161,4 +160,4 @@ def _reduce_precision(dtype, op, nrows):
         new_p = 2 * p + nrows
     else:
         raise NotImplementedError()
-    return max(min(new_p, cudf.Decimal64Dtype.MAX_PRECISION), 0)
+    return max(min(new_p, dtype.MAX_PRECISION), 0)
