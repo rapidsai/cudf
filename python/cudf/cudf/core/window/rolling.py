@@ -288,6 +288,10 @@ class Rolling(GetAttrGetItemMixin):
         ----------
         func : function
             A user defined function that takes an 1D array as input
+        args : tuple
+            unsupported.
+        kwargs
+            unsupported
 
         See also
         --------
@@ -308,7 +312,7 @@ class Rolling(GetAttrGetItemMixin):
         ...             if i > 3:
         ...                     count += 1
         ...     return count
-        ... 
+        ...
         >>> s = cudf.Series([0, 1.1, 5.8, 3.1, 6.2, 2.0, 1.5])
         >>> s.rolling(3, min_periods=1).apply(count_if_gt_3)
         0    0
