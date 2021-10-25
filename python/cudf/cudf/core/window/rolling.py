@@ -298,6 +298,27 @@ class Rolling(GetAttrGetItemMixin):
         -----
         See notes of the :meth:`cudf.Series.applymap`
 
+        Example
+        -------
+
+        >>> import cudf
+        >>> def count_if_gt_3(window):
+        ...     count = 0
+        ...     for i in window:
+        ...             if i > 3:
+        ...                     count += 1
+        ...     return count
+        ... 
+        >>> s = cudf.Series([0, 1.1, 5.8, 3.1, 6.2, 2.0, 1.5])
+        >>> s.rolling(3, min_periods=1).apply(count_if_gt_3)
+        0    0
+        1    0
+        2    1
+        3    2
+        4    3
+        5    2
+        6    1
+        dtype: int64
         """
         has_nulls = False
         if isinstance(self.obj, cudf.Series):
