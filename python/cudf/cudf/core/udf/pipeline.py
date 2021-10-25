@@ -225,7 +225,6 @@ def _define_function(fr, row_type, args, scalar_return=False):
     masked_input_initializers = "\n".join(initializers)
     row_initializers = "\n".join(row_initializers)
 
-    breakpoint()
     # Incorporate all of the above into the kernel code template
     d = {
         "input_columns": input_columns,
@@ -301,7 +300,6 @@ def compile_or_get(df, f, args):
         "pack_return": pack_return,
         "row_type": row_type,
     }
-    breakpoint()
     exec(
         _define_function(df, row_type, args, scalar_return=_is_scalar_return),
         global_exec_context,

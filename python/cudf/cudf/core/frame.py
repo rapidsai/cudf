@@ -1573,7 +1573,7 @@ class Frame:
                 launch_args.append((data, mask))
             offsets.append(col.offset)
         launch_args += offsets
-        launch_args.append(*args)
+        launch_args += list(args)
         launch_args.append(len(self))  # size
         kernel.forall(len(self))(*launch_args)
 
