@@ -117,8 +117,7 @@ def test_series_sort_index(nelem, asc):
 @pytest.mark.parametrize("data", [[0, 1, 1, 2, 2, 2, 3, 3], [0], [1, 2, 3]])
 @pytest.mark.parametrize("n", [-100, -50, -12, -2, 0, 1, 2, 3, 4, 7])
 def test_series_nlargest(data, n):
-    """Indirectly tests Series.sort_values()
-    """
+    """Indirectly tests Series.sort_values()"""
     sr = Series(data)
     psr = pd.Series(data)
     assert_eq(sr.nlargest(n), psr.nlargest(n))
@@ -136,8 +135,7 @@ def test_series_nlargest(data, n):
 @pytest.mark.parametrize("data", [[0, 1, 1, 2, 2, 2, 3, 3], [0], [1, 2, 3]])
 @pytest.mark.parametrize("n", [-100, -50, -12, -2, 0, 1, 2, 3, 4, 9])
 def test_series_nsmallest(data, n):
-    """Indirectly tests Series.sort_values()
-    """
+    """Indirectly tests Series.sort_values()"""
     sr = Series(data)
     psr = pd.Series(data)
     assert_eq(sr.nsmallest(n), psr.nsmallest(n))
