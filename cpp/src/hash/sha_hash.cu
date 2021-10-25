@@ -71,12 +71,6 @@ const __constant__ uint64_t sha512_hash_constants[80] = {
   0x4cc5d4becb3e42b6, 0x597f299cfc657e2a, 0x5fcb6fab3ad6faec, 0x6c44198c4a475817,
 };
 
-// SHA supported leaf data type check
-bool sha_type_check(data_type dt)
-{
-  return !is_chrono(dt) && (is_fixed_width(dt) || (dt.id() == type_id::STRING));
-}
-
 CUDA_DEVICE_CALLABLE uint32_t rotate_bits_left(uint32_t x, int8_t r)
 {
   // This function is equivalent to (x << r) | (x >> (32 - r))
@@ -720,6 +714,12 @@ struct SHA512Hash : HashBase<SHA512Hash> {
   hash_state state;
 };
 
+// SHA supported leaf data type check
+constexpr inline bool sha_leaf_type_check(data_type dt)
+{
+  return (is_fixed_width(dt) && !is_chrono(dt)) || (dt.id() == type_id::STRING);
+}
+
 }  // namespace
 
 /**
@@ -750,7 +750,7 @@ std::unique_ptr<column> sha_hash(table_view const& input,
   // TODO: Accept single layer list columns holding those types.
   CUDF_EXPECTS(
     std::all_of(
-      input.begin(), input.end(), [](auto const& col) { return sha_type_check(col.type()); }),
+      input.begin(), input.end(), [](auto const& col) { return sha_leaf_type_check(col.type()); }),
     "Unsupported column type for hash function.");
 
   // Result column allocation and creation
