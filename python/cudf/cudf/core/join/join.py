@@ -91,8 +91,6 @@ class Merge:
             suffixes=suffixes,
         )
 
-        self.lhs = lhs
-        self.rhs = rhs
         self.how = how
         self.sort = sort
         self.lsuffix, self.rsuffix = suffixes
@@ -116,13 +114,13 @@ class Merge:
         if left_on or right_on:
             self._left_keys = [
                 _Indexer(name=on, column=True)
-                if not self._using_left_index and on in self.lhs._data
+                if not self._using_left_index and on in lhs._data
                 else _Indexer(name=on, index=True)
                 for on in (_coerce_to_tuple(left_on) if left_on else [])
             ]
             self._right_keys = [
                 _Indexer(name=on, column=True)
-                if not self._using_right_index and on in self.rhs._data
+                if not self._using_right_index and on in rhs._data
                 else _Indexer(name=on, index=True)
                 for on in (_coerce_to_tuple(right_on) if right_on else [])
             ]
@@ -134,7 +132,7 @@ class Merge:
             # if `on` is not provided and we're not merging
             # index with column or on both indexes, then use
             # the intersection  of columns in both frames
-            on_names = set(self.lhs._data) & set(self.rhs._data)
+            on_names = set(lhs._data) & set(rhs._data)
             self._left_keys = [
                 _Indexer(name=on, column=True) for on in on_names
             ]
@@ -142,8 +140,8 @@ class Merge:
                 _Indexer(name=on, column=True) for on in on_names
             ]
 
-        self.output_lhs = self.lhs.copy(deep=False)
-        self.output_rhs = self.rhs.copy(deep=False)
+        self.output_lhs = lhs.copy(deep=False)
+        self.output_rhs = rhs.copy(deep=False)
 
         left_join_cols = {}
         right_join_cols = {}
