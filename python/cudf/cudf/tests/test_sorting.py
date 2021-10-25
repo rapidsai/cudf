@@ -155,15 +155,15 @@ def test_series_nsmallest(data, n):
 
 @pytest.mark.parametrize("nelem,n", [(1, 1), (100, 100), (10, 5), (100, 10)])
 @pytest.mark.parametrize("op", ["nsmallest", "nlargest"])
-def test_dataframe_nlargest_nsmallest(nelem, n, op):
+@pytest.mark.parametrize("columns", ["a", ["b", "a"]])
+def test_dataframe_nlargest_nsmallest(nelem, n, op, columns):
     np.random.seed(0)
     aa = np.random.random(nelem)
     bb = np.random.random(nelem)
 
     df = DataFrame({"a": aa, "b": bb})
     pdf = df.to_pandas()
-    assert_eq(getattr(df, op)(n, "a"), getattr(pdf, op)(n, "a"))
-    assert_eq(getattr(df, op)(n, ["b", "a"]), getattr(pdf, op)(n, ["b", "a"]))
+    assert_eq(getattr(df, op)(n, columns), getattr(pdf, op)(n, columns))
 
 
 @pytest.mark.parametrize(
