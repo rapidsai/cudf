@@ -253,8 +253,6 @@ class Merge:
             else:
                 data[name] = col
 
-        # TODO: There is a bug here, we actually need to pull the index columns
-        # from both if both left_index and right_index were True.
         if self._using_right_index:
             # right_index and left_on
             index = left_result._index
