@@ -67,7 +67,14 @@ def _filters_to_query(filters):
     return query_string, local_dict
 
 
-def read_orc(path, columns=None, filters=None, storage_options=None, filtering_columns_first=False, **kwargs):
+def read_orc(
+    path,
+    columns=None,
+    filters=None,
+    storage_options=None,
+    filtering_columns_first=False,
+    **kwargs,
+):
     """Read cudf dataframe from ORC file(s).
 
     Note that this function is mostly borrowed from upstream Dask.
@@ -159,7 +166,11 @@ def read_orc(path, columns=None, filters=None, storage_options=None, filtering_c
         print(f"{columns_in_predicate=}")
         columns = [c for c in columns if c not in columns_in_predicate]
         filtered_df = read_orc(
-            path, columns=columns_in_predicate, filters=None, storage_options=None, **kwargs
+            path,
+            columns=columns_in_predicate,
+            filters=None,
+            storage_options=None,
+            **kwargs,
         ).query(query_string, local_dict=local_dict)
 
         # Since the call to `read_orc` results in a partition for each relevant
@@ -170,7 +181,9 @@ def read_orc(path, columns=None, filters=None, storage_options=None, filtering_c
 
         # Finally we repartition so that we can horizontally concatenate with
         # the remaining columns
-        filtered_df = filtered_df.repartition(np.count_nonzero(is_filtered_partition_empty)).reset_index(drop=True)
+        filtered_df = filtered_df.repartition(
+            np.count_nonzero(is_filtered_partition_empty)
+        ).reset_index(drop=True)
 
     print(f"{columns=}")
 
@@ -184,7 +197,10 @@ def read_orc(path, columns=None, filters=None, storage_options=None, filtering_c
             if filters is None
             else cudf.io.orc._filter_stripes(filters, path)
         ):
-            if not filtering_columns_first or not is_filtered_partition_empty[filtered_partition_idx]:
+            if (
+                not filtering_columns_first
+                or not is_filtered_partition_empty[filtered_partition_idx]
+            ):
                 dsk[(name, N)] = (
                     _read_orc_stripe,
                     fs,
@@ -199,7 +215,19 @@ def read_orc(path, columns=None, filters=None, storage_options=None, filtering_c
     divisions = [None] * (len(dsk) + 1)
     res = dd.core.new_dd_object(dsk, name, meta, divisions)
 
-    return res if not filtering_columns_first else dd.concat([filtered_df, res.repartition(npartitions=N).reset_index(drop=True).query(query_string, local_dict=local_dict)], axis=1)
+    return (
+        res
+        if not filtering_columns_first
+        else dd.concat(
+            [
+                filtered_df,
+                res.repartition(npartitions=N)
+                .reset_index(drop=True)
+                .query(query_string, local_dict=local_dict),
+            ],
+            axis=1,
+        )
+    )
 
 
 def write_orc_partition(
