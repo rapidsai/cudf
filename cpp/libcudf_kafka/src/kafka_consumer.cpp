@@ -79,9 +79,8 @@ void kafka_consumer::build_validate_configs(PyObject* python_config_dict)
     std::string error_string;
     if (std::find(callableConfigs.begin(), callableConfigs.end(), key) != callableConfigs.end()) {
       // Properly configure the callable. This is a Python callback for oauth processing
-      OAuthRefreshCb cb(vo, NULL);
+      PythonOAuthRefreshCb cb(vo, NULL);
       kafka_conf->set("oauthbearer_token_refresh_cb", &cb, error_string);
-
     } else {
       CUDF_EXPECTS(valueType.compare("str") == 0,
                    "Only string values are supported for this configuration");

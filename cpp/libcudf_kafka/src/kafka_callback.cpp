@@ -20,11 +20,11 @@ namespace io {
 namespace external {
 namespace kafka {
 
-OAuthRefreshCb::OAuthRefreshCb(PyObject* callback, PyObject* args)
+PythonOAuthRefreshCb::PythonOAuthRefreshCb(PyObject* callback, PyObject* args)
   : callback(callback), args(args){};
 
-void OAuthRefreshCb::oauthbearer_token_refresh_cb(RdKafka::Handle* handle,
-                                                  const std::string& oauthbearer_config)
+void PythonOAuthRefreshCb::oauthbearer_token_refresh_cb(RdKafka::Handle* handle,
+                                                        const std::string& oauthbearer_config)
 {
   CUDF_EXPECTS(PyCallable_Check(callback), "A Python callable is required");
 

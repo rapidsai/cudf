@@ -33,9 +33,9 @@ namespace kafka {
  * @brief Callback to retrieve OAuth token from external source. Invoked when
  * token refresh is required.
  */
-class OAuthRefreshCb : public RdKafka::OAuthBearerTokenRefreshCb {
+class PythonOAuthRefreshCb : public RdKafka::OAuthBearerTokenRefreshCb {
  public:
-  OAuthRefreshCb(PyObject* callback, PyObject* args);
+  PythonOAuthRefreshCb(PyObject* callback, PyObject* args);
 
   void oauthbearer_token_refresh_cb(RdKafka::Handle* handle, const std::string& oauthbearer_config);
 
