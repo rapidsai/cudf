@@ -278,15 +278,14 @@ class aggregate_orc_metadata {
                              int32_t id)
   {
     auto current_id = id;
-    auto parent_id  = metadata.parent_id(current_id);
-    while (parent_id != -1) {
+    while (metadata.column_has_parent(current_id)) {
+      auto parent_id = metadata.parent_id(current_id);
       if (std::find(selected_columns[parent_id].cbegin(),
                     selected_columns[parent_id].cend(),
                     current_id) == selected_columns[parent_id].end()) {
         selected_columns[parent_id].push_back(current_id);
       }
       current_id = parent_id;
-      parent_id  = metadata.parent_id(current_id);
     }
   }
 

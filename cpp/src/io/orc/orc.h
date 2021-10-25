@@ -598,7 +598,20 @@ class metadata {
   }
   int get_row_index_stride() const { return ff.rowIndexStride; }
 
-  int32_t parent_id(int32_t column_id) const { return parents.at(column_id).id; }
+  /**
+   * @brief Returns the ID of the parent column of the given column.
+   */
+  int32_t parent_id(int32_t column_id) const { return parents.at(column_id).value().id; }
+
+  /**
+   * @brief Returns the index the given column has in its parent's children list.
+   */
+  int32_t field_index(int32_t column_id) const { return parents.at(column_id).value().field_idx; }
+
+  /**
+   * @brief Returns whether the given column has a parent.
+   */
+  int32_t column_has_parent(int32_t column_id) const { return parents.at(column_id).has_value(); }
 
  public:
   PostScript ps;
@@ -611,12 +624,13 @@ class metadata {
  private:
   struct column_parent {
     // parent's ID
-    int32_t id = -1;
+    int32_t id;
     // Index of this column in the parent's list of children
-    int32_t field_idx = -1;
+    int32_t field_idx;
+    column_parent(int32_t parent_id, int32_t field_idx) : id{parent_id}, field_idx{field_idx} {}
   };
   void init_parent_descriptors();
-  std::vector<column_parent> parents;
+  std::vector<std::optional<column_parent>> parents;
 
   void init_column_names();
   std::vector<std::string> column_names;

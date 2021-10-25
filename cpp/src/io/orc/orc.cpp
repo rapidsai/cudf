@@ -470,39 +470,36 @@ void metadata::init_column_names()
 {
   column_names.resize(get_num_columns());
   thrust::tabulate(column_names.begin(), column_names.end(), [&](auto col_id) {
-    auto const parent_id = parents[col_id].id;
-    if (parent_id < 0) return std::string{};
-    auto const& parent_field_names = ff.types[parent_id].fieldNames;
-    auto const field_idx           = parents[col_id].field_idx;
+    if (not column_has_parent(col_id)) return std::string{};
+    auto const& parent_field_names = ff.types[parent_id(col_id)].fieldNames;
     // Child columns of lists don't have a name in ORC files, generate placeholder in that case
-    return field_idx < static_cast<int32_t>(parent_field_names.size())
-             ? parent_field_names[field_idx]
+    return field_index(col_id) < static_cast<int32_t>(parent_field_names.size())
+             ? parent_field_names[field_index(col_id)]
              : std::to_string(col_id);
   });
 
   column_paths.resize(get_num_columns());
   thrust::tabulate(column_paths.begin(), column_paths.end(), [&](auto col_id) {
-    auto const parent_id = parents[col_id].id;
-    if (parent_id < 0) return std::string{};
+    if (not column_has_parent(col_id)) return std::string{};
     // Don't include ORC root column name in path
-    return (parent_id == 0 ? "" : column_paths[parent_id] + ".") + column_names[col_id];
+    return (parent_id(col_id) == 0 ? "" : column_paths[parent_id(col_id)] + ".") +
+           column_names[col_id];
   });
 }
 
 void metadata::init_parent_descriptors()
 {
-  auto const num_columns = static_cast<uint32_t>(ff.types.size());
+  auto const num_columns = static_cast<int32_t>(ff.types.size());
   parents.resize(num_columns);
 
-  for (uint32_t col_id = 0; col_id < num_columns; ++col_id) {
+  for (int32_t col_id = 0; col_id < num_columns; ++col_id) {
     auto const& subtypes    = ff.types[col_id].subtypes;
-    auto const num_children = static_cast<uint32_t>(subtypes.size());
-    for (uint32_t field_idx = 0; field_idx < num_children; ++field_idx) {
-      auto const child_id = subtypes[field_idx];
+    auto const num_children = static_cast<int32_t>(subtypes.size());
+    for (int32_t field_idx = 0; field_idx < num_children; ++field_idx) {
+      auto const child_id = static_cast<int32_t>(subtypes[field_idx]);
       CUDF_EXPECTS(child_id > col_id && child_id < num_columns, "Invalid column id");
-      CUDF_EXPECTS(parents[child_id].id == -1, "Same node referenced twice");
-      parents[child_id].id        = col_id;
-      parents[child_id].field_idx = field_idx;
+      CUDF_EXPECTS(not column_has_parent(child_id), "Same node referenced twice");
+      parents[child_id] = {col_id, field_idx};
     }
   }
 }
