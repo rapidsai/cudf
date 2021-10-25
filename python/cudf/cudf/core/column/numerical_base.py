@@ -194,8 +194,7 @@ class NumericalBaseColumn(ColumnBase):
     def round(
         self, decimals: int = 0, how: str = "half_even"
     ) -> NumericalBaseColumn:
-        """Round the values in the Column to the given number of decimals.
-        """
+        """Round the values in the Column to the given number of decimals."""
         return libcudf.round.round(self, decimal_places=decimals, how=how)
 
     def _apply_scan_op(self, op: str) -> ColumnBase:
