@@ -29,32 +29,29 @@ class _Indexer:
     # >>> _Indexer("a", column=True).get(df)  # returns column "a" of df
     # >>> _Indexer("b", index=True).get(df)  # returns index level "b" of df
 
-    def __init__(self, name: Any, column=False, index=False):
-        if column and index:
-            raise ValueError("Cannot specify both column and index")
+    def __init__(self, name: Any):
         self.name = name
-        self.column, self.index = column, index
 
+
+class _ColumnIndexer(_Indexer):
     def get(self, obj: Frame) -> ColumnBase:
-        # get the column from `obj`
-        if self.column:
-            return obj._data[self.name]
-        else:
-            if obj._index is not None:
-                return obj._index._data[self.name]
+        return obj._data[self.name]
+
+    def set(self, obj: Frame, value: ColumnBase, validate=False):
+        obj._data.set_by_label(self.name, value, validate=validate)
+
+
+class _IndexIndexer(_Indexer):
+    def get(self, obj: Frame) -> ColumnBase:
+        if obj._index is not None:
+            return obj._index._data[self.name]
         raise KeyError
 
     def set(self, obj: Frame, value: ColumnBase, validate=False):
-        # set the colum in `obj`
-        if self.column:
-            obj._data.set_by_label(self.name, value, validate=validate)
+        if obj._index is not None:
+            obj._index._data.set_by_label(self.name, value, validate=validate)
         else:
-            if obj._index is not None:
-                obj._index._data.set_by_label(
-                    self.name, value, validate=validate
-                )
-            else:
-                raise KeyError
+            raise KeyError
 
 
 def _match_join_keys(

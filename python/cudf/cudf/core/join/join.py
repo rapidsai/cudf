@@ -7,7 +7,8 @@ import cudf
 from cudf import _lib as libcudf
 from cudf.core.join._join_helpers import (
     _coerce_to_tuple,
-    _Indexer,
+    _ColumnIndexer,
+    _IndexIndexer,
     _match_join_keys,
 )
 
@@ -113,15 +114,15 @@ class Merge:
 
         if left_on or right_on:
             self._left_keys = [
-                _Indexer(name=on, column=True)
+                _ColumnIndexer(name=on)
                 if not self._using_left_index and on in lhs._data
-                else _Indexer(name=on, index=True)
+                else _IndexIndexer(name=on)
                 for on in (_coerce_to_tuple(left_on) if left_on else [])
             ]
             self._right_keys = [
-                _Indexer(name=on, column=True)
+                _ColumnIndexer(name=on)
                 if not self._using_right_index and on in rhs._data
-                else _Indexer(name=on, index=True)
+                else _IndexIndexer(name=on)
                 for on in (_coerce_to_tuple(right_on) if right_on else [])
             ]
             if len(self._left_keys) != len(self._right_keys):
@@ -133,12 +134,8 @@ class Merge:
             # index with column or on both indexes, then use
             # the intersection  of columns in both frames
             on_names = set(lhs._data) & set(rhs._data)
-            self._left_keys = [
-                _Indexer(name=on, column=True) for on in on_names
-            ]
-            self._right_keys = [
-                _Indexer(name=on, column=True) for on in on_names
-            ]
+            self._left_keys = [_ColumnIndexer(name=on) for on in on_names]
+            self._right_keys = [_ColumnIndexer(name=on) for on in on_names]
 
         self.output_lhs = lhs.copy(deep=False)
         self.output_rhs = rhs.copy(deep=False)
