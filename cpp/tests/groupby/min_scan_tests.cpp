@@ -140,19 +140,6 @@ TEST_F(groupby_min_scan_string_test, basic)
 
   auto agg = cudf::make_min_aggregation<groupby_scan_aggregation>();
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
-  // CUDF_EXPECT_THROW_MESSAGE(test_single_scan(keys, vals, expect_keys, expect_vals,
-  // std::move(agg)), "Unsupported groupby scan type-agg combination");
-  // {
-  //   std::vector<groupby::scan_request> requests;
-  //   requests.emplace_back(groupby::scan_request());
-  //   requests[0].values = vals;
-  //   requests[0].aggregations.push_back(std::move(agg));
-  //   groupby::groupby gb_obj(table_view({keys}), null_policy::EXCLUDE, sorted::NO, {}, {});
-  //   // groupby scan uses sort implementation
-  //   auto result = gb_obj.scan(requests);
-  //   cudf::test::print(result.first->view().column(0));
-  //   cudf::test::print(result.second[0].results[0]->view());
-  // }
 }
 
 template <typename T>
