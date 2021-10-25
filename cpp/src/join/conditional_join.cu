@@ -115,8 +115,8 @@ conditional_join(table_view const& left,
           *right_table,
           kernel_join_type,
           parser.device_expression_data,
-          size.data(),
-          swap_tables);
+          swap_tables,
+          size.data());
     } else {
       compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -124,8 +124,8 @@ conditional_join(table_view const& left,
           *right_table,
           kernel_join_type,
           parser.device_expression_data,
-          size.data(),
-          swap_tables);
+          swap_tables,
+          size.data());
     }
     CHECK_CUDA(stream.value());
     join_size = size.value(stream);
@@ -159,7 +159,8 @@ conditional_join(table_view const& left,
         join_output_r,
         write_index.data(),
         parser.device_expression_data,
-        join_size);
+        join_size,
+        swap_tables);
   } else {
     conditional_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -170,7 +171,8 @@ conditional_join(table_view const& left,
         join_output_r,
         write_index.data(),
         parser.device_expression_data,
-        join_size);
+        join_size,
+        swap_tables);
   }
 
   CHECK_CUDA(stream.value());
@@ -260,8 +262,8 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
         *right_table,
         join_type,
         parser.device_expression_data,
-        size.data(),
-        swap_tables);
+        swap_tables,
+        size.data());
   } else {
     compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -269,8 +271,8 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
         *right_table,
         join_type,
         parser.device_expression_data,
-        size.data(),
-        swap_tables);
+        swap_tables,
+        size.data());
   }
   CHECK_CUDA(stream.value());
 
