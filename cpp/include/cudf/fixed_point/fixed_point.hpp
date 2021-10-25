@@ -49,7 +49,8 @@ enum class Radix : int32_t { BASE_2 = 2, BASE_10 = 10 };
 template <typename T>
 constexpr inline auto is_supported_representation_type()
 {
-  return cuda::std::is_same_v<T, int32_t> || cuda::std::is_same_v<T, int64_t> ||
+  return cuda::std::is_same_v<T, int32_t> ||  //
+         cuda::std::is_same_v<T, int64_t> ||  //
          cuda::std::is_same_v<T, __int128_t>;
 }
 
