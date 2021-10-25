@@ -2099,3 +2099,20 @@ def test_join_on_index_with_duplicate_names():
     got = lhs.join(rhs, how="inner")
 
     assert_join_results_equal(expect, got, how="inner")
+
+
+def test_join_redundant_params():
+    lhs = cudf.DataFrame(
+        {"a": [1, 2, 3], "c": [2, 3, 4]}, index=cudf.Index([0, 1, 2], name="c")
+    )
+    rhs = cudf.DataFrame(
+        {"b": [1, 2, 3]}, index=cudf.Index([0, 1, 2], name="a")
+    )
+    with pytest.raises(ValueError):
+        lhs.merge(rhs, on="a", left_index=True)
+    with pytest.raises(ValueError):
+        lhs.merge(rhs, left_on="a", left_index=True, right_index=True)
+    with pytest.raises(ValueError):
+        lhs.merge(rhs, right_on="a", left_index=True, right_index=True)
+    with pytest.raises(ValueError):
+        lhs.merge(rhs, left_on="c", right_on="b")
