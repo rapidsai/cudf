@@ -301,10 +301,9 @@ class Merge:
         how,
         suffixes,
     ):
-        """
-        Error for various invalid combinations of merge input parameters
-        """
-        # must actually support the requested merge type
+        # Error for various invalid combinations of merge input parameters
+
+        # We must actually support the requested merge type
         if how not in {"left", "inner", "outer", "leftanti", "leftsemi"}:
             raise NotImplementedError(f"{how} merge not supported yet")
 
