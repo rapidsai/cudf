@@ -18,7 +18,11 @@ from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move, pair
 
 from cudf._lib.aggregation cimport Aggregation, make_aggregation
-from cudf._lib.types cimport dtype_to_data_type, underlying_type_t_type_id
+from cudf._lib.types cimport (
+    dtype_to_data_type,
+    is_decimal_type_id,
+    underlying_type_t_type_id,
+)
 
 import numpy as np
 
@@ -72,7 +76,7 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
             c_out_dtype
         ))
 
-    if c_result.get()[0].type().id() == libcudf_types.type_id.DECIMAL64:
+    if is_decimal_type_id(c_result.get()[0].type().id()):
         scale = -c_result.get()[0].type().scale()
         precision = _reduce_precision(col_dtype, reduction_op, len(incol))
         py_result = DeviceScalar.from_unique_ptr(
