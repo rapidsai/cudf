@@ -149,15 +149,17 @@ class Merge:
             self._out_class = cudf.DataFrame
 
         self._key_columns_with_same_name = (
-            on
+            set(_coerce_to_tuple(on))
             if on
-            else []
+            else set()
             if (self._using_left_index or self._using_right_index)
-            else [
-                lkey.name
-                for lkey, rkey in zip(self._left_keys, self._right_keys)
-                if lkey.name == rkey.name
-            ]
+            else set(
+                [
+                    lkey.name
+                    for lkey, rkey in zip(self._left_keys, self._right_keys)
+                    if lkey.name == rkey.name
+                ]
+            )
         )
 
     def perform_merge(self) -> Frame:
@@ -230,39 +232,26 @@ class Merge:
                         validate=False,
                     )
 
-        # Compute the result column names:
-        # left_names and right_names will be a mappings of input column names
-        # to the corresponding names in the final result.
-        left_names = dict(zip(left_result._data, left_result._data))
-        right_names = dict(zip(right_result._data, right_result._data))
-
-        # For any columns from left_result and right_result that have the same
-        # name:
-        # - if they are key columns, keep only the left column
-        # - if they are not key columns, use suffixes to differentiate them
-        #   in the final result
+        # All columns from the left table make it into the output. Non-key
+        # columns that share a name with a column in the right table are
+        # suffixed with the provided suffix.
         common_names = set(left_result._data.names) & set(
             right_result._data.names
         )
-
-        for name in common_names:
-            if name in self._key_columns_with_same_name:
-                del right_names[name]
-            else:
-                left_names[name] = f"{name}{self.lsuffix}"
-                right_names[name] = f"{name}{self.rsuffix}"
-
-        # Assemble the data columns of the result:
+        cols_to_suffix = common_names - self._key_columns_with_same_name
         data = {
-            **{
-                new_name: left_result._data[orig_name]
-                for orig_name, new_name in left_names.items()
-            },
-            **{
-                new_name: right_result._data[orig_name]
-                for orig_name, new_name in right_names.items()
-            },
+            (f"{name}{self.lsuffix}" if name in cols_to_suffix else name): col
+            for name, col in left_result._data.items()
         }
+
+        # The right table follows the same rule as the left table except that
+        # key columns from the right table are removed.
+        for name, col in right_result._data.items():
+            if name in common_names:
+                if name not in self._key_columns_with_same_name:
+                    data[f"{name}{self.rsuffix}"] = col
+            else:
+                data[name] = col
 
         # TODO: There is a bug here, we actually need to pull the index columns
         # from both if both left_index and right_index were True.
