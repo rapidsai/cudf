@@ -1632,6 +1632,7 @@ def test_ceil(data, time_type, resolution):
     got = gs.dt.ceil(resolution)
     assert_eq(expect, got)
 
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -1659,4 +1660,3 @@ def test_floor(data, time_type, resolution):
     expect = ps.dt.floor(resolution)
     got = gs.dt.floor(resolution)
     assert_eq(expect, got)
-    
