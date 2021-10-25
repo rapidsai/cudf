@@ -1553,11 +1553,11 @@ class Frame:
         return result
 
     @annotate("APPLY", color="purple", domain="cudf_python")
-    def _apply(self, func):
+    def _apply(self, func, *args):
         """
         Apply `func` across the rows of the frame.
         """
-        kernel, retty = compile_or_get(self, func)
+        kernel, retty = compile_or_get(self, func, args)
 
         # Mask and data column preallocated
         ans_col = cupy.empty(len(self), dtype=retty)
@@ -1573,6 +1573,7 @@ class Frame:
                 launch_args.append((data, mask))
             offsets.append(col.offset)
         launch_args += offsets
+        launch_args.append(*args)
         launch_args.append(len(self))  # size
         kernel.forall(len(self))(*launch_args)
 

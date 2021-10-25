@@ -2,7 +2,7 @@ import math
 
 import cachetools
 import numpy as np
-from numba import cuda
+from numba import cuda, typeof
 from numba.np import numpy_support
 from numba.types import Record, Tuple, boolean, int64, void
 from nvtx import annotate
@@ -66,17 +66,19 @@ def get_frame_row_type(fr):
 
 
 @annotate("NUMBA JIT", color="green", domain="cudf_python")
-def get_udf_return_type(func, df):
+def get_udf_return_type(func, df, args=()):
     """
     Get the return type of a masked UDF for a given set of argument dtypes. It
     is assumed that a `MaskedType(dtype)` is passed to the function for each
     input dtype.
     """
+    # The users function args should be a row of the frame and then extra args
     row_type = get_frame_row_type(df)
+    compile_sig = (row_type, *(typeof(arg) for arg in args))
 
     # Get the return type. The PTX is also returned by compile_udf, but is not
     # needed here.
-    ptx, output_type = cudautils.compile_udf(func, (row_type,))
+    ptx, output_type = cudautils.compile_udf(func, compile_sig)
     if not isinstance(output_type, MaskedType):
         numba_output_type = numpy_support.from_dtype(np.dtype(output_type))
     else:
@@ -99,7 +101,7 @@ def masked_array_type_from_col(col):
         return Tuple((nb_scalar_ty[::1], libcudf_bitmask_type[::1]))
 
 
-def construct_signature(df, return_type):
+def construct_signature(df, return_type, args):
     """
     Build the signature of numba types that will be used to
     actually JIT the kernel itself later, accounting for types
@@ -115,7 +117,7 @@ def construct_signature(df, return_type):
         offsets.append(int64)
 
     # return_type + data,masks + offsets + size
-    sig = void(*(sig + offsets + [int64]))
+    sig = void(*(sig + offsets + [int64] + [typeof(arg) for arg in args]))
 
     return sig
 
@@ -126,7 +128,7 @@ def mask_get(mask, pos):
 
 
 kernel_template = """\
-def _kernel(retval, {input_columns}, {input_offsets}, size):
+def _kernel(retval, {input_columns}, {input_offsets}, {extra_args}, size):
     i = cuda.grid(1)
     ret_data_arr, ret_mask_arr = retval
     if i < size:
@@ -140,7 +142,7 @@ def _kernel(retval, {input_columns}, {input_offsets}, size):
 {row_initializers}
 
         # pass the assembled row into the udf
-        ret = f_(row)
+        ret = f_(row, {extra_args})
 
         # pack up the return values and set them
         ret_masked = pack_return(ret)
@@ -163,7 +165,7 @@ row_initializer_template = """\
 """
 
 
-def _define_function(fr, row_type, scalar_return=False):
+def _define_function(fr, row_type, args, scalar_return=False):
     """
     The kernel we want to JIT compile looks something like the following,
     which is an example for two columns that both have nulls present
@@ -199,6 +201,7 @@ def _define_function(fr, row_type, scalar_return=False):
     # Create argument list for kernel
     input_columns = ", ".join([f"input_col_{i}" for i in range(len(fr._data))])
     input_offsets = ", ".join([f"offset_{i}" for i in range(len(fr._data))])
+    extra_args = ",".join("extra_arg_" + str(i) for i in range(len(args)))
 
     # Generate the initializers for each device function argument
     initializers = []
@@ -222,10 +225,12 @@ def _define_function(fr, row_type, scalar_return=False):
     masked_input_initializers = "\n".join(initializers)
     row_initializers = "\n".join(row_initializers)
 
+    breakpoint()
     # Incorporate all of the above into the kernel code template
     d = {
         "input_columns": input_columns,
         "input_offsets": input_offsets,
+        "extra_args": extra_args,
         "masked_input_initializers": masked_input_initializers,
         "row_initializers": row_initializers,
         "numba_rectype": row_type,  # from global
@@ -235,7 +240,7 @@ def _define_function(fr, row_type, scalar_return=False):
 
 
 @annotate("UDF COMPILATION", color="darkgreen", domain="cudf_python")
-def compile_or_get(df, f):
+def compile_or_get(df, f, args):
     """
     Return a compiled kernel in terms of MaskedTypes that launches a
     kernel equivalent of `f` for the dtypes of `df`. The kernel uses
@@ -270,7 +275,7 @@ def compile_or_get(df, f):
 
     # precompile the user udf to get the right return type.
     # could be a MaskedType or a scalar type.
-    numba_return_type = get_udf_return_type(f, df)
+    numba_return_type = get_udf_return_type(f, df, args)
 
     _is_scalar_return = not isinstance(numba_return_type, MaskedType)
     scalar_return_type = (
@@ -280,8 +285,7 @@ def compile_or_get(df, f):
     )
 
     # this is the signature for the final full kernel compilation
-    sig = construct_signature(df, scalar_return_type)
-
+    sig = construct_signature(df, scalar_return_type, args)
     # this row type is used within the kernel to pack up the column and
     # mask data into the dict like data structure the user udf expects
     row_type = get_frame_row_type(df)
@@ -297,8 +301,9 @@ def compile_or_get(df, f):
         "pack_return": pack_return,
         "row_type": row_type,
     }
+    breakpoint()
     exec(
-        _define_function(df, row_type, scalar_return=_is_scalar_return),
+        _define_function(df, row_type, args, scalar_return=_is_scalar_return),
         global_exec_context,
         local_exec_context,
     )
