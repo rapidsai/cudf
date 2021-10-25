@@ -351,7 +351,7 @@ def read_parquet(
     row_groups_per_part=None,
     **kwargs,
 ):
-    """ Read parquet files into a Dask DataFrame
+    """Read parquet files into a Dask DataFrame
 
     Calls ``dask.dataframe.read_parquet`` to cordinate the execution of
     ``cudf.read_parquet``, and ultimately read multiple partitions into

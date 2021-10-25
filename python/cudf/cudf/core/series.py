@@ -85,7 +85,7 @@ from cudf.utils.utils import (
 
 def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
     """Append a scalar `value` to the end of `col` inplace.
-       Cast to common type if possible
+    Cast to common type if possible
     """
     to_type = find_common_type([type(value), col.dtype])
     val_col = as_column(value, dtype=to_type)
@@ -2120,8 +2120,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @property
     def index(self):
-        """The index object
-        """
+        """The index object"""
         return self._index
 
     @index.setter
@@ -2130,8 +2129,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @property
     def nullmask(self):
-        """The gpu buffer for the null-mask
-        """
+        """The gpu buffer for the null-mask"""
         return cudf.Series(self._column.nullmask)
 
     def as_mask(self):
