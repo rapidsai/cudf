@@ -116,7 +116,7 @@ def construct_signature(df, return_type, args):
         sig.append(masked_array_type_from_col(col))
         offsets.append(int64)
 
-    # return_type + data,masks + offsets + size
+    # return_type + data,masks + offsets + size + extra args
     sig = void(*(sig + offsets + [int64] + [typeof(arg) for arg in args]))
 
     return sig

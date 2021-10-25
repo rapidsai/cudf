@@ -4097,7 +4097,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         result_type: {'expand', 'reduce', 'broadcast', None}, default None
             Not yet supported
         args: tuple
-            Not yet supported
+            Positional arguments to pass to func in addition to the dataframe.
 
         Examples
         --------
@@ -4245,7 +4245,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if result_type is not None:
             raise ValueError("The `result_type` kwarg is not yet supported.")
         if kwargs:
-            raise ValueError("args and kwargs are not yet supported.")
+            raise ValueError("UDFs using **kwargs are not yet supported.")
 
         return self._apply(func, *args)
 
