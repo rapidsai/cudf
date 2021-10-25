@@ -1750,9 +1750,6 @@ class Frame:
         result._copy_type_metadata(self)
         return result
 
-    def _reverse(self):
-        return self.__class__._from_data(*libcudf.copying.reverse(self))
-
     def _fill(self, fill_values, begin, end, inplace):
         col_and_fill = zip(self._columns, fill_values)
 
@@ -1768,8 +1765,7 @@ class Frame:
         return self
 
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
-        """Shift values by `periods` positions.
-        """
+        """Shift values by `periods` positions."""
         assert axis in (None, 0) and freq is None
         return self._shift(periods)
 
@@ -5508,7 +5504,7 @@ class Frame:
 
     def rmul(self, other, axis, level=None, fill_value=None):
         """
-        Get Multiplication of dataframe or series and other, element-wise 
+        Get Multiplication of dataframe or series and other, element-wise
         (binary operator `rmul`).
 
         Equivalent to ``other * frame``, but with support to substitute a
