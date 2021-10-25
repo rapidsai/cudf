@@ -18,36 +18,6 @@
 #include <chrono>
 #include <memory>
 
-/**
- * @brief Callback to retrieve OAuth token from external source. Invoked when
- * token refresh is required.
- */
-class OAuthRefreshCb : public RdKafka::OAuthBearerTokenRefreshCb {
- public:
-  OAuthRefreshCb(PyObject* callback, PyObject* args, PyObject* kwargs)
-    : callback(callback), args(args), kwargs(kwargs){};
-
-  void oauthbearer_token_refresh_cb(RdKafka::Handle* handle, const std::string& oauthbearer_config)
-  {
-    printf("oauthbearer_token_refresh_cb\n");
-    PyObject* args;
-    PyObject* kwargs;
-
-    CUDF_EXPECTS(PyCallable_Check(callback), "A Python callable is required");
-
-    // Make sure that we own the GIL
-    PyGILState_STATE state = PyGILState_Ensure();
-    std::string result(PyUnicode_AsUTF8(PyObject_CallObject(callback, args)));
-    printf("Result: %s\n", result.c_str());
-    PyGILState_Release(state);
-  }
-
- private:
-  PyObject* callback;
-  PyObject* args;
-  PyObject* kwargs;
-};
-
 namespace cudf {
 namespace io {
 namespace external {
@@ -108,10 +78,8 @@ void kafka_consumer::build_validate_configs(PyObject* python_config_dict)
 
     std::string error_string;
     if (std::find(callableConfigs.begin(), callableConfigs.end(), key) != callableConfigs.end()) {
-      // Properly configure the callable. This is a Python callback for callback processing
-      PyObject* args;
-      PyObject* kwargs;
-      OAuthRefreshCb cb(vo, args, kwargs);
+      // Properly configure the callable. This is a Python callback for oauth processing
+      OAuthRefreshCb cb(vo, NULL);
       kafka_conf->set("oauthbearer_token_refresh_cb", &cb, error_string);
 
     } else {

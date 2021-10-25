@@ -25,6 +25,7 @@
 #include <map>
 #include <memory>
 #include <string>
+#include "kafka_callback.hpp"
 
 namespace cudf {
 namespace io {
