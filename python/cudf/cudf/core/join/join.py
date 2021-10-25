@@ -92,6 +92,8 @@ class Merge:
             suffixes=suffixes,
         )
 
+        self.lhs = lhs.copy(deep=False)
+        self.rhs = rhs.copy(deep=False)
         self.how = how
         self.sort = sort
         self.lsuffix, self.rsuffix = suffixes
@@ -137,15 +139,12 @@ class Merge:
             self._left_keys = [_ColumnIndexer(name=on) for on in on_names]
             self._right_keys = [_ColumnIndexer(name=on) for on in on_names]
 
-        self.output_lhs = lhs.copy(deep=False)
-        self.output_rhs = rhs.copy(deep=False)
-
         left_join_cols = {}
         right_join_cols = {}
 
         for left_key, right_key in zip(self._left_keys, self._right_keys):
-            lcol = left_key.get(self.output_lhs)
-            rcol = right_key.get(self.output_rhs)
+            lcol = left_key.get(self.lhs)
+            rcol = right_key.get(self.rhs)
             lcol_casted, rcol_casted = _match_join_keys(lcol, rcol, self.how)
             left_join_cols[left_key.name] = lcol_casted
             right_join_cols[left_key.name] = rcol_casted
@@ -160,8 +159,8 @@ class Merge:
                 lcol_casted = lcol_casted.astype("category")
                 rcol_casted = rcol_casted.astype("category")
 
-            left_key.set(self.output_lhs, lcol_casted, validate=False)
-            right_key.set(self.output_rhs, rcol_casted, validate=False)
+            left_key.set(self.lhs, lcol_casted, validate=False)
+            right_key.set(self.rhs, rcol_casted, validate=False)
 
         self._left_join_table = cudf.core.frame.Frame(left_join_cols)
         self._right_join_table = cudf.core.frame.Frame(right_join_cols)
@@ -197,11 +196,11 @@ class Merge:
 
         gather_index = self._using_left_index or self._using_right_index
         if left_rows is not None:
-            left_result = self.output_lhs._gather(
+            left_result = self.lhs._gather(
                 left_rows, nullify=True, keep_index=gather_index
             )
         if right_rows is not None:
-            right_result = self.output_rhs._gather(
+            right_result = self.rhs._gather(
                 right_rows, nullify=True, keep_index=gather_index
             )
 
@@ -222,8 +221,6 @@ class Merge:
         # is simply dropped. For outer joins, the two key columns are combined
         # by filling nulls in the left key column with corresponding values
         # from the right key column:
-        # TODO: Move this to the creation of the output_lhs in the constructor
-        # as well.
         if self.how == "outer":
             for lkey, rkey in zip(self._left_keys, self._right_keys):
                 if lkey.name == rkey.name:
