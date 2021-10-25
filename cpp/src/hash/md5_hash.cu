@@ -55,72 +55,6 @@ const __constant__ uint32_t md5_hash_constants[64] = {
   0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1, 0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391,
 };
 
-template <int capacity, typename hash_step_callable>
-struct hash_circular_buffer {
-  uint8_t storage[capacity];
-  uint8_t* cur;
-  int available_space{capacity};
-  hash_step_callable hash_step;
-
-  CUDA_DEVICE_CALLABLE hash_circular_buffer(hash_step_callable hash_step)
-    : cur{storage}, hash_step{hash_step}
-  {
-  }
-
-  CUDA_DEVICE_CALLABLE void put(uint8_t const* in, int size)
-  {
-    int copy_start = 0;
-    while (size >= available_space) {
-      // The buffer will be filled by this chunk of data. Copy a chunk of the
-      // data to fill the buffer and trigger a hash step.
-      memcpy(cur, in + copy_start, available_space);
-      hash_step(storage);
-      size -= available_space;
-      copy_start += available_space;
-      cur             = storage;
-      available_space = capacity;
-    }
-    // The buffer will not be filled by the remaining data. That is, `size >= 0
-    // && size < capacity`. We copy the remaining data into the buffer but do
-    // not trigger a hash step.
-    memcpy(cur, in + copy_start, size);
-    cur += size;
-    available_space -= size;
-  }
-
-  CUDA_DEVICE_CALLABLE void pad(int const space_to_leave)
-  {
-    if (space_to_leave > available_space) {
-      memset(cur, 0x00, available_space);
-      hash_step(storage);
-      cur             = storage;
-      available_space = capacity;
-    }
-    memset(cur, 0x00, available_space - space_to_leave);
-    cur += available_space - space_to_leave;
-    available_space = space_to_leave;
-  }
-
-  CUDA_DEVICE_CALLABLE const uint8_t& operator[](int idx) const { return storage[idx]; }
-};
-
-// Get a uint8_t pointer to a column element and its size as a pair.
-template <typename Element>
-auto CUDA_DEVICE_CALLABLE get_element_pointer_and_size(Element const& element)
-{
-  if constexpr (is_fixed_width<Element>() && !is_chrono<Element>()) {
-    return thrust::make_pair(reinterpret_cast<uint8_t const*>(&element), sizeof(Element));
-  } else {
-    cudf_assert(false && "Unsupported type.");
-  }
-}
-
-template <>
-auto CUDA_DEVICE_CALLABLE get_element_pointer_and_size(string_view const& element)
-{
-  return thrust::make_pair(reinterpret_cast<uint8_t const*>(element.data()), element.size_bytes());
-}
-
 struct MD5Hasher {
   static constexpr int message_chunk_size = 64;
 
@@ -205,7 +139,7 @@ struct MD5Hasher {
         A = D;
         D = C;
         C = B;
-        B = B + __funnelshift_l(F, F, md5_shift_constants[((j / 16) * 4) + (j % 4)]);
+        B = B + rotate_bits_left(F, md5_shift_constants[((j / 16) * 4) + (j % 4)]);
       }
 
       hash_values[0] += A;
