@@ -139,6 +139,28 @@ class Merge:
             self._left_keys = [_ColumnIndexer(name=on) for on in on_names]
             self._right_keys = [_ColumnIndexer(name=on) for on in on_names]
 
+        if isinstance(lhs, cudf.MultiIndex) or isinstance(
+            rhs, cudf.MultiIndex
+        ):
+            self._out_class = cudf.MultiIndex
+        elif isinstance(lhs, cudf.BaseIndex):
+            self._out_class = lhs.__class__
+        else:
+            self._out_class = cudf.DataFrame
+
+        self._key_columns_with_same_name = (
+            on
+            if on
+            else []
+            if (self._using_left_index or self._using_right_index)
+            else [
+                lkey.name
+                for lkey, rkey in zip(self._left_keys, self._right_keys)
+                if lkey.name == rkey.name
+            ]
+        )
+
+    def perform_merge(self) -> Frame:
         left_join_cols = {}
         right_join_cols = {}
 
@@ -162,47 +184,24 @@ class Merge:
             left_key.set(self.lhs, lcol_casted, validate=False)
             right_key.set(self.rhs, rcol_casted, validate=False)
 
-        self._left_join_table = cudf.core.frame.Frame(left_join_cols)
-        self._right_join_table = cudf.core.frame.Frame(right_join_cols)
-
-        if isinstance(lhs, cudf.MultiIndex) or isinstance(
-            rhs, cudf.MultiIndex
-        ):
-            self._out_class = cudf.MultiIndex
-        elif isinstance(lhs, cudf.BaseIndex):
-            self._out_class = lhs.__class__
-        else:
-            self._out_class = cudf.DataFrame
-
-        self._key_columns_with_same_name = (
-            on
-            if on
-            else []
-            if (self._using_left_index or self._using_right_index)
-            else [
-                lkey.name
-                for lkey, rkey in zip(self._left_keys, self._right_keys)
-                if lkey.name == rkey.name
-            ]
-        )
-
-    def perform_merge(self) -> Frame:
         left_rows, right_rows = self._joiner(
-            self._left_join_table, self._right_join_table, how=self.how,
+            cudf.core.frame.Frame(left_join_cols),
+            cudf.core.frame.Frame(right_join_cols),
+            how=self.how,
         )
-
-        left_result = cudf.core.frame.Frame()
-        right_result = cudf.core.frame.Frame()
 
         gather_index = self._using_left_index or self._using_right_index
-        if left_rows is not None:
-            left_result = self.lhs._gather(
-                left_rows, nullify=True, keep_index=gather_index
-            )
-        if right_rows is not None:
-            right_result = self.rhs._gather(
-                right_rows, nullify=True, keep_index=gather_index
-            )
+
+        left_result = (
+            self.lhs._gather(left_rows, nullify=True, keep_index=gather_index)
+            if left_rows is not None
+            else cudf.core.frame.Frame()
+        )
+        right_result = (
+            self.rhs._gather(right_rows, nullify=True, keep_index=gather_index)
+            if right_rows is not None
+            else cudf.core.frame.Frame()
+        )
 
         result = self._out_class._from_data(
             *self._merge_results(left_result, right_result)
@@ -217,10 +216,10 @@ class Merge:
         # `Frame`, suffixing column names if necessary.
 
         # If two key columns have the same name, a single output column appears
-        # in the result. For all other join types, the key column from the rhs
-        # is simply dropped. For outer joins, the two key columns are combined
-        # by filling nulls in the left key column with corresponding values
-        # from the right key column:
+        # in the result. For all non-outer join types, the key column from the
+        # rhs is simply dropped. For outer joins, the two key columns are
+        # combined by filling nulls in the left key column with corresponding
+        # values from the right key column:
         if self.how == "outer":
             for lkey, rkey in zip(self._left_keys, self._right_keys):
                 if lkey.name == rkey.name:
@@ -247,11 +246,11 @@ class Merge:
         )
 
         for name in common_names:
-            if name not in self._key_columns_with_same_name:
+            if name in self._key_columns_with_same_name:
+                del right_names[name]
+            else:
                 left_names[name] = f"{name}{self.lsuffix}"
                 right_names[name] = f"{name}{self.rsuffix}"
-            else:
-                del right_names[name]
 
         # Assemble the data columns of the result:
         data = {
