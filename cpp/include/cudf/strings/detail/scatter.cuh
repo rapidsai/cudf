@@ -48,8 +48,8 @@ namespace detail {
  * @param scatter_map Iterator of indices into the output column.
  * @param target The set of columns into which values from the source column
  *        are to be scattered.
- * @param mr Device memory resource used to allocate the returned column's device memory
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
  * @return New strings column.
  */
 template <typename SourceIterator, typename MapIterator>
@@ -79,9 +79,7 @@ std::unique_ptr<column> scatter(
                              std::move(offsets_column),
                              std::move(chars_column),
                              UNKNOWN_NULL_COUNT,
-                             cudf::detail::copy_bitmask(target.parent(), stream, mr),
-                             stream,
-                             mr);
+                             cudf::detail::copy_bitmask(target.parent(), stream, mr));
 }
 
 }  // namespace detail

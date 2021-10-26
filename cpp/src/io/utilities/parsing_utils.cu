@@ -68,8 +68,6 @@ __device__ __forceinline__ void setElement(void*, cudf::size_type, const T&, con
  * @param[in] key Character to find in the array
  * @param[in,out] count Pointer to the number of found occurrences
  * @param[out] positions Array containing the output positions
- *
- * @return void
  */
 template <class T>
 __global__ void count_and_set_positions(const char* data,

@@ -15,7 +15,7 @@
  */
 
 /**
- * @file typed_statistics_chunk
+ * @file typed_statistics_chunk.cuh
  * @brief Templated wrapper to generalize statistics chunk reduction and aggregation
  * across different leaf column types
  */
@@ -92,7 +92,6 @@ struct typed_statistics_chunk<T, true> {
   using E = typename detail::extrema_type<T>::type;
   using A = typename detail::aggregation_type<T>::type;
 
-  uint32_t num_rows;    //!< number of non-null values in chunk
   uint32_t non_nulls;   //!< number of non-null values in chunk
   uint32_t null_count;  //!< number of null values in chunk
 
@@ -103,9 +102,8 @@ struct typed_statistics_chunk<T, true> {
   uint8_t has_minmax;  //!< Nonzero if min_value and max_values are valid
   uint8_t has_sum;     //!< Nonzero if sum is valid
 
-  __device__ typed_statistics_chunk(const uint32_t _num_rows = 0)
-    : num_rows(_num_rows),
-      non_nulls(0),
+  __device__ typed_statistics_chunk()
+    : non_nulls(0),
       null_count(0),
       minimum_value(detail::minimum_identity<E>()),
       maximum_value(detail::maximum_identity<E>()),
@@ -135,7 +133,6 @@ struct typed_statistics_chunk<T, true> {
     }
     non_nulls += chunk.non_nulls;
     null_count += chunk.null_count;
-    num_rows += (chunk.non_nulls + chunk.null_count);
   }
 };
 
@@ -143,7 +140,6 @@ template <typename T>
 struct typed_statistics_chunk<T, false> {
   using E = typename detail::extrema_type<T>::type;
 
-  uint32_t num_rows;    //!< number of non-null values in chunk
   uint32_t non_nulls;   //!< number of non-null values in chunk
   uint32_t null_count;  //!< number of null values in chunk
 
@@ -153,9 +149,8 @@ struct typed_statistics_chunk<T, false> {
   uint8_t has_minmax;  //!< Nonzero if min_value and max_values are valid
   uint8_t has_sum;     //!< Nonzero if sum is valid
 
-  __device__ typed_statistics_chunk(const uint32_t _num_rows = 0)
-    : num_rows(_num_rows),
-      non_nulls(0),
+  __device__ typed_statistics_chunk()
+    : non_nulls(0),
       null_count(0),
       minimum_value(detail::minimum_identity<E>()),
       maximum_value(detail::maximum_identity<E>()),
@@ -180,7 +175,6 @@ struct typed_statistics_chunk<T, false> {
     }
     non_nulls += chunk.non_nulls;
     null_count += chunk.null_count;
-    num_rows += (chunk.non_nulls + chunk.null_count);
   }
 };
 
@@ -237,14 +231,23 @@ template <typename T, bool include_aggregate>
 __inline__ __device__ statistics_chunk
 get_untyped_chunk(const typed_statistics_chunk<T, include_aggregate>& chunk)
 {
-  statistics_chunk stat;
+  using E = typename detail::extrema_type<T>::type;
+  statistics_chunk stat{};
   stat.non_nulls  = chunk.non_nulls;
-  stat.null_count = chunk.num_rows - chunk.non_nulls;
+  stat.null_count = chunk.null_count;
   stat.has_minmax = chunk.has_minmax;
-  stat.has_sum =
-    chunk.has_minmax;  // If a valid input was encountered we assume that the sum is valid
+  stat.has_sum    = [&]() {
+    if (!chunk.has_minmax) return false;
+    // invalidate the sum if overlow or underflow is possible
+    if constexpr (std::is_floating_point_v<E> or std::is_integral_v<E>) {
+      return std::numeric_limits<E>::max() / chunk.non_nulls >=
+               static_cast<E>(chunk.maximum_value) and
+             std::numeric_limits<E>::lowest() / chunk.non_nulls <=
+               static_cast<E>(chunk.minimum_value);
+    }
+    return true;
+  }();
   if (chunk.has_minmax) {
-    using E = typename detail::extrema_type<T>::type;
     if constexpr (std::is_floating_point_v<E>) {
       union_member::get<E>(stat.min_value) =
         (chunk.minimum_value != 0.0) ? chunk.minimum_value : CUDART_NEG_ZERO;

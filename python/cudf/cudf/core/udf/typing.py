@@ -17,8 +17,15 @@ from numba.core.typing.typeof import typeof
 from numba.cuda.cudadecl import registry as cuda_decl_registry
 from pandas._libs.missing import NAType as _NAType
 
-from . import classes
-from ._ops import arith_ops, comparison_ops
+from cudf.core.udf import api
+from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
+
+SUPPORTED_NUMBA_TYPES = (
+    types.Number,
+    types.Boolean,
+    types.NPDatetime,
+    types.NPTimedelta,
+)
 
 
 class MaskedType(types.Type):
@@ -30,7 +37,7 @@ class MaskedType(types.Type):
     def __init__(self, value):
         # MaskedType in Numba shall be parameterized
         # with a value type
-        if not isinstance(value, (types.Number, types.Boolean)):
+        if not isinstance(value, SUPPORTED_NUMBA_TYPES):
             raise TypeError("value_type must be a numeric scalar type")
         self.value_type = value
         super().__init__(name=f"Masked{self.value_type}")
@@ -101,7 +108,7 @@ class MaskedType(types.Type):
 
 # For typing a Masked constant value defined outside a kernel (e.g. captured in
 # a closure).
-@typeof_impl.register(classes.Masked)
+@typeof_impl.register(api.Masked)
 def typeof_masked(val, c):
     return MaskedType(typeof(val.value))
 
@@ -110,11 +117,19 @@ def typeof_masked(val, c):
 # type in a kernel.
 @cuda_decl_registry.register
 class MaskedConstructor(ConcreteTemplate):
-    key = classes.Masked
-
+    key = api.Masked
+    units = ["ns", "ms", "us", "s"]
+    datetime_cases = set(types.NPDatetime(u) for u in units)
+    timedelta_cases = set(types.NPTimedelta(u) for u in units)
     cases = [
         nb_signature(MaskedType(t), t, types.boolean)
-        for t in (types.integer_domain | types.real_domain)
+        for t in (
+            types.integer_domain
+            | types.real_domain
+            | datetime_cases
+            | timedelta_cases
+            | {types.boolean}
+        )
     ]
 
 
@@ -123,20 +138,20 @@ make_attribute_wrapper(MaskedType, "value", "value")
 make_attribute_wrapper(MaskedType, "valid", "valid")
 
 
-# Typing for `classes.Masked`
+# Typing for `api.Masked`
 @cuda_decl_registry.register_attr
 class ClassesTemplate(AttributeTemplate):
-    key = types.Module(classes)
+    key = types.Module(api)
 
     def resolve_Masked(self, mod):
         return types.Function(MaskedConstructor)
 
 
-# Registration of the global is also needed for Numba to type classes.Masked
-cuda_decl_registry.register_global(classes, types.Module(classes))
-# For typing bare Masked (as in `from .classes import Masked`
+# Registration of the global is also needed for Numba to type api.Masked
+cuda_decl_registry.register_global(api, types.Module(api))
+# For typing bare Masked (as in `from .api import Masked`
 cuda_decl_registry.register_global(
-    classes.Masked, types.Function(MaskedConstructor)
+    api.Masked, types.Function(MaskedConstructor)
 )
 
 
@@ -224,6 +239,15 @@ class MaskedScalarArithOp(AbstractTemplate):
             return nb_signature(MaskedType(return_type), args[0], args[1])
 
 
+class MaskedScalarUnaryOp(AbstractTemplate):
+    def generic(self, args, kws):
+        if len(args) == 1 and isinstance(args[0], MaskedType):
+            return_type = self.context.resolve_function_type(
+                self.key, (args[0].value_type,), kws
+            ).return_type
+            return nb_signature(MaskedType(return_type), args[0])
+
+
 class MaskedScalarNullOp(AbstractTemplate):
     def generic(self, args, kws):
         """
@@ -247,10 +271,10 @@ class MaskedScalarScalarOp(AbstractTemplate):
         # In the case of op(Masked, scalar), we resolve the type between
         # the Masked value_type and the scalar's type directly
         if isinstance(args[0], MaskedType) and isinstance(
-            args[1], types.Number
+            args[1], SUPPORTED_NUMBA_TYPES
         ):
             to_resolve_types = (args[0].value_type, args[1])
-        elif isinstance(args[0], types.Number) and isinstance(
+        elif isinstance(args[0], SUPPORTED_NUMBA_TYPES) and isinstance(
             args[1], MaskedType
         ):
             to_resolve_types = (args[1].value_type, args[0])
@@ -287,8 +311,28 @@ class MaskedScalarTruth(AbstractTemplate):
             return nb_signature(types.boolean, MaskedType(types.boolean))
 
 
-for op in arith_ops + comparison_ops:
+@cuda_decl_registry.register_global(api.pack_return)
+class UnpackReturnToMasked(AbstractTemplate):
+    """
+    Turn a returned MaskedType into its value and validity
+    or turn a scalar into the tuple (scalar, True).
+    """
+
+    def generic(self, args, kws):
+        if isinstance(args[0], MaskedType):
+            # MaskedType(dtype, valid) -> MaskedType(dtype, valid)
+            return nb_signature(args[0], args[0])
+        elif isinstance(args[0], SUPPORTED_NUMBA_TYPES):
+            # scalar_type -> MaskedType(scalar_type, True)
+            return_type = MaskedType(args[0])
+            return nb_signature(return_type, args[0])
+
+
+for binary_op in arith_ops + comparison_ops:
     # Every op shares the same typing class
-    cuda_decl_registry.register_global(op)(MaskedScalarArithOp)
-    cuda_decl_registry.register_global(op)(MaskedScalarNullOp)
-    cuda_decl_registry.register_global(op)(MaskedScalarScalarOp)
+    cuda_decl_registry.register_global(binary_op)(MaskedScalarArithOp)
+    cuda_decl_registry.register_global(binary_op)(MaskedScalarNullOp)
+    cuda_decl_registry.register_global(binary_op)(MaskedScalarScalarOp)
+
+for unary_op in unary_ops:
+    cuda_decl_registry.register_global(unary_op)(MaskedScalarUnaryOp)

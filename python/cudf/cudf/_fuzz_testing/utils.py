@@ -11,7 +11,7 @@ import pyorc
 import cudf
 from cudf.testing._utils import assert_eq
 from cudf.utils.dtypes import (
-    pandas_dtypes_to_cudf_dtypes,
+    pandas_dtypes_to_np_dtypes,
     pyarrow_dtypes_to_pandas_dtypes,
 )
 
@@ -218,7 +218,7 @@ def convert_nulls_to_none(records, df):
     scalar_columns_convert = [
         col
         for col in df.columns
-        if df[col].dtype in pandas_dtypes_to_cudf_dtypes
+        if df[col].dtype in pandas_dtypes_to_np_dtypes
         or pd.api.types.is_datetime64_dtype(df[col].dtype)
         or pd.api.types.is_timedelta64_dtype(df[col].dtype)
     ]
@@ -263,7 +263,7 @@ def _preprocess_to_orc_tuple(df):
     has_nulls_or_nullable_dtype = any(
         [
             True
-            if df[col].dtype in pandas_dtypes_to_cudf_dtypes
+            if df[col].dtype in pandas_dtypes_to_np_dtypes
             or df[col].isnull().any()
             else False
             for col in df.columns

@@ -8,13 +8,13 @@ import rmm
 
 import cudf
 import cudf._lib as libcudfxx
-from cudf.core.buffer import Buffer
-from cudf.utils.dtypes import (
+from cudf.api.types import (
     is_categorical_dtype,
     is_decimal_dtype,
     is_list_dtype,
     is_struct_dtype,
 )
+from cudf.core.buffer import Buffer
 
 from cpython.buffer cimport PyObject_CheckBuffer
 from libc.stdint cimport uintptr_t
@@ -30,7 +30,10 @@ from cudf._lib.cpp.strings.convert.convert_integers cimport (
     from_integers as cpp_from_integers,
 )
 
-from cudf._lib.types import cudf_to_np_types, np_to_cudf_types
+from cudf._lib.types import (
+    LIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
+    SUPPORTED_NUMPY_TO_LIBCUDF_TYPES,
+)
 
 from cudf._lib.types cimport (
     dtype_from_column_view,
@@ -77,6 +80,7 @@ cdef class Column:
 
         self._size = size
         self._cached_sizeof = None
+        self._distinct_count = {}
         self._dtype = dtype
         self._offset = offset
         self._null_count = null_count
@@ -200,9 +204,14 @@ cdef class Column:
                 raise ValueError(error_msg)
 
         self._mask = None
-        self._null_count = None
         self._children = None
         self._base_mask = value
+        self._clear_cache()
+
+    def _clear_cache(self):
+        self._distinct_count = {}
+        self._cached_sizeof = None
+        self._null_count = None
 
     def set_mask(self, value):
         """

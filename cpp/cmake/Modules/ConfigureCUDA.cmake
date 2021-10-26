@@ -14,19 +14,6 @@
 # limitations under the License.
 #=============================================================================
 
-# Find the CUDAToolkit
-find_package(CUDAToolkit REQUIRED)
-
-# Auto-detect available GPU compute architectures
-include(${CMAKE_CURRENT_LIST_DIR}/SetGPUArchs.cmake)
-message(STATUS "CUDF: Building CUDF for GPU architectures: ${CMAKE_CUDA_ARCHITECTURES}")
-
-# Must come after find_package(CUDAToolkit) because we symlink
-# ccache as a compiler front-end for nvcc in gpuCI CPU builds.
-# Must also come after we detect and potentially rewrite
-# CMAKE_CUDA_ARCHITECTURES
-enable_language(CUDA)
-
 if(CMAKE_COMPILER_IS_GNUCXX)
     list(APPEND CUDF_CXX_FLAGS -Wall -Werror -Wno-unknown-pragmas -Wno-error=deprecated-declarations)
 endif()

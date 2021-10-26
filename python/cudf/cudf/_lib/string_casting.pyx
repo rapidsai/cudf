@@ -8,7 +8,7 @@ from cudf._lib.scalar import as_device_scalar
 
 from cudf._lib.scalar cimport DeviceScalar
 
-from cudf._lib.types import np_to_cudf_types
+from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
@@ -72,7 +72,7 @@ def string_to_floating(Column input_col, object out_type):
     cdef unique_ptr[column] c_result
     cdef type_id tid = <type_id> (
         <underlying_type_t_type_id> (
-            np_to_cudf_types[out_type]
+            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[out_type]
         )
     )
     cdef data_type c_out_type = data_type(tid)
@@ -165,7 +165,7 @@ def string_to_integer(Column input_col, object out_type):
     cdef unique_ptr[column] c_result
     cdef type_id tid = <type_id> (
         <underlying_type_t_type_id> (
-            np_to_cudf_types[out_type]
+            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[out_type]
         )
     )
     cdef data_type c_out_type = data_type(tid)
@@ -509,7 +509,8 @@ def from_booleans(Column input_col):
 
 def int2timestamp(
         Column input_col,
-        format):
+        str format,
+        Column names):
     """
     Converting/Casting input date-time column to string
     column with specified format
@@ -517,6 +518,9 @@ def int2timestamp(
     Parameters
     ----------
     input_col : input column of type timestamp in integer format
+    format : The string specifying output format
+    names : The string names to use for weekdays ("%a", "%A") and
+    months ("%b", "%B")
 
     Returns
     -------
@@ -525,12 +529,15 @@ def int2timestamp(
     """
     cdef column_view input_column_view = input_col.view()
     cdef string c_timestamp_format = format.encode("UTF-8")
+    cdef column_view input_strings_names = names.view()
+
     cdef unique_ptr[column] c_result
     with nogil:
         c_result = move(
             cpp_from_timestamps(
                 input_column_view,
-                c_timestamp_format))
+                c_timestamp_format,
+                input_strings_names))
 
     return Column.from_unique_ptr(move(c_result))
 
@@ -552,7 +559,7 @@ def timestamp2int(Column input_col, dtype, format):
     cdef column_view input_column_view = input_col.view()
     cdef type_id tid = <type_id> (
         <underlying_type_t_type_id> (
-            np_to_cudf_types[dtype]
+            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[dtype]
         )
     )
     cdef data_type out_type = data_type(tid)
@@ -617,7 +624,7 @@ def timedelta2int(Column input_col, dtype, format):
     cdef column_view input_column_view = input_col.view()
     cdef type_id tid = <type_id> (
         <underlying_type_t_type_id> (
-            np_to_cudf_types[dtype]
+            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[dtype]
         )
     )
     cdef data_type out_type = data_type(tid)
@@ -744,7 +751,9 @@ def htoi(Column input_col, **kwargs):
     cdef column_view input_column_view = input_col.view()
     cdef type_id tid = <type_id> (
         <underlying_type_t_type_id> (
-            np_to_cudf_types[kwargs.get('dtype', cudf.dtype("int64"))]
+            SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[
+                kwargs.get('dtype', cudf.dtype("int64"))
+            ]
         )
     )
     cdef data_type c_out_type = data_type(tid)

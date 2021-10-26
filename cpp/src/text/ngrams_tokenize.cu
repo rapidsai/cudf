@@ -138,9 +138,9 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
   rmm::cuda_stream_view stream         = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource())
 {
-  CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
   cudf::string_view d_delimiter(delimiter.data(), delimiter.size());
-  CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be valid");
+  CUDF_EXPECTS(separator.is_valid(stream), "Parameter separator must be valid");
   cudf::string_view d_separator(separator.data(), separator.size());
 
   CUDF_EXPECTS(ngrams >= 1, "Parameter ngrams should be an integer value of 1 or greater");
@@ -243,13 +243,8 @@ std::unique_ptr<cudf::column> ngrams_tokenize(
   chars_column->set_null_count(0);
   offsets_column->set_null_count(0);
   // create the output strings column
-  return make_strings_column(total_ngrams,
-                             std::move(offsets_column),
-                             std::move(chars_column),
-                             0,
-                             rmm::device_buffer{0, stream, mr},
-                             stream,
-                             mr);
+  return make_strings_column(
+    total_ngrams, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail

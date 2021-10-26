@@ -34,7 +34,7 @@ struct column_from_scalar_dispatch {
                                            rmm::mr::device_memory_resource* mr) const
   {
     if (size == 0) return make_empty_column(value.type());
-    if (!value.is_valid())
+    if (!value.is_valid(stream))
       return make_fixed_width_column(value.type(), size, mask_state::ALL_NULL, stream, mr);
     auto output_column =
       make_fixed_width_column(value.type(), size, mask_state::UNALLOCATED, stream, mr);
@@ -54,7 +54,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stri
   if (size == 0) return make_empty_column(value.type());
   auto null_mask = detail::create_null_mask(size, mask_state::ALL_NULL, stream, mr);
 
-  if (!value.is_valid())
+  if (!value.is_valid(stream))
     return std::make_unique<column>(
       value.type(), size, rmm::device_buffer{}, std::move(null_mask), size);
 
@@ -101,7 +101,7 @@ std::unique_ptr<cudf::column> column_from_scalar_dispatch::operator()<cudf::stru
 
   auto children =
     detail::gather(ss.view(), iter, iter + size, out_of_bounds_policy::NULLIFY, stream, mr);
-  auto const is_valid = ss.is_valid();
+  auto const is_valid = ss.is_valid(stream);
   return make_structs_column(size,
                              std::move(children->release()),
                              is_valid ? 0 : size,

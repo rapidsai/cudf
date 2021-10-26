@@ -146,10 +146,10 @@ table_with_metadata read_avro(avro_reader_options const& options,
   CUDF_FUNC_RANGE();
 
   auto datasources = make_datasources(options.get_source());
-  auto reader =
-    std::make_unique<avro::reader>(std::move(datasources), options, rmm::cuda_stream_default, mr);
 
-  return reader->read(options);
+  CUDF_EXPECTS(datasources.size() == 1, "Only a single source is currently supported.");
+
+  return avro::read_avro(std::move(datasources[0]), options, rmm::cuda_stream_default, mr);
 }
 
 compression_type infer_compression_type(compression_type compression, source_info const& info)

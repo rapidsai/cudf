@@ -21,8 +21,7 @@
 #include <io/comp/io_uncomp.h>
 #include <io/utilities/column_buffer.hpp>
 #include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/trie.cuh>
-#include <io/utilities/type_conversion.cuh>
+#include <io/utilities/type_conversion.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -553,8 +552,8 @@ table_with_metadata convert_data_to_table(parse_options_view const& parse_opts,
 /**
  * @brief Read an entire set or a subset of data from the source
  *
- * @param[in] range_offset Number of bytes offset from the start
- * @param[in] range_size Bytes to read; use `0` for all remaining data
+ * @param[in] options reader options with Number of bytes offset from the start,
+ * Bytes to read; use `0` for all remaining data
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return Table and its metadata

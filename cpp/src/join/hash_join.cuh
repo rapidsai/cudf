@@ -16,12 +16,11 @@
 #pragma once
 
 #include <cudf/detail/concatenate.cuh>
-#include <cudf/detail/gather.cuh>
-#include <cudf/detail/gather.hpp>
 #include <join/join_common_utils.cuh>
 #include <join/join_common_utils.hpp>
 #include <join/join_kernels.cuh>
 
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
@@ -140,6 +139,7 @@ struct hash_join::hash_join_impl {
  private:
   cudf::table_view _build;
   std::vector<std::unique_ptr<cudf::column>> _created_null_columns;
+  cudf::structs::detail::flattened_table _flattened_build_table;
   std::unique_ptr<cudf::detail::multimap_type, std::function<void(cudf::detail::multimap_type*)>>
     _hash_table;
 
@@ -152,6 +152,7 @@ struct hash_join::hash_join_impl {
    *
    * @param build The build table, from which the hash table is built.
    * @param compare_nulls Controls whether null join-key values should match or not.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    */
   hash_join_impl(cudf::table_view const& build,
                  null_equality compare_nulls,

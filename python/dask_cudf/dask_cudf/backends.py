@@ -7,12 +7,16 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from dask.dataframe.categorical import categorical_dtype_dispatch
 from dask.dataframe.core import get_parallel_type, meta_nonempty
-from dask.dataframe.methods import (
+from dask.dataframe.dispatch import (
+    categorical_dtype_dispatch,
     concat_dispatch,
+    group_split_dispatch,
+    hash_object_dispatch,
     is_categorical_dtype_dispatch,
+    make_meta_dispatch,
     tolist_dispatch,
+    union_categoricals_dispatch,
 )
 from dask.dataframe.utils import (
     UNKNOWN_CATEGORIES,
@@ -20,22 +24,11 @@ from dask.dataframe.utils import (
     _scalar_from_dtype,
     is_arraylike,
     is_scalar,
+    make_meta_obj,
 )
 
-try:
-    from dask.dataframe.utils import make_meta_obj as make_meta_obj
-except ImportError:
-    from dask.dataframe.utils import make_meta as make_meta_obj
-
-try:
-    from dask.dataframe.dispatch import (
-        make_meta_dispatch as make_meta_dispatch,
-    )
-except ImportError:
-    from dask.dataframe.utils import make_meta as make_meta_dispatch
-
 import cudf
-from cudf.utils.dtypes import is_string_dtype
+from cudf.api.types import is_string_dtype
 
 from .core import DataFrame, Index, Series
 
@@ -255,13 +248,18 @@ def tolist_cudf(obj):
     (cudf.Series, cudf.BaseIndex, cudf.CategoricalDtype, Series)
 )
 def is_categorical_dtype_cudf(obj):
-    return cudf.utils.dtypes.is_categorical_dtype(obj)
+    return cudf.api.types.is_categorical_dtype(obj)
 
 
 try:
-    from dask.dataframe.dispatch import percentile_dispatch
+    try:
+        from dask.array.dispatch import percentile_lookup
+    except ImportError:
+        from dask.dataframe.dispatch import (
+            percentile_dispatch as percentile_lookup,
+        )
 
-    @percentile_dispatch.register((cudf.Series, cp.ndarray, cudf.Index))
+    @percentile_lookup.register((cudf.Series, cp.ndarray, cudf.BaseIndex))
     def percentile_cudf(a, q, interpolation="linear"):
         # Cudf dispatch to the equivalent of `np.percentile`:
         # https://numpy.org/doc/stable/reference/generated/numpy.percentile.html
@@ -273,7 +271,7 @@ try:
         if isinstance(q, Iterator):
             q = list(q)
 
-        if cudf.utils.dtypes.is_categorical_dtype(a.dtype):
+        if cudf.api.types.is_categorical_dtype(a.dtype):
             result = cp.percentile(a.cat.codes, q, interpolation=interpolation)
 
             return (
@@ -304,60 +302,46 @@ try:
 except ImportError:
     pass
 
-try:
-    from dask.dataframe.dispatch import union_categoricals_dispatch
 
-    @union_categoricals_dispatch.register((cudf.Series, cudf.BaseIndex))
-    def union_categoricals_cudf(
+@union_categoricals_dispatch.register((cudf.Series, cudf.BaseIndex))
+def union_categoricals_cudf(
+    to_union, sort_categories=False, ignore_order=False
+):
+    return cudf.api.types._union_categoricals(
         to_union, sort_categories=False, ignore_order=False
-    ):
-        return cudf.api.types._union_categoricals(
-            to_union, sort_categories=False, ignore_order=False
+    )
+
+
+def safe_hash(frame):
+    return cudf.Series(frame.hash_values(), index=frame.index)
+
+
+@hash_object_dispatch.register((cudf.DataFrame, cudf.Series))
+def hash_object_cudf(frame, index=True):
+    if index:
+        return safe_hash(frame.reset_index())
+    return safe_hash(frame)
+
+
+@hash_object_dispatch.register(cudf.BaseIndex)
+def hash_object_cudf_index(ind, index=None):
+
+    if isinstance(ind, cudf.MultiIndex):
+        return safe_hash(ind.to_frame(index=False))
+
+    col = cudf.core.column.as_column(ind)
+    return safe_hash(cudf.Series(col))
+
+
+@group_split_dispatch.register((cudf.Series, cudf.DataFrame))
+def group_split_cudf(df, c, k, ignore_index=False):
+    return dict(
+        zip(
+            range(k),
+            df.scatter_by_map(
+                c.astype(np.int32, copy=False),
+                map_size=k,
+                keep_index=not ignore_index,
+            ),
         )
-
-
-except ImportError:
-    pass
-
-try:
-
-    from dask.dataframe.core import group_split_dispatch, hash_object_dispatch
-
-    def safe_hash(frame):
-        index = frame.index
-        if isinstance(frame, cudf.DataFrame):
-            return cudf.Series(frame.hash_columns(), index=index)
-        else:
-            return cudf.Series(frame.hash_values(), index=index)
-
-    @hash_object_dispatch.register((cudf.DataFrame, cudf.Series))
-    def hash_object_cudf(frame, index=True):
-        if index:
-            return safe_hash(frame.reset_index())
-        return safe_hash(frame)
-
-    @hash_object_dispatch.register(cudf.BaseIndex)
-    def hash_object_cudf_index(ind, index=None):
-
-        if isinstance(ind, cudf.MultiIndex):
-            return safe_hash(ind.to_frame(index=False))
-
-        col = cudf.core.column.as_column(ind)
-        return safe_hash(cudf.Series(col))
-
-    @group_split_dispatch.register((cudf.Series, cudf.DataFrame))
-    def group_split_cudf(df, c, k, ignore_index=False):
-        return dict(
-            zip(
-                range(k),
-                df.scatter_by_map(
-                    c.astype(np.int32, copy=False),
-                    map_size=k,
-                    keep_index=not ignore_index,
-                ),
-            )
-        )
-
-
-except ImportError:
-    pass
+    )

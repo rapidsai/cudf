@@ -26,6 +26,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <thrust/transform_scan.h>
 
@@ -54,53 +55,18 @@ struct replace_nans_functor {
       return dinput.is_null(i) or !std::isnan(dinput.element<T>(i));
     };
 
-    if (input.has_nulls()) {
-      auto input_pair_iterator = make_pair_iterator<T, true>(*input_device_view);
-      if (replacement_nullable) {
-        auto replacement_pair_iterator = make_pair_iterator<T, true>(replacement);
-        return copy_if_else(true,
-                            input_pair_iterator,
-                            input_pair_iterator + size,
-                            replacement_pair_iterator,
-                            predicate,
-                            input.type(),
-                            stream,
-                            mr);
-      } else {
-        auto replacement_pair_iterator = make_pair_iterator<T, false>(replacement);
-        return copy_if_else(true,
-                            input_pair_iterator,
-                            input_pair_iterator + size,
-                            replacement_pair_iterator,
-                            predicate,
-                            input.type(),
-                            stream,
-                            mr);
-      }
-    } else {
-      auto input_pair_iterator = make_pair_iterator<T, false>(*input_device_view);
-      if (replacement_nullable) {
-        auto replacement_pair_iterator = make_pair_iterator<T, true>(replacement);
-        return copy_if_else(true,
-                            input_pair_iterator,
-                            input_pair_iterator + size,
-                            replacement_pair_iterator,
-                            predicate,
-                            input.type(),
-                            stream,
-                            mr);
-      } else {
-        auto replacement_pair_iterator = make_pair_iterator<T, false>(replacement);
-        return copy_if_else(false,
-                            input_pair_iterator,
-                            input_pair_iterator + size,
-                            replacement_pair_iterator,
-                            predicate,
-                            input.type(),
-                            stream,
-                            mr);
-      }
-    }
+    auto input_iterator =
+      make_optional_iterator<T>(*input_device_view, contains_nulls::DYNAMIC{}, input.has_nulls());
+    auto replacement_iterator =
+      make_optional_iterator<T>(replacement, contains_nulls::DYNAMIC{}, replacement_nullable);
+    return copy_if_else(input.has_nulls() or replacement_nullable,
+                        input_iterator,
+                        input_iterator + size,
+                        replacement_iterator,
+                        predicate,
+                        input.type(),
+                        stream,
+                        mr);
   }
 
   template <typename T, typename... Args>
@@ -234,8 +200,8 @@ void normalize_nans_and_zeros(mutable_column_view in_out, rmm::cuda_stream_view 
  *        Convert  -0.0  -> 0.0
  *
  * @throws cudf::logic_error if column does not have floating point data type.
- * @param[in] column_view representing input data
- * @param[in] device_memory_resource allocator for allocating output data
+ * @param[in] input column_view representing input data
+ * @param[in] mr device_memory_resource allocator for allocating output data
  *
  * @returns new column with the modified data
  */
@@ -261,7 +227,7 @@ std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
  *        Convert  -0.0  -> 0.0
  *
  * @throws cudf::logic_error if column does not have floating point data type.
- * @param[in, out] mutable_column_view representing input data. data is processed in-place
+ * @param[in, out] in_out mutable_column_view representing input data. data is processed in-place
  */
 void normalize_nans_and_zeros(mutable_column_view& in_out)
 {
