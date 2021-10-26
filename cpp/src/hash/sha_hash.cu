@@ -230,40 +230,32 @@ struct HasherDispatcher {
   {
   }
 
-  template <typename T,
-            typename std::enable_if_t<(!is_fixed_width<T>() || is_chrono<T>()) &&
-                                      !std::is_same_v<T, string_view>>* = nullptr>
-  void CUDA_DEVICE_CALLABLE operator()(size_type)
-  {
-    cudf_assert(false && "Unsupported type for hash function.");
-  }
-
-  template <typename T,
-            typename std::enable_if_t<is_fixed_width<T>() && !is_chrono<T>()>* = nullptr>
+  template <typename Element>
   void CUDA_DEVICE_CALLABLE operator()(size_type row_index)
   {
-    T const& key = input_col.element<T>(row_index);
-    if constexpr (is_floating_point<T>()) {
-      if (isnan(key)) {
-        T nan = std::numeric_limits<T>::quiet_NaN();
-        hasher->process_fixed_width(nan);
-      } else if (key == T{0.0}) {
-        hasher->process_fixed_width(T{0.0});
+    if constexpr (is_fixed_width<Element>() && !is_chrono<Element>()) {
+      Element const& key = input_col.element<Element>(row_index);
+      if constexpr (is_floating_point<Element>()) {
+        if (isnan(key)) {
+          Element nan = std::numeric_limits<Element>::quiet_NaN();
+          hasher->process_fixed_width(nan);
+        } else if (key == Element{0.0}) {
+          hasher->process_fixed_width(Element{0.0});
+        } else {
+          hasher->process_fixed_width(key);
+        }
       } else {
         hasher->process_fixed_width(key);
       }
+    } else if constexpr (std::is_same_v<Element, string_view>) {
+      string_view key     = input_col.element<string_view>(row_index);
+      uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
+      uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
+      hasher->process(data, len);
     } else {
-      hasher->process_fixed_width(key);
+      (void)row_index;
+      cudf_assert(false && "Unsupported type for hash function.");
     }
-  }
-
-  template <typename T, typename std::enable_if_t<std::is_same_v<T, string_view>>* = nullptr>
-  void CUDA_DEVICE_CALLABLE operator()(size_type row_index)
-  {
-    string_view key     = input_col.element<string_view>(row_index);
-    uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
-    uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
-    hasher->process(data, len);
   }
 };
 
