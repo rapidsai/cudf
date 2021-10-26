@@ -1138,10 +1138,10 @@ TEST_P(OrcWriterTestDecimal, Decimal64)
   // Using int16_t because scale causes values to overflow if they already require 32 bits
   auto const vals = random_values<int32_t>(num_rows);
   auto data       = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return numeric::decimal64{vals[i], numeric::scale_type{scale}};
+    return numeric::decimal128{vals[i], numeric::scale_type{scale}};
   });
   auto mask = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 7 == 0; });
-  column_wrapper<numeric::decimal64> col{data, data + num_rows, mask};
+  column_wrapper<numeric::decimal128> col{data, data + num_rows, mask};
   cudf::table_view tbl({static_cast<cudf::column_view>(col)});
 
   auto filepath = temp_env->get_temp_filepath("Decimal64.orc");
