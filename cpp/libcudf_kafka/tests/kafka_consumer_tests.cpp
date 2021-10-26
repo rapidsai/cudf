@@ -43,8 +43,6 @@ TEST_F(KafkaDatasourceTest, MissingGroupID)
 TEST_F(KafkaDatasourceTest, InvalidConfigValues)
 {
   // Give a made up configuration value
-  std::map<std::string, std::string> kafka_configs;
-  kafka_configs.insert({"completely_made_up_config", "wrong"});
   PyObject* kafka_configs = Py_BuildValue("{s:s}", "completely_made_up_config", "wrong");
 
   EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, "csv-topic", 0, 0, 3, 5000, "\n"),
