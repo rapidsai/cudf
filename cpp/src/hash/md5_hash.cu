@@ -17,6 +17,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/hashing.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -244,7 +245,8 @@ std::unique_ptr<column> md5_hash(table_view const& input,
   auto chars_view = chars_column->mutable_view();
   auto d_chars    = chars_view.data<char>();
 
-  rmm::device_buffer null_mask{0, stream, mr};
+  // Build an output null mask from the logical AND of all input columns' null masks.
+  rmm::device_buffer null_mask{cudf::detail::bitmask_and(input, stream)};
 
   auto const device_input = table_device_view::create(input, stream);
 
