@@ -21,7 +21,9 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/valid_if.cuh>
+#include <cudf/table/row_operators.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
 
@@ -172,7 +174,7 @@ struct reduce_functor {
                             thrust::make_counting_iterator<ResultType>(0),
                             thrust::make_discard_iterator(),
                             resultview->begin<ResultType>(),
-                            thrust::equal_to<ResultType>{},
+                            thrust::equal_to<size_type>{},
                             OpType{*valuesview});
     } else {
       auto init  = OpType::template identity<DeviceType>();
@@ -206,9 +208,82 @@ struct reduce_functor {
     return result;
   }
 
+  template <typename T>
+  std::enable_if_t<not is_natively_supported<T>() and std::is_same_v<T, struct_view> and
+                     (K == aggregation::ARGMIN or K == aggregation::ARGMAX),
+                   std::unique_ptr<column>>
+  operator()(column_view const& values,
+             size_type num_groups,
+             cudf::device_span<size_type const> group_labels,
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr)
+  {
+    using ResultType = cudf::detail::target_type_t<T, K>;
+    auto result      = make_fixed_width_column(
+      data_type{type_to_id<ResultType>()}, num_groups, mask_state::UNALLOCATED, stream, mr);
+
+    if (values.is_empty()) { return result; }
+
+    // The comparison and null orders for finding arg_min/arg_max for the min/max elements.
+    auto const comp_order      = K == aggregation::ARGMIN ? order::ASCENDING : order::DESCENDING;
+    auto const null_precedence = K == aggregation::ARGMIN ? null_order::AFTER : null_order::BEFORE;
+
+    auto const flattened_values =
+      structs::detail::flatten_nested_columns(table_view{{values}},
+                                              {comp_order},
+                                              {null_precedence},
+                                              structs::detail::column_nullability::MATCH_INCOMING);
+    auto const values_ptr = table_device_view::create(flattened_values, stream);
+
+    // Perform reduction to find arg_min/arg_max.
+    auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& comp) {
+      thrust::reduce_by_key(rmm::exec_policy(stream),
+                            group_labels.data(),
+                            group_labels.data() + group_labels.size(),
+                            inp_iter,
+                            thrust::make_discard_iterator(),
+                            out_iter,
+                            thrust::equal_to<size_type>{},
+                            comp);
+    };
+
+    auto const count_iter   = thrust::make_counting_iterator<ResultType>(0);
+    auto const result_begin = result->mutable_view().template begin<ResultType>();
+    if (!values.has_nulls()) {
+      auto const comp = row_lexicographic_comparator<false>(*values_ptr,
+                                                            *values_ptr,
+                                                            flattened_values.orders().data(),
+                                                            flattened_values.null_orders().data());
+      do_reduction(count_iter, result_begin, comp);
+    } else {
+      auto const comp = row_lexicographic_comparator<true>(*values_ptr,
+                                                           *values_ptr,
+                                                           flattened_values.orders().data(),
+                                                           flattened_values.null_orders().data());
+      do_reduction(count_iter, result_begin, comp);
+
+      // Generate bitmask for the output from the input.
+      auto const values_ptr = column_device_view::create(values, stream);
+      auto validity         = rmm::device_uvector<bool>(num_groups, stream);
+      do_reduction(cudf::detail::make_validity_iterator(*values_ptr),
+                   validity.begin(),
+                   thrust::logical_or<bool>{});
+
+      auto [null_mask, null_count] = cudf::detail::valid_if(
+        validity.begin(), validity.end(), thrust::identity<bool>{}, stream, mr);
+      result->set_null_mask(std::move(null_mask));
+      result->set_null_count(null_count);
+    }
+
+    return result;
+  }
+
   template <typename T, typename... Args>
-  std::enable_if_t<not is_natively_supported<T>(), std::unique_ptr<column>> operator()(
-    Args&&... args)
+  std::enable_if_t<not is_natively_supported<T>() and
+                     (not std::is_same_v<T, struct_view> or
+                      (K != aggregation::ARGMIN or K != aggregation::ARGMAX)),
+                   std::unique_ptr<column>>
+  operator()(Args&&... args)
   {
     CUDF_FAIL("Unsupported type-agg combination");
   }
