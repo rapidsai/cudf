@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 
+#define PY_SSIZE_T_CLEAN
+#include <Python.h>
+
 #include <gtest/gtest.h>
 #include <map>
 #include <memory>
@@ -31,8 +34,7 @@ struct KafkaDatasourceTest : public ::testing::Test {
 TEST_F(KafkaDatasourceTest, MissingGroupID)
 {
   // group.id is a required configuration.
-  std::map<std::string, std::string> kafka_configs;
-  kafka_configs.insert({"bootstrap.servers", "localhost:9092"});
+  PyObject* kafka_configs = Py_BuildValue("{s:s}", "bootstrap.servers", "localhost:9092");
 
   EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, "csv-topic", 0, 0, 3, 5000, "\n"),
                cudf::logic_error);
@@ -43,14 +45,13 @@ TEST_F(KafkaDatasourceTest, InvalidConfigValues)
   // Give a made up configuration value
   std::map<std::string, std::string> kafka_configs;
   kafka_configs.insert({"completely_made_up_config", "wrong"});
+  PyObject* kafka_configs = Py_BuildValue("{s:s}", "completely_made_up_config", "wrong");
 
   EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, "csv-topic", 0, 0, 3, 5000, "\n"),
                cudf::logic_error);
 
-  kafka_configs.clear();
-
   // Give a good config property with a bad value
-  kafka_configs.insert({"message.max.bytes", "this should be a number not text"});
+  kafka_configs = Py_BuildValue("{s:s}", "message.max.bytes", "his should be a number not text");
   EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, "csv-topic", 0, 0, 3, 5000, "\n"),
                cudf::logic_error);
 }
