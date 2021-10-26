@@ -171,12 +171,12 @@ def read_orc(
             filters=None,
             storage_options=None,
             **kwargs,
-        ).query(query_string, local_dict=local_dict)
+        )
 
         # Since the call to `read_orc` results in a partition for each relevant
         # stripe, we can simply check which partitions are empty. Then we can read
         # in only those relevant stripes.
-        filtered_partition_lens = filtered_df.map_partitions(len).compute()
+        filtered_partition_lens = filtered_df.map_partitions(lambda df: len(df.query(query_string, local_dict=local_dict))).compute()
         is_filtered_partition_empty = filtered_partition_lens == 0
 
         # Finally we repartition so that we can horizontally concatenate with
@@ -215,19 +215,15 @@ def read_orc(
     divisions = [None] * (len(dsk) + 1)
     res = dd.core.new_dd_object(dsk, name, meta, divisions)
 
-    return (
-        res
-        if not filtering_columns_first
-        else dd.concat(
-            [
-                filtered_df,
-                res.repartition(npartitions=N)
-                .reset_index(drop=True)
-                .query(query_string, local_dict=local_dict),
-            ],
-            axis=1,
-        )
-    )
+    if not filtering_columns_first:
+        return res
+    else:
+        # return filtered_df.merge(
+        #     res.repartition(npartitions=N)
+        #     .reset_index(drop=True), how="left"
+        # )
+        res.repartition(npartitions=N).reset_index(drop=True)
+        return dask_cudf.concat()
 
 
 def write_orc_partition(
