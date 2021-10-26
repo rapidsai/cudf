@@ -1063,11 +1063,11 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
         int32_t scale = (t < numvals) ? col_scale - val_scale : 0;
         if (scale >= 0) {
           scale        = min(scale, 27);
-          vals.i128[t] = v * kPow10[scale];
+          vals.i128[t] = (v * kPow5i[scale]) << scale;
         } else  // if (scale < 0)
         {
           scale        = min(-scale, 27);  // should be irrelevant
-          vals.i128[t] = v / kPow10[scale];
+          vals.i128[t] = (v / kPow5i[scale]) >> scale;
         }
       }
     }
