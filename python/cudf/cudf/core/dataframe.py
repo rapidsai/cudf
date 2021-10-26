@@ -2168,7 +2168,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
             if not idx_dtype_match:
-                # TODO: This should be an early return
                 columns = (
                     columns if columns is not None else list(df._column_names)
                 )
