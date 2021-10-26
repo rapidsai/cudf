@@ -610,8 +610,6 @@ constexpr inline bool sha_leaf_type_check(data_type dt)
   return (is_fixed_width(dt) && !is_chrono(dt)) || (dt.id() == type_id::STRING);
 }
 
-}  // namespace
-
 /**
  * @brief Call a SHA-1 or SHA-2 hash function on a table view.
  *
@@ -676,6 +674,8 @@ std::unique_ptr<column> sha_hash(table_view const& input,
   return make_strings_column(
     input.num_rows(), std::move(offsets_column), std::move(chars_column), 0, std::move(null_mask));
 }
+
+}  // namespace
 
 std::unique_ptr<column> sha1_hash(table_view const& input,
                                   rmm::cuda_stream_view stream,
