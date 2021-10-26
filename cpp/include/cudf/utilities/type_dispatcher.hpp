@@ -412,8 +412,8 @@ template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl,
           typename Functor,
           typename... Ts>
 __host__ __device__ __forceinline__ constexpr decltype(auto) type_dispatcher(cudf::data_type dtype,
-                                                                   Functor f,
-                                                                   Ts&&... args)
+                                                                             Functor f,
+                                                                             Ts&&... args)
 {
   switch (dtype.id()) {
     case type_id::BOOL8:
