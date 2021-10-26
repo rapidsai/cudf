@@ -110,15 +110,14 @@ struct scan_dispatcher {
   template <typename T>
   static constexpr bool is_min_max_supported()
   {
-    return (std::is_same_v<Op, DeviceMin> || std::is_same_v<Op, DeviceMax>)&&(
-      cudf::is_relationally_comparable<T, T>()  // && !std::is_arithmetic_v<T>
-    );
+    return cudf::is_relationally_comparable<T, T>() &&
+           (std::is_same_v<Op, DeviceMin> || std::is_same_v<Op, DeviceMax>);
   }
 
   template <typename T>
   static constexpr bool is_supported()
   {
-    return std::is_arithmetic_v<T> || is_min_max_supported<T>();  // is_string_supported<T>();
+    return std::is_arithmetic_v<T> || is_min_max_supported<T>();
   }
 
   // for arithmetic types
