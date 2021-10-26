@@ -124,7 +124,7 @@ struct null_replaced_value_accessor : value_accessor<T> {
 template <aggregation::Kind K>
 struct reduce_functor {
   template <typename T>
-  static constexpr bool is_supported()
+  static constexpr bool is_natively_supported()
   {
     switch (K) {
       case aggregation::SUM:
@@ -140,7 +140,7 @@ struct reduce_functor {
   }
 
   template <typename T>
-  std::enable_if_t<is_supported<T>(), std::unique_ptr<column>> operator()(
+  std::enable_if_t<is_natively_supported<T>(), std::unique_ptr<column>> operator()(
     column_view const& values,
     size_type num_groups,
     cudf::device_span<size_type const> group_labels,
@@ -207,7 +207,8 @@ struct reduce_functor {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<not is_supported<T>(), std::unique_ptr<column>> operator()(Args&&... args)
+  std::enable_if_t<not is_natively_supported<T>(), std::unique_ptr<column>> operator()(
+    Args&&... args)
   {
     CUDF_FAIL("Unsupported type-agg combination");
   }
