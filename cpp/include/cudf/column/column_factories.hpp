@@ -46,7 +46,7 @@ std::unique_ptr<column> make_empty_column(data_type type);
  * An empty column contains zero elements and no validity mask.
  *
  * @param[in] id The column type id
- * @return Empty column with desired type
+ * @return Empty column with specified type
  */
 std::unique_ptr<column> make_empty_column(type_id id);
 
