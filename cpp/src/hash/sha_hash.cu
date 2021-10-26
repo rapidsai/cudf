@@ -223,7 +223,12 @@ struct HashBase : public crtp<Hasher> {
 template <typename Hasher>
 struct HasherDispatcher {
   Hasher* hasher;
-  column_device_view col;
+  column_device_view input_col;
+
+  CUDA_DEVICE_CALLABLE HasherDispatcher(Hasher* hasher, column_device_view const& input_col)
+    : hasher{hasher}, input_col{input_col}
+  {
+  }
 
   template <typename T,
             typename std::enable_if_t<(!is_fixed_width<T>() || is_chrono<T>()) &&
@@ -237,7 +242,7 @@ struct HasherDispatcher {
             typename std::enable_if_t<is_fixed_width<T>() && !is_chrono<T>()>* = nullptr>
   void CUDA_DEVICE_CALLABLE operator()(size_type row_index)
   {
-    T const& key = col.element<T>(row_index);
+    T const& key = input_col.element<T>(row_index);
     if constexpr (is_floating_point<T>()) {
       if (isnan(key)) {
         T nan = std::numeric_limits<T>::quiet_NaN();
@@ -255,7 +260,7 @@ struct HasherDispatcher {
   template <typename T, typename std::enable_if_t<std::is_same_v<T, string_view>>* = nullptr>
   void CUDA_DEVICE_CALLABLE operator()(size_type row_index)
   {
-    string_view key     = col.element<string_view>(row_index);
+    string_view key     = input_col.element<string_view>(row_index);
     uint8_t const* data = reinterpret_cast<uint8_t const*>(key.data());
     uint32_t const len  = static_cast<uint32_t>(key.size_bytes());
     hasher->process(data, len);
@@ -666,13 +671,11 @@ std::unique_ptr<column> sha_hash(table_view const& input,
                    thrust::make_counting_iterator(0),
                    thrust::make_counting_iterator(input.num_rows()),
                    [d_chars, device_input = *device_input] __device__(auto row_index) {
-                     auto const result_location = d_chars + (row_index * Hasher::digest_size);
-                     Hasher hasher              = Hasher{result_location};
+                     Hasher hasher(d_chars + (row_index * Hasher::digest_size));
                      for (auto const& col : device_input) {
                        if (col.is_valid(row_index)) {
-                         HasherDispatcher<Hasher> hasher_dispatcher{&hasher, col};
                          cudf::type_dispatcher<dispatch_storage_type>(
-                           col.type(), hasher_dispatcher, row_index);
+                           col.type(), HasherDispatcher(&hasher, col), row_index);
                        }
                      }
                      hasher.finalize();
