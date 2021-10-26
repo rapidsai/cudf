@@ -68,6 +68,9 @@ std::unique_ptr<column> make_empty_column(data_type type)
   return std::make_unique<column>(type, 0, rmm::device_buffer{});
 }
 
+// Empty column of specified type id
+std::unique_ptr<column> make_empty_column(type_id id) { return make_empty_column(data_type{id}); }
+
 // Allocate storage for a specified number of numeric elements
 std::unique_ptr<column> make_numeric_column(data_type type,
                                             size_type size,
