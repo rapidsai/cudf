@@ -67,13 +67,21 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::disp
 {
   using namespace cudf::structs::detail;
 
+  // Currently, structs are not supported in hash-based aggregates.
+  // Therefore, if any request contains structs then we must fallback to sort-based aggregates.
+  // TODO: Support structs in hash-based aggregates.
+  auto const has_struct =
+    std::all_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
+      return r.values.type().id() == type_id::STRUCT;
+    });
+
   // If sort groupby has been called once on this groupby object, then
   // always use sort groupby from now on. Because once keys are sorted,
   // all the aggs that can be done by hash groupby are efficiently done by
   // sort groupby as well.
   // Only use hash groupby if the keys aren't sorted and all requests can be
   // satisfied with a hash implementation
-  if (_keys_are_sorted == sorted::NO and not _helper and
+  if (_keys_are_sorted == sorted::NO and not _helper and (not has_struct) and
       detail::hash::can_use_hash_groupby(_keys, requests)) {
     // Optionally flatten nested key columns.
     auto flattened             = flatten_nested_columns(_keys, {}, {}, column_nullability::FORCE);
