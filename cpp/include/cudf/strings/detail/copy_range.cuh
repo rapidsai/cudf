@@ -93,8 +93,8 @@ namespace detail {
  * @param target_begin The starting index of the target range (inclusive)
  * @param target_end The index of the last element in the target range
  * (exclusive)
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return std::unique_ptr<column> The result target column
  */
 template <typename SourceValueIterator, typename SourceValidityIterator>
@@ -210,9 +210,7 @@ std::unique_ptr<column> copy_range(
                                std::move(p_offsets_column),
                                std::move(p_chars_column),
                                null_count,
-                               std::move(null_mask),
-                               stream,
-                               mr);
+                               std::move(null_mask));
   }
 }
 

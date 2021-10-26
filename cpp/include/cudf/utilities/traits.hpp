@@ -142,6 +142,31 @@ constexpr inline bool is_equality_comparable()
   return detail::is_equality_comparable_impl<L, R>::value;
 }
 
+namespace detail {
+/**
+ * @brief Helper functor to check if a specified type `T` supports equality comparisons.
+ */
+struct unary_equality_comparable_functor {
+  template <typename T>
+  bool operator()() const
+  {
+    return cudf::is_equality_comparable<T, T>();
+  }
+};
+}  // namespace detail
+
+/**
+ * @brief Checks whether `data_type` `type` supports equality comparisons.
+ *
+ * @param type Data_type for comparison.
+ * @return true If `type` supports equality comparisons.
+ * @return false If `type` does not support equality comparisons.
+ */
+inline bool is_equality_comparable(data_type type)
+{
+  return cudf::type_dispatcher(type, detail::unary_equality_comparable_functor{});
+}
+
 /**
  * @brief Indicates whether the type `T` is a numeric type.
  *

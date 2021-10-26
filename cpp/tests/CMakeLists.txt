@@ -33,6 +33,7 @@ endfunction()
 # - column tests ----------------------------------------------------------------------------------
 ConfigureTest(COLUMN_TEST
     column/bit_cast_test.cpp
+    column/column_view_shallow_test.cpp
     column/column_test.cu
     column/column_device_view_test.cu
     column/compound_test.cu)
@@ -58,10 +59,13 @@ ConfigureTest(GROUPBY_TEST
     groupby/argmax_tests.cpp
     groupby/collect_list_tests.cpp
     groupby/collect_set_tests.cpp
+    groupby/correlation_tests.cpp
     groupby/count_scan_tests.cpp
     groupby/count_tests.cpp
+    groupby/covariance_tests.cpp
     groupby/groups_tests.cpp
     groupby/keys_tests.cpp
+    groupby/lists_tests.cpp
     groupby/m2_tests.cpp
     groupby/min_tests.cpp
     groupby/max_scan_tests.cpp
@@ -80,9 +84,11 @@ ConfigureTest(GROUPBY_TEST
     groupby/replace_nulls_tests.cpp
     groupby/shift_tests.cpp
     groupby/std_tests.cpp
+    groupby/structs_tests.cpp
     groupby/sum_of_squares_tests.cpp
     groupby/sum_scan_tests.cpp
     groupby/sum_tests.cpp
+    groupby/tdigest_tests.cu
     groupby/var_tests.cpp)
 
 ###################################################################################################
@@ -121,6 +127,7 @@ ConfigureTest(HASH_MAP_TEST
 ###################################################################################################
 # - quantiles tests -------------------------------------------------------------------------------
 ConfigureTest(QUANTILES_TEST
+    quantiles/percentile_approx_test.cu
     quantiles/quantile_test.cpp
     quantiles/quantiles_test.cpp)
 
@@ -177,7 +184,8 @@ ConfigureTest(TRANSFORM_TEST
     transform/nans_to_null_test.cpp
     transform/mask_to_bools_test.cpp
     transform/bools_to_mask_test.cpp
-    transform/row_bit_count_test.cu)
+    transform/row_bit_count_test.cu
+    transform/one_hot_encode_tests.cpp)
 
 ###################################################################################################
 # - interop tests -------------------------------------------------------------------------
@@ -195,6 +203,7 @@ ConfigureTest(ORC_TEST io/orc_test.cpp)
 ConfigureTest(PARQUET_TEST io/parquet_test.cpp)
 ConfigureTest(JSON_TEST io/json_test.cpp)
 ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
+ConfigureTest(MULTIBYTE_SPLIT_TEST io/text/multibyte_split_test.cpp)
 if(CUDF_ENABLE_ARROW_S3)
   target_compile_definitions(ARROW_IO_SOURCE_TEST PRIVATE "S3_ENABLED")
 endif()
@@ -212,7 +221,7 @@ ConfigureTest(COPYING_TEST
     copying/concatenate_tests.cu
     copying/copy_if_else_nested_tests.cpp
     copying/copy_range_tests.cpp
-    copying/copy_tests.cu
+    copying/copy_tests.cpp
     copying/detail_gather_tests.cu
     copying/gather_list_tests.cpp
     copying/gather_str_tests.cpp
@@ -260,6 +269,7 @@ ConfigureTest(ITERATOR_TEST
     iterator/scalar_iterator_test.cu
     iterator/optional_iterator_test_chrono.cu
     iterator/optional_iterator_test_numeric.cu
+    iterator/indexalator_test.cu
     )
 
 ###################################################################################################
@@ -341,7 +351,7 @@ ConfigureTest(DISPATCHER_TEST types/type_dispatcher_test.cu)
 ###################################################################################################
 # - strings test ----------------------------------------------------------------------------------
 ConfigureTest(STRINGS_TEST
-    strings/array_tests.cu
+    strings/array_tests.cpp
     strings/attrs_tests.cpp
     strings/booleans_tests.cpp
     strings/case_tests.cpp
@@ -361,7 +371,6 @@ ConfigureTest(STRINGS_TEST
     strings/find_multiple_tests.cpp
     strings/fixed_point_tests.cpp
     strings/floats_tests.cpp
-    strings/hash_string.cu
     strings/integers_tests.cpp
     strings/ipv4_tests.cpp
     strings/json_tests.cpp
@@ -377,7 +386,7 @@ ConfigureTest(STRINGS_TEST
 
 ###################################################################################################
 # - structs test ----------------------------------------------------------------------------------
-ConfigureTest(STRUCTS_TEST 
+ConfigureTest(STRUCTS_TEST
     structs/structs_column_tests.cpp
     structs/utilities_tests.cpp
     )

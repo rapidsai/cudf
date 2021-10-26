@@ -39,8 +39,8 @@ namespace detail {
  * @param lhs First column.
  * @param rhs Second column.
  * @param row_order Indexes for each column.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 template <typename index_type, typename row_order_iterator>
@@ -103,9 +103,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
                              std::move(offsets_column),
                              std::move(chars_column),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail

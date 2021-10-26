@@ -21,47 +21,30 @@ def make_params():
     np.random.seed(0)
 
     hows = _JOIN_TYPES
-    methods = "hash,sort".split(",")
 
     # Test specific cases (1)
     aa = [0, 0, 4, 5, 5]
     bb = [0, 0, 2, 3, 5]
     for how in hows:
-        if how in ["left", "inner", "right", "leftanti", "leftsemi"]:
-            for method in methods:
-                yield (aa, bb, how, method)
-        else:
-            yield (aa, bb, how, "sort")
+        yield (aa, bb, how)
 
     # Test specific cases (2)
     aa = [0, 0, 1, 2, 3]
     bb = [0, 1, 2, 2, 3]
     for how in hows:
-        if how in ["left", "inner", "right", "leftanti", "leftsemi"]:
-            for method in methods:
-                yield (aa, bb, how, method)
-        else:
-            yield (aa, bb, how, "sort")
+        yield (aa, bb, how)
 
     # Test large random integer inputs
     aa = np.random.randint(0, 50, 100)
     bb = np.random.randint(0, 50, 100)
     for how in hows:
-        if how in ["left", "inner", "right", "leftanti", "leftsemi"]:
-            for method in methods:
-                yield (aa, bb, how, method)
-        else:
-            yield (aa, bb, how, "sort")
+        yield (aa, bb, how)
 
     # Test floating point inputs
     aa = np.random.random(50)
     bb = np.random.random(50)
     for how in hows:
-        if how in ["left", "inner", "right", "leftanti", "leftsemi"]:
-            for method in methods:
-                yield (aa, bb, how, method)
-        else:
-            yield (aa, bb, how, "sort")
+        yield (aa, bb, how)
 
 
 def pd_odd_joins(left, right, join_type):
@@ -102,8 +85,8 @@ def assert_join_results_equal(expect, got, how, **kwargs):
         raise ValueError(f"Not a join result: {type(expect).__name__}")
 
 
-@pytest.mark.parametrize("aa,bb,how,method", make_params())
-def test_dataframe_join_how(aa, bb, how, method):
+@pytest.mark.parametrize("aa,bb,how", make_params())
+def test_dataframe_join_how(aa, bb, how):
     df = cudf.DataFrame()
     df["a"] = aa
     df["b"] = bb
@@ -122,7 +105,7 @@ def test_dataframe_join_how(aa, bb, how, method):
     def work_gdf(df):
         df1 = df.set_index("a")
         df2 = df.set_index("b")
-        joined = df1.join(df2, how=how, sort=True, method=method)
+        joined = df1.join(df2, how=how, sort=True)
         return joined
 
     expect = work_pandas(df.to_pandas(), how)
@@ -136,8 +119,7 @@ def test_dataframe_join_how(aa, bb, how, method):
     assert got.index.name is None
 
     assert list(expect.columns) == list(got.columns)
-    # test disabled until libgdf sort join gets updated with new api
-    if method == "hash":
+    if how in {"left", "inner", "right", "leftanti", "leftsemi"}:
         assert_eq(sorted(expect.index.values), sorted(got.index.values))
         if how != "outer":
             # Newly introduced ambiguous ValueError thrown when
@@ -161,9 +143,9 @@ def test_dataframe_join_how(aa, bb, how, method):
 def _check_series(expect, got):
     magic = 0xDEADBEAF
 
-    direct_equal = np.all(expect.values == got.to_array())
+    direct_equal = np.all(expect.values == got.to_numpy())
     nanfilled_equal = np.all(
-        expect.fillna(magic).values == got.fillna(magic).to_array()
+        expect.fillna(magic).values == got.fillna(magic).to_numpy()
     )
     msg = "direct_equal={}, nanfilled_equal={}".format(
         direct_equal, nanfilled_equal
@@ -221,8 +203,8 @@ def test_dataframe_join_cats():
     assert list(got.columns) == ["b", "c"]
     assert len(got) > 0
     assert set(got.index.to_pandas()) & set("abc")
-    assert set(got["b"].to_array()) & set(bb)
-    assert set(got["c"].to_array()) & set(cc)
+    assert set(got["b"].to_numpy()) & set(bb)
+    assert set(got["c"].to_numpy()) & set(cc)
 
 
 def test_dataframe_join_combine_cats():
@@ -2112,3 +2094,23 @@ def test_string_join_values_nulls():
     got = got.sort_values(by=["a", "b", "c"]).reset_index(drop=True)
 
     assert_join_results_equal(expect, got, how="left")
+
+
+def test_join_on_index_with_duplicate_names():
+    # although index levels with duplicate names are poorly supported
+    # overall, we *should* be able to join on them:
+    lhs = pd.DataFrame({"a": [1, 2, 3]})
+    rhs = pd.DataFrame({"b": [1, 2, 3]})
+    lhs.index = pd.MultiIndex.from_tuples(
+        [(1, 1), (1, 2), (2, 1)], names=["x", "x"]
+    )
+    rhs.index = pd.MultiIndex.from_tuples(
+        [(1, 1), (1, 3), (2, 1)], names=["x", "x"]
+    )
+    expect = lhs.join(rhs, how="inner")
+
+    lhs = cudf.from_pandas(lhs)
+    rhs = cudf.from_pandas(rhs)
+    got = lhs.join(rhs, how="inner")
+
+    assert_join_results_equal(expect, got, how="inner")

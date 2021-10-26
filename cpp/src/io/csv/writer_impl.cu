@@ -25,7 +25,7 @@
 #include "csv_gpu.h"
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/detail/csv.hpp>
@@ -149,9 +149,9 @@ struct column_to_strings_fn {
   // instead of column-wise; might be faster
   //
   // Note: Cannot pass `stream` to detail::<fname> version of <fname> calls below, because they are
-  // not exposed in header (see, for example, detail::concatenate(tbl_view, separator, na_rep, mr,
-  // stream) is declared and defined in combine.cu); Possible solution: declare `extern`, or just
-  // declare a prototype inside `namespace cudf::strings::detail`;
+  // not exposed in header (see, for example, detail::concatenate(tbl_view, separator, na_rep,
+  // stream, mr) is declared and defined in combine.cu); Possible solution: declare `extern`, or
+  // just declare a prototype inside `namespace cudf::strings::detail`;
 
   // bools:
   //
@@ -180,9 +180,7 @@ struct column_to_strings_fn {
                                std::move(children.first),
                                std::move(children.second),
                                column_v.null_count(),
-                               cudf::detail::copy_bitmask(column_v, stream_, mr_),
-                               stream_,
-                               mr_);
+                               cudf::detail::copy_bitmask(column_v, stream_, mr_));
   }
 
   // ints:
@@ -245,7 +243,12 @@ struct column_to_strings_fn {
       format = "\"" + format + "\"";
     }
 
-    return cudf::strings::detail::from_timestamps(column, format, stream_, mr_);
+    return cudf::strings::detail::from_timestamps(
+      column,
+      format,
+      strings_column_view(column_view{data_type{type_id::STRING}, 0, nullptr}),
+      stream_,
+      mr_);
   }
 
   template <typename column_type>
@@ -280,8 +283,16 @@ void write_chunked_begin(data_sink* out_sink,
                          rmm::cuda_stream_view stream,
                          rmm::mr::device_memory_resource* mr_)
 {
-  if ((metadata != nullptr) && (options_.is_enabled_include_header())) {
-    auto const& column_names = metadata->column_names;
+  if (options_.is_enabled_include_header()) {
+    // need to generate column names if metadata is not provided
+    std::vector<std::string> generated_col_names;
+    if (metadata == nullptr) {
+      generated_col_names.resize(table.num_columns());
+      thrust::tabulate(generated_col_names.begin(), generated_col_names.end(), [](auto idx) {
+        return std::to_string(idx);
+      });
+    }
+    auto const& column_names = (metadata == nullptr) ? generated_col_names : metadata->column_names;
     CUDF_EXPECTS(column_names.size() == static_cast<size_t>(table.num_columns()),
                  "Mismatch between number of column headers and table columns.");
 
@@ -424,7 +435,7 @@ void write_csv(data_sink* out_sink,
       });
 
       // split table_view into chunks:
-      vector_views = cudf::split(table, splits);
+      vector_views = cudf::detail::split(table, splits, stream);
     }
 
     // convert each chunk to CSV:

@@ -34,6 +34,10 @@ namespace io {
  * @file
  */
 
+constexpr size_t default_stripe_size_bytes   = 64 * 1024 * 1024;
+constexpr size_type default_stripe_size_rows = 1000000;
+constexpr size_type default_row_index_stride = 10000;
+
 /**
  * @brief Builds settings to use for `read_orc()`.
  */
@@ -192,7 +196,7 @@ class orc_reader_options {
   /**
    * @brief Enable/Disable use of numpy-compatible dtypes
    *
-   * @param rows Boolean value to enable/disable.
+   * @param use Boolean value to enable/disable.
    */
   void enable_use_np_dtypes(bool use) { _use_np_dtypes = use; }
 
@@ -295,7 +299,7 @@ class orc_reader_options_builder {
   /**
    * @brief Enable/Disable use of numpy-compatible dtypes.
    *
-   * @param rows Boolean value to enable/disable.
+   * @param use Boolean value to enable/disable.
    * @return this for chaining.
    */
   orc_reader_options_builder& use_np_dtypes(bool use)
@@ -386,10 +390,16 @@ class orc_writer_options {
   compression_type _compression = compression_type::AUTO;
   // Enable writing column statistics
   bool _enable_statistics = true;
+  // Maximum size of each stripe (unless smaller than a single row group)
+  size_t _stripe_size_bytes = default_stripe_size_bytes;
+  // Maximum number of rows in stripe (unless smaller than a single row group)
+  size_type _stripe_size_rows = default_stripe_size_rows;
+  // Row index stride (maximum number of rows in each row group)
+  size_type _row_index_stride = default_row_index_stride;
   // Set of columns to output
   table_view _table;
   // Optional associated metadata
-  const table_metadata* _metadata = nullptr;
+  const table_input_metadata* _metadata = nullptr;
 
   friend orc_writer_options_builder;
 
@@ -438,6 +448,25 @@ class orc_writer_options {
   bool enable_statistics() const { return _enable_statistics; }
 
   /**
+   * @brief Returns maximum stripe size, in bytes.
+   */
+  auto stripe_size_bytes() const { return _stripe_size_bytes; }
+
+  /**
+   * @brief Returns maximum stripe size, in rows.
+   */
+  auto stripe_size_rows() const { return _stripe_size_rows; }
+
+  /**
+   * @brief Returns the row index stride.
+   */
+  auto row_index_stride() const
+  {
+    auto const unaligned_stride = std::min(_row_index_stride, stripe_size_rows());
+    return unaligned_stride - unaligned_stride % 8;
+  }
+
+  /**
    * @brief Returns table to be written to output.
    */
   table_view get_table() const { return _table; }
@@ -445,7 +474,7 @@ class orc_writer_options {
   /**
    * @brief Returns associated metadata.
    */
-  table_metadata const* get_metadata() const { return _metadata; }
+  table_input_metadata const* get_metadata() const { return _metadata; }
 
   // Setters
 
@@ -464,6 +493,38 @@ class orc_writer_options {
   void enable_statistics(bool val) { _enable_statistics = val; }
 
   /**
+   * @brief Sets the maximum stripe size, in bytes.
+   */
+  void set_stripe_size_bytes(size_t size_bytes)
+  {
+    CUDF_EXPECTS(size_bytes >= 64 << 10, "64KB is the minimum stripe size");
+    _stripe_size_bytes = size_bytes;
+  }
+
+  /**
+   * @brief Sets the maximum stripe size, in rows.
+   *
+   * If the stripe size is smaller that the row group size, row group size will be reduced to math
+   * the stripe size.
+   */
+  void set_stripe_size_rows(size_type size_rows)
+  {
+    CUDF_EXPECTS(size_rows >= 512, "Maximum stripe size cannot be smaller than 512");
+    _stripe_size_rows = size_rows;
+  }
+
+  /**
+   * @brief Sets the row index stride.
+   *
+   * Rounded down to a multiple of 8.
+   */
+  void set_row_index_stride(size_type stride)
+  {
+    CUDF_EXPECTS(stride >= 512, "Row index stride cannot be smaller than 512");
+    _row_index_stride = stride;
+  }
+
+  /**
    * @brief Sets table to be written to output.
    *
    * @param tbl Table for the output.
@@ -475,7 +536,7 @@ class orc_writer_options {
    *
    * @param meta Associated metadata.
    */
-  void set_metadata(table_metadata* meta) { _metadata = meta; }
+  void set_metadata(table_input_metadata const* meta) { _metadata = meta; }
 };
 
 class orc_writer_options_builder {
@@ -502,7 +563,7 @@ class orc_writer_options_builder {
   /**
    * @brief Sets compression type.
    *
-   * @param compression The compression type to use.
+   * @param comp The compression type to use.
    * @return this for chaining.
    */
   orc_writer_options_builder& compression(compression_type comp)
@@ -524,6 +585,42 @@ class orc_writer_options_builder {
   }
 
   /**
+   * @brief Sets the maximum stripe size, in bytes.
+   *
+   * @param val maximum stripe size
+   * @return this for chaining.
+   */
+  orc_writer_options_builder& stripe_size_bytes(size_t val)
+  {
+    options.set_stripe_size_bytes(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the maximum number of rows in output stripes.
+   *
+   * @param val maximum number or rows
+   * @return this for chaining.
+   */
+  orc_writer_options_builder& stripe_size_rows(size_type val)
+  {
+    options.set_stripe_size_rows(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the row index stride.
+   *
+   * @param val new row index stride
+   * @return this for chaining.
+   */
+  orc_writer_options_builder& row_index_stride(size_type val)
+  {
+    options.set_row_index_stride(val);
+    return *this;
+  }
+
+  /**
    * @brief Sets table to be written to output.
    *
    * @param tbl Table for the output.
@@ -541,7 +638,7 @@ class orc_writer_options_builder {
    * @param meta Associated metadata.
    * @return this for chaining.
    */
-  orc_writer_options_builder& metadata(table_metadata* meta)
+  orc_writer_options_builder& metadata(table_input_metadata const* meta)
   {
     options._metadata = meta;
     return *this;
@@ -570,6 +667,9 @@ class orc_writer_options_builder {
  *  cudf::io::write_orc(options);
  * @endcode
  *
+ * Note: Support for writing tables with struct columns is currently experimental, the output may
+ * not be as reliable as writing for other datatypes.
+ *
  * @param options Settings for controlling reading behavior.
  * @param mr Device memory resource to use for device memory allocation.
  */
@@ -591,8 +691,14 @@ class chunked_orc_writer_options {
   compression_type _compression = compression_type::AUTO;
   // Enable writing column statistics
   bool _enable_statistics = true;
+  // Maximum size of each stripe (unless smaller than a single row group)
+  size_t _stripe_size_bytes = default_stripe_size_bytes;
+  // Maximum number of rows in stripe (unless smaller than a single row group)
+  size_type _stripe_size_rows = default_stripe_size_rows;
+  // Row index stride (maximum number of rows in each row group)
+  size_type _row_index_stride = default_row_index_stride;
   // Optional associated metadata
-  const table_metadata_with_nullability* _metadata = nullptr;
+  const table_input_metadata* _metadata = nullptr;
 
   friend chunked_orc_writer_options_builder;
 
@@ -636,9 +742,28 @@ class chunked_orc_writer_options {
   bool enable_statistics() const { return _enable_statistics; }
 
   /**
+   * @brief Returns maximum stripe size, in bytes.
+   */
+  auto stripe_size_bytes() const { return _stripe_size_bytes; }
+
+  /**
+   * @brief Returns maximum stripe size, in rows.
+   */
+  auto stripe_size_rows() const { return _stripe_size_rows; }
+
+  /**
+   * @brief Returns the row index stride.
+   */
+  auto row_index_stride() const
+  {
+    auto const unaligned_stride = std::min(_row_index_stride, stripe_size_rows());
+    return unaligned_stride - unaligned_stride % 8;
+  }
+
+  /**
    * @brief Returns associated metadata.
    */
-  table_metadata_with_nullability const* get_metadata() const { return _metadata; }
+  table_input_metadata const* get_metadata() const { return _metadata; }
 
   // Setters
 
@@ -657,11 +782,43 @@ class chunked_orc_writer_options {
   void enable_statistics(bool val) { _enable_statistics = val; }
 
   /**
+   * @brief Sets the maximum stripe size, in bytes.
+   */
+  void set_stripe_size_bytes(size_t size_bytes)
+  {
+    CUDF_EXPECTS(size_bytes >= 64 << 10, "64KB is the minimum stripe size");
+    _stripe_size_bytes = size_bytes;
+  }
+
+  /**
+   * @brief Sets the maximum stripe size, in rows.
+   *
+   * If the stripe size is smaller that the row group size, row group size will be reduced to math
+   * the stripe size.
+   */
+  void set_stripe_size_rows(size_type size_rows)
+  {
+    CUDF_EXPECTS(size_rows >= 512, "maximum stripe size cannot be smaller than 512");
+    _stripe_size_rows = size_rows;
+  }
+
+  /**
+   * @brief Sets the row index stride.
+   *
+   * Rounded down to a multiple of 8.
+   */
+  void set_row_index_stride(size_type stride)
+  {
+    CUDF_EXPECTS(stride >= 512, "Row index stride cannot be smaller than 512");
+    _row_index_stride = stride;
+  }
+
+  /**
    * @brief Sets associated metadata.
    *
    * @param meta Associated metadata.
    */
-  void metadata(table_metadata_with_nullability* meta) { _metadata = meta; }
+  void metadata(table_input_metadata const* meta) { _metadata = meta; }
 };
 
 class chunked_orc_writer_options_builder {
@@ -707,12 +864,48 @@ class chunked_orc_writer_options_builder {
   }
 
   /**
+   * @brief Sets the maximum stripe size, in bytes.
+   *
+   * @param val maximum stripe size
+   * @return this for chaining.
+   */
+  chunked_orc_writer_options_builder& stripe_size_bytes(size_t val)
+  {
+    options.set_stripe_size_bytes(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the maximum number of rows in output stripes.
+   *
+   * @param val maximum number or rows
+   * @return this for chaining.
+   */
+  chunked_orc_writer_options_builder& stripe_size_rows(size_type val)
+  {
+    options.set_stripe_size_rows(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the row index stride.
+   *
+   * @param val new row index stride
+   * @return this for chaining.
+   */
+  chunked_orc_writer_options_builder& row_index_stride(size_type val)
+  {
+    options.set_row_index_stride(val);
+    return *this;
+  }
+
+  /**
    * @brief Sets associated metadata.
    *
    * @param meta Associated metadata.
    * @return this for chaining.
    */
-  chunked_orc_writer_options_builder& metadata(table_metadata_with_nullability* meta)
+  chunked_orc_writer_options_builder& metadata(table_input_metadata const* meta)
   {
     options._metadata = meta;
     return *this;
@@ -763,10 +956,10 @@ class orc_chunked_writer {
   /**
    * @brief Constructor with chunked writer options
    *
-   * @param[in] op options used to write table
+   * @param[in] options options used to write table
    * @param[in] mr Device memory resource to use for device memory allocation
    */
-  orc_chunked_writer(chunked_orc_writer_options const& op,
+  orc_chunked_writer(chunked_orc_writer_options const& options,
                      rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**

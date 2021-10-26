@@ -102,7 +102,7 @@ std::unique_ptr<cudf::column> tokenize(cudf::strings_column_view const& strings,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
   cudf::string_view d_delimiter(delimiter.data(), delimiter.size());
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
   return tokenize_fn(strings.size(), strings_tokenizer{*strings_column, d_delimiter}, stream, mr);
@@ -114,7 +114,7 @@ std::unique_ptr<cudf::column> count_tokens(cudf::strings_column_view const& stri
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
   cudf::string_view d_delimiter(delimiter.data(), delimiter.size());
   auto strings_column = cudf::column_device_view::create(strings.parent(), stream);
   return token_count_fn(
@@ -214,13 +214,8 @@ std::unique_ptr<cudf::column> character_tokenize(cudf::strings_column_view const
   auto chars_column = std::make_unique<cudf::column>(chars_view, stream, mr);
 
   // return new strings column
-  return cudf::make_strings_column(num_characters,
-                                   std::move(offsets_column),
-                                   std::move(chars_column),
-                                   0,
-                                   rmm::device_buffer{},
-                                   stream,
-                                   mr);
+  return cudf::make_strings_column(
+    num_characters, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -182,6 +182,10 @@ std::unique_ptr<column> map_lookup(column_view const &map_column, string_scalar 
                                    rmm::mr::device_memory_resource *mr) {
   // Defensive checks.
   map_input_check(map_column, stream);
+
+  if (map_column.size() == 0) {
+    return make_empty_column(cudf::data_type{cudf::type_id::STRING});
+  }
 
   lists_column_view lcv{map_column};
   column_view structs_column = lcv.get_sliced_child(stream);

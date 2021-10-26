@@ -101,7 +101,7 @@ std::unique_ptr<cudf::column> is_valid(
  *
  * Supports only fixed-width types.
  *
- * @param column_view Input column
+ * @param input Input column
  * @param out_type Desired datatype of output column
  * @param mr Device memory resource used to allocate the returned column's device memory
  *
