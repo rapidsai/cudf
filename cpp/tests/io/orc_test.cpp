@@ -1185,13 +1185,13 @@ TEST_F(OrcWriterTest, Decimal32)
     cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath});
   auto result = cudf_io::read_orc(in_opts);
 
-  // Need a 64bit decimal column for comparison since the reader always creates DECIMAL64 columns
-  auto data64 = cudf::detail::make_counting_transform_iterator(0, [&vals](auto i) {
-    return numeric::decimal64{vals[i], numeric::scale_type{2}};
+  // Need a 128bit decimal column for comparison since the reader always creates DECIMAL128 columns
+  auto data128 = cudf::detail::make_counting_transform_iterator(0, [&vals](auto i) {
+    return numeric::decimal128{vals[i], numeric::scale_type{2}};
   });
-  column_wrapper<numeric::decimal64> col64{data64, data64 + num_rows, mask};
+  column_wrapper<numeric::decimal128> col128{data128, data128 + num_rows, mask};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(col64, result.tbl->view().column(0));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(col128, result.tbl->view().column(0));
 }
 
 TEST_F(OrcStatisticsTest, Overflow)
