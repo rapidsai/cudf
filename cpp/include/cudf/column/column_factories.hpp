@@ -41,7 +41,7 @@ namespace cudf {
 std::unique_ptr<column> make_empty_column(data_type type);
 
 /**
- * @brief Creates an empty column of the specified @p id
+ * @brief Creates an empty column of the specified type.
  *
  * An empty column contains zero elements and no validity mask.
  *
