@@ -25,6 +25,7 @@ namespace cudf::io::orc::detail {
  * @brief Describes a column hierarchy, which may exclude some input columns.
  */
 struct column_hierarchy {
+  // Maps column IDs to the IDs of their children columns
   using nesting_map = std::map<int32_t, std::vector<int32_t>>;
   // Children IDs of each column
   nesting_map children;
