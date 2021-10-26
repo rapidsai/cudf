@@ -86,7 +86,7 @@ std::unique_ptr<cudf::column> generate_ngrams(
   rmm::cuda_stream_view stream         = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr  = rmm::mr::get_current_device_resource())
 {
-  CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be valid");
+  CUDF_EXPECTS(separator.is_valid(stream), "Parameter separator must be valid");
   cudf::string_view const d_separator(separator.data(), separator.size());
   CUDF_EXPECTS(ngrams > 1, "Parameter ngrams should be an integer value of 2 or greater");
 
@@ -134,13 +134,8 @@ std::unique_ptr<cudf::column> generate_ngrams(
     ngram_generator_fn{d_strings, ngrams, d_separator}, ngrams_count, stream, mr);
 
   // make the output strings column from the offsets and chars column
-  return cudf::make_strings_column(ngrams_count,
-                                   std::move(children.first),
-                                   std::move(children.second),
-                                   0,
-                                   rmm::device_buffer{0, stream, mr},
-                                   stream,
-                                   mr);
+  return cudf::make_strings_column(
+    ngrams_count, std::move(children.first), std::move(children.second), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail
@@ -250,13 +245,8 @@ std::unique_ptr<cudf::column> generate_character_ngrams(cudf::strings_column_vie
                      strings_count,
                      generator);
 
-  return cudf::make_strings_column(total_ngrams,
-                                   std::move(offsets_column),
-                                   std::move(chars_column),
-                                   0,  // no nulls in the result
-                                   rmm::device_buffer{0, stream, mr},
-                                   stream,
-                                   mr);
+  return cudf::make_strings_column(
+    total_ngrams, std::move(offsets_column), std::move(chars_column), 0, rmm::device_buffer{});
 }
 
 }  // namespace detail

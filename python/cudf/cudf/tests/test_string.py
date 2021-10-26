@@ -82,7 +82,7 @@ def test_string_export(ps_gs):
     assert_eq(expect, got)
 
     expect = np.array(ps)
-    got = gs.to_array()
+    got = gs.to_numpy()
     assert_eq(expect, got)
 
     expect = pa.Array.from_pandas(ps)
@@ -775,13 +775,8 @@ def test_string_index_duplicate_str_cat(data, others, sep, na_rep, name):
     # in `.str.cat`
     # https://github.com/rapidsai/cudf/issues/5862
 
-    # TODO: Replace ``pd.Index(expect.to_series().sort_values())`` with
-    # ``expect.sort_values()`` once the below issue is fixed
-    # https://github.com/pandas-dev/pandas/issues/35584
     assert_eq(
-        pd.Index(expect.to_series().sort_values())
-        if not isinstance(expect, str)
-        else expect,
+        expect.sort_values() if not isinstance(expect, str) else expect,
         got.sort_values() if not isinstance(got, str) else got,
         exact=False,
     )
@@ -1389,6 +1384,26 @@ def test_string_char_case(case_op, data):
     assert_eq(gs.str.isspace(), ps.str.isspace())
 
     assert_eq(gs.str.isempty(), ps == "")
+
+
+def test_string_is_title():
+    data = [
+        "leopard",
+        "Golden Eagle",
+        "SNAKE",
+        "",
+        "!A",
+        "hello World",
+        "A B C",
+        "#",
+        "AƻB",
+        "Ⓑⓖ",
+        "Art of War",
+    ]
+    gs = cudf.Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(gs.str.istitle(), ps.str.istitle())
 
 
 @pytest.mark.parametrize(

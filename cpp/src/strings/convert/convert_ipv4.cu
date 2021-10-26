@@ -204,9 +204,7 @@ std::unique_ptr<column> integers_to_ipv4(
                              std::move(offsets_column),
                              std::move(chars_column),
                              integers.null_count(),
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 std::unique_ptr<column> is_ipv4(strings_column_view const& strings,

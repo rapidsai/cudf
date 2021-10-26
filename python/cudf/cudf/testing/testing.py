@@ -9,9 +9,8 @@ import numpy as np
 import pandas as pd
 
 import cudf
-from cudf.api.types import is_numeric_dtype
+from cudf.api.types import is_categorical_dtype, is_numeric_dtype
 from cudf.core._compat import PANDAS_GE_110
-from cudf.utils.dtypes import is_categorical_dtype
 
 
 def _check_isinstance(left, right, obj):
@@ -223,8 +222,8 @@ def assert_column_equal(
             left = left.astype(left.categories.dtype)
             right = right.astype(right.categories.dtype)
     if not columns_equal:
-        msg1 = f"{left.to_array()}"
-        msg2 = f"{right.to_array()}"
+        msg1 = f"{left.values_host}"
+        msg2 = f"{right.values_host}"
         try:
             diff = left.apply_boolean_mask(left != right).size
             diff = diff * 100.0 / left.size

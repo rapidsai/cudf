@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,6 +34,14 @@ namespace cudf {
  */
 using duration_D = cuda::std::chrono::duration<int32_t, cuda::std::chrono::days::period>;
 /**
+ * @brief Type alias representing an int32_t duration of hours.
+ */
+using duration_h = cuda::std::chrono::duration<int32_t, cuda::std::chrono::hours::period>;
+/**
+ * @brief Type alias representing an int32_t duration of minutes.
+ */
+using duration_m = cuda::std::chrono::duration<int32_t, cuda::std::chrono::minutes::period>;
+/**
  * @brief Type alias representing an int64_t duration of seconds.
  */
 using duration_s = cuda::std::chrono::duration<int64_t, cuda::std::chrono::seconds::period>;
@@ -51,6 +59,8 @@ using duration_us = cuda::std::chrono::duration<int64_t, cuda::std::chrono::micr
 using duration_ns = cuda::std::chrono::duration<int64_t, cuda::std::chrono::nanoseconds::period>;
 
 static_assert(sizeof(duration_D) == sizeof(typename duration_D::rep), "");
+static_assert(sizeof(duration_h) == sizeof(typename duration_h::rep), "");
+static_assert(sizeof(duration_m) == sizeof(typename duration_m::rep), "");
 static_assert(sizeof(duration_s) == sizeof(typename duration_s::rep), "");
 static_assert(sizeof(duration_ms) == sizeof(typename duration_ms::rep), "");
 static_assert(sizeof(duration_us) == sizeof(typename duration_us::rep), "");
@@ -77,6 +87,8 @@ namespace std {
   }
 
 DURATION_LIMITS(cudf::duration_D);
+DURATION_LIMITS(cudf::duration_h);
+DURATION_LIMITS(cudf::duration_m);
 DURATION_LIMITS(cudf::duration_s);
 DURATION_LIMITS(cudf::duration_ms);
 DURATION_LIMITS(cudf::duration_us);

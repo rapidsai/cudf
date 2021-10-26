@@ -29,7 +29,6 @@ def merge(
     right_index,
     how,
     sort,
-    method,
     indicator,
     suffixes,
 ):
@@ -47,7 +46,6 @@ def merge(
         right_index=right_index,
         how=how,
         sort=sort,
-        method=method,
         indicator=indicator,
         suffixes=suffixes,
     )
@@ -87,7 +85,6 @@ class Merge(object):
         right_index,
         how,
         sort,
-        method,
         indicator,
         suffixes,
     ):
@@ -208,7 +205,7 @@ class Merge(object):
                 left_keys.extend(
                     [
                         _Indexer(name=on, index=True)
-                        for on in self.lhs.index.names
+                        for on in self.lhs.index._data.names
                     ]
                 )
             if self.left_on:
@@ -223,7 +220,7 @@ class Merge(object):
                 right_keys.extend(
                     [
                         _Indexer(name=on, index=True)
-                        for on in self.rhs.index.names
+                        for on in self.rhs.index._data.names
                     ]
                 )
             if self.right_on:

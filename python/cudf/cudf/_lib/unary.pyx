@@ -2,7 +2,7 @@
 
 from enum import IntEnum
 
-from cudf.utils.dtypes import is_decimal_dtype
+from cudf.api.types import is_decimal_dtype
 
 from libcpp cimport bool
 from libcpp.memory cimport unique_ptr
@@ -14,11 +14,14 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view, mutable_column_view
 
-from cudf._lib.types import np_to_cudf_types
+from cudf._lib.types import SUPPORTED_NUMPY_TO_LIBCUDF_TYPES
 
 from cudf._lib.cpp.types cimport data_type, size_type, type_id
 
-from cudf._lib.column import cudf_to_np_types, np_to_cudf_types
+from cudf._lib.column import (
+    LIBCUDF_TO_SUPPORTED_NUMPY_TYPES,
+    SUPPORTED_NUMPY_TO_LIBCUDF_TYPES,
+)
 
 cimport cudf._lib.cpp.types as libcudf_types
 cimport cudf._lib.cpp.unary as libcudf_unary

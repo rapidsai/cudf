@@ -511,7 +511,6 @@ TYPED_TEST(TypedRankScanTest, mixedStructs)
     *struct_col, expected_rank_vals, make_rank_aggregation(), null_policy::INCLUDE);
 }
 
-/* Nested struct support dependent on https://github.com/rapidsai/cudf/issues/8683
 TYPED_TEST(TypedRankScanTest, nestedStructs)
 {
   auto const v = [] {
@@ -519,10 +518,12 @@ TYPED_TEST(TypedRankScanTest, nestedStructs)
       return make_vector<TypeParam>({-1, -1, -4, -4, -4, 5, 7, 7, 7, 9, 9, 9});
     return make_vector<TypeParam>({0, 0, 4, 4, 4, 5, 7, 7, 7, 9, 9, 9});
   }();
-  auto const b  = thrust::host_vector<bool>(std::vector<bool>{1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1,
-  1}); auto col1     = this->make_column(v, b); auto col2     = this->make_column(v, b); auto
-  col3     = this->make_column(v, b); auto col4     = this->make_column(v, b); auto strings1 =
-  strings_column_wrapper{
+  auto const b  = thrust::host_vector<bool>(std::vector<bool>{1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1});
+  auto col1     = this->make_column(v, b);
+  auto col2     = this->make_column(v, b);
+  auto col3     = this->make_column(v, b);
+  auto col4     = this->make_column(v, b);
+  auto strings1 = strings_column_wrapper{
     {"0a", "0a", "2a", "2a", "3b", "5", "6c", "6c", "6c", "9", "9", "10d"}, null_at(8)};
   auto strings2 = strings_column_wrapper{
     {"0a", "0a", "2a", "2a", "3b", "5", "6c", "6c", "6c", "9", "9", "10d"}, null_at(8)};
@@ -541,20 +542,62 @@ TYPED_TEST(TypedRankScanTest, nestedStructs)
   flat_columns.push_back(std::move(col4));
   auto flat_col = structs_column_wrapper{std::move(flat_columns)};
 
-  auto dense_out = scan(
-    nested_col, make_dense_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
-  auto dense_expected = scan(
-    flat_col, make_dense_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
-  auto rank_out = scan(
-    nested_col, make_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+  auto dense_out =
+    scan(nested_col, make_dense_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+  auto dense_expected =
+    scan(flat_col, make_dense_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+  auto rank_out =
+    scan(nested_col, make_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
   auto rank_expected =
-    scan(flat_col, make_rank_aggregation(), scan_type::INCLUSIVE,
-    null_policy::INCLUDE);
+    scan(flat_col, make_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(dense_out->view(), dense_expected->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(rank_out->view(), rank_expected->view());
 }
-*/
+
+TYPED_TEST(TypedRankScanTest, structsWithNullPushdown)
+{
+  auto const v = [] {
+    if (std::is_signed<TypeParam>::value)
+      return make_vector<TypeParam>({-1, -1, -4, -4, -4, 5, 7, 7, 7, 9, 9, 9});
+    return make_vector<TypeParam>({0, 0, 4, 4, 4, 5, 7, 7, 7, 9, 9, 9});
+  }();
+  auto const b = thrust::host_vector<bool>(std::vector<bool>{1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1});
+  auto col     = this->make_column(v, b);
+  auto strings = strings_column_wrapper{
+    {"0a", "0a", "2a", "2a", "3b", "5", "6c", "6c", "6c", "9", "9", "10d"}, null_at(8)};
+  std::vector<std::unique_ptr<column>> struct_columns;
+  struct_columns.push_back(std::move(col));
+  struct_columns.push_back(strings.release());
+
+  auto struct_col =
+    cudf::make_structs_column(12, std::move(struct_columns), 0, rmm::device_buffer{});
+
+  struct_col->set_null_mask(create_null_mask(12, cudf::mask_state::ALL_NULL));
+  auto expected_null_result =
+    fixed_width_column_wrapper<size_type>{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+  auto dense_null_out =
+    scan(*struct_col, make_dense_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+  auto rank_null_out =
+    scan(*struct_col, make_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(dense_null_out->view(), expected_null_result);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(rank_null_out->view(), expected_null_result);
+
+  auto const struct_nulls =
+    thrust::host_vector<bool>(std::vector<bool>{1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+  struct_col->set_null_mask(
+    cudf::test::detail::make_null_mask(struct_nulls.begin(), struct_nulls.end()));
+  auto expected_dense_vals =
+    fixed_width_column_wrapper<size_type>{1, 2, 2, 3, 4, 5, 6, 6, 7, 8, 8, 9};
+  auto expected_rank_vals =
+    fixed_width_column_wrapper<size_type>{1, 2, 2, 4, 5, 6, 7, 7, 9, 10, 10, 12};
+  auto dense_out =
+    scan(*struct_col, make_dense_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+  auto rank_out =
+    scan(*struct_col, make_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(dense_out->view(), expected_dense_vals);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(rank_out->view(), expected_rank_vals);
+}
 
 /* List support dependent on https://github.com/rapidsai/cudf/issues/8683
 template <typename T>
@@ -641,7 +684,7 @@ TEST(RankScanTest, ExclusiveScan)
 
   CUDF_EXPECT_THROW_MESSAGE(
     scan(vals, make_dense_rank_aggregation(), scan_type::EXCLUSIVE, null_policy::INCLUDE),
-    "Unsupported rank aggregation operator for exclusive scan");
+    "Unsupported dense rank aggregation operator for exclusive scan");
   CUDF_EXPECT_THROW_MESSAGE(
     scan(vals, make_rank_aggregation(), scan_type::EXCLUSIVE, null_policy::INCLUDE),
     "Unsupported rank aggregation operator for exclusive scan");

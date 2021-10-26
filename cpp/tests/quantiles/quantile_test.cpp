@@ -424,7 +424,8 @@ template <typename T>
 struct QuantileUnsupportedTypesTest : public BaseFixture {
 };
 
-using UnsupportedTestTypes = RemoveIf<ContainedIn<TestTypes>, AllTypes>;
+// TODO add tests for FixedPointTypes
+using UnsupportedTestTypes = RemoveIf<ContainedIn<Concat<TestTypes, FixedPointTypes>>, AllTypes>;
 TYPED_TEST_CASE(QuantileUnsupportedTypesTest, UnsupportedTestTypes);
 
 TYPED_TEST(QuantileUnsupportedTypesTest, TestZeroElements)

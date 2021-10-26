@@ -131,7 +131,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
   if (strings_count == 0)  // empty begets empty
     return make_empty_column(data_type{type_id::STRING});
 
-  CUDF_EXPECTS(separator.is_valid(), "Parameter separator must be a valid string_scalar");
+  CUDF_EXPECTS(separator.is_valid(stream), "Parameter separator must be a valid string_scalar");
   string_view d_separator(separator.data(), separator.size());
   auto d_narep = get_scalar_device_view(const_cast<string_scalar&>(narep));
 
@@ -156,9 +156,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                              std::move(children.first),
                              std::move(children.second),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 namespace {
@@ -254,9 +252,7 @@ std::unique_ptr<column> concatenate(table_view const& strings_columns,
                              std::move(children.first),
                              std::move(children.second),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail
