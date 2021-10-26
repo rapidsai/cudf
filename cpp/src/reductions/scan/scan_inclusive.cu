@@ -110,7 +110,7 @@ struct scan_dispatcher {
   template <typename T>
   static constexpr bool is_min_max_supported()
   {
-    return cudf::is_relationally_comparable<T, T>() &&
+    return cudf::is_relationally_comparable<T, T>() && !cudf::is_dictionary<T>() &&
            (std::is_same_v<Op, DeviceMin> || std::is_same_v<Op, DeviceMax>);
   }
 
@@ -120,12 +120,13 @@ struct scan_dispatcher {
     return std::is_arithmetic_v<T> || is_min_max_supported<T>();
   }
 
-  // for arithmetic types
-  template <typename T, std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
-  auto inclusive_scan(column_view const& input_view,
-                      null_policy,
-                      rmm::cuda_stream_view stream,
-                      rmm::mr::device_memory_resource* mr)
+  template <typename T>
+  std::enable_if_t<is_supported<T>() and not std::is_same_v<T, cudf::string_view>,
+                   std::unique_ptr<column>>
+  inclusive_scan(column_view const& input_view,
+                 null_policy,
+                 rmm::cuda_stream_view stream,
+                 rmm::mr::device_memory_resource* mr)
   {
     auto output_column = detail::allocate_like(
       input_view, input_view.size(), mask_allocation_policy::NEVER, stream, mr);
@@ -141,13 +142,13 @@ struct scan_dispatcher {
     return output_column;
   }
 
-  // for supporting MIN and MAX on non-arithmetic types
-  template <typename T,
-            std::enable_if_t<is_min_max_supported<T>() and not std::is_arithmetic_v<T>>* = nullptr>
-  std::unique_ptr<column> inclusive_scan(column_view const& input_view,
-                                         null_policy,
-                                         rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+  template <typename T>
+  std::enable_if_t<is_supported<T>() and std::is_same_v<T, cudf::string_view>,
+                   std::unique_ptr<column>>
+  inclusive_scan(column_view const& input_view,
+                 null_policy,
+                 rmm::cuda_stream_view stream,
+                 rmm::mr::device_memory_resource* mr)
   {
     auto d_input = column_device_view::create(input_view, stream);
 
