@@ -431,7 +431,7 @@ struct expression_evaluator {
    * @param row_index Row index of all input and output data column(s).
    */
   template <typename ResultSubclass, typename T, bool result_has_nulls>
-  CUDA_DEVICE_CALLABLE void evaluate(
+  __forceinline__ __device__ void evaluate(
     expression_result<ResultSubclass, T, result_has_nulls>& output_object,
     cudf::size_type const row_index,
     IntermediateDataType<has_nulls>* thread_intermediate_storage)
@@ -452,7 +452,7 @@ struct expression_evaluator {
    * @param output_row_index The row in the output to insert the result.
    */
   template <typename ResultSubclass, typename T, bool result_has_nulls>
-  CUDA_DEVICE_CALLABLE void evaluate(
+  __forceinline__ __device__ void evaluate(
     expression_result<ResultSubclass, T, result_has_nulls>& output_object,
     cudf::size_type const left_row_index,
     cudf::size_type const right_row_index,
