@@ -252,8 +252,6 @@ def test_merge_should_fail():
 
     with pytest.raises(KeyError):
         left.merge(right, how="left", on="NonCol")
-    with pytest.raises(KeyError):
-        left.merge(right, how="left", on="a")
 
 
 @pytest.mark.parametrize("how", ["inner", "left"])
