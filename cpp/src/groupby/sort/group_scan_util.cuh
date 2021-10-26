@@ -125,9 +125,8 @@ struct scan_functor {
     auto values_view = column_device_view::create(values, stream);
 
     if (values.has_nulls()) {
-      auto input = thrust::make_transform_iterator(
-        make_null_replacement_iterator(*values_view, OpType::template identity<T>()),
-        thrust::identity<T>{});
+      auto input = make_null_replacement_iterator(
+        *values_view, OpType::template identity<string_view>(), values.has_nulls());
       thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                     group_labels.begin(),
                                     group_labels.end(),
@@ -136,11 +135,10 @@ struct scan_functor {
                                     thrust::equal_to<size_type>{},
                                     OpType{});
     } else {
-      auto input = thrust::make_transform_iterator(values_view->begin<T>(), thrust::identity<T>{});
       thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                     group_labels.begin(),
                                     group_labels.end(),
-                                    input,
+                                    values_view->begin<string_view>(),
                                     results_vector.begin(),
                                     thrust::equal_to<size_type>{},
                                     OpType{});
