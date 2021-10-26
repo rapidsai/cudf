@@ -128,7 +128,7 @@ def mask_get(mask, pos):
 
 
 kernel_template = """\
-def _kernel(retval, {input_columns}, {input_offsets}, {extra_args}, size):
+def _kernel(retval, {input_columns}, {input_offsets}, {extra_args} size):
     i = cuda.grid(1)
     ret_data_arr, ret_mask_arr = retval
     if i < size:
@@ -201,7 +201,11 @@ def _define_function(fr, row_type, args, scalar_return=False):
     # Create argument list for kernel
     input_columns = ", ".join([f"input_col_{i}" for i in range(len(fr._data))])
     input_offsets = ", ".join([f"offset_{i}" for i in range(len(fr._data))])
-    extra_args = ",".join("extra_arg_" + str(i) for i in range(len(args)))
+    extra_args = (
+        ", ".join([f"extra_arg_{i}" for i in range(len(args))]) + ","
+        if len(args) > 0
+        else ""
+    )
 
     # Generate the initializers for each device function argument
     initializers = []
