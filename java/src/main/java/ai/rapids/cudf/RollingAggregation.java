@@ -83,14 +83,14 @@ public final class RollingAggregation {
   }
 
   /**
-   * Rolling Window Standard deviation with ddof = 1
+   * Rolling Window Standard Deviation with 1 as delta degrees of freedom(DDOF).
    */
   public static RollingAggregation standardDeviation() {
     return new RollingAggregation(Aggregation.standardDeviation());
   }
 
   /**
-   * Rolling Window Standard deviation with configurable ddof
+   * Rolling Window Standard Deviation with configurable delta degrees of freedom(DDOF).
    */
   public static RollingAggregation standardDeviation(int ddof) {
     return new RollingAggregation(Aggregation.standardDeviation(ddof));
