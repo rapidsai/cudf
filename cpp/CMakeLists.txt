@@ -577,7 +577,7 @@ add_library(cudftestutil STATIC
             tests/utilities/column_utilities.cu
             tests/utilities/table_utilities.cu
             tests/io/metadata_utilities.cpp
-            tests/strings/utilities.cu)
+            tests/strings/utilities.cpp)
 
 set_target_properties(cudftestutil
     PROPERTIES BUILD_RPATH                         "\$ORIGIN"

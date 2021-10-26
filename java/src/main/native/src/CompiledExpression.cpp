@@ -144,6 +144,9 @@ cudf::ast::ast_operator jni_to_unary_operator(jbyte jni_op_value) {
     case 20: return cudf::ast::ast_operator::RINT;
     case 21: return cudf::ast::ast_operator::BIT_INVERT;
     case 22: return cudf::ast::ast_operator::NOT;
+    case 23: return cudf::ast::ast_operator::CAST_TO_INT64;
+    case 24: return cudf::ast::ast_operator::CAST_TO_UINT64;
+    case 25: return cudf::ast::ast_operator::CAST_TO_FLOAT64;
     default: throw std::invalid_argument("unexpected JNI AST unary operator value");
   }
 }
