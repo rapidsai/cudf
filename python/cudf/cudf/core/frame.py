@@ -6254,6 +6254,456 @@ class Frame:
     # Alias for rtruediv
     rdiv = rtruediv
 
+    def eq(self, other, axis="columns", level=None, fill_value=None):
+        """Equal to, element-wise (binary operator eq).
+
+        Parameters
+        ----------
+        other : Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Frame
+            The result of the operation.
+
+        Examples
+        --------
+        **DataFrame**
+
+        >>> left = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'c': [7, 8, 9]}
+        ... )
+        >>> right = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'd': [10, 12, 12]}
+        ... )
+        >>> left.eq(right)
+        a     b     c     d
+        0  True  True  <NA>  <NA>
+        1  True  True  <NA>  <NA>
+        2  True  True  <NA>  <NA>
+        >>> left.eq(right, fill_value=7)
+        a     b      c      d
+        0  True  True   True  False
+        1  True  True  False  False
+        2  True  True  False  False
+
+        **Series**
+
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20],
+        ...                 index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None],
+        ...                 index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.eq(b, fill_value=2)
+        a    False
+        b    False
+        c    False
+        d    False
+        e     <NA>
+        f    False
+        g    False
+        dtype: bool
+        """
+        return self._binaryop(
+            other=other, fn="eq", fill_value=fill_value, can_reindex=True
+        )
+
+    def ne(self, other, axis="columns", level=None, fill_value=None):
+        """Not equal to, element-wise (binary operator ne).
+
+        Parameters
+        ----------
+        other : Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Frame
+            The result of the operation.
+
+        Examples
+        --------
+        **DataFrame**
+
+        >>> left = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'c': [7, 8, 9]}
+        ... )
+        >>> right = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'd': [10, 12, 12]}
+        ... )
+        >>> left.ne(right)
+        a      b     c     d
+        0  False  False  <NA>  <NA>
+        1  False  False  <NA>  <NA>
+        2  False  False  <NA>  <NA>
+        >>> left.ne(right, fill_value=7)
+        a      b      c     d
+        0  False  False  False  True
+        1  False  False   True  True
+        2  False  False   True  True
+
+        **Series**
+
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20],
+        ...                 index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None],
+        ...                 index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.ne(b, fill_value=2)
+        a    True
+        b    True
+        c    True
+        d    True
+        e    <NA>
+        f    True
+        g    True
+        dtype: bool
+        """  # noqa: E501
+        return self._binaryop(
+            other=other, fn="ne", fill_value=fill_value, can_reindex=True
+        )
+
+    def lt(self, other, axis="columns", level=None, fill_value=None):
+        """Less than, element-wise (binary operator lt).
+
+        Parameters
+        ----------
+        other : Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Frame
+            The result of the operation.
+
+        Examples
+        --------
+        **DataFrame**
+
+        >>> left = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'c': [7, 8, 9]}
+        ... )
+        >>> right = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'd': [10, 12, 12]}
+        ... )
+        >>> left.lt(right)
+        a      b     c     d
+        0  False  False  <NA>  <NA>
+        1  False  False  <NA>  <NA>
+        2  False  False  <NA>  <NA>
+        >>> left.lt(right, fill_value=7)
+        a      b      c     d
+        0  False  False  False  True
+        1  False  False  False  True
+        2  False  False  False  True
+
+        **Series**
+
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20],
+        ...                 index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None],
+        ...                 index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.lt(b, fill_value=-10)
+        a    False
+        b     True
+        c    False
+        d    False
+        e     <NA>
+        f    False
+        g    False
+        dtype: bool
+        """  # noqa: E501
+        return self._binaryop(
+            other=other, fn="lt", fill_value=fill_value, can_reindex=True
+        )
+
+    def le(self, other, axis="columns", level=None, fill_value=None):
+        """Less than or equal, element-wise (binary operator le).
+
+        Parameters
+        ----------
+        other : Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Frame
+            The result of the operation.
+
+        Examples
+        --------
+        **DataFrame**
+
+        >>> left = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'c': [7, 8, 9]}
+        ... )
+        >>> right = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'd': [10, 12, 12]}
+        ... )
+        >>> left.le(right)
+        a     b     c     d
+        0  True  True  <NA>  <NA>
+        1  True  True  <NA>  <NA>
+        2  True  True  <NA>  <NA>
+        >>> left.le(right, fill_value=7)
+        a     b      c     d
+        0  True  True   True  True
+        1  True  True  False  True
+        2  True  True  False  True
+
+        **Series**
+
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20],
+        ...                 index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None],
+        ...                 index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.le(b, fill_value=-10)
+        a    False
+        b     True
+        c    False
+        d    False
+        e     <NA>
+        f    False
+        g    False
+        dtype: bool
+        """  # noqa: E501
+        return self._binaryop(
+            other=other, fn="le", fill_value=fill_value, can_reindex=True
+        )
+
+    def gt(self, other, axis="columns", level=None, fill_value=None):
+        """Greater than, element-wise (binary operator gt).
+
+        Parameters
+        ----------
+        other : Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Frame
+            The result of the operation.
+
+        Examples
+        --------
+        **DataFrame**
+
+        >>> left = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'c': [7, 8, 9]}
+        ... )
+        >>> right = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'd': [10, 12, 12]}
+        ... )
+        >>> left.gt(right)
+        a      b     c     d
+        0  False  False  <NA>  <NA>
+        1  False  False  <NA>  <NA>
+        2  False  False  <NA>  <NA>
+        >>> left.gt(right, fill_value=7)
+        a      b      c      d
+        0  False  False  False  False
+        1  False  False   True  False
+        2  False  False   True  False
+
+        **Series**
+
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20],
+        ...                 index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None],
+        ...                 index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.gt(b)
+        a     True
+        b    False
+        c     True
+        d    False
+        e    False
+        f    False
+        g    False
+        dtype: bool
+        """  # noqa: E501
+        return self._binaryop(
+            other=other, fn="gt", fill_value=fill_value, can_reindex=True
+        )
+
+    def ge(self, other, axis="columns", level=None, fill_value=None):
+        """Greater than or equal, element-wise (binary operator ge).
+
+        Parameters
+        ----------
+        other : Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Frame
+            The result of the operation.
+
+        Examples
+        --------
+        **DataFrame**
+
+        >>> left = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'c': [7, 8, 9]}
+        ... )
+        >>> right = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'd': [10, 12, 12]}
+        ... )
+        >>> left.ge(right)
+        a     b     c     d
+        0  True  True  <NA>  <NA>
+        1  True  True  <NA>  <NA>
+        2  True  True  <NA>  <NA>
+        >>> left.ge(right, fill_value=7)
+        a     b     c      d
+        0  True  True  True  False
+        1  True  True  True  False
+        2  True  True  True  False
+
+        **Series**
+
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20],
+        ...                 index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None],
+        ...                 index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.ge(b)
+        a     True
+        b    False
+        c     True
+        d    False
+        e    False
+        f    False
+        g    False
+        dtype: bool
+        """  # noqa: E501
+        return self._binaryop(
+            other=other, fn="ge", fill_value=fill_value, can_reindex=True
+        )
+
 
 def _get_replacement_values_for_columns(
     to_replace: Any, value: Any, columns_dtype_map: Dict[Any, Any]

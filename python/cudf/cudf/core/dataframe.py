@@ -1878,6 +1878,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         fn: str,
         fill_value: Any = None,
         reflect: bool = False,
+        can_reindex: bool = False,
         *args,
         **kwargs,
     ):
@@ -1898,14 +1899,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 for right, (name, left) in zip(rhs, lhs._data.items())
             }
         elif isinstance(rhs, DataFrame):
-            if fn in cudf.utils.utils._EQUALITY_OPS:
-                if not lhs.columns.equals(rhs.columns) or not lhs.index.equals(
-                    rhs.index
-                ):
-                    raise ValueError(
-                        "Can only compare identically-labeled "
-                        "DataFrame objects"
-                    )
+            if (
+                not can_reindex
+                and fn in cudf.utils.utils._EQUALITY_OPS
+                and (
+                    not lhs.columns.equals(rhs.columns)
+                    or not lhs.index.equals(rhs.index)
+                )
+            ):
+                raise ValueError(
+                    "Can only compare identically-labeled " "DataFrame objects"
+                )
 
             lhs, rhs = _align_indices(lhs, rhs)
 
@@ -6571,6 +6575,12 @@ for binop in [
     "div",
     "rtruediv",
     "rdiv",
+    "eq",
+    "ne",
+    "lt",
+    "le",
+    "gt",
+    "ge",
 ]:
     setattr(DataFrame, binop, make_binop_func(binop))
 
