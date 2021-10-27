@@ -273,19 +273,13 @@ void fixed_point_binary_operation_validation(binary_operator op,
                                              Rhs rhs,
                                              thrust::optional<cudf::data_type> output_type = {})
 {
-  CUDF_EXPECTS(is_fixed_point(lhs), "Input must have fixed_point data_type.");
-  CUDF_EXPECTS(is_fixed_point(rhs), "Input must have fixed_point data_type.");
+  CUDF_EXPECTS((is_fixed_point(lhs) or is_fixed_point(rhs)),
+               "One of the inputs must have fixed_point data_type.");
   CUDF_EXPECTS(binops::is_supported_fixed_point_binop(op),
                "Unsupported fixed_point binary operation");
-  CUDF_EXPECTS(lhs.id() == rhs.id(), "Data type mismatch");
-  if (output_type.has_value()) {
-    if (binops::is_comparison_binop(op))
-      CUDF_EXPECTS(output_type == cudf::data_type{type_id::BOOL8},
-                   "Comparison operations require boolean output type.");
-    else
-      CUDF_EXPECTS(is_fixed_point(output_type.value()),
-                   "fixed_point binary operations require fixed_point output type.");
-  }
+  if (output_type.has_value() and binops::is_comparison_binop(op))
+    CUDF_EXPECTS(output_type == cudf::data_type{type_id::BOOL8},
+                 "Comparison operations require boolean output type.");
 }
 
 /**
