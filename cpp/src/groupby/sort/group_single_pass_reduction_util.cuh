@@ -78,6 +78,34 @@ struct ArgMax {
 };
 
 /**
+ * @brief Binary operator ArgMin/ArgMax with index values into the input table.
+ */
+template <bool has_nulls, bool arg_min>
+struct ArgMinMax {
+  size_type const num_rows;
+  row_lexicographic_comparator<has_nulls> const comp;
+
+  ArgMinMax(size_type const num_rows_, table_device_view const& table_)
+    : num_rows(num_rows_), comp(table_, table_)
+  {
+  }
+
+  CUDA_DEVICE_CALLABLE auto operator()(size_type lhs_idx, size_type rhs_idx) const
+  {
+    // The extra bounds checking is due to issue github.com/rapidsai/cudf/9156 and
+    // github.com/NVIDIA/thrust/issues/1525
+    // where invalid random values may be passed here by thrust::reduce_by_key
+    if (lhs_idx < 0 || lhs_idx >= num_rows) { return rhs_idx; }
+    if (rhs_idx < 0 || rhs_idx >= num_rows) { return lhs_idx; }
+
+    // Return `lhs_idx` iff:
+    //   row(lhs_idx) <  row(rhs_idx) and finding ArgMin, or
+    //   row(lhs_idx) >= row(rhs_idx) and finding ArgMax.
+    return comp(lhs_idx, rhs_idx) == arg_min ? lhs_idx : rhs_idx;
+  }
+};
+
+/**
  * @brief Value accessor for column which supports dictionary column too.
  *
  * @tparam T Type of the underlying column. For dictionary column, type of the key column.
@@ -230,15 +258,8 @@ struct reduce_functor {
 
     if (values.is_empty()) { return result; }
 
-    // The comparison order and null order for finding ARGMIN/ARGMAX.
-    auto const comp_order      = K == aggregation::ARGMIN ? order::ASCENDING : order::DESCENDING;
-    auto const null_precedence = K == aggregation::ARGMIN ? null_order::AFTER : null_order::BEFORE;
-
     auto const flattened_values =
-      structs::detail::flatten_nested_columns(table_view{{values}},
-                                              {comp_order},
-                                              {null_precedence},
-                                              structs::detail::column_nullability::MATCH_INCOMING);
+      structs::detail::flatten_nested_columns(table_view{{values}}, {}, {});
     auto const flattened_values_ptr = table_device_view::create(flattened_values, stream);
 
     // Perform segmented reduction to find ARGMIN/ARGMAX.
@@ -256,16 +277,12 @@ struct reduce_functor {
     auto const count_iter   = thrust::make_counting_iterator<ResultType>(0);
     auto const result_begin = result->mutable_view().template begin<ResultType>();
     if (!values.has_nulls()) {
-      auto const comp = row_lexicographic_comparator<false>(*flattened_values_ptr,
-                                                            *flattened_values_ptr,
-                                                            flattened_values.orders().data(),
-                                                            flattened_values.null_orders().data());
+      auto const comp =
+        ArgMinMax<false, K == aggregation::ARGMIN>(values.size(), *flattened_values_ptr);
       do_reduction(count_iter, result_begin, comp);
     } else {
-      auto const comp = row_lexicographic_comparator<true>(*flattened_values_ptr,
-                                                           *flattened_values_ptr,
-                                                           flattened_values.orders().data(),
-                                                           flattened_values.null_orders().data());
+      auto const comp =
+        ArgMinMax<true, K == aggregation::ARGMIN>(values.size(), *flattened_values_ptr);
       do_reduction(count_iter, result_begin, comp);
 
       // Generate bitmask for the output by segmented reduction of the input bitmask.
