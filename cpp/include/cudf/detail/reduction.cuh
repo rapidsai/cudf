@@ -18,6 +18,7 @@
 
 #include "reduction_operators.cuh"
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -26,6 +27,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <cub/device/device_reduce.cuh>
+#include <cub/device/device_segmented_reduce.cuh>
 
 #include <thrust/for_each.h>
 #include <thrust/iterator/iterator_traits.h>
@@ -216,6 +218,76 @@ std::unique_ptr<scalar> reduce(InputIterator d_in,
                        *dres = cop.template compute_result<OutputType>(i, valid_count, ddof);
                      });
   return std::unique_ptr<scalar>(result);
+}
+
+/**
+ * @brief Compute the specified simple reduction over each of the segments in the
+ * input range of elements.
+ *
+ * @param[in] d_in          the begin iterator to input
+ * @param[in] d_offset      the begin iterator to offset
+ * @param[in] num_items     the number of items
+ * @param[in] num_segments  the number of segments
+ * @param[in] op            the reduction operator
+ * @param[in] stream        CUDA stream used for device memory operations and kernel launches.
+ * @returns   Output scalar in device memory
+ *
+ * @tparam Op               the reduction operator with device binary operator
+ * @tparam InputIterator    the input column iterator
+ * @tparam OutputType       the output type of reduction
+ */
+template <typename Op,
+          typename InputIterator,
+          typename OffsetIterator,
+          typename OutputType = typename thrust::iterator_value<InputIterator>::type,
+          typename std::enable_if_t<is_fixed_width<OutputType>() &&
+                                    not cudf::is_fixed_point<OutputType>()>* = nullptr>
+std::unique_ptr<column> segmented_reduce(InputIterator d_in,
+                                         OffsetIterator d_offset,
+                                         cudf::size_type num_items,
+                                         cudf::size_type num_segments,
+                                         op::simple_op<Op> sop,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
+{
+  using InputType = OutputType;
+  auto binary_op  = sop.get_binary_op();
+  auto identity   = sop.template get_identity<OutputType>();
+  // auto dev_result = rmm::device_scalar<OutputType>{identity, stream, mr};
+  auto dev_result = make_fixed_width_column(
+    data_type{type_to_id<OutputType>()}, num_segments, mask_state::UNALLOCATED, stream, mr);
+  auto dev_result_mview = dev_result->mutable_view();
+
+  // Allocate temporary storage
+  rmm::device_buffer d_temp_storage;
+  size_t temp_storage_bytes = 0;
+  cub::DeviceSegmentedReduce::Reduce(d_temp_storage.data(),
+                                     temp_storage_bytes,
+                                     d_in,
+                                     dev_result_mview.data<InputType>(),
+                                     num_segments,
+                                     d_offset,
+                                     d_offset + num_segments + 1,
+                                     num_items,
+                                     binary_op,
+                                     identity,
+                                     stream.value());
+  d_temp_storage = rmm::device_buffer{temp_storage_bytes, stream};
+
+  // Run reduction
+  cub::DeviceSegmentedReduce::Reduce(d_temp_storage.data(),
+                                     temp_storage_bytes,
+                                     d_in,
+                                     dev_result_mview.data<InputType>(),
+                                     num_segments,
+                                     d_offset,
+                                     d_offset + num_segments + 1,
+                                     num_items,
+                                     binary_op,
+                                     identity,
+                                     stream.value());
+
+  return dev_result;
 }
 
 }  // namespace detail
