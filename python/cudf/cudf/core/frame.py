@@ -1750,9 +1750,6 @@ class Frame:
         result._copy_type_metadata(self)
         return result
 
-    def _reverse(self):
-        return self.__class__._from_data(*libcudf.copying.reverse(self))
-
     def _fill(self, fill_values, begin, end, inplace):
         col_and_fill = zip(self._columns, fill_values)
 
@@ -1768,8 +1765,7 @@ class Frame:
         return self
 
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
-        """Shift values by `periods` positions.
-        """
+        """Shift values by `periods` positions."""
         assert axis in (None, 0) and freq is None
         return self._shift(periods)
 
@@ -1823,7 +1819,7 @@ class Frame:
         ...     columns=['dogs', 'cats']
         ... )
         >>> df
-            dogs  cats
+           dogs  cats
         0  0.21  0.32
         1  0.01  0.67
         2  0.66  0.03
@@ -1833,7 +1829,7 @@ class Frame:
         of decimal places
 
         >>> df.round(1)
-            dogs  cats
+           dogs  cats
         0   0.2   0.3
         1   0.0   0.7
         2   0.7   0.0
@@ -1844,7 +1840,7 @@ class Frame:
         places as value
 
         >>> df.round({'dogs': 1, 'cats': 0})
-            dogs  cats
+           dogs  cats
         0   0.2   0.0
         1   0.0   1.0
         2   0.7   0.0
@@ -1856,7 +1852,7 @@ class Frame:
 
         >>> decimals = cudf.Series([0, 1], index=['cats', 'dogs'])
         >>> df.round(decimals)
-            dogs  cats
+           dogs  cats
         0   0.2   0.0
         1   0.0   1.0
         2   0.7   0.0
@@ -2634,7 +2630,7 @@ class Frame:
         1     6  1939-05-27 00:00:00.000000  Batman  Batmobile
         2  <NA>  1940-04-25 00:00:00.000000              Joker
         >>> df.isnull()
-            age   born   name    toy
+             age   born   name    toy
         0  False   True  False   True
         1  False  False  False  False
         2   True  False  False  False
@@ -5080,12 +5076,12 @@ class Frame:
         >>> df['a'] = cudf.Series([1, None, np.nan], nan_as_null=False)
         >>> df['b'] = cudf.Series([None, 3.14, np.nan], nan_as_null=False)
         >>> df
-            a     b
+              a     b
         0   1.0  <NA>
         1  <NA>  3.14
         2   NaN   NaN
         >>> df.nans_to_nulls()
-            a     b
+              a     b
         0   1.0  <NA>
         1  <NA>  3.14
         2  <NA>  <NA>
@@ -5508,7 +5504,7 @@ class Frame:
 
     def rmul(self, other, axis, level=None, fill_value=None):
         """
-        Get Multiplication of dataframe or series and other, element-wise 
+        Get Multiplication of dataframe or series and other, element-wise
         (binary operator `rmul`).
 
         Equivalent to ``other * frame``, but with support to substitute a
