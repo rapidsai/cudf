@@ -60,9 +60,8 @@ class aggregate_orc_metadata {
   size_type calc_num_stripes() const;
 
  public:
-  mutable std::vector<cudf::io::orc::metadata> per_file_metadata;  // TODO needed to be mutable?
+  std::vector<metadata> per_file_metadata;
   size_type const num_rows;
-  size_type const num_columns;
   size_type const num_stripes;
   bool row_grp_idx_present{true};
 
@@ -78,40 +77,54 @@ class aggregate_orc_metadata {
 
   auto get_num_stripes() const { return num_stripes; }
 
-  auto get_num_source_files() const { return per_file_metadata.size(); }
-
   auto const& get_types() const { return per_file_metadata[0].ff.types; }
 
   int get_row_index_stride() const { return per_file_metadata[0].ff.rowIndexStride; }
 
-  auto get_column_name(const int source_idx, const int column_id) const
-  {
-    CUDF_EXPECTS(source_idx <= static_cast<int>(per_file_metadata.size()),
-                 "Out of range source_idx provided");
-    return per_file_metadata[source_idx].get_column_name(column_id);
-  }
-
-  auto get_column_path(const int source_idx, const int column_id) const
-  {
-    CUDF_EXPECTS(source_idx <= static_cast<int>(per_file_metadata.size()),
-                 "Out of range source_idx provided");
-    return per_file_metadata[source_idx].get_column_path(column_id);
-  }
-
   auto is_row_grp_idx_present() const { return row_grp_idx_present; }
 
-  std::vector<cudf::io::orc::metadata::stripe_source_mapping> select_stripes(
+  /**
+   * @brief Returns the name of the given column from the given source.
+   */
+  auto column_name(const int source_idx, const int column_id) const
+  {
+    CUDF_EXPECTS(source_idx <= static_cast<int>(per_file_metadata.size()),
+                 "Out of range source_idx provided");
+    return per_file_metadata[source_idx].column_name(column_id);
+  }
+
+  /**
+   * @brief Returns the full name of the given column from the given source.
+   *
+   * Full name includes ancestor columns' names.
+   */
+  auto column_path(const int source_idx, const int column_id) const
+  {
+    CUDF_EXPECTS(source_idx <= static_cast<int>(per_file_metadata.size()),
+                 "Out of range source_idx provided");
+    return per_file_metadata[source_idx].column_path(column_id);
+  }
+
+  /**
+   * @brief Selects the stripes to read, based on the row/stripe selection parameters.
+   *
+   * Stripes are potentially selected from multiple files.
+   */
+  std::vector<metadata::stripe_source_mapping> select_stripes(
     std::vector<std::vector<size_type>> const& user_specified_stripes,
     size_type& row_start,
     size_type& row_count);
 
   /**
-   * @brief Filters and reduces down to a selection of columns
+   * @brief Filters ORC file to a selection of columns, based on their paths in the file.
    *
-   * @param use_names List of column names to select
-   * @return Vector of list of ORC column meta-data
+   * Paths are in format "grandparent_col.parent_col.child_col", where the root ORC column is
+   * ommited to match the cuDF table hierarchy.
+   *
+   * @param column_paths List of full column names (i.e. paths) to select from the ORC file
+   * @return Columns hierarchy - lists of children columns and sorted columns in each nesting level
    */
-  column_hierarchy select_columns(std::vector<std::string> const& use_names);
+  column_hierarchy select_columns(std::vector<std::string> const& column_paths);
 };
 
 }  // namespace cudf::io::orc::detail

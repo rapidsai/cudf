@@ -34,16 +34,17 @@ column_hierarchy::column_hierarchy(nesting_map child_map) : children{std::move(c
     }
   };
 
-  for (auto col_id : children[0]) {
-    levelize(col_id, 0);
-  }
+  std::for_each(
+    children[0].cbegin(), children[0].cend(), [&](auto col_id) { levelize(col_id, 0); });
 }
+
+namespace {
 
 /**
  * @brief Goes up to the root to include the column with the given id and its parents.
  */
 void update_parent_mapping(std::map<int32_t, std::vector<int32_t>>& selected_columns,
-                           cudf::io::orc::metadata const& metadata,
+                           metadata const& metadata,
                            int32_t id)
 {
   auto current_id = id;
@@ -81,7 +82,7 @@ void add_nested_columns(std::map<int32_t, std::vector<int32_t>>& selected_column
  * Columns that are not on the direct path are excluded, which may result in prunning.
  */
 void add_column_to_mapping(std::map<int32_t, std::vector<int32_t>>& selected_columns,
-                           cudf::io::orc::metadata const& metadata,
+                           metadata const& metadata,
                            int32_t id)
 {
   update_parent_mapping(selected_columns, metadata, id);
@@ -93,13 +94,15 @@ void add_column_to_mapping(std::map<int32_t, std::vector<int32_t>>& selected_col
  */
 auto metadatas_from_sources(std::vector<std::unique_ptr<datasource>> const& sources)
 {
-  std::vector<cudf::io::orc::metadata> metadatas;
+  std::vector<metadata> metadatas;
   std::transform(
     sources.cbegin(), sources.cend(), std::back_inserter(metadatas), [](auto const& source) {
-      return cudf::io::orc::metadata(source.get());
+      return metadata(source.get());
     });
   return metadatas;
 }
+
+}  // namespace
 
 size_type aggregate_orc_metadata::calc_num_rows() const
 {
@@ -107,12 +110,6 @@ size_type aggregate_orc_metadata::calc_num_rows() const
     per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto const& sum, auto const& pfm) {
       return sum + pfm.get_total_rows();
     });
-}
-
-size_type aggregate_orc_metadata::calc_num_cols() const
-{
-  if (not per_file_metadata.empty()) { return per_file_metadata[0].get_num_columns(); }
-  return 0;
 }
 
 size_type aggregate_orc_metadata::calc_num_stripes() const
@@ -127,7 +124,6 @@ aggregate_orc_metadata::aggregate_orc_metadata(
   std::vector<std::unique_ptr<datasource>> const& sources)
   : per_file_metadata(metadatas_from_sources(sources)),
     num_rows(calc_num_rows()),
-    num_columns(calc_num_cols()),
     num_stripes(calc_num_stripes())
 {
   // Verify that the input files have the same number of columns,
@@ -153,15 +149,15 @@ aggregate_orc_metadata::aggregate_orc_metadata(
   }
 }
 
-std::vector<cudf::io::orc::metadata::stripe_source_mapping> aggregate_orc_metadata::select_stripes(
+std::vector<metadata::stripe_source_mapping> aggregate_orc_metadata::select_stripes(
   std::vector<std::vector<size_type>> const& user_specified_stripes,
   size_type& row_start,
   size_type& row_count)
 {
-  std::vector<cudf::io::orc::metadata::stripe_source_mapping> selected_stripes_mapping;
+  std::vector<metadata::stripe_source_mapping> selected_stripes_mapping;
 
   if (!user_specified_stripes.empty()) {
-    CUDF_EXPECTS(user_specified_stripes.size() == get_num_source_files(),
+    CUDF_EXPECTS(user_specified_stripes.size() == per_file_metadata.size(),
                  "Must specify stripes for each source");
     // row_start is 0 if stripes are set. If this is not true anymore, then
     // row_start needs to be subtracted to get the correct row_count
@@ -249,32 +245,27 @@ std::vector<cudf::io::orc::metadata::stripe_source_mapping> aggregate_orc_metada
   return selected_stripes_mapping;
 }
 
-/**
- * @brief Filters and reduces down to a selection of columns
- *
- * @param use_names List of column names to select
- * @return Vector of list of ORC column meta-data
- */
-column_hierarchy aggregate_orc_metadata::select_columns(std::vector<std::string> const& use_names)
+column_hierarchy aggregate_orc_metadata::select_columns(
+  std::vector<std::string> const& column_paths)
 {
   auto const& pfm = per_file_metadata[0];
 
   column_hierarchy::nesting_map selected_columns;
-  if (use_names.empty()) {
+  if (column_paths.empty()) {
     for (auto const& col_id : pfm.ff.types[0].subtypes) {
       add_column_to_mapping(selected_columns, pfm, col_id);
     }
   } else {
-    for (const auto& use_name : use_names) {
+    for (const auto& path : column_paths) {
       bool name_found = false;
       for (auto col_id = 1; col_id < pfm.get_num_columns(); ++col_id) {
-        if (pfm.get_column_path(col_id) == use_name) {
+        if (pfm.column_path(col_id) == path) {
           name_found = true;
           add_column_to_mapping(selected_columns, pfm, col_id);
           break;
         }
       }
-      CUDF_EXPECTS(name_found, "Unknown column name: " + std::string(use_name));
+      CUDF_EXPECTS(name_found, "Unknown column name: " + std::string(path));
     }
   }
   return {std::move(selected_columns)};

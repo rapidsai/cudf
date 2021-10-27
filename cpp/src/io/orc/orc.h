@@ -586,12 +586,24 @@ class metadata {
   size_t get_total_rows() const { return ff.numberOfRows; }
   int get_num_stripes() const { return ff.stripes.size(); }
   int get_num_columns() const { return ff.types.size(); }
-  std::string const& get_column_name(int32_t column_id) const
+  /**
+   * @brief Returns the name of the column with the given ID.
+   *
+   * Name might not be unique in the ORC file, since columns with different parents are allowed to
+   * have the same names.
+   */
+  std::string const& column_name(int32_t column_id) const
   {
     CUDF_EXPECTS(column_id < get_num_columns(), "Out of range column id provided");
     return column_names[column_id];
   }
-  std::string const& get_column_path(int32_t column_id) const
+  /**
+   * @brief Returns the full name of the column with the given ID - includes the ancestor columns
+   * names.
+   *
+   * Each column in the ORC file has a unique path.
+   */
+  std::string const& column_path(int32_t column_id) const
   {
     CUDF_EXPECTS(column_id < get_num_columns(), "Out of range column id provided");
     return column_paths[column_id];

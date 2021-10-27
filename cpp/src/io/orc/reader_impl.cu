@@ -235,7 +235,7 @@ bool should_convert_decimal_column_to_float(const std::vector<std::string>& colu
 {
   return (std::find(columns_to_convert.begin(),
                     columns_to_convert.end(),
-                    metadata.get_column_name(column_index)) != columns_to_convert.end());
+                    metadata.column_name(column_index)) != columns_to_convert.end());
 }
 
 }  // namespace
@@ -728,7 +728,7 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
                                                           column_name_info& schema_info,
                                                           rmm::cuda_stream_view stream)
 {
-  schema_info.name = _metadata.get_column_name(0, orc_col_id);
+  schema_info.name = _metadata.column_name(0, orc_col_id);
   // If the column type is orc::DECIMAL see if the user
   // desires it to be converted to float64 or not
   auto const decimal_as_float64 = should_convert_decimal_column_to_float(
@@ -806,7 +806,7 @@ column_buffer&& reader::impl::assemble_buffer(const int32_t orc_col_id,
   auto const col_id = _col_meta.orc_col_map[level][orc_col_id];
   auto& col_buffer  = col_buffers[level][col_id];
 
-  col_buffer.name = _metadata.get_column_name(0, orc_col_id);
+  col_buffer.name = _metadata.column_name(0, orc_col_id);
   auto kind       = _metadata.get_col_type(orc_col_id).kind;
   switch (kind) {
     case orc::LIST:
