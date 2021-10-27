@@ -135,7 +135,11 @@ class _SeriesIlocIndexer(_FrameIndexer):
         if (
             not isinstance(
                 self._frame._column.dtype,
-                (cudf.Decimal64Dtype, cudf.CategoricalDtype),
+                (
+                    cudf.Decimal64Dtype,
+                    cudf.Decimal32Dtype,
+                    cudf.CategoricalDtype,
+                ),
             )
             and hasattr(value, "dtype")
             and _is_non_decimal_numeric_dtype(value.dtype)
