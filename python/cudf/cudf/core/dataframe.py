@@ -3254,7 +3254,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ):
         # Private implementation of deprecated public label_encoding method
         newname = prefix_sep.join([prefix, "labels"])
-        newcol = self[column].label_encoding(
+        newcol = self[column]._label_encoding(
             cats=cats, dtype=dtype, na_sentinel=na_sentinel
         )
         outdf = self.copy()
