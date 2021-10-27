@@ -6532,14 +6532,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return super()._explode(column, ignore_index)
 
 
-def make_binop_func(op):
+def make_binop_func(op, postprocess=None):
     wrapped_func = getattr(Frame, op)
 
     @functools.wraps(wrapped_func)
     def wrapper(self, other, axis="columns", level=None, fill_value=None):
         if axis not in (1, "columns"):
             raise NotImplementedError("Only axis=1 supported at this time.")
-        return wrapped_func(self, other, axis, level, fill_value)
+        output = wrapped_func(self, other, axis, level, fill_value)
+        if postprocess is None:
+            return output
+        return postprocess(self, other, output)
 
     # functools.wraps copies module level attributes to `wrapper` and sets
     # __wrapped__ attributes to `wrapped_func`. Cpython looks up the signature
@@ -6575,14 +6578,43 @@ for binop in [
     "div",
     "rtruediv",
     "rdiv",
+]:
+    setattr(DataFrame, binop, make_binop_func(binop))
+
+
+def _make_replacement_func(value):
+    def func(left, right, output):
+        if isinstance(right, Series):
+            uncommon_columns = set(left._column_names) ^ set(right.index)
+        elif isinstance(right, DataFrame):
+            uncommon_columns = set(left._column_names) ^ set(
+                right._column_names
+            )
+        else:
+            return output
+
+        for name in uncommon_columns:
+            output._data[name] = column.full(
+                size=len(output), fill_value=value, dtype="bool"
+            )
+        return output
+
+    return func
+
+
+DataFrame.ne = make_binop_func("ne", _make_replacement_func(True))
+
+
+for binop in [
     "eq",
-    "ne",
     "lt",
     "le",
     "gt",
     "ge",
 ]:
-    setattr(DataFrame, binop, make_binop_func(binop))
+    setattr(
+        DataFrame, binop, make_binop_func(binop, _make_replacement_func(False))
+    )
 
 
 def from_pandas(obj, nan_as_null=None):
