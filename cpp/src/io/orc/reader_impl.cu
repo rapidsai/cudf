@@ -81,7 +81,7 @@ constexpr type_id to_type_id(const orc::SchemaType& schema,
     case orc::DATE:
       // There isn't a (DAYS -> np.dtype) mapping
       return (use_np_dtypes) ? type_id::TIMESTAMP_MILLISECONDS : type_id::TIMESTAMP_DAYS;
-    case orc::DECIMAL: return (decimals_as_float64) ? type_id::FLOAT64 : type_id::DECIMAL64;
+    case orc::DECIMAL: return (decimals_as_float64) ? type_id::FLOAT64 : type_id::DECIMAL128;
     // Need to update once cuDF plans to support map type
     case orc::MAP:
     case orc::LIST: return type_id::LIST;
@@ -1074,7 +1074,7 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
       break;
 
     case orc::DECIMAL:
-      if (type == type_id::DECIMAL64) {
+      if (type == type_id::DECIMAL128) {
         scale = -static_cast<int32_t>(_metadata->get_types()[orc_col_id].scale.value_or(0));
       }
       out_col = make_empty_column(data_type(type, scale));
@@ -1215,11 +1215,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       auto col_type = to_type_id(
         _metadata->get_col_type(col.id), _use_np_dtypes, _timestamp_type.id(), decimal_as_float64);
       CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
-      // Remove this once we support Decimal128 data type
-      CUDF_EXPECTS(
-        (col_type != type_id::DECIMAL64) or (_metadata->get_col_type(col.id).precision <= 18),
-        "Decimal data has precision > 18, Decimal64 data type doesn't support it.");
-      if (col_type == type_id::DECIMAL64) {
+      if (col_type == type_id::DECIMAL128) {
         // sign of the scale is changed since cuDF follows c++ libraries like CNL
         // which uses negative scaling, but liborc and other libraries
         // follow positive scaling.
