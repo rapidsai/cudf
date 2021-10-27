@@ -40,48 +40,44 @@ namespace groupby {
 namespace detail {
 
 /**
- * @brief ArgMin binary operator with index values into input column.
+ * @brief Binary operator with index values into the input column.
  *
  * @tparam T Type of the underlying column. Must support '<' operator.
  */
-template <typename T>
-struct ArgMin {
+template <typename T, bool has_nulls, bool arg_min, typename Enable = void>
+struct ArgMinMax {
   column_device_view const d_col;
-  CUDA_DEVICE_CALLABLE auto operator()(size_type const& lhs, size_type const& rhs) const
+  CUDA_DEVICE_CALLABLE auto operator()(size_type const& lhs_idx, size_type const& rhs_idx) const
   {
     // The extra bounds checking is due to issue github.com/rapidsai/cudf/9156 and
     // github.com/NVIDIA/thrust/issues/1525
     // where invalid random values may be passed here by thrust::reduce_by_key
-    if (lhs < 0 || lhs >= d_col.size() || d_col.is_null(lhs)) { return rhs; }
-    if (rhs < 0 || rhs >= d_col.size() || d_col.is_null(rhs)) { return lhs; }
-    return d_col.element<T>(lhs) < d_col.element<T>(rhs) ? lhs : rhs;
-  }
-};
+    if (lhs_idx < 0 || lhs_idx >= d_col.size() || (has_nulls && d_col.is_null_nocheck(lhs_idx))) {
+      return rhs_idx;
+    }
+    if (rhs_idx < 0 || rhs_idx >= d_col.size() || (has_nulls && d_col.is_null_nocheck(rhs_idx))) {
+      return lhs_idx;
+    }
 
-/**
- * @brief ArgMax binary operator with index values into input column.
- *
- * @tparam T Type of the underlying column. Must support '<' operator.
- */
-template <typename T>
-struct ArgMax {
-  column_device_view const d_col;
-  CUDA_DEVICE_CALLABLE auto operator()(size_type const& lhs, size_type const& rhs) const
-  {
-    // The extra bounds checking is due to issue github.com/rapidsai/cudf/9156 and
-    // github.com/NVIDIA/thrust/issues/1525
-    // where invalid random values may be passed here by thrust::reduce_by_key
-    if (lhs < 0 || lhs >= d_col.size() || d_col.is_null(lhs)) { return rhs; }
-    if (rhs < 0 || rhs >= d_col.size() || d_col.is_null(rhs)) { return lhs; }
-    return d_col.element<T>(rhs) < d_col.element<T>(lhs) ? lhs : rhs;
+    // Return `lhs_idx` iff:
+    //   row(lhs_idx) <  row(rhs_idx) and finding ArgMin, or
+    //   row(lhs_idx) >= row(rhs_idx) and finding ArgMax.
+    auto const less = d_col.element<T>(lhs_idx) < d_col.element<T>(rhs_idx);
+    return less == arg_min ? lhs_idx : rhs_idx;
   }
 };
 
 /**
  * @brief Binary operator ArgMin/ArgMax with index values into the input table.
+ *
+ * @tparam T Type of the underlying data. This is the fallback for the cases when T does not support
+ * '<' operator.
  */
-template <bool has_nulls, bool arg_min>
-struct ArgMinMax {
+template <typename T, bool has_nulls, bool arg_min>
+struct ArgMinMax<T,
+                 has_nulls,
+                 arg_min,
+                 std::enable_if_t<!cudf::is_relationally_comparable<T, T>()>> {
   size_type const num_rows;
   row_lexicographic_comparator<has_nulls> const comp;
 
@@ -178,7 +174,6 @@ struct reduce_functor {
     rmm::mr::device_memory_resource* mr)
   {
     using DeviceType  = device_storage_type_t<T>;
-    using OpType      = cudf::detail::corresponding_operator_t<K>;
     using ResultType  = cudf::detail::target_type_t<T, K>;
     using ResultDType = device_storage_type_t<ResultType>;
 
@@ -191,43 +186,44 @@ struct reduce_functor {
 
     if (values.is_empty()) { return result; }
 
-    auto resultview = mutable_column_device_view::create(result->mutable_view(), stream);
-    auto valuesview = column_device_view::create(values, stream);
+    // Perform segmented reduction.
+    auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& comp) {
+      thrust::reduce_by_key(rmm::exec_policy(stream),
+                            group_labels.data(),
+                            group_labels.data() + group_labels.size(),
+                            inp_iter,
+                            thrust::make_discard_iterator(),
+                            out_iter,
+                            thrust::equal_to<size_type>{},
+                            comp);
+    };
+
+    auto const d_values_ptr = column_device_view::create(values, stream);
+    auto const result_begin = result->mutable_view().template begin<ResultDType>();
+
     if constexpr (K == aggregation::ARGMAX || K == aggregation::ARGMIN) {
-      using OpType =
-        std::conditional_t<(K == aggregation::ARGMAX), ArgMax<DeviceType>, ArgMin<DeviceType>>;
-      thrust::reduce_by_key(rmm::exec_policy(stream),
-                            group_labels.data(),
-                            group_labels.data() + group_labels.size(),
-                            thrust::make_counting_iterator<ResultType>(0),
-                            thrust::make_discard_iterator(),
-                            resultview->begin<ResultType>(),
-                            thrust::equal_to<size_type>{},
-                            OpType{*valuesview});
+      auto const count_iter = thrust::make_counting_iterator<ResultType>(0);
+      if (values.has_nulls()) {
+        using OpType = ArgMinMax<T, true, K == aggregation::ARGMIN>;
+        do_reduction(count_iter, result_begin, OpType{*d_values_ptr});
+      } else {
+        using OpType = ArgMinMax<T, false, K == aggregation::ARGMIN>;
+        do_reduction(count_iter, result_begin, OpType{*d_values_ptr});
+      }
     } else {
-      auto init  = OpType::template identity<DeviceType>();
-      auto begin = cudf::detail::make_counting_transform_iterator(
-        0, null_replaced_value_accessor{*valuesview, init, values.has_nulls()});
-      thrust::reduce_by_key(rmm::exec_policy(stream),
-                            group_labels.data(),
-                            group_labels.data() + group_labels.size(),
-                            begin,
-                            thrust::make_discard_iterator(),
-                            resultview->begin<ResultDType>(),
-                            thrust::equal_to<size_type>{},
-                            OpType{});
+      using OpType = cudf::detail::corresponding_operator_t<K>;
+      auto init    = OpType::template identity<DeviceType>();
+      auto begin   = cudf::detail::make_counting_transform_iterator(
+        0, null_replaced_value_accessor{*d_values_ptr, init, values.has_nulls()});
+      do_reduction(begin, result_begin, OpType{});
     }
 
     if (values.has_nulls()) {
       rmm::device_uvector<bool> validity(num_groups, stream);
-      thrust::reduce_by_key(rmm::exec_policy(stream),
-                            group_labels.data(),
-                            group_labels.data() + group_labels.size(),
-                            cudf::detail::make_validity_iterator(*valuesview),
-                            thrust::make_discard_iterator(),
-                            validity.begin(),
-                            thrust::equal_to<size_type>{},
-                            thrust::logical_or<bool>{});
+      do_reduction(cudf::detail::make_validity_iterator(*d_values_ptr),
+                   validity.begin(),
+                   thrust::logical_or<bool>{});
+
       auto [null_mask, null_count] = cudf::detail::valid_if(
         validity.begin(), validity.end(), thrust::identity<bool>{}, stream, mr);
       result->set_null_mask(std::move(null_mask));
@@ -260,7 +256,7 @@ struct reduce_functor {
 
     auto const flattened_values =
       structs::detail::flatten_nested_columns(table_view{{values}}, {}, {});
-    auto const flattened_values_ptr = table_device_view::create(flattened_values, stream);
+    auto const d_flattened_values_ptr = table_device_view::create(flattened_values, stream);
 
     // Perform segmented reduction to find ARGMIN/ARGMAX.
     auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& comp) {
@@ -276,19 +272,15 @@ struct reduce_functor {
 
     auto const count_iter   = thrust::make_counting_iterator<ResultType>(0);
     auto const result_begin = result->mutable_view().template begin<ResultType>();
-    if (!values.has_nulls()) {
-      auto const comp =
-        ArgMinMax<false, K == aggregation::ARGMIN>(values.size(), *flattened_values_ptr);
-      do_reduction(count_iter, result_begin, comp);
-    } else {
-      auto const comp =
-        ArgMinMax<true, K == aggregation::ARGMIN>(values.size(), *flattened_values_ptr);
-      do_reduction(count_iter, result_begin, comp);
+    if (values.has_nulls()) {
+      auto const op =
+        ArgMinMax<T, true, K == aggregation::ARGMIN>(values.size(), *d_flattened_values_ptr);
+      do_reduction(count_iter, result_begin, op);
 
       // Generate bitmask for the output by segmented reduction of the input bitmask.
-      auto const values_ptr = column_device_view::create(values, stream);
-      auto validity         = rmm::device_uvector<bool>(num_groups, stream);
-      do_reduction(cudf::detail::make_validity_iterator(*values_ptr),
+      auto const d_values_ptr = column_device_view::create(values, stream);
+      auto validity           = rmm::device_uvector<bool>(num_groups, stream);
+      do_reduction(cudf::detail::make_validity_iterator(*d_values_ptr),
                    validity.begin(),
                    thrust::logical_or<bool>{});
 
@@ -296,15 +288,18 @@ struct reduce_functor {
         validity.begin(), validity.end(), thrust::identity<bool>{}, stream, mr);
       result->set_null_mask(std::move(null_mask));
       result->set_null_count(null_count);
+    } else {
+      auto const op =
+        ArgMinMax<T, false, K == aggregation::ARGMIN>(values.size(), *d_flattened_values_ptr);
+      do_reduction(count_iter, result_begin, op);
     }
 
     return result;
   }
 
   // Throw exception if the input values type:
-  //  - Is not natively supported, or
-  //  - Is not struct type, or
-  //  - Is struct type but aggregation is not neither ARGMIN nor ARGMAX.
+  //  - Is not natively supported, and
+  //  - Is not struct type, or is struct type but aggregation is not neither ARGMIN nor ARGMAX.
   template <typename T, typename... Args>
   std::enable_if_t<not is_natively_supported<T>() and
                      (not std::is_same_v<T, struct_view> or
