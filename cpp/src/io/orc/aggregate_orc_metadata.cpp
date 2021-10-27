@@ -24,7 +24,7 @@ namespace cudf::io::orc::detail {
 column_hierarchy::column_hierarchy(nesting_map child_map) : children{std::move(child_map)}
 {
   // Sort columns by nesting levels
-  std::function<void(int32_t, int32_t)> levelize = [&](int32_t id, int32_t level) {
+  std::function<void(size_type, int32_t)> levelize = [&](size_type id, int32_t level) {
     if (static_cast<int32_t>(levels.size()) == level) levels.emplace_back();
 
     levels[level].push_back({id, static_cast<int32_t>(children[id].size())});
@@ -43,9 +43,9 @@ namespace {
 /**
  * @brief Goes up to the root to include the column with the given id and its parents.
  */
-void update_parent_mapping(std::map<int32_t, std::vector<int32_t>>& selected_columns,
+void update_parent_mapping(std::map<size_type, std::vector<size_type>>& selected_columns,
                            metadata const& metadata,
-                           int32_t id)
+                           size_type id)
 {
   auto current_id = id;
   while (metadata.column_has_parent(current_id)) {
@@ -62,9 +62,9 @@ void update_parent_mapping(std::map<int32_t, std::vector<int32_t>>& selected_col
 /**
  * @brief Adds all columns nested under the column with the given id to the nesting map.
  */
-void add_nested_columns(std::map<int32_t, std::vector<int32_t>>& selected_columns,
+void add_nested_columns(std::map<size_type, std::vector<size_type>>& selected_columns,
                         std::vector<SchemaType> const& types,
-                        int32_t id)
+                        size_type id)
 {
   for (auto child_id : types[id].subtypes) {
     if (std::find(selected_columns[id].cbegin(), selected_columns[id].cend(), child_id) ==
@@ -81,9 +81,9 @@ void add_nested_columns(std::map<int32_t, std::vector<int32_t>>& selected_column
  * All nested columns and direct ancestors of column `id` are included.
  * Columns that are not on the direct path are excluded, which may result in prunning.
  */
-void add_column_to_mapping(std::map<int32_t, std::vector<int32_t>>& selected_columns,
+void add_column_to_mapping(std::map<size_type, std::vector<size_type>>& selected_columns,
                            metadata const& metadata,
-                           int32_t id)
+                           size_type id)
 {
   update_parent_mapping(selected_columns, metadata, id);
   add_nested_columns(selected_columns, metadata.ff.types, id);

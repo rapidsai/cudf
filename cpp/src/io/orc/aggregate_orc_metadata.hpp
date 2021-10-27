@@ -26,7 +26,7 @@ namespace cudf::io::orc::detail {
  */
 struct column_hierarchy {
   // Maps column IDs to the IDs of their children columns
-  using nesting_map = std::map<int32_t, std::vector<int32_t>>;
+  using nesting_map = std::map<size_type, std::vector<size_type>>;
   // Children IDs of each column
   nesting_map children;
   // Each element contains column at the given nesting level
