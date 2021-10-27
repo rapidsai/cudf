@@ -358,9 +358,9 @@ struct TDigestTest : public cudf::test::BaseFixture {
 
 TEST_F(TDigestTest, EmptyMixed)
 {
-  cudf::test::fixed_width_column_wrapper<double> values{{123456.78, 10.0, 20.0, 30.0},
-                                                        {1, 0, 1, 0}};
-  cudf::test::strings_column_wrapper keys{"b", "a", "c", "d"};
+  cudf::test::fixed_width_column_wrapper<double> values{
+    {123456.78, 10.0, 20.0, 25.0, 30.0, 40.0, 50.0, 60.0, 70.0}, {1, 0, 0, 1, 0, 0, 1, 1, 0}};
+  cudf::test::strings_column_wrapper keys{"b", "a", "c", "c", "d", "d", "e", "e", "f"};
 
   auto const delta = 1000;
   cudf::table_view t({keys});
@@ -374,7 +374,9 @@ TEST_F(TDigestTest, EmptyMixed)
   using FCW     = cudf::test::fixed_width_column_wrapper<double>;
   auto expected = make_expected_tdigest_column({{FCW{}, FCW{}, 0, 0},
                                                 {FCW{123456.78}, FCW{1.0}, 123456.78, 123456.78},
-                                                {FCW{20.0}, FCW{1.0}, 20.0, 20.0},
+                                                {FCW{25.0}, FCW{1.0}, 25.0, 25.0},
+                                                {FCW{}, FCW{}, 0, 0},
+                                                {FCW{50.0, 60.0}, FCW{1.0, 1.0}, 50.0, 60.0},
                                                 {FCW{}, FCW{}, 0, 0}});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result.second[0].results[0], *expected);
