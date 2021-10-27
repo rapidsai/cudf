@@ -6481,14 +6481,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             self, level=level, fill_value=fill_value
         )
 
-    def equals(self, other):
-        if not isinstance(other, DataFrame):
-            return False
-        for self_name, other_name in zip(self._data.names, other._data.names):
-            if self_name != other_name:
-                return False
-        return super().equals(other)
-
     def explode(self, column, ignore_index=False):
         """
         Transform each element of a list-like to a row, replicating index
