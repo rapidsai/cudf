@@ -82,6 +82,19 @@ public final class RollingAggregation {
     return new RollingAggregation(Aggregation.max());
   }
 
+  /**
+   * Rolling Window Standard Deviation with 1 as delta degrees of freedom(DDOF).
+   */
+  public static RollingAggregation standardDeviation() {
+    return new RollingAggregation(Aggregation.standardDeviation());
+  }
+
+  /**
+   * Rolling Window Standard Deviation with configurable delta degrees of freedom(DDOF).
+   */
+  public static RollingAggregation standardDeviation(int ddof) {
+    return new RollingAggregation(Aggregation.standardDeviation(ddof));
+  }
 
   /**
    * Count number of valid, a.k.a. non-null, elements.
