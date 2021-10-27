@@ -672,7 +672,7 @@ class regex_compiler {
     } else if (t == CHAR) {
       m_prog.inst_at(inst_id).u1.c = yy;
     } else if (t == BOL || t == EOL) {
-      m_prog.inst_at(inst_id).u1.c = IS_MULTILINE(flags) ? yy : '\n';
+      m_prog.inst_at(inst_id).u1.c = is_multiline(flags) ? yy : '\n';
     }
     pushand(inst_id, inst_id);
     lastwasand = true;
@@ -785,7 +785,7 @@ class regex_compiler {
     // Parse
     std::vector<regex_parser::Item> items;
     {
-      regex_parser parser(pattern, IS_DOTALL(flags) ? ANYNL : ANY, m_prog);
+      regex_parser parser(pattern, is_dotall(flags) ? ANYNL : ANY, m_prog);
 
       // Expand counted repetitions
       if (parser.m_has_counted)
