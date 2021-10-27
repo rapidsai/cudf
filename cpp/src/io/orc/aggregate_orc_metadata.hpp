@@ -64,7 +64,7 @@ class aggregate_orc_metadata {
   size_type const num_rows;
   size_type const num_columns;
   size_type const num_stripes;
-  bool row_grp_idx_present = true;
+  bool row_grp_idx_present{true};
 
   aggregate_orc_metadata(std::vector<std::unique_ptr<datasource>> const& sources);
 

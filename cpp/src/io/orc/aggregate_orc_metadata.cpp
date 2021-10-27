@@ -104,7 +104,7 @@ auto metadatas_from_sources(std::vector<std::unique_ptr<datasource>> const& sour
 size_type aggregate_orc_metadata::calc_num_rows() const
 {
   return std::accumulate(
-    per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto& sum, auto& pfm) {
+    per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto const& sum, auto const& pfm) {
       return sum + pfm.get_total_rows();
     });
 }
@@ -118,7 +118,7 @@ size_type aggregate_orc_metadata::calc_num_cols() const
 size_type aggregate_orc_metadata::calc_num_stripes() const
 {
   return std::accumulate(
-    per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto& sum, auto& pfm) {
+    per_file_metadata.begin(), per_file_metadata.end(), 0, [](auto const& sum, auto const& pfm) {
       return sum + pfm.get_num_stripes();
     });
 }
