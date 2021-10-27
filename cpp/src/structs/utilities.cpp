@@ -199,7 +199,8 @@ flattened_table flatten_nested_columns(table_view const& input,
                                        std::vector<null_order> const& null_precedence,
                                        column_nullability nullability)
 {
-  auto const has_struct = std::any_of(input.begin(), input.end(), is_struct);
+  auto const has_struct =
+    std::any_of(input.begin(), input.end(), [](auto const& col) { return is_struct(col); });
   if (not has_struct) { return flattened_table{input, column_order, null_precedence, {}, {}}; }
 
   return table_flattener{input, column_order, null_precedence, nullability}();
@@ -280,7 +281,8 @@ std::unique_ptr<cudf::table> unflatten_nested_columns(std::unique_ptr<cudf::tabl
   CUDF_EXPECTS(not has_lists, "Unflattening LIST columns is not supported.");
 
   // If there are no STRUCTs, unflattening is a NOOP.
-  auto const has_structs = std::any_of(blueprint.begin(), blueprint.end(), is_struct);
+  auto const has_structs =
+    std::any_of(blueprint.begin(), blueprint.end(), [](auto const& col) { return is_struct(col); });
   if (not has_structs) {
     return std::move(flattened);  // Unchanged.
   }
