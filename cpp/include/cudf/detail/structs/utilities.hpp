@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cudf/scalar/scalar.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -259,6 +260,24 @@ std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> superimpose_parent
  * @return false If the column is not a struct column or does not contain null structs
  */
 bool contains_struct_nulls(column_view const& col);
+
+/**
+ * @brief Check whether the specified column is of type `STRUCT`.
+ *
+ * @param col Column whose type is checked
+ * @return true If input is a struct column
+ * @return false If input is not a struct column
+ */
+bool is_struct(column_view const& col);
+
+/**
+ * @brief Check whether the specified scalar is of type `STRUCT`.
+ *
+ * @param scalar_value scalar whose type is checked
+ * @return true If input is a struct scalar
+ * @return false If input is not a struct scalar
+ */
+bool is_struct(scalar const& scalar_value);
 }  // namespace detail
 }  // namespace structs
 }  // namespace cudf

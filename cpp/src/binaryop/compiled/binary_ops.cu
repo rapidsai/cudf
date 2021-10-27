@@ -20,6 +20,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/detail/utilities.cuh>
@@ -30,8 +31,6 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
-
-#include <cudf/detail/structs/utilities.hpp>
 
 namespace cudf {
 namespace binops {
@@ -328,7 +327,6 @@ void struct_binary_operation(mutable_column_view& out,
                                   op,
                                   out_iter,
                                   stream);
-    // } else if (op == binary_operator::NULL_EQUALS) {
   } else {
     CUDF_FAIL("Unsupported operator for these types");
   }
@@ -446,7 +444,7 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       rmm::cuda_stream_view stream)
 {
-  if (lhs.type().id() == type_id::STRUCT && rhs.type().id() == type_id::STRUCT) {
+  if (structs::detail::is_struct(lhs) && structs::detail::is_struct(rhs)) {
     CUDF_EXPECTS(is_supported_struct_operation(out.type(), lhs, rhs, op),
                  "Unsupported operator for these types");
     struct_binary_operation(out, lhs, rhs, op, stream);
@@ -464,7 +462,7 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       rmm::cuda_stream_view stream)
 {
-  if (lhs.type().id() == type_id::STRUCT && rhs.type().id() == type_id::STRUCT) {
+  if (structs::detail::is_struct(lhs) && structs::detail::is_struct(rhs)) {
     auto lhs_col = make_column_from_scalar(lhs, rhs.size(), stream);
     CUDF_EXPECTS(is_supported_struct_operation(out.type(), lhs_col->view(), rhs, op),
                  "Unsupported operator for these types");
@@ -483,7 +481,7 @@ void binary_operation(mutable_column_view& out,
                       binary_operator op,
                       rmm::cuda_stream_view stream)
 {
-  if (lhs.type().id() == type_id::STRUCT && rhs.type().id() == type_id::STRUCT) {
+  if (structs::detail::is_struct(lhs) && structs::detail::is_struct(rhs)) {
     auto rhs_col = make_column_from_scalar(rhs, lhs.size(), stream);
     CUDF_EXPECTS(is_supported_struct_operation(out.type(), lhs, rhs_col->view(), op),
                  "Unsupported operator for these types");

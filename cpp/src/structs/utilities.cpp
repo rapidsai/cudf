@@ -70,12 +70,9 @@ std::vector<std::vector<column_view>> extract_ordered_struct_children(
   return result;
 }
 
-namespace {
-/**
- * @brief Check whether the specified column is of type `STRUCT`.
- */
-bool is_struct(cudf::column_view const& col) { return col.type().id() == type_id::STRUCT; }
-}  // namespace
+bool is_struct(column_view const& col) { return col.type().id() == type_id::STRUCT; }
+
+bool is_struct(scalar const& scalar_value) { return scalar_value.type().id() == type_id::STRUCT; }
 
 bool is_or_has_nested_lists(cudf::column_view const& col)
 {
@@ -439,7 +436,7 @@ std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> superimpose_parent
 
 bool contains_struct_nulls(column_view const& col)
 {
-  return (col.type().id() == type_id::STRUCT && col.has_nulls()) ||
+  return (is_struct(col) && col.has_nulls()) ||
          std::any_of(col.child_begin(), col.child_end(), [](auto const& child) {
            return contains_struct_nulls(child);
          });
