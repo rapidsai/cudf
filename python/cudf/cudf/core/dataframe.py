@@ -6590,6 +6590,10 @@ def _make_replacement_func(value):
             uncommon_columns = set(left._column_names) ^ set(
                 right._column_names
             )
+        elif _is_scalar_or_zero_d_array(right):
+            for name, col in output._data.items():
+                output._data[name] = col.fillna(value)
+            return output
         else:
             return output
 
