@@ -238,6 +238,7 @@ struct HasherDispatcher {
                   std::is_same_v<Element, string_view>) {
       hasher->process(input_col.element<Element>(row_index));
     } else {
+      (void)row_index;
       cudf_assert(false && "Unsupported type for hash function.");
     }
   }
@@ -263,6 +264,8 @@ struct ListHasherDispatcher {
         if (input_col.is_valid(i)) { hasher->process(input_col.element<Element>(i)); }
       }
     } else {
+      (void)offset_begin;
+      (void)offset_end;
       cudf_assert(false && "Unsupported type for hash function.");
     }
   }
