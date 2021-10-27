@@ -3221,7 +3221,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Returns
         -------
-        a new dataframe with a new column append for the coded values.
+        A new DataFrame with a new column appended for the coded values.
 
         Examples
         --------
@@ -3239,13 +3239,26 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         2  3  20             1
         """
 
+        warnings.warn(
+            "DataFrame.label_encoding is deprecated and will be removed in the "
+            "future. Consider using cuML's LabelEncoder instead.",
+            FutureWarning,
+        )
+
+        return self._label_encoding(
+            column, prefix, cats, prefix_sep, dtype, na_sentinel
+        )
+
+    def _label_encoding(
+        self, column, prefix, cats, prefix_sep="_", dtype=None, na_sentinel=-1
+    ):
+        # Private implementation of deprecated public label_encoding method
         newname = prefix_sep.join([prefix, "labels"])
         newcol = self[column].label_encoding(
             cats=cats, dtype=dtype, na_sentinel=na_sentinel
         )
         outdf = self.copy()
         outdf.insert(len(outdf._data), newname, newcol)
-
         return outdf
 
     @annotate("ARGSORT", color="yellow", domain="cudf_python")

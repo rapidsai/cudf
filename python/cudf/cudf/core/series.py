@@ -2739,7 +2739,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             ]
 
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):
-        """Perform label encoding
+        """Perform label encoding.
 
         Parameters
         ----------
@@ -2796,6 +2796,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             FutureWarning,
         )
 
+        return self._label_encoding(cats, dtype, na_sentinel)
+
+    def _label_encoding(self, cats, dtype=None, na_sentinel=-1):
+        # Private implementation of deprecated public label_encoding method
         def _return_sentinel_series():
             return Series(
                 cudf.core.column.full(
