@@ -85,7 +85,7 @@ from cudf.utils.utils import (
 
 def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
     """Append a scalar `value` to the end of `col` inplace.
-       Cast to common type if possible
+    Cast to common type if possible
     """
     to_type = find_common_type([type(value), col.dtype])
     val_col = as_column(value, dtype=to_type)
@@ -135,7 +135,11 @@ class _SeriesIlocIndexer(_FrameIndexer):
         if (
             not isinstance(
                 self._frame._column.dtype,
-                (cudf.Decimal64Dtype, cudf.CategoricalDtype),
+                (
+                    cudf.Decimal64Dtype,
+                    cudf.Decimal32Dtype,
+                    cudf.CategoricalDtype,
+                ),
             )
             and hasattr(value, "dtype")
             and _is_non_decimal_numeric_dtype(value.dtype)
@@ -2120,8 +2124,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @property
     def index(self):
-        """The index object
-        """
+        """The index object"""
         return self._index
 
     @index.setter
@@ -2130,8 +2133,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @property
     def nullmask(self):
-        """The gpu buffer for the null-mask
-        """
+        """The gpu buffer for the null-mask"""
         return cudf.Series(self._column.nullmask)
 
     def as_mask(self):
@@ -5521,8 +5523,8 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     result_col = column.as_column(result)
 
     if a_col.null_count and b_col.null_count:
-        a_nulls = a_col.isna()
-        b_nulls = b_col.isna()
+        a_nulls = a_col.isnull()
+        b_nulls = b_col.isnull()
         null_values = a_nulls | b_nulls
 
         if equal_nan is True:
@@ -5530,9 +5532,9 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
         del a_nulls, b_nulls
     elif a_col.null_count:
-        null_values = a_col.isna()
+        null_values = a_col.isnull()
     elif b_col.null_count:
-        null_values = b_col.isna()
+        null_values = b_col.isnull()
     else:
         return Series(result_col, index=index)
 
