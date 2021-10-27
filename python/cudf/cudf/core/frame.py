@@ -1766,8 +1766,7 @@ class Frame:
         return self
 
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
-        """Shift values by `periods` positions.
-        """
+        """Shift values by `periods` positions."""
         assert axis in (None, 0) and freq is None
         return self._shift(periods)
 
@@ -5506,7 +5505,7 @@ class Frame:
 
     def rmul(self, other, axis, level=None, fill_value=None):
         """
-        Get Multiplication of dataframe or series and other, element-wise 
+        Get Multiplication of dataframe or series and other, element-wise
         (binary operator `rmul`).
 
         Equivalent to ``other * frame``, but with support to substitute a

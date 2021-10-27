@@ -116,6 +116,8 @@ def _generate_rand_meta(obj, dtypes_list, null_frequency_override=None):
             )
         elif dtype == "decimal64":
             meta["max_precision"] = cudf.Decimal64Dtype.MAX_PRECISION
+        elif dtype == "decimal32":
+            meta["max_precision"] = cudf.Decimal32Dtype.MAX_PRECISION
 
         meta["dtype"] = dtype
         meta["null_frequency"] = null_frequency

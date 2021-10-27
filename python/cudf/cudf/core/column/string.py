@@ -42,7 +42,7 @@ from cudf.utils.dtypes import can_convert_to_column
 
 
 def str_to_boolean(column: StringColumn):
-    """Takes in string column and returns boolean column """
+    """Takes in string column and returns boolean column"""
     return (
         libstrings.count_characters(column) > cudf.Scalar(0, dtype="int8")
     ).fillna(False)
@@ -552,7 +552,7 @@ class StringMethods(ColumnMethods):
     def extract(
         self, pat: str, flags: int = 0, expand: bool = True
     ) -> SeriesOrIndex:
-        """
+        r"""
         Extract capture groups in the regex `pat` as columns in a DataFrame.
 
         For each subject string in the Series, extract groups from the first
@@ -624,7 +624,7 @@ class StringMethods(ColumnMethods):
         na=np.nan,
         regex: bool = True,
     ) -> SeriesOrIndex:
-        """
+        r"""
         Test if pattern or regex is contained within a string of a Series or
         Index.
 
@@ -3270,7 +3270,7 @@ class StringMethods(ColumnMethods):
         return self._return_or_inplace(libstrings.wrap(self._column, width))
 
     def count(self, pat: str, flags: int = 0) -> SeriesOrIndex:
-        """
+        r"""
         Count occurrences of pattern in each string of the Series/Index.
 
         This function is used to count the number of times a particular
@@ -4767,7 +4767,7 @@ class StringMethods(ColumnMethods):
         0     True
         1    False
         dtype: bool
-         """
+        """
         ltype = libstrings.LetterType.CONSONANT
 
         if can_convert_to_column(position):
