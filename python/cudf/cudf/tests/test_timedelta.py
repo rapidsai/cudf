@@ -167,17 +167,15 @@ def test_timedelta_from_pandas(data, dtype):
     ],
 )
 @pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
-@pytest.mark.parametrize("fillna", [None, "pandas"])
-def test_timedelta_series_to_array(data, dtype, fillna):
+def test_timedelta_series_to_numpy(data, dtype):
     gsr = cudf.Series(data, dtype=dtype)
 
     expected = np.array(
         cp.asnumpy(data) if isinstance(data, cp.ndarray) else data, dtype=dtype
     )
-    if fillna is None:
-        expected = expected[~np.isnan(expected)]
+    expected = expected[~np.isnan(expected)]
 
-    actual = gsr.to_array(fillna=fillna)
+    actual = gsr.dropna().to_numpy()
 
     np.testing.assert_array_equal(expected, actual)
 

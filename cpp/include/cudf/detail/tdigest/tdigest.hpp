@@ -23,42 +23,32 @@ namespace detail {
 
 namespace tdigest {
 
-// mean and weight column indices within tdigest inner struct columns
-constexpr size_type mean_column_index   = 0;
-constexpr size_type weight_column_index = 1;
-
-// min and max column indices within tdigest outer struct columns
-constexpr size_type centroid_column_index = 0;
-constexpr size_type min_column_index      = 1;
-constexpr size_type max_column_index      = 2;
-
 /**
- * @brief Verifies that the input column is a valid tdigest column.
+ * @brief Create a tdigest column from it's constituent components.
  *
- * struct {
- *   // centroids for the digest
- *   list {
- *    struct {
- *      double    // mean
- *      double    // weight
- *    },
- *    ...
- *   }
- *   // these are from the input stream, not the centroids. they are used
- *   // during the percentile_approx computation near the beginning or
- *   // end of the quantiles
- *   double       // min
- *   double       // max
- * }
+ * @param num_rows The number of rows in the output column.
+ * @param centroid_means The inner means column.  These values are partitioned into lists by the
+ * `tdigest_offsets` column.
+ * @param centroid_weights The inner weights column.  These values are partitioned into lists by the
+ * `tdigest_offsets` column.
+ * @param tdigest_offsets Offsets representing each individual tdigest in the output column. The
+ * offsets partition the centroid means and weights.
+ * @param min_values Column representing the minimum input value for each tdigest.
+ * @param max_values Column representing the maximum input value for each tdigest.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  *
- * Each output row is a single tdigest.  The length of the row is the "size" of the
- * tdigest, each element of which represents a weighted centroid (mean, weight).
- *
- * @param col    Column to be checkeed
- *
- * @throws cudf::logic error if the column is not a valid tdigest column.
+ * @returns The constructed tdigest column.
  */
-void check_is_valid_tdigest_column(column_view const& col);
+std::unique_ptr<column> make_tdigest_column(
+  size_type num_rows,
+  std::unique_ptr<column>&& centroid_means,
+  std::unique_ptr<column>&& centroid_weights,
+  std::unique_ptr<column>&& tdigest_offsets,
+  std::unique_ptr<column>&& min_values,
+  std::unique_ptr<column>&& max_values,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Create an empty tdigest column.

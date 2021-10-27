@@ -196,7 +196,7 @@ def test_groupby_as_index_multiindex(pdf, gdf, as_index):
     else:
         # column names don't match - check just the values
         for gcol, pcol in zip(gdf, pdf):
-            assert_array_equal(gdf[gcol].to_array(), pdf[pcol].values)
+            assert_array_equal(gdf[gcol].to_numpy(), pdf[pcol].values)
 
 
 def test_groupby_default(pdf, gdf):
@@ -244,7 +244,7 @@ def test_groupby_cats():
     df["vals"] = np.random.random(len(df))
 
     cats = df["cats"].values_host
-    vals = df["vals"].to_array()
+    vals = df["vals"].to_numpy()
 
     grouped = df.groupby(["cats"], as_index=False).mean()
 
@@ -1907,6 +1907,89 @@ def test_groupby_shift_row_zero_shift(nelem, fill_value):
 
     expected = gdf
     got = gdf.groupby(["0"]).shift(periods=0, fill_value=fill_value)
+
+    assert_groupby_results_equal(
+        expected[["1", "2", "3", "4"]], got[["1", "2", "3", "4"]]
+    )
+
+
+@pytest.mark.parametrize("nelem", [2, 3, 100, 1000])
+@pytest.mark.parametrize("shift_perc", [0.5, 1.0, 1.5])
+@pytest.mark.parametrize("direction", [1, -1])
+def test_groupby_diff_row(nelem, shift_perc, direction):
+    pdf = make_frame(pd.DataFrame, nelem=nelem, extra_vals=["val2"])
+    gdf = cudf.from_pandas(pdf)
+    n_shift = int(nelem * shift_perc) * direction
+
+    expected = pdf.groupby(["x", "y"]).diff(periods=n_shift)
+    got = gdf.groupby(["x", "y"]).diff(periods=n_shift)
+
+    assert_groupby_results_equal(
+        expected[["val", "val2"]], got[["val", "val2"]]
+    )
+
+
+@pytest.mark.parametrize("nelem", [10, 50, 100, 1000])
+@pytest.mark.parametrize("shift_perc", [0.5, 1.0, 1.5])
+@pytest.mark.parametrize("direction", [1, -1])
+def test_groupby_diff_row_mixed_numerics(nelem, shift_perc, direction):
+    t = rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "float32", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "decimal64", "null_frequency": 0.4, "cardinality": 10},
+            {
+                "dtype": "datetime64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "timedelta64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+        ],
+        rows=nelem,
+        use_threads=False,
+    )
+    pdf = t.to_pandas()
+    gdf = cudf.from_pandas(pdf)
+    n_shift = int(nelem * shift_perc) * direction
+
+    expected = pdf.groupby(["0"]).diff(periods=n_shift)
+    got = gdf.groupby(["0"]).diff(periods=n_shift)
+
+    assert_groupby_results_equal(
+        expected[["1", "2", "3", "4", "5"]], got[["1", "2", "3", "4", "5"]]
+    )
+
+
+@pytest.mark.parametrize("nelem", [10, 50, 100, 1000])
+def test_groupby_diff_row_zero_shift(nelem):
+    t = rand_dataframe(
+        dtypes_meta=[
+            {"dtype": "int64", "null_frequency": 0, "cardinality": 10},
+            {"dtype": "int64", "null_frequency": 0.4, "cardinality": 10},
+            {"dtype": "float32", "null_frequency": 0.4, "cardinality": 10},
+            {
+                "dtype": "datetime64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+            {
+                "dtype": "timedelta64[ns]",
+                "null_frequency": 0.4,
+                "cardinality": 10,
+            },
+        ],
+        rows=nelem,
+        use_threads=False,
+    )
+    gdf = cudf.from_pandas(t.to_pandas())
+
+    expected = gdf
+    got = gdf.groupby(["0"]).shift(periods=0)
 
     assert_groupby_results_equal(
         expected[["1", "2", "3", "4"]], got[["1", "2", "3", "4"]]

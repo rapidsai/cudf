@@ -59,8 +59,10 @@ ConfigureTest(GROUPBY_TEST
     groupby/argmax_tests.cpp
     groupby/collect_list_tests.cpp
     groupby/collect_set_tests.cpp
+    groupby/correlation_tests.cpp
     groupby/count_scan_tests.cpp
     groupby/count_tests.cpp
+    groupby/covariance_tests.cpp
     groupby/groups_tests.cpp
     groupby/keys_tests.cpp
     groupby/lists_tests.cpp
@@ -182,7 +184,8 @@ ConfigureTest(TRANSFORM_TEST
     transform/nans_to_null_test.cpp
     transform/mask_to_bools_test.cpp
     transform/bools_to_mask_test.cpp
-    transform/row_bit_count_test.cu)
+    transform/row_bit_count_test.cu
+    transform/one_hot_encode_tests.cpp)
 
 ###################################################################################################
 # - interop tests -------------------------------------------------------------------------
@@ -218,7 +221,7 @@ ConfigureTest(COPYING_TEST
     copying/concatenate_tests.cu
     copying/copy_if_else_nested_tests.cpp
     copying/copy_range_tests.cpp
-    copying/copy_tests.cu
+    copying/copy_tests.cpp
     copying/detail_gather_tests.cu
     copying/gather_list_tests.cpp
     copying/gather_str_tests.cpp
@@ -266,6 +269,7 @@ ConfigureTest(ITERATOR_TEST
     iterator/scalar_iterator_test.cu
     iterator/optional_iterator_test_chrono.cu
     iterator/optional_iterator_test_numeric.cu
+    iterator/indexalator_test.cu
     )
 
 ###################################################################################################
@@ -347,7 +351,7 @@ ConfigureTest(DISPATCHER_TEST types/type_dispatcher_test.cu)
 ###################################################################################################
 # - strings test ----------------------------------------------------------------------------------
 ConfigureTest(STRINGS_TEST
-    strings/array_tests.cu
+    strings/array_tests.cpp
     strings/attrs_tests.cpp
     strings/booleans_tests.cpp
     strings/case_tests.cpp
@@ -367,7 +371,6 @@ ConfigureTest(STRINGS_TEST
     strings/find_multiple_tests.cpp
     strings/fixed_point_tests.cpp
     strings/floats_tests.cpp
-    strings/hash_string.cu
     strings/integers_tests.cpp
     strings/ipv4_tests.cpp
     strings/json_tests.cpp
@@ -383,7 +386,7 @@ ConfigureTest(STRINGS_TEST
 
 ###################################################################################################
 # - structs test ----------------------------------------------------------------------------------
-ConfigureTest(STRUCTS_TEST 
+ConfigureTest(STRUCTS_TEST
     structs/structs_column_tests.cpp
     structs/utilities_tests.cpp
     )

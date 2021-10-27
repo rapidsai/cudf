@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,16 +16,18 @@
 
 #pragma once
 
-namespace cudf {
-namespace io {
-/**
- * @brief Convert a string to a cuDF data_type
- *
- * @param[in] dtype The string to be converted
- *
- * @return data_type The converted data type
- */
-data_type convert_string_to_dtype(const std::string& dtype);
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
-}  // namespace io
-}  // namespace cudf
+namespace cudf {
+namespace java {
+
+/**
+ * Check that the vector of expected uncompressed sizes matches the vector of actual compressed
+ * sizes. Both vectors are assumed to be in device memory and contain num_chunks elements.
+ */
+bool check_nvcomp_output_sizes(std::size_t const *dev_uncompressed_sizes,
+                               std::size_t const *dev_actual_uncompressed_sizes,
+                               std::size_t num_chunks, rmm::cuda_stream_view stream);
+} // namespace java
+} // namespace cudf

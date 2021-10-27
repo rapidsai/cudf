@@ -121,8 +121,7 @@ ALL_TYPES = NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | OTHER_TYPES
 
 
 def np_to_pa_dtype(dtype):
-    """Util to convert numpy dtype to PyArrow dtype.
-    """
+    """Util to convert numpy dtype to PyArrow dtype."""
     # special case when dtype is np.datetime64
     if dtype.kind == "M":
         time_unit, _ = np.datetime_data(dtype)
@@ -153,8 +152,7 @@ def get_numeric_type_info(dtype):
 
 
 def numeric_normalize_types(*args):
-    """Cast all args to a common type using numpy promotion logic
-    """
+    """Cast all args to a common type using numpy promotion logic"""
     dtype = np.result_type(*[a.dtype for a in args])
     return [a.astype(dtype) for a in args]
 
@@ -171,8 +169,8 @@ def _find_common_type_decimal(dtypes):
 
 
 def cudf_dtype_from_pydata_dtype(dtype):
-    """ Given a numpy or pandas dtype, converts it into the equivalent cuDF
-        Python dtype.
+    """Given a numpy or pandas dtype, converts it into the equivalent cuDF
+    Python dtype.
     """
 
     if cudf.api.types.is_categorical_dtype(dtype):
@@ -188,8 +186,8 @@ def cudf_dtype_from_pydata_dtype(dtype):
 
 
 def cudf_dtype_to_pa_type(dtype):
-    """ Given a cudf pandas dtype, converts it into the equivalent cuDF
-        Python dtype.
+    """Given a cudf pandas dtype, converts it into the equivalent cuDF
+    Python dtype.
     """
     if cudf.api.types.is_categorical_dtype(dtype):
         raise NotImplementedError()
@@ -204,8 +202,8 @@ def cudf_dtype_to_pa_type(dtype):
 
 
 def cudf_dtype_from_pa_type(typ):
-    """ Given a cuDF pyarrow dtype, converts it into the equivalent
-        cudf pandas dtype.
+    """Given a cuDF pyarrow dtype, converts it into the equivalent
+    cudf pandas dtype.
     """
     if pa.types.is_list(typ):
         return cudf.core.dtypes.ListDtype.from_arrow(typ)
@@ -498,6 +496,34 @@ def find_common_type(dtypes):
 
     if len(dtypes) == 0:
         return None
+
+    # Early exit for categoricals since they're not hashable and therefore
+    # can't be put in a set.
+    if any(cudf.api.types.is_categorical_dtype(dtype) for dtype in dtypes):
+        if all(
+            (
+                cudf.api.types.is_categorical_dtype(dtype)
+                and (not dtype.ordered if hasattr(dtype, "ordered") else True)
+            )
+            for dtype in dtypes
+        ):
+            if len(set(dtype._categories.dtype for dtype in dtypes)) == 1:
+                return cudf.CategoricalDtype(
+                    cudf.core.column.concat_columns(
+                        [dtype._categories for dtype in dtypes]
+                    ).unique()
+                )
+            else:
+                raise ValueError(
+                    "Only unordered categories of the same underlying type "
+                    "may be coerced to a common type."
+                )
+        else:
+            # TODO: Should this be an error case (mixing categorical with other
+            # dtypes) or should this return object? Unclear if we have enough
+            # information to decide right now, may have to come back to this as
+            # usage of find_common_type increases.
+            return cudf.dtype("O")
 
     # Aggregate same types
     dtypes = set(dtypes)

@@ -192,6 +192,7 @@ Reshaping, sorting, transposing
    DataFrame.unstack
    DataFrame.melt
    DataFrame.explode
+   DataFrame.to_struct
    DataFrame.T
    DataFrame.transpose
 
@@ -241,6 +242,7 @@ Serialization / IO / conversion
    DataFrame.from_pandas
    DataFrame.from_records
    DataFrame.hash_columns
+   DataFrame.hash_values
    DataFrame.to_arrow
    DataFrame.to_dlpack
    DataFrame.to_parquet

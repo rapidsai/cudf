@@ -656,8 +656,7 @@ class MultiIndex(Frame, BaseIndex):
         self._codes = cudf.DataFrame._from_data(codes)
 
     def _compute_validity_mask(self, index, row_tuple, max_length):
-        """ Computes the valid set of indices of values in the lookup
-        """
+        """Computes the valid set of indices of values in the lookup"""
         lookup = cudf.DataFrame()
         for name, row in zip(index.names, row_tuple):
             if isinstance(row, slice) and row == slice(None):
@@ -867,7 +866,7 @@ class MultiIndex(Frame, BaseIndex):
                 "21.10 or older will no longer be deserializable "
                 "after version 21.12. Please load and resave any "
                 "pickles before upgrading to version 22.02.",
-                DeprecationWarning,
+                FutureWarning,
             )
             header["column_names"] = header["names"]
         column_names = pickle.loads(header["column_names"])
@@ -877,7 +876,7 @@ class MultiIndex(Frame, BaseIndex):
                 "21.08 or older will no longer be deserializable "
                 "after version 21.10. Please load and resave any "
                 "pickles before upgrading to version 21.12.",
-                DeprecationWarning,
+                FutureWarning,
             )
             df = cudf.DataFrame.deserialize(header["source_data"], frames)
             return cls.from_frame(df)._set_names(column_names)
@@ -940,6 +939,27 @@ class MultiIndex(Frame, BaseIndex):
             level_idx = colnames.index(level)
         level_values = as_index(self._data[level], name=self.names[level_idx])
         return level_values
+
+    def is_numeric(self):
+        return False
+
+    def is_boolean(self):
+        return False
+
+    def is_integer(self):
+        return False
+
+    def is_floating(self):
+        return False
+
+    def is_object(self):
+        return False
+
+    def is_categorical(self):
+        return False
+
+    def is_interval(self):
+        return False
 
     @classmethod
     def _concat(cls, objs):
@@ -1613,7 +1633,7 @@ class MultiIndex(Frame, BaseIndex):
 
         # Handle partial key search. If length of `key` is less than `nlevels`,
         # Only search levels up to `len(key)` level.
-        key_as_table = libcudf.table.Table(
+        key_as_table = cudf.core.frame.Frame(
             {i: column.as_column(k, length=1) for i, k in enumerate(key)}
         )
         partial_index = self.__class__._from_data(
@@ -1640,9 +1660,7 @@ class MultiIndex(Frame, BaseIndex):
             # the range is returned.
             return slice(lower_bound, upper_bound)
 
-        true_inds = cupy.array(
-            sort_inds.slice(lower_bound, upper_bound).to_gpu_array()
-        )
+        true_inds = sort_inds.slice(lower_bound, upper_bound).values
         true_inds = _maybe_indices_to_slice(true_inds)
         if isinstance(true_inds, slice):
             return true_inds
@@ -1651,3 +1669,74 @@ class MultiIndex(Frame, BaseIndex):
         mask = cupy.full(self._data.nrows, False)
         mask[true_inds] = True
         return mask
+
+    def _get_reconciled_name_object(self, other) -> MultiIndex:
+        """
+        If the result of a set operation will be self,
+        return self, unless the names change, in which
+        case make a shallow copy of self.
+        """
+        names = self._maybe_match_names(other)
+        if self.names != names:
+            return self.rename(names)
+        return self
+
+    def _maybe_match_names(self, other):
+        """
+        Try to find common names to attach to the result of an operation
+        between a and b. Return a consensus list of names if they match
+        at least partly or list of None if they have completely
+        different names.
+        """
+        if len(self.names) != len(other.names):
+            return [None] * len(self.names)
+        return [
+            self_name if self_name == other_name else None
+            for self_name, other_name in zip(self.names, other.names)
+        ]
+
+    def _union(self, other, sort=None):
+        # TODO: When to_frame is refactored to return a
+        # deep copy in future, we should push most of the common
+        # logic between MultiIndex._union & BaseIndex._union into
+        # GenericIndex._union.
+        other_df = other.copy(deep=True).to_frame(index=False)
+        self_df = self.copy(deep=True).to_frame(index=False)
+        col_names = list(range(0, self.nlevels))
+        self_df.columns = col_names
+        other_df.columns = col_names
+        self_df["order"] = self_df.index
+        other_df["order"] = other_df.index
+
+        result_df = self_df.merge(other_df, on=col_names, how="outer")
+        result_df = result_df.sort_values(
+            by=result_df.columns[self.nlevels :], ignore_index=True
+        )
+
+        midx = MultiIndex.from_frame(result_df.iloc[:, : self.nlevels])
+        midx.names = self.names if self.names == other.names else None
+        if sort is None and len(other):
+            return midx.sort_values()
+        return midx
+
+    def _intersection(self, other, sort=None):
+        if self.names != other.names:
+            deep = True
+            col_names = list(range(0, self.nlevels))
+            res_name = (None,) * self.nlevels
+        else:
+            deep = False
+            col_names = None
+            res_name = self.names
+
+        other_df = other.copy(deep=deep).to_frame(index=False)
+        self_df = self.copy(deep=deep).to_frame(index=False)
+        if col_names is not None:
+            other_df.columns = col_names
+            self_df.columns = col_names
+
+        result_df = cudf.merge(self_df, other_df, how="inner")
+        midx = self.__class__.from_frame(result_df, names=res_name)
+        if sort is None and len(other):
+            return midx.sort_values()
+        return midx

@@ -32,7 +32,7 @@
 #include <type_traits>
 
 /**
- * @filename type_lists.hpp
+ * @file type_lists.hpp
  * @brief Provides centralized type lists for use in Google Test
  * type-parameterized tests.
  *
@@ -340,7 +340,7 @@ using CompoundTypes =
  * TYPED_TEST_CASE(MyTypedFixture, cudf::test::AllTypes);
  * ```
  */
-using AllTypes = Concat<NumericTypes, ChronoTypes>;
+using AllTypes = Concat<NumericTypes, ChronoTypes, FixedPointTypes>;
 
 /**
  * @brief `std::array` of all `cudf::type_id`s
