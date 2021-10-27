@@ -1138,11 +1138,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         self._drop_column(name)
 
-    def __sizeof__(self):
-        columns = sum(col.__sizeof__() for col in self._data.columns)
-        index = self._index.__sizeof__()
-        return columns + index
-
     def _slice(self: T, arg: slice) -> T:
         """
         _slice : slice the frame as per the arg
@@ -1254,7 +1249,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         5048
         """
         ind = list(self.columns)
-        sizes = [col._memory_usage(deep=deep) for col in self._data.columns]
+        sizes = [col.memory_usage(deep=deep) for col in self._data.columns]
         if index:
             ind.append("Index")
             ind = cudf.Index(ind, dtype="str")

@@ -1022,9 +1022,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         mask[true_inds] = True
         return mask
 
-    def __sizeof__(self):
-        return self._values.__sizeof__()
-
     def __repr__(self):
         max_seq_items = get_option("max_seq_items") or len(self)
         mr = 0

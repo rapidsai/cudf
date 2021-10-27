@@ -1410,7 +1410,7 @@ class BaseIndex(Serializable):
         -------
             bytes used
         """
-        return self._values._memory_usage(deep=deep)
+        return self._values.memory_usage(deep=deep)
 
     @classmethod
     def from_pandas(cls, index, nan_as_null=None):

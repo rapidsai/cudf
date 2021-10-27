@@ -199,14 +199,6 @@ class ColumnBase(Column, Serializable):
 
         return result_col
 
-    def __sizeof__(self) -> int:
-        n = 0
-        if self.data is not None:
-            n += self.data.size
-        if self.nullable:
-            n += bitmask_allocation_size_bytes(self.size)
-        return n
-
     def dropna(self, drop_nan: bool = False) -> ColumnBase:
         if drop_nan:
             col = self.nans_to_nulls()
@@ -313,13 +305,18 @@ class ColumnBase(Column, Serializable):
             self.base_mask, self.offset, self.offset + len(self)
         )
 
-    def _memory_usage(self, **kwargs) -> int:
-        return self.__sizeof__()
+    def memory_usage(self) -> int:
+        n = 0
+        if self.data is not None:
+            n += self.data.size
+        if self.nullable:
+            n += bitmask_allocation_size_bytes(self.size)
+        return n
 
     def _default_na_value(self) -> Any:
         raise NotImplementedError()
 
-    # TODO: This method is decpreated and can be removed when the associated
+    # TODO: This method is deprecated and can be removed when the associated
     # Frame methods are removed.
     def to_gpu_array(self, fillna=None) -> "cuda.devicearray.DeviceNDArray":
         """Get a dense numba device array for the data.
