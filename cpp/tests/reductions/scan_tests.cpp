@@ -464,6 +464,31 @@ TYPED_TEST(ScanChronoTest, ChronoMinMax)
 }
 
 template <typename T>
+struct ScanDurationTest : public BaseFixture {
+};
+
+TYPED_TEST_CASE(ScanDurationTest, DurationTypes);
+
+TYPED_TEST(ScanDurationTest, Sum)
+{
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> col({5, 4, 6, 0, 1, 6, 5, 3},
+                                                                 {1, 1, 1, 0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> expected({5, 9, 15, 0, 16, 22, 27, 30},
+                                                                      {1, 1, 1, 0, 1, 1, 1, 1});
+
+  auto result = cudf::scan(col, cudf::make_sum_aggregation(), cudf::scan_type::INCLUSIVE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+
+  result = cudf::scan(
+    col, cudf::make_sum_aggregation(), cudf::scan_type::INCLUSIVE, cudf::null_policy::EXCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
+  // cudf::test::print(result->view());
+
+  EXPECT_THROW(cudf::scan(col, cudf::make_sum_aggregation(), cudf::scan_type::EXCLUSIVE),
+               cudf::logic_error);
+}
+
+template <typename T>
 struct TypedRankScanTest : ScanTest<T> {
   inline void test_ungrouped_rank_scan(column_view const& input,
                                        column_view const& expect_vals,
