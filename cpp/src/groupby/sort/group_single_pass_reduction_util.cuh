@@ -208,6 +208,10 @@ struct reduce_functor {
     return result;
   }
 
+  // This specialization handles the cases when the input values type:
+  //  - Is not natively supported, and
+  //  - Is struct type, and
+  //  - Aggregation is either ARGMIN or ARGMAX.
   template <typename T>
   std::enable_if_t<not is_natively_supported<T>() and std::is_same_v<T, struct_view> and
                      (K == aggregation::ARGMIN or K == aggregation::ARGMAX),
@@ -218,13 +222,15 @@ struct reduce_functor {
              rmm::cuda_stream_view stream,
              rmm::mr::device_memory_resource* mr)
   {
+    // This is be expected to be size_type.
     using ResultType = cudf::detail::target_type_t<T, K>;
-    auto result      = make_fixed_width_column(
+
+    auto result = make_fixed_width_column(
       data_type{type_to_id<ResultType>()}, num_groups, mask_state::UNALLOCATED, stream, mr);
 
     if (values.is_empty()) { return result; }
 
-    // The comparison and null orders for finding arg_min/arg_max for the min/max elements.
+    // The comparison order and null order for finding ARGMIN/ARGMAX.
     auto const comp_order      = K == aggregation::ARGMIN ? order::ASCENDING : order::DESCENDING;
     auto const null_precedence = K == aggregation::ARGMIN ? null_order::AFTER : null_order::BEFORE;
 
@@ -233,9 +239,9 @@ struct reduce_functor {
                                               {comp_order},
                                               {null_precedence},
                                               structs::detail::column_nullability::MATCH_INCOMING);
-    auto const values_ptr = table_device_view::create(flattened_values, stream);
+    auto const flattened_values_ptr = table_device_view::create(flattened_values, stream);
 
-    // Perform reduction to find arg_min/arg_max.
+    // Perform segmented reduction to find ARGMIN/ARGMAX.
     auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& comp) {
       thrust::reduce_by_key(rmm::exec_policy(stream),
                             group_labels.data(),
@@ -250,19 +256,19 @@ struct reduce_functor {
     auto const count_iter   = thrust::make_counting_iterator<ResultType>(0);
     auto const result_begin = result->mutable_view().template begin<ResultType>();
     if (!values.has_nulls()) {
-      auto const comp = row_lexicographic_comparator<false>(*values_ptr,
-                                                            *values_ptr,
+      auto const comp = row_lexicographic_comparator<false>(*flattened_values_ptr,
+                                                            *flattened_values_ptr,
                                                             flattened_values.orders().data(),
                                                             flattened_values.null_orders().data());
       do_reduction(count_iter, result_begin, comp);
     } else {
-      auto const comp = row_lexicographic_comparator<true>(*values_ptr,
-                                                           *values_ptr,
+      auto const comp = row_lexicographic_comparator<true>(*flattened_values_ptr,
+                                                           *flattened_values_ptr,
                                                            flattened_values.orders().data(),
                                                            flattened_values.null_orders().data());
       do_reduction(count_iter, result_begin, comp);
 
-      // Generate bitmask for the output from the input.
+      // Generate bitmask for the output by segmented reduction of the input bitmask.
       auto const values_ptr = column_device_view::create(values, stream);
       auto validity         = rmm::device_uvector<bool>(num_groups, stream);
       do_reduction(cudf::detail::make_validity_iterator(*values_ptr),
@@ -278,6 +284,10 @@ struct reduce_functor {
     return result;
   }
 
+  // Throw exception if the input values type:
+  //  - Is not natively supported, or
+  //  - Is not struct type, or
+  //  - Is struct type but aggregation is not neither ARGMIN nor ARGMAX.
   template <typename T, typename... Args>
   std::enable_if_t<not is_natively_supported<T>() and
                      (not std::is_same_v<T, struct_view> or
