@@ -21,6 +21,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 
+#include <algorithm>
 #include <vector>
 
 struct StringsContainsTests : public cudf::test::BaseFixture {
@@ -234,6 +235,30 @@ TEST_F(StringsContainsTests, MatchesIPV4Test)
       {false, false, false, false, false, false, true, true, false, false});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
   }
+}
+
+TEST_F(StringsContainsTests, EmbeddedNullCharacter)
+{
+  std::vector<std::string> data(10);
+  std::generate(data.begin(), data.end(), [n = 0]() mutable {
+    char first      = static_cast<char>('A' + n++);
+    char raw_data[] = {first, '\0', 'B'};
+    return std::string{raw_data, 3};
+  });
+  cudf::test::strings_column_wrapper input(data.begin(), data.end());
+  auto strings_view = cudf::strings_column_view(input);
+
+  auto results  = cudf::strings::contains_re(strings_view, "A");
+  auto expected = cudf::test::fixed_width_column_wrapper<bool>({1, 0, 0, 0, 0, 0, 0, 0, 0, 0});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+
+  results  = cudf::strings::contains_re(strings_view, "B");
+  expected = cudf::test::fixed_width_column_wrapper<bool>({1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+
+  results  = cudf::strings::contains_re(strings_view, "J\\0B");
+  expected = cudf::test::fixed_width_column_wrapper<bool>({0, 0, 0, 0, 0, 0, 0, 0, 0, 1});
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 }
 
 TEST_F(StringsContainsTests, CountTest)

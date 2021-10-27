@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -838,9 +838,10 @@ class regex_compiler {
 reprog reprog::create_from(const char32_t* pattern, regex_flags const flags)
 {
   reprog rtn;
-  // regex_compiler compiler(pattern, ANY, rtn);  // future feature: ANYNL
   regex_compiler compiler(pattern, flags, rtn);
-  if (std::getenv("CUDF_REGEX_DEBUG")) rtn.print(flags);
+  // for debugging, it can be helpful to call rtn.print(flags) here to dump
+  // out the instructions that have been created from the given pattern
+  if (std::getenv("LIBCUDF_REGEX_DEBUG")) rtn.print(flags);
   return rtn;
 }
 

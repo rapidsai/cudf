@@ -44,7 +44,7 @@ from cudf.testing._utils import assert_eq
 )
 @pytest.mark.parametrize("to_host", [True, False])
 def test_serialize(df, to_host):
-    """ This should hopefully replace all functions below """
+    """This should hopefully replace all functions below"""
     a = df()
     if "cudf" not in type(a).__module__:
         a = cudf.from_pandas(a)
