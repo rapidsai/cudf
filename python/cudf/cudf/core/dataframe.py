@@ -3240,8 +3240,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
 
         warnings.warn(
-            "DataFrame.label_encoding is deprecated and will be removed in the "
-            "future. Consider using cuML's LabelEncoder instead.",
+            "DataFrame.label_encoding is deprecated and will be removed in "
+            "the future. Consider using cuML's LabelEncoder instead.",
             FutureWarning,
         )
 
