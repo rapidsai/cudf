@@ -24,7 +24,9 @@
 #include <cudf_test/cxxopts.hpp>
 #include <cudf_test/file_utilities.hpp>
 
+#include <rmm/mr/device/arena_memory_resource.hpp>
 #include <rmm/mr/device/binning_memory_resource.hpp>
+#include <rmm/mr/device/cuda_async_memory_resource.hpp>
 #include <rmm/mr/device/cuda_memory_resource.hpp>
 #include <rmm/mr/device/managed_memory_resource.hpp>
 #include <rmm/mr/device/owning_wrapper.hpp>
@@ -217,11 +219,18 @@ class TempDirTestEnvironment : public ::testing::Environment {
 /// MR factory functions
 inline auto make_cuda() { return std::make_shared<rmm::mr::cuda_memory_resource>(); }
 
+inline auto make_async() { return std::make_shared<rmm::mr::cuda_async_memory_resource>(); }
+
 inline auto make_managed() { return std::make_shared<rmm::mr::managed_memory_resource>(); }
 
 inline auto make_pool()
 {
   return rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(make_cuda());
+}
+
+inline auto make_arena()
+{
+  return rmm::mr::make_owning_wrapper<rmm::mr::arena_memory_resource>(make_cuda());
 }
 
 inline auto make_binning()
@@ -253,7 +262,9 @@ inline std::shared_ptr<rmm::mr::device_memory_resource> create_memory_resource(
 {
   if (allocation_mode == "binning") return make_binning();
   if (allocation_mode == "cuda") return make_cuda();
+  if (allocation_mode == "async") return make_async();
   if (allocation_mode == "pool") return make_pool();
+  if (allocation_mode == "arena") return make_arena();
   if (allocation_mode == "managed") return make_managed();
   CUDF_FAIL("Invalid RMM allocation mode: " + allocation_mode);
 }
