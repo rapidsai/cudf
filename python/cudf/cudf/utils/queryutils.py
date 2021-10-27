@@ -156,8 +156,7 @@ def {kernelname}(out, {args}):
 
 
 def _wrap_query_expr(name, fn, args):
-    """Wrap the query expression in a cuda kernel.
-    """
+    """Wrap the query expression in a cuda kernel."""
 
     def _add_idx(arg):
         if arg.startswith(ENVREF_PREFIX):

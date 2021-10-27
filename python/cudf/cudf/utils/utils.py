@@ -383,8 +383,8 @@ def _cast_to_appropriate_cudf_type(val, index=None):
 
 def _get_cupy_compatible_args_index(args, ser_index=None):
     """
-     This function returns cupy compatible arguments and output index
-     if conversion is not possible it returns None
+    This function returns cupy compatible arguments and output index
+    if conversion is not possible it returns None
     """
 
     casted_ls = []
