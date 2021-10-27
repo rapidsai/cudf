@@ -474,7 +474,12 @@ class RangeIndex(BaseIndex):
         pos = search_range(start, stop, label, step, side=side)
         return pos
 
-    def memory_usage(self, **kwargs):
+    def memory_usage(self, deep=False):
+        if deep:
+            warnings.warn(
+                "The deep parameter is ignored and is only included "
+                "for pandas compatibility."
+            )
         return 0
 
     def unique(self):

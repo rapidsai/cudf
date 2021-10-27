@@ -3,6 +3,7 @@
 from __future__ import annotations, division, print_function
 
 import pickle
+import warnings
 from typing import Any, Set
 
 import cupy
@@ -1410,7 +1411,12 @@ class BaseIndex(Serializable):
         -------
             bytes used
         """
-        return self._values.memory_usage(deep=deep)
+        if deep:
+            warnings.warn(
+                "The deep parameter is ignored and is only included "
+                "for pandas compatibility."
+            )
+        return self._values.memory_usage()
 
     @classmethod
     def from_pandas(cls, index, nan_as_null=None):

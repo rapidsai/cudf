@@ -1018,9 +1018,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> s.memory_usage(index=False)
         24
         """
-        n = self._column.memory_usage(deep=deep)
+        if deep:
+            warnings.warn(
+                "The deep parameter is ignored and is only included "
+                "for pandas compatibility."
+            )
+        n = self._column.memory_usage()
         if index:
-            n += self._index.memory_usage(deep=deep)
+            n += self._index.memory_usage()
         return n
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):

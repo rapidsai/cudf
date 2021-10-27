@@ -1248,12 +1248,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> df['object'].astype('category').memory_usage(deep=True)
         5048
         """
+        if deep:
+            warnings.warn(
+                "The deep parameter is ignored and is only included "
+                "for pandas compatibility."
+            )
         ind = list(self.columns)
-        sizes = [col.memory_usage(deep=deep) for col in self._data.columns]
+        sizes = [col.memory_usage() for col in self._data.columns]
         if index:
             ind.append("Index")
             ind = cudf.Index(ind, dtype="str")
-            sizes.append(self.index.memory_usage(deep=deep))
+            sizes.append(self.index.memory_usage())
         return Series(sizes, index=ind)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
