@@ -110,17 +110,13 @@ class reprog_device {
     rmm::cuda_stream_view stream);
 
   /**
-   * @brief Create device program instance from a regex pattern.
-   *
-   * The number of strings is needed to compute the state data size required when evaluating the
-   * regex.
+   * @brief Create the device program instance from a regex pattern.
    *
    * @param pattern The regex pattern to compile.
+   * @param re_flags Regex flags for interpretting special characters in the pattern.
    * @param cp_flags The code-point lookup table for character types.
    * @param strings_count Number of strings that will be evaluated.
-   * @param stream CUDA stream for asynchronous memory allocations. To ensure correct
-   * synchronization on destruction, the same stream should be used for all operations with the
-   * created objects.
+   * @param stream CUDA stream used for device memory operations and kernel launches
    * @return The program device object.
    */
   static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> create(
