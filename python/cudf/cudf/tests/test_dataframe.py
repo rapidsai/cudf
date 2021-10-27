@@ -8955,6 +8955,6 @@ def test_dataframe_pearson_corr(data):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
-    expected = gdf.groupby("id").corr()
-    actual = pdf.groupby("id").corr()
+    expected = gdf.groupby("id").corr("pearson")
+    actual = pdf.groupby("id").corr("pearson")
     assert_eq(expected, actual)
