@@ -51,6 +51,7 @@ from cudf.core.dtypes import (
     CategoricalDtype,
     Decimal64Dtype,
     Decimal32Dtype,
+    Decimal128Dtype,
     IntervalDtype,
     ListDtype,
     StructDtype,

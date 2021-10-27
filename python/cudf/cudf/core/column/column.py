@@ -45,6 +45,7 @@ from cudf.api.types import (
     is_categorical_dtype,
     is_decimal32_dtype,
     is_decimal64_dtype,
+    is_decimal128_dtype,
     is_decimal_dtype,
     is_dtype_equal,
     is_integer_dtype,
@@ -309,8 +310,8 @@ class ColumnBase(Column, Serializable):
             array.type, pd.core.arrays._arrow_utils.ArrowIntervalType
         ):
             return cudf.core.column.IntervalColumn.from_arrow(array)
-        elif isinstance(array.type, pa.Decimal128Type):
-            return cudf.core.column.Decimal64Column.from_arrow(array)
+        # elif isinstance(array.type, pa.Decimal128Type):
+        #     return cudf.core.column.Decimal128Column.from_arrow(array)
 
         result = libcudf.interop.from_arrow(data, data.column_names)[0]["None"]
 
@@ -1516,6 +1517,18 @@ def build_column(
             null_count=null_count,
             children=children,
         )
+    elif is_decimal128_dtype(dtype):
+        if size is None:
+            raise TypeError("Must specify size")
+        return cudf.core.column.Decimal128Column(
+            data=data,
+            size=size,
+            offset=offset,
+            dtype=dtype,
+            mask=mask,
+            null_count=null_count,
+            children=children,
+        )
     elif is_interval_dtype(dtype):
         return cudf.core.column.IntervalColumn(
             dtype=dtype,
@@ -1852,7 +1865,7 @@ def as_column(
         else:
             pyarrow_array = pa.array(arbitrary, from_pandas=nan_as_null)
             if isinstance(pyarrow_array.type, pa.Decimal128Type):
-                pyarrow_type = cudf.Decimal64Dtype.from_arrow(
+                pyarrow_type = cudf.Decimal128Dtype.from_arrow(
                     pyarrow_array.type
                 )
             else:
@@ -2074,6 +2087,14 @@ def as_column(
                         ),
                     )
                     return cudf.core.column.Decimal32Column.from_arrow(data)
+                elif isinstance(dtype, cudf.core.dtypes.Decimal128Dtype):
+                    data = pa.array(
+                        arbitrary,
+                        type=pa.decimal128(
+                            precision=dtype.precision, scale=dtype.scale
+                        ),
+                    )
+                    return cudf.core.column.Decimal128Column.from_arrow(data)
             pa_type = None
             np_type = None
             try:

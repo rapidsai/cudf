@@ -79,6 +79,7 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         DURATION_NANOSECONDS   "cudf::type_id::DURATION_NANOSECONDS"
         DECIMAL32              "cudf::type_id::DECIMAL32"
         DECIMAL64              "cudf::type_id::DECIMAL64"
+        DECIMAL128             "cudf::type_id::DECIMAL128"
 
     ctypedef enum hash_id "cudf::hash_id":
         HASH_IDENTITY "cudf::hash_id::HASH_IDENTITY"

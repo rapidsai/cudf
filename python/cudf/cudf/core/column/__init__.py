@@ -31,5 +31,6 @@ from cudf.core.column.interval import IntervalColumn  # noqa: F401
 from cudf.core.column.decimal import (  # noqa: F401
     Decimal32Column,
     Decimal64Column,
+    Decimal128Column,
 )
 from cudf.core.column.interval import IntervalColumn  # noqa: F401

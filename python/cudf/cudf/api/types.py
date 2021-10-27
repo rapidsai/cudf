@@ -20,6 +20,7 @@ from cudf.core.dtypes import (  # noqa: F401
     is_categorical_dtype,
     is_decimal32_dtype,
     is_decimal64_dtype,
+    is_decimal128_dtype,
     is_decimal_dtype,
     is_interval_dtype,
     is_list_dtype,

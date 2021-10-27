@@ -17,7 +17,7 @@ from cudf._lib.cpp.strings.convert.convert_fixed_point cimport (
     is_fixed_point as cpp_is_fixed_point,
     to_fixed_point as cpp_to_fixed_point,
 )
-from cudf._lib.cpp.types cimport DECIMAL64, data_type, type_id
+from cudf._lib.cpp.types cimport DECIMAL64, DECIMAL128, data_type, type_id
 from cudf._lib.types cimport underlying_type_t_type_id
 
 
@@ -60,7 +60,7 @@ def to_decimal(Column input_col, object out_type):
     cdef column_view input_column_view = input_col.view()
     cdef unique_ptr[column] c_result
     cdef int scale = out_type.scale
-    cdef data_type c_out_type = data_type(DECIMAL64, -scale)
+    cdef data_type c_out_type = data_type(DECIMAL128, -scale)
     with nogil:
         c_result = move(
             cpp_to_fixed_point(
