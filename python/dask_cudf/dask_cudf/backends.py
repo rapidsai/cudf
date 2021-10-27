@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+from dask.dask import sizeof as sizeof_dispatch
 from dask.dataframe.core import get_parallel_type, meta_nonempty
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
@@ -345,3 +346,8 @@ def group_split_cudf(df, c, k, ignore_index=False):
             ),
         )
     )
+
+
+@sizeof_dispatch.register((cudf.DataFrame, cudf.Series, cudf.BaseIndex))
+def sizeof_cudf(obj):
+    return obj.memory_usage()
