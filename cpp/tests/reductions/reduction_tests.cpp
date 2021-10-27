@@ -108,7 +108,7 @@ struct ReductionTest : public cudf::test::BaseFixture {
       using ScalarType                     = cudf::scalar_type_t<T_out>;
       auto result1                         = static_cast<ScalarType*>(result.get());
       EXPECT_EQ(expected_null, !result1->is_valid());
-      if (result1->is_valid()) { EXPECT_EQ(expected_value, result1->value()); }
+      if (result1->is_valid()) { EXPECT_EQ(expected_value, T_out{result1->value()}); }
     };
 
     if (succeeded_condition) {
@@ -152,8 +152,8 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
   using ScalarType = cudf::scalar_type_t<T>;
   auto min_result  = static_cast<ScalarType*>(res.first.get());
   auto max_result  = static_cast<ScalarType*>(res.second.get());
-  EXPECT_EQ(min_result->value(), expected_min_result);
-  EXPECT_EQ(max_result->value(), expected_max_result);
+  EXPECT_EQ(T{min_result->value()}, expected_min_result);
+  EXPECT_EQ(T{max_result->value()}, expected_max_result);
 
   // test with some nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
@@ -174,8 +174,8 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
   using ScalarType     = cudf::scalar_type_t<T>;
   auto min_null_result = static_cast<ScalarType*>(null_res.first.get());
   auto max_null_result = static_cast<ScalarType*>(null_res.second.get());
-  EXPECT_EQ(min_null_result->value(), expected_min_null_result);
-  EXPECT_EQ(max_null_result->value(), expected_max_null_result);
+  EXPECT_EQ(T{min_null_result->value()}, expected_min_null_result);
+  EXPECT_EQ(T{max_null_result->value()}, expected_max_null_result);
 
   // test with all null
   cudf::test::fixed_width_column_wrapper<T> col_all_nulls = construct_null_column(v, all_null);

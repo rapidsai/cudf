@@ -341,7 +341,7 @@ using CompoundTypes =
  * TYPED_TEST_CASE(MyTypedFixture, cudf::test::AllTypes);
  * ```
  */
-using AllTypes = Concat<NumericTypes, ChronoTypes>;
+using AllTypes = Concat<NumericTypes, ChronoTypes, FixedPointTypes>;
 
 /**
  * @brief `std::array` of all `cudf::type_id`s

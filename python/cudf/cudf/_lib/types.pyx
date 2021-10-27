@@ -233,11 +233,13 @@ cdef libcudf_types.data_type dtype_to_data_type(dtype) except *:
             <underlying_type_t_type_id> (
                 SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[np.dtype(dtype)]))
 
-    if tid in (
-        libcudf_types.type_id.DECIMAL64,
-        libcudf_types.type_id.DECIMAL32,
-        libcudf_types.type_id.DECIMAL128
-    ):
+    if is_decimal_type_id(tid):
         return libcudf_types.data_type(tid, -dtype.scale)
     else:
         return libcudf_types.data_type(tid)
+
+cdef bool is_decimal_type_id(libcudf_types.type_id tid) except *:
+    return tid in (
+        libcudf_types.type_id.DECIMAL64,
+        libcudf_types.type_id.DECIMAL32
+    )
