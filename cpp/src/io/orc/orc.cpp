@@ -473,7 +473,7 @@ void metadata::init_column_names()
     if (not column_has_parent(col_id)) return std::string{};
     auto const& parent_field_names = ff.types[parent_id(col_id)].fieldNames;
     // Child columns of lists don't have a name in ORC files, generate placeholder in that case
-    return field_index(col_id) < static_cast<int32_t>(parent_field_names.size())
+    return field_index(col_id) < static_cast<size_type>(parent_field_names.size())
              ? parent_field_names[field_index(col_id)]
              : std::to_string(col_id);
   });
@@ -489,14 +489,14 @@ void metadata::init_column_names()
 
 void metadata::init_parent_descriptors()
 {
-  auto const num_columns = static_cast<int32_t>(ff.types.size());
+  auto const num_columns = static_cast<size_type>(ff.types.size());
   parents.resize(num_columns);
 
-  for (int32_t col_id = 0; col_id < num_columns; ++col_id) {
+  for (size_type col_id = 0; col_id < num_columns; ++col_id) {
     auto const& subtypes    = ff.types[col_id].subtypes;
-    auto const num_children = static_cast<int32_t>(subtypes.size());
-    for (int32_t field_idx = 0; field_idx < num_children; ++field_idx) {
-      auto const child_id = static_cast<int32_t>(subtypes[field_idx]);
+    auto const num_children = static_cast<size_type>(subtypes.size());
+    for (size_type field_idx = 0; field_idx < num_children; ++field_idx) {
+      auto const child_id = static_cast<size_type>(subtypes[field_idx]);
       CUDF_EXPECTS(child_id > col_id && child_id < num_columns, "Invalid column id");
       CUDF_EXPECTS(not column_has_parent(child_id), "Same node referenced twice");
       parents[child_id] = {col_id, field_idx};

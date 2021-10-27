@@ -51,7 +51,7 @@ struct stripe_source_mapping;
  * @brief Keeps track of orc mapping and child column details.
  */
 struct reader_column_meta {
-  std::vector<std::vector<int32_t>>
+  std::vector<std::vector<size_type>>
     orc_col_map;                         // Mapping between column id in orc to processing order.
   std::vector<uint32_t> num_child_rows;  // number of rows in child columns
 
@@ -173,7 +173,7 @@ class reader::impl {
    * @param col_buffers Column buffers for columns and children.
    * @param level Current nesting level.
    */
-  column_buffer&& assemble_buffer(const int32_t orc_col_id,
+  column_buffer&& assemble_buffer(const size_type orc_col_id,
                                   std::vector<std::vector<column_buffer>>& col_buffers,
                                   const size_t level,
                                   rmm::cuda_stream_view stream);
@@ -200,7 +200,7 @@ class reader::impl {
    *
    * @return An empty column equivalent to orc column type.
    */
-  std::unique_ptr<column> create_empty_column(const int32_t orc_col_id,
+  std::unique_ptr<column> create_empty_column(const size_type orc_col_id,
                                               column_name_info& schema_info,
                                               rmm::cuda_stream_view stream);
 

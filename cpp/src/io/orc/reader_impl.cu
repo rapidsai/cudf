@@ -635,7 +635,7 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
                                         cudf::detail::host_2dspan<gpu::RowGroup> row_groups,
                                         std::vector<column_buffer>& out_buffers,
                                         std::vector<orc_column_meta> const& list_col,
-                                        const int32_t level)
+                                        const size_type level)
 {
   const auto num_of_stripes         = chunks.size().first;
   const auto num_of_rowgroups       = row_groups.size().first;
@@ -678,7 +678,7 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
         for (size_t rowgroup_id = 0; rowgroup_id < stripe_num_row_groups;
              rowgroup_id++, processed_row_groups++) {
           const auto child_rows = row_groups[processed_row_groups][parent_col_idx].num_child_rows;
-          for (int32_t id = 0; id < p_col.num_children; id++) {
+          for (size_type id = 0; id < p_col.num_children; id++) {
             const auto child_col_idx                                  = index + id;
             rwgrp_meta[processed_row_groups][child_col_idx].start_row = processed_child_rows;
             rwgrp_meta[processed_row_groups][child_col_idx].num_rows  = child_rows;
@@ -689,7 +689,7 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
 
       // Aggregate start row, number of rows per chunk and total number of rows in a column
       const auto child_rows = chunks[stripe_id][parent_col_idx].num_child_rows;
-      for (int32_t id = 0; id < p_col.num_children; id++) {
+      for (size_type id = 0; id < p_col.num_children; id++) {
         const auto child_col_idx = index + id;
 
         num_child_rows[child_col_idx] += child_rows;
@@ -707,7 +707,7 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
     auto parent_valid_map  = out_buffers[parent_col_idx].null_mask();
     auto num_rows          = out_buffers[parent_col_idx].size;
 
-    for (int32_t id = 0; id < p_col.num_children; id++) {
+    for (size_type id = 0; id < p_col.num_children; id++) {
       const auto child_col_idx                     = index + id;
       _col_meta.parent_column_index[child_col_idx] = parent_col_idx;
       if (type == type_id::STRUCT) {
@@ -724,7 +724,7 @@ void reader::impl::aggregate_child_meta(cudf::detail::host_2dspan<gpu::ColumnDes
 
 std::string get_map_child_col_name(size_t const idx) { return (idx == 0) ? "key" : "value"; }
 
-std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_id,
+std::unique_ptr<column> reader::impl::create_empty_column(const size_type orc_col_id,
                                                           column_name_info& schema_info,
                                                           rmm::cuda_stream_view stream)
 {
@@ -798,7 +798,7 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
 }
 
 // Adds child column buffers to parent column
-column_buffer&& reader::impl::assemble_buffer(const int32_t orc_col_id,
+column_buffer&& reader::impl::assemble_buffer(const size_type orc_col_id,
                                               std::vector<std::vector<column_buffer>>& col_buffers,
                                               const size_t level,
                                               rmm::cuda_stream_view stream)
@@ -952,7 +952,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         // sign of the scale is changed since cuDF follows c++ libraries like CNL
         // which uses negative scaling, but liborc and other libraries
         // follow positive scaling.
-        auto const scale = -static_cast<int32_t>(_metadata.get_col_type(col.id).scale.value_or(0));
+        auto const scale =
+          -static_cast<size_type>(_metadata.get_col_type(col.id).scale.value_or(0));
         column_types.emplace_back(col_type, scale);
       } else {
         column_types.emplace_back(col_type);
@@ -1127,7 +1128,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                     ? sizeof(string_index_pair)
                                   : ((column_types[col_idx].id() == type_id::LIST) or
                                  (column_types[col_idx].id() == type_id::STRUCT))
-                                    ? sizeof(int32_t)
+                                    ? sizeof(size_type)
                                     : cudf::size_of(column_types[col_idx]);
             chunk.num_rowgroups = stripe_num_rowgroups;
             if (chunk.type_kind == orc::TIMESTAMP) {
