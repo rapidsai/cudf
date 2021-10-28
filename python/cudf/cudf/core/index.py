@@ -1873,20 +1873,15 @@ class DatetimeIndex(GenericIndex):
 
         Returns
         -------
-        DatetimeIndex or Series
-            Index of the same type for a DatetimeIndex,
-            or a Series with the same index for a Series.
+        DatetimeIndex
+            Index of the same type for a DatetimeIndex
 
         Examples
         --------
         >>> import cudf
-        >>> t = cudf.Series(["2001-01-01 00:04:45", "2001-01-01 00:04:58",
-        ... "2001-01-01 00:05:04"], dtype="datetime64[ns]")
-        >>> t.dt.ceil("T")
-        0   2001-01-01 00:05:00
-        1   2001-01-01 00:05:00
-        2   2001-01-01 00:06:00
-        dtype: datetime64[ns]
+        >>> gIndex = cudf.DatetimeIndex(["2020-05-31 08:00:00","1999-12-31 18:40:00"])
+        >>> gIndex.ceil("T")
+        DatetimeIndex(['2020-05-31 08:00:00', '1999-12-31 18:40:00'], dtype='datetime64[ns]', freq=None)
         """
         out_column = self._values.ceil(field)
 
@@ -1898,7 +1893,7 @@ class DatetimeIndex(GenericIndex):
         )
 
         return as_index(
-            out_column, index=self.series._index, name=self.series.name
+            out_column, name=self.series.name
         )
 
     def floor(self, field):
@@ -1915,27 +1910,28 @@ class DatetimeIndex(GenericIndex):
 
         Returns
         -------
-        DatetimeIndex or Series
-            Index of the same type for a DatetimeIndex,
-            or a Series with the same index for a Series.
+        DatetimeIndex
+            Index of the same type for a DatetimeIndex
 
         Examples
         --------
         >>> import cudf
-        >>> t = cudf.Series(["2001-01-01 00:04:45", "2001-01-01 00:04:58",
-        ... "2001-01-01 00:05:04"], dtype="datetime64[ns]")
-        >>> t.dt.floor("T")
-        0   2001-01-01 00:04:00
-        1   2001-01-01 00:04:00
-        2   2001-01-01 00:05:00
-        dtype: datetime64[ns]
+        >>> gIndex = pd.DatetimeIndex(["2020-05-31 08:59:59","1999-12-31 18:44:59"])
+        >>> gIndex.floor("T")
+        DatetimeIndex(['2020-05-31 08:59:00', '1999-12-31 18:44:00'], dtype='datetime64[ns]', freq=None)
         """
-        out_column = self.series._column.floor(field)
+        out_column = self._values.floor(field)
 
-        return Series(
-            data=out_column, index=self.series._index, name=self.series.name
+        out_column = column.build_column(
+            data=out_column.base_data,
+            dtype=out_column.dtype,
+            mask=out_column.base_mask,
+            offset=out_column.offset,
         )
 
+        return as_index(
+            out_column, name=self.series.name
+        )
 
 class TimedeltaIndex(GenericIndex):
     """
