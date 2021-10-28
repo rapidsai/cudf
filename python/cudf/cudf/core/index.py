@@ -1857,6 +1857,84 @@ class DatetimeIndex(GenericIndex):
 
     def is_boolean(self):
         return False
+    
+    
+    def ceil(self, field):
+        """
+        Perform ceil operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        field : str
+            One of ["D", "H", "T", "S", "L", "U", "N"]
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`_
+            for more details on these aliases.
+
+        Returns
+        -------
+        DatetimeIndex or Series
+            Index of the same type for a DatetimeIndex,
+            or a Series with the same index for a Series.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> t = cudf.Series(["2001-01-01 00:04:45", "2001-01-01 00:04:58",
+        ... "2001-01-01 00:05:04"], dtype="datetime64[ns]")
+        >>> t.dt.ceil("T")
+        0   2001-01-01 00:05:00
+        1   2001-01-01 00:05:00
+        2   2001-01-01 00:06:00
+        dtype: datetime64[ns]
+        """
+        out_column = self._values.ceil(field)
+
+        out_column = column.build_column(
+            data=out_column.base_data,
+            dtype=out_column.dtype,
+            mask=out_column.base_mask,
+            offset=out_column.offset,
+        )
+
+        return as_index(
+            out_column, index=self.series._index, name=self.series.name
+        )
+
+    def floor(self, field):
+        """
+        Perform floor operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        field : str
+            One of ["D", "H", "T", "S", "L", "U", "N"]
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`_
+            for more details on these aliases.
+
+        Returns
+        -------
+        DatetimeIndex or Series
+            Index of the same type for a DatetimeIndex,
+            or a Series with the same index for a Series.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> t = cudf.Series(["2001-01-01 00:04:45", "2001-01-01 00:04:58",
+        ... "2001-01-01 00:05:04"], dtype="datetime64[ns]")
+        >>> t.dt.floor("T")
+        0   2001-01-01 00:04:00
+        1   2001-01-01 00:04:00
+        2   2001-01-01 00:05:00
+        dtype: datetime64[ns]
+        """
+        out_column = self.series._column.floor(field)
+
+        return Series(
+            data=out_column, index=self.series._index, name=self.series.name
+        )
 
 
 class TimedeltaIndex(GenericIndex):
