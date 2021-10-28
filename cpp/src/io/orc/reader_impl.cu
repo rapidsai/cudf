@@ -467,29 +467,21 @@ class aggregate_orc_metadata {
    * @param level current level of nesting.
    * @param id current column id that needs to be added.
    * @param has_timestamp_column True if timestamp column present and false otherwise.
-   * @param has_nested_column True if any of the selected column is a nested type.
    */
   void add_column(std::vector<std::vector<orc_column_meta>>& selection,
                   std::vector<SchemaType> const& types,
                   const size_t level,
                   const uint32_t id,
-                  bool& has_timestamp_column,
-                  bool& has_nested_column)
+                  bool& has_timestamp_column)
   {
     if (level == selection.size()) { selection.emplace_back(); }
-    selection[level].push_back({id, 0});
-    const int col_id = selection[level].size() - 1;
+    selection[level].push_back({id, static_cast<uint32_t>(types[id].subtypes.size())});
     if (types[id].kind == orc::TIMESTAMP) { has_timestamp_column = true; }
 
-    if (types[id].kind == orc::MAP or types[id].kind == orc::LIST or
-        types[id].kind == orc::STRUCT) {
-      has_nested_column = true;
-      for (const auto child_id : types[id].subtypes) {
-        // Since nested column needs to be processed before its child can be processed,
-        // child column is being added to next level
-        add_column(selection, types, level + 1, child_id, has_timestamp_column, has_nested_column);
-      }
-      selection[level][col_id].num_children = types[id].subtypes.size();
+    for (const auto child_id : types[id].subtypes) {
+      // Since nested column needs to be processed before its child can be processed,
+      // child column is being added to next level
+      add_column(selection, types, level + 1, child_id, has_timestamp_column);
     }
   }
 
@@ -498,12 +490,11 @@ class aggregate_orc_metadata {
    *
    * @param use_names List of column names to select
    * @param has_timestamp_column True if timestamp column present and false otherwise
-   * @param has_nested_column True if any of the selected column is a nested type.
    *
    * @return Vector of list of ORC column meta-data
    */
   std::vector<std::vector<orc_column_meta>> select_columns(
-    std::vector<std::string> const& use_names, bool& has_timestamp_column, bool& has_nested_column)
+    std::vector<std::string> const& use_names, bool& has_timestamp_column)
   {
     auto const& pfm = per_file_metadata[0];
     std::vector<std::vector<orc_column_meta>> selection;
@@ -520,7 +511,7 @@ class aggregate_orc_metadata {
           auto col_id = pfm.ff.types[0].subtypes[index];
           if (pfm.get_column_name(col_id) == use_name) {
             name_found = true;
-            add_column(selection, pfm.ff.types, 0, col_id, has_timestamp_column, has_nested_column);
+            add_column(selection, pfm.ff.types, 0, col_id, has_timestamp_column);
             // Should start with next index
             index = i + 1;
             break;
@@ -530,7 +521,7 @@ class aggregate_orc_metadata {
       }
     } else {
       for (auto const& col_id : pfm.ff.types[0].subtypes) {
-        add_column(selection, pfm.ff.types, 0, col_id, has_timestamp_column, has_nested_column);
+        add_column(selection, pfm.ff.types, 0, col_id, has_timestamp_column);
       }
     }
 
@@ -809,8 +800,8 @@ void update_null_mask(cudf::detail::hostdevice_2dvector<gpu::ColumnDesc>& chunks
     }
   }
 
-  thrust::counting_iterator<int, thrust::host_space_tag> col_idx_it(0);
-  thrust::counting_iterator<int, thrust::host_space_tag> stripe_idx_it(0);
+  thrust::counting_iterator<int> col_idx_it(0);
+  thrust::counting_iterator<int> stripe_idx_it(0);
 
   if (is_mask_updated) {
     // Update chunks with pointers to column data which might have been changed.
@@ -879,8 +870,8 @@ void reader::impl::decode_stream_data(cudf::detail::hostdevice_2dvector<gpu::Col
 {
   const auto num_stripes = chunks.size().first;
   const auto num_columns = chunks.size().second;
-  thrust::counting_iterator<int, thrust::host_space_tag> col_idx_it(0);
-  thrust::counting_iterator<int, thrust::host_space_tag> stripe_idx_it(0);
+  thrust::counting_iterator<int> col_idx_it(0);
+  thrust::counting_iterator<int> stripe_idx_it(0);
 
   // Update chunks with pointers to column data
   std::for_each(stripe_idx_it, stripe_idx_it + num_stripes, [&](auto stripe_idx) {
@@ -1044,7 +1035,7 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
       schema_info.children.emplace_back("");
       out_col = make_lists_column(
         0,
-        make_empty_column(data_type(type_id::INT32)),
+        make_empty_column(type_id::INT32),
         create_empty_column(
           _metadata->get_col_type(orc_col_id).subtypes[0], schema_info.children.back(), stream),
         0,
@@ -1066,7 +1057,7 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
       auto struct_col =
         make_structs_column(0, std::move(child_columns), 0, rmm::device_buffer{0, stream}, stream);
       out_col = make_lists_column(0,
-                                  make_empty_column(data_type(type_id::INT32)),
+                                  make_empty_column(type_id::INT32),
                                   std::move(struct_col),
                                   0,
                                   rmm::device_buffer{0, stream},
@@ -1089,7 +1080,7 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
       out_col = make_empty_column(data_type(type, scale));
       break;
 
-    default: out_col = make_empty_column(data_type(type));
+    default: out_col = make_empty_column(type);
   }
 
   return out_col;
@@ -1164,8 +1155,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
   _metadata = std::make_unique<aggregate_orc_metadata>(_sources);
 
   // Select only columns required by the options
-  _selected_columns =
-    _metadata->select_columns(options.get_columns(), _has_timestamp_column, _has_nested_column);
+  _selected_columns = _metadata->select_columns(options.get_columns(), _has_timestamp_column);
 
   // Override output timestamp resolution if requested
   if (options.get_timestamp_type().id() != type_id::EMPTY) {
@@ -1187,7 +1177,9 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                        const std::vector<std::vector<size_type>>& stripes,
                                        rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(skip_rows == 0 or (not _has_nested_column),
+  // Selected columns at different levels of nesting are stored in different elements
+  // of `_selected_columns`; thus, size == 1 means no nested columns
+  CUDF_EXPECTS(skip_rows == 0 or _selected_columns.size() == 1,
                "skip_rows is not supported by nested columns");
 
   std::vector<std::unique_ptr<column>> out_columns;
@@ -1411,7 +1403,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                     : cudf::size_of(column_types[col_idx]);
             chunk.num_rowgroups = stripe_num_rowgroups;
             if (chunk.type_kind == orc::TIMESTAMP) {
-              chunk.ts_clock_rate = to_clockrate(_timestamp_type.id());
+              chunk.timestamp_type_id = _timestamp_type.id();
             }
             if (not is_data_empty) {
               for (int k = 0; k < gpu::CI_NUM_STREAMS; k++) {

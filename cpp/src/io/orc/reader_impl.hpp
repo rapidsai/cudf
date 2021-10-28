@@ -79,7 +79,7 @@ class reader::impl {
   /**
    * @brief Constructor from a dataset source with reader options.
    *
-   * @param source Dataset source
+   * @param sources Dataset sources
    * @param options Settings for controlling reading behavior
    * @param mr Device memory resource to use for device memory allocation
    */
@@ -215,7 +215,6 @@ class reader::impl {
   bool _use_index            = true;
   bool _use_np_dtypes        = true;
   bool _has_timestamp_column = false;
-  bool _has_nested_column    = false;
   std::vector<std::string> _decimal_cols_as_float;
   data_type _timestamp_type{type_id::EMPTY};
   reader_column_meta _col_meta;

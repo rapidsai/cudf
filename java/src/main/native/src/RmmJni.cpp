@@ -210,17 +210,6 @@ private:
   }
 
   bool on_alloc_fail(std::size_t num_bytes) {
-    cudaError_t err = cudaPeekAtLastError();
-    if (err != cudaSuccess) {
-      // workaround for RMM pooled mode (CNMEM backend) leaving a CUDA error pending
-      if (err == cudaErrorMemoryAllocation) {
-        cudaGetLastError();
-      } else {
-        // let this allocation fail so the application can see the CUDA error
-        return false;
-      }
-    }
-
     JNIEnv *env = cudf::jni::get_jni_env(jvm);
     jboolean result =
         env->CallBooleanMethod(handler_obj, on_alloc_fail_method, static_cast<jlong>(num_bytes));
@@ -256,7 +245,7 @@ private:
         total_before = get_total_bytes_allocated();
         result = resource->allocate(num_bytes, stream);
         break;
-      } catch (std::bad_alloc const &e) {
+      } catch (rmm::out_of_memory const &e) {
         if (!on_alloc_fail(num_bytes)) {
           throw;
         }

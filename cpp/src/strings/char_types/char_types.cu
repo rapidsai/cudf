@@ -152,7 +152,7 @@ std::unique_ptr<column> filter_characters_of_type(strings_column_view const& str
                                                   rmm::cuda_stream_view stream,
                                                   rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(replacement.is_valid(), "Parameter replacement must be valid");
+  CUDF_EXPECTS(replacement.is_valid(stream), "Parameter replacement must be valid");
   if (types_to_remove == ALL_TYPES)
     CUDF_EXPECTS(types_to_keep != ALL_TYPES,
                  "Parameters types_to_remove and types_to_keep must not be both ALL_TYPES");

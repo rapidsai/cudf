@@ -117,8 +117,7 @@ def test_series_sort_index(nelem, asc):
 @pytest.mark.parametrize("data", [[0, 1, 1, 2, 2, 2, 3, 3], [0], [1, 2, 3]])
 @pytest.mark.parametrize("n", [-100, -50, -12, -2, 0, 1, 2, 3, 4, 7])
 def test_series_nlargest(data, n):
-    """Indirectly tests Series.sort_values()
-    """
+    """Indirectly tests Series.sort_values()"""
     sr = Series(data)
     psr = pd.Series(data)
     assert_eq(sr.nlargest(n), psr.nlargest(n))
@@ -136,8 +135,7 @@ def test_series_nlargest(data, n):
 @pytest.mark.parametrize("data", [[0, 1, 1, 2, 2, 2, 3, 3], [0], [1, 2, 3]])
 @pytest.mark.parametrize("n", [-100, -50, -12, -2, 0, 1, 2, 3, 4, 9])
 def test_series_nsmallest(data, n):
-    """Indirectly tests Series.sort_values()
-    """
+    """Indirectly tests Series.sort_values()"""
     sr = Series(data)
     psr = pd.Series(data)
     assert_eq(sr.nsmallest(n), psr.nsmallest(n))
@@ -281,6 +279,27 @@ def test_dataframe_multi_column_nulls(
     assert_eq(
         got[by].reset_index(drop=True), expect[by].reset_index(drop=True)
     )
+
+
+@pytest.mark.parametrize(
+    "ascending", list(product((True, False), (True, False)))
+)
+@pytest.mark.parametrize("na_position", ["first", "last"])
+def test_dataframe_multi_column_nulls_multiple_ascending(
+    ascending, na_position
+):
+    pdf = pd.DataFrame(
+        {"a": [3, 1, None, 2, 2, None, 1], "b": [1, 2, 3, 4, 5, 6, 7]}
+    )
+    gdf = DataFrame.from_pandas(pdf)
+    expect = pdf.sort_values(
+        by=["a", "b"], ascending=ascending, na_position=na_position
+    )
+    actual = gdf.sort_values(
+        by=["a", "b"], ascending=ascending, na_position=na_position
+    )
+
+    assert_eq(actual, expect)
 
 
 @pytest.mark.parametrize("nelem", [1, 100])

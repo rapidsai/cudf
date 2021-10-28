@@ -18,6 +18,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
@@ -218,7 +219,7 @@ struct sort_groupby_helper {
   column_ptr _keys_bitmask_column;   ///< Column representing rows with one or more nulls values
   table_view _keys;                  ///< Input keys to sort by
   table_view _unflattened_keys;      ///< Input keys, unflattened and possibly nested
-  std::vector<column_ptr> _struct_null_vectors;  ///< Null vectors for struct columns in _keys
+  structs::detail::flattened_table _flattened;  ///< Support datastructures for _keys
 
   index_vector_ptr
     _group_offsets;  ///< Indices into sorted _keys indicating starting index of each groups

@@ -41,6 +41,16 @@ namespace cudf {
 std::unique_ptr<column> make_empty_column(data_type type);
 
 /**
+ * @brief Creates an empty column of the specified type.
+ *
+ * An empty column contains zero elements and no validity mask.
+ *
+ * @param[in] id The column type id
+ * @return Empty column with specified type
+ */
+std::unique_ptr<column> make_empty_column(type_id id);
+
+/**
  * @brief Construct column with sufficient uninitialized storage to hold `size` elements of the
  * specified numeric `data_type` with an optional null mask.
  *
@@ -494,7 +504,7 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
  * data    (depth 1)   {1, 2, 3, 4, 5, 6, 7}
  * @endcode
  *
- * @param[in] num_lists The number of lists the column represents.
+ * @param[in] num_rows The number of lists the column represents.
  * @param[in] offsets_column The column of offset values for this column. Each value should
  * represent the starting offset into the child elements that corresponds to the beginning of the
  * row, with the first row starting at 0. The length of row N can be determined by subtracting
@@ -512,7 +522,7 @@ std::unique_ptr<column> make_strings_column(size_type num_strings,
  *           allocation of the column's `null_mask` and children.
  */
 std::unique_ptr<cudf::column> make_lists_column(
-  size_type num_lists,
+  size_type num_rows,
   std::unique_ptr<column> offsets_column,
   std::unique_ptr<column> child_column,
   size_type null_count,
