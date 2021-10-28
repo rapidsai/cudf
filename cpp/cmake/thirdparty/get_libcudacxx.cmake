@@ -21,7 +21,6 @@ function(find_and_configure_libcudacxx)
                           INSTALL_EXPORT_SET cudf-exports)
 
     set(LIBCUDACXX_INCLUDE_DIR "${libcudacxx_SOURCE_DIR}/include" PARENT_SCOPE)
-    set(LIBCXX_INCLUDE_DIR "${libcudacxx_SOURCE_DIR}/libcxx/include" PARENT_SCOPE)
 endfunction()
 
 find_and_configure_libcudacxx()
