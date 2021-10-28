@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from dask.dask import sizeof as sizeof_dispatch
+from dask.sizeof import sizeof as sizeof_dispatch
 from dask.dataframe.core import get_parallel_type, meta_nonempty
 from dask.dataframe.dispatch import (
     categorical_dtype_dispatch,
