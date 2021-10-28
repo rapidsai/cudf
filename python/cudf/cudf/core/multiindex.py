@@ -656,8 +656,7 @@ class MultiIndex(Frame, BaseIndex):
         self._codes = cudf.DataFrame._from_data(codes)
 
     def _compute_validity_mask(self, index, row_tuple, max_length):
-        """ Computes the valid set of indices of values in the lookup
-        """
+        """Computes the valid set of indices of values in the lookup"""
         lookup = cudf.DataFrame()
         for name, row in zip(index.names, row_tuple):
             if isinstance(row, slice) and row == slice(None):

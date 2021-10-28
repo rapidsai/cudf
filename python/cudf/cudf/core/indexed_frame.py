@@ -13,6 +13,7 @@ import cudf
 import cudf._lib as libcudf
 from cudf.api.types import is_categorical_dtype, is_list_like
 from cudf.core.frame import Frame
+from cudf.core.index import Index
 from cudf.core.multiindex import MultiIndex
 from cudf.utils.utils import _gather_map_is_valid, cached_property
 
@@ -98,6 +99,31 @@ class IndexedFrame(Frame):
 
     def __init__(self, data=None, index=None):
         super().__init__(data=data, index=index)
+
+    def to_dict(self, *args, **kwargs):  # noqa: D102
+        raise TypeError(
+            "cuDF does not support conversion to host memory "
+            "via `to_dict()` method. Consider using "
+            "`.to_pandas().to_dict()` to construct a Python dictionary."
+        )
+
+    @property
+    def index(self):
+        """Get the labels for the rows."""
+        return self._index
+
+    @index.setter
+    def index(self, value):
+        old_length = len(self)
+        new_length = len(value)
+
+        # A DataFrame with 0 columns can have an index of arbitrary length.
+        if len(self._data) > 0 and new_length != old_length:
+            raise ValueError(
+                f"Length mismatch: Expected axis has {old_length} elements, "
+                f"new values have {len(value)} elements"
+            )
+        self._index = Index(value)
 
     @cached_property
     def loc(self):

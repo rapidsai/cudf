@@ -1035,7 +1035,7 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
       schema_info.children.emplace_back("");
       out_col = make_lists_column(
         0,
-        make_empty_column(data_type(type_id::INT32)),
+        make_empty_column(type_id::INT32),
         create_empty_column(
           _metadata->get_col_type(orc_col_id).subtypes[0], schema_info.children.back(), stream),
         0,
@@ -1057,7 +1057,7 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
       auto struct_col =
         make_structs_column(0, std::move(child_columns), 0, rmm::device_buffer{0, stream}, stream);
       out_col = make_lists_column(0,
-                                  make_empty_column(data_type(type_id::INT32)),
+                                  make_empty_column(type_id::INT32),
                                   std::move(struct_col),
                                   0,
                                   rmm::device_buffer{0, stream},
@@ -1080,7 +1080,7 @@ std::unique_ptr<column> reader::impl::create_empty_column(const int32_t orc_col_
       out_col = make_empty_column(data_type(type, scale));
       break;
 
-    default: out_col = make_empty_column(data_type(type));
+    default: out_col = make_empty_column(type);
   }
 
   return out_col;
