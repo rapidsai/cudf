@@ -47,7 +47,9 @@ conditional_join(table_view const& left,
   // We can immediately filter out cases where the right table is empty. In
   // some cases, we return all the rows of the left table with a corresponding
   // null index for the right table; in others, we return an empty output.
-  if (right.num_rows() == 0) {
+  auto right_num_rows{right.num_rows()};
+  auto left_num_rows{left.num_rows()};
+  if (right_num_rows == 0) {
     switch (join_type) {
       // Left, left anti, and full all return all the row indices from left
       // with a corresponding NULL from the right.
@@ -61,7 +63,7 @@ conditional_join(table_view const& left,
                               std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
       default: CUDF_FAIL("Invalid join kind."); break;
     }
-  } else if (left.num_rows() == 0) {
+  } else if (left_num_rows == 0) {
     switch (join_type) {
       // Left, left anti, left semi, and inner joins all return empty sets.
       case join_kind::LEFT_JOIN:
@@ -94,7 +96,7 @@ conditional_join(table_view const& left,
 
   // For inner joins we support optimizing the join by launching one thread for
   // whichever table is larger rather than always using the left table.
-  auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right.num_rows() > left.num_rows());
+  auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
   detail::grid_1d config(swap_tables ? right_table->num_rows() : left_table->num_rows(),
                          DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
@@ -183,7 +185,7 @@ conditional_join(table_view const& left,
   // by any row in the left table.
   if (join_type == join_kind::FULL_JOIN) {
     auto complement_indices = detail::get_left_join_indices_complement(
-      join_indices.second, left.num_rows(), right.num_rows(), stream, mr);
+      join_indices.second, left_num_rows, right_num_rows, stream, mr);
     join_indices = detail::concatenate_vector_pairs(join_indices, complement_indices, stream);
   }
   return join_indices;
@@ -199,19 +201,21 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
   // We can immediately filter out cases where one table is empty. In
   // some cases, we return all the rows of the other table with a corresponding
   // null index for the empty table; in others, we return an empty output.
-  if (right.num_rows() == 0) {
+  auto right_num_rows{right.num_rows()};
+  auto left_num_rows{left.num_rows()};
+  if (right_num_rows == 0) {
     switch (join_type) {
       // Left, left anti, and full all return all the row indices from left
       // with a corresponding NULL from the right.
       case join_kind::LEFT_JOIN:
       case join_kind::LEFT_ANTI_JOIN:
-      case join_kind::FULL_JOIN: return left.num_rows();
+      case join_kind::FULL_JOIN: return left_num_rows;
       // Inner and left semi joins return empty output because no matches can exist.
       case join_kind::INNER_JOIN:
       case join_kind::LEFT_SEMI_JOIN: return 0;
       default: CUDF_FAIL("Invalid join kind."); break;
     }
-  } else if (left.num_rows() == 0) {
+  } else if (left_num_rows == 0) {
     switch (join_type) {
       // Left, left anti, left semi, and inner joins all return empty sets.
       case join_kind::LEFT_JOIN:
@@ -219,7 +223,7 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
       case join_kind::INNER_JOIN:
       case join_kind::LEFT_SEMI_JOIN: return 0;
       // Full joins need to return the trivial complement.
-      case join_kind::FULL_JOIN: return right.num_rows();
+      case join_kind::FULL_JOIN: return right_num_rows;
       default: CUDF_FAIL("Invalid join kind."); break;
     }
   }
@@ -242,7 +246,7 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
 
   // For inner joins we support optimizing the join by launching one thread for
   // whichever table is larger rather than always using the left table.
-  auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right.num_rows() > left.num_rows());
+  auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
   detail::grid_1d config(swap_tables ? right_table->num_rows() : left_table->num_rows(),
                          DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;

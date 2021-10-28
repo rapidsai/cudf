@@ -43,7 +43,8 @@ namespace detail {
  * @param[in] join_type The type of join to be performed
  * @param[in] device_expression_data Container of device data required to evaluate the desired
  * expression.
- * @param[in] output_size The resulting output size
+ * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
+ * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
  * @param[out] output_size The resulting output size
  */
 template <int block_size, bool has_nulls>
@@ -128,6 +129,8 @@ __global__ void compute_conditional_join_output_size(
  * @param device_expression_data Container of device data required to evaluate the desired
  * expression.
  * @param[in] max_size The maximum size of the output
+ * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
+ * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
  */
 template <cudf::size_type block_size, cudf::size_type output_cache_size, bool has_nulls>
 __global__ void conditional_join(table_device_view left_table,
@@ -226,7 +229,7 @@ __global__ void conditional_join(table_device_view left_table,
     if ((join_type == join_kind::LEFT_JOIN || join_type == join_kind::LEFT_ANTI_JOIN ||
          join_type == join_kind::FULL_JOIN) &&
         (!found_match)) {
-      // TODO: This code assumes that this swap_tables is not true for any join
+      // TODO: This code assumes that swap_tables is false for all join
       // kinds aside from inner joins. Once the code is generalized to handle
       // other joins we'll want to switch the variable in the line below back
       // to the left_row_index, but for now we can assume that they are
