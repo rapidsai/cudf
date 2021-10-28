@@ -22,6 +22,7 @@
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/types.hpp>
@@ -81,8 +82,10 @@ struct ArgMinMax<T,
   size_type const num_rows;
   row_lexicographic_comparator<has_nulls> const comp;
 
-  ArgMinMax(size_type const num_rows_, table_device_view const& table_)
-    : num_rows(num_rows_), comp(table_, table_)
+  ArgMinMax(size_type const num_rows_,
+            table_device_view const& table_,
+            null_order const* null_precedence)
+    : num_rows(num_rows_), comp(table_, table_, nullptr, null_precedence)
   {
   }
 
@@ -254,9 +257,17 @@ struct reduce_functor {
 
     if (values.is_empty()) { return result; }
 
-    auto const flattened_values =
-      structs::detail::flatten_nested_columns(table_view{{values}}, {}, {});
+    // When finding ARGMIN, we need to consider nulls as larger than non-null elements.
+    // Thing is opposite for ARGMAX.
+    auto const null_precedence =
+      (K == aggregation::ARGMIN) ? null_order::AFTER : null_order::BEFORE;
+    auto const flattened_values = structs::detail::flatten_nested_columns(
+      table_view{{values}}, {}, std::vector<null_order>{null_precedence});
     auto const d_flattened_values_ptr = table_device_view::create(flattened_values, stream);
+    auto const flattened_null_precedences =
+      (K == aggregation::ARGMIN)
+        ? cudf::detail::make_device_uvector_async(flattened_values.null_orders(), stream)
+        : rmm::device_uvector<null_order>(0, stream);
 
     // Perform segmented reduction to find ARGMIN/ARGMAX.
     auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& comp) {
@@ -273,8 +284,8 @@ struct reduce_functor {
     auto const count_iter   = thrust::make_counting_iterator<ResultType>(0);
     auto const result_begin = result->mutable_view().template begin<ResultType>();
     if (values.has_nulls()) {
-      auto const op =
-        ArgMinMax<T, true, K == aggregation::ARGMIN>(values.size(), *d_flattened_values_ptr);
+      auto const op = ArgMinMax<T, true, K == aggregation::ARGMIN>(
+        values.size(), *d_flattened_values_ptr, flattened_null_precedences.data());
       do_reduction(count_iter, result_begin, op);
 
       // Generate bitmask for the output by segmented reduction of the input bitmask.
@@ -289,8 +300,8 @@ struct reduce_functor {
       result->set_null_mask(std::move(null_mask));
       result->set_null_count(null_count);
     } else {
-      auto const op =
-        ArgMinMax<T, false, K == aggregation::ARGMIN>(values.size(), *d_flattened_values_ptr);
+      auto const op = ArgMinMax<T, false, K == aggregation::ARGMIN>(
+        values.size(), *d_flattened_values_ptr, flattened_null_precedences.data());
       do_reduction(count_iter, result_begin, op);
     }
 
