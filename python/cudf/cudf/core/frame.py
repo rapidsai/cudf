@@ -5,8 +5,8 @@ from __future__ import annotations
 import copy
 import pickle
 import warnings
-from itertools import chain
 from collections import abc
+from itertools import chain
 from typing import (
     Any,
     Callable,
@@ -50,9 +50,9 @@ from cudf.core.join import merge
 from cudf.core.udf.pipeline import compile_or_get
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
-from cudf.utils.utils import _gather_map_is_valid
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type, is_column_like
+from cudf.utils.utils import _gather_map_is_valid
 
 T = TypeVar("T", bound="Frame")
 
@@ -2322,19 +2322,31 @@ class Frame:
         subset_cols = [name for name in self._column_names if name in subset]
         if len(subset_cols) == 0:
             return self.copy(deep=True)
+        
+        keys = self._positions_from_column_names(subset, include_index=not ignore_index)
+        result = self._drop_duplicates(keys=keys, keep=keep, nulls_are_equal=nulls_are_equal, ignore_index=ignore_index)
+        result._copy_type_metadata(self)
+        if self._index is not None:
+            result._index.name = self._index.name
+            if isinstance(self._index, cudf.MultiIndex):
+                result._index.names = self._index.names
+        return result
 
-        result = self.__class__._from_data(
-            *libcudf.stream_compaction.drop_duplicates(
-                self,
-                keys=subset,
+    def _positions_from_column_names(self, column_names, include_index=False):
+        """Maps each column name into their indexed position in the frame
+        """
+        return [i for i, name in enumerate(self._column_names) if name in column_names]
+
+    def _drop_duplicates(self, keys, keep, nulls_are_equal, ignore_index):
+        return self.__class__._from_maybe_indexed_columns(
+            libcudf.stream_compaction.drop_duplicates(
+                list(self._columns),
+                keys=keys,
                 keep=keep,
                 nulls_are_equal=nulls_are_equal,
-                ignore_index=ignore_index,
-            )
+            ),
+            self._column_names
         )
-
-        result._copy_type_metadata(self)
-        return result
 
     def replace(
         self,

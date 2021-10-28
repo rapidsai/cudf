@@ -37,6 +37,7 @@ from cudf._lib.scalar import as_device_scalar
 from cudf._lib.stream_compaction import (
     distinct_count as cpp_distinct_count,
     drop_nulls,
+    drop_duplicates,
 )
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
@@ -1135,11 +1136,9 @@ class ColumnBase(Column, Serializable):
         # the following issue resolved:
         # https://github.com/rapidsai/cudf/issues/5286
 
-        return (
-            self.as_frame()
-            .drop_duplicates(keep="first", ignore_index=True)
-            ._as_column()
-        )
+        return next(iter(drop_duplicates(
+            [self], keep="first"
+        )))
 
     def serialize(self) -> Tuple[dict, list]:
         header: Dict[Any, Any] = {}

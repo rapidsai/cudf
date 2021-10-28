@@ -413,3 +413,23 @@ class IndexedFrame(Frame):
         if keep_index:
             result.index.names = self._index.names
         return result
+
+    def _positions_from_column_names(self, column_names, include_index=False):
+        """Maps each column name into their position in the frame
+        Set `include_index=True` to add the number of index columns to the
+        result.
+        """
+        n_indices_cols = len(self._index._data) if include_index else 0
+        return [i + n_indices_cols for i, name in enumerate(self._column_names) if name in column_names]
+
+    def _drop_duplicates(self, keys, keep, nulls_are_equal, ignore_index):
+        return self.__class__._from_maybe_indexed_columns(
+            libcudf.stream_compaction.drop_duplicates(
+                list(self._columns) if ignore_index else list(self._index._columns + self._columns),
+                keys=keys,
+                keep=keep,
+                nulls_are_equal=nulls_are_equal,
+            ),
+            self._column_names,
+            self._index.names if not ignore_index else None
+        )

@@ -41,13 +41,13 @@ def drop_nulls(data: list, how="any", keys=None, thresh=None):
     data : list of columns
     how  : "any" or "all". If thresh is None, drops rows of cols that have any
            nulls or all nulls (respectively) in subset (default: "any")
-    keys : List of Column names. If set, then these columns are checked for
+    keys : List of column indices. If set, then these columns are checked for
            nulls rather than all of cols (optional)
     thresh : Minimum number of non-nulls required to keep a row (optional)
 
     Returns
     -------
-    Frame with null rows dropped
+    list of columns with null rows dropped
     """
 
     cdef vector[size_type] cpp_keys = keys if keys is not None else range(len(data))
@@ -110,26 +110,27 @@ def apply_boolean_mask(source_table, Column boolean_mask):
     )
 
 
-def drop_duplicates(source_table,
+def drop_duplicates(data: list,
                     object keys=None,
                     object keep='first',
-                    bool nulls_are_equal=True,
-                    bool ignore_index=False):
+                    bool nulls_are_equal=True):
     """
     Drops rows in source_table as per duplicate rows in keys.
 
     Parameters
     ----------
-    source_table : source_table whose rows gets dropped
-    keys : List of Column names belong to source_table
+    data : List of columns
+    keys : List of column indices. If set, then these columns are checked for
+           duplicates rather than all of cols (optional)
     keep : keep 'first' or 'last' or none of the duplicate rows
     nulls_are_equal : if True, nulls are treated equal else not.
 
     Returns
     -------
-    Frame with duplicate dropped
+    list of columns with duplicate dropped
     """
 
+    cdef vector[size_type] cpp_keys = keys if keys is not None else range(len(data))
     cdef duplicate_keep_option cpp_keep_option
 
     if keep == 'first':
@@ -141,30 +142,14 @@ def drop_duplicates(source_table,
     else:
         raise ValueError('keep must be either "first", "last" or False')
 
-    num_index_columns =(
-        0 if (source_table._index is None or ignore_index)
-        else source_table._index._num_columns)
     # shifting the index number by number of index columns
-    cdef vector[size_type] cpp_keys = (
-        [
-            num_index_columns + source_table._column_names.index(name)
-            for name in keys
-        ]
-        if keys is not None
-        else range(
-            num_index_columns, num_index_columns + source_table._num_columns
-        )
-    )
-
     cdef null_equality cpp_nulls_equal = (
         null_equality.EQUAL
         if nulls_are_equal
         else null_equality.UNEQUAL
     )
     cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = table_view_from_table(
-        source_table, ignore_index
-    )
+    cdef table_view source_table_view = table_view_from_columns(data)
 
     with nogil:
         c_result = move(
@@ -176,13 +161,7 @@ def drop_duplicates(source_table,
             )
         )
 
-    return data_from_unique_ptr(
-        move(c_result),
-        column_names=source_table._column_names,
-        index_names=(
-            None if (source_table._index is None or ignore_index)
-            else source_table._index_names)
-    )
+    return columns_from_unique_ptr(move(c_result))
 
 
 def distinct_count(Column source_column, ignore_nulls=True, nan_as_null=False):
