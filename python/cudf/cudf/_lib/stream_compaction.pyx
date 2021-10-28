@@ -32,13 +32,13 @@ from cudf._lib.utils cimport (
 )
 
 
-def drop_nulls(data: tuple, how="any", keys=None, thresh=None):
+def drop_nulls(data: list, how="any", keys=None, thresh=None):
     """
     Drops null rows from cols depending on key columns.
 
     Parameters
     ----------
-    data : tuple of columns
+    data : list of columns
     how  : "any" or "all". If thresh is None, drops rows of cols that have any
            nulls or all nulls (respectively) in subset (default: "any")
     keys : List of Column names. If set, then these columns are checked for
@@ -70,9 +70,7 @@ def drop_nulls(data: tuple, how="any", keys=None, thresh=None):
             )
         )
 
-    return columns_from_unique_ptr(
-        move(c_result)
-    )
+    return columns_from_unique_ptr(move(c_result))
 
 
 def apply_boolean_mask(source_table, Column boolean_mask):

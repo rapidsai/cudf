@@ -220,7 +220,7 @@ class ColumnBase(Column, Serializable):
             col = self.nans_to_nulls()
         else:
             col = self
-        return drop_nulls((self,))[0]
+        return drop_nulls([self])[0]
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
