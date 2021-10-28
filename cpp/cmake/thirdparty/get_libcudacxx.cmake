@@ -26,6 +26,6 @@ function(find_and_configure_libcudacxx VERSION)
     set(LIBCXX_INCLUDE_DIR "${libcudacxx_SOURCE_DIR}/libcxx/include" PARENT_SCOPE)
 endfunction()
 
-set(CUDF_MIN_VERSION_libcudacxx 1.4.0)
+set(CUDF_MIN_VERSION_libcudacxx 1.6.0)
 
 find_and_configure_libcudacxx(${CUDF_MIN_VERSION_libcudacxx})
