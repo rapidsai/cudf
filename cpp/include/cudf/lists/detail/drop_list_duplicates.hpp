@@ -15,8 +15,7 @@
  */
 #pragma once
 
-#include <cudf/lists/lists_column_view.hpp>
-#include <cudf/stream_compaction.hpp>
+#include <cudf/lists/drop_list_duplicates.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
