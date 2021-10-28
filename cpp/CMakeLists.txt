@@ -478,12 +478,10 @@ target_compile_options(cudf
 target_include_directories(cudf
            PUBLIC      "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>"
                        "$<BUILD_INTERFACE:${JITIFY_INCLUDE_DIR}>"
-                       "$<BUILD_INTERFACE:${LIBCUDACXX_INCLUDE_DIR}>"
                        "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
                        "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
            PRIVATE     "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
-           INTERFACE   "$<INSTALL_INTERFACE:include>"
-                       "$<INSTALL_INTERFACE:include/libcudf/libcudacxx>")
+           INTERFACE   "$<INSTALL_INTERFACE:include>")
 
 target_compile_definitions(cudf
             PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_DEFINITIONS}>"
@@ -517,6 +515,7 @@ add_dependencies(cudf jitify_preprocess_run)
 # Specify the target module library dependencies
 target_link_libraries(cudf
            PUBLIC ${ARROW_LIBRARIES}
+                  libcudacxx::libcudacxx
                   cudf::Thrust
                   rmm::rmm
            PRIVATE cuco::cuco
