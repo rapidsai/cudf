@@ -4227,6 +4227,46 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testDropListDuplicatesWithKeysValues() {
+    List<Integer> list1Keys = Arrays.asList(1, 2);
+    List<Integer> list2Keys = Arrays.asList(3, 4, 5);
+    List<Integer> list3Keys = Arrays.asList(null, 0, 6, 6, 0);
+    List<Integer> dedupeList3Keys = Arrays.asList(0, 6, null);
+    List<Integer> list4Keys = Arrays.asList(null, 6, 7, null, 7);
+    List<Integer> dedupeList4Keys = Arrays.asList(6, 7, null);
+
+    List<Integer> list1Vals = Arrays.asList(10, 20);
+    List<Integer> list2Vals = Arrays.asList(30, 40, 50);
+    List<Integer> list3Vals = Arrays.asList(60, 70, 80, 90, 100);
+    List<Integer> dedupeList3Vals = Arrays.asList(60, 90, 100);
+    List<Integer> list4Vals = Arrays.asList(110, 120, 130, 140, 150);
+    List<Integer> dedupeList4Vals = Arrays.asList(120, 140, 150);
+
+    List<Integer> list5Common = null;
+
+    HostColumnVector.DataType listType = new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.INT32));
+    try (ColumnVector keys = ColumnVector.fromLists(listType, list1Keys, list2Keys, list3Keys, list4Keys, list5Common);
+         ColumnVector expectedKeys = ColumnVector.fromLists(listType, list1Keys, list2Keys, dedupeList3Keys, dedupeList4Keys, list5Common);
+         ColumnVector vals = ColumnVector.fromLists(listType, list1Vals, list2Vals, list3Vals, list4Vals, list5Common);
+         ColumnVector expectedVals = ColumnVector.fromLists(listType, list1Vals, list2Vals, dedupeList3Vals, dedupeList4Vals, list5Common);
+    ) {
+      ColumnVector[] outputKeysVals = keys.dropListDuplicatesWithKeysValues(vals);
+      try(ColumnVector sortedOutputKeys = outputKeysVals[0].listSortRows(false, false);
+          ColumnVector sortedOutputVals = outputKeysVals[1].listSortRows(false, false)) {
+        assertColumnsAreEqual(expectedKeys, sortedOutputKeys);
+        assertColumnsAreEqual(expectedVals, sortedOutputVals);
+      } finally {
+        for (ColumnVector outputKeysVal : outputKeysVals) {
+          if (outputKeysVal != null) {
+            outputKeysVal.close();
+          }
+        }
+      }
+    }
+  }
+
+  @Test
   void testListContainsString() {
     List<String> list1 = Arrays.asList("Héllo there", "thésé");
     List<String> list2 = Arrays.asList("", "ARé some", "test strings");
