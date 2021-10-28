@@ -135,7 +135,11 @@ class _SeriesIlocIndexer(_FrameIndexer):
         if (
             not isinstance(
                 self._frame._column.dtype,
-                (cudf.Decimal64Dtype, cudf.CategoricalDtype),
+                (
+                    cudf.Decimal64Dtype,
+                    cudf.Decimal32Dtype,
+                    cudf.CategoricalDtype,
+                ),
             )
             and hasattr(value, "dtype")
             and _is_non_decimal_numeric_dtype(value.dtype)
@@ -918,6 +922,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         e    14
         dtype: int64
         """
+        warnings.warn(
+            "Series.set_index is deprecated and will be removed in the future",
+            FutureWarning,
+        )
         index = index if isinstance(index, BaseIndex) else as_index(index)
         return self._from_data(self._data, index, self.name)
 
@@ -1155,13 +1163,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
     iteritems = SingleColumnFrame.__iter__
 
     items = SingleColumnFrame.__iter__
-
-    def to_dict(self, into=dict):
-        raise TypeError(
-            "cuDF does not support conversion to host memory "
-            "via `to_dict()` method. Consider using "
-            "`.to_pandas().to_dict()` to construct a Python dictionary."
-        )
 
     def __setitem__(self, key, value):
         if isinstance(key, slice):
@@ -2117,15 +2118,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)
         """  # noqa: E501
         return self._column.data
-
-    @property
-    def index(self):
-        """The index object"""
-        return self._index
-
-    @index.setter
-    def index(self, _index):
-        self._index = as_index(_index)
 
     @property
     def nullmask(self):

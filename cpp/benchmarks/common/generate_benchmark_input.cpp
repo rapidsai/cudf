@@ -297,12 +297,21 @@ std::unique_ptr<cudf::column> create_random_column(data_profile const& profile,
     }
   }
 
+  // cudf expects the null mask buffer to be padded up to 64 bytes. so allocate the proper size and
+  // copy what we have.
+  rmm::device_buffer result_bitmask{cudf::bitmask_allocation_size_bytes(num_rows),
+                                    rmm::cuda_stream_default};
+  cudaMemcpyAsync(result_bitmask.data(),
+                  null_mask.data(),
+                  null_mask.size() * sizeof(cudf::bitmask_type),
+                  cudaMemcpyHostToDevice,
+                  rmm::cuda_stream_default);
+
   return std::make_unique<cudf::column>(
     cudf::data_type{cudf::type_to_id<T>()},
     num_rows,
     rmm::device_buffer(data.data(), num_rows * sizeof(stored_Type), rmm::cuda_stream_default),
-    rmm::device_buffer(
-      null_mask.data(), null_mask.size() * sizeof(cudf::bitmask_type), rmm::cuda_stream_default));
+    std::move(result_bitmask));
 }
 
 /**

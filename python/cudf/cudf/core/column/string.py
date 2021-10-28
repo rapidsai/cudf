@@ -552,7 +552,7 @@ class StringMethods(ColumnMethods):
     def extract(
         self, pat: str, flags: int = 0, expand: bool = True
     ) -> SeriesOrIndex:
-        """
+        r"""
         Extract capture groups in the regex `pat` as columns in a DataFrame.
 
         For each subject string in the Series, extract groups from the first
@@ -624,7 +624,7 @@ class StringMethods(ColumnMethods):
         na=np.nan,
         regex: bool = True,
     ) -> SeriesOrIndex:
-        """
+        r"""
         Test if pattern or regex is contained within a string of a Series or
         Index.
 
@@ -3270,7 +3270,7 @@ class StringMethods(ColumnMethods):
         return self._return_or_inplace(libstrings.wrap(self._column, width))
 
     def count(self, pat: str, flags: int = 0) -> SeriesOrIndex:
-        """
+        r"""
         Count occurrences of pattern in each string of the Series/Index.
 
         This function is used to count the number of times a particular
