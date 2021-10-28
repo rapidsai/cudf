@@ -737,7 +737,11 @@ class StringMethods(ColumnMethods):
             raise NotImplementedError("`case` parameter is not yet supported")
         if na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
-        if flags != 0 and (flags & (re.MULTILINE | re.DOTALL) == 0):
+        if (
+            flags != 0
+            and (flags & (re.MULTILINE | re.DOTALL) == 0)
+            or (flags & ~(re.MULTILINE | re.DOTALL) != 0)
+        ):
             raise NotImplementedError("invalid `flags` parameter value")
 
         if pat is None:
@@ -3332,7 +3336,11 @@ class StringMethods(ColumnMethods):
         >>> index.str.count('a')
         Int64Index([0, 0, 2, 1], dtype='int64')
         """  # noqa W605
-        if flags != 0 and (flags & (re.MULTILINE | re.DOTALL) == 0):
+        if (
+            flags != 0
+            and (flags & (re.MULTILINE | re.DOTALL) == 0)
+            or (flags & ~(re.MULTILINE | re.DOTALL) != 0)
+        ):
             raise NotImplementedError("invalid `flags` parameter value")
 
         return self._return_or_inplace(
@@ -3893,7 +3901,11 @@ class StringMethods(ColumnMethods):
         """
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
-        if flags != 0 and (flags & (re.MULTILINE | re.DOTALL) == 0):
+        if (
+            flags != 0
+            and (flags & (re.MULTILINE | re.DOTALL) == 0)
+            or (flags & ~(re.MULTILINE | re.DOTALL) != 0)
+        ):
             raise NotImplementedError("invalid `flags` parameter value")
 
         return self._return_or_inplace(

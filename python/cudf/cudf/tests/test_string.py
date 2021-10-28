@@ -835,7 +835,8 @@ def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
     ],
 )
 @pytest.mark.parametrize(
-    "flags,flags_raise", [(0, 0), (re.MULTILINE | re.DOTALL, 0), (1, 1)]
+    "flags,flags_raise",
+    [(0, 0), (re.MULTILINE | re.DOTALL, 0), (re.I, 1), (re.I | re.DOTALL, 1)],
 )
 @pytest.mark.parametrize("na,na_raise", [(np.nan, 0), (None, 1), ("", 1)])
 def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):

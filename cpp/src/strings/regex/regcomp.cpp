@@ -959,19 +959,21 @@ void reprog::print(regex_flags const flags)
       case NOP: printf("NOP, nextid= %d", inst.u2.next_id); break;
       case BOL: {
         printf("BOL, c = ");
-        if (inst.u1.c == '\n')
+        if (inst.u1.c == '\n') {
           printf("'\\n'");
-        else
+        } else {
           printf("'%c'", inst.u1.c);
+        }
         printf(", nextid= %d", inst.u2.next_id);
         break;
       }
       case EOL: {
         printf("EOL, c = ");
-        if (inst.u1.c == '\n')
+        if (inst.u1.c == '\n') {
           printf("'\\n'");
-        else
+        } else {
           printf("'%c'", inst.u1.c);
+        }
         printf(", nextid= %d", inst.u2.next_id);
         break;
       }
