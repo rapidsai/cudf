@@ -1429,7 +1429,7 @@ class Frame:
 
         result = self.__class__._from_maybe_indexed_columns(
             libcudf.stream_compaction.drop_nulls(
-                tuple(self._index._data.columns + frame._columns),
+                list(self._index._data.columns + frame._columns),
                 how=how,
                 keys=self._column_name_to_indices(subset),
                 thresh=thresh,

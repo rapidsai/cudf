@@ -216,11 +216,8 @@ class ColumnBase(Column, Serializable):
         return n
 
     def dropna(self, drop_nan: bool = False) -> ColumnBase:
-        if drop_nan:
-            col = self.nans_to_nulls()
-        else:
-            col = self
-        return drop_nulls([self])[0]
+        col = self.nans_to_nulls() if drop_nan else self
+        return drop_nulls([col])[0]
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
