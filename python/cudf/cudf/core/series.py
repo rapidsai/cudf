@@ -5017,9 +5017,8 @@ class DatetimeProperties(object):
 
         Returns
         -------
-        DatetimeIndex, TimedeltaIndex, or Series
-            Index of the same type for a DatetimeIndex or TimedeltaIndex,
-            or a Series with the same index for a Series.
+        Series
+            Series with the same index for a Series.
 
         Examples
         --------
@@ -5052,9 +5051,8 @@ class DatetimeProperties(object):
 
         Returns
         -------
-        DatetimeIndex, TimedeltaIndex, or Series
-            Index of the same type for a DatetimeIndex or TimedeltaIndex,
-            or a Series with the same index for a Series.
+        Series
+            Series with the same index for a Series.
 
         Examples
         --------
