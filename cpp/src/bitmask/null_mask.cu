@@ -446,15 +446,9 @@ rmm::device_uvector<size_type> segmented_count_set_bits(
   auto word_num_set_bits  = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
                                                            word_num_set_bits_functor{bitmask});
   auto first_word_indices = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0),
-    // We cannot use lambda as cub::DeviceSegmentedReduce::Sum() requires
-    // first_word_indices and last_word_indices to have the same type.
-    to_word_index(true, d_first_indices.data()));
+    thrust::make_counting_iterator(0), to_word_index_functor{true, d_first_indices.data()});
   auto last_word_indices = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0),
-    // We cannot use lambda as cub::DeviceSegmentedReduce::Sum() requires
-    // first_word_indices and last_word_indices to have the same type.
-    to_word_index(false, d_last_indices.data()));
+    thrust::make_counting_iterator(0), to_word_index_functor{false, d_last_indices.data()});
 
   // first allocate temporary memory
 
