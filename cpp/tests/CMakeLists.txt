@@ -351,7 +351,7 @@ ConfigureTest(DISPATCHER_TEST types/type_dispatcher_test.cu)
 ###################################################################################################
 # - strings test ----------------------------------------------------------------------------------
 ConfigureTest(STRINGS_TEST
-    strings/array_tests.cu
+    strings/array_tests.cpp
     strings/attrs_tests.cpp
     strings/booleans_tests.cpp
     strings/case_tests.cpp
@@ -371,7 +371,6 @@ ConfigureTest(STRINGS_TEST
     strings/find_multiple_tests.cpp
     strings/fixed_point_tests.cpp
     strings/floats_tests.cpp
-    strings/hash_string.cu
     strings/integers_tests.cpp
     strings/ipv4_tests.cpp
     strings/json_tests.cpp
@@ -387,7 +386,7 @@ ConfigureTest(STRINGS_TEST
 
 ###################################################################################################
 # - structs test ----------------------------------------------------------------------------------
-ConfigureTest(STRUCTS_TEST 
+ConfigureTest(STRUCTS_TEST
     structs/structs_column_tests.cpp
     structs/utilities_tests.cpp
     )

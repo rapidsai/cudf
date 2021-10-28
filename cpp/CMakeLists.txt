@@ -97,6 +97,11 @@ rapids_find_package(CUDAToolkit REQUIRED
     INSTALL_EXPORT_SET cudf-exports)
 include(cmake/Modules/ConfigureCUDA.cmake) # set other CUDA compilation flags
 
+# ctest cuda memcheck
+find_program(CUDA_SANITIZER compute-sanitizer)
+set(MEMORYCHECK_COMMAND ${CUDA_SANITIZER})
+set(MEMORYCHECK_TYPE CudaSanitizer)
+set(CUDA_SANITIZER_COMMAND_OPTIONS "--tool memcheck")
 
 ###################################################################################################
 # - dependencies ----------------------------------------------------------------------------------
@@ -571,7 +576,7 @@ add_library(cudftestutil STATIC
             tests/utilities/column_utilities.cu
             tests/utilities/table_utilities.cu
             tests/io/metadata_utilities.cpp
-            tests/strings/utilities.cu)
+            tests/strings/utilities.cpp)
 
 set_target_properties(cudftestutil
     PROPERTIES BUILD_RPATH                         "\$ORIGIN"

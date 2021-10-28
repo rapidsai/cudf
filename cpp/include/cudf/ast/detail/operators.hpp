@@ -192,6 +192,15 @@ CUDA_HOST_DEVICE_CALLABLE constexpr void ast_operator_dispatcher(ast_operator op
     case ast_operator::NOT:
       f.template operator()<ast_operator::NOT>(std::forward<Ts>(args)...);
       break;
+    case ast_operator::CAST_TO_INT64:
+      f.template operator()<ast_operator::CAST_TO_INT64>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::CAST_TO_UINT64:
+      f.template operator()<ast_operator::CAST_TO_UINT64>(std::forward<Ts>(args)...);
+      break;
+    case ast_operator::CAST_TO_FLOAT64:
+      f.template operator()<ast_operator::CAST_TO_FLOAT64>(std::forward<Ts>(args)...);
+      break;
     default:
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Invalid operator.");
@@ -778,6 +787,26 @@ struct operator_functor<ast_operator::NOT, false> {
   {
     return !input;
   }
+};
+
+template <typename To>
+struct cast {
+  static constexpr auto arity{1};
+  template <typename From>
+  CUDA_DEVICE_CALLABLE auto operator()(From f) -> decltype(static_cast<To>(f))
+  {
+    return static_cast<To>(f);
+  }
+};
+
+template <>
+struct operator_functor<ast_operator::CAST_TO_INT64, false> : cast<int64_t> {
+};
+template <>
+struct operator_functor<ast_operator::CAST_TO_UINT64, false> : cast<uint64_t> {
+};
+template <>
+struct operator_functor<ast_operator::CAST_TO_FLOAT64, false> : cast<double> {
 };
 
 /*
