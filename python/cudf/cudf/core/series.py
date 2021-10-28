@@ -1170,7 +1170,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         else:
             self.loc[key] = value
 
-    def take(self, indices, keep_index=True):
+    def take(self, indices, axis=0, keep_index=True):
         """
         Return Series by taking values from the corresponding *indices*.
 

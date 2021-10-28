@@ -2553,7 +2553,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if not inplace:
             return result
 
-    def take(self, positions, keep_index=True):
+    def take(self, positions, axis=0, keep_index=True):
         """
         Return a new DataFrame containing the rows specified by *positions*
 
@@ -2584,6 +2584,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         0  1.0  a
         2  3.0  c
         """
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 is supported.")
         positions = as_column(positions)
         if is_bool_dtype(positions):
             return self._apply_boolean_mask(positions)
