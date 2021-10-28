@@ -23,6 +23,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/reduction.hpp>
 #include <cudf/strings/string_view.hpp>
@@ -104,8 +105,6 @@ struct ScanTest : public BaseFixture {
                  null_policy null_handling,
                  numeric::scale_type scale)
   {
-    bool const do_print = false;  // set true for debugging
-
     auto col_in = this->make_column(v, b, scale);
     std::unique_ptr<column> col_out;
     std::unique_ptr<column> expected_col_out;
@@ -116,16 +115,6 @@ struct ScanTest : public BaseFixture {
       expected_col_out = this->make_expected(v, b, agg, inclusive, null_handling, scale);
       col_out          = scan(*col_in, agg, inclusive, null_handling);
       CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected_col_out, *col_out);
-
-      if constexpr (do_print) {
-        std::cout << "input = ";
-        print(*col_in);
-        std::cout << "expected = ";
-        print(*expected_col_out);
-        std::cout << "result = ";
-        print(*col_out);
-        std::cout << std::endl;
-      }
     }
   }
 
@@ -147,23 +136,23 @@ struct ScanTest : public BaseFixture {
 
   bool params_supported(std::unique_ptr<aggregation> const& agg, scan_type inclusive)
   {
-    if constexpr (std::is_same_v<T, string_view>) {
-      bool supported_agg = (agg->kind == aggregation::MIN || agg->kind == aggregation::MAX ||
-                            agg->kind == aggregation::RANK || agg->kind == aggregation::DENSE_RANK);
-      return supported_agg && (inclusive == scan_type::INCLUSIVE);
-    } else if constexpr (is_fixed_point<T>()) {
-      bool supported_agg = (agg->kind == aggregation::MIN || agg->kind == aggregation::MAX ||
-                            agg->kind == aggregation::SUM || agg->kind == aggregation::RANK ||
-                            agg->kind == aggregation::DENSE_RANK);
-      return supported_agg;
-    } else if constexpr (std::is_arithmetic<T>()) {
-      bool supported_agg = (agg->kind == aggregation::MIN || agg->kind == aggregation::MAX ||
-                            agg->kind == aggregation::SUM || agg->kind == aggregation::PRODUCT ||
-                            agg->kind == aggregation::RANK || agg->kind == aggregation::DENSE_RANK);
-      return supported_agg;
-    } else {
+    bool supported = [&] {
+      switch (agg->kind) {
+        case aggregation::SUM: return std::is_invocable_v<cudf::DeviceSum, T, T>;
+        case aggregation::PRODUCT: return std::is_invocable_v<cudf::DeviceProduct, T, T>;
+        case aggregation::MIN: return std::is_invocable_v<cudf::DeviceMin, T, T>;
+        case aggregation::MAX: return std::is_invocable_v<cudf::DeviceMax, T, T>;
+        default: return false;
+      }
       return false;
-    }
+    }();
+
+    // special cases for individual types
+    if constexpr (cudf::is_fixed_point<T>())
+      return supported && (agg->kind != aggregation::PRODUCT);
+    if constexpr (std::is_same_v<T, string_view> || cudf::is_timestamp<T>())
+      return supported && (inclusive == scan_type::INCLUSIVE);
+    return supported;
   }
 
   std::unique_ptr<column> make_column(host_span<HostType const> v,
