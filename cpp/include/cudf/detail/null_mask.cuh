@@ -246,6 +246,13 @@ struct word_num_set_bits_functor {
   bitmask_type const* bitmask;
 };
 
+// Count set bits in a segmented null mask, using indices on the device
+rmm::device_uvector<size_type> segmented_count_set_bits(
+  bitmask_type const* bitmask,
+  rmm::device_uvector<size_type> const& d_first_indices,
+  rmm::device_uvector<size_type> const& d_last_indices,
+  rmm::cuda_stream_view stream);
+
 /**
  * @brief Given a bitmask, counts the number of set (1) bits in every range
  * `[indices_begin[2*i], indices_begin[(2*i)+1])` (where 0 <= i < std::distance(indices_begin,
@@ -262,7 +269,7 @@ struct word_num_set_bits_functor {
  * ranges to count the number of set bits within
  * @param indices_end An iterator representing the end of the range of indices specifying ranges to
  * count the number of set bits within
- * @param streaam CUDA stream used for device memory operations and kernel launches
+ * @param stream CUDA stream used for device memory operations and kernel launches
  *
  * @return A vector storing the number of non-zero bits in the specified ranges
  */
@@ -305,61 +312,9 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
 
   auto d_first_indices = make_device_uvector_async(h_first_indices, stream);
   auto d_last_indices  = make_device_uvector_async(h_last_indices, stream);
-  rmm::device_uvector<size_type> d_null_counts(num_ranges, stream);
 
-  auto word_num_set_bits  = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
-                                                           word_num_set_bits_functor{bitmask});
-  auto first_word_indices = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0),
-    // We cannot use lambda as cub::DeviceSegmentedReduce::Sum() requires
-    // first_word_indices and last_word_indices to have the same type.
-    to_word_index(true, d_first_indices.data()));
-  auto last_word_indices = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0),
-    // We cannot use lambda as cub::DeviceSegmentedReduce::Sum() requires
-    // first_word_indices and last_word_indices to have the same type.
-    to_word_index(false, d_last_indices.data()));
-
-  // first allocate temporary memory
-
-  size_t temp_storage_bytes{0};
-  CUDA_TRY(cub::DeviceSegmentedReduce::Sum(nullptr,
-                                           temp_storage_bytes,
-                                           word_num_set_bits,
-                                           d_null_counts.begin(),
-                                           num_ranges,
-                                           first_word_indices,
-                                           last_word_indices,
-                                           stream.value()));
-  rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
-
-  // second perform segmented reduction
-
-  CUDA_TRY(cub::DeviceSegmentedReduce::Sum(d_temp_storage.data(),
-                                           temp_storage_bytes,
-                                           word_num_set_bits,
-                                           d_null_counts.begin(),
-                                           num_ranges,
-                                           first_word_indices,
-                                           last_word_indices,
-                                           stream.value()));
-
-  CHECK_CUDA(stream.value());
-
-  // third, adjust counts in segment boundaries (if segments are not
-  // word-aligned)
-
-  constexpr size_type block_size{256};
-
-  cudf::detail::grid_1d grid(num_ranges, block_size);
-
-  subtract_set_bits_range_boundaries_kernel<<<grid.num_blocks,
-                                              grid.num_threads_per_block,
-                                              0,
-                                              stream.value()>>>(
-    bitmask, num_ranges, d_first_indices.begin(), d_last_indices.begin(), d_null_counts.begin());
-
-  CHECK_CUDA(stream.value());
+  rmm::device_uvector<size_type> d_null_counts =
+    segmented_count_set_bits(bitmask, d_first_indices, d_last_indices, stream);
 
   std::vector<size_type> ret(num_ranges);
   CUDA_TRY(cudaMemcpyAsync(ret.data(),

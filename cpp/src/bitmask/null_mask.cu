@@ -433,6 +433,72 @@ rmm::device_buffer bitmask_or(table_view const& view,
   return null_mask;
 }
 
+// Count set bits in a segmented null mask, using indices on the device
+rmm::device_uvector<size_type> segmented_count_set_bits(
+  bitmask_type const* bitmask,
+  rmm::device_uvector<size_type> const& d_first_indices,
+  rmm::device_uvector<size_type> const& d_last_indices,
+  rmm::cuda_stream_view stream)
+{
+  size_type num_ranges = d_first_indices.size();
+  rmm::device_uvector<size_type> d_null_counts(num_ranges, stream);
+
+  auto word_num_set_bits  = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
+                                                           word_num_set_bits_functor{bitmask});
+  auto first_word_indices = thrust::make_transform_iterator(
+    thrust::make_counting_iterator(0),
+    // We cannot use lambda as cub::DeviceSegmentedReduce::Sum() requires
+    // first_word_indices and last_word_indices to have the same type.
+    to_word_index(true, d_first_indices.data()));
+  auto last_word_indices = thrust::make_transform_iterator(
+    thrust::make_counting_iterator(0),
+    // We cannot use lambda as cub::DeviceSegmentedReduce::Sum() requires
+    // first_word_indices and last_word_indices to have the same type.
+    to_word_index(false, d_last_indices.data()));
+
+  // first allocate temporary memory
+
+  size_t temp_storage_bytes{0};
+  CUDA_TRY(cub::DeviceSegmentedReduce::Sum(nullptr,
+                                           temp_storage_bytes,
+                                           word_num_set_bits,
+                                           d_null_counts.begin(),
+                                           num_ranges,
+                                           first_word_indices,
+                                           last_word_indices,
+                                           stream.value()));
+  rmm::device_buffer d_temp_storage(temp_storage_bytes, stream);
+
+  // second perform segmented reduction
+
+  CUDA_TRY(cub::DeviceSegmentedReduce::Sum(d_temp_storage.data(),
+                                           temp_storage_bytes,
+                                           word_num_set_bits,
+                                           d_null_counts.begin(),
+                                           num_ranges,
+                                           first_word_indices,
+                                           last_word_indices,
+                                           stream.value()));
+
+  CHECK_CUDA(stream.value());
+
+  // third, adjust counts in segment boundaries (if segments are not
+  // word-aligned)
+
+  constexpr size_type block_size{256};
+
+  cudf::detail::grid_1d grid(num_ranges, block_size);
+
+  subtract_set_bits_range_boundaries_kernel<<<grid.num_blocks,
+                                              grid.num_threads_per_block,
+                                              0,
+                                              stream.value()>>>(
+    bitmask, num_ranges, d_first_indices.begin(), d_last_indices.begin(), d_null_counts.begin());
+
+  CHECK_CUDA(stream.value());
+  return d_null_counts;
+}
+
 /**
  * @copydoc cudf::segmented_count_set_bits
  *
