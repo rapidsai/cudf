@@ -809,7 +809,7 @@ void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_byt
 std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
 {
   if (c.nullable()) {
-    auto num_bitmasks = bitmask_allocation_size_bytes(c.size()) / sizeof(bitmask_type);
+    auto num_bitmasks = num_bitmask_words(c.size());
     std::vector<bitmask_type> host_bitmask(num_bitmasks);
     if (c.offset() == 0) {
       CUDA_TRY(cudaMemcpy(host_bitmask.data(),

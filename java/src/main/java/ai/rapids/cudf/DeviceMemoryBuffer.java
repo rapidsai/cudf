@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -99,8 +99,16 @@ public class DeviceMemoryBuffer extends BaseDeviceMemoryBuffer {
     }
   }
 
-  // Static factory method to make this a little simpler from JNI
-  static DeviceMemoryBuffer fromRmm(long address, long lengthInBytes, long rmmBufferAddress) {
+  /**
+   * Wrap an existing RMM allocation in a device memory buffer. The RMM allocation will be freed
+   * when the resulting device memory buffer instance frees its memory resource (i.e.: when its
+   * reference count goes to zero).
+   * @param address device address of the RMM allocation
+   * @param lengthInBytes length of the RMM allocation in bytes
+   * @param rmmBufferAddress host address of the rmm::device_buffer that owns the device memory
+   * @return new device memory buffer instance that wraps the existing RMM allocation
+   */
+  public static DeviceMemoryBuffer fromRmm(long address, long lengthInBytes, long rmmBufferAddress) {
     return new DeviceMemoryBuffer(address, lengthInBytes, rmmBufferAddress);
   }
 
