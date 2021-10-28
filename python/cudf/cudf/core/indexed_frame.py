@@ -10,10 +10,11 @@ import pandas as pd
 from nvtx import annotate
 
 import cudf
-from cudf.api.types import is_categorical_dtype, is_list_like
+import cudf._lib as libcudf
+from cudf.api.types import is_categorical_dtype, is_list_like, is_integer_dtype
 from cudf.core.frame import Frame
 from cudf.core.multiindex import MultiIndex
-from cudf.utils.utils import cached_property
+from cudf.utils.utils import cached_property, _gather_map_is_valid
 
 
 def _indices_from_labels(obj, labels):
@@ -388,3 +389,27 @@ class IndexedFrame(Frame):
         if ignore_index is True:
             out = out.reset_index(drop=True)
         return self._mimic_inplace(out, inplace=inplace)
+
+    def _gather(self, gather_map, keep_index=True, nullify=False):
+        gather_map = cudf.core.column.as_column(gather_map)
+        if not gather_map.dtype == "int32":
+            gather_map = gather_map.astype("int32")
+
+        if not _gather_map_is_valid(gather_map, len(self)):
+            raise IndexError(f"Gather map index is out of bounds.")
+
+        result = self.__class__._from_maybe_indexed_columns(
+            libcudf.copying.gather(
+                list(self._index._columns + self._columns) if keep_index else list(self._columns),
+                gather_map,
+                nullify=nullify,
+            ),
+            self._column_names,
+            self._index.names if keep_index else None
+        )
+
+
+        result._copy_type_metadata(self, include_index=keep_index)
+        if keep_index:
+            result.index.names = self._index.names
+        return result

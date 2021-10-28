@@ -74,7 +74,7 @@ from cudf.utils.dtypes import (
     pandas_dtypes_alias_to_cudf_alias,
     pandas_dtypes_to_np_dtypes,
 )
-from cudf.utils.utils import mask_dtype
+from cudf.utils.utils import mask_dtype, _gather_map_is_valid
 
 T = TypeVar("T", bound="ColumnBase")
 
@@ -217,7 +217,7 @@ class ColumnBase(Column, Serializable):
 
     def dropna(self, drop_nan: bool = False) -> ColumnBase:
         col = self.nans_to_nulls() if drop_nan else self
-        return drop_nulls([col])[0]
+        return next(iter(drop_nulls([col])))
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
@@ -715,7 +715,6 @@ class ColumnBase(Column, Serializable):
     def take(
         self: T,
         indices: ColumnBase,
-        keep_index: bool = True,
         nullify: bool = False,
     ) -> T:
         """Return Column by taking values from the corresponding *indices*.
@@ -723,20 +722,17 @@ class ColumnBase(Column, Serializable):
         # Handle zero size
         if indices.size == 0:
             return cast(T, column_empty_like(self, newsize=0))
-        try:
-            return (
-                self.as_frame()
-                ._gather(indices, keep_index=keep_index, nullify=nullify)
-                ._as_column()
-                ._with_type_metadata(self.dtype)
-            )
-        except RuntimeError as e:
-            if "out of bounds" in str(e):
-                raise IndexError(
-                    f"index out of bounds for column of size {len(self)}"
-                ) from e
-            raise
-
+        if not indices.dtype == "int32":
+            indices = indices.astype("int32")
+        if not _gather_map_is_valid(indices, len(self)):
+            raise IndexError(f"Gather map index is out of bounds.")
+        
+        return next(iter(libcudf.copying.gather(
+                [self],
+                indices,
+                nullify=nullify,
+            )))._with_type_metadata(self.dtype)
+        
     def isin(self, values: Sequence) -> ColumnBase:
         """Check whether values are contained in the Column.
 

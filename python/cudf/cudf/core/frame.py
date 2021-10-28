@@ -50,6 +50,7 @@ from cudf.core.join import merge
 from cudf.core.udf.pipeline import compile_or_get
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
+from cudf.utils.utils import _gather_map_is_valid
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type, is_column_like
 
@@ -154,15 +155,13 @@ class Frame:
         column_names: List[str],
         index_names: Optional[List[str]] = None
     ):
+        index = None
         if index_names is not None:
             index_ids = list(range(len(index_names)))
             # First construct the index, if any
             index = cudf.core.index._index_from_data(
                 dict(zip(index_ids, columns))
             )
-            index.name = index_names[0]
-            if len(index_names) > 1:
-                index.names = index_names
 
         n_index_columns = len(index_names) if index_names is not None else 0
         data = {
@@ -170,9 +169,7 @@ class Frame:
             for i, name in enumerate(column_names)
         }
 
-        return cls._from_data(
-            data, index
-        )
+        return cls._from_data(data, index)
 
 
     def _mimic_inplace(
@@ -553,20 +550,23 @@ class Frame:
         )
 
     def _gather(self, gather_map, keep_index=True, nullify=False):
-        if not is_integer_dtype(gather_map.dtype):
+        gather_map = cudf.core.column.as_column(gather_map)
+        if not gather_map.dtype == "int32":
             gather_map = gather_map.astype("int32")
-        result = self.__class__._from_data(
-            *libcudf.copying.gather(
-                self,
-                as_column(gather_map),
-                keep_index=keep_index,
+        
+        if not _gather_map_is_valid(gather_map, len(self)):
+            raise IndexError(f"Gather map index is out of bounds.")
+
+        result = self.__class__._from_maybe_indexed_columns(
+            libcudf.copying.gather(
+                list(self._columns),
+                gather_map,
                 nullify=nullify,
-            )
+            ),
+            self._column_names
         )
 
-        result._copy_type_metadata(self, include_index=keep_index)
-        if keep_index and self._index is not None:
-            result._index.names = self._index.names
+        result._copy_type_metadata(self)
         return result
 
     def _hash(self, method, initial_hash=None):
@@ -1442,6 +1442,10 @@ class Frame:
             self._index.names
         )
         result._copy_type_metadata(frame)
+        if self._index is not None:
+            result._index.name = self._index.name
+            if isinstance(self._index, cudf.MultiIndex):
+                result._index.names = self._index.names
         return result
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):

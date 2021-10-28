@@ -137,9 +137,9 @@ class MultiIndex(Frame, BaseIndex):
             else:
                 level = cudf.DataFrame({column_name: levels[i]})
 
-            source_data[column_name] = libcudf.copying.gather(level, col)[0][
-                column_name
-            ]
+            source_data[column_name] = (
+                next(iter(libcudf.copying.gather([level._data[column_name]], col)))
+            )
 
         super().__init__(source_data)
         self._levels = levels

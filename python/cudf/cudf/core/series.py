@@ -1212,7 +1212,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         else:
             col_inds = as_column(indices)
             return self._from_data(
-                {self.name: self._column.take(col_inds, keep_index=False)}
+                {self.name: self._column.take(col_inds)}
             )
 
     def __repr__(self):
