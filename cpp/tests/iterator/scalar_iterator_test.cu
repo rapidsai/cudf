@@ -14,7 +14,7 @@
  */
 #include <tests/iterator/iterator_tests.cuh>
 
-using TestingTypes = cudf::test::AllTypes;
+using TestingTypes = cudf::test::FixedWidthTypesWithoutFixedPoint;
 
 TYPED_TEST_CASE(IteratorTest, TestingTypes);
 

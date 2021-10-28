@@ -396,12 +396,12 @@ struct agg_specific_empty_output {
     }
 
     if constexpr (cudf::is_fixed_width<target_type>()) {
-      return cudf::make_empty_column(data_type{type_to_id<target_type>()});
+      return cudf::make_empty_column(type_to_id<target_type>());
     }
 
     if constexpr (op == aggregation::COLLECT_LIST) {
       return cudf::make_lists_column(
-        0, make_empty_column(data_type{type_to_id<offset_type>()}), empty_like(input), 0, {});
+        0, make_empty_column(type_to_id<offset_type>()), empty_like(input), 0, {});
     }
 
     return empty_like(input);

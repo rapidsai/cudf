@@ -60,7 +60,7 @@ std::unique_ptr<cudf::column> copy_if_else(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count = std::distance(lhs_begin, lhs_end);
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   // create null mask
   auto valid_mask = cudf::detail::valid_if(

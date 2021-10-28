@@ -592,7 +592,7 @@ def get_dummies(
     drop_first=False,
     dtype="uint8",
 ):
-    """ Returns a dataframe whose columns are the one hot encodings of all
+    """Returns a dataframe whose columns are the one hot encodings of all
     columns in `df`
 
     Parameters
