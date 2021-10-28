@@ -46,7 +46,7 @@ namespace detail {
  * @tparam T Type of the underlying column. Must support '<' operator.
  */
 template <typename T, bool has_nulls, bool arg_min, typename Enable = void>
-struct ArgMinMax {
+struct arg_minmax_fn {
   column_device_view const d_col;
   CUDA_DEVICE_CALLABLE auto operator()(size_type const& lhs_idx, size_type const& rhs_idx) const
   {
@@ -75,16 +75,16 @@ struct ArgMinMax {
  * '<' operator.
  */
 template <typename T, bool has_nulls, bool arg_min>
-struct ArgMinMax<T,
-                 has_nulls,
-                 arg_min,
-                 std::enable_if_t<!cudf::is_relationally_comparable<T, T>()>> {
+struct arg_minmax_fn<T,
+                     has_nulls,
+                     arg_min,
+                     std::enable_if_t<!cudf::is_relationally_comparable<T, T>()>> {
   size_type const num_rows;
   row_lexicographic_comparator<has_nulls> const comp;
 
-  ArgMinMax(size_type const num_rows_,
-            table_device_view const& table_,
-            null_order const* null_precedence)
+  arg_minmax_fn(size_type const num_rows_,
+                table_device_view const& table_,
+                null_order const* null_precedence)
     : num_rows(num_rows_), comp(table_, table_, nullptr, null_precedence)
   {
   }
@@ -190,7 +190,7 @@ struct reduce_functor {
     if (values.is_empty()) { return result; }
 
     // Perform segmented reduction.
-    auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& comp) {
+    auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
       thrust::reduce_by_key(rmm::exec_policy(stream),
                             group_labels.data(),
                             group_labels.data() + group_labels.size(),
@@ -198,7 +198,7 @@ struct reduce_functor {
                             thrust::make_discard_iterator(),
                             out_iter,
                             thrust::equal_to<size_type>{},
-                            comp);
+                            binop);
     };
 
     auto const d_values_ptr = column_device_view::create(values, stream);
@@ -207,10 +207,10 @@ struct reduce_functor {
     if constexpr (K == aggregation::ARGMAX || K == aggregation::ARGMIN) {
       auto const count_iter = thrust::make_counting_iterator<ResultType>(0);
       if (values.has_nulls()) {
-        using OpType = ArgMinMax<T, true, K == aggregation::ARGMIN>;
+        using OpType = arg_minmax_fn<T, true, K == aggregation::ARGMIN>;
         do_reduction(count_iter, result_begin, OpType{*d_values_ptr});
       } else {
-        using OpType = ArgMinMax<T, false, K == aggregation::ARGMIN>;
+        using OpType = arg_minmax_fn<T, false, K == aggregation::ARGMIN>;
         do_reduction(count_iter, result_begin, OpType{*d_values_ptr});
       }
     } else {
@@ -270,7 +270,7 @@ struct reduce_functor {
         : rmm::device_uvector<null_order>(0, stream);
 
     // Perform segmented reduction to find ARGMIN/ARGMAX.
-    auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& comp) {
+    auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
       thrust::reduce_by_key(rmm::exec_policy(stream),
                             group_labels.data(),
                             group_labels.data() + group_labels.size(),
@@ -278,13 +278,13 @@ struct reduce_functor {
                             thrust::make_discard_iterator(),
                             out_iter,
                             thrust::equal_to<size_type>{},
-                            comp);
+                            binop);
     };
 
     auto const count_iter   = thrust::make_counting_iterator<ResultType>(0);
     auto const result_begin = result->mutable_view().template begin<ResultType>();
     if (values.has_nulls()) {
-      auto const op = ArgMinMax<T, true, K == aggregation::ARGMIN>(
+      auto const op = arg_minmax_fn<T, true, K == aggregation::ARGMIN>(
         values.size(), *d_flattened_values_ptr, flattened_null_precedences.data());
       do_reduction(count_iter, result_begin, op);
 
@@ -300,7 +300,7 @@ struct reduce_functor {
       result->set_null_mask(std::move(null_mask));
       result->set_null_count(null_count);
     } else {
-      auto const op = ArgMinMax<T, false, K == aggregation::ARGMIN>(
+      auto const op = arg_minmax_fn<T, false, K == aggregation::ARGMIN>(
         values.size(), *d_flattened_values_ptr, flattened_null_precedences.data());
       do_reduction(count_iter, result_begin, op);
     }
