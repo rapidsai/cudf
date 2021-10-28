@@ -154,12 +154,16 @@ class Frame:
         column_names: List[str],
         index_names: Optional[List[str]] = None
     ):
-        # First construct the index, if any
-        index = (
-            cudf.core.index._index_from_data(dict(zip(index_names, columns)))
-            if index_names is not None
-            else None
-        )
+        if index_names is not None:
+            index_ids = list(range(len(index_names)))
+            # First construct the index, if any
+            index = cudf.core.index._index_from_data(
+                dict(zip(index_ids, columns))
+            )
+            index.name = index_names[0]
+            if len(index_names) > 1:
+                index.names = index_names
+
         n_index_columns = len(index_names) if index_names is not None else 0
         data = {
             name: columns[i + n_index_columns]
@@ -1438,10 +1442,6 @@ class Frame:
             self._index.names
         )
         result._copy_type_metadata(frame)
-        if self._index is not None:
-            result._index.name = self._index.name
-            if isinstance(self._index, cudf.MultiIndex):
-                result._index.names = self._index.names
         return result
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
