@@ -430,6 +430,27 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicates(JNIEnv
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicatesWithKeysValues(
+    JNIEnv *env, jclass, jlong keys_handle, jlong vals_handle) {
+  JNI_NULL_CHECK(env, keys_handle, "keys_handle is null", 0);
+  JNI_NULL_CHECK(env, vals_handle, "vals_handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const *keys_cv = reinterpret_cast<cudf::column_view const *>(keys_handle);
+    auto const *vals_cv = reinterpret_cast<cudf::column_view const *>(vals_handle);
+
+    // Apache Spark desires to keep the last duplicate element.
+    auto [out_keys, out_vals] = cudf::lists::drop_list_duplicates(
+        cudf::lists_column_view(*keys_cv), cudf::lists_column_view(*vals_cv),
+        cudf::duplicate_keep_option::KEEP_LAST);
+    auto const results =
+        cudf::jni::native_jlongArray(env, {reinterpret_cast<jlong>(out_keys.release()),
+                                           reinterpret_cast<jlong>(out_vals.release())});
+    return results.get_jArray();
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listContains(JNIEnv *env, jclass,
                                                                     jlong column_view,
                                                                     jlong lookup_key) {
