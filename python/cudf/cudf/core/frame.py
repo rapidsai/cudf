@@ -6,7 +6,6 @@ import copy
 import pickle
 import warnings
 from collections import abc
-from itertools import chain
 from typing import (
     Any,
     Callable,
@@ -33,7 +32,6 @@ from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_decimal_dtype,
     is_dict_like,
-    is_integer_dtype,
     is_scalar,
     issubdtype,
 )
@@ -118,9 +116,15 @@ class Frame:
 
     def _column_name_to_indices(self, column_names, include_index=True):
         column_names = set(column_names)
-        idx_len = len(self._index._data) if include_index and self._index is not None else 0
+        idx_len = (
+            len(self._index._data)
+            if include_index and self._index is not None
+            else 0
+        )
         return [
-            i + idx_len for i, name in enumerate(self._data.keys()) if name in column_names
+            i + idx_len
+            for i, name in enumerate(self._data.keys())
+            if name in column_names
         ]
 
     def serialize(self):
@@ -153,7 +157,7 @@ class Frame:
         cls,
         columns: List[ColumnBase],
         column_names: List[str],
-        index_names: Optional[List[str]] = None
+        index_names: Optional[List[str]] = None,
     ):
         index = None
         if index_names is not None:
@@ -170,7 +174,6 @@ class Frame:
         }
 
         return cls._from_data(data, index)
-
 
     def _mimic_inplace(
         self: T, result: Frame, inplace: bool = False
@@ -553,17 +556,15 @@ class Frame:
         gather_map = cudf.core.column.as_column(gather_map)
         if not gather_map.dtype == "int32":
             gather_map = gather_map.astype("int32")
-        
+
         if not _gather_map_is_valid(gather_map, len(self)):
-            raise IndexError(f"Gather map index is out of bounds.")
+            raise IndexError("Gather map index is out of bounds.")
 
         result = self.__class__._from_maybe_indexed_columns(
             libcudf.copying.gather(
-                list(self._columns),
-                gather_map,
-                nullify=nullify,
+                list(self._columns), gather_map, nullify=nullify,
             ),
-            self._column_names
+            self._column_names,
         )
 
         result._copy_type_metadata(self)
@@ -1439,7 +1440,7 @@ class Frame:
                 thresh=thresh,
             ),
             self._column_names,
-            self._index.names
+            self._index.names,
         )
         result._copy_type_metadata(frame)
         if self._index is not None:
@@ -2322,9 +2323,16 @@ class Frame:
         subset_cols = [name for name in self._column_names if name in subset]
         if len(subset_cols) == 0:
             return self.copy(deep=True)
-        
-        keys = self._positions_from_column_names(subset, include_index=not ignore_index)
-        result = self._drop_duplicates(keys=keys, keep=keep, nulls_are_equal=nulls_are_equal, ignore_index=ignore_index)
+
+        keys = self._positions_from_column_names(
+            subset, include_index=not ignore_index
+        )
+        result = self._drop_duplicates(
+            keys=keys,
+            keep=keep,
+            nulls_are_equal=nulls_are_equal,
+            ignore_index=ignore_index,
+        )
         result._copy_type_metadata(self)
         if self._index is not None:
             result._index.name = self._index.name
@@ -2333,9 +2341,13 @@ class Frame:
         return result
 
     def _positions_from_column_names(self, column_names, include_index=False):
-        """Maps each column name into their indexed position in the frame
+        """Map each column name into their positions in the frame.
         """
-        return [i for i, name in enumerate(self._column_names) if name in column_names]
+        return [
+            i
+            for i, name in enumerate(self._column_names)
+            if name in column_names
+        ]
 
     def _drop_duplicates(self, keys, keep, nulls_are_equal, ignore_index):
         return self.__class__._from_maybe_indexed_columns(
@@ -2345,7 +2357,7 @@ class Frame:
                 keep=keep,
                 nulls_are_equal=nulls_are_equal,
             ),
-            self._column_names
+            self._column_names,
         )
 
     def replace(

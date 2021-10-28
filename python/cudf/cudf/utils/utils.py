@@ -508,7 +508,10 @@ def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
         return slice(start, stop, step)
     return indices
 
-def _gather_map_is_valid(gather_map: "cudf.core.column.NumericalColumn", nrows: int) -> bool:
+
+def _gather_map_is_valid(
+    gather_map: "cudf.core.column.ColumnBase", nrows: int
+) -> bool:
     if len(gather_map) == 0:
         return True
     gm_min, gm_max = minmax(gather_map)

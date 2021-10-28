@@ -11,10 +11,10 @@ from nvtx import annotate
 
 import cudf
 import cudf._lib as libcudf
-from cudf.api.types import is_categorical_dtype, is_list_like, is_integer_dtype
+from cudf.api.types import is_categorical_dtype, is_list_like
 from cudf.core.frame import Frame
 from cudf.core.multiindex import MultiIndex
-from cudf.utils.utils import cached_property, _gather_map_is_valid
+from cudf.utils.utils import _gather_map_is_valid, cached_property
 
 
 def _indices_from_labels(obj, labels):
@@ -396,18 +396,19 @@ class IndexedFrame(Frame):
             gather_map = gather_map.astype("int32")
 
         if not _gather_map_is_valid(gather_map, len(self)):
-            raise IndexError(f"Gather map index is out of bounds.")
+            raise IndexError("Gather map index is out of bounds.")
 
         result = self.__class__._from_maybe_indexed_columns(
             libcudf.copying.gather(
-                list(self._index._columns + self._columns) if keep_index else list(self._columns),
+                list(self._index._columns + self._columns)
+                if keep_index
+                else list(self._columns),
                 gather_map,
                 nullify=nullify,
             ),
             self._column_names,
-            self._index.names if keep_index else None
+            self._index.names if keep_index else None,
         )
-
 
         result._copy_type_metadata(self, include_index=keep_index)
         if keep_index:
@@ -415,21 +416,28 @@ class IndexedFrame(Frame):
         return result
 
     def _positions_from_column_names(self, column_names, include_index=False):
-        """Maps each column name into their position in the frame
+        """Map each column name into their positions in the frame.
+
         Set `include_index=True` to add the number of index columns to the
         result.
         """
         n_indices_cols = len(self._index._data) if include_index else 0
-        return [i + n_indices_cols for i, name in enumerate(self._column_names) if name in column_names]
+        return [
+            i + n_indices_cols
+            for i, name in enumerate(self._column_names)
+            if name in column_names
+        ]
 
     def _drop_duplicates(self, keys, keep, nulls_are_equal, ignore_index):
         return self.__class__._from_maybe_indexed_columns(
             libcudf.stream_compaction.drop_duplicates(
-                list(self._columns) if ignore_index else list(self._index._columns + self._columns),
+                list(self._columns)
+                if ignore_index
+                else list(self._index._columns + self._columns),
                 keys=keys,
                 keep=keep,
                 nulls_are_equal=nulls_are_equal,
             ),
             self._column_names,
-            self._index.names if not ignore_index else None
+            self._index.names if not ignore_index else None,
         )
