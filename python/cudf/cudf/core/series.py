@@ -3909,6 +3909,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
 
 def make_binop_func(op):
+    # This function is used to wrap binary operations in Frame with an
+    # appropriate API for Series as required for pandas compatibility. The
+    # main effect is reordering and error-checking parameters in
+    # Series-specific ways.
     wrapped_func = getattr(Frame, op)
 
     @functools.wraps(wrapped_func)
@@ -3931,6 +3935,7 @@ def make_binop_func(op):
     return wrapper
 
 
+# Wrap all Frame binop functions with the expected API for Series.
 for binop in (
     "add",
     "radd",
