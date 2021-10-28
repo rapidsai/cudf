@@ -15,7 +15,6 @@
  */
 
 #include <cuda_profiler_api.h>
-
 #include <rmm/device_buffer.hpp>
 
 #include "jni_utils.hpp"
