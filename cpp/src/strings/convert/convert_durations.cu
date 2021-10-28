@@ -701,7 +701,7 @@ std::unique_ptr<column> from_durations(column_view const& durations,
                                        rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = durations.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   return type_dispatcher(
     durations.type(), dispatch_from_durations_fn{}, durations, format, stream, mr);
