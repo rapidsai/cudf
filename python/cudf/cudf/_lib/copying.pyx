@@ -38,10 +38,10 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport size_type
 from cudf._lib.utils cimport (
+    columns_from_unique_ptr,
     data_from_table_view,
     data_from_unique_ptr,
     table_view_from_columns,
-    columns_from_unique_ptr
 )
 
 # workaround for https://github.com/cython/cython/issues/3885
