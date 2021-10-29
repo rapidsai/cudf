@@ -315,10 +315,6 @@ TYPED_TEST(SegmentedGatherTest, GatherOnNonCompactedNullLists)
   auto const expected =
     LCW<T>{{{4, 3, 2, 1}, {5}, {6, 7}, {8, 0, 9}, {}, {{X}, all_nulls()}, {4, 5}}, null_at(5)};
   auto const results = segmented_gather(lists_column_view{*input}, lists_column_view{gather_map});
-  std::cout << "Results:  " << std::endl;
-  cudf::test::print(*results);
-  std::cout << "Expected: " << std::endl;
-  cudf::test::print(expected);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results->view(), expected);
 }
 
