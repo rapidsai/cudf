@@ -2470,3 +2470,25 @@ def test_index_type_methods(data, func):
         assert_eq(False, actual)
     else:
         assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("data", [1000000, 2000000, 3000000, 4000000, 5000000])
+def test_index_datetime_ceil(data):
+    cuidx = cudf.DatetimeIndex(data)
+    pidx = cuidx.to_pandas()
+
+    pidx_ceil = pidx.ceil("T")
+    cuidx_ceil = cuidx.ceil("T")
+
+    assert_eq(pidx_ceil, cuidx_ceil)
+
+
+@pytest.mark.parametrize("data", [1000000, 2000000, 3000000, 4000000, 5000000])
+def test_index_datetime_floor(data):
+    cuidx = cudf.DatetimeIndex(data)
+    pidx = cuidx.to_pandas()
+
+    pidx_floor = pidx.floor("T")
+    cuidx_floor = cuidx.floor("T")
+
+    assert_eq(pidx_floor, cuidx_floor)
