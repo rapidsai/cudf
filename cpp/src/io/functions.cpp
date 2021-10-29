@@ -256,7 +256,7 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 
   // Get column names
   for (auto i = 0; i < metadata.get_num_columns(); i++) {
-    result.column_names.push_back(metadata.get_column_name(i));
+    result.column_names.push_back(metadata.column_name(i));
   }
 
   // Get file-level statistics, statistics of each column of file
