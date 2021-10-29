@@ -284,6 +284,20 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfNegEven3)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
 
+TYPED_TEST(RoundTestsFixedPointTypes, TestForBlog)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const input    = fp_wrapper{{25649999}, scale_type{-5}};
+  auto const expected = fp_wrapper{{256}, scale_type{0}};
+  auto const result   = cudf::round(input);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
 TYPED_TEST(RoundTestsFloatingPointTypes, SimpleFloatingPointTestHalfUp0)
 {
   using fw_wrapper = cudf::test::fixed_width_column_wrapper<TypeParam>;
