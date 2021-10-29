@@ -1208,6 +1208,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         1    14
         dtype: int64
         """
+        if axis != 0:
+            raise ValueError("Only axis=0 is valid for Series objects.")
         if keep_index is True or is_scalar(indices):
             return self.iloc[indices]
         else:
