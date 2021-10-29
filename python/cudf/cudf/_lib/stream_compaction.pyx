@@ -25,10 +25,10 @@ from cudf._lib.cpp.types cimport (
     size_type,
 )
 from cudf._lib.utils cimport (
+    columns_from_unique_ptr,
     data_from_unique_ptr,
     table_view_from_columns,
     table_view_from_table,
-    columns_from_unique_ptr,
 )
 
 
@@ -50,7 +50,9 @@ def drop_nulls(data: list, how="any", keys=None, thresh=None):
     list of columns with null rows dropped
     """
 
-    cdef vector[size_type] cpp_keys = keys if keys is not None else range(len(data))
+    cdef vector[size_type] cpp_keys = (
+        keys if keys is not None else range(len(data))
+    )
 
     cdef size_type c_keep_threshold = cpp_keys.size()
     if thresh is not None:
@@ -130,7 +132,9 @@ def drop_duplicates(data: list,
     list of columns with duplicate dropped
     """
 
-    cdef vector[size_type] cpp_keys = keys if keys is not None else range(len(data))
+    cdef vector[size_type] cpp_keys = (
+        keys if keys is not None else range(len(data))
+    )
     cdef duplicate_keep_option cpp_keep_option
 
     if keep == 'first':
