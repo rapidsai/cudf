@@ -1893,7 +1893,7 @@ class DatetimeIndex(GenericIndex):
             offset=out_column.offset,
         )
 
-        return as_index(out_column, name=self.series.name)
+        return as_index(out_column, name=self.name)
 
     def floor(self, field):
         """
@@ -1930,7 +1930,7 @@ class DatetimeIndex(GenericIndex):
             offset=out_column.offset,
         )
 
-        return as_index(out_column, name=self.series.name)
+        return as_index(out_column, name=self.name)
 
 
 class TimedeltaIndex(GenericIndex):
