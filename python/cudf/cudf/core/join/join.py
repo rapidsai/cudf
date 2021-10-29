@@ -101,9 +101,11 @@ class Merge:
         # At this point validation guarantees that if on is not None we
         # don't have any other args, so we can apply it directly to left_on and
         # right_on.
+        self._using_left_index = bool(left_index)
         left_on = (
             lhs.index._data.names if left_index else left_on if left_on else on
         )
+        self._using_right_index = bool(right_index)
         right_on = (
             rhs.index._data.names
             if right_index
@@ -115,13 +117,13 @@ class Merge:
         if left_on or right_on:
             self._left_keys = [
                 _ColumnIndexer(name=on)
-                if on in lhs._data
+                if not self._using_left_index and on in lhs._data
                 else _IndexIndexer(name=on)
                 for on in (_coerce_to_tuple(left_on) if left_on else [])
             ]
             self._right_keys = [
                 _ColumnIndexer(name=on)
-                if on in rhs._data
+                if not self._using_right_index and on in rhs._data
                 else _IndexIndexer(name=on)
                 for on in (_coerce_to_tuple(right_on) if right_on else [])
             ]
