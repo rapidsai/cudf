@@ -42,6 +42,16 @@ column_view strings_column_view::offsets() const
   return child(offsets_column_index);
 }
 
+strings_column_view::offset_iterator strings_column_view::offsets_begin() const
+{
+  return offsets().begin<offset_type>() + offset();
+}
+
+strings_column_view::offset_iterator strings_column_view::offsets_end() const
+{
+  return offsets_begin() + size() + 1;
+}
+
 column_view strings_column_view::chars() const
 {
   CUDF_EXPECTS(num_children() > 0, "strings column has no children");
@@ -52,6 +62,16 @@ size_type strings_column_view::chars_size() const noexcept
 {
   if (size() == 0) return 0;
   return chars().size();
+}
+
+strings_column_view::chars_iterator strings_column_view::chars_begin() const
+{
+  return chars().begin<char>();
+}
+
+strings_column_view::chars_iterator strings_column_view::chars_end() const
+{
+  return chars_begin() + chars_size();
 }
 
 }  // namespace cudf
