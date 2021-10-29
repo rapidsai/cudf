@@ -118,28 +118,23 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
   CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(order_by),
                "Unsupported list type in grouped rank scan.");
 
-  cache.add_result(
-    values,
-    agg,
-    detail::rank_scan(
-      order_by, helper.group_labels(stream), helper.group_offsets(stream), stream, mr));
-}
+  auto const& rank_agg = dynamic_cast<cudf::detail::rank_aggregation const&>(agg);
 
-template <>
-void scan_result_functor::operator()<aggregation::DENSE_RANK>(aggregation const& agg)
-{
-  if (cache.has_result(values, agg)) return;
-  CUDF_EXPECTS(helper.is_presorted(),
-               "Dense rank aggregate in groupby scan requires the keys to be presorted");
-  auto const order_by = get_grouped_values();
-  CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(order_by),
-               "Unsupported list type in grouped dense_rank scan.");
-
-  cache.add_result(
-    values,
-    agg,
-    detail::dense_rank_scan(
-      order_by, helper.group_labels(stream), helper.group_offsets(stream), stream, mr));
+  if (rank_agg._method == rank_method::MIN) {
+    cache.add_result(
+      values,
+      agg,
+      detail::rank_scan(
+        order_by, helper.group_labels(stream), helper.group_offsets(stream), stream, mr));
+  } else if (rank_agg._method == rank_method::DENSE) {
+    cache.add_result(
+      values,
+      agg,
+      detail::dense_rank_scan(
+        order_by, helper.group_labels(stream), helper.group_offsets(stream), stream, mr));
+  } else {
+    CUDF_FAIL("Unsupported rank method in groupby scan");
+  }
 }
 }  // namespace detail
 

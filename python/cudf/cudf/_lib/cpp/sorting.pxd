@@ -14,14 +14,6 @@ from cudf._lib.cpp.table.table_view cimport table_view
 
 
 cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
-    ctypedef enum rank_method:
-        FIRST "cudf::rank_method::FIRST"
-        AVERAGE "cudf::rank_method::AVERAGE"
-        MIN "cudf::rank_method::MIN"
-        MAX "cudf::rank_method::MAX"
-        DENSE "cudf::rank_method::DENSE"
-
-cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
     cdef unique_ptr[column] sorted_order(
         table_view source_table,
         vector[libcudf_types.order] column_order,
@@ -29,7 +21,7 @@ cdef extern from "cudf/sorting.hpp" namespace "cudf" nogil:
 
     cdef unique_ptr[column] rank(
         column_view input_view,
-        rank_method method,
+        libcudf_types.rank_method method,
         libcudf_types.order column_order,
         libcudf_types.null_policy null_handling,
         libcudf_types.null_order null_precedence,

@@ -39,14 +39,14 @@ inline void test_pair_rank_scans(column_view const& keys,
                    order,
                    keys,
                    expected_dense,
-                   make_dense_rank_aggregation<groupby_scan_aggregation>(),
+                   make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE),
                    null_policy::INCLUDE,
                    sorted::YES);
   test_single_scan(keys,
                    order,
                    keys,
                    expected_rank,
-                   make_rank_aggregation<groupby_scan_aggregation>(),
+                   make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN),
                    null_policy::INCLUDE,
                    sorted::YES);
 }
@@ -209,8 +209,10 @@ TYPED_TEST(typed_groupby_rank_scan_test, mixedStructs)
   std::vector<groupby::scan_request> requests;
   requests.emplace_back(groupby::scan_request());
   requests[0].values = *struct_col;
-  requests[0].aggregations.push_back(make_dense_rank_aggregation<groupby_scan_aggregation>());
-  requests[0].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>());
+  requests[0].aggregations.push_back(
+    make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE));
+  requests[0].aggregations.push_back(
+    make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN));
 
   groupby::groupby gb_obj(table_view({keys}), null_policy::INCLUDE, sorted::YES);
   auto result = gb_obj.scan(requests);
@@ -243,11 +245,15 @@ TYPED_TEST(typed_groupby_rank_scan_test, nestedStructs)
   requests.emplace_back(groupby::scan_request());
   requests.emplace_back(groupby::scan_request());
   requests[0].values = *nested_col;
-  requests[0].aggregations.push_back(make_dense_rank_aggregation<groupby_scan_aggregation>());
-  requests[0].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>());
+  requests[0].aggregations.push_back(
+    make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE));
+  requests[0].aggregations.push_back(
+    make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN));
   requests[1].values = *flattened_col;
-  requests[1].aggregations.push_back(make_dense_rank_aggregation<groupby_scan_aggregation>());
-  requests[1].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>());
+  requests[1].aggregations.push_back(
+    make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE));
+  requests[1].aggregations.push_back(
+    make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN));
 
   groupby::groupby gb_obj(table_view({keys}), null_policy::INCLUDE, sorted::YES);
   auto result = gb_obj.scan(requests);
@@ -292,11 +298,15 @@ TYPED_TEST(typed_groupby_rank_scan_test, structsWithNullPushdown)
   requests.emplace_back(groupby::scan_request());
   requests.emplace_back(groupby::scan_request());
   requests[0].values = *struct_col;
-  requests[0].aggregations.push_back(make_dense_rank_aggregation<groupby_scan_aggregation>());
-  requests[0].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>());
+  requests[0].aggregations.push_back(
+    make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE));
+  requests[0].aggregations.push_back(
+    make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN));
   requests[1].values = *null_col;
-  requests[1].aggregations.push_back(make_dense_rank_aggregation<groupby_scan_aggregation>());
-  requests[1].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>());
+  requests[1].aggregations.push_back(
+    make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE));
+  requests[1].aggregations.push_back(
+    make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN));
 
   groupby::groupby gb_obj(table_view({keys}), null_policy::INCLUDE, sorted::YES);
   auto result = gb_obj.scan(requests);
@@ -353,11 +363,11 @@ TYPED_TEST(list_groupby_rank_scan_test, lists)
   requests.emplace_back(groupby::aggregation_request());
   requests.emplace_back(groupby::aggregation_request());
   requests[0].values = list_col;
-  requests[0].aggregations.push_back(make_dense_rank_aggregation<groupby_scan_aggregation>());
-  requests[0].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>());
+  requests[0].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE));
+  requests[0].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN));
   requests[1].values = struct_col;
-  requests[1].aggregations.push_back(make_dense_rank_aggregation<groupby_scan_aggregation>());
-  requests[1].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>());
+  requests[1].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE));
+  requests[1].aggregations.push_back(make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN));
 
   groupby::groupby gb_obj(table_view({keys}), null_policy::INCLUDE, sorted::YES);
   auto result = gb_obj.scan(requests);
@@ -439,57 +449,60 @@ TEST_F(groupby_rank_scan_test_failures, test_exception_triggers)
                      col,
                      keys,
                      col,
-                     make_dense_rank_aggregation<groupby_scan_aggregation>(),
+                     make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE),
                      null_policy::INCLUDE,
                      sorted::NO),
-    "Dense rank aggregate in groupby scan requires the keys to be presorted");
-
-  CUDF_EXPECT_THROW_MESSAGE(test_single_scan(keys,
-                                             col,
-                                             keys,
-                                             col,
-                                             make_rank_aggregation<groupby_scan_aggregation>(),
-                                             null_policy::INCLUDE,
-                                             sorted::NO),
-                            "Rank aggregate in groupby scan requires the keys to be presorted");
+    "Rank aggregate in groupby scan requires the keys to be presorted");
 
   CUDF_EXPECT_THROW_MESSAGE(
     test_single_scan(keys,
                      col,
                      keys,
                      col,
-                     make_dense_rank_aggregation<groupby_scan_aggregation>(),
+                     make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN),
+                     null_policy::INCLUDE,
+                     sorted::NO),
+    "Rank aggregate in groupby scan requires the keys to be presorted");
+
+  CUDF_EXPECT_THROW_MESSAGE(
+    test_single_scan(keys,
+                     col,
+                     keys,
+                     col,
+                     make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE),
                      null_policy::EXCLUDE,
                      sorted::YES),
-    "Dense rank aggregate in groupby scan requires the keys to be presorted");
-
-  CUDF_EXPECT_THROW_MESSAGE(test_single_scan(keys,
-                                             col,
-                                             keys,
-                                             col,
-                                             make_rank_aggregation<groupby_scan_aggregation>(),
-                                             null_policy::EXCLUDE,
-                                             sorted::YES),
-                            "Rank aggregate in groupby scan requires the keys to be presorted");
+    "Rank aggregate in groupby scan requires the keys to be presorted");
 
   CUDF_EXPECT_THROW_MESSAGE(
     test_single_scan(keys,
                      col,
                      keys,
                      col,
-                     make_dense_rank_aggregation<groupby_scan_aggregation>(),
+                     make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN),
+                     null_policy::EXCLUDE,
+                     sorted::YES),
+    "Rank aggregate in groupby scan requires the keys to be presorted");
+
+  CUDF_EXPECT_THROW_MESSAGE(
+    test_single_scan(keys,
+                     col,
+                     keys,
+                     col,
+                     make_rank_aggregation<groupby_scan_aggregation>(rank_method::DENSE),
                      null_policy::EXCLUDE,
                      sorted::NO),
-    "Dense rank aggregate in groupby scan requires the keys to be presorted");
+    "Rank aggregate in groupby scan requires the keys to be presorted");
 
-  CUDF_EXPECT_THROW_MESSAGE(test_single_scan(keys,
-                                             col,
-                                             keys,
-                                             col,
-                                             make_rank_aggregation<groupby_scan_aggregation>(),
-                                             null_policy::EXCLUDE,
-                                             sorted::NO),
-                            "Rank aggregate in groupby scan requires the keys to be presorted");
+  CUDF_EXPECT_THROW_MESSAGE(
+    test_single_scan(keys,
+                     col,
+                     keys,
+                     col,
+                     make_rank_aggregation<groupby_scan_aggregation>(rank_method::MIN),
+                     null_policy::EXCLUDE,
+                     sorted::NO),
+    "Rank aggregate in groupby scan requires the keys to be presorted");
 }
 
 }  // namespace test

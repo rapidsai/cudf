@@ -75,8 +75,6 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
                                                           class row_number_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class rank_aggregation const& agg);
-  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
-                                                          class dense_rank_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(
     data_type col_type, class collect_list_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
@@ -125,7 +123,6 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class nth_element_aggregation const& agg);
   virtual void visit(class row_number_aggregation const& agg);
   virtual void visit(class rank_aggregation const& agg);
-  virtual void visit(class dense_rank_aggregation const& agg);
   virtual void visit(class collect_list_aggregation const& agg);
   virtual void visit(class collect_set_aggregation const& agg);
   virtual void visit(class lead_lag_aggregation const& agg);
@@ -609,7 +606,15 @@ class row_number_aggregation final : public rolling_aggregation {
  */
 class rank_aggregation final : public rolling_aggregation, public groupby_scan_aggregation {
  public:
-  rank_aggregation() : aggregation{RANK} {}
+  rank_aggregation(rank_method method, null_policy null_handling, bool percentage)
+    : aggregation{RANK}, _method{method}, _null_handling{null_handling}, _percentage(percentage)
+  {
+  }
+  rank_method _method;         ///< rank method
+  null_policy _null_handling;  ///< include or exclude nulls in ranks
+  bool _percentage;            ///< whether to return percentage ranks
+
+  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
 
   std::unique_ptr<aggregation> clone() const override
   {
@@ -621,25 +626,13 @@ class rank_aggregation final : public rolling_aggregation, public groupby_scan_a
     return collector.visit(col_type, *this);
   }
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
-};
 
-/**
- * @brief Derived class for specifying a dense rank aggregation
- */
-class dense_rank_aggregation final : public rolling_aggregation, public groupby_scan_aggregation {
- public:
-  dense_rank_aggregation() : aggregation{DENSE_RANK} {}
-
-  std::unique_ptr<aggregation> clone() const override
+ private:
+  size_t hash_impl() const
   {
-    return std::make_unique<dense_rank_aggregation>(*this);
+    return std::hash<int>{}(static_cast<int>(_method)) ^
+           std::hash<bool>{}(static_cast<bool>(_null_handling)) ^ std::hash<bool>{}(_percentage);
   }
-  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
-    data_type col_type, simple_aggregations_collector& collector) const override
-  {
-    return collector.visit(col_type, *this);
-  }
-  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 };
 
 /**
@@ -1200,13 +1193,7 @@ struct target_type_impl<Source, aggregation::ROW_NUMBER> {
 // Always use size_type accumulator for RANK
 template <typename Source>
 struct target_type_impl<Source, aggregation::RANK> {
-  using type = size_type;
-};
-
-// Always use size_type accumulator for DENSE_RANK
-template <typename Source>
-struct target_type_impl<Source, aggregation::DENSE_RANK> {
-  using type = size_type;
+  using type = size_type;  // double for percentage=true.
 };
 
 // Always use list for COLLECT_LIST
@@ -1369,8 +1356,6 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(aggregation::Kin
       return f.template operator()<aggregation::ROW_NUMBER>(std::forward<Ts>(args)...);
     case aggregation::RANK:
       return f.template operator()<aggregation::RANK>(std::forward<Ts>(args)...);
-    case aggregation::DENSE_RANK:
-      return f.template operator()<aggregation::DENSE_RANK>(std::forward<Ts>(args)...);
     case aggregation::COLLECT_LIST:
       return f.template operator()<aggregation::COLLECT_LIST>(std::forward<Ts>(args)...);
     case aggregation::COLLECT_SET:

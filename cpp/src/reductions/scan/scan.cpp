@@ -35,12 +35,13 @@ std::unique_ptr<column> scan(column_view const& input,
   if (agg->kind == aggregation::RANK) {
     CUDF_EXPECTS(inclusive == scan_type::INCLUSIVE,
                  "Unsupported rank aggregation operator for exclusive scan");
-    return inclusive_rank_scan(input, rmm::cuda_stream_default, mr);
-  }
-  if (agg->kind == aggregation::DENSE_RANK) {
-    CUDF_EXPECTS(inclusive == scan_type::INCLUSIVE,
-                 "Unsupported dense rank aggregation operator for exclusive scan");
-    return inclusive_dense_rank_scan(input, rmm::cuda_stream_default, mr);
+    auto const& rank_agg = dynamic_cast<cudf::detail::rank_aggregation const&>(*agg);
+    if (rank_agg._method == rank_method::MIN) {
+      return inclusive_rank_scan(input, rmm::cuda_stream_default, mr);
+    } else if (rank_agg._method == rank_method::DENSE) {
+      return inclusive_dense_rank_scan(input, rmm::cuda_stream_default, mr);
+    }
+    CUDF_FAIL("Unsupported rank aggregation method for inclusive scan");
   }
 
   return inclusive == scan_type::EXCLUSIVE

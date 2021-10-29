@@ -24,19 +24,6 @@
 namespace cudf {
 
 /**
- * @brief Tie-breaker method to use for ranking the column.
- *
- * @ingroup column_sort
- */
-enum class rank_method {
-  FIRST,    ///< stable sort order ranking (no ties)
-  AVERAGE,  ///< mean of first in the group
-  MIN,      ///< min of first in the group
-  MAX,      ///< max of first in the group
-  DENSE     ///< rank always increases by 1 between groups
-};
-
-/**
  * @addtogroup column_sort
  * @{
  * @file

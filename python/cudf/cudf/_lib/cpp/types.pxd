@@ -102,3 +102,10 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         HIGHER "cudf::interpolation::HIGHER"
         MIDPOINT "cudf::interpolation::MIDPOINT"
         NEAREST "cudf::interpolation::NEAREST"
+
+    ctypedef enum rank_method:
+        FIRST "cudf::rank_method::FIRST"
+        AVERAGE "cudf::rank_method::AVERAGE"
+        MIN "cudf::rank_method::MIN"
+        MAX "cudf::rank_method::MAX"
+        DENSE "cudf::rank_method::DENSE"

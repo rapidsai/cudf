@@ -16,12 +16,11 @@ from cudf._lib.cpp.search cimport lower_bound, upper_bound
 from cudf._lib.cpp.sorting cimport (
     is_sorted as cpp_is_sorted,
     rank,
-    rank_method,
     sorted_order,
 )
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.cpp.types cimport null_order, null_policy, order
+from cudf._lib.cpp.types cimport null_order, null_policy, order, rank_method
 from cudf._lib.sort cimport underlying_type_t_rank_method
 from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 

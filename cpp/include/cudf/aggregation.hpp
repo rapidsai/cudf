@@ -77,8 +77,7 @@ class aggregation {
     NUNIQUE,         ///< count number of unique elements
     NTH_ELEMENT,     ///< get the nth element
     ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
-    RANK,            ///< get rank       of current index
-    DENSE_RANK,      ///< get dense rank of current index
+    RANK,            ///< get rank of current index
     COLLECT_LIST,    ///< collect values into a list
     COLLECT_SET,     ///< collect values into a list without duplicate entries
     LEAD,            ///< window function, accesses row at specified offset following current row
@@ -289,9 +288,11 @@ std::unique_ptr<Base> make_row_number_aggregation();
 /**
  * @brief Factory to create a RANK aggregation
  *
- * `RANK` returns a non-nullable column of size_type "ranks": the number of rows preceding or
- * equal to the current row plus one. As a result, ranks are not unique and gaps will appear in
- * the ranking sequence.
+ * `RANK` returns a non-nullable column of size_type "ranks"
+ * Method "min": the number of rows preceding or equal to the current row plus one. As a result,
+ * ranks are not unique and gaps will appear in the ranking sequence.
+ * Method "dense": the preceding unique value's rank plus one. As a result, ranks are not unique but
+ * there are no gaps in the ranking sequence.
  *
  * This aggregation only works with "scan" algorithms. The input column into the group or
  * ungrouped scan is an orderby column that orders the rows that the aggregate function ranks.
@@ -333,48 +334,6 @@ std::unique_ptr<Base> make_row_number_aggregation();
  *   groupby column      : driver_name
  *   input orderby column: num_overtakes
  *  result: column<size_type>{1, 1, 1, 4, 4, 1, 1, 3, 4}
- * @endcode
- */
-template <typename Base = aggregation>
-std::unique_ptr<Base> make_rank_aggregation();
-
-/**
- * @brief Factory to create a DENSE_RANK aggregation
- *
- * `DENSE_RANK` returns a non-nullable column of size_type "dense ranks": the preceding unique
- * value's rank plus one. As a result, ranks are not unique but there are no gaps in the ranking
- * sequence (unlike RANK aggregations).
- *
- * This aggregation only works with "scan" algorithms. The input column into the group or
- * ungrouped scan is an orderby column that orders the rows that the aggregate function ranks.
- * If rows are ordered by more than one column, the orderby input column should be a struct
- * column containing the ordering columns.
- *
- * Note:
- *  1. This method requires that the rows are presorted by the group keys and order_by columns.
- *  2. `DENSE_RANK` aggregations will return a fully valid column regardless of null_handling
- *     policy specified in the scan.
- *  3. `DENSE_RANK` aggregations are not compatible with exclusive scans.
- *
- * @code{.pseudo}
- * Example: Consider an motor-racing statistics dataset, containing the following columns:
- *   1. driver_name:   (STRING) Name of the car driver
- *   2. num_overtakes: (INT32)  Number of times the driver overtook another car in a lap
- *   3. lap_number:    (INT32)  The number of the lap
- *
- * For the following presorted data:
- *
- *  [ // driver_name,  num_overtakes,  lap_number
- *    {   "bottas",        2,            3        },
- *    {   "bottas",        2,            7        },
- *    {   "bottas",        2,            7        },
- *    {   "bottas",        1,            1        },
- *    {   "bottas",        1,            2        },
- *    {   "hamilton",      4,            1        },
- *    {   "hamilton",      4,            1        },
- *    {   "hamilton",      3,            4        },
- *    {   "hamilton",      2,            4        }
- *  ]
  *
  * A grouped dense rank aggregation scan with:
  *   groupby column      : driver_name
@@ -386,9 +345,16 @@ std::unique_ptr<Base> make_rank_aggregation();
  *   input orderby column: num_overtakes
  *  result: column<size_type>{1, 1, 1, 2, 2, 1, 1, 2, 3}
  * @endcode
+ *
+ * @param method The ranking method used for tie breaking (same values).
+ * @param null_handling  flag to include nulls during ranking. If nulls are not
+ * included, corresponding rank will be null.
+ * @param percentage flag to convert ranks to percentage in range (0,1}
  */
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_dense_rank_aggregation();
+std::unique_ptr<Base> make_rank_aggregation(rank_method method,
+                                            null_policy null_handling = null_policy::EXCLUDE,
+                                            bool percentage           = false);
 
 /**
  * @brief Factory to create a COLLECT_LIST aggregation
