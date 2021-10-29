@@ -58,7 +58,7 @@ conda config --show-sources
 conda list --show-channel-urls
 
 # FIX Added to deal with Anancoda SSL verification issues during conda builds
-conda config --set ssl_verify False
+#conda config --set ssl_verify False
 
 ################################################################################
 # BUILD - Conda package builds

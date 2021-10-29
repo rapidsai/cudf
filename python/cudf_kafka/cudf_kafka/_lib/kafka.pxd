@@ -49,7 +49,6 @@ cdef extern from "kafka_consumer.hpp" \
 cdef class KafkaDatasource(Datasource):
 
     cdef unique_ptr[datasource] c_datasource
-    cdef map[string, string] kafka_configs
     cdef string topic
     cdef int32_t partition
     cdef int64_t start_offset
