@@ -450,9 +450,9 @@ void writer::impl::build_dictionaries(orc_table_view& orc_table,
  * @brief Returns the maximum size of RLE encoded values of an integer type.
  **/
 template <typename T>
-size_t max_integer_RLE_length()
+size_t max_varint_size()
 {
-  // RLE encodes 7 bits in each byte
+  // varint encodes 7 bits in each byte
   return cudf::util::div_rounding_up_unsafe(sizeof(T) * 8, 7);
 }
 
@@ -467,16 +467,16 @@ constexpr size_t RLE_stream_size(TypeKind kind, size_t count)
       return div_rounding_up_unsafe(count, byte_rle_max_len) * (byte_rle_max_len + 1);
     case TypeKind::SHORT:
       return div_rounding_up_unsafe(count, gpu::encode_block_size) *
-             (gpu::encode_block_size * max_integer_RLE_length<int16_t>() + 2);
+             (gpu::encode_block_size * max_varint_size<int16_t>() + 2);
     case TypeKind::FLOAT:
     case TypeKind::INT:
     case TypeKind::DATE:
       return div_rounding_up_unsafe(count, gpu::encode_block_size) *
-             (gpu::encode_block_size * max_integer_RLE_length<int32_t>() + 2);
+             (gpu::encode_block_size * max_varint_size<int32_t>() + 2);
     case TypeKind::LONG:
     case TypeKind::DOUBLE:
       return div_rounding_up_unsafe(count, gpu::encode_block_size) *
-             (gpu::encode_block_size * max_integer_RLE_length<int64_t>() + 2);
+             (gpu::encode_block_size * max_varint_size<int64_t>() + 2);
     default: CUDF_FAIL("Unsupported ORC type for RLE stream size");
   }
 }
