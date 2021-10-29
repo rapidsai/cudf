@@ -45,7 +45,7 @@ namespace strings {
  *
  * @param strings Strings instance for this operation.
  * @param pattern Regex pattern to match to each string.
- * @param flags Regex flags for interpretting special characters in the pattern.
+ * @param flags Regex flags for interpreting special characters in the pattern.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of boolean results for each string.
  */
@@ -72,7 +72,7 @@ std::unique_ptr<column> contains_re(
  *
  * @param strings Strings instance for this operation.
  * @param pattern Regex pattern to match to each string.
- * @param flags Regex flags for interpretting special characters in the pattern.
+ * @param flags Regex flags for interpreting special characters in the pattern.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of boolean results for each string.
  */
@@ -99,7 +99,7 @@ std::unique_ptr<column> matches_re(
  *
  * @param strings Strings instance for this operation.
  * @param pattern Regex pattern to match within each string.
- * @param flags Regex flags for interpretting special characters in the pattern.
+ * @param flags Regex flags for interpreting special characters in the pattern.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New INT32 column with counts for each string.
  */
