@@ -11,7 +11,7 @@ from nvtx import annotate
 
 import cudf
 import cudf._lib as libcudf
-from cudf.api.types import is_categorical_dtype, is_list_like
+from cudf.api.types import is_categorical_dtype, is_integer_dtype, is_list_like
 from cudf.core.frame import Frame
 from cudf.core.index import Index
 from cudf.core.multiindex import MultiIndex
@@ -418,10 +418,10 @@ class IndexedFrame(Frame):
 
     def _gather(self, gather_map, keep_index=True, nullify=False):
         gather_map = cudf.core.column.as_column(gather_map)
-        if not gather_map.dtype == "int32":
+        if not is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
 
-        if not _gather_map_is_valid(gather_map, len(self)):
+        if not _gather_map_is_valid(gather_map, len(self), nullify):
             raise IndexError("Gather map index is out of bounds.")
 
         result = self.__class__._from_maybe_indexed_columns(

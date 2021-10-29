@@ -36,8 +36,8 @@ from cudf._lib.null_mask import (
 from cudf._lib.scalar import as_device_scalar
 from cudf._lib.stream_compaction import (
     distinct_count as cpp_distinct_count,
-    drop_nulls,
     drop_duplicates,
+    drop_nulls,
 )
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
@@ -75,7 +75,7 @@ from cudf.utils.dtypes import (
     pandas_dtypes_alias_to_cudf_alias,
     pandas_dtypes_to_np_dtypes,
 )
-from cudf.utils.utils import mask_dtype, _gather_map_is_valid
+from cudf.utils.utils import _gather_map_is_valid, mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
 
@@ -689,26 +689,18 @@ class ColumnBase(Column, Serializable):
     def median(self, skipna: bool = None) -> ScalarLike:
         raise TypeError(f"cannot perform median with type {self.dtype}")
 
-    def take(
-        self: T,
-        indices: ColumnBase,
-        nullify: bool = False,
-    ) -> T:
+    def take(self: T, indices: ColumnBase, nullify: bool = False,) -> T:
         """Return Column by taking values from the corresponding *indices*."""
         # Handle zero size
         if indices.size == 0:
             return cast(T, column_empty_like(self, newsize=0))
-        if not indices.dtype == "int32":
-            indices = indices.astype("int32")
-        if not _gather_map_is_valid(indices, len(self)):
-            raise IndexError(f"Gather map index is out of bounds.")
-        
-        return next(iter(libcudf.copying.gather(
-                [self],
-                indices,
-                nullify=nullify,
-            )))._with_type_metadata(self.dtype)
-        
+        if not _gather_map_is_valid(indices, len(self), nullify):
+            raise IndexError("Gather map index is out of bounds.")
+
+        return next(
+            iter(libcudf.copying.gather([self], indices, nullify=nullify,))
+        )._with_type_metadata(self.dtype)
+
     def isin(self, values: Sequence) -> ColumnBase:
         """Check whether values are contained in the Column.
 
@@ -1096,9 +1088,7 @@ class ColumnBase(Column, Serializable):
         # the following issue resolved:
         # https://github.com/rapidsai/cudf/issues/5286
 
-        return next(iter(drop_duplicates(
-            [self], keep="first"
-        )))
+        return next(iter(drop_duplicates([self], keep="first")))
 
     def serialize(self) -> Tuple[dict, list]:
         header: Dict[Any, Any] = {}

@@ -32,6 +32,7 @@ from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
     is_decimal_dtype,
     is_dict_like,
+    is_integer_dtype,
     is_scalar,
     issubdtype,
 )
@@ -554,10 +555,10 @@ class Frame:
 
     def _gather(self, gather_map, keep_index=True, nullify=False):
         gather_map = cudf.core.column.as_column(gather_map)
-        if not gather_map.dtype == "int32":
+        if not is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
 
-        if not _gather_map_is_valid(gather_map, len(self)):
+        if not _gather_map_is_valid(gather_map, len(self), nullify):
             raise IndexError("Gather map index is out of bounds.")
 
         result = self.__class__._from_maybe_indexed_columns(
