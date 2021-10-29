@@ -104,9 +104,12 @@ class strings_column_view : private column_view {
    * @brief Return an iterator for the chars child column.
    *
    * This does not applies the offset of the parent.
-   * The offsets child must be used to properly address
+   * The offsets child must be used to properly address the char bytes.
    *
-   * @return Iterator pointing to the first offset value.
+   * For example, to access the first character of string `i` (accounting for
+   * a sliced column offset) use: `chars_begin()[offsets_begin()[i]]`.
+   *
+   * @return Iterator pointing to the first char byte.
    */
   chars_iterator chars_begin() const;
 
@@ -115,7 +118,7 @@ class strings_column_view : private column_view {
    *
    * This automatically applies the offset of the parent.
    *
-   * @return Iterator pointing 1 past the last offset value.
+   * @return Iterator pointing 1 past the last char byte.
    */
   chars_iterator chars_end() const;
 };
