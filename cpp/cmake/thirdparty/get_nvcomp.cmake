@@ -33,8 +33,8 @@ function(find_and_configure_nvcomp VERSION)
     endif()
 
     # Per-thread default stream
-    if(PER_THREAD_DEFAULT_STREAM)
-        target_compile_definitions(nvcomp PUBLIC CUDA_API_PER_THREAD_DEFAULT_STREAM)
+    if(TARGET nvcomp AND PER_THREAD_DEFAULT_STREAM)
+        target_compile_definitions(nvcomp PRIVATE CUDA_API_PER_THREAD_DEFAULT_STREAM)
     endif()
 
 endfunction()
