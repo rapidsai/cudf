@@ -842,7 +842,11 @@ def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
 def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
     ps, gs = ps_gs
 
-    expectation = raise_builder([flags_raise, na_raise], NotImplementedError)
+    expectation = does_not_raise()
+    if flags_raise:
+        expectation = pytest.raises(ValueError)
+    if na_raise:
+        expectation = pytest.raises(NotImplementedError)
 
     with expectation:
         expect = ps.str.contains(pat, flags=flags, na=na, regex=regex)

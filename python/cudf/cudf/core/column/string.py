@@ -98,6 +98,13 @@ _timedelta_to_str_typecast_functions = {
 }
 
 
+def _is_supported_regex_flags(flags):
+    return flags == 0 or (
+        (flags & (re.MULTILINE | re.DOTALL) != 0)
+        and (flags & ~(re.MULTILINE | re.DOTALL) == 0)
+    )
+
+
 class StringMethods(ColumnMethods):
     """
     Vectorized string functions for Series and Index.
@@ -737,19 +744,15 @@ class StringMethods(ColumnMethods):
             raise NotImplementedError("`case` parameter is not yet supported")
         if na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
-        if (
-            flags != 0
-            and (flags & (re.MULTILINE | re.DOTALL) == 0)
-            or (flags & ~(re.MULTILINE | re.DOTALL) != 0)
-        ):
-            raise NotImplementedError("invalid `flags` parameter value")
+        if not _is_supported_regex_flags(flags):
+            raise ValueError("invalid `flags` parameter value")
 
         if pat is None:
             result_col = column.column_empty(
                 len(self._column), dtype="bool", masked=True
             )
         elif is_scalar(pat):
-            if regex is True:
+            if regex:
                 result_col = libstrings.contains_re(self._column, pat, flags)
             else:
                 result_col = libstrings.contains(
@@ -3301,7 +3304,7 @@ class StringMethods(ColumnMethods):
             -  `flags` parameter currently only supports re.DOTALL
                and re.MULTILINE.
             -  Some characters need to be escaped when passing
-               in pat. eg. ``'$'`` has a special meaning in regex
+               in pat. e.g. ``'$'`` has a special meaning in regex
                and must be escaped when finding this literal character.
 
         Examples
@@ -3336,12 +3339,8 @@ class StringMethods(ColumnMethods):
         >>> index.str.count('a')
         Int64Index([0, 0, 2, 1], dtype='int64')
         """  # noqa W605
-        if (
-            flags != 0
-            and (flags & (re.MULTILINE | re.DOTALL) == 0)
-            or (flags & ~(re.MULTILINE | re.DOTALL) != 0)
-        ):
-            raise NotImplementedError("invalid `flags` parameter value")
+        if not _is_supported_regex_flags(flags):
+            raise ValueError("invalid `flags` parameter value")
 
         return self._return_or_inplace(
             libstrings.count_re(self._column, pat, flags)
@@ -3901,12 +3900,8 @@ class StringMethods(ColumnMethods):
         """
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
-        if (
-            flags != 0
-            and (flags & (re.MULTILINE | re.DOTALL) == 0)
-            or (flags & ~(re.MULTILINE | re.DOTALL) != 0)
-        ):
-            raise NotImplementedError("invalid `flags` parameter value")
+        if not _is_supported_regex_flags(flags):
+            raise ValueError("invalid `flags` parameter value")
 
         return self._return_or_inplace(
             libstrings.match_re(self._column, pat, flags)
