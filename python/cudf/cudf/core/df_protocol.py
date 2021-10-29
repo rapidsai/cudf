@@ -80,7 +80,7 @@ class _CuDFBuffer:
 
         return res
 
-    def __dlpack_device__(self) -> Tuple[enum.IntEnum, int]:
+    def __dlpack_device__(self) -> Tuple[_Device, int]:
         """
         Device type and device ID for where the data in the buffer resides.
         """
