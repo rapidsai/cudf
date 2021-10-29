@@ -2727,7 +2727,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             ]
 
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):
-        """Perform label encoding
+        """Perform label encoding.
 
         Parameters
         ----------
@@ -2784,6 +2784,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             FutureWarning,
         )
 
+        return self._label_encoding(cats, dtype, na_sentinel)
+
+    def _label_encoding(self, cats, dtype=None, na_sentinel=-1):
+        # Private implementation of deprecated public label_encoding method
         def _return_sentinel_series():
             return Series(
                 cudf.core.column.full(
@@ -5004,7 +5008,68 @@ class DatetimeProperties(object):
         )
 
     def ceil(self, field):
+        """
+        Perform ceil operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        field : str
+            One of ["D", "H", "T", "S", "L", "U", "N"]
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`_
+            for more details on these aliases.
+
+        Returns
+        -------
+        Series
+            Series with the same index for a Series.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> t = cudf.Series(["2001-01-01 00:04:45", "2001-01-01 00:04:58",
+        ... "2001-01-01 00:05:04"], dtype="datetime64[ns]")
+        >>> t.dt.ceil("T")
+        0   2001-01-01 00:05:00
+        1   2001-01-01 00:05:00
+        2   2001-01-01 00:06:00
+        dtype: datetime64[ns]
+        """
         out_column = self.series._column.ceil(field)
+
+        return Series(
+            data=out_column, index=self.series._index, name=self.series.name
+        )
+
+    def floor(self, field):
+        """
+        Perform floor operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        field : str
+            One of ["D", "H", "T", "S", "L", "U", "N"]
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`_
+            for more details on these aliases.
+
+        Returns
+        -------
+        Series
+            Series with the same index for a Series.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> t = cudf.Series(["2001-01-01 00:04:45", "2001-01-01 00:04:58",
+        ... "2001-01-01 00:05:04"], dtype="datetime64[ns]")
+        >>> t.dt.floor("T")
+        0   2001-01-01 00:04:00
+        1   2001-01-01 00:04:00
+        2   2001-01-01 00:05:00
+        dtype: datetime64[ns]
+        """
+        out_column = self.series._column.floor(field)
 
         return Series(
             data=out_column, index=self.series._index, name=self.series.name
