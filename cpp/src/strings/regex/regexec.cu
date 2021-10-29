@@ -75,7 +75,7 @@ reprog_device::reprog_device(reprog& prog)
 std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_device::create(
   std::string const& pattern,
   uint8_t const* codepoint_flags,
-  int32_t strings_count,
+  size_type strings_count,
   rmm::cuda_stream_view stream)
 {
   return reprog_device::create(
@@ -87,7 +87,7 @@ std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> reprog_devic
   std::string const& pattern,
   regex_flags const flags,
   uint8_t const* codepoint_flags,
-  int32_t strings_count,
+  size_type strings_count,
   rmm::cuda_stream_view stream)
 {
   std::vector<char32_t> pattern32 = string_to_char32_vector(pattern);

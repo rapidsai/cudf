@@ -96,25 +96,23 @@ class reprog_device {
    * regex.
    *
    * @param pattern The regex pattern to compile.
-   * @param cp_flags The code-point lookup table for character types.
+   * @param codepoint_flags The code point lookup table for character types.
    * @param strings_count Number of strings that will be evaluated.
-   * @param stream CUDA stream for asynchronous memory allocations. To ensure correct
-   * synchronization on destruction, the same stream should be used for all operations with the
-   * created objects.
+   * @param stream CUDA stream used for device memory operations and kernel launches.
    * @return The program device object.
    */
   static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> create(
     std::string const& pattern,
-    const uint8_t* cp_flags,
-    int32_t strings_count,
+    uint8_t const* codepoint_flags,
+    size_type strings_count,
     rmm::cuda_stream_view stream);
 
   /**
    * @brief Create the device program instance from a regex pattern.
    *
    * @param pattern The regex pattern to compile.
-   * @param re_flags Regex flags for interpretting special characters in the pattern.
-   * @param cp_flags The code-point lookup table for character types.
+   * @param re_flags Regex flags for interpreting special characters in the pattern.
+   * @param codepoint_flags The code point lookup table for character types.
    * @param strings_count Number of strings that will be evaluated.
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @return The program device object.
@@ -122,8 +120,8 @@ class reprog_device {
   static std::unique_ptr<reprog_device, std::function<void(reprog_device*)>> create(
     std::string const& pattern,
     regex_flags const re_flags,
-    const uint8_t* cp_flags,
-    int32_t strings_count,
+    uint8_t const* codepoint_flags,
+    size_type strings_count,
     rmm::cuda_stream_view stream);
 
   /**

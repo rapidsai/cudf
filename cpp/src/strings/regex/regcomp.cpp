@@ -841,7 +841,6 @@ reprog reprog::create_from(const char32_t* pattern, regex_flags const flags)
   regex_compiler compiler(pattern, flags, rtn);
   // for debugging, it can be helpful to call rtn.print(flags) here to dump
   // out the instructions that have been created from the given pattern
-  if (std::getenv("LIBCUDF_REGEX_DEBUG")) rtn.print(flags);
   return rtn;
 }
 
@@ -927,9 +926,10 @@ void reprog::optimize2()
   _startinst_ids.push_back(-1);  // terminator mark
 }
 
+#ifndef NDBUG
 void reprog::print(regex_flags const flags)
 {
-  printf("Flags = 0x%02x\n", static_cast<uint32_t>(flags));
+  printf("Flags = 0x%08x\n", static_cast<uint32_t>(flags));
   printf("Instructions:\n");
   for (std::size_t i = 0; i < _insts.size(); i++) {
     const reinst& inst = _insts[i];
@@ -1026,6 +1026,7 @@ void reprog::print(regex_flags const flags)
   }
   if (_num_capturing_groups) printf("Number of capturing groups: %d\n", _num_capturing_groups);
 }
+#endif
 
 }  // namespace detail
 }  // namespace strings
