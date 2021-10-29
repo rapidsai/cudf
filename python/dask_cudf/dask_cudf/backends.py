@@ -348,6 +348,15 @@ def group_split_cudf(df, c, k, ignore_index=False):
     )
 
 
-@sizeof_dispatch.register((cudf.DataFrame, cudf.Series, cudf.BaseIndex))
-def sizeof_cudf(obj):
-    return obj.memory_usage()
+@sizeof_dispatch.register_lazy("cudf")
+def register_cudf():
+    @sizeof_dispatch.register((cudf.DataFrame))
+    def sizeof_cudf_dataframe(df):
+        p = df.index.memory_usage()
+        for name, col in df.iteritems():
+            p += col.memory_usage(index=False)
+        return int(p)
+
+    @sizeof_dispatch.register((cudf.Series, cudf.BaseIndex))
+    def sizeof_cudf_series_index(obj):
+        return obj.memory_usage()
