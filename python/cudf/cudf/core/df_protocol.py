@@ -139,7 +139,7 @@ class _CuDFColumn:
         return 0
 
     @property
-    def dtype(self) -> Tuple[enum.IntEnum, int, str, str]:
+    def dtype(self) -> Tuple[_DtypeKind, int, str, str]:
         """
         Dtype description as a tuple ``(kind, bit-width, format string, endianness)``
 
