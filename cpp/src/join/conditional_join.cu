@@ -97,8 +97,7 @@ conditional_join(table_view const& left,
   // For inner joins we support optimizing the join by launching one thread for
   // whichever table is larger rather than always using the left table.
   auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
-  detail::grid_1d config(swap_tables ? right_table->num_rows() : left_table->num_rows(),
-                         DEFAULT_JOIN_BLOCK_SIZE);
+  detail::grid_1d config(swap_tables ? right_num_rows : left_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
   join_kind kernel_join_type = join_type == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : join_type;
 
@@ -247,8 +246,7 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
   // For inner joins we support optimizing the join by launching one thread for
   // whichever table is larger rather than always using the left table.
   auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
-  detail::grid_1d config(swap_tables ? right_table->num_rows() : left_table->num_rows(),
-                         DEFAULT_JOIN_BLOCK_SIZE);
+  detail::grid_1d config(swap_tables ? right_num_rows : left_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
 
   assert(join_type != join_kind::FULL_JOIN);
