@@ -16,7 +16,7 @@ conda activate rapids
 
 FORMAT_FILE_URL=https://github.com/rapidsai/rapids-cmake/blob/main/cmake-format-rapids-cmake.json
 export RAPIDS_CMAKE_FORMAT_FILE=/tmp/rapids_cmake_ci/cmake-formats-rapids-cmake.json
-mkdir $(dirname RAPIDS_CMAKE_FORMAT_FILE)
+mkdir $(dirname ${RAPIDS_CMAKE_FORMAT_FILE})
 wget -O ${RAPIDS_CMAKE_FORMAT_FILE} ${FORMAT_FILE_URL}
 
 pre-commit run --hook-stage manual --all-files
