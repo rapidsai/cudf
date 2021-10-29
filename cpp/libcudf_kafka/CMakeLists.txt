@@ -45,7 +45,7 @@ include(cmake/thirdparty/get_cudf.cmake)
 include(cmake/thirdparty/get_rdkafka.cmake)
 
 # Locate Python Development headers
-find_package(Python3 COMPONENTS Interpreter Development)
+find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
 
 # # GTests if enabled
 if (BUILD_TESTS)

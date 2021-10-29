@@ -15,7 +15,7 @@
 #=============================================================================
 
 # Locate Python Development headers
-find_package(Python3 COMPONENTS Interpreter Development)
+find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
 
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
