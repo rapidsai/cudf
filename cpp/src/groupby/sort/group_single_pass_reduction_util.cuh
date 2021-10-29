@@ -45,8 +45,8 @@ namespace detail {
  *
  * @tparam T Type of the underlying column. Must support '<' operator.
  */
-template <typename T, bool has_nulls, bool arg_min, typename Enable = void>
-struct arg_minmax_fn {
+template <typename T, bool has_nulls, bool arg_min>
+struct element_arg_minmax_fn {
   column_device_view const d_col;
   CUDA_DEVICE_CALLABLE auto operator()(size_type const& lhs_idx, size_type const& rhs_idx) const
   {
@@ -75,16 +75,13 @@ struct arg_minmax_fn {
  * '<' operator.
  */
 template <typename T, bool has_nulls, bool arg_min>
-struct arg_minmax_fn<T,
-                     has_nulls,
-                     arg_min,
-                     std::enable_if_t<!cudf::is_relationally_comparable<T, T>()>> {
+struct row_arg_minmax_fn {
   size_type const num_rows;
   row_lexicographic_comparator<has_nulls> const comp;
 
-  arg_minmax_fn(size_type const num_rows_,
-                table_device_view const& table_,
-                null_order const* null_precedence)
+  row_arg_minmax_fn(size_type const num_rows_,
+                    table_device_view const& table_,
+                    null_order const* null_precedence)
     : num_rows(num_rows_), comp(table_, table_, nullptr, null_precedence)
   {
   }
@@ -153,7 +150,7 @@ struct null_replaced_value_accessor : value_accessor<T> {
 template <aggregation::Kind K>
 struct reduce_functor {
   template <typename T>
-  static constexpr bool is_natively_supported()
+  static constexpr bool is_trivially_supported()
   {
     switch (K) {
       case aggregation::SUM:
@@ -169,7 +166,7 @@ struct reduce_functor {
   }
 
   template <typename T>
-  std::enable_if_t<is_natively_supported<T>(), std::unique_ptr<column>> operator()(
+  std::enable_if_t<is_trivially_supported<T>(), std::unique_ptr<column>> operator()(
     column_view const& values,
     size_type num_groups,
     cudf::device_span<size_type const> group_labels,
@@ -207,10 +204,10 @@ struct reduce_functor {
     if constexpr (K == aggregation::ARGMAX || K == aggregation::ARGMIN) {
       auto const count_iter = thrust::make_counting_iterator<ResultType>(0);
       if (values.has_nulls()) {
-        using OpType = arg_minmax_fn<T, true, K == aggregation::ARGMIN>;
+        using OpType = element_arg_minmax_fn<T, true, K == aggregation::ARGMIN>;
         do_reduction(count_iter, result_begin, OpType{*d_values_ptr});
       } else {
-        using OpType = arg_minmax_fn<T, false, K == aggregation::ARGMIN>;
+        using OpType = element_arg_minmax_fn<T, false, K == aggregation::ARGMIN>;
         do_reduction(count_iter, result_begin, OpType{*d_values_ptr});
       }
     } else {
@@ -236,11 +233,12 @@ struct reduce_functor {
   }
 
   // This specialization handles the cases when the input values type:
-  //  - Is not natively supported, and
   //  - Is struct type, and
   //  - Aggregation is either ARGMIN or ARGMAX.
+  // Since `is_trivially_supported` returns false for `struct_view`, we don't have to cover it in
+  // the SFINAE condition.
   template <typename T>
-  std::enable_if_t<not is_natively_supported<T>() and std::is_same_v<T, struct_view> and
+  std::enable_if_t<std::is_same_v<T, struct_view> and
                      (K == aggregation::ARGMIN or K == aggregation::ARGMAX),
                    std::unique_ptr<column>>
   operator()(column_view const& values,
@@ -284,7 +282,7 @@ struct reduce_functor {
     auto const count_iter   = thrust::make_counting_iterator<ResultType>(0);
     auto const result_begin = result->mutable_view().template begin<ResultType>();
     if (values.has_nulls()) {
-      auto const op = arg_minmax_fn<T, true, K == aggregation::ARGMIN>(
+      auto const op = row_arg_minmax_fn<T, true, K == aggregation::ARGMIN>(
         values.size(), *d_flattened_values_ptr, flattened_null_precedences.data());
       do_reduction(count_iter, result_begin, op);
 
@@ -300,7 +298,7 @@ struct reduce_functor {
       result->set_null_mask(std::move(null_mask));
       result->set_null_count(null_count);
     } else {
-      auto const op = arg_minmax_fn<T, false, K == aggregation::ARGMIN>(
+      auto const op = row_arg_minmax_fn<T, false, K == aggregation::ARGMIN>(
         values.size(), *d_flattened_values_ptr, flattened_null_precedences.data());
       do_reduction(count_iter, result_begin, op);
     }
@@ -309,10 +307,10 @@ struct reduce_functor {
   }
 
   // Throw exception if the input values type:
-  //  - Is not natively supported, and
+  //  - Is not trivially supported, and
   //  - Is not struct type, or is struct type but aggregation is not neither ARGMIN nor ARGMAX.
   template <typename T, typename... Args>
-  std::enable_if_t<not is_natively_supported<T>() and
+  std::enable_if_t<not is_trivially_supported<T>() and
                      (not std::is_same_v<T, struct_view> or
                       (K != aggregation::ARGMIN or K != aggregation::ARGMAX)),
                    std::unique_ptr<column>>
