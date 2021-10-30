@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.  All rights reserved.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.  All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -567,11 +567,11 @@ class regex_compiler {
         case LBRA: /* must have been RBRA */
           op1                                    = popand('(');
           id_inst2                               = m_prog.add_inst(RBRA);
-          m_prog.inst_at(id_inst2).u1.subid      = ator.subid;  // subidstack[subidstack.size()-1];
+          m_prog.inst_at(id_inst2).u1.subid      = ator.subid;
           m_prog.inst_at(op1.id_last).u2.next_id = id_inst2;
           id_inst1                               = m_prog.add_inst(LBRA);
-          m_prog.inst_at(id_inst1).u1.subid   = ator.subid;  // subidstack[subidstack.size() - 1];
-          m_prog.inst_at(id_inst1).u2.next_id = op1.id_first;
+          m_prog.inst_at(id_inst1).u1.subid      = ator.subid;
+          m_prog.inst_at(id_inst1).u2.next_id    = op1.id_first;
           pushand(id_inst1, id_inst2);
           return;
         case OR:
@@ -826,7 +826,8 @@ reprog reprog::create_from(const char32_t* pattern)
 {
   reprog rtn;
   regex_compiler compiler(pattern, ANY, rtn);  // future feature: ANYNL
-  // rtn->print();
+  // for debugging, it can be helpful to call rtn.print() here to dump
+  // out the instructions that have been created from the given pattern
   return rtn;
 }
 
@@ -912,6 +913,7 @@ void reprog::optimize2()
   _startinst_ids.push_back(-1);  // terminator mark
 }
 
+#ifndef NDEBUG
 void reprog::print()
 {
   printf("Instructions:\n");
@@ -992,6 +994,7 @@ void reprog::print()
   }
   if (_num_capturing_groups) printf("Number of capturing groups: %d\n", _num_capturing_groups);
 }
+#endif
 
 }  // namespace detail
 }  // namespace strings

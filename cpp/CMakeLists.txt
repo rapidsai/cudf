@@ -270,6 +270,7 @@ add_library(cudf
     src/io/functions.cpp
     src/io/json/json_gpu.cu
     src/io/json/reader_impl.cu
+    src/io/orc/aggregate_orc_metadata.cpp
     src/io/orc/dict_enc.cu
     src/io/orc/orc.cpp
     src/io/orc/reader_impl.cu
@@ -576,7 +577,7 @@ add_library(cudftestutil STATIC
             tests/utilities/column_utilities.cu
             tests/utilities/table_utilities.cu
             tests/io/metadata_utilities.cpp
-            tests/strings/utilities.cu)
+            tests/strings/utilities.cpp)
 
 set_target_properties(cudftestutil
     PROPERTIES BUILD_RPATH                         "\$ORIGIN"
