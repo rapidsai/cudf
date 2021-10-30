@@ -26,6 +26,14 @@
 
 #include <string>
 
+// Define a new macro analogous to CUDA_HOST_DEVICE_CALLABLE that maximizes the
+// chances of inlining when applied to a callable that is called on the GPU.
+#ifdef __CUDACC__
+#define CUDA_HOST_DEVICE_FORCEINLINE_CALLABLE __host__ __device__ __forceinline__
+#else
+#define CUDA_HOST_DEVICE_FORCEINLINE_CALLABLE inline
+#endif
+
 /**
  * @file
  * @brief Defines the mapping between `cudf::type_id` runtime type information
@@ -411,9 +419,8 @@ using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceT
 template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl,
           typename Functor,
           typename... Ts>
-__host__ __device__ __forceinline__ constexpr decltype(auto) type_dispatcher(cudf::data_type dtype,
-                                                                             Functor f,
-                                                                             Ts&&... args)
+CUDA_HOST_DEVICE_FORCEINLINE_CALLABLE constexpr decltype(auto) type_dispatcher(
+  cudf::data_type dtype, Functor f, Ts&&... args)
 {
   switch (dtype.id()) {
     case type_id::BOOL8:
