@@ -178,38 +178,6 @@ public class Rmm {
    */
   public static synchronized void initialize(int allocationMode, LogConf logConf, long poolSize,
       long maxPoolSize) throws RmmException {
-    initialize(allocationMode, logConf, poolSize, maxPoolSize, 0, 0);
-  }
-
-  /**
-   * Initialize memory manager state and storage. This will always initialize
-   * the CUDA context for the calling thread if it is not already set. The
-   * caller is responsible for setting the desired CUDA device prior to this
-   * call if a specific device is already set.
-   * <p>NOTE: All cudf methods will set the chosen CUDA device in the CUDA
-   * context of the calling thread after this returns.
-   * @param allocationMode Allocation strategy to use. Bit set using
-   *                       {@link RmmAllocationMode#CUDA_DEFAULT},
-   *                       {@link RmmAllocationMode#POOL},
-   *                       {@link RmmAllocationMode#ARENA},
-   *                       {@link RmmAllocationMode#CUDA_ASYNC} and
-   *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
-   * @param logConf        How to do logging or null if you don't want to
-   * @param poolSize       The initial pool size in bytes
-   * @param maxPoolSize    The maximum size the pool is allowed to grow. If the specified value
-   *                       is <= 0 then the pool size will not be artificially limited.
-   * @param allocationAlignment The size to which allocations are aligned.
-   * @param alignmentThreshold  Only allocations with size larger than or equal to this threshold
-   *                            are aligned with `allocationAlignment`.
-   * @throws IllegalStateException if RMM has already been initialized
-   * @throws IllegalArgumentException if a max pool size is specified but the allocation mode
-   *                                  is not {@link RmmAllocationMode#POOL} or
-   *                                  {@link RmmAllocationMode#ARENA} or
-   *                                  {@link RmmAllocationMode#CUDA_ASYNC}, or the maximum pool
-   *                                  size is below the initial size.
-   */
-  public static synchronized void initialize(int allocationMode, LogConf logConf, long poolSize,
-      long maxPoolSize, long allocationAlignment, long alignmentThreshold) throws RmmException {
     if (initialized) {
       throw new IllegalStateException("RMM is already initialized");
     }
@@ -242,8 +210,7 @@ public class Rmm {
       loc = logConf.loc;
     }
 
-    initializeInternal(allocationMode, loc.internalId, path, poolSize, maxPoolSize,
-        allocationAlignment, alignmentThreshold);
+    initializeInternal(allocationMode, loc.internalId, path, poolSize, maxPoolSize);
     MemoryCleaner.setDefaultGpu(Cuda.getDevice());
     initialized = true;
   }
@@ -289,8 +256,7 @@ public class Rmm {
   }
 
   private static native void initializeInternal(int allocationMode, int logTo, String path,
-      long poolSize, long maxPoolSize, long allocationAlignment, long alignmentThreshold)
-      throws RmmException;
+      long poolSize, long maxPoolSize) throws RmmException;
 
   /**
    * Shut down any initialized RMM instance.  This should be used very rarely.  It does not need to

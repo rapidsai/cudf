@@ -135,11 +135,11 @@ TEST_F(groupby_min_scan_string_test, basic)
   strings_column_wrapper vals{"año", "bit", "₹1", "aaa", "zit", "bat", "aaa", "$1", "₹1", "wut"};
 
   key_wrapper expect_keys{1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
-  strings_column_wrapper expect_vals;
+  strings_column_wrapper expect_vals(
+    {"año", "aaa", "aaa", "bit", "bit", "bat", "bat", "₹1", "$1", "$1"});
 
   auto agg = cudf::make_min_aggregation<groupby_scan_aggregation>();
-  CUDF_EXPECT_THROW_MESSAGE(test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg)),
-                            "Unsupported groupby scan type-agg combination");
+  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 template <typename T>
