@@ -1492,3 +1492,15 @@ def test_empty_statistics():
         assert stats[0]["i"].get("minimum") == 1
         assert stats[0]["i"].get("maximum") == 1
         assert stats[0]["i"].get("sum") == 1
+
+
+def test_orc_writer_rle_stream_size(datadir, tmpdir):
+    original = datadir / "TestOrcFile.int16.rle.size.orc"
+    reencoded = tmpdir.join("int16_map.orc")
+
+    df = cudf.read_orc(original)
+    df.to_orc(reencoded)
+
+    # Segfaults when RLE stream sizes don't account for varint length
+    pa_out = pa.orc.ORCFile(reencoded).read()
+    assert_eq(df.to_pandas(), pa_out)
