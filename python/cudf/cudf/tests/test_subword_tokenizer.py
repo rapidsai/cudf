@@ -32,7 +32,9 @@ def test_subword_tokenize_on_disk_vocab_str_api(datadir):
     the vocabulary is not pre-loaded
     and is accessed via the string accessor
     """
-    with open(os.path.join(datadir, "test_sentences.txt")) as file:
+    with open(
+        os.path.join(datadir, "test_sentences.txt"), encoding="utf-8"
+    ) as file:
         input_sentence_ls = [line.strip() for line in file]
 
     vocab_dir = os.path.join(datadir, "bert_base_cased_sampled")
@@ -55,7 +57,9 @@ def test_subword_tokenize_on_disk_vocab_str_api(datadir):
 def test_subword_tokenize(
     seq_len, stride, add_special_tokens, do_lower_case, datadir
 ):
-    with open(os.path.join(datadir, "test_sentences.txt")) as file:
+    with open(
+        os.path.join(datadir, "test_sentences.txt"), encoding="utf-8"
+    ) as file:
         input_sentence_ls = [line.strip() for line in file]
 
     vocab_dir = os.path.join(datadir, "bert_base_cased_sampled")
