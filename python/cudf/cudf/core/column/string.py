@@ -4372,7 +4372,9 @@ class StringMethods(ColumnMethods):
             retain_index=False,
         )
 
-    def character_ngrams(self, n: int = 2) -> SeriesOrIndex:
+    def character_ngrams(
+        self, n: int = 2, as_list: bool = False
+    ) -> SeriesOrIndex:
         """
         Generate the n-grams from characters in a column of strings.
 
@@ -4381,6 +4383,9 @@ class StringMethods(ColumnMethods):
         n : int
             The degree of the n-gram (number of consecutive characters).
             Default of 2 for bigrams.
+        as_list : bool
+            Set to True to return ngrams in a list column where each
+            list element is the ngrams for each string.
 
         Examples
         --------
@@ -4403,11 +4408,32 @@ class StringMethods(ColumnMethods):
         3    fgh
         4    xyz
         dtype: object
+        >>> str_series.str.character_ngrams(3,True)
+        0    [abc, bcd]
+        1    [efg, fgh]
+        2         [xyz]
+        dtype: list
         """
-        return self._return_or_inplace(
-            libstrings.generate_character_ngrams(self._column, n),
-            retain_index=False,
+        ngrams = libstrings.generate_character_ngrams(self._column, n)
+        if as_list is False:
+            return self._return_or_inplace(ngrams, retain_index=False)
+
+        # convert the output to a list by just generating the
+        # offsets for the output list column
+        sn = (self.len() - (n - 1)).clip(0, None).fillna(0)  # type: ignore
+        sizes = libcudf.concat.concat_columns(
+            [column.as_column(0, dtype=np.int32, length=1), sn._column]
         )
+        oc = libcudf.reduce.scan("cumsum", sizes, True)
+        lc = cudf.core.column.ListColumn(
+            size=self._column.size,
+            dtype=cudf.ListDtype(self._column.dtype),
+            mask=self._column.mask,
+            offset=0,
+            null_count=self._column.null_count,
+            children=(oc, ngrams),
+        )
+        return self._return_or_inplace(lc, retain_index=False)
 
     def ngrams_tokenize(
         self, n: int = 2, delimiter: str = " ", separator: str = "_"
