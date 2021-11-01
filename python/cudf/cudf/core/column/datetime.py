@@ -225,9 +225,6 @@ class DatetimeColumn(column.ColumnBase):
     def ceil(self, field: str) -> ColumnBase:
         return libcudf.datetime.ceil_datetime(self, field)
 
-    def floor(self, field: str) -> ColumnBase:
-        return libcudf.datetime.floor_datetime(self, field)
-
     def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarLike:
         if isinstance(other, cudf.Scalar):
             return other
