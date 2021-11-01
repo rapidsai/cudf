@@ -1170,7 +1170,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         else:
             self.loc[key] = value
 
-    def take(self, indices, keep_index=True):
+    def take(self, indices, axis=0, keep_index=True):
         """
         Return Series by taking values from the corresponding *indices*.
 
@@ -1208,6 +1208,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         1    14
         dtype: int64
         """
+        axis = self._get_axis_from_axis_arg(axis)
         if keep_index is True or is_scalar(indices):
             return self.iloc[indices]
         else:
