@@ -42,27 +42,55 @@
 namespace cudf {
 namespace groupby {
 namespace detail {
+// Error case when no other overload or specialization is available
+template <aggregation::Kind K, typename T, typename Enable = void>
+struct scan_functor_impl {
+  template <typename... Args>
+  std::unique_ptr<column> operator()(Args&&...)
+  {
+    CUDF_FAIL("Unsupported groupby scan type-agg combination.");
+  }
+};
+
 template <aggregation::Kind K>
 struct scan_functor {
   template <typename T>
-  static constexpr bool is_trivially_supported()
+  std::unique_ptr<column> operator()(column_view const& values,
+                                     size_type num_groups,
+                                     cudf::device_span<cudf::size_type const> group_labels,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
-    if (K == aggregation::SUM)
-      return cudf::is_numeric<T>() || cudf::is_duration<T>() || cudf::is_fixed_point<T>();
-    else if (K == aggregation::MIN or K == aggregation::MAX)
-      return !cudf::is_dictionary<T>() and is_relationally_comparable<T, T>();
-    else
-      return false;
+    return scan_functor_impl<K, T>{}(values, num_groups, group_labels, stream, mr);
   }
+};
 
-  template <typename T>
-  std::enable_if_t<is_trivially_supported<T>() and not std::is_same_v<T, cudf::string_view>,
-                   std::unique_ptr<column>>
-  operator()(column_view const& values,
-             size_type num_groups,
-             cudf::device_span<cudf::size_type const> group_labels,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr)
+/**
+ * @brief Check if the given aggregation K with data type T is supported in groupby scan.
+ */
+template <aggregation::Kind K, typename T>
+static constexpr bool is_scan_supported()
+{
+  if (K == aggregation::SUM)
+    return cudf::is_numeric<T>() || cudf::is_duration<T>() || cudf::is_fixed_point<T>();
+  else if (K == aggregation::MIN or K == aggregation::MAX)
+    return not cudf::is_dictionary<T>() and
+           (is_relationally_comparable<T, T>() or std::is_same_v<T, cudf::struct_view>);
+  else
+    return false;
+}
+
+template <aggregation::Kind K, typename T>
+struct scan_functor_impl<
+  K,
+  T,
+  std::enable_if_t<is_scan_supported<K, T>() and not std::is_same_v<T, cudf::string_view> and
+                   not std::is_same_v<T, cudf::struct_view>>> {
+  std::unique_ptr<column> operator()(column_view const& values,
+                                     size_type num_groups,
+                                     cudf::device_span<cudf::size_type const> group_labels,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     using DeviceType       = device_storage_type_t<T>;
     using OpType           = cudf::detail::corresponding_operator_t<K>;
@@ -108,15 +136,18 @@ struct scan_functor {
     }
     return result;
   }
+};
 
-  template <typename T>
-  std::enable_if_t<is_trivially_supported<T>() and std::is_same_v<T, cudf::string_view>,
-                   std::unique_ptr<column>>
-  operator()(column_view const& values,
-             size_type num_groups,
-             cudf::device_span<cudf::size_type const> group_labels,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr)
+template <aggregation::Kind K, typename T>
+struct scan_functor_impl<
+  K,
+  T,
+  std::enable_if_t<is_scan_supported<K, T>() and std::is_same_v<T, cudf::string_view>>> {
+  std::unique_ptr<column> operator()(column_view const& values,
+                                     size_type num_groups,
+                                     cudf::device_span<cudf::size_type const> group_labels,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     using OpType = cudf::detail::corresponding_operator_t<K>;
 
@@ -152,16 +183,18 @@ struct scan_functor {
       results->set_null_mask(cudf::detail::copy_bitmask(values, stream), values.null_count());
     return results;
   }
+};
 
-  template <typename T>
-  std::enable_if_t<std::is_same_v<T, cudf::struct_view> and
-                     (K == aggregation::MIN or K == aggregation::MAX),
-                   std::unique_ptr<column>>
-  operator()(column_view const& values,
-             size_type num_groups,
-             cudf::device_span<cudf::size_type const> group_labels,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr)
+template <aggregation::Kind K, typename T>
+struct scan_functor_impl<
+  K,
+  T,
+  std::enable_if_t<is_scan_supported<K, T>() and std::is_same_v<T, cudf::struct_view>>> {
+  std::unique_ptr<column> operator()(column_view const& values,
+                                     size_type num_groups,
+                                     cudf::device_span<cudf::size_type const> group_labels,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     if (values.is_empty()) { return cudf::empty_like(values); }
 
@@ -218,7 +251,7 @@ struct scan_functor {
         ->release();
 
     // After gathering the children elements, we need to push down nulls from the root structs
-    // column to them (so we will have null row in => null row out).
+    // column to them.
     if (values.has_nulls()) {
       for (std::unique_ptr<column>& child : scanned_children) {
         structs::detail::superimpose_parent_nulls(
@@ -230,16 +263,6 @@ struct scan_functor {
                                std::move(scanned_children),
                                values.null_count(),
                                cudf::detail::copy_bitmask(values, stream));
-  }
-
-  template <typename T, typename... Args>
-  std::enable_if_t<not is_trivially_supported<T>() and
-                     (not std::is_same_v<T, cudf::struct_view> or
-                      (K != aggregation::MIN and K != aggregation::MAX)),
-                   std::unique_ptr<column>>
-  operator()(Args&&... args)
-  {
-    CUDF_FAIL("Unsupported groupby scan type-agg combination");
   }
 };
 

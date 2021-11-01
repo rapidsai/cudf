@@ -116,31 +116,59 @@ struct null_replaced_value_accessor : value_accessor<T> {
   }
 };
 
+// Error case when no other overload or specialization is available
+template <aggregation::Kind K, typename T, typename Enable = void>
+struct reduce_functor_impl {
+  template <typename... Args>
+  std::unique_ptr<column> operator()(Args&&...)
+  {
+    CUDF_FAIL("Unsupported groupby reduction type-agg combination.");
+  }
+};
+
 template <aggregation::Kind K>
 struct reduce_functor {
   template <typename T>
-  static constexpr bool is_trivially_supported()
+  std::unique_ptr<column> operator()(column_view const& values,
+                                     size_type num_groups,
+                                     cudf::device_span<cudf::size_type const> group_labels,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
-    switch (K) {
-      case aggregation::SUM:
-        return cudf::is_numeric<T>() || cudf::is_duration<T>() || cudf::is_fixed_point<T>();
-      case aggregation::PRODUCT: return cudf::detail::is_product_supported<T>();
-      case aggregation::MIN:
-      case aggregation::MAX:
-        return cudf::is_fixed_width<T>() and is_relationally_comparable<T, T>();
-      case aggregation::ARGMIN:
-      case aggregation::ARGMAX: return is_relationally_comparable<T, T>();
-      default: return false;
-    }
+    return reduce_functor_impl<K, T>{}(values, num_groups, group_labels, stream, mr);
   }
+};
 
-  template <typename T>
-  std::enable_if_t<is_trivially_supported<T>(), std::unique_ptr<column>> operator()(
-    column_view const& values,
-    size_type num_groups,
-    cudf::device_span<size_type const> group_labels,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
+/**
+ * @brief Check if the given aggregation K with data type T is supported in groupby reduction.
+ */
+template <aggregation::Kind K, typename T>
+static constexpr bool is_redution_supported()
+{
+  switch (K) {
+    case aggregation::SUM:
+      return cudf::is_numeric<T>() || cudf::is_duration<T>() || cudf::is_fixed_point<T>();
+    case aggregation::PRODUCT: return cudf::detail::is_product_supported<T>();
+    case aggregation::MIN:
+    case aggregation::MAX: return cudf::is_fixed_width<T>() and is_relationally_comparable<T, T>();
+    case aggregation::ARGMIN:
+    case aggregation::ARGMAX:
+      return is_relationally_comparable<T, T>() or std::is_same_v<T, cudf::struct_view>;
+    default: return false;
+  }
+}
+
+template <aggregation::Kind K, typename T>
+struct reduce_functor_impl<
+  K,
+  T,
+  std::enable_if_t<is_redution_supported<K, T>() and not std::is_same_v<T, cudf::struct_view>>> {
+  std::unique_ptr<column> operator()(column_view const& values,
+                                     size_type num_groups,
+                                     cudf::device_span<cudf::size_type const> group_labels,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+
   {
     using DeviceType  = device_storage_type_t<T>;
     using ResultType  = cudf::detail::target_type_t<T, K>;
@@ -200,21 +228,18 @@ struct reduce_functor {
     }
     return result;
   }
+};
 
-  // This specialization handles the cases when the input values type:
-  //  - Is struct type, and
-  //  - Aggregation is either ARGMIN or ARGMAX.
-  // Since `is_trivially_supported` returns false for `struct_view`, we don't have to cover it in
-  // the SFINAE condition.
-  template <typename T>
-  std::enable_if_t<std::is_same_v<T, struct_view> and
-                     (K == aggregation::ARGMIN or K == aggregation::ARGMAX),
-                   std::unique_ptr<column>>
-  operator()(column_view const& values,
-             size_type num_groups,
-             cudf::device_span<size_type const> group_labels,
-             rmm::cuda_stream_view stream,
-             rmm::mr::device_memory_resource* mr)
+template <aggregation::Kind K, typename T>
+struct reduce_functor_impl<
+  K,
+  T,
+  std::enable_if_t<is_redution_supported<K, T>() and std::is_same_v<T, cudf::struct_view>>> {
+  std::unique_ptr<column> operator()(column_view const& values,
+                                     size_type num_groups,
+                                     cudf::device_span<cudf::size_type const> group_labels,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     // This is be expected to be size_type.
     using ResultType = cudf::detail::target_type_t<T, K>;
@@ -273,19 +298,6 @@ struct reduce_functor {
     }
 
     return result;
-  }
-
-  // Throw exception if the input values type:
-  //  - Is not trivially supported, and
-  //  - Is not struct type, or is struct type but aggregation is not neither ARGMIN nor ARGMAX.
-  template <typename T, typename... Args>
-  std::enable_if_t<not is_trivially_supported<T>() and
-                     (not std::is_same_v<T, struct_view> or
-                      (K != aggregation::ARGMIN and K != aggregation::ARGMAX)),
-                   std::unique_ptr<column>>
-  operator()(Args&&... args)
-  {
-    CUDF_FAIL("Unsupported type-agg combination");
   }
 };
 
