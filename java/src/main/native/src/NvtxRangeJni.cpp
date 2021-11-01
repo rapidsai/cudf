@@ -58,7 +58,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_NvtxRange_pop(JNIEnv *env, jclass cla
   CATCH_STD(env, );
 }
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_NvtxRange_end(JNIEnv *env, jclass clazz, 
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_NvtxRange_end(JNIEnv *env, jclass clazz,
                                                          jlong nvtxRangeId) {
   try {
     nvtxDomainRangeEnd(nvtx3::domain::get<java_domain>(), static_cast<nvtxRangeId_t>(nvtxRangeId));
