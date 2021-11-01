@@ -17,17 +17,21 @@ find_package(Threads REQUIRED)
 add_library(cudf_datagen STATIC common/generate_benchmark_input.cpp)
 target_compile_features(cudf_datagen PUBLIC cxx_std_17 cuda_std_17)
 
-target_compile_options(cudf_datagen PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
-                                           "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
+target_compile_options(
+  cudf_datagen PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+                      "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+)
 
 target_link_libraries(
   cudf_datagen PUBLIC GTest::gmock GTest::gtest GTest::gmock_main GTest::gtest_main
-                      benchmark::benchmark nvbench::nvbench Threads::Threads cudf)
+                      benchmark::benchmark nvbench::nvbench Threads::Threads cudf
+)
 
 target_include_directories(
   cudf_datagen
   PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
-         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
+         "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+)
 
 # ##################################################################################################
 # * compiler function -----------------------------------------------------------------------------
@@ -35,7 +39,8 @@ target_include_directories(
 # Use an OBJECT library so we only compile these helper source files only once
 add_library(
   cudf_benchmark_common OBJECT "${CUDF_SOURCE_DIR}/tests/utilities/base_fixture.cpp"
-                               synchronization/synchronization.cpp io/cuio_benchmark_common.cpp)
+                               synchronization/synchronization.cpp io/cuio_benchmark_common.cpp
+)
 target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen)
 
 # This function takes in a benchmark name and benchmark source and handles setting all of the
@@ -44,21 +49,24 @@ function(ConfigureBench CMAKE_BENCH_NAME)
   add_executable(${CMAKE_BENCH_NAME} ${ARGN})
   set_target_properties(
     ${CMAKE_BENCH_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY
-                                   "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/benchmarks>")
-  target_link_libraries(${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen
-                                                    benchmark::benchmark_main)
+                                   "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/benchmarks>"
+  )
+  target_link_libraries(
+    ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main
+  )
 endfunction()
 
-# This function takes in a benchmark name and benchmark source for nvbench benchmarks and
-# handles setting all of the associated properties and linking
-# to build the benchmark
+# This function takes in a benchmark name and benchmark source for nvbench benchmarks and handles
+# setting all of the associated properties and linking to build the benchmark
 function(ConfigureNVBench CMAKE_BENCH_NAME)
   add_executable(${CMAKE_BENCH_NAME} ${ARGN})
   set_target_properties(
     ${CMAKE_BENCH_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY
-                                   "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/benchmarks>")
-  target_link_libraries(${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen
-                                                    nvbench::main)
+                                   "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/benchmarks>"
+  )
+  target_link_libraries(
+    ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen nvbench::main
+  )
 endfunction()
 
 # ##################################################################################################
@@ -117,8 +125,9 @@ ConfigureBench(SEARCH_BENCH search/search_benchmark.cpp)
 
 # ##################################################################################################
 # * sort benchmark --------------------------------------------------------------------------------
-ConfigureBench(SORT_BENCH sort/rank_benchmark.cpp sort/sort_benchmark.cpp
-               sort/sort_strings_benchmark.cpp)
+ConfigureBench(
+  SORT_BENCH sort/rank_benchmark.cpp sort/sort_benchmark.cpp sort/sort_strings_benchmark.cpp
+)
 
 # ##################################################################################################
 # * quantiles benchmark
@@ -133,7 +142,8 @@ ConfigureBench(TYPE_DISPATCHER_BENCH type_dispatcher/type_dispatcher_benchmark.c
 # * reduction benchmark ---------------------------------------------------------------------------
 ConfigureBench(
   REDUCTION_BENCH reduction/anyall_benchmark.cpp reduction/dictionary_benchmark.cpp
-  reduction/reduce_benchmark.cpp reduction/scan_benchmark.cpp reduction/minmax_benchmark.cpp)
+  reduction/reduce_benchmark.cpp reduction/scan_benchmark.cpp reduction/minmax_benchmark.cpp
+)
 
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------
@@ -145,8 +155,10 @@ ConfigureBench(FILL_BENCH filling/repeat_benchmark.cpp)
 
 # ##################################################################################################
 # * groupby benchmark -----------------------------------------------------------------------------
-ConfigureBench(GROUPBY_BENCH groupby/group_sum_benchmark.cu groupby/group_nth_benchmark.cu
-               groupby/group_shift_benchmark.cu)
+ConfigureBench(
+  GROUPBY_BENCH groupby/group_sum_benchmark.cu groupby/group_nth_benchmark.cu
+  groupby/group_shift_benchmark.cu
+)
 
 # ##################################################################################################
 # * hashing benchmark -----------------------------------------------------------------------------
@@ -194,8 +206,10 @@ ConfigureBench(AST_BENCH ast/transform_benchmark.cpp)
 
 # ##################################################################################################
 # * binaryop benchmark ----------------------------------------------------------------------------
-ConfigureBench(BINARYOP_BENCH binaryop/binaryop_benchmark.cpp
-               binaryop/compiled_binaryop_benchmark.cpp binaryop/jit_binaryop_benchmark.cpp)
+ConfigureBench(
+  BINARYOP_BENCH binaryop/binaryop_benchmark.cpp binaryop/compiled_binaryop_benchmark.cpp
+  binaryop/jit_binaryop_benchmark.cpp
+)
 
 # ##################################################################################################
 # * nvtext benchmark -------------------------------------------------------------------
@@ -206,7 +220,8 @@ ConfigureBench(
   text/normalize_spaces_benchmark.cpp
   text/replace_benchmark.cpp
   text/subword_benchmark.cpp
-  text/tokenize_benchmark.cpp)
+  text/tokenize_benchmark.cpp
+)
 
 # ##################################################################################################
 # * strings benchmark -------------------------------------------------------------------
@@ -230,7 +245,8 @@ ConfigureBench(
   string/split_benchmark.cpp
   string/substring_benchmark.cpp
   string/translate_benchmark.cpp
-  string/url_decode_benchmark.cpp)
+  string/url_decode_benchmark.cpp
+)
 
 # ##################################################################################################
 # * json benchmark -------------------------------------------------------------------

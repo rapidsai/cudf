@@ -14,7 +14,8 @@
 cmake_minimum_required(VERSION 3.20.1 FATAL_ERROR)
 
 file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-21.10/RAPIDS.cmake
-     ${CMAKE_BINARY_DIR}/RAPIDS.cmake)
+     ${CMAKE_BINARY_DIR}/RAPIDS.cmake
+)
 include(${CMAKE_BINARY_DIR}/RAPIDS.cmake)
 
 include(rapids-cmake)
@@ -26,7 +27,8 @@ include(rapids-find)
 project(
   CUDA_KAFKA
   VERSION 21.12.00
-  LANGUAGES CXX)
+  LANGUAGES CXX
+)
 
 # Set a default build type if none was specified
 rapids_cmake_build_type(Release)
@@ -61,8 +63,10 @@ add_library(cudf_kafka SHARED src/kafka_consumer.cpp)
 
 # ##################################################################################################
 # * include paths ---------------------------------------------------------------------------------
-target_include_directories(cudf_kafka PUBLIC "$<BUILD_INTERFACE:${CUDA_KAFKA_SOURCE_DIR}/include>"
-                                             "$<INSTALL_INTERFACE:include>")
+target_include_directories(
+  cudf_kafka PUBLIC "$<BUILD_INTERFACE:${CUDA_KAFKA_SOURCE_DIR}/include>"
+                    "$<INSTALL_INTERFACE:include>"
+)
 
 # ##################################################################################################
 # * library paths ---------------------------------------------------------------------------------
@@ -74,7 +78,8 @@ set_target_properties(
              INSTALL_RPATH "\$ORIGIN"
              # set target compile options
              CXX_STANDARD 17
-             CXX_STANDARD_REQUIRED ON)
+             CXX_STANDARD_REQUIRED ON
+)
 
 # ##################################################################################################
 # * cudf_kafka Install ----------------------------------------------------------------------------
@@ -82,7 +87,8 @@ rapids_cmake_install_lib_dir(lib_dir)
 install(
   TARGETS cudf_kafka
   DESTINATION ${lib_dir}
-  EXPORT cudf_kafka-exports)
+  EXPORT cudf_kafka-exports
+)
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include DESTINATION include)
 
@@ -90,10 +96,12 @@ rapids_export(
   INSTALL cudf_kafka
   EXPORT_SET cudf_kafka-exports
   GLOBAL_TARGETS cudf_kafka
-  NAMESPACE cudf_kafka::)
+  NAMESPACE cudf_kafka::
+)
 
 rapids_export(
   BUILD cudf_kafka
   EXPORT_SET cudf_kafka-exports
   GLOBAL_TARGETS cudf_kafka
-  NAMESPACE cudf_kafka::)
+  NAMESPACE cudf_kafka::
+)

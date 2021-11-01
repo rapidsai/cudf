@@ -57,29 +57,34 @@ set(cuFile_VERSION ${PKG_cuFile_VERSION})
 find_path(
   cuFile_INCLUDE_DIR
   NAMES cufile.h
-  HINTS ${PKG_cuFile_INCLUDE_DIRS} /usr/local/cuda/include /usr/local/cuda/lib64)
+  HINTS ${PKG_cuFile_INCLUDE_DIRS} /usr/local/cuda/include /usr/local/cuda/lib64
+)
 
 find_library(
   cuFile_LIBRARY
   NAMES cufile
-  HINTS ${PKG_cuFile_LIBRARY_DIRS} /usr/local/cuda/lib64)
+  HINTS ${PKG_cuFile_LIBRARY_DIRS} /usr/local/cuda/lib64
+)
 
 find_library(
   cuFileRDMA_LIBRARY
   NAMES cufile_rdma
-  HINTS ${PKG_cuFile_LIBRARY_DIRS} /usr/local/cuda/lib64)
+  HINTS ${PKG_cuFile_LIBRARY_DIRS} /usr/local/cuda/lib64
+)
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(
   cuFile
   FOUND_VAR cuFile_FOUND
   REQUIRED_VARS cuFile_LIBRARY cuFileRDMA_LIBRARY cuFile_INCLUDE_DIR
-  VERSION_VAR cuFile_VERSION)
+  VERSION_VAR cuFile_VERSION
+)
 
 if(cuFile_INCLUDE_DIR AND NOT TARGET cuFile::cuFile_interface)
   add_library(cuFile::cuFile_interface IMPORTED INTERFACE)
-  target_include_directories(cuFile::cuFile_interface
-                             INTERFACE "$<BUILD_INTERFACE:${cuFile_INCLUDE_DIR}>")
+  target_include_directories(
+    cuFile::cuFile_interface INTERFACE "$<BUILD_INTERFACE:${cuFile_INCLUDE_DIR}>"
+  )
   target_compile_options(cuFile::cuFile_interface INTERFACE "${cuFile_COMPILE_OPTIONS}")
   target_compile_definitions(cuFile::cuFile_interface INTERFACE CUFILE_FOUND)
 endif()
@@ -90,7 +95,8 @@ if(cuFile_FOUND AND NOT TARGET cuFile::cuFile)
     cuFile::cuFile
     PROPERTIES IMPORTED_LOCATION "${cuFile_LIBRARY}"
                INTERFACE_COMPILE_OPTIONS "${cuFile_COMPILE_OPTIONS}"
-               INTERFACE_INCLUDE_DIRECTORIES "${cuFile_INCLUDE_DIR}")
+               INTERFACE_INCLUDE_DIRECTORIES "${cuFile_INCLUDE_DIR}"
+  )
 endif()
 
 if(cuFile_FOUND AND NOT TARGET cuFile::cuFileRDMA)
@@ -99,7 +105,8 @@ if(cuFile_FOUND AND NOT TARGET cuFile::cuFileRDMA)
     cuFile::cuFileRDMA
     PROPERTIES IMPORTED_LOCATION "${cuFileRDMA_LIBRARY}"
                INTERFACE_COMPILE_OPTIONS "${cuFile_COMPILE_OPTIONS}"
-               INTERFACE_INCLUDE_DIRECTORIES "${cuFile_INCLUDE_DIR}")
+               INTERFACE_INCLUDE_DIRECTORIES "${cuFile_INCLUDE_DIR}"
+  )
 endif()
 
 mark_as_advanced(cuFile_LIBRARY cuFileRDMA_LIBRARY cuFile_INCLUDE_DIR)

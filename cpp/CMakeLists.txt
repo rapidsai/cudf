@@ -15,7 +15,8 @@
 cmake_minimum_required(VERSION 3.20.1 FATAL_ERROR)
 
 file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-21.12/RAPIDS.cmake
-     ${CMAKE_BINARY_DIR}/RAPIDS.cmake)
+     ${CMAKE_BINARY_DIR}/RAPIDS.cmake
+)
 include(${CMAKE_BINARY_DIR}/RAPIDS.cmake)
 
 include(rapids-cmake)
@@ -29,7 +30,8 @@ rapids_cuda_init_architectures(CUDF)
 project(
   CUDF
   VERSION 21.12.00
-  LANGUAGES C CXX CUDA)
+  LANGUAGES C CXX CUDA
+)
 
 # Needed because GoogleBenchmark changes the state of FindThreads.cmake, causing subsequent runs to
 # have different values for the `Threads::Threads` target. Setting this flag ensures
@@ -54,7 +56,8 @@ option(DISABLE_DEPRECATION_WARNING "Disable warnings generated from deprecated d
 # Option to enable line info in CUDA device compilation to allow introspection when profiling /
 # memchecking
 option(CUDA_ENABLE_LINEINFO
-       "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler" OFF)
+       "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler" OFF
+)
 # cudart can be statically linked or dynamically linked. The python ecosystem wants dynamic linking
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 
@@ -68,7 +71,8 @@ message(VERBOSE "CUDF: Build and enable S3 filesystem support for Arrow: ${CUDF_
 message(VERBOSE "CUDF: Build with per-thread default stream: ${PER_THREAD_DEFAULT_STREAM}")
 message(
   VERBOSE
-  "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNING}")
+  "CUDF: Disable warnings generated from deprecated declarations: ${DISABLE_DEPRECATION_WARNING}"
+)
 message(
   VERBOSE
   "CUDF: Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler: ${CUDA_ENABLE_LINEINFO}"
@@ -88,9 +92,11 @@ set(CUDF_CUDA_DEFINITIONS "")
 # Set RMM logging level
 set(RMM_LOGGING_LEVEL
     "INFO"
-    CACHE STRING "Choose the logging level.")
-set_property(CACHE RMM_LOGGING_LEVEL PROPERTY STRINGS "TRACE" "DEBUG" "INFO" "WARN" "ERROR"
-                                              "CRITICAL" "OFF")
+    CACHE STRING "Choose the logging level."
+)
+set_property(
+  CACHE RMM_LOGGING_LEVEL PROPERTY STRINGS "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF"
+)
 message(VERBOSE "CUDF: RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
 
 if(NOT CUDF_GENERATED_INCLUDE_DIR)
@@ -106,7 +112,8 @@ rapids_cmake_support_conda_env(conda_env MODIFY_PREFIX_PATH)
 rapids_find_package(
   CUDAToolkit REQUIRED
   BUILD_EXPORT_SET cudf-exports
-  INSTALL_EXPORT_SET cudf-exports)
+  INSTALL_EXPORT_SET cudf-exports
+)
 include(cmake/Modules/ConfigureCUDA.cmake) # set other CUDA compilation flags
 
 # ctest cuda memcheck
@@ -125,7 +132,8 @@ rapids_find_package(ZLIB REQUIRED)
 rapids_find_package(
   Threads REQUIRED
   BUILD_EXPORT_SET cudf-exports
-  INSTALL_EXPORT_SET cudf-exports)
+  INSTALL_EXPORT_SET cudf-exports
+)
 
 # add third party dependencies using CPM
 rapids_cpm_init()
@@ -467,7 +475,8 @@ add_library(
   src/unary/nan_ops.cu
   src/unary/null_ops.cu
   src/utilities/default_stream.cpp
-  src/utilities/type_checks.cpp)
+  src/utilities/type_checks.cpp
+)
 
 set_target_properties(
   cudf
@@ -479,10 +488,13 @@ set_target_properties(
              CUDA_STANDARD 17
              CUDA_STANDARD_REQUIRED ON
              POSITION_INDEPENDENT_CODE ON
-             INTERFACE_POSITION_INDEPENDENT_CODE ON)
+             INTERFACE_POSITION_INDEPENDENT_CODE ON
+)
 
-target_compile_options(cudf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
-                                    "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
+target_compile_options(
+  cudf PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+               "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+)
 
 # Specify include paths for the current target and dependents
 target_include_directories(
@@ -493,11 +505,13 @@ target_include_directories(
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
          "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
-  INTERFACE "$<INSTALL_INTERFACE:include>" "$<INSTALL_INTERFACE:include/libcudf/libcudacxx>")
+  INTERFACE "$<INSTALL_INTERFACE:include>" "$<INSTALL_INTERFACE:include/libcudf/libcudacxx>"
+)
 
 target_compile_definitions(
   cudf PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_DEFINITIONS}>"
-              "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>>")
+              "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>>"
+)
 
 # Disable Jitify log printing. See https://github.com/NVIDIA/jitify/issues/79
 target_compile_definitions(cudf PRIVATE "JITIFY_PRINT_LOG=0")
@@ -527,7 +541,8 @@ add_dependencies(cudf jitify_preprocess_run)
 target_link_libraries(
   cudf
   PUBLIC ${ARROW_LIBRARIES} cudf::Thrust rmm::rmm
-  PRIVATE cuco::cuco ZLIB::ZLIB nvcomp::nvcomp)
+  PRIVATE cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
+)
 
 # Add Conda library, and include paths if specified
 if(TARGET conda_env)
@@ -569,7 +584,8 @@ SECTIONS
   .nvFatBinSegment : { *(.nvFatBinSegment) }
   .nv_fatbin : { *(.nv_fatbin) }
 }
-]=])
+]=]
+)
 target_link_options(cudf PRIVATE "$<HOST_LINK:${CUDF_BINARY_DIR}/fatbin.ld>")
 
 add_library(cudf::cudf ALIAS cudf)
@@ -584,7 +600,8 @@ add_library(cudf::cudf ALIAS cudf)
 add_library(
   cudftestutil STATIC
   tests/utilities/base_fixture.cpp tests/utilities/column_utilities.cu
-  tests/utilities/table_utilities.cu tests/io/metadata_utilities.cpp tests/strings/utilities.cpp)
+  tests/utilities/table_utilities.cu tests/io/metadata_utilities.cpp tests/strings/utilities.cpp
+)
 
 set_target_properties(
   cudftestutil
@@ -596,16 +613,20 @@ set_target_properties(
              CUDA_STANDARD 17
              CUDA_STANDARD_REQUIRED ON
              POSITION_INDEPENDENT_CODE ON
-             INTERFACE_POSITION_INDEPENDENT_CODE ON)
+             INTERFACE_POSITION_INDEPENDENT_CODE ON
+)
 
 target_compile_options(
   cudftestutil PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
-                      "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>")
+                      "$<BUILD_INTERFACE:$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>>"
+)
 
 target_link_libraries(cudftestutil PUBLIC GTest::gmock GTest::gtest Threads::Threads cudf)
 
-target_include_directories(cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
-                                               "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>")
+target_include_directories(
+  cudftestutil PUBLIC "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}>"
+                      "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
+)
 
 add_library(cudf::cudftestutil ALIAS cudftestutil)
 
@@ -628,7 +649,8 @@ if(CUDF_BUILD_BENCHMARKS)
     GIT_REPOSITORY https://github.com/google/benchmark.git
     GIT_TAG v1.5.2
     GIT_SHALLOW TRUE
-    OPTIONS "BENCHMARK_ENABLE_TESTING OFF" "BENCHMARK_ENABLE_INSTALL OFF")
+    OPTIONS "BENCHMARK_ENABLE_TESTING OFF" "BENCHMARK_ENABLE_INSTALL OFF"
+  )
 
   # Find or install NVBench
   include(${rapids-cmake-dir}/cpm/nvbench.cmake)
@@ -648,31 +670,37 @@ set(CMAKE_INSTALL_DEFAULT_COMPONENT_NAME cudf)
 install(
   TARGETS cudf
   DESTINATION ${lib_dir}
-  EXPORT cudf-exports)
+  EXPORT cudf-exports
+)
 
 install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cudf_test
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
 
 install(
   DIRECTORY ${CUDF_GENERATED_INCLUDE_DIR}/include/libcxx
             ${CUDF_GENERATED_INCLUDE_DIR}/include/libcudacxx
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf)
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf
+)
 
 install(
   TARGETS cudftestutil
   DESTINATION ${lib_dir}
-  EXPORT cudf-testing-exports)
+  EXPORT cudf-testing-exports
+)
 
 install(
   EXPORT cudf-testing-exports
   FILE cudf-testing-targets.cmake
   NAMESPACE cudf::
-  DESTINATION "${lib_dir}/cmake/cudf")
+  DESTINATION "${lib_dir}/cmake/cudf"
+)
 
 include("${rapids-cmake-dir}/export/write_dependencies.cmake")
 rapids_export_write_dependencies(
   INSTALL cudf-testing-exports
-  "${PROJECT_BINARY_DIR}/rapids-cmake/cudf/export/cudf-testing-dependencies.cmake")
+  "${PROJECT_BINARY_DIR}/rapids-cmake/cudf/export/cudf-testing-dependencies.cmake"
+)
 
 set(doc_string
     [=[
@@ -699,7 +727,8 @@ This module offers an optional testing component which defines the
 following IMPORTED GLOBAL  targets:
 
  cudf::cudftestutil     - The main cudf testing library
-    ]=])
+    ]=]
+)
 
 set(common_code_string
     [=[
@@ -734,7 +763,8 @@ foreach(include IN LISTS all_includes)
 endforeach()
 set_target_properties(cudf::cudf PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${system_includes}")
 set_target_properties(cudf_non_system_includes PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${normal_includes}")
-]=])
+]=]
+)
 set(install_code_string
     [=[
 set(ArrowCUDA_DIR "${Arrow_DIR}")
@@ -748,7 +778,8 @@ if(testing IN_LIST cudf_FIND_COMPONENTS)
     include("${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
   endif()
 endif()
-]=])
+]=]
+)
 string(APPEND install_code_string "${common_code_string}")
 
 rapids_export(
@@ -757,7 +788,8 @@ rapids_export(
   GLOBAL_TARGETS cudf
   NAMESPACE cudf::
   DOCUMENTATION doc_string
-  FINAL_CODE_BLOCK install_code_string)
+  FINAL_CODE_BLOCK install_code_string
+)
 
 # ##################################################################################################
 # * build export -------------------------------------------------------------------------------
@@ -769,7 +801,8 @@ endif()
 if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
   include("${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
 endif()
-]=])
+]=]
+)
 string(APPEND build_code_string "${common_code_string}")
 
 rapids_export(
@@ -778,14 +811,17 @@ rapids_export(
   GLOBAL_TARGETS cudf
   NAMESPACE cudf::
   DOCUMENTATION doc_string
-  FINAL_CODE_BLOCK build_code_string)
+  FINAL_CODE_BLOCK build_code_string
+)
 
 export(
   EXPORT cudf-testing-exports
   FILE ${CUDF_BINARY_DIR}/cudf-testing-targets.cmake
-  NAMESPACE cudf::)
-rapids_export_write_dependencies(BUILD cudf-testing-exports
-                                 "${CUDF_BINARY_DIR}/cudf-testing-dependencies.cmake")
+  NAMESPACE cudf::
+)
+rapids_export_write_dependencies(
+  BUILD cudf-testing-exports "${CUDF_BINARY_DIR}/cudf-testing-dependencies.cmake"
+)
 
 # ##################################################################################################
 # * make documentation ----------------------------------------------------------------------------
@@ -796,6 +832,11 @@ add_custom_command(
   WORKING_DIRECTORY ${CUDF_SOURCE_DIR}/doxygen
   COMMAND doxygen Doxyfile
   VERBATIM
-  COMMENT "Custom command for building cudf doxygen docs.")
+  COMMENT "Custom command for building cudf doxygen docs."
+)
 
-add_custom_target(docs_cudf DEPENDS CUDF_DOXYGEN COMMENT "Custom command for building cudf doxygen docs.")
+add_custom_target(
+  docs_cudf
+  DEPENDS CUDF_DOXYGEN
+  COMMENT "Custom command for building cudf doxygen docs."
+)

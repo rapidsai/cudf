@@ -37,19 +37,27 @@ function(jit_preprocess_files)
         -remove-unused-globals -D__CUDACC_RTC__ -I${CUDF_SOURCE_DIR}/include
         -I${CUDF_SOURCE_DIR}/src -I${LIBCUDACXX_INCLUDE_DIR} -I${CUDAToolkit_INCLUDE_DIRS}
         --no-preinclude-workarounds --no-replace-pragma-once
-      COMMENT "Custom command to JIT-compile files.")
+      COMMENT "Custom command to JIT-compile files."
+    )
   endforeach()
   set(JIT_PREPROCESSED_FILES
       "${JIT_PREPROCESSED_FILES}"
-      PARENT_SCOPE)
+      PARENT_SCOPE
+  )
 endfunction()
 
 jit_preprocess_files(
   SOURCE_DIRECTORY ${CUDF_SOURCE_DIR}/src FILES binaryop/jit/kernel.cu
-  transform/jit/masked_udf_kernel.cu transform/jit/kernel.cu rolling/jit/kernel.cu)
+  transform/jit/masked_udf_kernel.cu transform/jit/kernel.cu rolling/jit/kernel.cu
+)
 
-add_custom_target(jitify_preprocess_run DEPENDS ${JIT_PREPROCESSED_FILES} COMMENT "Target representing jitified files.")
+add_custom_target(
+  jitify_preprocess_run
+  DEPENDS ${JIT_PREPROCESSED_FILES}
+  COMMENT "Target representing jitified files."
+)
 
 file(COPY "${LIBCUDACXX_INCLUDE_DIR}/"
-     DESTINATION "${CUDF_GENERATED_INCLUDE_DIR}/include/libcudacxx")
+     DESTINATION "${CUDF_GENERATED_INCLUDE_DIR}/include/libcudacxx"
+)
 file(COPY "${LIBCXX_INCLUDE_DIR}" DESTINATION "${CUDF_GENERATED_INCLUDE_DIR}/include/libcxx")

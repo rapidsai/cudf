@@ -21,7 +21,8 @@ function(ConfigureTest CMAKE_TEST_NAME)
   add_executable(${CMAKE_TEST_NAME} ${ARGN})
   set_target_properties(
     ${CMAKE_TEST_NAME} PROPERTIES RUNTIME_OUTPUT_DIRECTORY
-                                  "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>")
+                                  "$<BUILD_INTERFACE:${CUDF_BINARY_DIR}/gtests>"
+  )
   target_link_libraries(${CMAKE_TEST_NAME} PRIVATE cudftestutil GTest::gmock_main GTest::gtest_main)
   add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
 endfunction()
@@ -32,8 +33,10 @@ endfunction()
 
 # ##################################################################################################
 # * column tests ----------------------------------------------------------------------------------
-ConfigureTest(COLUMN_TEST column/bit_cast_test.cpp column/column_view_shallow_test.cpp
-              column/column_test.cu column/column_device_view_test.cu column/compound_test.cu)
+ConfigureTest(
+  COLUMN_TEST column/bit_cast_test.cpp column/column_view_shallow_test.cpp column/column_test.cu
+  column/column_device_view_test.cu column/compound_test.cu
+)
 
 # ##################################################################################################
 # * scalar tests ----------------------------------------------------------------------------------
@@ -85,12 +88,15 @@ ConfigureTest(
   groupby/sum_scan_tests.cpp
   groupby/sum_tests.cpp
   groupby/tdigest_tests.cu
-  groupby/var_tests.cpp)
+  groupby/var_tests.cpp
+)
 
 # ##################################################################################################
 # * join tests ------------------------------------------------------------------------------------
-ConfigureTest(JOIN_TEST join/join_tests.cpp join/conditional_join_tests.cu
-              join/cross_join_tests.cpp join/semi_anti_join_tests.cpp)
+ConfigureTest(
+  JOIN_TEST join/join_tests.cpp join/conditional_join_tests.cu join/cross_join_tests.cpp
+  join/semi_anti_join_tests.cpp
+)
 
 # ##################################################################################################
 # * is_sorted tests -------------------------------------------------------------------------------
@@ -106,8 +112,10 @@ ConfigureTest(HASHING_TEST hashing/hash_test.cpp)
 
 # ##################################################################################################
 # * partitioning tests ----------------------------------------------------------------------------
-ConfigureTest(PARTITIONING_TEST partitioning/hash_partition_test.cpp
-              partitioning/round_robin_test.cpp partitioning/partition_test.cpp)
+ConfigureTest(
+  PARTITIONING_TEST partitioning/hash_partition_test.cpp partitioning/round_robin_test.cpp
+  partitioning/partition_test.cpp
+)
 
 # ##################################################################################################
 # * hash_map tests --------------------------------------------------------------------------------
@@ -115,8 +123,10 @@ ConfigureTest(HASH_MAP_TEST hash_map/map_test.cu hash_map/multimap_test.cu)
 
 # ##################################################################################################
 # * quantiles tests -------------------------------------------------------------------------------
-ConfigureTest(QUANTILES_TEST quantiles/percentile_approx_test.cu quantiles/quantile_test.cpp
-              quantiles/quantiles_test.cpp)
+ConfigureTest(
+  QUANTILES_TEST quantiles/percentile_approx_test.cu quantiles/quantile_test.cpp
+  quantiles/quantiles_test.cpp
+)
 
 # ##################################################################################################
 # * reduction tests -------------------------------------------------------------------------------
@@ -155,7 +165,8 @@ ConfigureTest(
   binaryop/binop-integration-test.cpp
   binaryop/binop-compiled-test.cpp
   binaryop/binop-compiled-fixed_point-test.cpp
-  binaryop/binop-generic-ptx-test.cpp)
+  binaryop/binop-generic-ptx-test.cpp
+)
 
 # ##################################################################################################
 # * unary transform tests -------------------------------------------------------------------------
@@ -166,12 +177,14 @@ ConfigureTest(
   transform/mask_to_bools_test.cpp
   transform/bools_to_mask_test.cpp
   transform/row_bit_count_test.cu
-  transform/one_hot_encode_tests.cpp)
+  transform/one_hot_encode_tests.cpp
+)
 
 # ##################################################################################################
 # * interop tests -------------------------------------------------------------------------
-ConfigureTest(INTEROP_TEST interop/to_arrow_test.cpp interop/from_arrow_test.cpp
-              interop/dlpack_test.cpp)
+ConfigureTest(
+  INTEROP_TEST interop/to_arrow_test.cpp interop/from_arrow_test.cpp interop/dlpack_test.cpp
+)
 
 # ##################################################################################################
 # * io tests --------------------------------------------------------------------------------------
@@ -217,7 +230,8 @@ ConfigureTest(
   copying/slice_tests.cpp
   copying/split_tests.cpp
   copying/utility_tests.cpp
-  copying/reverse_tests.cpp)
+  copying/reverse_tests.cpp
+)
 
 # ##################################################################################################
 # * utilities tests -------------------------------------------------------------------------------
@@ -228,7 +242,8 @@ ConfigureTest(
   utilities_tests/column_wrapper_tests.cpp
   utilities_tests/lists_column_wrapper_tests.cpp
   utilities_tests/default_stream_tests.cpp
-  utilities_tests/type_check_tests.cpp)
+  utilities_tests/type_check_tests.cpp
+)
 
 # ##################################################################################################
 # * span tests -------------------------------------------------------------------------------
@@ -248,7 +263,8 @@ ConfigureTest(
   iterator/scalar_iterator_test.cu
   iterator/optional_iterator_test_chrono.cu
   iterator/optional_iterator_test_numeric.cu
-  iterator/indexalator_test.cu)
+  iterator/indexalator_test.cu
+)
 
 # ##################################################################################################
 # * device atomics tests --------------------------------------------------------------------------
@@ -260,13 +276,15 @@ ConfigureTest(TRANSPOSE_TEST transpose/transpose_test.cpp)
 
 # ##################################################################################################
 # * table tests -----------------------------------------------------------------------------------
-ConfigureTest(TABLE_TEST table/table_tests.cpp table/table_view_tests.cu
-              table/row_operators_tests.cpp)
+ConfigureTest(
+  TABLE_TEST table/table_tests.cpp table/table_view_tests.cu table/row_operators_tests.cpp
+)
 
 # ##################################################################################################
 # * sorted-merge tests ----------------------------------------------------------------------------
-ConfigureTest(MERGE_TEST merge/merge_test.cpp merge/merge_dictionary_test.cpp
-              merge/merge_string_test.cpp)
+ConfigureTest(
+  MERGE_TEST merge/merge_test.cpp merge/merge_dictionary_test.cpp merge/merge_string_test.cpp
+)
 
 # ##################################################################################################
 # * stream compaction tests -----------------------------------------------------------------------
@@ -275,7 +293,8 @@ ConfigureTest(
   stream_compaction/apply_boolean_mask_tests.cpp
   stream_compaction/drop_nulls_tests.cpp
   stream_compaction/drop_nans_tests.cpp
-  stream_compaction/drop_duplicates_tests.cpp)
+  stream_compaction/drop_duplicates_tests.cpp
+)
 
 # ##################################################################################################
 # * rolling tests ---------------------------------------------------------------------------------
@@ -287,22 +306,28 @@ ConfigureTest(
   rolling/lead_lag_test.cpp
   rolling/range_rolling_window_test.cpp
   rolling/range_window_bounds_test.cpp
-  rolling/rolling_test.cpp)
+  rolling/rolling_test.cpp
+)
 
 # ##################################################################################################
 # * filling test ----------------------------------------------------------------------------------
-ConfigureTest(FILLING_TEST filling/fill_tests.cpp filling/repeat_tests.cpp
-              filling/sequence_tests.cpp)
+ConfigureTest(
+  FILLING_TEST filling/fill_tests.cpp filling/repeat_tests.cpp filling/sequence_tests.cpp
+)
 
 # ##################################################################################################
 # * search test -----------------------------------------------------------------------------------
-ConfigureTest(SEARCH_TEST search/search_dictionary_test.cpp search/search_struct_test.cpp
-              search/search_test.cpp)
+ConfigureTest(
+  SEARCH_TEST search/search_dictionary_test.cpp search/search_struct_test.cpp
+  search/search_test.cpp
+)
 
 # ##################################################################################################
 # * reshape test ----------------------------------------------------------------------------------
-ConfigureTest(RESHAPE_TEST reshape/byte_cast_tests.cpp reshape/interleave_columns_tests.cpp
-              reshape/tile_tests.cpp)
+ConfigureTest(
+  RESHAPE_TEST reshape/byte_cast_tests.cpp reshape/interleave_columns_tests.cpp
+  reshape/tile_tests.cpp
+)
 
 # ##################################################################################################
 # * traits test -----------------------------------------------------------------------------------
@@ -351,7 +376,8 @@ ConfigureTest(
   strings/strip_tests.cpp
   strings/substring_tests.cpp
   strings/translate_tests.cpp
-  strings/urls_tests.cpp)
+  strings/urls_tests.cpp
+)
 
 # ##################################################################################################
 # * structs test ----------------------------------------------------------------------------------
@@ -368,12 +394,15 @@ ConfigureTest(
   text/replace_tests.cpp
   text/stemmer_tests.cpp
   text/subword_tests.cpp
-  text/tokenize_tests.cpp)
+  text/tokenize_tests.cpp
+)
 
 # ##################################################################################################
 # * bitmask tests ---------------------------------------------------------------------------------
-ConfigureTest(BITMASK_TEST bitmask/valid_if_tests.cu bitmask/set_nullmask_tests.cu
-              bitmask/bitmask_tests.cpp bitmask/is_element_valid_tests.cpp)
+ConfigureTest(
+  BITMASK_TEST bitmask/valid_if_tests.cu bitmask/set_nullmask_tests.cu bitmask/bitmask_tests.cpp
+  bitmask/is_element_valid_tests.cpp
+)
 
 # ##################################################################################################
 # * dictionary tests ------------------------------------------------------------------------------
@@ -389,7 +418,8 @@ ConfigureTest(
   dictionary/scatter_test.cpp
   dictionary/search_test.cpp
   dictionary/set_keys_test.cpp
-  dictionary/slice_test.cpp)
+  dictionary/slice_test.cpp
+)
 
 # ##################################################################################################
 # * encode tests -----------------------------------------------------------------------------------
@@ -410,7 +440,8 @@ ConfigureTest(
   lists/drop_list_duplicates_tests.cpp
   lists/explode_tests.cpp
   lists/extract_tests.cpp
-  lists/sort_lists_tests.cpp)
+  lists/sort_lists_tests.cpp
+)
 
 # ##################################################################################################
 # * bin tests ----------------------------------------------------------------------------------

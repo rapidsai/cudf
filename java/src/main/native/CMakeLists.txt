@@ -14,7 +14,8 @@
 cmake_minimum_required(VERSION 3.20.1 FATAL_ERROR)
 
 file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-21.12/RAPIDS.cmake
-     ${CMAKE_BINARY_DIR}/RAPIDS.cmake)
+     ${CMAKE_BINARY_DIR}/RAPIDS.cmake
+)
 include(${CMAKE_BINARY_DIR}/RAPIDS.cmake)
 
 include(rapids-cmake)
@@ -30,7 +31,8 @@ rapids_cuda_init_architectures(CUDF_JNI)
 project(
   CUDF_JNI
   VERSION 21.12.00
-  LANGUAGES C CXX CUDA)
+  LANGUAGES C CXX CUDA
+)
 
 # ##################################################################################################
 # * build options ---------------------------------------------------------------------------------
@@ -57,7 +59,8 @@ else()
 endif()
 
 set(CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Modules/"
-                      "${CUDF_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH})
+                      "${CUDF_SOURCE_DIR}/cmake/Modules/" ${CMAKE_MODULE_PATH}
+)
 
 # ##################################################################################################
 # * compiler options ------------------------------------------------------------------------------
@@ -91,35 +94,41 @@ rapids_cmake_build_type("Release")
 find_path(
   THRUST_INCLUDE "thrust"
   HINTS "$ENV{CUDF_ROOT}/_deps/thrust-src" "${CUDF_CPP_BUILD_DIR}/_deps/thrust-src"
-        "$ENV{CONDA_PREFIX}/include")
+        "$ENV{CONDA_PREFIX}/include"
+)
 
 message(STATUS "THRUST: THRUST_INCLUDE set to ${THRUST_INCLUDE}")
 
 find_path(
   CUB_INCLUDE "cub" HINTS "$ENV{CUDF_ROOT}/_deps/thrust-src"
-                          "${CUDF_CPP_BUILD_DIR}/_deps/thrust-src" "$ENV{CONDA_PREFIX}/include")
+                          "${CUDF_CPP_BUILD_DIR}/_deps/thrust-src" "$ENV{CONDA_PREFIX}/include"
+)
 
 message(STATUS "CUB: CUB_INCLUDE set to ${CUB_INCLUDE}")
 
 find_path(LIBCUDACXX_INCLUDE "cuda" HINTS "$ENV{CUDF_ROOT}/_deps/libcudacxx-src/include"
-                                          "${CUDF_CPP_BUILD_DIR}/_deps/libcudacxx-src/include")
+                                          "${CUDF_CPP_BUILD_DIR}/_deps/libcudacxx-src/include"
+)
 
 message(STATUS "LIBCUDACXX: LIBCUDACXX_INCLUDE set to ${LIBCUDACXX_INCLUDE}")
 
 find_path(
   SPDLOG_INCLUDE "spdlog"
   HINTS "${CUDF_CPP_BUILD_DIR}/_deps/spdlog-src/include" "$ENV{RMM_ROOT}/_deps/spdlog-src/include"
-        "$ENV{RMM_ROOT}/include" "$ENV{CONDA_PREFIX}/include")
+        "$ENV{RMM_ROOT}/include" "$ENV{CONDA_PREFIX}/include"
+)
 
 message(STATUS "SPDLOG: SPDLOG_INCLUDE set to ${SPDLOG_INCLUDE}")
 # ##################################################################################################
 # * CUDF ------------------------------------------------------------------------------------------
 
 set(CUDF_INCLUDE "${PROJECT_SOURCE_DIR}/../../../../cpp/include"
-                 "${PROJECT_SOURCE_DIR}/../../../../cpp/src/")
+                 "${PROJECT_SOURCE_DIR}/../../../../cpp/src/"
+)
 
 set(CUDF_LIB_HINTS HINTS "$ENV{CUDF_ROOT}" "$ENV{CUDF_ROOT}/lib" "$ENV{CONDA_PREFIX}/lib"
-                   "${CUDF_CPP_BUILD_DIR}")
+                   "${CUDF_CPP_BUILD_DIR}"
+)
 
 find_library(CUDF_LIB "cudf" REQUIRED HINTS ${CUDF_LIB_HINTS})
 
@@ -129,7 +138,8 @@ find_library(CUDF_LIB "cudf" REQUIRED HINTS ${CUDF_LIB_HINTS})
 find_path(
   RMM_INCLUDE "rmm"
   HINTS "${CUDF_CPP_BUILD_DIR}/_deps/rmm-src/include" "$ENV{RMM_ROOT}/include"
-        "$ENV{RMM_HOME}/include" "$ENV{CONDA_PREFIX}/include/rmm" "$ENV{CONDA_PREFIX}/include")
+        "$ENV{RMM_HOME}/include" "$ENV{CONDA_PREFIX}/include/rmm" "$ENV{CONDA_PREFIX}/include"
+)
 
 message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
 
@@ -137,7 +147,8 @@ message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
 # * ARROW -----------------------------------------------------------------------------------------
 
 find_path(ARROW_INCLUDE "arrow" HINTS "$ENV{ARROW_ROOT}/include"
-                                      "${CUDF_CPP_BUILD_DIR}/_deps/arrow-src/cpp/src")
+                                      "${CUDF_CPP_BUILD_DIR}/_deps/arrow-src/cpp/src"
+)
 
 message(STATUS "ARROW: ARROW_INCLUDE set to ${ARROW_INCLUDE}")
 
@@ -151,7 +162,8 @@ endif()
 find_library(
   ARROW_LIBRARY ${CUDF_JNI_ARROW_LIBNAME} REQUIRED
   HINTS "$ENV{ARROW_ROOT}/lib" "${CUDF_CPP_BUILD_DIR}/_deps/arrow-build/release"
-        "${CUDF_CPP_BUILD_DIR}/_deps/arrow-build/debug")
+        "${CUDF_CPP_BUILD_DIR}/_deps/arrow-build/debug"
+)
 
 if(NOT ARROW_LIBRARY)
   if(CUDF_JNI_ARROW_STATIC)
@@ -178,13 +190,16 @@ endif()
 # * nvcomp ----------------------------------------------------------------------------------------
 
 find_path(NVCOMP_INCLUDE "nvcomp" HINTS "${CUDF_CPP_BUILD_DIR}/_deps/nvcomp-src/include"
-                                        "$ENV{CONDA_PREFIX}/include")
+                                        "$ENV{CONDA_PREFIX}/include"
+)
 
 message(STATUS "NVCOMP: NVCOMP_INCLUDE set to ${NVCOMP_INCLUDE}")
 
 set(CUDF_JNI_NVCOMP_LIBNAME "libnvcomp.a")
-find_library(NVCOMP_LIBRARY ${CUDF_JNI_NVCOMP_LIBNAME} REQUIRED HINTS "${CUDF_CPP_BUILD_DIR}/lib"
-                                                                      "$ENV{CONDA_PREFIX}/lib")
+find_library(
+  NVCOMP_LIBRARY ${CUDF_JNI_NVCOMP_LIBNAME} REQUIRED HINTS "${CUDF_CPP_BUILD_DIR}/lib"
+                                                           "$ENV{CONDA_PREFIX}/lib"
+)
 
 if(NOT NVCOMP_LIBRARY)
   message(FATAL_ERROR "nvcomp static library not found.")
@@ -221,7 +236,8 @@ add_library(
   src/ScalarJni.cpp
   src/TableJni.cpp
   src/map_lookup.cu
-  src/check_nvcomp_output_sizes.cu)
+  src/check_nvcomp_output_sizes.cu
+)
 
 # ##################################################################################################
 # * include paths ---------------------------------------------------------------------------------
@@ -240,7 +256,8 @@ target_include_directories(
          "${JNI_INCLUDE_DIRS}"
          "${CUDF_INCLUDE}"
          "${RMM_INCLUDE}"
-         "${ARROW_INCLUDE}")
+         "${ARROW_INCLUDE}"
+)
 
 # ##################################################################################################
 # * compile options
@@ -255,13 +272,18 @@ set_target_properties(
              CXX_STANDARD 17
              CXX_STANDARD_REQUIRED ON
              CUDA_STANDARD 17
-             CUDA_STANDARD_REQUIRED ON)
+             CUDA_STANDARD_REQUIRED ON
+)
 
-target_compile_options(cudfjni PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
-                                       "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>")
+target_compile_options(
+  cudfjni PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_FLAGS}>"
+                  "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_FLAGS}>"
+)
 
-target_compile_definitions(cudfjni PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_DEFINITIONS}>"
-                                          "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>")
+target_compile_definitions(
+  cudfjni PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_DEFINITIONS}>"
+                 "$<$<COMPILE_LANGUAGE:CUDA>:${CUDF_CUDA_DEFINITIONS}>"
+)
 
 if(USE_GDS)
   add_library(cufilejni SHARED src/CuFileJni.cpp)
@@ -271,11 +293,13 @@ if(USE_GDS)
                INSTALL_RPATH "\$ORIGIN"
                # set target compile options
                CXX_STANDARD 17
-               CXX_STANDARD_REQUIRED ON)
+               CXX_STANDARD_REQUIRED ON
+  )
   target_include_directories(
     cufilejni
     PUBLIC "${LIBCUDACXX_INCLUDE}" "${CUDF_INCLUDE}"
-    PRIVATE "${cuFile_INCLUDE_DIRS}")
+    PRIVATE "${cuFile_INCLUDE_DIRS}"
+  )
   target_link_libraries(cufilejni PRIVATE cudfjni "${cuFile_LIBRARIES}")
 endif()
 
@@ -284,10 +308,12 @@ endif()
 
 set(RMM_LOGGING_LEVEL
     "INFO"
-    CACHE STRING "Choose the logging level.")
+    CACHE STRING "Choose the logging level."
+)
 # Set the possible values of build type for cmake-gui
-set_property(CACHE RMM_LOGGING_LEVEL PROPERTY STRINGS "TRACE" "DEBUG" "INFO" "WARN" "ERROR"
-                                              "CRITICAL" "OFF")
+set_property(
+  CACHE RMM_LOGGING_LEVEL PROPERTY STRINGS "TRACE" "DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "OFF"
+)
 message(STATUS "RMM_LOGGING_LEVEL = '${RMM_LOGGING_LEVEL}'.")
 
 target_compile_definitions(cudfjni PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM_LOGGING_LEVEL})
