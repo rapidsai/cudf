@@ -153,7 +153,8 @@ def test_string_dtype():
 
 def test_mixed_dtype():
     data_mixed = dict(int=[1, 2, 3], float=[1.5, 2.5, 3.5],
-                        bool=[True, False, True], categorical=[5, 1, 5])
+                        bool=[True, False, True], categorical=[5, 1, 5],
+                        string=["rapidsai-cudf ", "", "df protocol"])
     _test_datatype(data_mixed)
 
 
@@ -201,3 +202,12 @@ def test_NA_string_dtype():
     assert col.num_chunks() == 1
     _test_from_dataframe_equals(df.__dataframe__(allow_copy=False))
     _test_from_dataframe_equals(df.__dataframe__(allow_copy=True))
+
+
+def test_NA_mixed_dtype():
+    data_mixed = dict(int=[1, None, 2, 3, 1000], float=[None, 1.5, 2.5, 3.5, None],
+                        bool=[True, None, False, None, None], 
+                        categorical=[5, 1, 5, 3, None],
+                        string=[None, None, None, "df protocol", None])
+    _test_datatype(data_mixed)
+
