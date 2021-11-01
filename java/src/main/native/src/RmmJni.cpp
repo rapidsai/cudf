@@ -322,9 +322,10 @@ std::unique_ptr<rmm::mr::cuda_memory_resource> Cuda_memory_resource{};
 
 extern "C" {
 
-JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(
-    JNIEnv *env, jclass clazz, jint allocation_mode, jint log_to, jstring jpath, jlong pool_size,
-    jlong max_pool_size, jlong allocation_alignment, jlong alignment_threshold) {
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, jclass clazz,
+                                                                  jint allocation_mode, jint log_to,
+                                                                  jstring jpath, jlong pool_size,
+                                                                  jlong max_pool_size) {
   try {
     // make sure the CUDA device is setup in the context
     cudaError_t cuda_status = cudaFree(0);
@@ -375,14 +376,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(
       Initialized_resource = std::make_shared<rmm::mr::cuda_memory_resource>();
     }
 
-    if (allocation_alignment != 0) {
-      Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::aligned_resource_adaptor>(
-          Initialized_resource, allocation_alignment, alignment_threshold);
-    }
-
-    auto wrapped = make_tracking_adaptor(
-        Initialized_resource.get(),
-        std::max(RMM_ALLOC_SIZE_ALIGNMENT, static_cast<std::size_t>(allocation_alignment)));
+    auto wrapped = make_tracking_adaptor(Initialized_resource.get(), RMM_ALLOC_SIZE_ALIGNMENT);
     Tracking_memory_resource.reset(wrapped);
 
     auto resource = Tracking_memory_resource.get();

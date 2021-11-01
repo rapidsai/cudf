@@ -101,27 +101,11 @@ struct min_max_scan_operator {
   }
 };
 
-/**
- * @brief Dispatcher for running a Scan operation on an input column
- *
- * @tparam Op device binary operator
- */
-template <typename Op>
-struct scan_dispatcher {
- private:
-  template <typename T>
-  static constexpr bool is_supported()
-  {
-    return std::is_invocable_v<Op, T, T> && !cudf::is_dictionary<T>();
-  }
-
-  template <typename T>
-  std::enable_if_t<is_supported<T>() and not std::is_same_v<T, cudf::string_view>,
-                   std::unique_ptr<column>>
-  inclusive_scan(column_view const& input_view,
-                 null_policy,
-                 rmm::cuda_stream_view stream,
-                 rmm::mr::device_memory_resource* mr)
+template <typename Op, typename T>
+struct scan_functor {
+  std::unique_ptr<column> inclusive_scan(column_view const& input_view,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
   {
     auto output_column = detail::allocate_like(
       input_view, input_view.size(), mask_allocation_policy::NEVER, stream, mr);
@@ -136,24 +120,24 @@ struct scan_dispatcher {
     CHECK_CUDA(stream.value());
     return output_column;
   }
+};
 
-  template <typename T>
-  std::enable_if_t<is_supported<T>() and std::is_same_v<T, cudf::string_view>,
-                   std::unique_ptr<column>>
-  inclusive_scan(column_view const& input_view,
-                 null_policy,
-                 rmm::cuda_stream_view stream,
-                 rmm::mr::device_memory_resource* mr)
+template <typename Op>
+struct scan_functor<Op, cudf::string_view> {
+  std::unique_ptr<column> inclusive_scan(column_view const& input_view,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
   {
     auto d_input = column_device_view::create(input_view, stream);
 
     // build indices of the scan operation results
     rmm::device_uvector<size_type> result(input_view.size(), stream);
-    thrust::inclusive_scan(rmm::exec_policy(stream),
-                           thrust::counting_iterator<size_type>(0),
-                           thrust::counting_iterator<size_type>(input_view.size()),
-                           result.begin(),
-                           min_max_scan_operator<T, Op>{*d_input, input_view.has_nulls()});
+    thrust::inclusive_scan(
+      rmm::exec_policy(stream),
+      thrust::counting_iterator<size_type>(0),
+      thrust::counting_iterator<size_type>(input_view.size()),
+      result.begin(),
+      min_max_scan_operator<cudf::string_view, Op>{*d_input, input_view.has_nulls()});
 
     // call gather using the indices to build the output column
     auto result_table = cudf::detail::gather(cudf::table_view({input_view}),
@@ -163,6 +147,21 @@ struct scan_dispatcher {
                                              stream,
                                              mr);
     return std::move(result_table->release().front());
+  }
+};
+
+/**
+ * @brief Dispatcher for running a Scan operation on an input column
+ *
+ * @tparam Op device binary operator
+ */
+template <typename Op>
+struct scan_dispatcher {
+ private:
+  template <typename T>
+  static constexpr bool is_supported()
+  {
+    return std::is_invocable_v<Op, T, T> && !cudf::is_dictionary<T>();
   }
 
  public:
@@ -179,17 +178,17 @@ struct scan_dispatcher {
    */
   template <typename T, typename std::enable_if_t<is_supported<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input,
-                                     null_policy null_handling,
+                                     null_policy,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    return inclusive_scan<T>(input, null_handling, stream, mr);
+    return scan_functor<Op, T>{}.inclusive_scan(input, stream, mr);
   }
 
   template <typename T, typename... Args>
   std::enable_if_t<!is_supported<T>(), std::unique_ptr<column>> operator()(Args&&...)
   {
-    CUDF_FAIL("Non-arithmetic types not supported for inclusive scan");
+    CUDF_FAIL("Unsupported type for inclusive scan operation");
   }
 };
 

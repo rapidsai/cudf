@@ -14,18 +14,14 @@
 # limitations under the License.
 #=============================================================================
 
-function(find_and_configure_libcudacxx VERSION)
-    rapids_cpm_find(libcudacxx ${VERSION}
-        GIT_REPOSITORY      https://github.com/NVIDIA/libcudacxx.git
-        GIT_TAG             ${VERSION}
-        GIT_SHALLOW         TRUE
-        DOWNLOAD_ONLY       TRUE
-    )
+function(find_and_configure_libcudacxx)
+    include(${rapids-cmake-dir}/cpm/libcudacxx.cmake)
+
+    rapids_cpm_libcudacxx(BUILD_EXPORT_SET cudf-exports
+                          INSTALL_EXPORT_SET cudf-exports
+                          PATCH_COMMAND   patch --reject-file=- -p1 -N < ${CUDF_SOURCE_DIR}/cmake/libcudacxx.patch || true)
 
     set(LIBCUDACXX_INCLUDE_DIR "${libcudacxx_SOURCE_DIR}/include" PARENT_SCOPE)
-    set(LIBCXX_INCLUDE_DIR "${libcudacxx_SOURCE_DIR}/libcxx/include" PARENT_SCOPE)
 endfunction()
 
-set(CUDF_MIN_VERSION_libcudacxx 1.4.0)
-
-find_and_configure_libcudacxx(${CUDF_MIN_VERSION_libcudacxx})
+find_and_configure_libcudacxx()
