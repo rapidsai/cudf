@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <groupby/sort/group_util.cuh>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
@@ -65,39 +67,6 @@ struct element_arg_minmax_fn {
     //   row(lhs_idx) >= row(rhs_idx) and finding ArgMax.
     auto const less = d_col.element<T>(lhs_idx) < d_col.element<T>(rhs_idx);
     return less == arg_min ? lhs_idx : rhs_idx;
-  }
-};
-
-/**
- * @brief Binary operator ArgMin/ArgMax with index values into the input table.
- *
- * @tparam T Type of the underlying data. This is the fallback for the cases when T does not support
- * '<' operator.
- */
-template <typename T, bool has_nulls, bool arg_min>
-struct row_arg_minmax_fn {
-  size_type const num_rows;
-  row_lexicographic_comparator<has_nulls> const comp;
-
-  row_arg_minmax_fn(size_type const num_rows_,
-                    table_device_view const& table_,
-                    null_order const* null_precedence)
-    : num_rows(num_rows_), comp(table_, table_, nullptr, null_precedence)
-  {
-  }
-
-  CUDA_DEVICE_CALLABLE auto operator()(size_type lhs_idx, size_type rhs_idx) const
-  {
-    // The extra bounds checking is due to issue github.com/rapidsai/cudf/9156 and
-    // github.com/NVIDIA/thrust/issues/1525
-    // where invalid random values may be passed here by thrust::reduce_by_key
-    if (lhs_idx < 0 || lhs_idx >= num_rows) { return rhs_idx; }
-    if (rhs_idx < 0 || rhs_idx >= num_rows) { return lhs_idx; }
-
-    // Return `lhs_idx` iff:
-    //   row(lhs_idx) <  row(rhs_idx) and finding ArgMin, or
-    //   row(lhs_idx) >= row(rhs_idx) and finding ArgMax.
-    return comp(lhs_idx, rhs_idx) == arg_min ? lhs_idx : rhs_idx;
   }
 };
 
@@ -312,7 +281,7 @@ struct reduce_functor {
   template <typename T, typename... Args>
   std::enable_if_t<not is_trivially_supported<T>() and
                      (not std::is_same_v<T, struct_view> or
-                      (K != aggregation::ARGMIN or K != aggregation::ARGMAX)),
+                      (K != aggregation::ARGMIN and K != aggregation::ARGMAX)),
                    std::unique_ptr<column>>
   operator()(Args&&... args)
   {
