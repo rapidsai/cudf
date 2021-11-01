@@ -944,15 +944,7 @@ table_with_metadata reader::impl::read(size_type skip_rows,
       auto col_type = to_type_id(
         _metadata.get_col_type(col.id), _use_np_dtypes, _timestamp_type.id(), decimal_as_float64);
       CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
-<<<<<<< HEAD
       if (col_type == type_id::DECIMAL128) {
-=======
-      // Remove this once we support Decimal128 data type
-      CUDF_EXPECTS(
-        (col_type != type_id::DECIMAL64) or (_metadata.get_col_type(col.id).precision <= 18),
-        "Decimal data has precision > 18, Decimal64 data type doesn't support it.");
-      if (col_type == type_id::DECIMAL64) {
->>>>>>> branch-21.12
         // sign of the scale is changed since cuDF follows c++ libraries like CNL
         // which uses negative scaling, but liborc and other libraries
         // follow positive scaling.
