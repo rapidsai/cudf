@@ -42,7 +42,7 @@ from cudf.utils.dtypes import can_convert_to_column
 
 
 def str_to_boolean(column: StringColumn):
-    """Takes in string column and returns boolean column """
+    """Takes in string column and returns boolean column"""
     return (
         libstrings.count_characters(column) > cudf.Scalar(0, dtype="int8")
     ).fillna(False)
@@ -540,7 +540,7 @@ class StringMethods(ColumnMethods):
 
         offset_col = self._column.children[0]
 
-        res = cudf.core.column.ListColumn(
+        return cudf.core.column.ListColumn(
             size=len(self._column),
             dtype=cudf.ListDtype(self._column.dtype),
             mask=self._column.mask,
@@ -548,12 +548,11 @@ class StringMethods(ColumnMethods):
             null_count=self._column.null_count,
             children=(offset_col, result_col),
         )
-        return res
 
     def extract(
         self, pat: str, flags: int = 0, expand: bool = True
     ) -> SeriesOrIndex:
-        """
+        r"""
         Extract capture groups in the regex `pat` as columns in a DataFrame.
 
         For each subject string in the Series, extract groups from the first
@@ -625,7 +624,7 @@ class StringMethods(ColumnMethods):
         na=np.nan,
         regex: bool = True,
     ) -> SeriesOrIndex:
-        """
+        r"""
         Test if pattern or regex is contained within a string of a Series or
         Index.
 
@@ -3271,7 +3270,7 @@ class StringMethods(ColumnMethods):
         return self._return_or_inplace(libstrings.wrap(self._column, width))
 
     def count(self, pat: str, flags: int = 0) -> SeriesOrIndex:
-        """
+        r"""
         Count occurrences of pattern in each string of the Series/Index.
 
         This function is used to count the number of times a particular
@@ -4373,7 +4372,9 @@ class StringMethods(ColumnMethods):
             retain_index=False,
         )
 
-    def character_ngrams(self, n: int = 2) -> SeriesOrIndex:
+    def character_ngrams(
+        self, n: int = 2, as_list: bool = False
+    ) -> SeriesOrIndex:
         """
         Generate the n-grams from characters in a column of strings.
 
@@ -4382,6 +4383,9 @@ class StringMethods(ColumnMethods):
         n : int
             The degree of the n-gram (number of consecutive characters).
             Default of 2 for bigrams.
+        as_list : bool
+            Set to True to return ngrams in a list column where each
+            list element is the ngrams for each string.
 
         Examples
         --------
@@ -4404,11 +4408,32 @@ class StringMethods(ColumnMethods):
         3    fgh
         4    xyz
         dtype: object
+        >>> str_series.str.character_ngrams(3,True)
+        0    [abc, bcd]
+        1    [efg, fgh]
+        2         [xyz]
+        dtype: list
         """
-        return self._return_or_inplace(
-            libstrings.generate_character_ngrams(self._column, n),
-            retain_index=False,
+        ngrams = libstrings.generate_character_ngrams(self._column, n)
+        if as_list is False:
+            return self._return_or_inplace(ngrams, retain_index=False)
+
+        # convert the output to a list by just generating the
+        # offsets for the output list column
+        sn = (self.len() - (n - 1)).clip(0, None).fillna(0)  # type: ignore
+        sizes = libcudf.concat.concat_columns(
+            [column.as_column(0, dtype=np.int32, length=1), sn._column]
         )
+        oc = libcudf.reduce.scan("cumsum", sizes, True)
+        lc = cudf.core.column.ListColumn(
+            size=self._column.size,
+            dtype=cudf.ListDtype(self._column.dtype),
+            mask=self._column.mask,
+            offset=0,
+            null_count=self._column.null_count,
+            children=(oc, ngrams),
+        )
+        return self._return_or_inplace(lc, retain_index=False)
 
     def ngrams_tokenize(
         self, n: int = 2, delimiter: str = " ", separator: str = "_"
@@ -4768,7 +4793,7 @@ class StringMethods(ColumnMethods):
         0     True
         1    False
         dtype: bool
-         """
+        """
         ltype = libstrings.LetterType.CONSONANT
 
         if can_convert_to_column(position):
@@ -5118,15 +5143,7 @@ class StringColumn(column.ColumnBase):
                 "StringColumns do not use data attribute of Column, use "
                 "`set_base_children` instead"
             )
-        else:
-            super().set_base_data(value)
-
-    def set_base_mask(self, value: Optional[Buffer]):
-        super().set_base_mask(value)
-
-    def set_base_children(self, value: Tuple["column.ColumnBase", ...]):
-        # TODO: Implement dtype validation of the children here somehow
-        super().set_base_children(value)
+        super().set_base_data(value)
 
     def __contains__(self, item: ScalarLike) -> bool:
         if is_scalar(item):
@@ -5199,7 +5216,7 @@ class StringColumn(column.ColumnBase):
                 )
             else:
                 format = datetime.infer_format(
-                    self.apply_boolean_mask(self.notna()).element_indexing(0)
+                    self.apply_boolean_mask(self.notnull()).element_indexing(0)
                 )
 
         return self._as_datetime_or_timedelta_column(out_dtype, format)
@@ -5374,7 +5391,7 @@ class StringColumn(column.ColumnBase):
         df = cudf.DataFrame({"old": to_replace_col, "new": replacement_col})
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:
-            res = self.fillna(df._data["new"][df._data["old"].isna()][0])
+            res = self.fillna(df._data["new"][df._data["old"].isnull()][0])
             df = df.dropna(subset=["old"])
         else:
             res = self

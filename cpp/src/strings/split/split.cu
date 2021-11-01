@@ -426,7 +426,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
   std::vector<std::unique_ptr<column>> results;
   auto const strings_count = strings_column.size();
   if (strings_count == 0) {
-    results.push_back(make_empty_column(data_type{type_id::STRING}));
+    results.push_back(make_empty_column(type_id::STRING));
     return std::make_unique<table>(std::move(results));
   }
 

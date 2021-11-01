@@ -68,7 +68,7 @@ def count_zero(arr):
 
 
 def assert_eq(left, right, **kwargs):
-    """ Assert that two cudf-like things are equivalent
+    """Assert that two cudf-like things are equivalent
 
     This equality test works for pandas/cudf dataframes/series/indexes/scalars
     in the same way, and so makes it easier to perform parametrized testing
