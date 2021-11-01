@@ -296,7 +296,7 @@ struct ScanTest : public BaseFixture {
 
 using TestTypes = Concat<NumericTypes, FixedPointTypes, Types<string_view>>;
 
-TYPED_TEST_CASE(ScanTest, TestTypes);
+TYPED_TEST_SUITE(ScanTest, TestTypes);
 
 TYPED_TEST(ScanTest, Min)
 {
@@ -443,7 +443,7 @@ struct TypedRankScanTest : ScanTest<T> {
 using RankTypes =
   Concat<IntegralTypesNotBool, FloatingPointTypes, FixedPointTypes, ChronoTypes, StringTypes>;
 
-TYPED_TEST_CASE(TypedRankScanTest, RankTypes);
+TYPED_TEST_SUITE(TypedRankScanTest, RankTypes);
 
 TYPED_TEST(TypedRankScanTest, Rank)
 {
@@ -608,7 +608,7 @@ using ListTestTypeSet = Concat<IntegralTypesNotBool,
                                            FloatingPointTypes,
                                            FixedPointTypes>;
 
-TYPED_TEST_CASE(ListRankScanTest, ListTestTypeSet);
+TYPED_TEST_SUITE(ListRankScanTest, ListTestTypeSet);
 
 TYPED_TEST(ListRankScanTest, ListRank)
 {

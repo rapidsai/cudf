@@ -32,7 +32,7 @@ template <typename T>
 struct TypedDispatcherTest : public DispatcherTest {
 };
 
-TYPED_TEST_CASE(TypedDispatcherTest, cudf::test::AllTypes);
+TYPED_TEST_SUITE(TypedDispatcherTest, cudf::test::AllTypes);
 
 namespace {
 template <typename Expected>
@@ -90,7 +90,7 @@ template <typename T>
 struct TypedDoubleDispatcherTest : public DispatcherTest {
 };
 
-TYPED_TEST_CASE(TypedDoubleDispatcherTest, cudf::test::AllTypes);
+TYPED_TEST_SUITE(TypedDoubleDispatcherTest, cudf::test::AllTypes);
 
 namespace {
 template <typename Expected1, typename Expected2>

@@ -391,7 +391,7 @@ void test_replace(cudf::host_span<T const> input_column,
 
 using Types = cudf::test::NumericTypes;
 
-TYPED_TEST_CASE(ReplaceTest, Types);
+TYPED_TEST_SUITE(ReplaceTest, Types);
 
 // Simple test, replacing all even replacement_values_column
 TYPED_TEST(ReplaceTest, ReplaceEvenPosition)
@@ -544,7 +544,7 @@ struct FixedPointTestBothReps : public cudf::test::BaseFixture {
 
 template <typename T>
 using wrapper = cudf::test::fixed_width_column_wrapper<T>;
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTestBothReps, FixedPointReplace)
 {

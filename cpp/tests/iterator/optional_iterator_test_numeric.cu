@@ -20,7 +20,7 @@ template <typename T>
 struct NumericOptionalIteratorTest : public IteratorTest<T> {
 };
 
-TYPED_TEST_CASE(NumericOptionalIteratorTest, TestingTypes);
+TYPED_TEST_SUITE(NumericOptionalIteratorTest, TestingTypes);
 TYPED_TEST(NumericOptionalIteratorTest, nonull_optional_iterator)
 {
   nonull_optional_iterator(*this);

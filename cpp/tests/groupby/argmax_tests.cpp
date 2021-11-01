@@ -32,7 +32,7 @@ struct groupby_argmax_test : public cudf::test::BaseFixture {
 };
 using K = int32_t;
 
-TYPED_TEST_CASE(groupby_argmax_test, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(groupby_argmax_test, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(groupby_argmax_test, basic)
 {

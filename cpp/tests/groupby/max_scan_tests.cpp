@@ -39,7 +39,7 @@ struct groupby_max_scan_test : public cudf::test::BaseFixture {
   using result_wrapper = fixed_width_column_wrapper<R, int32_t>;
 };
 
-TYPED_TEST_CASE(groupby_max_scan_test, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(groupby_max_scan_test, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(groupby_max_scan_test, basic)
 {
@@ -148,7 +148,7 @@ template <typename T>
 struct FixedPointTestBothReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTestBothReps, GroupBySortMaxScanDecimalAsValue)
 {

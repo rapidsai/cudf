@@ -33,7 +33,7 @@ struct groupby_max_test : public cudf::test::BaseFixture {
 };
 
 using K = int32_t;
-TYPED_TEST_CASE(groupby_max_test, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(groupby_max_test, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(groupby_max_test, basic)
 {
@@ -255,7 +255,7 @@ template <typename T>
 struct FixedPointTestBothReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTestBothReps, GroupBySortMaxDecimalAsValue)
 {

@@ -406,7 +406,7 @@ template <typename T>
 class RollingVarStdTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(RollingVarStdTest, cudf::test::FixedWidthTypesWithoutChrono);
+TYPED_TEST_SUITE(RollingVarStdTest, cudf::test::FixedWidthTypesWithoutChrono);
 
 class RollingtVarStdTestUntyped : public cudf::test::BaseFixture {
 };
@@ -599,7 +599,7 @@ TEST_F(RollingErrorTest, MeanTimestampNotSupported)
                cudf::logic_error);
 }
 
-TYPED_TEST_CASE(RollingTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(RollingTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 // simple example from Pandas docs
 TYPED_TEST(RollingTest, SimpleStatic)
@@ -1142,7 +1142,7 @@ template <typename T>
 struct FixedPointTests : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTests, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTests, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTests, MinMaxCountLagLead)
 {
