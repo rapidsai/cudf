@@ -62,21 +62,29 @@ auto left_zero_eq_right_zero =
 // Generate a single pair of left/right non-nullable columns of random data
 // suitable for testing a join against a reference join implementation.
 template <typename T>
-std::pair<std::vector<T>, std::vector<T>> gen_random_repeated_columns(unsigned int N = 10000,
-                                                                      unsigned int num_repeats = 10)
+std::pair<std::vector<T>, std::vector<T>> gen_random_repeated_columns(
+  unsigned int N_left            = 10000,
+  unsigned int num_repeats_left  = 10,
+  unsigned int N_right           = 10000,
+  unsigned int num_repeats_right = 10)
 {
   // Generate columns of num_repeats repeats of the integer range [0, num_unique),
   // then merge a shuffled version and compare to hash join.
-  unsigned int num_unique = N / num_repeats;
+  unsigned int num_unique_left  = N_left / num_repeats_left;
+  unsigned int num_unique_right = N_right / num_repeats_right;
 
-  std::vector<T> left(N);
-  std::vector<T> right(N);
+  std::vector<T> left(N_left);
+  std::vector<T> right(N_right);
 
-  for (unsigned int i = 0; i < num_repeats; ++i) {
-    std::iota(
-      std::next(left.begin(), num_unique * i), std::next(left.begin(), num_unique * (i + 1)), 0);
-    std::iota(
-      std::next(right.begin(), num_unique * i), std::next(right.begin(), num_unique * (i + 1)), 0);
+  for (unsigned int i = 0; i < num_repeats_left; ++i) {
+    std::iota(std::next(left.begin(), num_unique_left * i),
+              std::next(left.begin(), num_unique_left * (i + 1)),
+              0);
+  }
+  for (unsigned int i = 0; i < num_repeats_right; ++i) {
+    std::iota(std::next(right.begin(), num_unique_right * i),
+              std::next(right.begin(), num_unique_right * (i + 1)),
+              0);
   }
 
   std::random_device rd;
@@ -493,6 +501,18 @@ TYPED_TEST(ConditionalInnerJoinTest, TestCompareRandomToHashNulls)
 {
   auto [left, right] = gen_random_nullable_repeated_columns<TypeParam>();
   this->compare_to_hash_join_nulls({left}, {right});
+};
+
+TYPED_TEST(ConditionalInnerJoinTest, TestCompareRandomToHashNullsLargerLeft)
+{
+  auto [left, right] = gen_random_repeated_columns<TypeParam>(2000, 10, 1000, 10);
+  this->compare_to_hash_join({left}, {right});
+};
+
+TYPED_TEST(ConditionalInnerJoinTest, TestCompareRandomToHashNullsLargerRight)
+{
+  auto [left, right] = gen_random_repeated_columns<TypeParam>(1000, 10, 2000, 10);
+  this->compare_to_hash_join({left}, {right});
 };
 
 TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnTwoNullsRowAllEqual)
