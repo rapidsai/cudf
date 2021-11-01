@@ -444,14 +444,15 @@ class IndexedFrame(Frame):
     def _positions_from_column_names(self, column_names, include_index=False):
         """Map each column name into their positions in the frame.
 
-        Set `include_index=True` to add the number of index columns to the
-        result.
+        Return positions of the provided column names, offset by the number of
+        index columns if index exists and `include_index` is True. The order
+        of indices returned corresponds to the column order in this Frame.
         """
         n_indices_cols = len(self._index._data) if include_index else 0
         return [
             i + n_indices_cols
             for i, name in enumerate(self._column_names)
-            if name in column_names
+            if name in set(column_names)
         ]
 
     def _drop_duplicates(self, keys, keep, nulls_are_equal, ignore_index):

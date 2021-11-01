@@ -115,19 +115,6 @@ class Frame:
     def _columns(self) -> List[Any]:  # TODO: List[Column]?
         return self._data.columns
 
-    def _column_name_to_indices(self, column_names, include_index=True):
-        column_names = set(column_names)
-        idx_len = (
-            len(self._index._data)
-            if include_index and self._index is not None
-            else 0
-        )
-        return [
-            i + idx_len
-            for i, name in enumerate(self._data.keys())
-            if name in column_names
-        ]
-
     def serialize(self):
         header = {
             "type-serialized": pickle.dumps(type(self)),
@@ -1437,7 +1424,9 @@ class Frame:
             libcudf.stream_compaction.drop_nulls(
                 list(self._index._data.columns + frame._columns),
                 how=how,
-                keys=self._column_name_to_indices(subset),
+                keys=self._positions_from_column_names(
+                    subset, include_index=True
+                ),
                 thresh=thresh,
             ),
             self._column_names,
@@ -2339,11 +2328,15 @@ class Frame:
 
     def _positions_from_column_names(self, column_names, include_index=False):
         """Map each column name into their positions in the frame.
+
+        Return positions of the provided column names, offset by the number of
+        index columns if index exists and `include_index` is True. The order
+        of indices returned corresponds to the column order in this Frame.
         """
         return [
             i
             for i, name in enumerate(self._column_names)
-            if name in column_names
+            if name in set(column_names)
         ]
 
     def _drop_duplicates(self, keys, keep, nulls_are_equal, ignore_index):
