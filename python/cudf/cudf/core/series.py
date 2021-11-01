@@ -5008,14 +5008,15 @@ class DatetimeProperties(object):
             data=out_column, index=self.series._index, name=self.series.name
         )
 
-    def ceil(self, field):
+    def ceil(self, freq):
         """
         Perform ceil operation on the data to the specified freq.
 
         Parameters
         ----------
-        field : str
+        freq : str
             One of ["D", "H", "T", "S", "L", "U", "N"]
+            Must be a fixed frequency like ‘S’ (second) not ‘ME’ (month end).
             See `frequency aliases <https://pandas.pydata.org/docs/\
                 user_guide/timeseries.html#timeseries-offset-aliases>`_
             for more details on these aliases.
@@ -5023,7 +5024,8 @@ class DatetimeProperties(object):
         Returns
         -------
         Series
-            Series with the same index for a Series.
+            Series with all timestamps rounded up to the specified frequency.
+            The index is preserved.
 
         Examples
         --------
@@ -5036,20 +5038,21 @@ class DatetimeProperties(object):
         2   2001-01-01 00:06:00
         dtype: datetime64[ns]
         """
-        out_column = self.series._column.ceil(field)
+        out_column = self.series._column.ceil(freq)
 
         return Series(
             data=out_column, index=self.series._index, name=self.series.name
         )
 
-    def floor(self, field):
+    def floor(self, freq):
         """
         Perform floor operation on the data to the specified freq.
 
         Parameters
         ----------
-        field : str
+        freq : str
             One of ["D", "H", "T", "S", "L", "U", "N"]
+            Must be a fixed frequency like ‘S’ (second) not ‘ME’ (month end).
             See `frequency aliases <https://pandas.pydata.org/docs/\
                 user_guide/timeseries.html#timeseries-offset-aliases>`_
             for more details on these aliases.
@@ -5057,7 +5060,8 @@ class DatetimeProperties(object):
         Returns
         -------
         Series
-            Series with the same index for a Series.
+            Series with all timestamps rounded up to the specified frequency.
+            The index is preserved.
 
         Examples
         --------
@@ -5070,7 +5074,7 @@ class DatetimeProperties(object):
         2   2001-01-01 00:05:00
         dtype: datetime64[ns]
         """
-        out_column = self.series._column.floor(field)
+        out_column = self.series._column.floor(freq)
 
         return Series(
             data=out_column, index=self.series._index, name=self.series.name
