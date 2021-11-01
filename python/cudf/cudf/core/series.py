@@ -5045,6 +5045,7 @@ class DatetimeProperties(object):
     def floor(self, field):
         """
         Perform floor operation on the data to the specified freq.
+
         Parameters
         ----------
         field : str
@@ -5052,10 +5053,12 @@ class DatetimeProperties(object):
             See `frequency aliases <https://pandas.pydata.org/docs/\
                 user_guide/timeseries.html#timeseries-offset-aliases>`_
             for more details on these aliases.
+
         Returns
         -------
         Series
             Series with the same index for a Series.
+
         Examples
         --------
         >>> import cudf
