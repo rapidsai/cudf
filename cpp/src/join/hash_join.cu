@@ -154,23 +154,24 @@ probe_join_hash_table(cudf::table_device_view build_table,
 
   const cudf::size_type probe_table_num_rows = probe_table.num_rows();
 
-  auto out1_zip = thrust::make_zip_iterator(
+  auto out1_zip_begin = thrust::make_zip_iterator(
     thrust::make_tuple(thrust::make_discard_iterator(), left_indices->begin()));
-  auto out2_zip = thrust::make_zip_iterator(
+  auto out2_zip_begin = thrust::make_zip_iterator(
     thrust::make_tuple(thrust::make_discard_iterator(), right_indices->begin()));
 
   if constexpr (JoinKind == cudf::detail::join_kind::FULL_JOIN or
                 JoinKind == cudf::detail::join_kind::LEFT_JOIN) {
-    [[maybe_unused]] auto const actual_size = hash_table.pair_retrieve_outer(
-      iter, iter + probe_table_num_rows, out1_zip, out2_zip, equality, stream.value());
+    [[maybe_unused]] auto [out1_zip_end, out2_zip_end] = hash_table.pair_retrieve_outer(
+      iter, iter + probe_table_num_rows, out1_zip_begin, out2_zip_begin, equality, stream.value());
 
     if constexpr (JoinKind == cudf::detail::join_kind::FULL_JOIN) {
+      auto const actual_size = out1_zip_end - out1_zip_begin;
       left_indices->resize(actual_size, stream);
       right_indices->resize(actual_size, stream);
     }
   } else {
     hash_table.pair_retrieve(
-      iter, iter + probe_table_num_rows, out1_zip, out2_zip, equality, stream.value());
+      iter, iter + probe_table_num_rows, out1_zip_begin, out2_zip_begin, equality, stream.value());
   }
   return std::make_pair(std::move(left_indices), std::move(right_indices));
 }
@@ -218,13 +219,13 @@ std::size_t get_full_join_size(cudf::table_device_view build_table,
 
   const cudf::size_type probe_table_num_rows = probe_table.num_rows();
 
-  auto out1_zip = thrust::make_zip_iterator(
+  auto out1_zip_begin = thrust::make_zip_iterator(
     thrust::make_tuple(thrust::make_discard_iterator(), left_indices->begin()));
-  auto out2_zip = thrust::make_zip_iterator(
+  auto out2_zip_begin = thrust::make_zip_iterator(
     thrust::make_tuple(thrust::make_discard_iterator(), right_indices->begin()));
 
   hash_table.pair_retrieve_outer(
-    iter, iter + probe_table_num_rows, out1_zip, out2_zip, equality, stream.value());
+    iter, iter + probe_table_num_rows, out1_zip_begin, out2_zip_begin, equality, stream.value());
 
   // Release intermediate memory allocation
   left_indices->resize(0, stream);

@@ -15,10 +15,11 @@
  */
 #pragma once
 
-#include <cudf/detail/concatenate.cuh>
 #include <join/join_common_utils.cuh>
 #include <join/join_common_utils.hpp>
 
+#include <cudf/detail/concatenate.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/join.hpp>

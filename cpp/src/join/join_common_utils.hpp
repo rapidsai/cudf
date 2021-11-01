@@ -36,12 +36,14 @@ constexpr size_type JoinNoneValue     = std::numeric_limits<size_type>::min();
 
 using pair_type = cuco::pair_type<hash_value_type, size_type>;
 
-using multimap_type = cuco::static_multimap<
-  hash_value_type,
-  size_type,
-  cuda::thread_scope_device,
-  cuco::detail::double_hashing<hash_value_type, size_type, DEFAULT_JOIN_CG_SIZE>,
-  default_allocator<char>>;
+using hash_type = cuco::detail::MurmurHash3_32<hash_value_type>;
+
+using multimap_type =
+  cuco::static_multimap<hash_value_type,
+                        size_type,
+                        cuda::thread_scope_device,
+                        default_allocator<char>,
+                        cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, hash_type, hash_type>>;
 
 using row_hash = cudf::row_hasher<default_hash>;
 
