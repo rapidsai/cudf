@@ -149,12 +149,12 @@ def copy_range(Column input_column,
 
 
 def gather(
-    data: list,
+    columns: list,
     Column gather_map,
     bool nullify=False
 ):
     cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = table_view_from_columns(data)
+    cdef table_view source_table_view = table_view_from_columns(columns)
     cdef column_view gather_map_view = gather_map.view()
     cdef cpp_copying.out_of_bounds_policy policy = (
         cpp_copying.out_of_bounds_policy.NULLIFY if nullify

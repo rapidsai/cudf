@@ -32,26 +32,26 @@ from cudf._lib.utils cimport (
 )
 
 
-def drop_nulls(data: list, how="any", keys=None, thresh=None):
+def drop_nulls(columns: list, how="any", keys=None, thresh=None):
     """
     Drops null rows from cols depending on key columns.
 
     Parameters
     ----------
-    data : list of columns
+    columns : list of columns
     how  : "any" or "all". If thresh is None, drops rows of cols that have any
            nulls or all nulls (respectively) in subset (default: "any")
     keys : List of column indices. If set, then these columns are checked for
-           nulls rather than all of cols (optional)
+           nulls rather than all of columns (optional)
     thresh : Minimum number of non-nulls required to keep a row (optional)
 
     Returns
     -------
-    list of columns with null rows dropped
+    columns with null rows dropped
     """
 
     cdef vector[size_type] cpp_keys = (
-        keys if keys is not None else range(len(data))
+        keys if keys is not None else range(len(columns))
     )
 
     cdef size_type c_keep_threshold = cpp_keys.size()
@@ -61,7 +61,7 @@ def drop_nulls(data: list, how="any", keys=None, thresh=None):
         c_keep_threshold = 1
 
     cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = table_view_from_columns(data)
+    cdef table_view source_table_view = table_view_from_columns(columns)
 
     with nogil:
         c_result = move(
@@ -112,7 +112,7 @@ def apply_boolean_mask(source_table, Column boolean_mask):
     )
 
 
-def drop_duplicates(data: list,
+def drop_duplicates(columns: list,
                     object keys=None,
                     object keep='first',
                     bool nulls_are_equal=True):
@@ -121,19 +121,19 @@ def drop_duplicates(data: list,
 
     Parameters
     ----------
-    data : List of columns
+    columns : List of columns
     keys : List of column indices. If set, then these columns are checked for
-           duplicates rather than all of cols (optional)
+           duplicates rather than all of columns (optional)
     keep : keep 'first' or 'last' or none of the duplicate rows
     nulls_are_equal : if True, nulls are treated equal else not.
 
     Returns
     -------
-    list of columns with duplicate dropped
+    columns with duplicate dropped
     """
 
     cdef vector[size_type] cpp_keys = (
-        keys if keys is not None else range(len(data))
+        keys if keys is not None else range(len(columns))
     )
     cdef duplicate_keep_option cpp_keep_option
 
@@ -153,7 +153,7 @@ def drop_duplicates(data: list,
         else null_equality.UNEQUAL
     )
     cdef unique_ptr[table] c_result
-    cdef table_view source_table_view = table_view_from_columns(data)
+    cdef table_view source_table_view = table_view_from_columns(columns)
 
     with nogil:
         c_result = move(
