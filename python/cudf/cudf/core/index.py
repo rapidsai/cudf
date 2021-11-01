@@ -86,6 +86,11 @@ def _lexsorted_equal_range(
 
 def _index_from_data(data: MutableMapping, name: Any = None):
     """Construct an index of the appropriate type from some data."""
+
+    # TODO: parameter `name` is assumed to be single level name,
+    # which is incompatible with MultiIndex names requirement.
+    # A more generic approach is to rename `name` to `names` and
+    # always assume it to be an iterable.
     if len(data) == 0:
         raise ValueError("Cannot construct Index from any empty Table")
     if len(data) == 1:
