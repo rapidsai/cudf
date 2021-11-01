@@ -26,7 +26,7 @@ class _DtypeKind(enum.IntEnum):
     DATETIME = 22
     CATEGORICAL = 23
 
-class Device(enum.IntEnum):
+class _Device(enum.IntEnum):
     CPU = 1
     CUDA = 2
     CPU_PINNED = 3
