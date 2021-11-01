@@ -213,7 +213,7 @@ class ColumnBase(Column, Serializable):
 
     def dropna(self, drop_nan: bool = False) -> ColumnBase:
         col = self.nans_to_nulls() if drop_nan else self
-        return next(iter(drop_nulls([col])))
+        return drop_nulls([col])[0]
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
@@ -697,9 +697,9 @@ class ColumnBase(Column, Serializable):
         if not _gather_map_is_valid(indices, len(self), nullify):
             raise IndexError("Gather map index is out of bounds.")
 
-        return next(
-            iter(libcudf.copying.gather([self], indices, nullify=nullify,))
-        )._with_type_metadata(self.dtype)
+        return libcudf.copying.gather([self], indices, nullify=nullify,)[
+            0
+        ]._with_type_metadata(self.dtype)
 
     def isin(self, values: Sequence) -> ColumnBase:
         """Check whether values are contained in the Column.
@@ -1088,7 +1088,7 @@ class ColumnBase(Column, Serializable):
         # the following issue resolved:
         # https://github.com/rapidsai/cudf/issues/5286
 
-        return next(iter(drop_duplicates([self], keep="first")))
+        return drop_duplicates([self], keep="first")[0]
 
     def serialize(self) -> Tuple[dict, list]:
         header: Dict[Any, Any] = {}
