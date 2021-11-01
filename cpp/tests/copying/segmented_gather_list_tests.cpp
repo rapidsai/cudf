@@ -35,9 +35,6 @@ using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBo
                                                   cudf::test::TimestampTypes>;
 TYPED_TEST_SUITE(SegmentedGatherTest, FixedWidthTypesNotBool);
 
-class SegmentedGatherTestList : public cudf::test::BaseFixture {
-};
-
 // to disambiguate between {} == 0 and {} == List{0}
 // Also, see note about compiler issues when declaring nested
 // empty lists in lists_column_wrapper documentation
