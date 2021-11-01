@@ -85,7 +85,7 @@ from cudf.utils.utils import (
 
 def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
     """Append a scalar `value` to the end of `col` inplace.
-       Cast to common type if possible
+    Cast to common type if possible
     """
     to_type = find_common_type([type(value), col.dtype])
     val_col = as_column(value, dtype=to_type)
@@ -135,7 +135,11 @@ class _SeriesIlocIndexer(_FrameIndexer):
         if (
             not isinstance(
                 self._frame._column.dtype,
-                (cudf.Decimal64Dtype, cudf.CategoricalDtype),
+                (
+                    cudf.Decimal64Dtype,
+                    cudf.Decimal32Dtype,
+                    cudf.CategoricalDtype,
+                ),
             )
             and hasattr(value, "dtype")
             and _is_non_decimal_numeric_dtype(value.dtype)
@@ -728,7 +732,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         See Also
         --------
-        cudf.core.reshape.concat : General function to concatenate DataFrame or
+        cudf.concat : General function to concatenate DataFrame or
             Series objects.
 
         Examples
@@ -918,6 +922,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         e    14
         dtype: int64
         """
+        warnings.warn(
+            "Series.set_index is deprecated and will be removed in the future",
+            FutureWarning,
+        )
         index = index if isinstance(index, BaseIndex) else as_index(index)
         return self._from_data(self._data, index, self.name)
 
@@ -1156,20 +1164,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     items = SingleColumnFrame.__iter__
 
-    def to_dict(self, into=dict):
-        raise TypeError(
-            "cuDF does not support conversion to host memory "
-            "via `to_dict()` method. Consider using "
-            "`.to_pandas().to_dict()` to construct a Python dictionary."
-        )
-
     def __setitem__(self, key, value):
         if isinstance(key, slice):
             self.iloc[key] = value
         else:
             self.loc[key] = value
 
-    def take(self, indices, keep_index=True):
+    def take(self, indices, axis=0, keep_index=True):
         """
         Return Series by taking values from the corresponding *indices*.
 
@@ -1207,6 +1208,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         1    14
         dtype: int64
         """
+        axis = self._get_axis_from_axis_arg(axis)
         if keep_index is True or is_scalar(indices):
             return self.iloc[indices]
         else:
@@ -2119,19 +2121,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return self._column.data
 
     @property
-    def index(self):
-        """The index object
-        """
-        return self._index
-
-    @index.setter
-    def index(self, _index):
-        self._index = as_index(_index)
-
-    @property
     def nullmask(self):
-        """The gpu buffer for the null-mask
-        """
+        """The gpu buffer for the null-mask"""
         return cudf.Series(self._column.nullmask)
 
     def as_mask(self):
@@ -2737,7 +2728,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             ]
 
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):
-        """Perform label encoding
+        """Perform label encoding.
 
         Parameters
         ----------
@@ -2794,6 +2785,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             FutureWarning,
         )
 
+        return self._label_encoding(cats, dtype, na_sentinel)
+
+    def _label_encoding(self, cats, dtype=None, na_sentinel=-1):
+        # Private implementation of deprecated public label_encoding method
         def _return_sentinel_series():
             return Series(
                 cudf.core.column.full(
@@ -2879,6 +2874,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
 
         Apply a basic function to a series with nulls
+
         >>> sr = cudf.Series([1,cudf.NA,3])
         >>> def f(x):
         ...     return x + 1
@@ -2890,6 +2886,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         Use a function that does something conditionally,
         based on if the value is or is not null
+
         >>> sr = cudf.Series([1,cudf.NA,3])
         >>> def f(x):
         ...     if x is cudf.NA:
@@ -3501,7 +3498,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2     30
         dtype: int64
         >>> series.hash_values(method="murmur3")
-        array([-1930516747,   422619251,  -941520876], dtype=int32)
+        0   -1930516747
+        1     422619251
+        2    -941520876
+        dtype: int32
+        >>> series.hash_values(method="md5")
+        0    7be4bbacbfdb05fb3044e36c22b41e8b
+        1    947ca8d2c5f0f27437f156cfbfab0969
+        2    d0580ef52d27c043c8e341fd5039b166
+        dtype: object
         """
         return Series._from_data(
             {None: self._hash(method=method)}, index=self.index
@@ -5511,8 +5516,8 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     result_col = column.as_column(result)
 
     if a_col.null_count and b_col.null_count:
-        a_nulls = a_col.isna()
-        b_nulls = b_col.isna()
+        a_nulls = a_col.isnull()
+        b_nulls = b_col.isnull()
         null_values = a_nulls | b_nulls
 
         if equal_nan is True:
@@ -5520,9 +5525,9 @@ def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
 
         del a_nulls, b_nulls
     elif a_col.null_count:
-        null_values = a_col.isna()
+        null_values = a_col.isnull()
     elif b_col.null_count:
-        null_values = b_col.isna()
+        null_values = b_col.isnull()
     else:
         return Series(result_col, index=index)
 

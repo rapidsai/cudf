@@ -713,23 +713,25 @@ template std::unique_ptr<groupby_aggregation> make_merge_m2_aggregation<groupby_
 
 /// Factory to create a COVARIANCE aggregation
 template <typename Base>
-std::unique_ptr<Base> make_covariance_aggregation()
+std::unique_ptr<Base> make_covariance_aggregation(size_type min_periods, size_type ddof)
 {
-  return std::make_unique<detail::covariance_aggregation>();
+  return std::make_unique<detail::covariance_aggregation>(min_periods, ddof);
 }
-template std::unique_ptr<aggregation> make_covariance_aggregation<aggregation>();
-template std::unique_ptr<groupby_aggregation> make_covariance_aggregation<groupby_aggregation>();
+template std::unique_ptr<aggregation> make_covariance_aggregation<aggregation>(
+  size_type min_periods, size_type ddof);
+template std::unique_ptr<groupby_aggregation> make_covariance_aggregation<groupby_aggregation>(
+  size_type min_periods, size_type ddof);
 
 /// Factory to create a CORRELATION aggregation
 template <typename Base>
-std::unique_ptr<Base> make_correlation_aggregation(correlation_type type)
+std::unique_ptr<Base> make_correlation_aggregation(correlation_type type, size_type min_periods)
 {
-  return std::make_unique<detail::correlation_aggregation>(type);
+  return std::make_unique<detail::correlation_aggregation>(type, min_periods);
 }
 template std::unique_ptr<aggregation> make_correlation_aggregation<aggregation>(
-  correlation_type type);
+  correlation_type type, size_type min_periods);
 template std::unique_ptr<groupby_aggregation> make_correlation_aggregation<groupby_aggregation>(
-  correlation_type type);
+  correlation_type type, size_type min_periods);
 
 template <typename Base>
 std::unique_ptr<Base> make_tdigest_aggregation(int max_centroids)

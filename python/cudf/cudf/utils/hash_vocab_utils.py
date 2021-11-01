@@ -170,7 +170,7 @@ def _pack_keys_and_values(flattened_hash_table, original_dict):
 
 def _load_vocab_dict(path):
     vocab = {}
-    with open(path, mode="r") as f:
+    with open(path, mode="r", encoding="utf-8") as f:
         counter = 0
         for line in f:
             vocab[line.strip()] = counter
@@ -247,7 +247,7 @@ def hash_vocab(
     sep_token="[SEP]",
 ):
     """
-      Write the vocab vocabulary hashtable to the output_path
+    Write the vocab vocabulary hashtable to the output_path
     """
     np.random.seed(1243342)
     vocab = _load_vocab_dict(vocab_path)

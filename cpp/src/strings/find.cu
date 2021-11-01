@@ -184,7 +184,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
                                     rmm::mr::device_memory_resource* mr)
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::BOOL8});
+  if (strings_count == 0) return make_empty_column(type_id::BOOL8);
 
   CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
   if (target.size() == 0)  // empty target string returns true
@@ -244,7 +244,7 @@ std::unique_ptr<column> contains_fn(strings_column_view const& strings,
                                     rmm::cuda_stream_view stream,
                                     rmm::mr::device_memory_resource* mr)
 {
-  if (strings.is_empty()) return make_empty_column(data_type{type_id::BOOL8});
+  if (strings.is_empty()) return make_empty_column(type_id::BOOL8);
 
   CUDF_EXPECTS(targets.size() == strings.size(),
                "strings and targets column must be the same size");
