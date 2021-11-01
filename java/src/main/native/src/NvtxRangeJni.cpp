@@ -40,7 +40,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_NvtxRange_push(JNIEnv *env, jclass cl
 }
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_NvtxRange_start(JNIEnv *env, jclass clazz, jstring name,
-                                                          jint color_bits) {
+                                                            jint color_bits) {
   try {
     cudf::jni::native_jstring range_name(env, name);
     nvtx3::color range_color(static_cast<nvtx3::color::value_type>(color_bits));
@@ -59,7 +59,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_NvtxRange_pop(JNIEnv *env, jclass cla
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_NvtxRange_end(JNIEnv *env, jclass clazz, 
-                                                          jlong nvtxRangeId) {
+                                                         jlong nvtxRangeId) {
   try {
     nvtxDomainRangeEnd(nvtx3::domain::get<java_domain>(), static_cast<nvtxRangeId_t>(nvtxRangeId));
   }
