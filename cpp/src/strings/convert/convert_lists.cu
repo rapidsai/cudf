@@ -36,7 +36,7 @@ constexpr size_type right_brace_index = 2;
 /**
  * @brief Pending separator type for `stack_item`
  */
-enum class item_separator { NONE, ELEMENT, LIST };
+enum class item_separator : int8_t { NONE, ELEMENT, LIST };
 
 /**
  * @brief Stack item used to manage nested lists.
