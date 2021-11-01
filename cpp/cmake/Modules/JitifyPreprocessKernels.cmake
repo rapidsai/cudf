@@ -26,9 +26,9 @@ function(jit_preprocess_files)
     get_filename_component(jit_output_directory "${ARG_OUTPUT}" DIRECTORY)
     list(APPEND JIT_PREPROCESSED_FILES "${ARG_OUTPUT}")
     add_custom_command(
+      OUTPUT ${ARG_OUTPUT}
       WORKING_DIRECTORY ${ARG_SOURCE_DIRECTORY}
       DEPENDS jitify_preprocess "${ARG_SOURCE_DIRECTORY}/${ARG_FILE}"
-      OUTPUT ${ARG_OUTPUT}
       VERBATIM
       COMMAND ${CMAKE_COMMAND} -E make_directory "${jit_output_directory}"
       COMMAND
