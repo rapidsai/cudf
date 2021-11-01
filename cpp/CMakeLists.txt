@@ -501,11 +501,10 @@ target_include_directories(
   cudf
   PUBLIC "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>"
          "$<BUILD_INTERFACE:${JITIFY_INCLUDE_DIR}>"
-         "$<BUILD_INTERFACE:${LIBCUDACXX_INCLUDE_DIR}>"
          "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
          "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
   PRIVATE "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
-  INTERFACE "$<INSTALL_INTERFACE:include>" "$<INSTALL_INTERFACE:include/libcudf/libcudacxx>"
+  INTERFACE "$<INSTALL_INTERFACE:include>"
 )
 
 target_compile_definitions(
@@ -540,7 +539,7 @@ add_dependencies(cudf jitify_preprocess_run)
 # Specify the target module library dependencies
 target_link_libraries(
   cudf
-  PUBLIC ${ARROW_LIBRARIES} cudf::Thrust rmm::rmm
+  PUBLIC ${ARROW_LIBRARIES} libcudacxx::libcudacxx cudf::Thrust rmm::rmm
   PRIVATE cuco::cuco ZLIB::ZLIB nvcomp::nvcomp
 )
 
@@ -678,12 +677,6 @@ install(DIRECTORY ${CUDF_SOURCE_DIR}/include/cudf ${CUDF_SOURCE_DIR}/include/cud
 )
 
 install(
-  DIRECTORY ${CUDF_GENERATED_INCLUDE_DIR}/include/libcxx
-            ${CUDF_GENERATED_INCLUDE_DIR}/include/libcudacxx
-  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf
-)
-
-install(
   TARGETS cudftestutil
   DESTINATION ${lib_dir}
   EXPORT cudf-testing-exports
@@ -735,36 +728,9 @@ set(common_code_string
 if(NOT TARGET cudf::Thrust)
   thrust_create_target(cudf::Thrust FROM_OPTIONS)
 endif()
-
-# nvcc automatically adds the CUDA Toolkit system include paths before any
-# system include paths that CMake adds.
-#
-# CMake implicitly treats all includes on import targets as 'SYSTEM' includes.
-#
-# To get the cudacxx shipped with cudf to be picked up by consumers instead of the
-# version shipped with the CUDA Toolkit we need to make sure it is a non-SYSTEM
-# include on the CMake side.
-#
-# To do this currently, we move the includes from the cudf::cudf target to a
-# non-import target to ensure they are `-I` instead of `-isystem`
-
-add_library(cudf_non_system_includes INTERFACE)
-target_link_libraries(cudf::cudf INTERFACE cudf_non_system_includes)
-
-get_target_property(all_includes cudf::cudf INTERFACE_INCLUDE_DIRECTORIES)
-set(system_includes )
-set(normal_includes )
-foreach(include IN LISTS all_includes)
-  if(include MATCHES "/libcudacxx")
-    list(APPEND normal_includes "${include}")
-  else()
-    list(APPEND system_includes "${include}")
-  endif()
-endforeach()
-set_target_properties(cudf::cudf PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${system_includes}")
-set_target_properties(cudf_non_system_includes PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${normal_includes}")
 ]=]
 )
+
 set(install_code_string
     [=[
 set(ArrowCUDA_DIR "${Arrow_DIR}")
