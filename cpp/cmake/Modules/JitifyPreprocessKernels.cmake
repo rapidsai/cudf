@@ -17,6 +17,7 @@ add_executable(jitify_preprocess "${JITIFY_INCLUDE_DIR}/jitify2_preprocess.cpp")
 
 target_link_libraries(jitify_preprocess CUDA::cudart ${CMAKE_DL_LIBS})
 
+# Take a list of files to JIT-compile and run them through jitify_preprocess.
 function(jit_preprocess_files)
   cmake_parse_arguments(ARG "" "SOURCE_DIRECTORY" "FILES" ${ARGN})
 
@@ -35,7 +36,8 @@ function(jit_preprocess_files)
         ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files -i -m -std=c++17
         -remove-unused-globals -D__CUDACC_RTC__ -I${CUDF_SOURCE_DIR}/include
         -I${CUDF_SOURCE_DIR}/src -I${LIBCUDACXX_INCLUDE_DIR} -I${CUDAToolkit_INCLUDE_DIRS}
-        --no-preinclude-workarounds --no-replace-pragma-once)
+        --no-preinclude-workarounds --no-replace-pragma-once
+      COMMENT "Custom command to JIT-compile files.")
   endforeach()
   set(JIT_PREPROCESSED_FILES
       "${JIT_PREPROCESSED_FILES}"
@@ -46,7 +48,7 @@ jit_preprocess_files(
   SOURCE_DIRECTORY ${CUDF_SOURCE_DIR}/src FILES binaryop/jit/kernel.cu
   transform/jit/masked_udf_kernel.cu transform/jit/kernel.cu rolling/jit/kernel.cu)
 
-add_custom_target(jitify_preprocess_run DEPENDS ${JIT_PREPROCESSED_FILES})
+add_custom_target(jitify_preprocess_run DEPENDS ${JIT_PREPROCESSED_FILES} COMMENT "Target representing jitified files.")
 
 file(COPY "${LIBCUDACXX_INCLUDE_DIR}/"
      DESTINATION "${CUDF_GENERATED_INCLUDE_DIR}/include/libcudacxx")

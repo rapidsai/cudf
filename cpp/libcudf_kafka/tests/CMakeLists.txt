@@ -15,6 +15,8 @@
 # ##################################################################################################
 # * compiler function -----------------------------------------------------------------------------
 
+# This function takes in a test name and test source and handles setting all of the associated
+# properties and linking to build the test
 function(ConfigureTest test_name)
   add_executable(${test_name} ${ARGN})
   set_target_properties(

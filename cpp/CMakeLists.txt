@@ -795,6 +795,7 @@ add_custom_command(
   OUTPUT CUDF_DOXYGEN
   WORKING_DIRECTORY ${CUDF_SOURCE_DIR}/doxygen
   COMMAND doxygen Doxyfile
-  VERBATIM)
+  VERBATIM
+  COMMENT "Custom command for building cudf doxygen docs.")
 
-add_custom_target(docs_cudf DEPENDS CUDF_DOXYGEN)
+add_custom_target(docs_cudf DEPENDS CUDF_DOXYGEN COMMENT "Custom command for building cudf doxygen docs.")

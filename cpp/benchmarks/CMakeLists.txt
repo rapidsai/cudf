@@ -38,6 +38,8 @@ add_library(
                                synchronization/synchronization.cpp io/cuio_benchmark_common.cpp)
 target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen)
 
+# This function takes in a benchmark name and benchmark source and handles setting all of the
+# associated properties and linking to build the benchmark
 function(ConfigureBench CMAKE_BENCH_NAME)
   add_executable(${CMAKE_BENCH_NAME} ${ARGN})
   set_target_properties(
@@ -47,6 +49,9 @@ function(ConfigureBench CMAKE_BENCH_NAME)
                                                     benchmark::benchmark_main)
 endfunction()
 
+# This function takes in a benchmark name and benchmark source for nvbench benchmarks and
+# handles setting all of the associated properties and linking
+# to build the benchmark
 function(ConfigureNVBench CMAKE_BENCH_NAME)
   add_executable(${CMAKE_BENCH_NAME} ${ARGN})
   set_target_properties(

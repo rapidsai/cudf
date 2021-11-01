@@ -15,6 +15,8 @@
 # ##################################################################################################
 # * compiler function -----------------------------------------------------------------------------
 
+# This function takes in a test name and test source and handles setting all of the associated
+# properties and linking to build the test
 function(ConfigureTest CMAKE_TEST_NAME)
   add_executable(${CMAKE_TEST_NAME} ${ARGN})
   set_target_properties(
