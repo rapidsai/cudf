@@ -36,6 +36,9 @@ class _Device(enum.IntEnum):
     VPI = 9
     ROCM = 10
 
+_k = _DtypeKind
+SUPPORTED_DTYPE = (_k.INT, _k.UINT, _k.FLOAT, _k.CATEGORICAL,
+                   _k.BOOL, _k.STRING)
 
 class _CuDFBuffer:
     """
@@ -50,7 +53,7 @@ class _CuDFBuffer:
         # Store the cudf buffer where the data resides as a private
         # attribute, so we can use it to retrieve the public attributes
         self._buf = buf
-        self._cudf_dtype =  cudf_dtype
+        self._dtype =  dtype
         self._allow_copy = allow_copy
 
     @property
@@ -72,19 +75,19 @@ class _CuDFBuffer:
         DLPack not implemented in NumPy yet, so leave it out here.
         """
         try: 
-            cudarray = cuda.as_cuda_array(self._buf).view(self._cudf_dtype)
+            cudarray = cuda.as_cuda_array(self._buf).view(self._dtype)
             res = cp.asarray(cudarray).toDlpack()
 
         except ValueError:
-            raise TypeError(f'dtype {self._cudf_dtype} unsupported by `dlpack`')
+            raise TypeError(f'dtype {self._dtype} unsupported by `dlpack`')
 
         return res
 
     def __dlpack_device__(self) -> Tuple[_Device, int]:
         """
-        Device type and device ID for where the data in the buffer resides.
+        _Device type and _Device ID for where the data in the buffer resides.
         """
-        return (Device.CUDA, cp.asarray(self._buf).device.id)
+        return (_Device.CUDA, cp.asarray(self._buf).device.id)
 
     def __repr__(self) -> str:
         return f'{self.__class__.__name__}(' + str({'bufsize': self.bufsize,
@@ -268,20 +271,18 @@ class _CuDFColumn:
         mask or a byte mask, the value (0 or 1) indicating a missing value. None
         otherwise.
         """
+        _k = _DtypeKind
+        kind = self.dtype[0]
         if self.null_count == 0:
             # there is no validity mask so it is non-nullable
             return 0, None
-        else :
-            _k = _DtypeKind
-            kind = self.dtype[0]
-            # bit mask is universally used in cudf for missing
-            if kind in (_k.INT, _k.UINT, _k.FLOAT, _k.CATEGORICAL,
-                        _k.BOOL, _k.STRING, _k.DATETIME):
-                return 3, 0
-            else:
-                raise NotImplementedError(f"Data type {self.dtype} not yet supported")
 
-        return null, value
+        elif kind in SUPPORTED_DTYPE:
+            # bit mask is universally used in cudf for missing
+            return 3, 0
+            
+        else:
+            raise NotImplementedError(f"Data type {self.dtype} not yet supported")
 
     @property
     def null_count(self) -> int:
@@ -615,7 +616,7 @@ def _protocol_column_to_cudf_column_numeric(col:ColumnObject) -> \
 
 
 def _check_data_is_on_gpu(buffer : _CuDFBuffer) -> None:
-    if buffer.__dlpack_device__()[0] != Device.CUDA and not buffer._allow_copy:
+    if buffer.__dlpack_device__()[0] != _Device.CUDA and not buffer._allow_copy:
         raise TypeError("This operation must copy data from CPU to GPU. "
                             "Set `allow_copy=True` to allow it.")
 

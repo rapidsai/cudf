@@ -29,8 +29,8 @@ from typing import Any, Tuple
 
 DataFrameObject = Any
 
-def assert_buffer_equal(buffer_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
-    buf, dtype = buffer_dtype
+def assert_buffer_equal(buffer_and_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
+    buf, dtype = buffer_and_dtype
     device_id = cp.asarray(cudfcol.data).device.id
     assert buf.__dlpack_device__() == (2, device_id)
     col_from_buf = build_column(Buffer(buf.ptr, buf.bufsize),
@@ -38,13 +38,14 @@ def assert_buffer_equal(buffer_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
                         )
     # check that non null values are the equals as null are represented
     # by sentinel values in the buffer.
-    non_null_idxs = cudfcol is not None
+    non_null_idxs = cudfcol != None
+    print(non_null_idxs, cudfcol is not None)
     assert_eq(col_from_buf[non_null_idxs], cudfcol[non_null_idxs])
     
     if dtype[0] != _DtypeKind.BOOL:
         array_from_dlpack = cp.fromDlpack(buf.__dlpack__())
         col_array = cp.asarray(cudfcol.data_array_view)
-        assert_eq(array_from_dlpack.all(), col_array.all())
+        assert_eq(array_from_dlpack.flatten(), col_array.flatten())
     else:
         pytest.raises(TypeError, buf.__dlpack__)
 
@@ -54,7 +55,7 @@ def assert_buffer_equal(buffer_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
 def assert_column_equal(col: _CuDFColumn, cudfcol):
     assert col.size == cudfcol.size 
     assert col.offset == 0
-    assert col.null_count == cudfcol.isna().sum() 
+    assert col.null_count == cudfcol.null_count
     assert col.num_chunks() == 1
     if col.null_count == 0 :
         pytest.raises(RuntimeError, col._get_validity_buffer)
@@ -117,12 +118,6 @@ def _test_datatype(data):
     _test_from_dataframe_equals(cdf.__dataframe__(allow_copy=False))
     _test_from_dataframe_equals(cdf.__dataframe__(allow_copy=True))
 
-    # pdf = pd.DataFrame(data=data)
-    # cpu_dfobj = _CuDFDataFrame(pdf)
-    # _test_from_dataframe_exception(cpu_dfobj)
-    # _test_from_dataframe_equals(cpu_dfobj, allow_copy=True)
-    
-
 def test_from_dataframe():
     data = dict(a=[1, 2, 3], b=[9, 10, 11])
     df1 = cudf.DataFrame(data=data)
@@ -154,7 +149,6 @@ def test_bool_dtype():
 def test_string_dtype():
     data_string = dict(a=["a", "b", "cdef", "", "g"])
     _test_datatype(data_string)
-   
 
 
 def test_mixed_dtype():
