@@ -37,7 +37,7 @@ class _Device(enum.IntEnum):
     ROCM = 10
 
 _k = _DtypeKind
-SUPPORTED_DTYPE = (_k.INT, _k.UINT, _k.FLOAT, _k.CATEGORICAL,
+_SUPPORTED_KINDS = (_k.INT, _k.UINT, _k.FLOAT, _k.CATEGORICAL,
                    _k.BOOL, _k.STRING)
 
 class _CuDFBuffer:
@@ -212,7 +212,7 @@ class _CuDFColumn:
                 raise ValueError(f"Data type {dtype} not supported by exchange"
                                  "protocol")
 
-        if kind not in (_k.INT, _k.UINT, _k.FLOAT, _k.BOOL, _k.CATEGORICAL, _k.STRING):
+        if kind not in _SUPPORTED_KINDS:
             raise NotImplementedError(f"Data type {dtype} not handled yet")
 
         bitwidth = dtype.itemsize * 8
@@ -277,7 +277,7 @@ class _CuDFColumn:
             # there is no validity mask so it is non-nullable
             return 0, None
 
-        elif kind in SUPPORTED_DTYPE:
+        elif kind in _SUPPORTED_KINDS:
             # bit mask is universally used in cudf for missing
             return 3, 0
             
@@ -368,7 +368,6 @@ class _CuDFColumn:
             encoded_string = self._col.children[1]
             buffer = _CuDFBuffer(encoded_string.data, encoded_string.dtype, allow_copy=self._allow_copy)
             dtype = self._dtype_from_cudfdtype(encoded_string.dtype) 
-            # dtype = (_k.STRING, 8, "u", "=") 
 
         else:
             raise NotImplementedError(f"Data type {self._col.dtype} not handled yet")
@@ -396,13 +395,11 @@ class _CuDFColumn:
             return buffer, dtype
 
         elif null == 1:
-            msg = "This column uses NaN as null so does not have a separate mask"
+            raise RuntimeError("This column uses NaN as null so does not have a separate mask")
         elif null == 0:   
-            msg = "This column is non-nullable so does not have a mask"
+            raise RuntimeError("This column is non-nullable so does not have a mask")
         else:
-            raise NotImplementedError("See self.describe_null")
-
-        raise RuntimeError(msg)
+            raise NotImplementedError(f"See {self.__class__.__name__}.describe_null method.")
 
     def _get_offsets_buffer(self) -> Tuple[_CuDFBuffer, Any]:
         """
@@ -421,6 +418,7 @@ class _CuDFColumn:
             raise RuntimeError("This column has a fixed-length dtype so does not have an offsets buffer")
 
         return buffer, dtype
+
 
 class _CuDFDataFrame:
     """
@@ -501,9 +499,6 @@ def __dataframe__(self, nan_as_null : bool = False,
     """
     The public method to attach to cudf.DataFrame.
 
-    We'll attach it via monkey-patching here for demo purposes. If Pandas adopts
-    the protocol, this will be a regular method on pandas.DataFrame.
-
     ``nan_as_null`` is a keyword intended for the consumer to tell the
     producer to overwrite null values in the data with ``NaN`` (or ``NaT``).
     This currently has no effect; once support for nullable extension
@@ -513,7 +508,7 @@ def __dataframe__(self, nan_as_null : bool = False,
     allowed to make a copy of the data. For example, copying data would be
     necessary if a library supports strided buffers, given that this protocol
     specifies contiguous buffers.
-    Currently, if the flag is set to ``False`` and a copy is needed, a
+    Currently, if this flag is set to ``False`` and a copy is needed, a
     ``RuntimeError`` will be raised.
     """
     return _CuDFDataFrame(
@@ -609,13 +604,13 @@ def _protocol_column_to_cudf_column_numeric(col:ColumnObject) -> \
         raise NotImplementedError("column.offset > 0 not handled yet")
 
     _dbuffer, _ddtype = col.get_buffers()['data']
-    _check_data_is_on_gpu(_dbuffer)
+    _check_buffer_is_on_gpu(_dbuffer)
     dcol = build_column(Buffer(_dbuffer.ptr, _dbuffer.bufsize), 
                         protocol_dtype_to_cupy_dtype(_ddtype))        
     return _set_missing_values(col, dcol), _dbuffer
 
 
-def _check_data_is_on_gpu(buffer : _CuDFBuffer) -> None:
+def _check_buffer_is_on_gpu(buffer : _CuDFBuffer) -> None:
     if buffer.__dlpack_device__()[0] != _Device.CUDA and not buffer._allow_copy:
         raise TypeError("This operation must copy data from CPU to GPU. "
                             "Set `allow_copy=True` to allow it.")
@@ -637,8 +632,7 @@ def protocol_dtype_to_cupy_dtype(_dtype) -> cp.dtype:
     kind = _dtype[0]
     bitwidth = _dtype[1]
     _k = _DtypeKind
-    if _dtype[0] not in (_k.INT, _k.UINT, _k.FLOAT, _k.BOOL,_k.CATEGORICAL,
-                         _k.STRING, _k.DATETIME):
+    if _dtype[0] not in _SUPPORTED_KINDS:
         raise RuntimeError(f"Data type {_dtype[0]} not handled yet")
    
     return _CP_DTYPES[kind][bitwidth]
@@ -654,7 +648,7 @@ def _protocol_column_to_cudf_column_categorical(col : ColumnObject) -> \
 
     categories = as_column(mapping.values())
     codes_buffer, codes_dtype = col.get_buffers()['data']
-    _check_data_is_on_gpu(codes_buffer)
+    _check_buffer_is_on_gpu(codes_buffer)
     cdtype = protocol_dtype_to_cupy_dtype(codes_dtype)
     codes = build_column(Buffer(codes_buffer.ptr, codes_buffer.bufsize), cdtype)
     
@@ -673,16 +667,17 @@ def _protocol_column_to_cudf_column_string(col : ColumnObject) -> \
     buffers = col.get_buffers()
 
     # Retrieve the data buffer containing the UTF-8 code units
-    dbuffer, bdtype = buffers["data"]
-    _check_data_is_on_gpu(dbuffer)
-    encoded_string = build_column(Buffer(dbuffer.ptr, dbuffer.bufsize),
-                        protocol_dtype_to_cupy_dtype(bdtype)
+    data_buffer, data_dtype = buffers["data"]
+    _check_buffer_is_on_gpu(data_buffer)
+    encoded_string = build_column(Buffer(data_buffer.ptr, data_buffer.bufsize),
+                        protocol_dtype_to_cupy_dtype(data_dtype)
                         )
 
     # Retrieve the offsets buffer containing the index offsets demarcating the beginning and end of each string
-    obuffer, odtype = buffers["offsets"]
-    offsets = build_column(Buffer(obuffer.ptr, obuffer.bufsize), 
-                           protocol_dtype_to_cupy_dtype(odtype)
+    offset_buffer, offset_dtype = buffers["offsets"]
+    _check_buffer_is_on_gpu(offset_buffer)
+    offsets = build_column(Buffer(offset_buffer.ptr, offset_buffer.bufsize), 
+                           protocol_dtype_to_cupy_dtype(offset_dtype)
                            )
     
     col_str = build_column(None, dtype=cp.dtype('O'), children=(offsets, encoded_string))
