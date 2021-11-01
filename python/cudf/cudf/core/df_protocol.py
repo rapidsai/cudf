@@ -337,7 +337,7 @@ class _CuDFColumn:
         buffers["data"] = self._get_data_buffer()
         try:
             buffers["validity"] = self._get_validity_buffer()
-        except:
+        except RuntimeError:
             buffers["validity"] = None
 
         try:
