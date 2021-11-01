@@ -3759,9 +3759,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
               full outer join.
             - inner : use intersection of keys from both frames, similar to
               a SQL inner join.
-            - leftsemi : similar to ``inner`` join, but in addition returns all
-              columns from the left dataframe and ignores all columns from
-              the right dataframe.
+            - leftsemi : similar to ``inner`` join, but only returns columns
+               from the left dataframe and ignores all columns from the
+               right dataframe.
             - leftanti : returns only rows columns from the left dataframe
               for non-matched records. This is exact opposite to ``leftsemi``
               join.
