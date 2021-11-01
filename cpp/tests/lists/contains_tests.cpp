@@ -272,7 +272,7 @@ TYPED_TEST(TypedContainsTest, ScalarKeyNonNullListsWithNullValues)
   {
     // CONTAINS
     auto result   = lists::contains(search_space->view(), *search_key_one);
-    auto expected = bools{{x, 1, x, 0, 0, x, x, 1}, nulls_at({0, 2, 5, 6})};
+    auto expected = bools{0, 1, 0, 0, 0, 0, 0, 1};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
@@ -309,7 +309,7 @@ TYPED_TEST(TypedContainsTest, ScalarKeysWithNullsInLists)
   {
     // CONTAINS.
     auto result   = lists::contains(search_space->view(), *search_key_one);
-    auto expected = bools{{x, 1, x, 0, x, x, x, 1}, nulls_at({0, 2, 4, 5, 6})};
+    auto expected = bools{{0, 1, 0, 0, x, 0, 0, 1}, null_at(4)};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
@@ -345,7 +345,7 @@ TEST_F(ContainsTest, BoolScalarWithNullsInLists)
   {
     // CONTAINS
     auto result   = lists::contains(search_space->view(), *search_key_one);
-    auto expected = bools{{x, 1, 1, 0, x, 1, x, 1}, nulls_at({0, 4, 6})};
+    auto expected = bools{{0, 1, 1, 0, x, 1, 0, 1}, null_at(4)};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
@@ -382,7 +382,7 @@ TEST_F(ContainsTest, StringScalarWithNullsInLists)
   {
     // CONTAINS
     auto result   = lists::contains(search_space->view(), *search_key_one);
-    auto expected = bools{{x, 1, x, 0, x, x, x, 1}, nulls_at({0, 2, 4, 5, 6})};
+    auto expected = bools{{0, 1, 0, 0, x, 0, 0, 1}, null_at(4)};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
@@ -577,7 +577,7 @@ TYPED_TEST(TypedVectorContainsTest, VectorNonNullListsWithNullValues)
   {
     // CONTAINS
     auto result   = lists::contains(search_space->view(), search_keys);
-    auto expected = bools{{x, 1, x, 0, 0, x, x, 1}, nulls_at({0, 2, 5, 6})};
+    auto expected = bools{0, 1, 0, 0, 0, 0, 0, 1};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
@@ -615,7 +615,7 @@ TYPED_TEST(TypedVectorContainsTest, VectorWithNullsInLists)
   {
     // CONTAINS
     auto result   = lists::contains(search_space->view(), search_keys);
-    auto expected = bools{{x, 1, x, 0, x, x, x, 1}, nulls_at({0, 2, 4, 5, 6})};
+    auto expected = bools{{0, 1, 0, 0, x, 0, 0, 1}, null_at(4)};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
@@ -653,7 +653,7 @@ TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNullsInListsAndInSearc
   {
     // CONTAINS
     auto result   = lists::contains(search_space->view(), search_keys);
-    auto expected = bools{{x, 1, x, x, x, x, x, 1}, nulls_at({0, 2, 3, 4, 5, 6})};
+    auto expected = bools{{0, 1, 0, x, x, 0, 0, 1}, nulls_at({3, 4})};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
@@ -692,7 +692,7 @@ TEST_F(ContainsTest, BoolKeyVectorWithNullsInListsAndInSearchKeys)
   {
     // CONTAINS
     auto result   = lists::contains(search_space->view(), search_keys);
-    auto expected = bools{{x, 1, x, x, x, x, x, 1}, nulls_at({0, 2, 3, 4, 5, 6})};
+    auto expected = bools{{0, 1, 0, x, x, 0, 0, 1}, nulls_at({3, 4})};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
@@ -730,7 +730,7 @@ TEST_F(ContainsTest, StringKeyVectorWithNullsInListsAndInSearchKeys)
   {
     // CONTAINS
     auto result   = lists::contains(search_space->view(), search_keys);
-    auto expected = bools{{x, 1, x, x, x, x, x, 1}, nulls_at({0, 2, 3, 4, 5, 6})};
+    auto expected = bools{{0, 1, 0, x, x, 0, 0, 1}, nulls_at({3, 4})};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
@@ -894,7 +894,7 @@ TYPED_TEST(TypedContainsNaNsTest, ListWithNaNsContainsVector)
     {
       // CONTAINS
       auto result   = lists::contains(search_space->view(), search_keys->view());
-      auto expected = bools{{1, 0, 0, 0, 1, 0, 1, 0, 1, 0}, nulls_at({1, 2})};
+      auto expected = bools{{1, 0, 0, 0, 1, 0, 1, 0, 1, 0}, null_at(2)};
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
     }
     {
@@ -919,7 +919,7 @@ TYPED_TEST(TypedContainsNaNsTest, ListWithNaNsContainsVector)
     {
       // CONTAINS
       auto result   = lists::contains(search_space->view(), search_keys->view());
-      auto expected = bools{{1, 0, 0, 0, 1, 0, 1, 0, 1, 0}, null_at(1)};
+      auto expected = bools{1, 0, 0, 0, 1, 0, 1, 0, 1, 0};
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
     }
     {

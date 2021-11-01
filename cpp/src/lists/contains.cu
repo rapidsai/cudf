@@ -121,8 +121,7 @@ struct finder<duplicate_find_option::FIND_LAST> {
 /**
  * @brief Functor to search each list row for the specified search keys.
  */
-template <search_key_nulls search_keys_have_nulls,
-          if_lists_contain_nulls nullify_if_lists_contain_nulls = if_lists_contain_nulls::NULLIFY>
+template <search_key_nulls search_keys_have_nulls>
 struct lookup_functor {
   template <typename ElementType>
   struct is_supported {
@@ -181,17 +180,18 @@ struct lookup_functor {
         auto list = cudf::list_device_view(d_lists, row_index);
         if (list.is_null()) { return {absent_index, false}; }
 
-        auto const [position, is_found] =
-          find_option == duplicate_find_option::FIND_FIRST
-            ? finder<duplicate_find_option::FIND_FIRST>{}(list, search_key)
-            : finder<duplicate_find_option::FIND_LAST>{}(list, search_key);
+        auto const [position, _] = find_option == duplicate_find_option::FIND_FIRST
+                                     ? finder<duplicate_find_option::FIND_FIRST>{}(list, search_key)
+                                     : finder<duplicate_find_option::FIND_LAST>{}(list, search_key);
+        /* // DELETEME!
         bool is_valid =
           is_found || !nullify_if_lists_contain_nulls ||
           thrust::none_of(thrust::seq,
                           thrust::make_counting_iterator(size_type{0}),
                           thrust::make_counting_iterator(list.size()),
                           [&list] __device__(auto const& i) { return list.is_null(i); });
-        return {position, is_valid};
+                          */
+        return {position, true};
       });
   }
 
@@ -284,12 +284,7 @@ namespace detail {
  *                                duplicate_find_option,
  *                                rmm::mr::device_memory_resource*)
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @tparam nullify Choice of nullification semantics:
- *   1. Whether to nullify the output if the search key is not found *and* the list
- *      contains null elements, as in `cudf::lists::contains()`
- *   2. Not to nullify the output even if the search key isn't found.
  */
-template <if_lists_contain_nulls nullify = if_lists_contain_nulls::DONT_NULLIFY>
 std::unique_ptr<column> index_of(
   cudf::lists_column_view const& lists,
   cudf::scalar const& search_key,
@@ -299,14 +294,14 @@ std::unique_ptr<column> index_of(
 {
   return search_key.is_valid(stream)
            ? cudf::type_dispatcher(search_key.type(),
-                                   lookup_functor<search_key_nulls::NO_NULLS, nullify>{},
+                                   lookup_functor<search_key_nulls::NO_NULLS>{},
                                    lists,
                                    search_key,
                                    find_option,
                                    stream,
                                    mr)
            : cudf::type_dispatcher(search_key.type(),
-                                   lookup_functor<search_key_nulls::HAS_NULLS, nullify>{},
+                                   lookup_functor<search_key_nulls::HAS_NULLS>{},
                                    lists,
                                    search_key,
                                    find_option,
@@ -320,13 +315,7 @@ std::unique_ptr<column> index_of(
  *                                duplicate_find_option,
  *                                rmm::mr::device_memory_resource*)
  * @param stream CUDA stream used for device memory operations and kernel launches.
- * @tparam nullify Choice of nullification semantics:
- *   1. Whether to nullify the output if the search key is not found *and* the list
- *      contains null elements, as in `cudf::lists::contains()`
- *   2. Not to nullify the output even if the search key isn't found as with
- *      `cudf::lists::index_of()`.
  */
-template <if_lists_contain_nulls nullify = if_lists_contain_nulls::DONT_NULLIFY>
 std::unique_ptr<column> index_of(
   cudf::lists_column_view const& lists,
   cudf::column_view const& search_keys,
@@ -339,14 +328,14 @@ std::unique_ptr<column> index_of(
 
   return search_keys.has_nulls()
            ? cudf::type_dispatcher(search_keys.type(),
-                                   lookup_functor<search_key_nulls::HAS_NULLS, nullify>{},
+                                   lookup_functor<search_key_nulls::HAS_NULLS>{},
                                    lists,
                                    search_keys,
                                    find_option,
                                    stream,
                                    mr)
            : cudf::type_dispatcher(search_keys.type(),
-                                   lookup_functor<search_key_nulls::NO_NULLS, nullify>{},
+                                   lookup_functor<search_key_nulls::NO_NULLS>{},
                                    lists,
                                    search_keys,
                                    find_option,
@@ -365,10 +354,8 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  return to_contains(index_of<if_lists_contain_nulls::NULLIFY>(
-                       lists, search_key, duplicate_find_option::FIND_FIRST, stream),
-                     stream,
-                     mr);
+  return to_contains(
+    index_of(lists, search_key, duplicate_find_option::FIND_FIRST, stream), stream, mr);
 }
 
 /**
@@ -385,10 +372,8 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
   CUDF_EXPECTS(search_keys.size() == lists.size(),
                "Number of search keys must match list column size.");
 
-  return to_contains(index_of<if_lists_contain_nulls::NULLIFY>(
-                       lists, search_keys, duplicate_find_option::FIND_FIRST, stream),
-                     stream,
-                     mr);
+  return to_contains(
+    index_of(lists, search_keys, duplicate_find_option::FIND_FIRST, stream), stream, mr);
 }
 
 }  // namespace detail
