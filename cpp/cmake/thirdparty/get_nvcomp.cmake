@@ -32,6 +32,11 @@ function(find_and_configure_nvcomp VERSION)
         add_library(nvcomp::nvcomp ALIAS nvcomp)
     endif()
 
+    # Per-thread default stream
+    if(TARGET nvcomp AND PER_THREAD_DEFAULT_STREAM)
+        target_compile_definitions(nvcomp PRIVATE CUDA_API_PER_THREAD_DEFAULT_STREAM)
+    endif()
+
 endfunction()
 
 set(CUDF_MIN_VERSION_nvCOMP 2.1.0)
