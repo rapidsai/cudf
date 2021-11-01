@@ -426,7 +426,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
   std::vector<std::unique_ptr<column>> results;
   auto const strings_count = strings_column.size();
   if (strings_count == 0) {
-    results.push_back(make_empty_column(data_type{type_id::STRING}));
+    results.push_back(make_empty_column(type_id::STRING));
     return std::make_unique<table>(std::move(results));
   }
 
@@ -800,7 +800,7 @@ std::unique_ptr<table> split(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
   size_type max_tokens = 0;
   if (maxsplit > 0) max_tokens = maxsplit + 1;  // makes consistent with Pandas
@@ -825,7 +825,7 @@ std::unique_ptr<table> rsplit(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
 
   size_type max_tokens = 0;
   if (maxsplit > 0) max_tokens = maxsplit + 1;  // makes consistent with Pandas

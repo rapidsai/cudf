@@ -66,6 +66,7 @@ struct contains_fn {
 std::unique_ptr<column> contains_util(
   strings_column_view const& strings,
   std::string const& pattern,
+  regex_flags const flags,
   bool beginning_only                 = false,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
@@ -75,7 +76,8 @@ std::unique_ptr<column> contains_util(
   auto d_column       = *strings_column;
 
   // compile regex into device object
-  auto prog   = reprog_device::create(pattern, get_character_flags_table(), strings_count, stream);
+  auto prog =
+    reprog_device::create(pattern, flags, get_character_flags_table(), strings_count, stream);
   auto d_prog = *prog;
 
   // create the output column
@@ -123,19 +125,21 @@ std::unique_ptr<column> contains_util(
 std::unique_ptr<column> contains_re(
   strings_column_view const& strings,
   std::string const& pattern,
+  regex_flags const flags,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  return contains_util(strings, pattern, false, stream, mr);
+  return contains_util(strings, pattern, flags, false, stream, mr);
 }
 
 std::unique_ptr<column> matches_re(
   strings_column_view const& strings,
   std::string const& pattern,
+  regex_flags const flags,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  return contains_util(strings, pattern, true, stream, mr);
+  return contains_util(strings, pattern, flags, true, stream, mr);
 }
 
 }  // namespace detail
@@ -144,18 +148,20 @@ std::unique_ptr<column> matches_re(
 
 std::unique_ptr<column> contains_re(strings_column_view const& strings,
                                     std::string const& pattern,
+                                    regex_flags const flags,
                                     rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains_re(strings, pattern, rmm::cuda_stream_default, mr);
+  return detail::contains_re(strings, pattern, flags, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> matches_re(strings_column_view const& strings,
                                    std::string const& pattern,
+                                   regex_flags const flags,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::matches_re(strings, pattern, rmm::cuda_stream_default, mr);
+  return detail::matches_re(strings, pattern, flags, rmm::cuda_stream_default, mr);
 }
 
 namespace detail {
@@ -190,6 +196,7 @@ struct count_fn {
 std::unique_ptr<column> count_re(
   strings_column_view const& strings,
   std::string const& pattern,
+  regex_flags const flags,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -198,7 +205,8 @@ std::unique_ptr<column> count_re(
   auto d_column       = *strings_column;
 
   // compile regex into device object
-  auto prog   = reprog_device::create(pattern, get_character_flags_table(), strings_count, stream);
+  auto prog =
+    reprog_device::create(pattern, flags, get_character_flags_table(), strings_count, stream);
   auto d_prog = *prog;
 
   // create the output column
@@ -247,10 +255,11 @@ std::unique_ptr<column> count_re(
 
 std::unique_ptr<column> count_re(strings_column_view const& strings,
                                  std::string const& pattern,
+                                 regex_flags const flags,
                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::count_re(strings, pattern, rmm::cuda_stream_default, mr);
+  return detail::count_re(strings, pattern, flags, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

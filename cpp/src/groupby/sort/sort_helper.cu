@@ -23,9 +23,11 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/sorting.hpp>
+#include <cudf/detail/structs/utilities.hpp>
+#include <cudf/strings/string_view.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
-#include <structs/utilities.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -100,10 +102,11 @@ sort_groupby_helper::sort_groupby_helper(table_view const& keys,
 {
   using namespace cudf::structs::detail;
 
-  auto [flattened_keys, _, __, struct_null_vectors] =
-    flatten_nested_columns(keys, {}, {}, column_nullability::FORCE);
-  _struct_null_vectors = std::move(struct_null_vectors);
-  _keys                = flattened_keys;
+  _flattened                 = flatten_nested_columns(keys, {}, {}, column_nullability::FORCE);
+  _keys                      = _flattened;
+  auto is_supported_key_type = [](auto col) { return cudf::is_equality_comparable(col.type()); };
+  CUDF_EXPECTS(std::all_of(_keys.begin(), _keys.end(), is_supported_key_type),
+               "Unsupported groupby key type does not support equality comparison");
 
   // Cannot depend on caller's sorting if the column contains nulls,
   // and null values are to be excluded.

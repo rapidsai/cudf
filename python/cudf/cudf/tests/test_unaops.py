@@ -19,16 +19,16 @@ _unaops = [operator.abs, operator.invert, operator.neg, np.ceil, np.floor]
 def test_series_abs(dtype):
     arr = (np.random.random(1000) * 100).astype(dtype)
     sr = Series(arr)
-    np.testing.assert_equal(sr.abs().to_array(), np.abs(arr))
-    np.testing.assert_equal(abs(sr).to_array(), abs(arr))
+    np.testing.assert_equal(sr.abs().to_numpy(), np.abs(arr))
+    np.testing.assert_equal(abs(sr).to_numpy(), abs(arr))
 
 
 @pytest.mark.parametrize("dtype", utils.INTEGER_TYPES)
 def test_series_invert(dtype):
     arr = (np.random.random(1000) * 100).astype(dtype)
     sr = Series(arr)
-    np.testing.assert_equal((~sr).to_array(), np.invert(arr))
-    np.testing.assert_equal((~sr).to_array(), ~arr)
+    np.testing.assert_equal((~sr).to_numpy(), np.invert(arr))
+    np.testing.assert_equal((~sr).to_numpy(), ~arr)
 
 
 @pytest.mark.parametrize("dtype", utils.INTEGER_TYPES + ["bool"])
@@ -41,28 +41,28 @@ def test_series_not(dtype):
         arr = arr * (np.random.random(1000) * 100).astype(dtype)
     sr = Series(arr)
 
-    result = cudf.logical_not(sr).to_array()
+    result = cudf.logical_not(sr).to_numpy()
     expect = np.logical_not(arr)
     np.testing.assert_equal(result, expect)
-    np.testing.assert_equal((~sr).to_array(), ~arr)
+    np.testing.assert_equal((~sr).to_numpy(), ~arr)
 
 
 def test_series_neg():
     arr = np.random.random(100) * 100
     sr = Series(arr)
-    np.testing.assert_equal((-sr).to_array(), -arr)
+    np.testing.assert_equal((-sr).to_numpy(), -arr)
 
 
 def test_series_ceil():
     arr = np.random.random(100) * 100
     sr = Series(arr)
-    np.testing.assert_equal(sr.ceil().to_array(), np.ceil(arr))
+    np.testing.assert_equal(sr.ceil().to_numpy(), np.ceil(arr))
 
 
 def test_series_floor():
     arr = np.random.random(100) * 100
     sr = Series(arr)
-    np.testing.assert_equal(sr.floor().to_array(), np.floor(arr))
+    np.testing.assert_equal(sr.floor().to_numpy(), np.floor(arr))
 
 
 @pytest.mark.parametrize("nelem", [1, 7, 8, 9, 32, 64, 128])
@@ -77,7 +77,7 @@ def test_validity_ceil(nelem):
     res = sr.ceil()
 
     na_value = -100000
-    got = res.fillna(na_value).to_array()
+    got = res.fillna(na_value).to_numpy()
     res_mask = np.asarray(bitmask, dtype=np.bool_)[: data.size]
 
     expect = np.ceil(data)

@@ -16,8 +16,6 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/gather.cuh>
-#include <cudf/detail/gather.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
@@ -303,6 +301,21 @@ std::unique_ptr<table> scatter(table_view const& source,
   auto map_begin = indexalator_factory::make_input_iterator(scatter_map);
   auto map_end   = map_begin + scatter_map.size();
   return detail::scatter(source, map_begin, map_end, target, check_bounds, stream, mr);
+}
+
+std::unique_ptr<table> scatter(table_view const& source,
+                               device_span<size_type const> const scatter_map,
+                               table_view const& target,
+                               bool check_bounds,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(scatter_map.size() <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
+               "invalid scatter map size");
+  auto map_col = column_view(data_type{type_to_id<size_type>()},
+                             static_cast<size_type>(scatter_map.size()),
+                             scatter_map.data());
+  return scatter(source, map_col, target, check_bounds, stream, mr);
 }
 
 std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<const scalar>> const& source,

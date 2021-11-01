@@ -21,7 +21,7 @@ function(find_and_configure_nvcomp VERSION)
         GLOBAL_TARGETS     nvcomp::nvcomp
         CPM_ARGS
             GITHUB_REPOSITORY  NVIDIA/nvcomp
-            GIT_TAG            4f4e5713e69473be6e0c8ae483a932f666ae3c2f
+            GIT_TAG            c435afaf4ba8a8d12f379d688effcb185886cec1
             OPTIONS            "BUILD_STATIC ON"
                                "BUILD_TESTS OFF"
                                "BUILD_BENCHMARKS OFF"
@@ -30,6 +30,11 @@ function(find_and_configure_nvcomp VERSION)
 
     if(NOT TARGET nvcomp::nvcomp)
         add_library(nvcomp::nvcomp ALIAS nvcomp)
+    endif()
+
+    # Per-thread default stream
+    if(TARGET nvcomp AND PER_THREAD_DEFAULT_STREAM)
+        target_compile_definitions(nvcomp PRIVATE CUDA_API_PER_THREAD_DEFAULT_STREAM)
     endif()
 
 endfunction()

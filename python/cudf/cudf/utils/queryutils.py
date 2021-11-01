@@ -5,7 +5,6 @@ import datetime as dt
 from typing import Any, Dict
 
 import numpy as np
-import six
 from numba import cuda
 
 import cudf
@@ -91,7 +90,7 @@ def query_builder(info, funcid):
     lines = [def_line, "    return {}".format(info["source"])]
     source = "\n".join(lines)
     glbs = {}
-    six.exec_(source, glbs)
+    exec(source, glbs)
     return glbs[funcid]
 
 
@@ -157,8 +156,7 @@ def {kernelname}(out, {args}):
 
 
 def _wrap_query_expr(name, fn, args):
-    """Wrap the query expression in a cuda kernel.
-    """
+    """Wrap the query expression in a cuda kernel."""
 
     def _add_idx(arg):
         if arg.startswith(ENVREF_PREFIX):
@@ -177,7 +175,7 @@ def _wrap_query_expr(name, fn, args):
         args=", ".join(kernargs),
         indiced_args=", ".join(indiced_args),
     )
-    six.exec_(src, glbls)
+    exec(src, glbls)
     kernel = glbls[name]
     return kernel
 

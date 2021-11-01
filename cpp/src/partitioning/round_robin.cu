@@ -65,13 +65,13 @@ namespace {
  * (offsets, indices) = (row_offsets, col_indices) of transpose_dbg;
  * where (row_offsets, col_indices) are the CSR format of the graph;
  *
- * @Param[in] input The input table to be round-robin partitioned
- * @Param[in] num_partitions Number of partitions for the table
- * @Param[in] start_partition Index of the 1st partition
- * @Param[in] mr Device memory resource used to allocate the returned table's device memory
- * @Param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] input The input table to be round-robin partitioned
+ * @param[in] num_partitions Number of partitions for the table
+ * @param[in] start_partition Index of the 1st partition
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr Device memory resource used to allocate the returned table's device memory
  *
- * @Returns A std::pair consisting of a unique_ptr to the partitioned table and the partition
+ * @returns A std::pair consisting of a unique_ptr to the partitioned table and the partition
  * offsets for each partition within the table
  */
 std::pair<std::unique_ptr<cudf::table>, std::vector<cudf::size_type>> degenerate_partitions(

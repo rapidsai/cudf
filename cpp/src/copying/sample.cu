@@ -70,8 +70,9 @@ std::unique_ptr<table> sample(table_view const& input,
                          gather_map_mutable_view.begin<size_type>(),
                          thrust::default_random_engine(seed));
 
-    auto gather_map_view =
-      (n == num_rows) ? gather_map->view() : cudf::slice(gather_map->view(), {0, n})[0];
+    auto gather_map_view = (n == num_rows)
+                             ? gather_map->view()
+                             : cudf::detail::slice(gather_map->view(), {0, n}, stream)[0];
     return detail::gather(input,
                           gather_map_view.begin<size_type>(),
                           gather_map_view.end<size_type>(),

@@ -22,14 +22,13 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/aggregation/result_cache.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
-
-#include <structs/utilities.hpp>
 
 #include <memory>
 
@@ -68,10 +67,10 @@ struct scan_result_functor final : store_result_functor {
 template <>
 void scan_result_functor::operator()<aggregation::SUM>(aggregation const& agg)
 {
-  if (cache.has_result(col_idx, agg)) return;
+  if (cache.has_result(values, agg)) return;
 
   cache.add_result(
-    col_idx,
+    values,
     agg,
     detail::sum_scan(
       get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr));
@@ -80,10 +79,10 @@ void scan_result_functor::operator()<aggregation::SUM>(aggregation const& agg)
 template <>
 void scan_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
 {
-  if (cache.has_result(col_idx, agg)) return;
+  if (cache.has_result(values, agg)) return;
 
   cache.add_result(
-    col_idx,
+    values,
     agg,
     detail::min_scan(
       get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr));
@@ -92,10 +91,10 @@ void scan_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
 template <>
 void scan_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
 {
-  if (cache.has_result(col_idx, agg)) return;
+  if (cache.has_result(values, agg)) return;
 
   cache.add_result(
-    col_idx,
+    values,
     agg,
     detail::max_scan(
       get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr));
@@ -104,15 +103,15 @@ void scan_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
 template <>
 void scan_result_functor::operator()<aggregation::COUNT_ALL>(aggregation const& agg)
 {
-  if (cache.has_result(col_idx, agg)) return;
+  if (cache.has_result(values, agg)) return;
 
-  cache.add_result(col_idx, agg, detail::count_scan(helper.group_labels(stream), stream, mr));
+  cache.add_result(values, agg, detail::count_scan(helper.group_labels(stream), stream, mr));
 }
 
 template <>
 void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
 {
-  if (cache.has_result(col_idx, agg)) return;
+  if (cache.has_result(values, agg)) return;
   CUDF_EXPECTS(helper.is_presorted(),
                "Rank aggregate in groupby scan requires the keys to be presorted");
   auto const order_by = get_grouped_values();
@@ -120,7 +119,7 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
                "Unsupported list type in grouped rank scan.");
 
   cache.add_result(
-    col_idx,
+    values,
     agg,
     detail::rank_scan(
       order_by, helper.group_labels(stream), helper.group_offsets(stream), stream, mr));
@@ -129,7 +128,7 @@ void scan_result_functor::operator()<aggregation::RANK>(aggregation const& agg)
 template <>
 void scan_result_functor::operator()<aggregation::DENSE_RANK>(aggregation const& agg)
 {
-  if (cache.has_result(col_idx, agg)) return;
+  if (cache.has_result(values, agg)) return;
   CUDF_EXPECTS(helper.is_presorted(),
                "Dense rank aggregate in groupby scan requires the keys to be presorted");
   auto const order_by = get_grouped_values();
@@ -137,7 +136,7 @@ void scan_result_functor::operator()<aggregation::DENSE_RANK>(aggregation const&
                "Unsupported list type in grouped dense_rank scan.");
 
   cache.add_result(
-    col_idx,
+    values,
     agg,
     detail::dense_rank_scan(
       order_by, helper.group_labels(stream), helper.group_offsets(stream), stream, mr));
@@ -155,10 +154,9 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::sort
   // sum and count. std depends on mean and count
   cudf::detail::result_cache cache(requests.size());
 
-  for (size_t i = 0; i < requests.size(); i++) {
-    auto store_functor =
-      detail::scan_result_functor(i, requests[i].values, helper(), cache, stream, mr);
-    for (auto const& aggregation : requests[i].aggregations) {
+  for (auto const& request : requests) {
+    auto store_functor = detail::scan_result_functor(request.values, helper(), cache, stream, mr);
+    for (auto const& aggregation : request.aggregations) {
       // TODO (dm): single pass compute all supported reductions
       cudf::detail::aggregation_dispatcher(aggregation->kind, store_functor, *aggregation);
     }

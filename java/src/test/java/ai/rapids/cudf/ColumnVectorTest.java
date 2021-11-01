@@ -3085,6 +3085,17 @@ public class ColumnVectorTest extends CudfTestBase {
              ColumnVector result = v1.rollingWindow(RollingAggregation.lag(1, defaultOutput), options)) {
           assertColumnsAreEqual(expected, result);
         }
+
+        try (ColumnVector expected = ColumnVector.fromBoxedDoubles(0.7071d, 1.5275d, 1.5275d, 1d, 1.4142);
+             ColumnVector result = v1.rollingWindow(RollingAggregation.standardDeviation(), options)) {
+          assertColumnsAreEqual(expected, result);
+        }
+
+        try (ColumnVector expected =
+                 ColumnVector.fromBoxedDoubles(Double.POSITIVE_INFINITY, 2.1602d, 2.1602d, 1.4142d, Double.POSITIVE_INFINITY);
+             ColumnVector result = v1.rollingWindow(RollingAggregation.standardDeviation(2), options)) {
+          assertColumnsAreEqual(expected, result);
+        }
       }
     }
   }
@@ -5408,6 +5419,17 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list3);
          ColumnVector res = cv.getMapValue(Scalar.fromString("a"));
          ColumnVector expected = ColumnVector.fromStrings("b", "c", null)) {
+      assertColumnsAreEqual(expected, res);
+    }
+  }
+
+  @Test
+  void testGetMapValueEmptyInput() {
+    HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
+        new HostColumnVector.BasicType(true, DType.STRING)));
+    try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType));
+         ColumnVector res = cv.getMapValue(Scalar.fromString("a"));
+         ColumnVector expected = ColumnVector.fromStrings()) {
       assertColumnsAreEqual(expected, res);
     }
   }

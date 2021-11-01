@@ -22,8 +22,8 @@ function(find_and_configure_cucollections)
     rapids_cpm_find(cuco 0.0
         GLOBAL_TARGETS cuco::cuco
         CPM_ARGS
-            GITHUB_REPOSITORY PointKernel/cuCollections
-            GIT_TAG           static-multi-map
+            GITHUB_REPOSITORY NVIDIA/cuCollections
+            GIT_TAG           62b90b7f7adf272455007b1c857e1d621aaf13ca
             OPTIONS           "BUILD_TESTS OFF"
                               "BUILD_BENCHMARKS OFF"
                               "BUILD_EXAMPLES OFF"

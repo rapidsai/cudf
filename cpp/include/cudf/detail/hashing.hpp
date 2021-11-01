@@ -19,6 +19,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <cstddef>
+#include <functional>
+
 namespace cudf {
 namespace detail {
 
@@ -53,5 +56,38 @@ std::unique_ptr<column> serial_murmur_hash3_32(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/* Copyright 2005-2014 Daniel James.
+ *
+ * Use, modification and distribution is subject to the Boost Software
+ * License, Version 1.0. (See accompanying file LICENSE_1_0.txt or copy at
+ * http://www.boost.org/LICENSE_1_0.txt)
+ */
+/**
+ * @brief Combines two hashed values into a single hashed value.
+ *
+ * Adapted from Boost hash_combine function, modified for 64-bit
+ * https://www.boost.org/doc/libs/1_35_0/doc/html/boost/hash_combine_id241013.html
+ *
+ * @param lhs The first hashed value
+ * @param rhs The second hashed value
+ * @return Combined hash value
+ */
+constexpr std::size_t hash_combine(std::size_t lhs, std::size_t rhs)
+{
+  lhs ^= rhs + 0x9e3779b97f4a7c15 + (lhs << 6) + (lhs >> 2);
+  return lhs;
+}
 }  // namespace detail
 }  // namespace cudf
+
+// specialization of std::hash for cudf::data_type
+namespace std {
+template <>
+struct hash<cudf::data_type> {
+  std::size_t operator()(cudf::data_type const& type) const noexcept
+  {
+    return cudf::detail::hash_combine(std::hash<int32_t>{}(static_cast<int32_t>(type.id())),
+                                      std::hash<int32_t>{}(type.scale()));
+  }
+};
+}  // namespace std

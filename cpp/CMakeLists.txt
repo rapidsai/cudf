@@ -16,7 +16,7 @@
 
 cmake_minimum_required(VERSION 3.20.1 FATAL_ERROR)
 
-file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-21.10/RAPIDS.cmake
+file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-21.12/RAPIDS.cmake
     ${CMAKE_BINARY_DIR}/RAPIDS.cmake)
 include(${CMAKE_BINARY_DIR}/RAPIDS.cmake)
 
@@ -28,7 +28,7 @@ include(rapids-find)
 
 rapids_cuda_init_architectures(CUDF)
 
-project(CUDF VERSION 21.10.00 LANGUAGES C CXX CUDA)
+project(CUDF VERSION 21.12.00 LANGUAGES C CXX CUDA)
 
 # Needed because GoogleBenchmark changes the state of FindThreads.cmake,
 # causing subsequent runs to have different values for the `Threads::Threads` target.
@@ -97,14 +97,18 @@ rapids_find_package(CUDAToolkit REQUIRED
     INSTALL_EXPORT_SET cudf-exports)
 include(cmake/Modules/ConfigureCUDA.cmake) # set other CUDA compilation flags
 
+# ctest cuda memcheck
+find_program(CUDA_SANITIZER compute-sanitizer)
+set(MEMORYCHECK_COMMAND ${CUDA_SANITIZER})
+set(MEMORYCHECK_TYPE CudaSanitizer)
+set(CUDA_SANITIZER_COMMAND_OPTIONS "--tool memcheck")
 
 ###################################################################################################
 # - dependencies ----------------------------------------------------------------------------------
 
 # find zlib
-rapids_find_package(ZLIB REQUIRED
-    BUILD_EXPORT_SET cudf-exports
-    INSTALL_EXPORT_SET cudf-exports)
+rapids_find_package(ZLIB REQUIRED)
+
 # find Threads (needed by cudftestutil)
 rapids_find_package(Threads REQUIRED
     BUILD_EXPORT_SET cudf-exports
@@ -220,6 +224,7 @@ add_library(cudf
     src/groupby/sort/group_argmax.cu
     src/groupby/sort/group_argmin.cu
     src/groupby/sort/group_collect.cu
+    src/groupby/sort/group_correlation.cu
     src/groupby/sort/group_count.cu
     src/groupby/sort/group_m2.cu
     src/groupby/sort/group_max.cu
@@ -237,8 +242,9 @@ add_library(cudf
     src/groupby/sort/group_max_scan.cu
     src/groupby/sort/group_min_scan.cu
     src/groupby/sort/group_rank_scan.cu
-    src/groupby/sort/group_sum_scan.cu
     src/groupby/sort/group_replace_nulls.cu
+    src/groupby/sort/group_sum_scan.cu
+    src/groupby/sort/group_tdigest.cu
     src/groupby/sort/sort_helper.cu
     src/hash/hashing.cu
     src/hash/md5_hash.cu
@@ -264,6 +270,7 @@ add_library(cudf
     src/io/functions.cpp
     src/io/json/json_gpu.cu
     src/io/json/reader_impl.cu
+    src/io/orc/aggregate_orc_metadata.cpp
     src/io/orc/dict_enc.cu
     src/io/orc/orc.cpp
     src/io/orc/reader_impl.cu
@@ -319,6 +326,8 @@ add_library(cudf
     src/merge/merge.cu
     src/partitioning/partitioning.cu
     src/partitioning/round_robin.cu
+    src/quantiles/tdigest/tdigest.cu
+    src/quantiles/tdigest/tdigest_column_view.cpp
     src/quantiles/quantile.cu
     src/quantiles/quantiles.cu
     src/reductions/all.cu
@@ -330,6 +339,7 @@ add_library(cudf
     src/reductions/nth_element.cu
     src/reductions/product.cu
     src/reductions/reductions.cpp
+    src/reductions/scan/rank_scan.cu
     src/reductions/scan/scan.cpp
     src/reductions/scan/scan_exclusive.cu
     src/reductions/scan/scan_inclusive.cu
@@ -435,6 +445,7 @@ add_library(cudf
     src/transform/encode.cu
     src/transform/mask_to_bools.cu
     src/transform/nans_to_nulls.cu
+    src/transform/one_hot_encode.cu
     src/transform/row_bit_count.cu
     src/transform/transform.cpp
     src/transpose/transpose.cu
@@ -467,13 +478,10 @@ target_compile_options(cudf
 target_include_directories(cudf
            PUBLIC      "$<BUILD_INTERFACE:${DLPACK_INCLUDE_DIR}>"
                        "$<BUILD_INTERFACE:${JITIFY_INCLUDE_DIR}>"
-                       "$<BUILD_INTERFACE:${LIBCUDACXX_INCLUDE_DIR}>"
                        "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/include>"
                        "$<BUILD_INTERFACE:${CUDF_GENERATED_INCLUDE_DIR}/include>"
            PRIVATE     "$<BUILD_INTERFACE:${CUDF_SOURCE_DIR}/src>"
-           INTERFACE   "$<INSTALL_INTERFACE:include>"
-                       "$<INSTALL_INTERFACE:include/libcudf/libcudacxx>"
-                       "$<INSTALL_INTERFACE:include/libcudf/Thrust>")
+           INTERFACE   "$<INSTALL_INTERFACE:include>")
 
 target_compile_definitions(cudf
             PUBLIC "$<$<COMPILE_LANGUAGE:CXX>:${CUDF_CXX_DEFINITIONS}>"
@@ -506,11 +514,12 @@ add_dependencies(cudf jitify_preprocess_run)
 
 # Specify the target module library dependencies
 target_link_libraries(cudf
-           PUBLIC ZLIB::ZLIB
-                  ${ARROW_LIBRARIES}
+           PUBLIC ${ARROW_LIBRARIES}
+                  libcudacxx::libcudacxx
                   cudf::Thrust
                   rmm::rmm
            PRIVATE cuco::cuco
+                   ZLIB::ZLIB
                    nvcomp::nvcomp)
 
 # Add Conda library, and include paths if specified
@@ -566,7 +575,8 @@ add_library(cudftestutil STATIC
             tests/utilities/base_fixture.cpp
             tests/utilities/column_utilities.cu
             tests/utilities/table_utilities.cu
-            tests/strings/utilities.cu)
+            tests/io/metadata_utilities.cpp
+            tests/strings/utilities.cpp)
 
 set_target_properties(cudftestutil
     PROPERTIES BUILD_RPATH                         "\$ORIGIN"
@@ -643,11 +653,6 @@ install(DIRECTORY
             ${CUDF_SOURCE_DIR}/include/cudf_test
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
-install(DIRECTORY
-            ${CUDF_GENERATED_INCLUDE_DIR}/include/libcxx
-            ${CUDF_GENERATED_INCLUDE_DIR}/include/libcudacxx
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/libcudf)
-
 install(TARGETS cudftestutil
         DESTINATION ${lib_dir}
         EXPORT cudf-testing-exports)
@@ -690,6 +695,13 @@ following IMPORTED GLOBAL  targets:
     ]=])
 
 
+set(common_code_string
+    [=[
+if(NOT TARGET cudf::Thrust)
+  thrust_create_target(cudf::Thrust FROM_OPTIONS)
+endif()
+]=])
+
 set(install_code_string
     [=[
 set(ArrowCUDA_DIR "${Arrow_DIR}")
@@ -703,11 +715,8 @@ if(testing IN_LIST cudf_FIND_COMPONENTS)
     include("${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
   endif()
 endif()
-
-if(NOT TARGET cudf::Thrust)
-  thrust_create_target(cudf::Thrust FROM_OPTIONS)
-endif()
 ]=])
+string(APPEND install_code_string "${common_code_string}")
 
 rapids_export(INSTALL cudf
     EXPORT_SET cudf-exports
@@ -726,11 +735,8 @@ endif()
 if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
   include("${CMAKE_CURRENT_LIST_DIR}/cudf-testing-targets.cmake")
 endif()
-
-if(NOT TARGET cudf::Thrust)
-  thrust_create_target(cudf::Thrust FROM_OPTIONS)
-endif()
 ]=])
+string(APPEND build_code_string "${common_code_string}")
 
 rapids_export(BUILD cudf
     EXPORT_SET cudf-exports

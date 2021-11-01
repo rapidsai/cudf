@@ -9,7 +9,6 @@ from nvtx import annotate
 
 import cudf
 from cudf._lib import groupby as libgroupby
-from cudf._lib.table import Table
 from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
@@ -821,7 +820,7 @@ class GroupBy(Serializable):
         interpolation : {"linear", "lower", "higher", "midpoint", "nearest"}
             The interpolation method to use when the desired quantile lies
             between two data points. Defaults to "linear".
-       """
+        """
 
         def func(x):
             return getattr(x, "quantile")(q=q, interpolation=interpolation)
@@ -861,12 +860,45 @@ class GroupBy(Serializable):
         """Get the last non-null value in each group."""
         return self.agg("last")
 
-    def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
-        """Internal implementation for `ffill` and `bfill`
+    def diff(self, periods=1, axis=0):
+        """Get the difference between the values in each group.
+
+        Parameters
+        ----------
+        periods : int, default 1
+            Periods to shift for calculating difference,
+            accepts negative values.
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            Take difference over rows (0) or columns (1).
+            Only row-wise (0) shift is supported.
+
+        Returns
+        -------
+        Series or DataFrame
+            First differences of the Series or DataFrame.
         """
+
+        if not axis == 0:
+            raise NotImplementedError("Only axis=0 is supported.")
+
+        # grouped values
+        value_columns = self.grouping.values
+        _, (data, index), _ = self._groupby.groups(
+            cudf.core.frame.Frame(value_columns._data)
+        )
+        grouped = self.obj.__class__._from_data(data, index)
+        grouped = self._mimic_pandas_order(grouped)
+
+        result = grouped - self.shift(periods=periods)
+        return result._copy_type_metadata(value_columns)
+
+    def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
+        """Internal implementation for `ffill` and `bfill`"""
         value_columns = self.grouping.values
         result = self.obj.__class__._from_data(
-            self._groupby.replace_nulls(Table(value_columns._data), method)
+            self._groupby.replace_nulls(
+                cudf.core.frame.Frame(value_columns._data), method
+            )
         )
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(value_columns)
@@ -981,7 +1013,9 @@ class GroupBy(Serializable):
             return getattr(self, method, limit)()
 
         value_columns = self.grouping.values
-        _, (data, index), _ = self._groupby.groups(Table(value_columns._data))
+        _, (data, index), _ = self._groupby.groups(
+            cudf.core.frame.Frame(value_columns._data)
+        )
 
         grouped = self.obj.__class__._from_data(data, index)
         result = grouped.fillna(
@@ -1039,7 +1073,9 @@ class GroupBy(Serializable):
             fill_value = [fill_value] * len(value_columns._data)
 
         result = self.obj.__class__._from_data(
-            *self._groupby.shift(Table(value_columns), periods, fill_value)
+            *self._groupby.shift(
+                cudf.core.frame.Frame(value_columns), periods, fill_value
+            )
         )
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(value_columns)
@@ -1052,7 +1088,7 @@ class GroupBy(Serializable):
         """
         sorted_order_column = arange(0, result._data.nrows)
         _, (order, _), _ = self._groupby.groups(
-            Table({"sorted_order_column": sorted_order_column})
+            cudf.core.frame.Frame({"sorted_order_column": sorted_order_column})
         )
         gather_map = order["sorted_order_column"].argsort()
         result = result.take(gather_map)
@@ -1328,8 +1364,7 @@ class _Grouping(Serializable):
 
     @property
     def keys(self):
-        """Return grouping key columns as index
-        """
+        """Return grouping key columns as index"""
         nkeys = len(self._key_columns)
 
         if nkeys == 0:

@@ -128,6 +128,7 @@ std::unique_ptr<column> all_characters_of_type(
  * @param strings Strings instance for this operation.
  * @param types_to_remove The character types to check in each string.
  *        Use `ALL_TYPES` here to specify `types_to_keep` instead.
+ * @param replacement The replacement character to use when removing characters.
  * @param types_to_keep Default `ALL_TYPES` means all characters of
  *        `types_to_remove` will be filtered.
  * @param mr Device memory resource used to allocate the returned column's device memory.

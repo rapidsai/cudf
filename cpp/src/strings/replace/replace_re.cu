@@ -108,9 +108,9 @@ std::unique_ptr<column> replace_re(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
-  CUDF_EXPECTS(repl.is_valid(), "Parameter repl must be valid");
+  CUDF_EXPECTS(repl.is_valid(stream), "Parameter repl must be valid");
   string_view d_repl(repl.data(), repl.size());
 
   auto strings_column = column_device_view::create(strings.parent(), stream);
