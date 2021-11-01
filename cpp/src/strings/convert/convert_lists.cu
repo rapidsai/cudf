@@ -138,7 +138,7 @@ struct format_lists_fn {
       if (item.separator == item_separator::LIST) {
         bytes += write_separator(d_output, right_brace_index);
       } else if (item.separator == item_separator::ELEMENT) {
-        bytes += write_separator(d_output);
+        bytes += write_separator(d_output, separator_index);
       }
 
       // loop through the child elements for the current view
@@ -199,7 +199,7 @@ std::unique_ptr<column> format_list_column(lists_column_view const& input,
   auto child_col  = input.child();
   while (child_col.type().id() == type_id::LIST) {
     child_col = cudf::lists_column_view(child_col).child();
-    depth++;
+    ++depth;
   }
   CUDF_EXPECTS(child_col.type().id() == type_id::STRING, "lists child must be a STRING column");
 
@@ -214,9 +214,11 @@ std::unique_ptr<column> format_list_column(lists_column_view const& input,
   auto const d_separators = column_device_view::create(separators.parent(), stream);
   auto const d_na_rep     = na_rep.value(stream);
 
-  format_lists_fn functor{*d_input, *d_separators, d_na_rep, stack_buffer.data(), depth};
-
-  auto children = cudf::strings::detail::make_strings_children(functor, input.size(), stream, mr);
+  auto children = cudf::strings::detail::make_strings_children(
+    format_lists_fn{*d_input, *d_separators, d_na_rep, stack_buffer.data(), depth},
+    input.size(),
+    stream,
+    mr);
 
   return make_strings_column(
     input.size(), std::move(children.first), std::move(children.second), 0, rmm::device_buffer{});
