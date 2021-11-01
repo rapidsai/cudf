@@ -414,7 +414,7 @@ add_library(cudf
     src/strings/split/split.cu
     src/strings/split/split_record.cu
     src/strings/strings_column_factories.cu
-    src/strings/strings_column_view.cu
+    src/strings/strings_column_view.cpp
     src/strings/strings_scalar_factories.cpp
     src/strings/strip.cu
     src/strings/substring.cu
