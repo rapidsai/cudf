@@ -38,7 +38,7 @@ def assert_buffer_equal(buffer_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
                         )
     # check that non null values are the equals as null are represented
     # by sentinel values in the buffer.
-    non_null_idxs = cudfcol!=None
+    non_null_idxs = cudfcol is not None
     assert_eq(col_from_buf[non_null_idxs], cudfcol[non_null_idxs])
     
     if dtype[0] != _DtypeKind.BOOL:
@@ -184,7 +184,7 @@ def test_NA_categorical_dtype():
     col = df.__dataframe__().get_column_by_name('B')
     assert col.dtype[0] == _DtypeKind.CATEGORICAL
     assert col.null_count == 2
-    assert col.describe_null == (3, 0)  # sentinel value -1
+    assert col.describe_null == (3, 0)
     assert col.num_chunks() == 1
     assert col.describe_categorical == (False, True, {0: 1, 1: 2, 2: 5})
     _test_from_dataframe_equals(df.__dataframe__(allow_copy=False))

@@ -43,7 +43,7 @@ class _CuDFBuffer:
     """
 
     def __init__(self, buf : cudf.core.buffer.Buffer, 
-                 cudf_dtype: cp.dtype, allow_copy : bool = True) -> None:
+                 dtype: np.dtype, allow_copy : bool = True) -> None:
         """
         Use cudf.core.buffer.Buffer object.
         """
@@ -87,7 +87,7 @@ class _CuDFBuffer:
         return (Device.CUDA, cp.asarray(self._buf).device.id)
 
     def __repr__(self) -> str:
-        return 'CuDFBuffer(' + str({'bufsize': self.bufsize,
+        return f'{self.__class__.__name__}(' + str({'bufsize': self.bufsize,
                                       'ptr': self.ptr,
                                       'dlpack': self.__dlpack__(),
                                       'device': self.__dlpack_device__()[0].name}
@@ -186,7 +186,7 @@ class _CuDFColumn:
 
         return self._dtype_from_cudfdtype(dtype)
 
-    def _dtype_from_cudfdtype(self, dtype) -> Tuple[enum.IntEnum, int, str, str]:
+    def _dtype_from_cudfdtype(self, dtype) -> Tuple[_DtypeKind, int, str, str]:
         """
         See `self.dtype` for details.
         """
@@ -214,7 +214,7 @@ class _CuDFColumn:
 
         bitwidth = dtype.itemsize * 8
         format_str = dtype.str
-        endianness = dtype.byteorder if not kind == _k.CATEGORICAL else '='
+        endianness = dtype.byteorder if kind != _k.CATEGORICAL else '='
         return (kind, bitwidth, format_str, endianness)
 
     @property
@@ -225,7 +225,7 @@ class _CuDFColumn:
         - There are only values in the data buffer.
         - There is a separate dictionary-style encoding for categorical values.
 
-        Raises RuntimeError if the dtype is not categorical
+        Raises TypeError if the dtype is not categorical
 
         Content of returned dict:
 
@@ -269,18 +269,15 @@ class _CuDFColumn:
         otherwise.
         """
         if self.null_count == 0:
-            # there is no validity mask in this case
-            # so making it non-nullable (hackingly)
-            null = 0
-            value = None
+            # there is no validity mask so it is non-nullable
+            return 0, None
         else :
             _k = _DtypeKind
             kind = self.dtype[0]
             # bit mask is universally used in cudf for missing
             if kind in (_k.INT, _k.UINT, _k.FLOAT, _k.CATEGORICAL,
                         _k.BOOL, _k.STRING, _k.DATETIME):
-                null = 3
-                value = 0
+                return 3, 0
             else:
                 raise NotImplementedError(f"Data type {self.dtype} not yet supported")
 
@@ -291,7 +288,7 @@ class _CuDFColumn:
         """
         Number of null elements. Should always be known.
         """
-        return self._col.isna().sum()
+        return self._col.null_count
 
     @property
     def metadata(self) -> Dict[str, Any]:
@@ -308,7 +305,7 @@ class _CuDFColumn:
 
     def get_chunks(self, n_chunks : Optional[int] = None) -> Iterable['_CuDFColumn']:
         """
-        Return an iterator yielding the chunks.
+        Return an iterable yielding the chunks.
 
         See `DataFrame.get_chunks` for details on ``n_chunks``.
         """
@@ -479,7 +476,7 @@ class _CuDFDataFrame:
                 for name in self._df.columns]
 
     def select_columns(self, indices: Sequence[int]) -> '_CuDFDataFrame':
-        if not isinstance(indices, collections.Sequence):
+        if not isinstance(indices, collections.abc.Sequence):
             raise ValueError("`indices` is not a sequence")
 
         return _CuDFDataFrame(self._df.iloc[:, indices])
@@ -576,7 +573,7 @@ def _from_dataframe(df : DataFrameObject) -> _CuDFDataFrame :
     if df.num_chunks() > 1:
         raise NotImplementedError("More than one chunk not handled yet")
 
-    # We need a dict of columns here, with each column being a cudf column column.
+    # We need a dict of columns here, with each column being a cudf column.
     columns = dict()
     _k = _DtypeKind
     _buffers = []  # hold on to buffers, keeps memory alive
@@ -619,7 +616,7 @@ def _protocol_column_to_cudf_column_numeric(col:ColumnObject) -> \
 
 def _check_data_is_on_gpu(buffer : _CuDFBuffer) -> None:
     if buffer.__dlpack_device__()[0] != Device.CUDA and not buffer._allow_copy:
-        raise TypeError("This operation must copy data from CPU to GPU."
+        raise TypeError("This operation must copy data from CPU to GPU. "
                             "Set `allow_copy=True` to allow it.")
 
 def _set_missing_values(protocol_col: _CuDFColumn, 
@@ -627,7 +624,7 @@ def _set_missing_values(protocol_col: _CuDFColumn,
                         -> cudf.core.column.ColumnBase:
 
     null_kind, null_value = protocol_col.describe_null
-    if  null_kind != 0:
+    if null_kind != 0:
         assert null_kind == 3, f"cudf supports only bit mask, null_kind should be 3, got: {null_kind}." 
         _mask_buffer, _mask_dtype = protocol_col.get_buffers()["validity"]
         bitmask = cp.asarray(Buffer(_mask_buffer.ptr, _mask_buffer.bufsize), cp.bool8) 
