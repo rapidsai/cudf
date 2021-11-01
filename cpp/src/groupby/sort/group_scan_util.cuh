@@ -262,7 +262,7 @@ struct scan_functor_impl<
     return make_structs_column(values.size(),
                                std::move(scanned_children),
                                values.null_count(),
-                               cudf::detail::copy_bitmask(values, stream));
+                               cudf::detail::copy_bitmask(values, stream, mr));
   }
 };
 
