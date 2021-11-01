@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import builtins
 import pickle
+import re
 import warnings
 from typing import (
     TYPE_CHECKING,
@@ -95,6 +96,13 @@ _timedelta_to_str_typecast_functions = {
     cudf.dtype("timedelta64[us]"): str_cast.int2timedelta,
     cudf.dtype("timedelta64[ns]"): str_cast.int2timedelta,
 }
+
+
+def _is_supported_regex_flags(flags):
+    return flags == 0 or (
+        (flags & (re.MULTILINE | re.DOTALL) != 0)
+        and (flags & ~(re.MULTILINE | re.DOTALL) == 0)
+    )
 
 
 class StringMethods(ColumnMethods):
@@ -637,6 +645,8 @@ class StringMethods(ColumnMethods):
             Character sequence or regular expression.
             If ``pat`` is list-like then regular expressions are not
             accepted.
+        flags : int, default 0 (no flags)
+            Flags to pass through to the regex engine (e.g. re.MULTILINE)
         regex : bool, default True
             If True, assumes the pattern is a regular expression.
             If False, treats the pattern as a literal string.
@@ -650,9 +660,11 @@ class StringMethods(ColumnMethods):
 
         Notes
         -----
-        The parameters `case`, `flags`, and `na` are not yet supported and
-        will raise a NotImplementedError if anything other than the default
+        The parameters `case` and `na` are not yet supported and will
+        raise a NotImplementedError if anything other than the default
         value is set.
+        The `flags` parameter currently only supports re.DOTALL and
+        re.MULTILINE.
 
         Examples
         --------
@@ -730,18 +742,18 @@ class StringMethods(ColumnMethods):
         """  # noqa W605
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
-        elif flags != 0:
-            raise NotImplementedError("`flags` parameter is not yet supported")
-        elif na is not np.nan:
+        if na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
+        if not _is_supported_regex_flags(flags):
+            raise ValueError("invalid `flags` parameter value")
 
         if pat is None:
             result_col = column.column_empty(
                 len(self._column), dtype="bool", masked=True
             )
         elif is_scalar(pat):
-            if regex is True:
-                result_col = libstrings.contains_re(self._column, pat)
+            if regex:
+                result_col = libstrings.contains_re(self._column, pat, flags)
             else:
                 result_col = libstrings.contains(
                     self._column, cudf.Scalar(pat, "str")
@@ -3280,6 +3292,8 @@ class StringMethods(ColumnMethods):
         ----------
         pat : str
             Valid regular expression.
+        flags : int, default 0 (no flags)
+            Flags to pass through to the regex engine (e.g. re.MULTILINE)
 
         Returns
         -------
@@ -3287,9 +3301,10 @@ class StringMethods(ColumnMethods):
 
         Notes
         -----
-            -  `flags` parameter is currently not supported.
+            -  `flags` parameter currently only supports re.DOTALL
+               and re.MULTILINE.
             -  Some characters need to be escaped when passing
-               in pat. eg. ``'$'`` has a special meaning in regex
+               in pat. e.g. ``'$'`` has a special meaning in regex
                and must be escaped when finding this literal character.
 
         Examples
@@ -3324,10 +3339,12 @@ class StringMethods(ColumnMethods):
         >>> index.str.count('a')
         Int64Index([0, 0, 2, 1], dtype='int64')
         """  # noqa W605
-        if flags != 0:
-            raise NotImplementedError("`flags` parameter is not yet supported")
+        if not _is_supported_regex_flags(flags):
+            raise ValueError("invalid `flags` parameter value")
 
-        return self._return_or_inplace(libstrings.count_re(self._column, pat))
+        return self._return_or_inplace(
+            libstrings.count_re(self._column, pat, flags)
+        )
 
     def findall(
         self, pat: str, flags: int = 0, expand: bool = True
@@ -3846,6 +3863,8 @@ class StringMethods(ColumnMethods):
         ----------
         pat : str
             Character sequence or regular expression.
+        flags : int, default 0 (no flags)
+            Flags to pass through to the regex engine (e.g. re.MULTILINE)
 
         Returns
         -------
@@ -3853,7 +3872,10 @@ class StringMethods(ColumnMethods):
 
         Notes
         -----
-        Parameters currently not supported are: `case`, `flags` and `na`.
+        Parameters `case` and `na` are currently not supported.
+        The `flags` parameter currently only supports re.DOTALL and
+        re.MULTILINE.
+
 
         Examples
         --------
@@ -3878,10 +3900,12 @@ class StringMethods(ColumnMethods):
         """
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
-        if flags != 0:
-            raise NotImplementedError("`flags` parameter is not yet supported")
+        if not _is_supported_regex_flags(flags):
+            raise ValueError("invalid `flags` parameter value")
 
-        return self._return_or_inplace(libstrings.match_re(self._column, pat))
+        return self._return_or_inplace(
+            libstrings.match_re(self._column, pat, flags)
+        )
 
     def url_decode(self) -> SeriesOrIndex:
         """
