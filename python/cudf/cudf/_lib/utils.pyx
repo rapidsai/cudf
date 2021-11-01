@@ -281,7 +281,7 @@ cdef data_from_unique_ptr(
         A dict of the columns in the output table.
     """
 
-    columns = columns_from_unique_ptr(c_tbl)
+    columns = columns_from_unique_ptr(move(c_tbl))
 
     # First construct the index, if any
     index = (
