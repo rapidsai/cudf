@@ -3748,7 +3748,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             If on is None and not merging on indexes then
             this defaults to the intersection of the columns
             in both DataFrames.
-        how : {‘left’, ‘outer’, ‘inner’}, default ‘inner’
+        how : {‘left’, ‘outer’, ‘inner’, 'leftsemi', 'leftanti'},
+              default ‘inner’
             Type of merge to be performed.
 
             - left : use only keys from left frame, similar to a SQL left
@@ -3756,8 +3757,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             - right : not supported.
             - outer : use union of keys from both frames, similar to a SQL
               full outer join.
-            - inner: use intersection of keys from both frames, similar to
+            - inner : use intersection of keys from both frames, similar to
               a SQL inner join.
+            - leftsemi : similar to inner join, but in addition returns all
+              columns from the left dataframe and ignores all columns from
+              the right dataframe.
+            - leftanti : returns only rows columns from the left dataframe
+              for non-matched records. This is exact opposite to ``leftsemi``
+              join.
         left_on : label or list, or array-like
             Column or index level names to join on in the left DataFrame.
             Can also be an array or list of arrays of the length of the
