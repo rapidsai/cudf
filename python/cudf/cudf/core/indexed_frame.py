@@ -417,11 +417,15 @@ class IndexedFrame(Frame):
         return self._mimic_inplace(out, inplace=inplace)
 
     def _gather(self, gather_map, keep_index=True, nullify=False):
+        """Gather rows of frame specified by indices in `gather_map`.
+
+        Set rows to null for all out of bound indices if nullify is `True`.
+        """
         gather_map = cudf.core.column.as_column(gather_map)
         if not is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
 
-        if not _gather_map_is_valid(gather_map, len(self), nullify):
+        if not nullify and not _gather_map_is_valid(gather_map, len(self)):
             raise IndexError("Gather map index is out of bounds.")
 
         result = self.__class__._from_maybe_indexed_columns(

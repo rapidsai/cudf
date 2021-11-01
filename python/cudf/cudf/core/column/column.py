@@ -690,11 +690,13 @@ class ColumnBase(Column, Serializable):
         raise TypeError(f"cannot perform median with type {self.dtype}")
 
     def take(self: T, indices: ColumnBase, nullify: bool = False,) -> T:
-        """Return Column by taking values from the corresponding *indices*."""
+        """Return Column by taking values from the corresponding *indices*. Set
+        rows to null for all out of bound indices if nullify is `True`.
+        """
         # Handle zero size
         if indices.size == 0:
             return cast(T, column_empty_like(self, newsize=0))
-        if not _gather_map_is_valid(indices, len(self), nullify):
+        if not nullify and not _gather_map_is_valid(indices, len(self)):
             raise IndexError("Gather map index is out of bounds.")
 
         return libcudf.copying.gather([self], indices, nullify=nullify,)[
