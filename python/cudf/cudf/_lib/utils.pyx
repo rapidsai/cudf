@@ -292,7 +292,17 @@ cdef data_from_unique_ptr(
 cdef columns_from_unique_ptr(
     unique_ptr[table] c_tbl
 ):
-    """
+    """Convert a libcudf table into list of columns.
+
+    Parameters
+    ----------
+    c_tbl : unique_ptr[cudf::table]
+        The libcudf table whose columns will be extracted
+
+    Returns
+    -------
+    list[Column]
+        A list of columns.
     """
     cdef vector[unique_ptr[column]] c_columns = move(c_tbl.get().release())
     cdef vector[unique_ptr[column]].iterator it = c_columns.begin()
