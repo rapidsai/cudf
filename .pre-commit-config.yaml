@@ -70,6 +70,24 @@ repos:
                 language: system
                 files: \.(cu|cuh|h|hpp|cpp|inl)$
                 args: ['-fallback-style=none']
+              - id: cmake-format
+                name: cmake-format
+                entry: bash cpp/scripts/run-cmake-format.sh cmake-format
+                language: python
+                types: [cmake]
+                # Note that pre-commit autoupdate does not update the versions
+                # of dependencies, so we'll have to update this manually.
+                additional_dependencies:
+                  - cmakelang==0.6.13
+              - id: cmake-lint
+                name: cmake-lint
+                entry: bash cpp/scripts/run-cmake-format.sh cmake-lint
+                language: python
+                types: [cmake]
+                # Note that pre-commit autoupdate does not update the versions
+                # of dependencies, so we'll have to update this manually.
+                additional_dependencies:
+                  - cmakelang==0.6.13
 
 default_language_version:
       python: python3
