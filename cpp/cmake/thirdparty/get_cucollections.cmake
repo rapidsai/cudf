@@ -14,6 +14,8 @@
 # limitations under the License.
 #=============================================================================
 
+# cuCollections doesn't have a version
+
 function(find_and_configure_cucollections)
 
     # Find or install cuCollections
@@ -21,7 +23,7 @@ function(find_and_configure_cucollections)
         GLOBAL_TARGETS cuco::cuco
         CPM_ARGS
             GITHUB_REPOSITORY NVIDIA/cuCollections
-            GIT_TAG           729857a5698a0e8d8f812e0464f65f37854ae17b
+            GIT_TAG           62b90b7f7adf272455007b1c857e1d621aaf13ca
             OPTIONS           "BUILD_TESTS OFF"
                               "BUILD_BENCHMARKS OFF"
                               "BUILD_EXAMPLES OFF"

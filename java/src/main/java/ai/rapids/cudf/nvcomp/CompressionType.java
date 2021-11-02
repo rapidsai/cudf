@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,10 @@ public enum CompressionType {
   INT(4),
   UINT(5),
   LONGLONG(6),
-  ULONGLONG(7);
+  ULONGLONG(7),
+  BITS(0xff);
+
+  private static final CompressionType[] types = CompressionType.values();
 
   final int nativeId;
 
@@ -33,6 +36,17 @@ public enum CompressionType {
     this.nativeId = nativeId;
   }
 
+  /** Lookup the CompressionType that corresponds to the specified native identifier */
+  public static CompressionType fromNativeId(int id) {
+    for (CompressionType type : types) {
+      if (type.nativeId == id) {
+        return type;
+      }
+    }
+    throw new IllegalArgumentException("Unknown compression type ID: " + id);
+  }
+
+  /** Get the native code identifier for the type */
   public final int toNativeId() {
     return nativeId;
   }

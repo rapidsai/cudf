@@ -58,7 +58,10 @@ def test_series_replace_all(gsr, to_replace, value):
     actual = gsr.replace(to_replace=gd_to_replace, value=gd_value)
     expected = psr.replace(to_replace=pd_to_replace, value=pd_value)
 
-    assert_eq(expected, actual)
+    assert_eq(
+        expected.sort_values().reset_index(drop=True),
+        actual.sort_values().reset_index(drop=True),
+    )
 
 
 def test_series_replace():
@@ -75,7 +78,10 @@ def test_series_replace():
     psr4 = psr3.replace("one", "two")
     sr3 = cudf.from_pandas(psr3)
     sr4 = sr3.replace("one", "two")
-    assert_eq(psr4, sr4)
+    assert_eq(
+        psr4.sort_values().reset_index(drop=True),
+        sr4.sort_values().reset_index(drop=True),
+    )
 
     psr5 = psr3.replace("one", "five")
     sr5 = sr3.replace("one", "five")
@@ -226,7 +232,10 @@ def test_dataframe_replace(df, to_replace, value):
     expected = pdf.replace(to_replace=pd_to_replace, value=pd_value)
     actual = gdf.replace(to_replace=gd_to_replace, value=gd_value)
 
-    assert_eq(expected, actual)
+    expected_sorted = expected.sort_values(by=list(expected.columns), axis=0)
+    actual_sorted = actual.sort_values(by=list(actual.columns), axis=0)
+
+    assert_eq(expected_sorted, actual_sorted)
 
 
 def test_dataframe_replace_with_nulls():
@@ -1103,6 +1112,8 @@ def test_dataframe_exceptions_for_clip(lower, upper):
         ([1, 2, 3, 4, 5], None, 4),
         ([1, 2, 3, 4, 5], None, None),
         ([1, 2, 3, 4, 5], 4, 2),
+        ([1.0, 2.0, 3.0, 4.0, 5.0], 4, 2),
+        (pd.Series([1, 2, 3, 4, 5], dtype="int32"), 4, 2),
         (["a", "b", "c", "d", "e"], "b", "d"),
         (["a", "b", "c", "d", "e"], "b", None),
         (["a", "b", "c", "d", "e"], None, "d"),
@@ -1112,7 +1123,7 @@ def test_dataframe_exceptions_for_clip(lower, upper):
 @pytest.mark.parametrize("inplace", [True, False])
 def test_series_clip(data, lower, upper, inplace):
     psr = pd.Series(data)
-    gsr = cudf.Series.from_pandas(data)
+    gsr = cudf.from_pandas(psr)
 
     expect = psr.clip(lower=lower, upper=upper)
     got = gsr.clip(lower=lower, upper=upper, inplace=inplace)
@@ -1334,4 +1345,7 @@ def test_series_replace_errors():
 def test_replace_nulls(gsr, old, new, expected):
 
     actual = gsr.replace(old, new)
-    assert_eq(expected, actual)
+    assert_eq(
+        expected.sort_values().reset_index(drop=True),
+        actual.sort_values().reset_index(drop=True),
+    )
