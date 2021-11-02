@@ -880,7 +880,7 @@ def test_string_repeat(data, repeats):
     assert_eq(expect, got)
 
 
-# Pandas isn't respect the `n` parameter so ignoring it in test parameters
+# Pandas doesn't respect the `n` parameter so ignoring it in test parameters
 @pytest.mark.parametrize(
     "pat,regex",
     [("a", False), ("f", False), (r"[a-z]", True), (r"[A-Z]", True)],
@@ -1799,6 +1799,7 @@ def test_string_replace_multi():
         "([a-z])-([a-zé])",
         "([a-z])-([a-z])",
         "([a-z])-([a-zé])",
+        re.compile("([A-Z])(\\d)"),
     ],
 )
 @pytest.mark.parametrize(
@@ -2103,6 +2104,32 @@ def test_string_contains_multi(data, sub, expect):
     got = gs.str.contains(sub)
     expect = cudf.Series(expect)
     assert_eq(expect, got, check_dtype=False)
+
+
+# Pandas does not allow 'case' or 'flags' if 'pat' is re.Pattern
+# This covers contains, match, count, and replace
+@pytest.mark.parametrize(
+    "pat", [re.compile("[n-z]"), re.compile("[A-Z]"), re.compile("de"), "A"],
+)
+@pytest.mark.parametrize("repl", ["xyz", "", " "])
+def test_string_compiled_re(ps_gs, pat, repl):
+    ps, gs = ps_gs
+
+    expect = ps.str.contains(pat, regex=True)
+    got = gs.str.contains(pat, regex=True)
+    assert_eq(expect, got)
+
+    expect = ps.str.match(pat)
+    got = gs.str.match(pat)
+    assert_eq(expect, got)
+
+    expect = ps.str.count(pat)
+    got = gs.str.count(pat)
+    assert_eq(expect, got, check_dtype=False)
+
+    expect = ps.str.replace(pat, repl, regex=True)
+    got = gs.str.replace(pat, repl, regex=True)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
