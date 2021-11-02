@@ -44,7 +44,7 @@ namespace groupby {
 namespace detail {
 // Error case when no other overload or specialization is available
 template <aggregation::Kind K, typename T, typename Enable = void>
-struct scan_functor_impl {
+struct group_scan_functor {
   template <typename... Args>
   static std::unique_ptr<column> invoke(Args&&...)
   {
@@ -53,7 +53,7 @@ struct scan_functor_impl {
 };
 
 template <aggregation::Kind K>
-struct scan_functor {
+struct group_scan_dispatcher {
   template <typename T>
   std::unique_ptr<column> operator()(column_view const& values,
                                      size_type num_groups,
@@ -61,7 +61,7 @@ struct scan_functor {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    return scan_functor_impl<K, T>::invoke(values, num_groups, group_labels, stream, mr);
+    return group_scan_functor<K, T>::invoke(values, num_groups, group_labels, stream, mr);
   }
 };
 
@@ -69,7 +69,7 @@ struct scan_functor {
  * @brief Check if the given aggregation K with data type T is supported in groupby scan.
  */
 template <aggregation::Kind K, typename T>
-static constexpr bool is_scan_supported()
+static constexpr bool is_group_scan_supported()
 {
   if (K == aggregation::SUM)
     return cudf::is_numeric<T>() || cudf::is_duration<T>() || cudf::is_fixed_point<T>();
@@ -81,10 +81,10 @@ static constexpr bool is_scan_supported()
 }
 
 template <aggregation::Kind K, typename T>
-struct scan_functor_impl<
+struct group_scan_functor<
   K,
   T,
-  std::enable_if_t<is_scan_supported<K, T>() and not std::is_same_v<T, cudf::string_view> and
+  std::enable_if_t<is_group_scan_supported<K, T>() and not std::is_same_v<T, cudf::string_view> and
                    not std::is_same_v<T, cudf::struct_view>>> {
   static std::unique_ptr<column> invoke(column_view const& values,
                                         size_type num_groups,
@@ -139,10 +139,10 @@ struct scan_functor_impl<
 };
 
 template <aggregation::Kind K, typename T>
-struct scan_functor_impl<
+struct group_scan_functor<
   K,
   T,
-  std::enable_if_t<is_scan_supported<K, T>() and std::is_same_v<T, cudf::string_view>>> {
+  std::enable_if_t<is_group_scan_supported<K, T>() and std::is_same_v<T, cudf::string_view>>> {
   static std::unique_ptr<column> invoke(column_view const& values,
                                         size_type num_groups,
                                         cudf::device_span<cudf::size_type const> group_labels,
@@ -186,10 +186,10 @@ struct scan_functor_impl<
 };
 
 template <aggregation::Kind K, typename T>
-struct scan_functor_impl<
+struct group_scan_functor<
   K,
   T,
-  std::enable_if_t<is_scan_supported<K, T>() and std::is_same_v<T, cudf::struct_view>>> {
+  std::enable_if_t<is_group_scan_supported<K, T>() and std::is_same_v<T, cudf::struct_view>>> {
   static std::unique_ptr<column> invoke(column_view const& values,
                                         size_type num_groups,
                                         cudf::device_span<cudf::size_type const> group_labels,
