@@ -513,9 +513,9 @@ def _gather_map_is_valid(
     gather_map: "cudf.core.column.ColumnBase", nrows: int
 ) -> bool:
     """Returns true if gather map is valid. A gather map is valid if empty or
-    all indices are within range (-nrows, nrows].
+    all indices are within range [-nrows, nrows).
     """
     if len(gather_map) == 0:
         return True
     gm_min, gm_max = minmax(gather_map)
-    return gm_min > -nrows and gm_max <= nrows
+    return gm_min >= -nrows and gm_max < nrows
