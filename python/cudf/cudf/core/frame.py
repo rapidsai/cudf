@@ -156,7 +156,6 @@ class Frame:
             index = cudf.core.index._index_from_data(
                 dict(zip(range(n_index_columns), columns))
             )
-
             if isinstance(index, cudf.MultiIndex):
                 index.names = index_names
             else:
@@ -2284,50 +2283,26 @@ class Frame:
         )
 
     def drop_duplicates(
-        self,
-        subset=None,
-        keep="first",
-        nulls_are_equal=True,
-        ignore_index=False,
+        self, keep="first", nulls_are_equal=True,
     ):
         """
-        Drops rows in frame as per duplicate rows in `subset` columns from
-        self.
+        Drop duplicate rows in frame.
 
-        subset : list, optional
-            List of columns to consider when dropping rows.
-        keep : ["first", "last", False] first will keep first of duplicate,
-            last will keep last of the duplicate and False drop all
-            duplicate
-        nulls_are_equal: null elements are considered equal to other null
-            elements
-        ignore_index: bool, default False
-            If True, the resulting axis will be labeled 0, 1, …, n - 1.
+        keep : ["first", "last", False]
+            "first" will keep first of duplicate, "last" will keep last of the
+            duplicate and "False" drop all duplicate
+        nulls_are_equal: bool, default True
+            Null elements are considered equal to other null elements.
         """
-        if subset is None:
-            subset = self._column_names
-        elif (
-            not np.iterable(subset)
-            or isinstance(subset, str)
-            or isinstance(subset, tuple)
-            and subset in self._data.names
-        ):
-            subset = (subset,)
-        diff = set(subset) - set(self._data)
-        if len(diff) != 0:
-            raise KeyError(f"columns {diff} do not exist")
-        subset_cols = [name for name in self._column_names if name in subset]
-        if len(subset_cols) == 0:
-            return self.copy(deep=True)
 
-        keys = self._positions_from_column_names(
-            subset, include_index=not ignore_index
-        )
-        result = self._drop_duplicates(
-            keys=keys,
-            keep=keep,
-            nulls_are_equal=nulls_are_equal,
-            ignore_index=ignore_index,
+        result = self.__class__._from_maybe_indexed_columns(
+            libcudf.stream_compaction.drop_duplicates(
+                list(self._columns),
+                keys=range(len(self._columns)),
+                keep=keep,
+                nulls_are_equal=nulls_are_equal,
+            ),
+            self._column_names,
         )
         result._copy_type_metadata(self)
         return result
@@ -2344,17 +2319,6 @@ class Frame:
             for i, name in enumerate(self._column_names)
             if name in set(column_names)
         ]
-
-    def _drop_duplicates(self, keys, keep, nulls_are_equal, ignore_index):
-        return self.__class__._from_maybe_indexed_columns(
-            libcudf.stream_compaction.drop_duplicates(
-                list(self._columns),
-                keys=keys,
-                keep=keep,
-                nulls_are_equal=nulls_are_equal,
-            ),
-            self._column_names,
-        )
 
     def replace(
         self,
@@ -2634,7 +2598,10 @@ class Frame:
                     self._index, cudf.core.index.CategoricalIndex
                 ):
                     self._index = cudf.Index(
-                        cast(cudf.core.index.NumericIndex, self._index)._column
+                        cast(
+                            cudf.core.index.NumericIndex, self._index
+                        )._column,
+                        name=self._index.name,
                     )
 
         return self

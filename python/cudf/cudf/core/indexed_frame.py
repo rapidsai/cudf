@@ -7,6 +7,7 @@ import warnings
 from typing import Type, TypeVar
 
 import cupy as cp
+import numpy as np
 import pandas as pd
 from nvtx import annotate
 
@@ -461,8 +462,46 @@ class IndexedFrame(Frame):
             if name in set(column_names)
         ]
 
-    def _drop_duplicates(self, keys, keep, nulls_are_equal, ignore_index):
-        return self.__class__._from_maybe_indexed_columns(
+    def drop_duplicates(
+        self,
+        subset=None,
+        keep="first",
+        nulls_are_equal=True,
+        ignore_index=False,
+    ):
+        """
+        Drop duplicate rows in frame.
+
+        subset : list, optional
+            List of columns to consider when dropping rows.
+        keep : ["first", "last", False]
+            "first" will keep first of duplicate, "last" will keep last of the
+            duplicate and "False" drop all duplicate.
+        nulls_are_equal: bool, default True
+            Null elements are considered equal to other null elements.
+        ignore_index: bool, default False
+            If True, the resulting axis will be labeled 0, 1, …, n - 1.
+        """
+        if subset is None:
+            subset = self._column_names
+        elif (
+            not np.iterable(subset)
+            or isinstance(subset, str)
+            or isinstance(subset, tuple)
+            and subset in self._data.names
+        ):
+            subset = (subset,)
+        diff = set(subset) - set(self._data)
+        if len(diff) != 0:
+            raise KeyError(f"columns {diff} do not exist")
+        subset_cols = [name for name in self._column_names if name in subset]
+        if len(subset_cols) == 0:
+            return self.copy(deep=True)
+
+        keys = self._positions_from_column_names(
+            subset, include_index=not ignore_index
+        )
+        result = self.__class__._from_maybe_indexed_columns(
             libcudf.stream_compaction.drop_duplicates(
                 list(self._columns)
                 if ignore_index
@@ -474,6 +513,8 @@ class IndexedFrame(Frame):
             self._column_names,
             self._index.names if not ignore_index else None,
         )
+        result._copy_type_metadata(self)
+        return result
 
     def sort_values(
         self,
