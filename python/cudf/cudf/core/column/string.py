@@ -744,6 +744,9 @@ class StringMethods(ColumnMethods):
             raise NotImplementedError("`case` parameter is not yet supported")
         if na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
+        if regex and isinstance(pat, re.Pattern):
+            flags = pat.flags & ~re.U
+            pat = pat.pattern
         if not _is_supported_regex_flags(flags):
             raise ValueError("invalid `flags` parameter value")
 
@@ -915,6 +918,10 @@ class StringMethods(ColumnMethods):
         if n == 0:
             n = -1
 
+        # If 'pat' is re.Pattern then get the pattern string from it
+        if regex and isinstance(pat, re.Pattern):
+            pat = pat.pattern
+
         # Pandas forces non-regex replace when pat is a single-character
         return self._return_or_inplace(
             libstrings.replace_re(
@@ -936,7 +943,7 @@ class StringMethods(ColumnMethods):
 
         Parameters
         ----------
-        pat : str
+        pat : str or compiled regex
             Regex with groupings to identify extract sections.
             This should not be a compiled regex.
         repl : str
@@ -955,6 +962,11 @@ class StringMethods(ColumnMethods):
         1    ZV576
         dtype: object
         """
+
+        # If 'pat' is re.Pattern then get the pattern string from it
+        if isinstance(pat, re.Pattern):
+            pat = pat.pattern
+
         return self._return_or_inplace(
             libstrings.replace_with_backrefs(self._column, pat, repl)
         )
@@ -3290,7 +3302,7 @@ class StringMethods(ColumnMethods):
 
         Parameters
         ----------
-        pat : str
+        pat : str or compiled regex
             Valid regular expression.
         flags : int, default 0 (no flags)
             Flags to pass through to the regex engine (e.g. re.MULTILINE)
@@ -3339,6 +3351,9 @@ class StringMethods(ColumnMethods):
         >>> index.str.count('a')
         Int64Index([0, 0, 2, 1], dtype='int64')
         """  # noqa W605
+        if isinstance(pat, re.Pattern):
+            flags = pat.flags & ~re.U
+            pat = pat.pattern
         if not _is_supported_regex_flags(flags):
             raise ValueError("invalid `flags` parameter value")
 
@@ -3861,7 +3876,7 @@ class StringMethods(ColumnMethods):
 
         Parameters
         ----------
-        pat : str
+        pat : str or compiled regex
             Character sequence or regular expression.
         flags : int, default 0 (no flags)
             Flags to pass through to the regex engine (e.g. re.MULTILINE)
@@ -3900,6 +3915,9 @@ class StringMethods(ColumnMethods):
         """
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
+        if isinstance(pat, re.Pattern):
+            flags = pat.flags & ~re.U
+            pat = pat.pattern
         if not _is_supported_regex_flags(flags):
             raise ValueError("invalid `flags` parameter value")
 

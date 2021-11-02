@@ -21,25 +21,29 @@
 
 #include <hash/concurrent_unordered_multimap.cuh>
 
+#include <cuco/static_multimap.cuh>
+
 #include <limits>
 
 namespace cudf {
 namespace detail {
 constexpr size_type MAX_JOIN_SIZE{std::numeric_limits<size_type>::max()};
 
+constexpr int DEFAULT_JOIN_CG_SIZE    = 2;
 constexpr int DEFAULT_JOIN_BLOCK_SIZE = 128;
 constexpr int DEFAULT_JOIN_CACHE_SIZE = 128;
 constexpr size_type JoinNoneValue     = std::numeric_limits<size_type>::min();
 
+using pair_type = cuco::pair_type<hash_value_type, size_type>;
+
+using hash_type = cuco::detail::MurmurHash3_32<hash_value_type>;
+
 using multimap_type =
-  concurrent_unordered_multimap<hash_value_type,
-                                size_type,
-                                size_t,
-                                std::numeric_limits<hash_value_type>::max(),
-                                std::numeric_limits<size_type>::max(),
-                                default_hash<hash_value_type>,
-                                equal_to<hash_value_type>,
-                                default_allocator<thrust::pair<hash_value_type, size_type>>>;
+  cuco::static_multimap<hash_value_type,
+                        size_type,
+                        cuda::thread_scope_device,
+                        default_allocator<char>,
+                        cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, hash_type, hash_type>>;
 
 using row_hash = cudf::row_hasher<default_hash>;
 
