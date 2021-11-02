@@ -2482,11 +2482,11 @@ def test_index_datetime_ceil():
     assert_eq(pidx_ceil, cuidx_ceil)
 
 
-# def test_index_datetime_floor():
-#     cuidx = cudf.DatetimeIndex([1000000, 2000000, 3000000, 4000000, 5000000])
-#     pidx = cuidx.to_pandas()
+def test_index_datetime_floor():
+    cuidx = cudf.DatetimeIndex([1000000, 2000000, 3000000, 4000000, 5000000])
+    pidx = cuidx.to_pandas()
 
-#     pidx_floor = pidx.floor("T")
-#     cuidx_floor = cuidx.floor("T")
+    pidx_floor = pidx.floor("T")
+    cuidx_floor = cuidx.floor("T")
 
-#     assert_eq(pidx_floor, cuidx_floor)
+    assert_eq(pidx_floor, cuidx_floor)
