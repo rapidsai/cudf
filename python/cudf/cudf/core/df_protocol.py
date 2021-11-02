@@ -138,7 +138,7 @@ class _CuDFColumn:
         """
         if not isinstance(column, cudf.Series):
             raise NotImplementedError(
-                "Columns of type {} not handled " "yet".format(type(column))
+                "Columns of type {} not handled yet".format(type(column))
             )
 
         # Store the column as a private attribute
@@ -238,7 +238,7 @@ class _CuDFColumn:
                 dtype = self._col.codes.dtype
             else:
                 raise ValueError(
-                    f"Data type {dtype} not supported by exchange" "protocol"
+                    f"Data type {dtype} not supported by exchange protocol"
                 )
 
         if kind not in _SUPPORTED_KINDS:
@@ -312,7 +312,7 @@ class _CuDFColumn:
 
         else:
             raise NotImplementedError(
-                f"Data type {self.dtype}" " not yet supported"
+                f"Data type {self.dtype} not yet supported"
             )
 
     @property
@@ -414,12 +414,14 @@ class _CuDFColumn:
 
         else:
             raise NotImplementedError(
-                f"Data type {self._col.dtype}" " not handled yet"
+                f"Data type {self._col.dtype} not handled yet"
             )
 
         return buffer, dtype
 
-    def _get_validity_buffer(self) -> Tuple[_CuDFBuffer, Any]:
+    def _get_validity_buffer(
+        self,
+    ) -> Tuple[_CuDFBuffer, Tuple[_DtypeKind, int, str, str]]:
         """
         Return the buffer containing the mask values
         indicating missing data and the buffer's associated dtype.
@@ -452,14 +454,16 @@ class _CuDFColumn:
             )
         elif null == 0:
             raise RuntimeError(
-                "This column is non-nullable" " so does not have a mask"
+                "This column is non-nullable so does not have a mask"
             )
         else:
             raise NotImplementedError(
-                f"See {self.__class__.__name__}" ".describe_null method."
+                f"See {self.__class__.__name__}.describe_null method."
             )
 
-    def _get_offsets_buffer(self) -> Tuple[_CuDFBuffer, Any]:
+    def _get_offsets_buffer(
+        self,
+    ) -> Tuple[_CuDFBuffer, Tuple[_DtypeKind, int, str, str]]:
         """
         Return the buffer containing the offset values for
         variable-size binary data (e.g., variable-length strings)
@@ -661,7 +665,7 @@ def _from_dataframe(df: DataFrameObject) -> _CuDFDataFrame:
 
         else:
             raise NotImplementedError(
-                f"Data type {col.dtype[0]}" " not handled yet"
+                f"Data type {col.dtype[0]} not handled yet"
             )
 
         _buffers.append(_buf)
@@ -736,7 +740,7 @@ def _protocol_to_cudf_column_categorical(
     ordered, is_dict, mapping = col.describe_categorical
     if not is_dict:
         raise NotImplementedError(
-            "Non-dictionary categoricals" " not supported yet"
+            "Non-dictionary categoricals not supported yet"
         )
 
     categories = as_column(mapping.values())
