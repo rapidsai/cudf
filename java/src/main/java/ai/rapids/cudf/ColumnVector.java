@@ -452,6 +452,22 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
+   * Create a LIST column from the current column and a given offsets column. The output colum will
+   * contain lists that have elements taken from the current column and their sizes are determined
+   * by the given offsets.
+   *
+   * Note that the users are responsible to make sure the given offsets column is of type INT32 and
+   * it contains valid values to create a LIST column.
+   *
+   * @param rows the number of rows to create.
+   * @param offsets the offsets pointing to row indices of the current column to create output
+   *                lists column.
+   */
+  public ColumnVector makeListFromOffsets(long rows, ColumnView offsets) {
+    return new ColumnVector(makeListFromOffsets(getNativeView(), offsets.getNativeView(), rows));
+  }
+
+  /**
    * Create a new vector of length rows, starting at the initialValue and going by step each time.
    * Only numeric types are supported.
    * @param initialValue the initial value to start at.
@@ -777,6 +793,9 @@ public final class ColumnVector extends ColumnView {
   private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
 
   private static native long makeList(long[] handles, long typeHandle, int scale, long rows)
+      throws CudfException;
+
+  private static native long makeListFromOffsets(long childHandle, long offsetsHandle, long rows)
       throws CudfException;
 
   private static native long concatenate(long[] viewHandles) throws CudfException;

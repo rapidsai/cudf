@@ -4228,41 +4228,44 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testDropListDuplicatesWithKeysValues() {
-    List<Integer> list1Keys = Arrays.asList(1, 2);
-    List<Integer> list2Keys = Arrays.asList(3, 4, 5);
-    List<Integer> list3Keys = Arrays.asList(null, 0, 6, 6, 0);
-    List<Integer> dedupeList3Keys = Arrays.asList(0, 6, null);
-    List<Integer> list4Keys = Arrays.asList(null, 6, 7, null, 7);
-    List<Integer> dedupeList4Keys = Arrays.asList(6, 7, null);
+    try(ColumnVector inputChildKeys = ColumnVector.fromBoxedInts(
+            1, 2, // list1
+            3, 4, 5, // list2
+            null, 0, 6, 6, 0, // list3
+            null, 6, 7, null, 7 // list 4
+        );
+        ColumnVector inputChildVals = ColumnVector.fromBoxedInts(
+            10, 20, // list1
+            30, 40, 50, // list2
+            60, 70, 80, 90, 100, // list3
+            110, 120, 130, 140, 150 // list4
+        );
+        ColumnVector inputStructsKeysVals = ColumnVector.makeStruct(inputChildKeys, inputChildVals);
+        ColumnVector inputOffsets = ColumnVector.fromInts(0, 2, 5, 10, 15, 15);
+        ColumnVector inputListsKeysVals = inputStructsKeysVals.makeListFromOffsets(5,
+            inputOffsets);
 
-    List<Integer> list1Vals = Arrays.asList(10, 20);
-    List<Integer> list2Vals = Arrays.asList(30, 40, 50);
-    List<Integer> list3Vals = Arrays.asList(60, 70, 80, 90, 100);
-    List<Integer> dedupeList3Vals = Arrays.asList(60, 90, 100);
-    List<Integer> list4Vals = Arrays.asList(110, 120, 130, 140, 150);
-    List<Integer> dedupeList4Vals = Arrays.asList(120, 140, 150);
+        ColumnVector expectedChildKeys = ColumnVector.fromBoxedInts(
+            1, 2,
+            3, 4, 5,
+            0, 6, null,
+            6, 7, null
+        );
+        ColumnVector expectedChildVals = ColumnVector.fromBoxedInts(
+            10, 20,
+            30, 40, 50,
+            100, 90, 60,
+            120, 150, 140);
+        ColumnVector expectedStructsKeysVals = ColumnVector.makeStruct(expectedChildKeys,
+            expectedChildVals);
+        ColumnVector expectedOffsets = ColumnVector.fromInts(0, 2, 5, 8, 11, 11);
+        ColumnVector expectedListsKeysVals = expectedStructsKeysVals.makeListFromOffsets(5,
+            expectedOffsets);
 
-    List<Integer> list5Common = null;
-
-    HostColumnVector.DataType listType = new HostColumnVector.ListType(true,
-        new HostColumnVector.BasicType(true, DType.INT32));
-    try (ColumnVector keys = ColumnVector.fromLists(listType, list1Keys, list2Keys, list3Keys, list4Keys, list5Common);
-         ColumnVector expectedKeys = ColumnVector.fromLists(listType, list1Keys, list2Keys, dedupeList3Keys, dedupeList4Keys, list5Common);
-         ColumnVector vals = ColumnVector.fromLists(listType, list1Vals, list2Vals, list3Vals, list4Vals, list5Common);
-         ColumnVector expectedVals = ColumnVector.fromLists(listType, list1Vals, list2Vals, dedupeList3Vals, dedupeList4Vals, list5Common);
+        ColumnVector output = inputListsKeysVals.dropListDuplicatesWithKeysValues();
+        ColumnVector sortedOutput = output.listSortRows(false, false);
     ) {
-      ColumnVector[] outputKeysVals = keys.dropListDuplicatesWithKeysValues(vals);
-      try(ColumnVector sortedOutputKeys = outputKeysVals[0].listSortRows(false, false);
-          ColumnVector sortedOutputVals = outputKeysVals[1].listSortRows(false, false)) {
-        assertColumnsAreEqual(expectedKeys, sortedOutputKeys);
-        assertColumnsAreEqual(expectedVals, sortedOutputVals);
-      } finally {
-        for (ColumnVector outputKeysVal : outputKeysVals) {
-          if (outputKeysVal != null) {
-            outputKeysVal.close();
-          }
-        }
-      }
+      assertColumnsAreEqual(expectedListsKeysVals, sortedOutput);
     }
   }
 
