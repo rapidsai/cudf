@@ -164,8 +164,7 @@ void inplace_bitmask_binop(
 template <typename OffsetIterator, typename OutputIterator>
 __global__ void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bitmask,
                                                           size_type num_ranges,
-                                                          OffsetIterator first_bit_indices,
-                                                          OffsetIterator last_bit_indices,
+                                                          OffsetIterator bit_indices,
                                                           OutputIterator null_counts)
 {
   constexpr size_type const word_size_in_bits{detail::size_in_bits<bitmask_type>()};
@@ -174,8 +173,8 @@ __global__ void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bi
   cudf::size_type range_id  = tid;
 
   while (range_id < num_ranges) {
-    size_type const first_bit_index = *(first_bit_indices + range_id);
-    size_type const last_bit_index  = *(last_bit_indices + range_id);
+    size_type const first_bit_index = *(bit_indices + 2 * range_id);
+    size_type const last_bit_index  = *(bit_indices + 2 * range_id + 1);
     size_type delta                 = 0;
     size_type num_slack_bits        = 0;
 
@@ -209,13 +208,13 @@ __global__ void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bi
 // convert [first_bit_index,last_bit_index) to
 // [first_word_index,last_word_index)
 struct to_word_index_functor {
-  const bool inclusive                 = false;
+  const bool last_indices              = false;
   size_type const* const d_bit_indices = nullptr;
 
   __device__ size_type operator()(const size_type& i) const
   {
-    auto bit_index = d_bit_indices[i];
-    return word_index(bit_index) + ((inclusive || intra_word_index(bit_index) == 0) ? 0 : 1);
+    auto bit_index = d_bit_indices[2 * i + (last_indices ? 1 : 0)];
+    return word_index(bit_index) + ((!last_indices || intra_word_index(bit_index) == 0) ? 0 : 1);
   }
 };
 
@@ -236,8 +235,7 @@ struct word_num_set_bits_functor {
 // Count set bits in a segmented null mask, using indices on the device
 rmm::device_uvector<size_type> segmented_count_set_bits(
   bitmask_type const* bitmask,
-  rmm::device_uvector<size_type> const& d_first_indices,
-  rmm::device_uvector<size_type> const& d_last_indices,
+  rmm::device_uvector<size_type> const& d_indices,
   rmm::cuda_stream_view stream);
 
 /**
@@ -286,7 +284,9 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
     return ret;
   }
 
-  size_type num_ranges = num_indices / 2;
+  auto const d_indices       = make_device_uvector_async(indices_begin, indices_end, stream);
+  size_type const num_ranges = num_indices / 2;
+  /*
   std::vector<size_type> h_first_indices(num_ranges);
   std::vector<size_type> h_last_indices(num_ranges);
   thrust::stable_partition_copy(thrust::seq,
@@ -299,9 +299,10 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
 
   auto d_first_indices = make_device_uvector_async(h_first_indices, stream);
   auto d_last_indices  = make_device_uvector_async(h_last_indices, stream);
+  */
 
   rmm::device_uvector<size_type> d_null_counts =
-    segmented_count_set_bits(bitmask, d_first_indices, d_last_indices, stream);
+    segmented_count_set_bits(bitmask, d_indices, stream);
 
   std::vector<size_type> ret(num_ranges);
   CUDA_TRY(cudaMemcpyAsync(ret.data(),

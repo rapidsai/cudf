@@ -436,19 +436,18 @@ rmm::device_buffer bitmask_or(table_view const& view,
 // Count set bits in a segmented null mask, using indices on the device
 rmm::device_uvector<size_type> segmented_count_set_bits(
   bitmask_type const* bitmask,
-  rmm::device_uvector<size_type> const& d_first_indices,
-  rmm::device_uvector<size_type> const& d_last_indices,
+  rmm::device_uvector<size_type> const& d_indices,
   rmm::cuda_stream_view stream)
 {
-  size_type num_ranges = d_first_indices.size();
+  size_type num_ranges = d_indices.size() / 2;
   rmm::device_uvector<size_type> d_null_counts(num_ranges, stream);
 
   auto word_num_set_bits  = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
                                                            word_num_set_bits_functor{bitmask});
   auto first_word_indices = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0), to_word_index_functor{true, d_first_indices.data()});
+    thrust::make_counting_iterator(0), to_word_index_functor{false, d_indices.data()});
   auto last_word_indices = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0), to_word_index_functor{false, d_last_indices.data()});
+    thrust::make_counting_iterator(0), to_word_index_functor{true, d_indices.data()});
 
   // first allocate temporary memory
 
@@ -487,7 +486,7 @@ rmm::device_uvector<size_type> segmented_count_set_bits(
                                               grid.num_threads_per_block,
                                               0,
                                               stream.value()>>>(
-    bitmask, num_ranges, d_first_indices.begin(), d_last_indices.begin(), d_null_counts.begin());
+    bitmask, num_ranges, d_indices.begin(), d_null_counts.begin());
 
   CHECK_CUDA(stream.value());
   return d_null_counts;
