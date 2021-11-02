@@ -1,14 +1,14 @@
-import enum
 import collections
-from typing import Any, Optional, Tuple, Dict, Iterable, Sequence
+import enum
+from typing import Any, Dict, Iterable, Optional, Sequence, Tuple
 
-import cudf
-from cudf.core.column import as_column, build_column, build_categorical_column
-from cudf.core.buffer import Buffer
-import numpy as np
 import cupy as cp
+import numpy as np
 from numba import cuda
 
+import cudf
+from cudf.core.buffer import Buffer
+from cudf.core.column import as_column, build_categorical_column, build_column
 
 # Implementation of interchange protocol classes
 # ----------------------------------------------

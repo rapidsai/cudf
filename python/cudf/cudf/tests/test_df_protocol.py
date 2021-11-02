@@ -1,19 +1,20 @@
+from typing import Any, Tuple
+
 import cupy as cp
+import pandas as pd
 import pytest
-from cudf.core.df_protocol import (
-    _from_dataframe,
-    _DtypeKind,
-    protocol_dtype_to_cupy_dtype,
-    _CuDFColumn,
-    _CuDFBuffer
-)
 
 import cudf
-from cudf.core.column import build_column
 from cudf.core.buffer import Buffer
+from cudf.core.column import build_column
+from cudf.core.df_protocol import (
+    _CuDFBuffer,
+    _CuDFColumn,
+    _DtypeKind,
+    _from_dataframe,
+    protocol_dtype_to_cupy_dtype,
+)
 from cudf.testing._utils import assert_eq
-import pandas as pd
-from typing import Any, Tuple
 
 DataFrameObject = Any
 
