@@ -7,8 +7,8 @@ Which implementation is used by default depends on the data format and the compr
 
 There are three special values for the environment variable:
 
-- "STABLE": only the nvCOMP usage that has been thoroughly tested in enabled.
-- "EXPERIMENTAL": All available uses of nvCOMP are enabled, regardless of the level of prior testing.
+- "STABLE": only enable the nvCOMP readers that have been deemed stable for production use. 
+- "EXPERIMENTAL": All available uses of nvCOMP are enabled, including new, experimental combinations.
 - "NONE": Internal implementations are used whenever possible.
 
 Any other value (or no value set) will result in the same behavior as the "STABLE" option.
