@@ -56,8 +56,7 @@ function(find_and_configure_thrust VERSION)
       DIRECTORY "${Thrust_SOURCE_DIR}/thrust"
       DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/libcudf/Thrust/"
       FILES_MATCHING
-      PATTERN "*.h"
-      PATTERN "*.inl"
+      REGEX "\\.(h|inl)$"
     )
     install(
       DIRECTORY "${Thrust_SOURCE_DIR}/dependencies/cub/cub"
