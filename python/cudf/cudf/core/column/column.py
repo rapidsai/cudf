@@ -689,7 +689,7 @@ class ColumnBase(Column, Serializable):
     def median(self, skipna: bool = None) -> ScalarLike:
         raise TypeError(f"cannot perform median with type {self.dtype}")
 
-    def take(self: T, indices: ColumnBase, nullify: bool = False,) -> T:
+    def take(self: T, indices: ColumnBase, nullify: bool = False) -> T:
         """Return Column by taking values from the corresponding *indices*. Set
         rows to null for all out of bound indices if nullify is `True`.
         """
