@@ -704,8 +704,8 @@ TEST_F(RowBitCount, EmptyTable)
   }
 
   {
-    auto strings = cudf::make_empty_column(data_type{type_id::STRING});
-    auto ints    = cudf::make_empty_column(data_type{type_id::INT32});
+    auto strings = cudf::make_empty_column(type_id::STRING);
+    auto ints    = cudf::make_empty_column(type_id::INT32);
     cudf::table_view empty({*strings, *ints});
 
     auto result = cudf::row_bit_count(empty);

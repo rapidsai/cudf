@@ -917,8 +917,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         string              object
         dtype: object
         """
-        return cudf.utils.utils._create_pandas_series(
-            data=[x.dtype for x in self._data.columns], index=self._data.names,
+        return pd.Series(self._dtypes)
+
+    @property
+    def _dtypes(self):
+        return dict(
+            zip(self._data.names, (col.dtype for col in self._data.columns))
         )
 
     @property
@@ -2123,39 +2127,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         mapper = dict(zip(old_cols, new_names))
         self.rename(mapper=mapper, inplace=True, axis=1)
 
-    @property
-    def index(self):
-        """Returns the index of the DataFrame"""
-        return self._index
-
-    @index.setter
-    def index(self, value):
-        old_length = (
-            self._num_rows if self._index is None else len(self._index)
-        )
-        if isinstance(value, cudf.core.multiindex.MultiIndex):
-            if len(self._data) > 0 and len(value) != old_length:
-                msg = (
-                    f"Length mismatch: Expected axis has {old_length} "
-                    f"elements, new values have {len(value)} elements"
-                )
-                raise ValueError(msg)
-            self._index = value
-            return
-
-        new_length = len(value)
-
-        if len(self._data) > 0 and new_length != old_length:
-            msg = (
-                f"Length mismatch: Expected axis has {old_length} elements, "
-                f"new values have {new_length} elements"
-            )
-            raise ValueError(msg)
-
-        # try to build an index from generic _index
-        idx = as_index(value)
-        self._index = idx
-
     def _reindex(
         self, columns, dtypes=None, deep=False, index=None, inplace=False
     ):
@@ -2188,16 +2159,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if index is not None:
             index = cudf.core.index.as_index(index)
 
-            if isinstance(index, cudf.MultiIndex):
-                idx_dtype_match = all(
-                    left_dtype == right_dtype
-                    for left_dtype, right_dtype in zip(
-                        (col.dtype for col in df.index._data.columns),
-                        (col.dtype for col in index._data.columns),
-                    )
+            idx_dtype_match = (df.index.nlevels == index.nlevels) and all(
+                left_dtype == right_dtype
+                for left_dtype, right_dtype in zip(
+                    (col.dtype for col in df.index._data.columns),
+                    (col.dtype for col in index._data.columns),
                 )
-            else:
-                idx_dtype_match = df.index.dtype == index.dtype
+            )
 
             if not idx_dtype_match:
                 columns = (
@@ -2238,7 +2206,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return self._mimic_inplace(result, inplace=inplace)
 
     def reindex(
-        self, labels=None, axis=0, index=None, columns=None, copy=True
+        self, labels=None, axis=None, index=None, columns=None, copy=True
     ):
         """
         Return a new DataFrame whose axes conform to a new index
@@ -2287,22 +2255,33 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if labels is None and index is None and columns is None:
             return self.copy(deep=copy)
 
-        dtypes = dict(self.dtypes)
-        idx = labels if index is None and axis in (0, "index") else index
-        cols = (
-            labels if columns is None and axis in (1, "columns") else columns
-        )
+        # pandas simply ignores the labels keyword if it is provided in
+        # addition to index and columns, but it prohibits the axis arg.
+        if (index is not None or columns is not None) and axis is not None:
+            raise TypeError(
+                "Cannot specify both 'axis' and any of 'index' or 'columns'."
+            )
+
+        axis = self._get_axis_from_axis_arg(axis)
+        if axis == 0:
+            if index is None:
+                index = labels
+        else:
+            if columns is None:
+                columns = labels
         df = (
             self
-            if cols is None
-            else self[list(set(self._column_names) & set(cols))]
+            if columns is None
+            else self[list(set(self._column_names) & set(columns))]
         )
 
-        result = df._reindex(
-            columns=cols, dtypes=dtypes, deep=copy, index=idx, inplace=False
+        return df._reindex(
+            columns=columns,
+            dtypes=self._dtypes,
+            deep=copy,
+            index=index,
+            inplace=False,
         )
-
-        return result
 
     def set_index(
         self,
@@ -2574,7 +2553,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if not inplace:
             return result
 
-    def take(self, indices, keep_index=None):
+    def take(self, indices, axis=0, keep_index=None):
+        axis = self._get_axis_from_axis_arg(axis)
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 is supported.")
         out = super().take(indices, keep_index)
         out.columns = self.columns
         return out
@@ -3188,7 +3170,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Returns
         -------
-        a new dataframe with a new column append for the coded values.
+        A new DataFrame with a new column appended for the coded values.
 
         Examples
         --------
@@ -3206,13 +3188,26 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         2  3  20             1
         """
 
+        warnings.warn(
+            "DataFrame.label_encoding is deprecated and will be removed in "
+            "the future. Consider using cuML's LabelEncoder instead.",
+            FutureWarning,
+        )
+
+        return self._label_encoding(
+            column, prefix, cats, prefix_sep, dtype, na_sentinel
+        )
+
+    def _label_encoding(
+        self, column, prefix, cats, prefix_sep="_", dtype=None, na_sentinel=-1
+    ):
+        # Private implementation of deprecated public label_encoding method
         newname = prefix_sep.join([prefix, "labels"])
-        newcol = self[column].label_encoding(
+        newcol = self[column]._label_encoding(
             cats=cats, dtype=dtype, na_sentinel=na_sentinel
         )
         outdf = self.copy()
         outdf.insert(len(outdf._data), newname, newcol)
-
         return outdf
 
     def agg(self, aggs, axis=None):
@@ -3581,7 +3576,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             If on is None and not merging on indexes then
             this defaults to the intersection of the columns
             in both DataFrames.
-        how : {‘left’, ‘outer’, ‘inner’}, default ‘inner’
+        how : {‘left’, ‘outer’, ‘inner’, 'leftsemi', 'leftanti'}, \
+            default ‘inner’
             Type of merge to be performed.
 
             - left : use only keys from left frame, similar to a SQL left
@@ -3589,8 +3585,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             - right : not supported.
             - outer : use union of keys from both frames, similar to a SQL
               full outer join.
-            - inner: use intersection of keys from both frames, similar to
+            - inner : use intersection of keys from both frames, similar to
               a SQL inner join.
+            - leftsemi : similar to ``inner`` join, but only returns columns
+               from the left dataframe and ignores all columns from the
+               right dataframe.
+            - leftanti : returns only rows columns from the left dataframe
+              for non-matched records. This is exact opposite to ``leftsemi``
+              join.
         left_on : label or list, or array-like
             Column or index level names to join on in the left DataFrame.
             Can also be an array or list of arrays of the length of the
@@ -6064,13 +6066,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         df = DataFrame(cupy.asfortranarray(corr)).set_index(self.columns)
         df.columns = self.columns
         return df
-
-    def to_dict(self, orient="dict", into=dict):
-        raise TypeError(
-            "cuDF does not support conversion to host memory "
-            "via `to_dict()` method. Consider using "
-            "`.to_pandas().to_dict()` to construct a Python dictionary."
-        )
 
     def to_struct(self, name=None):
         """
