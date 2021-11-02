@@ -148,16 +148,17 @@ class Frame:
         index_names: Optional[List[str]] = None,
     ):
         index = None
+        n_index_columns = 0
         if index_names is not None:
             # First construct the index, if any
+            n_index_columns = len(index_names)
             index = cudf.core.index._index_from_data(
-                dict(zip(range(len(index_names)), columns))
+                dict(zip(range(n_index_columns), columns))
             )
             index.name = index_names[0]
             if isinstance(index, cudf.MultiIndex):
                 index.names = index_names
 
-        n_index_columns = len(index_names) if index_names is not None else 0
         data = {
             name: columns[i + n_index_columns]
             for i, name in enumerate(column_names)
