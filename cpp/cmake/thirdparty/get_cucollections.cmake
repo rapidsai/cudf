@@ -12,6 +12,7 @@
 # the License.
 # =============================================================================
 
+# This function finds cucollections and sets any additional necessary environment variables.
 function(find_and_configure_cucollections)
 
   # Find or install cuCollections

@@ -12,6 +12,7 @@
 # the License.
 # =============================================================================
 
+# This function finds thrust and sets any additional necessary environment variables.
 function(find_and_configure_thrust VERSION)
   # We only want to set `UPDATE_DISCONNECTED` while the GIT tag hasn't moved from the last time we
   # cloned

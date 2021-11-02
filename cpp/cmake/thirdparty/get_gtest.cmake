@@ -12,6 +12,7 @@
 # the License.
 # =============================================================================
 
+# This function finds gtest and sets any additional necessary environment variables.
 function(find_and_configure_gtest)
   include(${rapids-cmake-dir}/cpm/gtest.cmake)
 

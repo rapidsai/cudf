@@ -14,6 +14,7 @@
 
 # Jitify doesn't have a version :/
 
+# This function finds Jitify and sets any additional necessary environment variables.
 function(find_and_configure_jitify)
   rapids_cpm_find(
     jitify 2.0.0

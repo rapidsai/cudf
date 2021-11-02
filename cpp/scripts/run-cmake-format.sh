@@ -26,7 +26,6 @@
 
 # Note that pre-commit always runs from the root of the repository, so relative
 # paths are automatically relative to the repo root.
-echo "Running in ${PWD}"
 DEFAULT_FORMAT_FILE_LOCATIONS=(
   "cpp/build/_deps/rapids-cmake-src/cmake-format-rapids-cmake.json" 
   "${CUDF_ROOT:-${HOME}}/_deps/rapids-cmake-src/cmake-format-rapids-cmake.json"

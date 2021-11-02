@@ -12,6 +12,7 @@
 # the License.
 # =============================================================================
 
+# This function finds nvcomp and sets any additional necessary environment variables.
 function(find_and_configure_nvcomp VERSION)
 
   # Find or install nvcomp

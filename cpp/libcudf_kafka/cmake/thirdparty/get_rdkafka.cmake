@@ -12,6 +12,7 @@
 # the License.
 # =============================================================================
 
+# This function finds rdkafka and sets any additional necessary environment variables.
 function(get_RDKafka)
   rapids_find_generate_module(
     RDKAFKA

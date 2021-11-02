@@ -12,6 +12,7 @@
 # the License.
 # =============================================================================
 
+# This function finds cudf and sets any additional necessary environment variables.
 function(find_and_configure_cudf VERSION)
   rapids_cmake_parse_version(MAJOR_MINOR ${VERSION} major_minor)
   rapids_cpm_find(

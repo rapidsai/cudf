@@ -12,6 +12,7 @@
 # the License.
 # =============================================================================
 
+# This function finds libcudacxx and sets any additional necessary environment variables.
 function(find_and_configure_libcudacxx)
   include(${rapids-cmake-dir}/cpm/libcudacxx.cmake)
 

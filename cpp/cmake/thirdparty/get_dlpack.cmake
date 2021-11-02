@@ -12,6 +12,7 @@
 # the License.
 # =============================================================================
 
+# This function finds dlpack and sets any additional necessary environment variables.
 function(find_and_configure_dlpack VERSION)
 
   rapids_find_generate_module(DLPACK HEADER_NAMES dlpack.h)
