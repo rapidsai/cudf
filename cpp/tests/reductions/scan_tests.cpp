@@ -203,7 +203,7 @@ struct ScanTest : public BaseScanTest<T> {
 using TestTypes = cudf::test::
   Concat<cudf::test::NumericTypes, cudf::test::FixedPointTypes, cudf::test::StringTypes>;
 
-TYPED_TEST_CASE(ScanTest, TestTypes);
+TYPED_TEST_SUITE(ScanTest, TestTypes);
 
 TYPED_TEST(ScanTest, Min)
 {

@@ -46,7 +46,7 @@ using RankTypes = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                      cudf::test::ChronoTypes,
                                      cudf::test::StringTypes>;
 
-TYPED_TEST_CASE(TypedRankScanTest, RankTypes);
+TYPED_TEST_SUITE(TypedRankScanTest, RankTypes);
 
 TYPED_TEST(TypedRankScanTest, Rank)
 {
