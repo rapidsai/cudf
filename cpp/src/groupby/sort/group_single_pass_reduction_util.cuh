@@ -123,7 +123,7 @@ struct null_replaced_value_accessor : value_accessor<T> {
 template <aggregation::Kind K, typename T, typename Enable = void>
 struct reduce_functor_impl {
   template <typename... Args>
-  std::unique_ptr<column> operator()(Args&&...)
+  static std::unique_ptr<column> invoke(Args&&...)
   {
     CUDF_FAIL("Unsupported groupby reduction type-agg combination.");
   }
@@ -138,7 +138,7 @@ struct reduce_functor {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    return reduce_functor_impl<K, T>{}(values, num_groups, group_labels, stream, mr);
+    return reduce_functor_impl<K, T>::invoke(values, num_groups, group_labels, stream, mr);
   }
 };
 
@@ -166,11 +166,11 @@ struct reduce_functor_impl<
   K,
   T,
   std::enable_if_t<is_redution_supported<K, T>() and not std::is_same_v<T, cudf::struct_view>>> {
-  std::unique_ptr<column> operator()(column_view const& values,
-                                     size_type num_groups,
-                                     cudf::device_span<cudf::size_type const> group_labels,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+  static std::unique_ptr<column> invoke(column_view const& values,
+                                        size_type num_groups,
+                                        cudf::device_span<cudf::size_type const> group_labels,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
 
   {
     using DeviceType  = device_storage_type_t<T>;
@@ -233,11 +233,11 @@ struct reduce_functor_impl<
   K,
   T,
   std::enable_if_t<is_redution_supported<K, T>() and std::is_same_v<T, cudf::struct_view>>> {
-  std::unique_ptr<column> operator()(column_view const& values,
-                                     size_type num_groups,
-                                     cudf::device_span<cudf::size_type const> group_labels,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+  static std::unique_ptr<column> invoke(column_view const& values,
+                                        size_type num_groups,
+                                        cudf::device_span<cudf::size_type const> group_labels,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
   {
     // This is be expected to be size_type.
     using ResultType = cudf::detail::target_type_t<T, K>;

@@ -46,7 +46,7 @@ namespace detail {
 template <aggregation::Kind K, typename T, typename Enable = void>
 struct scan_functor_impl {
   template <typename... Args>
-  std::unique_ptr<column> operator()(Args&&...)
+  static std::unique_ptr<column> invoke(Args&&...)
   {
     CUDF_FAIL("Unsupported groupby scan type-agg combination.");
   }
@@ -61,7 +61,7 @@ struct scan_functor {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    return scan_functor_impl<K, T>{}(values, num_groups, group_labels, stream, mr);
+    return scan_functor_impl<K, T>::invoke(values, num_groups, group_labels, stream, mr);
   }
 };
 
@@ -86,11 +86,11 @@ struct scan_functor_impl<
   T,
   std::enable_if_t<is_scan_supported<K, T>() and not std::is_same_v<T, cudf::string_view> and
                    not std::is_same_v<T, cudf::struct_view>>> {
-  std::unique_ptr<column> operator()(column_view const& values,
-                                     size_type num_groups,
-                                     cudf::device_span<cudf::size_type const> group_labels,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+  static std::unique_ptr<column> invoke(column_view const& values,
+                                        size_type num_groups,
+                                        cudf::device_span<cudf::size_type const> group_labels,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
   {
     using DeviceType       = device_storage_type_t<T>;
     using OpType           = cudf::detail::corresponding_operator_t<K>;
@@ -143,11 +143,11 @@ struct scan_functor_impl<
   K,
   T,
   std::enable_if_t<is_scan_supported<K, T>() and std::is_same_v<T, cudf::string_view>>> {
-  std::unique_ptr<column> operator()(column_view const& values,
-                                     size_type num_groups,
-                                     cudf::device_span<cudf::size_type const> group_labels,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+  static std::unique_ptr<column> invoke(column_view const& values,
+                                        size_type num_groups,
+                                        cudf::device_span<cudf::size_type const> group_labels,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
   {
     using OpType = cudf::detail::corresponding_operator_t<K>;
 
@@ -190,11 +190,11 @@ struct scan_functor_impl<
   K,
   T,
   std::enable_if_t<is_scan_supported<K, T>() and std::is_same_v<T, cudf::struct_view>>> {
-  std::unique_ptr<column> operator()(column_view const& values,
-                                     size_type num_groups,
-                                     cudf::device_span<cudf::size_type const> group_labels,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
+  static std::unique_ptr<column> invoke(column_view const& values,
+                                        size_type num_groups,
+                                        cudf::device_span<cudf::size_type const> group_labels,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
   {
     if (values.is_empty()) { return cudf::empty_like(values); }
 
