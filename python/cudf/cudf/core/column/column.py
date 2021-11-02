@@ -702,7 +702,7 @@ class ColumnBase(Column, Serializable):
         if not nullify and not _gather_map_is_valid(indices, len(self)):
             raise IndexError("Gather map index is out of bounds.")
 
-        return libcudf.copying.gather([self], indices, nullify=nullify,)[
+        return libcudf.copying.gather([self], indices, nullify=nullify)[
             0
         ]._with_type_metadata(self.dtype)
 
