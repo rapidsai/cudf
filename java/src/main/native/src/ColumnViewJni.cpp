@@ -445,6 +445,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicatesWithKey
     auto const keys_vals = lists_keys_vals.child();
     CUDF_EXPECTS(keys_vals.type().id() == cudf::type_id::STRUCT,
                  "Input column has child that is not a structs column.");
+    CUDF_EXPECTS(keys_vals.num_children() == 2,
+                 "Input column has child that does not have 2 children.");
 
     auto const lists_offsets = lists_keys_vals.offsets();
     auto const structs_keys_vals = cudf::structs_column_view(keys_vals);
