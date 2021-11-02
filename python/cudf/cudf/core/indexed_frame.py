@@ -433,7 +433,7 @@ class IndexedFrame(Frame):
         if not nullify and not _gather_map_is_valid(gather_map, len(self)):
             raise IndexError("Gather map index is out of bounds.")
 
-        result = self.__class__._from_maybe_indexed_columns(
+        result = self.__class__._from_columns(
             libcudf.copying.gather(
                 list(self._index._columns + self._columns)
                 if keep_index
@@ -501,7 +501,7 @@ class IndexedFrame(Frame):
         keys = self._positions_from_column_names(
             subset, include_index=not ignore_index
         )
-        result = self.__class__._from_maybe_indexed_columns(
+        result = self.__class__._from_columns(
             libcudf.stream_compaction.drop_duplicates(
                 list(self._columns)
                 if ignore_index

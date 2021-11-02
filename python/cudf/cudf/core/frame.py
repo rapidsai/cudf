@@ -142,16 +142,20 @@ class Frame:
         return obj
 
     @classmethod
-    def _from_maybe_indexed_columns(
+    def _from_columns(
         cls,
         columns: List[ColumnBase],
         column_names: List[str],
         index_names: Optional[List[str]] = None,
     ):
+        """Construct a `Frame` object from a list of columns.
+
+        If `index_names` is set, the first `len(index_names)` columns are
+        used to construct the index of the frame.
+        """
         index = None
         n_index_columns = 0
         if index_names is not None:
-            # First construct the index, if any
             n_index_columns = len(index_names)
             index = cudf.core.index._index_from_data(
                 dict(zip(range(n_index_columns), columns))
@@ -561,7 +565,7 @@ class Frame:
         if not nullify and not _gather_map_is_valid(gather_map, len(self)):
             raise IndexError("Gather map index is out of bounds.")
 
-        result = self.__class__._from_maybe_indexed_columns(
+        result = self.__class__._from_columns(
             libcudf.copying.gather(
                 list(self._columns), gather_map, nullify=nullify,
             ),
@@ -1433,7 +1437,7 @@ class Frame:
                 else:
                     frame._data[name] = col
 
-        result = self.__class__._from_maybe_indexed_columns(
+        result = self.__class__._from_columns(
             libcudf.stream_compaction.drop_nulls(
                 list(self._index._data.columns + frame._columns),
                 how=how,
@@ -2295,7 +2299,7 @@ class Frame:
             Null elements are considered equal to other null elements.
         """
 
-        result = self.__class__._from_maybe_indexed_columns(
+        result = self.__class__._from_columns(
             libcudf.stream_compaction.drop_duplicates(
                 list(self._columns),
                 keys=range(len(self._columns)),
