@@ -441,8 +441,6 @@ class IndexedFrame(Frame):
         )
 
         result._copy_type_metadata(self, include_index=keep_index)
-        if keep_index:
-            result.index.names = self._index.names
         return result
 
     def _positions_from_column_names(self, column_names, include_index=False):

@@ -156,10 +156,6 @@ class Frame:
                 dict(zip(range(n_index_columns), columns))
             )
 
-            # TODO: Index namings should be handled in _index_from_data
-            # Currently that factory method only accepts single level
-            # index name, so we need to handle the separately for multiindex
-            # below.
             if isinstance(index, cudf.MultiIndex):
                 index.names = index_names
             else:
@@ -2331,7 +2327,7 @@ class Frame:
         result._copy_type_metadata(self)
         return result
 
-    def _positions_from_column_names(self, column_names, include_index=False):
+    def _positions_from_column_names(self, column_names):
         """Map each column name into their positions in the frame.
 
         Return positions of the provided column names, offset by the number of
