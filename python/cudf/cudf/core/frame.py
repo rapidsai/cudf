@@ -155,9 +155,15 @@ class Frame:
             index = cudf.core.index._index_from_data(
                 dict(zip(range(n_index_columns), columns))
             )
-            index.name = index_names[0]
+
+            # TODO: Index namings should be handled in _index_from_data
+            # Currently that factory method only accepts single level
+            # index name, so we need to handle the separately for multiindex
+            # below.
             if isinstance(index, cudf.MultiIndex):
                 index.names = index_names
+            else:
+                index.name = index_names[0]
 
         data = {
             name: columns[i + n_index_columns]
