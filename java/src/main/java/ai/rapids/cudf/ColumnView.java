@@ -2191,13 +2191,8 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(dropListDuplicates(getNativeView()));
   }
 
-  public final ColumnVector[] dropListDuplicatesWithKeysValues(ColumnVector values) {
-    long[] nativeHandles = dropListDuplicatesWithKeysValues(getNativeView(), values.getNativeView());
-    ColumnVector[] results = new ColumnVector[nativeHandles.length];
-    for (int i = 0; i < nativeHandles.length; i++) {
-      results[i] = new ColumnVector(nativeHandles[i]);
-    }
-    return results;
+  public final ColumnVector dropListDuplicatesWithKeysValues() {
+    return new ColumnVector(dropListDuplicatesWithKeysValues(getNativeView()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -3531,7 +3526,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   private static native long dropListDuplicates(long nativeView);
 
-  private static native long[] dropListDuplicatesWithKeysValues(long keysViewHandle, long valsViewHandle);
+  private static native long dropListDuplicatesWithKeysValues(long nativeHandle);
 
   /**
    * Native method for list lookup
