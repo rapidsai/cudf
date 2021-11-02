@@ -3,9 +3,9 @@
 from __future__ import annotations, division, print_function
 
 import pickle
+import warnings
 from typing import Any, Set
 
-import cupy
 import pandas as pd
 
 import cudf
@@ -499,66 +499,6 @@ class BaseIndex(Serializable):
 
         return super().fillna(value=value)
 
-    def take(self, indices):
-        """Gather only the specific subset of indices
-
-        Parameters
-        ----------
-        indices: An array-like that maps to values contained in this Index.
-        """
-        return self[indices]
-
-    def argsort(self, ascending=True, **kwargs):
-        """
-        Return the integer indices that would sort the index.
-
-        Parameters
-        ----------
-        ascending : bool, default True
-            If True, returns the indices for ascending order.
-            If False, returns the indices for descending order.
-
-        Returns
-        -------
-        array : A cupy array containing Integer indices that
-            would sort the index if used as an indexer.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> index = cudf.Index([10, 100, 1, 1000])
-        >>> index
-        Int64Index([10, 100, 1, 1000], dtype='int64')
-        >>> index.argsort()
-        array([2, 0, 1, 3], dtype=int32)
-
-        The order of argsort can be reversed using
-        ``ascending`` parameter, by setting it to ``False``.
-        >>> index.argsort(ascending=False)
-        array([3, 1, 0, 2], dtype=int32)
-
-        ``argsort`` on a MultiIndex:
-
-        >>> index = cudf.MultiIndex(
-        ...      levels=[[1, 3, 4, -10], [1, 11, 5]],
-        ...      codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-        ...      names=["x", "y"],
-        ... )
-        >>> index
-        MultiIndex([(  1,  1),
-                    (  1,  5),
-                    (  3, 11),
-                    (  4, 11),
-                    (-10,  1)],
-                   names=['x', 'y'])
-        >>> index.argsort()
-        array([4, 0, 1, 2, 3], dtype=int32)
-        >>> index.argsort(ascending=False)
-        array([3, 2, 1, 0, 4], dtype=int32)
-        """
-        indices = self._values.argsort(ascending=ascending, **kwargs)
-        return cupy.asarray(indices)
-
     def to_frame(self, index=True, name=None):
         """Create a DataFrame with a column containing this Index
 
@@ -621,6 +561,10 @@ class BaseIndex(Serializable):
         """
         View the data as a numba device array object
         """
+        warnings.warn(
+            "The gpu_values property is deprecated and will be removed.",
+            FutureWarning,
+        )
         return self._values.data_array_view
 
     def append(self, other):
@@ -1025,7 +969,13 @@ class BaseIndex(Serializable):
             return intersection_result.sort_values()
         return intersection_result
 
-    def sort_values(self, return_indexer=False, ascending=True, key=None):
+    def sort_values(
+        self,
+        return_indexer=False,
+        ascending=True,
+        na_position="last",
+        key=None,
+    ):
         """
         Return a sorted copy of the index, and optionally return the indices
         that sorted the index itself.
@@ -1036,6 +986,9 @@ class BaseIndex(Serializable):
             Should the indices that would sort the index be returned.
         ascending : bool, default True
             Should the index values be sorted in an ascending order.
+        na_position : {'first' or 'last'}, default 'last'
+            Argument 'first' puts NaNs at the beginning, 'last' puts NaNs at
+            the end.
         key : None, optional
             This parameter is NON-FUNCTIONAL.
 
@@ -1101,12 +1054,14 @@ class BaseIndex(Serializable):
         """
         if key is not None:
             raise NotImplementedError("key parameter is not yet implemented.")
+        if na_position not in {"first", "last"}:
+            raise ValueError(f"invalid na_position: {na_position}")
 
-        indices = self._values.argsort(ascending=ascending)
-        index_sorted = cudf.Index(self.take(indices), name=self.name)
+        indices = self.argsort(ascending=ascending, na_position=na_position)
+        index_sorted = self.take(indices)
 
         if return_indexer:
-            return index_sorted, cupy.asarray(indices)
+            return index_sorted, indices
         else:
             return index_sorted
 
