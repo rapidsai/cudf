@@ -2557,43 +2557,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if not inplace:
             return result
 
-    def take(self, positions, axis=0, keep_index=True):
-        """
-        Return a new DataFrame containing the rows specified by *positions*
-
-        Parameters
-        ----------
-        positions : array-like
-            Integer or boolean array-like specifying the rows of the output.
-            If integer, each element represents the integer index of a row.
-            If boolean, *positions* must be of the same length as *self*,
-            and represents a boolean mask.
-
-        Returns
-        -------
-        out : DataFrame
-            New DataFrame
-
-        Examples
-        --------
-        >>> a = cudf.DataFrame({'a': [1.0, 2.0, 3.0],
-        ...                    'b': cudf.Series(['a', 'b', 'c'])})
-        >>> a.take([0, 2, 2])
-             a  b
-        0  1.0  a
-        2  3.0  c
-        2  3.0  c
-        >>> a.take([True, False, True])
-             a  b
-        0  1.0  a
-        2  3.0  c
-        """
+    def take(self, indices, axis=0, keep_index=None):
+        axis = self._get_axis_from_axis_arg(axis)
         if axis != 0:
             raise NotImplementedError("Only axis=0 is supported.")
-        positions = as_column(positions)
-        if is_bool_dtype(positions):
-            return self._apply_boolean_mask(positions)
-        out = self._gather(positions, keep_index=keep_index)
+        out = super().take(indices, keep_index)
         out.columns = self.columns
         return out
 
@@ -3246,127 +3214,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         outdf.insert(len(outdf._data), newname, newcol)
         return outdf
 
-    @annotate("ARGSORT", color="yellow", domain="cudf_python")
-    def argsort(self, ascending=True, na_position="last"):
-        """
-        Sort by the values.
-
-        Parameters
-        ----------
-        ascending : bool or list of bool, default True
-            If True, sort values in ascending order, otherwise descending.
-        na_position : {‘first’ or ‘last’}, default ‘last’
-            Argument ‘first’ puts NaNs at the beginning, ‘last’ puts NaNs
-            at the end.
-
-        Returns
-        -------
-        out_column_inds : cuDF Column of indices sorted based on input
-
-        Notes
-        -----
-        Difference from pandas:
-
-        - Support axis='index' only.
-        - Not supporting: inplace, kind
-        - Ascending can be a list of bools to control per column
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a':[10, 0, 2], 'b':[-10, 10, 1]})
-        >>> df
-            a   b
-        0  10 -10
-        1   0  10
-        2   2   1
-        >>> inds = df.argsort()
-        >>> inds
-        0    1
-        1    2
-        2    0
-        dtype: int32
-        >>> df.take(inds)
-            a   b
-        1   0  10
-        2   2   1
-        0  10 -10
-        """
-        inds_col = self._get_sorted_inds(
-            ascending=ascending, na_position=na_position
-        )
-        return cudf.Series(inds_col)
-
-    def sort_values(
-        self,
-        by,
-        axis=0,
-        ascending=True,
-        inplace=False,
-        kind="quicksort",
-        na_position="last",
-        ignore_index=False,
-    ):
-        """
-        Sort by the values row-wise.
-
-        Parameters
-        ----------
-        by : str or list of str
-            Name or list of names to sort by.
-        ascending : bool or list of bool, default True
-            Sort ascending vs. descending. Specify list for multiple sort
-            orders. If this is a list of bools, must match the length of the
-            by.
-        na_position : {‘first’, ‘last’}, default ‘last’
-            'first' puts nulls at the beginning, 'last' puts nulls at the end
-        ignore_index : bool, default False
-            If True, index will not be sorted.
-
-        Returns
-        -------
-        sorted_obj : cuDF DataFrame
-
-        Notes
-        -----
-        Difference from pandas:
-          * Support axis='index' only.
-          * Not supporting: inplace, kind
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame()
-        >>> df['a'] = [0, 1, 2]
-        >>> df['b'] = [-3, 2, 0]
-        >>> df.sort_values('b')
-           a  b
-        0  0 -3
-        2  2  0
-        1  1  2
-        """
-        if inplace:
-            raise NotImplementedError("`inplace` not currently implemented.")
-        if kind not in {"quicksort", "mergesort", "heapsort", "stable"}:
-            raise AttributeError(
-                f"{kind} is not a valid sorting algorithm for "
-                f"'DataFrame' object"
-            )
-        elif kind != "quicksort":
-            msg = (
-                f"GPU-accelerated {kind} is currently not supported, "
-                f"now defaulting to GPU-accelerated quicksort."
-            )
-            warnings.warn(msg)
-        if axis != 0:
-            raise NotImplementedError("`axis` not currently implemented.")
-
-        # argsort the `by` column
-        return self.take(
-            self[by].argsort(ascending=ascending, na_position=na_position),
-            keep_index=not ignore_index,
-        )
-
     def agg(self, aggs, axis=None):
         """
         Aggregate using one or more operations over the specified axis.
@@ -3559,7 +3406,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Italy     59000000  1937894      IT
         Brunei      434000    12128      BN
         """
-        return self._n_largest_or_smallest("nlargest", n, columns, keep)
+        return self._n_largest_or_smallest(True, n, columns, keep)
 
     def nsmallest(self, n, columns, keep="first"):
         """Get the rows of the DataFrame sorted by the n smallest value of *columns*
@@ -3627,26 +3474,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Tuvalu         11300   38      TV
         Nauru         337000  182      NR
         """
-        return self._n_largest_or_smallest("nsmallest", n, columns, keep)
-
-    def _n_largest_or_smallest(self, method, n, columns, keep):
-        # Get column to operate on
-        if not isinstance(columns, str):
-            [column] = columns
-        else:
-            column = columns
-
-        col = self[column].reset_index(drop=True)
-        # Operate
-        sorted_series = getattr(col, method)(n=n, keep=keep)
-        df = DataFrame()
-        new_positions = sorted_series.index.gpu_values
-        for k in self._data.names:
-            if k == column:
-                df[k] = sorted_series
-            else:
-                df[k] = self[k].reset_index(drop=True).take(new_positions)
-        return df.set_index(self.index.take(new_positions))
+        return self._n_largest_or_smallest(False, n, columns, keep)
 
     def transpose(self):
         """Transpose index and columns.

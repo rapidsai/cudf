@@ -30,6 +30,7 @@ from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries, Dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
+    is_bool_dtype,
     is_decimal_dtype,
     is_dict_like,
     is_integer_dtype,
@@ -533,6 +534,7 @@ class Frame:
         )
 
         result._copy_type_metadata(self, include_index=keep_index)
+        result._data.names = self._data.names
         if keep_index and self._index is not None:
             result._index.names = self._index.names
         return result
@@ -2882,6 +2884,9 @@ class Frame:
         """
         # Call libcudf++ search_sorted primitive
 
+        if na_position not in {"first", "last"}:
+            raise ValueError(f"invalid na_position: {na_position}")
+
         scalar_flag = None
         if is_scalar(values):
             scalar_flag = True
@@ -2903,34 +2908,101 @@ class Frame:
         else:
             return result
 
-    def _get_sorted_inds(self, by=None, ascending=True, na_position="last"):
-        """
-        Sort by the values.
+    @annotate("ARGSORT", color="yellow", domain="cudf_python")
+    def argsort(
+        self,
+        by=None,
+        axis=0,
+        kind="quicksort",
+        order=None,
+        ascending=True,
+        na_position="last",
+    ):
+        """Return the integer indices that would sort the Series values.
 
         Parameters
         ----------
-        by: list, optional
-            Labels specifying columns to sort by. By default,
-            sort by all columns of `self`
+        by : str or list of str, default None
+            Name or list of names to sort by. If None, sort by all columns.
+        axis : {0 or "index"}
+            Has no effect but is accepted for compatibility with numpy.
+        kind : {'mergesort', 'quicksort', 'heapsort', 'stable'}, default 'quicksort'
+            Choice of sorting algorithm. See :func:`numpy.sort` for more
+            information. 'mergesort' and 'stable' are the only stable
+            algorithms. Only quicksort is supported in cuDF.
+        order : None
+            Has no effect but is accepted for compatibility with numpy.
         ascending : bool or list of bool, default True
             If True, sort values in ascending order, otherwise descending.
         na_position : {‘first’ or ‘last’}, default ‘last’
             Argument ‘first’ puts NaNs at the beginning, ‘last’ puts NaNs
             at the end.
+
         Returns
         -------
-        out_column_inds : cuDF Column of indices sorted based on input
+        cupy.ndarray: The indices sorted based on input.
 
-        Difference from pandas:
-        * Support axis='index' only.
-        * Not supporting: inplace, kind
-        * Ascending can be a list of bools to control per column
-        """
+        Examples
+        --------
+        **Series**
+
+        >>> import cudf
+        >>> s = cudf.Series([3, 1, 2])
+        >>> s
+        0    3
+        1    1
+        2    2
+        dtype: int64
+        >>> s.argsort()
+        0    1
+        1    2
+        2    0
+        dtype: int32
+        >>> s[s.argsort()]
+        1    1
+        2    2
+        0    3
+        dtype: int64
+
+        **DataFrame**
+        >>> import cudf
+        >>> df = cudf.DataFrame({'foo': [3, 1, 2]})
+        >>> df.argsort()
+        array([1, 2, 0], dtype=int32)
+
+        **Index**
+        >>> import cudf
+        >>> idx = cudf.Index([3, 1, 2])
+        >>> idx.argsort()
+        array([1, 2, 0], dtype=int32)
+        """  # noqa: E501
+        if na_position not in {"first", "last"}:
+            raise ValueError(f"invalid na_position: {na_position}")
+        if kind != "quicksort":
+            if kind not in {"mergesort", "heapsort", "stable"}:
+                raise AttributeError(
+                    f"{kind} is not a valid sorting algorithm for "
+                    f"'DataFrame' object"
+                )
+            warnings.warn(
+                f"GPU-accelerated {kind} is currently not supported, "
+                "defaulting to quicksort."
+            )
+
+        if isinstance(by, str):
+            by = [by]
+        return self._get_sorted_inds(
+            by=by, ascending=ascending, na_position=na_position
+        ).values
+
+    def _get_sorted_inds(self, by=None, ascending=True, na_position="last"):
+        # Get an int64 column consisting of the indices required to sort self
+        # according to the columns specified in by.
 
         to_sort = (
             self
             if by is None
-            else self._get_columns_by_label(by, downcast=False)
+            else self._get_columns_by_label(list(by), downcast=False)
         )
 
         # If given a scalar need to construct a sequence of length # of columns
@@ -2938,6 +3010,74 @@ class Frame:
             ascending = [ascending] * to_sort._num_columns
 
         return libcudf.sort.order_by(to_sort, ascending, na_position)
+
+    def take(self, indices, keep_index=None):
+        """Return a new object containing the rows specified by *positions*
+
+        Parameters
+        ----------
+        indices : array-like
+            Array of ints indicating which positions to take.
+        keep_index : bool, default True
+            Whether to retain the index in result or not.
+
+        Returns
+        -------
+        out : Series or DataFrame or Index
+            New object with desired subset of rows.
+
+        Examples
+        --------
+        **Series**
+        >>> s = cudf.Series(['a', 'b', 'c', 'd', 'e'])
+        >>> s.take([2, 0, 4, 3])
+        2    c
+        0    a
+        4    e
+        3    d
+        dtype: object
+
+        **DataFrame**
+
+        >>> a = cudf.DataFrame({'a': [1.0, 2.0, 3.0],
+        ...                    'b': cudf.Series(['a', 'b', 'c'])})
+        >>> a.take([0, 2, 2])
+             a  b
+        0  1.0  a
+        2  3.0  c
+        2  3.0  c
+        >>> a.take([True, False, True])
+             a  b
+        0  1.0  a
+        2  3.0  c
+
+        **Index**
+
+        >>> idx = cudf.Index(['a', 'b', 'c', 'd', 'e'])
+        >>> idx.take([2, 0, 4, 3])
+        StringIndex(['c' 'a' 'e' 'd'], dtype='object')
+        """
+        # TODO: When we remove keep_index we should introduce the axis
+        # parameter. We could also introduce is_copy, but that's already
+        # deprecated in pandas so it's probably unnecessary. We also need to
+        # introduce Index.take's allow_fill and fill_value parameters.
+        if keep_index is not None:
+            warnings.warn(
+                "keep_index is deprecated and will be removed in the future.",
+                FutureWarning,
+            )
+        else:
+            keep_index = True
+
+        indices = as_column(indices)
+        if is_bool_dtype(indices):
+            warnings.warn(
+                "Calling take with a boolean array is deprecated and will be "
+                "removed in the future.",
+                FutureWarning,
+            )
+            return self._apply_boolean_mask(indices)
+        return self._gather(indices, keep_index=keep_index)
 
     def sin(self):
         """
