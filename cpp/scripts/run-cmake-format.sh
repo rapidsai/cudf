@@ -54,7 +54,6 @@ fi
 
 if [[ $1 == "cmake-format" ]]; then
   cmake-format -i --config-files cpp/cmake/config.json ${RAPIDS_CMAKE_FORMAT_FILE} -- ${@:2}
-  git --no-pager diff
 elif [[ $1 == "cmake-lint" ]]; then
   cmake-lint --config-files cpp/cmake/config.json ${RAPIDS_CMAKE_FORMAT_FILE} -- ${@:2}
 fi
