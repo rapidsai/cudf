@@ -128,6 +128,22 @@ TYPED_TEST(groupby_max_scan_test, null_keys_and_values)
   test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
+struct groupby_max_scan_string_test : public cudf::test::BaseFixture {
+};
+
+TEST_F(groupby_max_scan_string_test, basic)
+{
+  key_wrapper keys{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  strings_column_wrapper vals{"año", "bit", "₹1", "aaa", "zit", "bat", "aaa", "$1", "₹1", "wut"};
+
+  key_wrapper expect_keys{1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
+  strings_column_wrapper expect_vals(
+    {"año", "año", "año", "bit", "zit", "zit", "zit", "₹1", "₹1", "₹1"});
+
+  auto agg = cudf::make_max_aggregation<groupby_scan_aggregation>();
+  test_single_scan(keys, vals, expect_keys, expect_vals, std::move(agg));
+}
+
 template <typename T>
 struct FixedPointTestBothReps : public cudf::test::BaseFixture {
 };
