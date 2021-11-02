@@ -690,8 +690,9 @@ class ColumnBase(Column, Serializable):
         raise TypeError(f"cannot perform median with type {self.dtype}")
 
     def take(self: T, indices: ColumnBase, nullify: bool = False) -> T:
-        """Return Column by taking values from the corresponding *indices*. Set
-        rows to null for all out of bound indices if nullify is `True`.
+        """Return Column by taking values from the corresponding *indices*.
+
+        Set rows to null for all out of bound indices if nullify is `True`.
         """
         # Handle zero size
         if indices.size == 0:
