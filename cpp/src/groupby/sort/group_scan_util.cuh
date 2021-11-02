@@ -227,13 +227,17 @@ struct scan_functor_impl<
     // Find the indices of the prefix min/max elements within each group.
     auto const count_iter = thrust::make_counting_iterator<size_type>(0);
     if (values.has_nulls()) {
-      auto const op = row_arg_minmax_fn<T, true, K == aggregation::MIN>(
-        values.size(), *d_flattened_values_ptr, flattened_null_precedences.data());
-      do_scan(count_iter, map_begin, op);
+      auto const binop = row_arg_minmax_fn<T, true>(values.size(),
+                                                    *d_flattened_values_ptr,
+                                                    flattened_null_precedences.data(),
+                                                    K == aggregation::MIN);
+      do_scan(count_iter, map_begin, binop);
     } else {
-      auto const op = row_arg_minmax_fn<T, false, K == aggregation::MIN>(
-        values.size(), *d_flattened_values_ptr, flattened_null_precedences.data());
-      do_scan(count_iter, map_begin, op);
+      auto const binop = row_arg_minmax_fn<T, false>(values.size(),
+                                                     *d_flattened_values_ptr,
+                                                     flattened_null_precedences.data(),
+                                                     K == aggregation::MIN);
+      do_scan(count_iter, map_begin, binop);
     }
 
     auto gather_map_view =

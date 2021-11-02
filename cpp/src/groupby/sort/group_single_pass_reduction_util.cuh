@@ -47,9 +47,12 @@ namespace detail {
  *
  * @tparam T Type of the underlying column. Must support '<' operator.
  */
-template <typename T, bool has_nulls, bool arg_min>
+template <typename T>
 struct element_arg_minmax_fn {
   column_device_view const d_col;
+  bool const has_nulls;
+  bool const arg_min;
+
   CUDA_DEVICE_CALLABLE auto operator()(size_type const& lhs_idx, size_type const& rhs_idx) const
   {
     // The extra bounds checking is due to issue github.com/rapidsai/cudf/9156 and
@@ -200,19 +203,15 @@ struct reduce_functor_impl<
 
     if constexpr (K == aggregation::ARGMAX || K == aggregation::ARGMIN) {
       auto const count_iter = thrust::make_counting_iterator<ResultType>(0);
-      if (values.has_nulls()) {
-        using OpType = element_arg_minmax_fn<T, true, K == aggregation::ARGMIN>;
-        do_reduction(count_iter, result_begin, OpType{*d_values_ptr});
-      } else {
-        using OpType = element_arg_minmax_fn<T, false, K == aggregation::ARGMIN>;
-        do_reduction(count_iter, result_begin, OpType{*d_values_ptr});
-      }
+      auto const binop =
+        element_arg_minmax_fn<T>{*d_values_ptr, values.has_nulls(), K == aggregation::ARGMIN};
+      do_reduction(count_iter, result_begin, binop);
     } else {
-      using OpType = cudf::detail::corresponding_operator_t<K>;
-      auto init    = OpType::template identity<DeviceType>();
-      auto begin   = cudf::detail::make_counting_transform_iterator(
+      using OpType    = cudf::detail::corresponding_operator_t<K>;
+      auto init       = OpType::template identity<DeviceType>();
+      auto inp_values = cudf::detail::make_counting_transform_iterator(
         0, null_replaced_value_accessor{*d_values_ptr, init, values.has_nulls()});
-      do_reduction(begin, result_begin, OpType{});
+      do_reduction(inp_values, result_begin, OpType{});
     }
 
     if (values.has_nulls()) {
@@ -223,8 +222,7 @@ struct reduce_functor_impl<
 
       auto [null_mask, null_count] = cudf::detail::valid_if(
         validity.begin(), validity.end(), thrust::identity<bool>{}, stream, mr);
-      result->set_null_mask(std::move(null_mask));
-      result->set_null_count(null_count);
+      result->set_null_mask(std::move(null_mask), null_count);
     }
     return result;
   }
@@ -276,9 +274,11 @@ struct reduce_functor_impl<
     auto const count_iter   = thrust::make_counting_iterator<ResultType>(0);
     auto const result_begin = result->mutable_view().template begin<ResultType>();
     if (values.has_nulls()) {
-      auto const op = row_arg_minmax_fn<T, true, K == aggregation::ARGMIN>(
-        values.size(), *d_flattened_values_ptr, flattened_null_precedences.data());
-      do_reduction(count_iter, result_begin, op);
+      auto const binop = row_arg_minmax_fn<T, true>(values.size(),
+                                                    *d_flattened_values_ptr,
+                                                    flattened_null_precedences.data(),
+                                                    K == aggregation::ARGMIN);
+      do_reduction(count_iter, result_begin, binop);
 
       // Generate bitmask for the output by segmented reduction of the input bitmask.
       auto const d_values_ptr = column_device_view::create(values, stream);
@@ -289,12 +289,13 @@ struct reduce_functor_impl<
 
       auto [null_mask, null_count] = cudf::detail::valid_if(
         validity.begin(), validity.end(), thrust::identity<bool>{}, stream, mr);
-      result->set_null_mask(std::move(null_mask));
-      result->set_null_count(null_count);
+      result->set_null_mask(std::move(null_mask), null_count);
     } else {
-      auto const op = row_arg_minmax_fn<T, false, K == aggregation::ARGMIN>(
-        values.size(), *d_flattened_values_ptr, flattened_null_precedences.data());
-      do_reduction(count_iter, result_begin, op);
+      auto const binop = row_arg_minmax_fn<T, false>(values.size(),
+                                                     *d_flattened_values_ptr,
+                                                     flattened_null_precedences.data(),
+                                                     K == aggregation::ARGMIN);
+      do_reduction(count_iter, result_begin, binop);
     }
 
     return result;
