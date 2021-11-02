@@ -696,6 +696,8 @@ class ColumnBase(Column, Serializable):
         # Handle zero size
         if indices.size == 0:
             return cast(T, column_empty_like(self, newsize=0))
+        if not is_integer_dtype(indices.dtype):
+            indices = indices.astype("int32")
         if not nullify and not _gather_map_is_valid(indices, len(self)):
             raise IndexError("Gather map index is out of bounds.")
 
