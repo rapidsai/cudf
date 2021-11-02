@@ -5016,7 +5016,7 @@ class DatetimeProperties(object):
         ----------
         freq : str
             One of ["D", "H", "T", "S", "L", "U", "N"]
-            Must be a fixed frequency like ‘S’ (second) not ‘ME’ (month end).
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
             See `frequency aliases <https://pandas.pydata.org/docs/\
                 user_guide/timeseries.html#timeseries-offset-aliases>`_
             for more details on these aliases.
@@ -5052,7 +5052,7 @@ class DatetimeProperties(object):
         ----------
         freq : str
             One of ["D", "H", "T", "S", "L", "U", "N"]
-            Must be a fixed frequency like ‘S’ (second) not ‘ME’ (month end).
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
             See `frequency aliases <https://pandas.pydata.org/docs/\
                 user_guide/timeseries.html#timeseries-offset-aliases>`_
             for more details on these aliases.
