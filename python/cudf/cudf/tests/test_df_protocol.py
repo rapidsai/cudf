@@ -28,7 +28,7 @@ def assert_buffer_equal(buffer_and_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
     )
     # check that non null values are the equals as null are represented
     # by sentinel values in the buffer.
-    non_null_idxs = cudfcol != cudf.NA
+    non_null_idxs = cudf.Series(cudfcol) != cudf.NA
     assert_eq(col_from_buf[non_null_idxs], cudfcol[non_null_idxs])
 
     if dtype[0] != _DtypeKind.BOOL:
