@@ -3,6 +3,7 @@
 from __future__ import annotations, division, print_function
 
 import pickle
+import warnings
 from typing import Any, Set
 
 import pandas as pd
@@ -555,6 +556,17 @@ class BaseIndex(Serializable):
 
         return cudf.io.dlpack.to_dlpack(self)
 
+    @property
+    def gpu_values(self):
+        """
+        View the data as a numba device array object
+        """
+        warnings.warn(
+            "The gpu_values property is deprecated and will be removed.",
+            FutureWarning,
+        )
+        return self._values.data_array_view
+
     def append(self, other):
         """
         Append a collection of Index options together.
@@ -1042,6 +1054,8 @@ class BaseIndex(Serializable):
         """
         if key is not None:
             raise NotImplementedError("key parameter is not yet implemented.")
+        if na_position not in {"first", "last"}:
+            raise ValueError(f"invalid na_position: {na_position}")
 
         indices = self.argsort(ascending=ascending, na_position=na_position)
         index_sorted = self.take(indices)

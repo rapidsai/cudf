@@ -835,6 +835,8 @@ class MultiIndex(Frame, BaseIndex):
         return self._num_rows
 
     def take(self, indices):
+        if isinstance(indices, cudf.Series) and indices.has_nulls:
+            raise ValueError("Column must have no nulls.")
         obj = super().take(indices)
         obj.names = self.names
         return obj

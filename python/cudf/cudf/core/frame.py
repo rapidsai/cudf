@@ -2880,6 +2880,9 @@ class Frame:
         """
         # Call libcudf++ search_sorted primitive
 
+        if na_position not in {"first", "last"}:
+            raise ValueError(f"invalid na_position: {na_position}")
+
         scalar_flag = None
         if is_scalar(values):
             scalar_flag = True
@@ -2901,6 +2904,7 @@ class Frame:
         else:
             return result
 
+    @annotate("ARGSORT", color="yellow", domain="cudf_python")
     def argsort(
         self,
         by=None,
@@ -2936,6 +2940,8 @@ class Frame:
 
         Examples
         --------
+        **Series**
+
         >>> import cudf
         >>> s = cudf.Series([3, 1, 2])
         >>> s
@@ -2953,9 +2959,21 @@ class Frame:
         2    2
         0    3
         dtype: int64
+
+        **DataFrame**
+        >>> import cudf
+        >>> df = cudf.DataFrame({'foo': [3, 1, 2]})
+        >>> df.argsort()
+        array([1, 2, 0], dtype=int32)
+
+        **Index**
+        >>> import cudf
+        >>> idx = cudf.Index([3, 1, 2])
+        >>> idx.argsort()
+        array([1, 2, 0], dtype=int32)
         """  # noqa: E501
-        if isinstance(by, str):
-            by = [by]
+        if na_position not in {"first", "last"}:
+            raise ValueError(f"invalid na_position: {na_position}")
         if kind != "quicksort":
             if kind not in {"mergesort", "heapsort", "stable"}:
                 raise AttributeError(
@@ -2966,6 +2984,9 @@ class Frame:
                 f"GPU-accelerated {kind} is currently not supported, "
                 "defaulting to quicksort."
             )
+
+        if isinstance(by, str):
+            by = [by]
         return self._get_sorted_inds(
             by=by, ascending=ascending, na_position=na_position
         ).values
@@ -2998,11 +3019,22 @@ class Frame:
 
         Returns
         -------
-        out : DataFrame
-            New DataFrame
+        out : Series or DataFrame or Index
+            New object with desired subset of rows.
 
         Examples
         --------
+        **Series**
+        >>> s = cudf.Series(['a', 'b', 'c', 'd', 'e'])
+        >>> s.take([2, 0, 4, 3])
+        2    c
+        0    a
+        4    e
+        3    d
+        dtype: object
+
+        **DataFrame**
+
         >>> a = cudf.DataFrame({'a': [1.0, 2.0, 3.0],
         ...                    'b': cudf.Series(['a', 'b', 'c'])})
         >>> a.take([0, 2, 2])
@@ -3014,6 +3046,12 @@ class Frame:
              a  b
         0  1.0  a
         2  3.0  c
+
+        **Index**
+
+        >>> idx = cudf.Index(['a', 'b', 'c', 'd', 'e'])
+        >>> idx.take([2, 0, 4, 3])
+        StringIndex(['c' 'a' 'e' 'd'], dtype='object')
         """
         # TODO: When we remove keep_index we should introduce the axis
         # parameter. We could also introduce is_copy, but that's already

@@ -352,6 +352,9 @@ class IndexedFrame(Frame):
         if key is not None:
             raise NotImplementedError("key is not yet supported.")
 
+        if na_position not in {"first", "last"}:
+            raise ValueError(f"invalid na_position: {na_position}")
+
         if axis in (0, "index"):
             idx = self.index
             if isinstance(idx, MultiIndex):
@@ -437,6 +440,8 @@ class IndexedFrame(Frame):
         2  2  0
         1  1  2
         """
+        if na_position not in {"first", "last"}:
+            raise ValueError(f"invalid na_position: {na_position}")
         if inplace:
             raise NotImplementedError("`inplace` not currently implemented.")
         if kind != "quicksort":
