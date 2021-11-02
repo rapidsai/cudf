@@ -15,9 +15,6 @@
  */
 #pragma once
 
-#define PY_SSIZE_T_CLEAN
-#include <Python.h>
-
 #include <librdkafka/rdkafkacpp.h>
 #include <cudf/io/datasource.hpp>
 #include <map>
@@ -35,13 +32,12 @@ namespace kafka {
  */
 class PythonOAuthRefreshCb : public RdKafka::OAuthBearerTokenRefreshCb {
  public:
-  PythonOAuthRefreshCb(PyObject* callback, PyObject* args);
+  PythonOAuthRefreshCb(void* callback());
 
   void oauthbearer_token_refresh_cb(RdKafka::Handle* handle, const std::string& oauthbearer_config);
 
  private:
-  PyObject* callback;
-  PyObject* args;
+  PyObject (*callback)();
 };
 
 }  // namespace kafka

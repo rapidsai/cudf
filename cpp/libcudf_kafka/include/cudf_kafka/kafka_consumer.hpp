@@ -15,9 +15,6 @@
  */
 #pragma once
 
-#define PY_SSIZE_T_CLEAN
-#include <Python.h>
-
 #include <librdkafka/rdkafkacpp.h>
 #include <algorithm>
 #include <chrono>
@@ -53,7 +50,8 @@ class kafka_consumer : public cudf::io::datasource {
    * @param configs key/value pairs of librdkafka configurations that will be
    *                passed to the librdkafka client
    */
-  kafka_consumer(PyObject* configs);
+  kafka_consumer(std::map<std::string, std::string> configs,
+                 std::map<std::string, void*> callbacks);
 
   /**
    * @brief Instantiate a Kafka consumer object. Documentation for librdkafka configurations can be
@@ -70,7 +68,8 @@ class kafka_consumer : public cudf::io::datasource {
    * before batch_timeout, a smaller subset will be returned
    * @param delimiter optional delimiter to insert into the output between kafka messages, Ex: "\n"
    */
-  kafka_consumer(PyObject* configs,
+  kafka_consumer(std::map<std::string, std::string> configs,
+                 std::map<std::string, void*> callbacks,
                  std::string const& topic_name,
                  int partition,
                  int64_t start_offset,
@@ -182,11 +181,8 @@ class kafka_consumer : public cudf::io::datasource {
   std::unique_ptr<RdKafka::Conf> kafka_conf;  // RDKafka configuration object
   std::unique_ptr<RdKafka::KafkaConsumer> consumer;
 
-  // Configurations that can be Python callables. Anything else is expected to be a str
-  const std::vector<std::string> callableConfigs{"oauth_cb"};
-
-  // The Python configuration dict that was used to create this instance
-  PyObject* conf_dict;
+  std::map<std::string, std::string> configs;
+  std::map<std::string, void*> callbacks;
 
   std::string topic_name;
   int partition;
@@ -202,8 +198,6 @@ class kafka_consumer : public cudf::io::datasource {
   RdKafka::ErrorCode update_consumer_topic_partition_assignment(std::string const& topic,
                                                                 int partition,
                                                                 int64_t offset);
-
-  void build_validate_configs(PyObject* python_config_dict);
 
   /**
    * Convenience method for getting "now()" in Kafka's standard format

@@ -23,33 +23,70 @@ namespace io {
 namespace external {
 namespace kafka {
 
-kafka_consumer::kafka_consumer(PyObject* confdict)
-  : conf_dict(confdict), kafka_conf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL))
+kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
+                               std::map<std::string, void*> callbacks)
+  : configs(configs),
+    callbacks(callbacks),
+    kafka_conf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL))
 {
-  build_validate_configs(confdict);
+  for (auto const& key_value : configs) {
+    std::string error_string;
+    CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
+                   kafka_conf->set(key_value.first, key_value.second, error_string),
+                 "Invalid Kafka configuration");
+  }
+
+  // TODO: Just for testing ... want to make sure this works
+  std::string error_string;
+  PythonOAuthRefreshCb cb(callbacks.find("oauth_cb")->second);
+  kafka_conf->set("oauthbearer_token_refresh_cb", &cb, error_string);
+
+  // Kafka 0.9 > requires group.id in the configuration
+  std::string conf_val;
+  CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK == kafka_conf->get("group.id", conf_val),
+               "Kafka group.id must be configured");
 
   std::string errstr;
   consumer = std::unique_ptr<RdKafka::KafkaConsumer>(
     RdKafka::KafkaConsumer::create(kafka_conf.get(), errstr));
 }
 
-kafka_consumer::kafka_consumer(PyObject* confdict,
+kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
+                               std::map<std::string, void*> callbacks,
                                std::string const& topic_name,
                                int partition,
                                int64_t start_offset,
                                int64_t end_offset,
                                int batch_timeout,
                                std::string const& delimiter)
-  : topic_name(topic_name),
+  : configs(configs),
+    callbacks(callbacks),
+    topic_name(topic_name),
     partition(partition),
     start_offset(start_offset),
     end_offset(end_offset),
     batch_timeout(batch_timeout),
     delimiter(delimiter),
-    conf_dict(confdict),
     kafka_conf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL))
 {
-  build_validate_configs(confdict);
+  for (auto const& key_value : configs) {
+    std::string error_string;
+    CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
+                   kafka_conf->set(key_value.first, key_value.second, error_string),
+                 "Invalid Kafka configuration");
+  }
+
+  // TODO: Just for testing ... want to make sure this works
+  std::string error_string;
+  PythonOAuthRefreshCb cb(callbacks.find("oauth_cb")->second);
+  CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
+                 kafka_conf->set("oauthbearer_token_refresh_cb", &cb, error_string),
+               "Failed to set Kafka oauth callback");
+
+  // Kafka 0.9 > requires group.id in the configuration
+  std::string conf_val;
+  CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK == kafka_conf->get("group.id", conf_val),
+               "Kafka group.id must be configured");
 
   std::string errstr;
   consumer = std::unique_ptr<RdKafka::KafkaConsumer>(
@@ -58,42 +95,6 @@ kafka_consumer::kafka_consumer(PyObject* confdict,
   // Pre fill the local buffer with messages so the datasource->size() invocation
   // will return a valid size.
   consume_to_buffer();
-}
-
-/**
- * @brief Builds and validates Kafka C++ configuration object from Python values
- *
- * @param kafka_configs
- *  Python Dict of configuration values and possibly callables for callbacks
- */
-void kafka_consumer::build_validate_configs(PyObject* python_config_dict)
-{
-  Py_ssize_t pos = 0;
-  PyObject *ko, *vo;
-
-  while (PyDict_Next(python_config_dict, &pos, &ko, &vo)) {
-    CUDF_EXPECTS(PyUnicode_Check(ko), "expected kafka configuration property name as type string");
-    std::string key(PyUnicode_AsUTF8(ko));
-    std::string valueType(Py_TYPE(vo)->tp_name);
-
-    std::string error_string;
-    if (std::find(callableConfigs.begin(), callableConfigs.end(), key) != callableConfigs.end()) {
-      // Properly configure the callable. This is a Python callback for oauth processing
-      PythonOAuthRefreshCb cb(vo, NULL);
-      kafka_conf->set("oauthbearer_token_refresh_cb", &cb, error_string);
-    } else {
-      CUDF_EXPECTS(valueType.compare("str") == 0,
-                   "Only string values are supported for this configuration");
-      CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
-                     kafka_conf->set(key, PyUnicode_AsUTF8(vo), error_string),
-                   "Invalid Kafka configuration provided");
-    }
-  }
-
-  // Kafka 0.9 > requires group.id in the configuration
-  std::string conf_val;
-  CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK == kafka_conf->get("group.id", conf_val),
-               "Kafka group.id must be configured");
 }
 
 std::unique_ptr<cudf::io::datasource::buffer> kafka_consumer::host_read(size_t offset, size_t size)

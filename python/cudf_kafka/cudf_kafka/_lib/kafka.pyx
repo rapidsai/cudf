@@ -22,9 +22,22 @@ cdef class KafkaDatasource(Datasource):
                   int64_t end_offset=0,
                   int32_t batch_timeout=10000,
                   string delimiter=b"",):
+
+        # Convert Python-confluent-kafka configuration dict
+        # to map[string, string] and map[string, void] for callbacks
+        cdef map[string, string] configs
+        cdef map[string, void*] callbacks
+
+        for key in kafka_configs:
+            if callable(kafka_configs[key]):
+                callbacks[key.encode()] = <void *>kafka_configs[key]
+            else:
+                configs[key.encode()] = kafka_configs[key].encode()
+
         if topic != b"" and partition != -1:
             self.c_datasource = <unique_ptr[datasource]> \
-                make_unique[kafka_consumer](<cpython.PyObject*> kafka_configs,
+                make_unique[kafka_consumer](configs,
+                                            callbacks,
                                             topic,
                                             partition,
                                             start_offset,
@@ -33,7 +46,7 @@ cdef class KafkaDatasource(Datasource):
                                             delimiter)
         else:
             self.c_datasource = <unique_ptr[datasource]> \
-                make_unique[kafka_consumer](<cpython.PyObject*> kafka_configs)
+                make_unique[kafka_consumer](configs, callbacks)
 
     cdef datasource* get_datasource(self) nogil:
         return <datasource *> self.c_datasource.get()

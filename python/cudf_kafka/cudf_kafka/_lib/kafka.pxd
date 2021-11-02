@@ -16,9 +16,11 @@ cdef extern from "kafka_consumer.hpp" \
 
     cpdef cppclass kafka_consumer:
 
-        kafka_consumer(object configs) except +
+        kafka_consumer(map[string, string] configs,
+                       map[string, void] callbacks) except +
 
-        kafka_consumer(object configs,
+        kafka_consumer(map[string, string] configs,
+                       map[string, void] callbacks,
                        string topic_name,
                        int32_t partition,
                        int64_t start_offset,

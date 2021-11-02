@@ -20,40 +20,18 @@ namespace io {
 namespace external {
 namespace kafka {
 
-PythonOAuthRefreshCb::PythonOAuthRefreshCb(PyObject* callback, PyObject* args)
-  : callback(callback), args(args){};
+PythonOAuthRefreshCb::PythonOAuthRefreshCb(void* callback) : callback(callback){};
 
 void PythonOAuthRefreshCb::oauthbearer_token_refresh_cb(RdKafka::Handle* handle,
                                                         const std::string& oauthbearer_config)
 {
-  CUDF_EXPECTS(PyCallable_Check(callback), "A Python callable is required");
+  printf("oauthbearer_token_refresh_cb... I want this called so bad!!!\n");
 
-  // Make sure that we own the GIL
-  PyGILState_STATE state = PyGILState_Ensure();
-  PyObject* result       = PyObject_CallObject(callback, args);
-  Py_XINCREF(result);
+  // Since I need to get the results of the invoked Python function (PyObject) here
+  // I don't see how this avoids importing Python dependencies?
+  PyObject result = callback();
 
-  // Set the token in the Kafka context
-  if (result) {
-    CUDF_EXPECTS(PyDict_Check(result),
-                 "cudf_kafka requires a Dictionary response from the Python OAuthRefreshCb with "
-                 "dictionary keys (token, token_lifetime_ms, principal, extensions)");
-
-    // Ensure that expected keys are present from the Python callback response.
-    std::string token = PyUnicode_AsUTF8(PyDict_GetItemString(result, "token"));
-    int64_t token_lifetime_ms =
-      PyLong_AsLongLong(PyDict_GetItemString(result, "token_lifetime_ms"));
-    std::string principal = PyUnicode_AsUTF8(PyDict_GetItemString(result, "principal"));
-    std::list<std::string> extensions;
-    std::string errstr;
-
-    handle->oauthbearer_set_token(token, token_lifetime_ms, principal, extensions, errstr);
-  } else {
-    handle->oauthbearer_set_token_failure("");
-  }
-
-  Py_XDECREF(result);
-  PyGILState_Release(state);
+  // Need to get 3 dict elements and set them here ....
 }
 
 }  // namespace kafka
