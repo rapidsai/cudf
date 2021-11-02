@@ -101,9 +101,9 @@ struct min_max_scan_operator {
 
 template <typename Op, typename T>
 struct scan_functor {
-  std::unique_ptr<column> inclusive_scan(column_view const& input_view,
-                                         rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+  static std::unique_ptr<column> invoke(column_view const& input_view,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
   {
     auto output_column = detail::allocate_like(
       input_view, input_view.size(), mask_allocation_policy::NEVER, stream, mr);
@@ -122,9 +122,9 @@ struct scan_functor {
 
 template <typename Op>
 struct scan_functor<Op, cudf::string_view> {
-  std::unique_ptr<column> inclusive_scan(column_view const& input_view,
-                                         rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+  static std::unique_ptr<column> invoke(column_view const& input_view,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
   {
     auto d_input = column_device_view::create(input_view, stream);
 
@@ -187,7 +187,7 @@ struct scan_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    return scan_functor<Op, T>{}.inclusive_scan(input, stream, mr);
+    return scan_functor<Op, T>::invoke(input, stream, mr);
   }
 
   template <typename T, typename... Args>
