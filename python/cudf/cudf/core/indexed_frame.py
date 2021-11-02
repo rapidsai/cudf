@@ -450,9 +450,9 @@ class IndexedFrame(Frame):
         index columns if index exists and `include_index` is True. The order
         of indices returned corresponds to the column order in this Frame.
         """
-        n_indices_cols = len(self._index._data) if include_index else 0
+        num_index_columns = len(self._index._data) if include_index else 0
         return [
-            i + n_indices_cols
+            i + num_index_columns
             for i, name in enumerate(self._column_names)
             if name in set(column_names)
         ]
