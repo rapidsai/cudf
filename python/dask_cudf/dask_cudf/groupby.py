@@ -73,19 +73,6 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
             as_index=self.as_index,
         )
 
-    def mean(self, split_every=None, split_out=1):
-        return groupby_agg(
-            self.obj,
-            self.index,
-            {c: "mean" for c in self.obj.columns if c not in self.index},
-            split_every=split_every,
-            split_out=split_out,
-            dropna=self.dropna,
-            sep=self.sep,
-            sort=self.sort,
-            as_index=self.as_index,
-        )
-
     def aggregate(self, arg, split_every=None, split_out=1):
         if arg == "size":
             return self.size()
@@ -130,11 +117,37 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         self.as_index = kwargs.pop("as_index", True)
         super().__init__(*args, **kwargs)
 
-    def mean(self, split_every=None, split_out=1):
+    def collect(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
             self.index,
-            {self._slice: "mean"},
+            {self._slice: "collect"},
+            split_every=split_every,
+            split_out=split_out,
+            dropna=self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )[self._slice]
+
+    def std(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.index,
+            {self._slice: "std"},
+            split_every=split_every,
+            split_out=split_out,
+            dropna=self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )[self._slice]
+
+    def var(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.index,
+            {self._slice: "var"},
             split_every=split_every,
             split_out=split_out,
             dropna=self.dropna,
@@ -148,15 +161,18 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             return self.size()
         arg = _redirect_aggs(arg)
 
+        if not isinstance(arg, dict):
+            arg = {self._slice: arg}
+
         if (
             isinstance(self.obj, DaskDataFrame)
             and isinstance(self.index, (str, list))
-            and _is_supported({self._slice: arg}, SUPPORTED_AGGS)
+            and _is_supported(arg, SUPPORTED_AGGS)
         ):
             return groupby_agg(
                 self.obj,
                 self.index,
-                {self._slice: arg},
+                arg,
                 split_every=split_every,
                 split_out=split_out,
                 dropna=self.dropna,
