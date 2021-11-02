@@ -36,7 +36,8 @@ struct row_arg_minmax_fn {
 
   row_arg_minmax_fn(size_type const num_rows_,
                     table_device_view const& table_,
-                    null_order const* null_precedence_, bool const arg_min_)
+                    null_order const* null_precedence_,
+                    bool const arg_min_)
     : num_rows(num_rows_), comp(table_, table_, nullptr, null_precedence_), arg_min(arg_min_)
   {
   }
