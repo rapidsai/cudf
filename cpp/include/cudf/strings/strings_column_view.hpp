@@ -103,7 +103,7 @@ class strings_column_view : private column_view {
   /**
    * @brief Return an iterator for the chars child column.
    *
-   * This does not applies the offset of the parent.
+   * This does not apply the offset of the parent.
    * The offsets child must be used to properly address the char bytes.
    *
    * For example, to access the first character of string `i` (accounting for
@@ -116,7 +116,8 @@ class strings_column_view : private column_view {
   /**
    * @brief Return an end iterator for the offsets child column.
    *
-   * This automatically applies the offset of the parent.
+   * This does not apply the offset of the parent.
+   * The offsets child must be used to properly address the char bytes.
    *
    * @return Iterator pointing 1 past the last char byte.
    */
