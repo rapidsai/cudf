@@ -98,7 +98,7 @@ std::unique_ptr<column> wrap(
   CUDF_EXPECTS(width > 0, "Positive wrap width required");
 
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   auto strings_column  = column_device_view::create(strings.parent(), stream);
   auto d_column        = *strings_column;

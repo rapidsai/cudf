@@ -349,13 +349,8 @@ template <StreamIndexType cid,
           uint32_t inmask,
           int block_size,
           typename Storage>
-static __device__ uint32_t IntegerRLE(orcenc_state_s* s,
-                                      const T* inbuf,
-                                      uint32_t inpos,
-                                      uint32_t numvals,
-                                      uint32_t flush,
-                                      int t,
-                                      Storage& temp_storage)
+static __device__ uint32_t IntegerRLE(
+  orcenc_state_s* s, const T* inbuf, uint32_t inpos, uint32_t numvals, int t, Storage& temp_storage)
 {
   using block_reduce = cub::BlockReduce<T, block_size>;
   uint8_t* dst       = s->stream.data_ptrs[cid] + s->strm_pos[cid];
@@ -904,12 +899,12 @@ __global__ void __launch_bounds__(block_size)
           case INT:
           case DATE:
             n = IntegerRLE<CI_DATA, int32_t, true, 0x3ff, block_size>(
-              s, s->vals.i32, s->nnz - s->numvals, s->numvals, flush, t, temp_storage.i32);
+              s, s->vals.i32, s->nnz - s->numvals, s->numvals, t, temp_storage.i32);
             break;
           case LONG:
           case TIMESTAMP:
             n = IntegerRLE<CI_DATA, int64_t, true, 0x3ff, block_size>(
-              s, s->vals.i64, s->nnz - s->numvals, s->numvals, flush, t, temp_storage.i64);
+              s, s->vals.i64, s->nnz - s->numvals, s->numvals, t, temp_storage.i64);
             break;
           case BYTE:
             n = ByteRLE<CI_DATA, 0x3ff>(s, s->vals.u8, s->nnz - s->numvals, s->numvals, flush, t);
@@ -935,7 +930,7 @@ __global__ void __launch_bounds__(block_size)
           case STRING:
             if (s->chunk.encoding_kind == DICTIONARY_V2) {
               n = IntegerRLE<CI_DATA, uint32_t, false, 0x3ff, block_size>(
-                s, s->vals.u32, s->nnz - s->numvals, s->numvals, flush, t, temp_storage.u32);
+                s, s->vals.u32, s->nnz - s->numvals, s->numvals, t, temp_storage.u32);
             } else {
               n = s->numvals;
             }
@@ -958,18 +953,18 @@ __global__ void __launch_bounds__(block_size)
       }
       // Encode secondary stream values
       if (s->numlengths > 0) {
-        uint32_t flush = (s->cur_row == s->chunk.num_rows) ? 1 : 0, n;
+        uint32_t n;
         switch (s->chunk.type_kind) {
           case TIMESTAMP:
             n = IntegerRLE<CI_DATA2, uint64_t, false, 0x3ff, block_size>(
-              s, s->lengths.u64, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u64);
+              s, s->lengths.u64, s->nnz - s->numlengths, s->numlengths, t, temp_storage.u64);
             break;
           case DECIMAL:
           case LIST:
           case MAP:
           case STRING:
             n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
-              s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u32);
+              s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, t, temp_storage.u32);
             break;
           default: n = s->numlengths; break;
         }
@@ -1062,9 +1057,8 @@ __global__ void __launch_bounds__(block_size)
       if (t < numvals) s->lengths.u32[nz_idx] = count;
       __syncthreads();
       if (s->numlengths + numvals > 0) {
-        uint32_t flush = (s->cur_row + numvals == s->nrows) ? 1 : 0;
-        uint32_t n     = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
-          s, s->lengths.u32, s->cur_row, s->numlengths + numvals, flush, t, temp_storage);
+        uint32_t n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
+          s, s->lengths.u32, s->cur_row, s->numlengths + numvals, t, temp_storage);
         __syncthreads();
         if (!t) {
           s->numlengths += numvals;
