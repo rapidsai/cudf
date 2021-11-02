@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import warnings
 from typing import Type, TypeVar
 
 import cupy as cp
@@ -12,6 +13,7 @@ from nvtx import annotate
 import cudf
 from cudf.api.types import is_categorical_dtype, is_list_like
 from cudf.core.frame import Frame
+from cudf.core.index import Index
 from cudf.core.multiindex import MultiIndex
 from cudf.utils.utils import cached_property
 
@@ -97,6 +99,31 @@ class IndexedFrame(Frame):
 
     def __init__(self, data=None, index=None):
         super().__init__(data=data, index=index)
+
+    def to_dict(self, *args, **kwargs):  # noqa: D102
+        raise TypeError(
+            "cuDF does not support conversion to host memory "
+            "via `to_dict()` method. Consider using "
+            "`.to_pandas().to_dict()` to construct a Python dictionary."
+        )
+
+    @property
+    def index(self):
+        """Get the labels for the rows."""
+        return self._index
+
+    @index.setter
+    def index(self, value):
+        old_length = len(self)
+        new_length = len(value)
+
+        # A DataFrame with 0 columns can have an index of arbitrary length.
+        if len(self._data) > 0 and new_length != old_length:
+            raise ValueError(
+                f"Length mismatch: Expected axis has {old_length} elements, "
+                f"new values have {len(value)} elements"
+            )
+        self._index = Index(value)
 
     @cached_property
     def loc(self):
@@ -351,6 +378,9 @@ class IndexedFrame(Frame):
         if key is not None:
             raise NotImplementedError("key is not yet supported.")
 
+        if na_position not in {"first", "last"}:
+            raise ValueError(f"invalid na_position: {na_position}")
+
         if axis in (0, "index"):
             idx = self.index
             if isinstance(idx, MultiIndex):
@@ -388,3 +418,111 @@ class IndexedFrame(Frame):
         if ignore_index is True:
             out = out.reset_index(drop=True)
         return self._mimic_inplace(out, inplace=inplace)
+
+    def sort_values(
+        self,
+        by,
+        axis=0,
+        ascending=True,
+        inplace=False,
+        kind="quicksort",
+        na_position="last",
+        ignore_index=False,
+    ):
+        """Sort by the values along either axis.
+
+        Parameters
+        ----------
+        by : str or list of str
+            Name or list of names to sort by.
+        ascending : bool or list of bool, default True
+            Sort ascending vs. descending. Specify list for multiple sort
+            orders. If this is a list of bools, must match the length of the
+            by.
+        na_position : {‘first’, ‘last’}, default ‘last’
+            'first' puts nulls at the beginning, 'last' puts nulls at the end
+        ignore_index : bool, default False
+            If True, index will not be sorted.
+
+        Returns
+        -------
+        Frame : Frame with sorted values.
+
+        Notes
+        -----
+        Difference from pandas:
+          * Support axis='index' only.
+          * Not supporting: inplace, kind
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame()
+        >>> df['a'] = [0, 1, 2]
+        >>> df['b'] = [-3, 2, 0]
+        >>> df.sort_values('b')
+           a  b
+        0  0 -3
+        2  2  0
+        1  1  2
+        """
+        if na_position not in {"first", "last"}:
+            raise ValueError(f"invalid na_position: {na_position}")
+        if inplace:
+            raise NotImplementedError("`inplace` not currently implemented.")
+        if kind != "quicksort":
+            if kind not in {"mergesort", "heapsort", "stable"}:
+                raise AttributeError(
+                    f"{kind} is not a valid sorting algorithm for "
+                    f"'DataFrame' object"
+                )
+            warnings.warn(
+                f"GPU-accelerated {kind} is currently not supported, "
+                f"defaulting to quicksort."
+            )
+        if axis != 0:
+            raise NotImplementedError("`axis` not currently implemented.")
+
+        if len(self) == 0:
+            return self
+
+        # argsort the `by` column
+        return self.take(
+            self._get_columns_by_label(by)._get_sorted_inds(
+                ascending=ascending, na_position=na_position
+            ),
+            keep_index=not ignore_index,
+        )
+
+    def _n_largest_or_smallest(self, largest, n, columns, keep):
+        # Get column to operate on
+        if isinstance(columns, str):
+            columns = [columns]
+
+        if len(self) == 0:
+            return self
+
+        if keep == "first":
+            if n < 0:
+                n = 0
+
+            # argsort the `by` column
+            return self.take(
+                self._get_columns_by_label(columns)._get_sorted_inds(
+                    ascending=not largest
+                )[:n],
+                keep_index=True,
+            )
+        elif keep == "last":
+            indices = self._get_columns_by_label(columns)._get_sorted_inds(
+                ascending=largest
+            )
+
+            if n <= 0:
+                # Empty slice.
+                indices = indices[0:0]
+            else:
+                indices = indices[: -n - 1 : -1]
+            return self.take(indices, keep_index=True)
+        else:
+            raise ValueError('keep must be either "first", "last"')

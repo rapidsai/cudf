@@ -27,6 +27,10 @@ function(jit_preprocess_files)
                           ${ARGN}
                           )
 
+    get_target_property(libcudacxx_raw_includes libcudacxx::libcudacxx INTERFACE_INCLUDE_DIRECTORIES)
+    foreach(inc IN LISTS libcudacxx_raw_includes)
+        list(APPEND libcudacxx_includes "-I${inc}")
+    endforeach()
     foreach(ARG_FILE ${ARG_FILES})
         set(ARG_OUTPUT ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files/${ARG_FILE}.jit.hpp)
         get_filename_component(jit_output_directory "${ARG_OUTPUT}" DIRECTORY )
@@ -45,7 +49,7 @@ function(jit_preprocess_files)
                                     -D__CUDACC_RTC__
                                     -I${CUDF_SOURCE_DIR}/include
                                     -I${CUDF_SOURCE_DIR}/src
-                                    -I${LIBCUDACXX_INCLUDE_DIR}
+                                    ${libcudacxx_includes}
                                     -I${CUDAToolkit_INCLUDE_DIRS}
                                     --no-preinclude-workarounds
                                     --no-replace-pragma-once
@@ -63,5 +67,3 @@ jit_preprocess_files(SOURCE_DIRECTORY      ${CUDF_SOURCE_DIR}/src
 
 add_custom_target(jitify_preprocess_run DEPENDS ${JIT_PREPROCESSED_FILES})
 
-file(COPY "${LIBCUDACXX_INCLUDE_DIR}/" DESTINATION "${CUDF_GENERATED_INCLUDE_DIR}/include/libcudacxx")
-file(COPY "${LIBCXX_INCLUDE_DIR}"      DESTINATION "${CUDF_GENERATED_INCLUDE_DIR}/include/libcxx")

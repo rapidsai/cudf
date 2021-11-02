@@ -133,7 +133,7 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid)
 
   auto masks = cudf::test::detail::make_null_mask_vector(all_valid, all_valid + size);
 
-  EXPECT_TRUE(std::equal(masks.begin(), masks.end(), host_data.second.begin()));
+  EXPECT_TRUE(cudf::test::validate_host_masks(masks, host_data.second, size));
 }
 
 struct ColumnUtilitiesEquivalenceTest : public cudf::test::BaseFixture {

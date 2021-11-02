@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf import DataFrame, GenericIndex, Series
+from cudf import DataFrame, GenericIndex, RangeIndex, Series
 from cudf.core.buffer import Buffer
 from cudf.testing._utils import assert_eq
 
@@ -28,7 +28,7 @@ def check_serialization(df):
     assert_frame_picklable(df[2:-2])
     # sorted
     sortvaldf = df.sort_values("vals")
-    assert isinstance(sortvaldf.index, GenericIndex)
+    assert isinstance(sortvaldf.index, (GenericIndex, RangeIndex))
     assert_frame_picklable(sortvaldf)
     # out-of-band
     if pickle.HIGHEST_PROTOCOL >= 5:
