@@ -7,6 +7,11 @@ from io import BufferedWriter, BytesIO, IOBase
 import numpy as np
 from pyarrow import dataset as pa_ds, parquet as pq
 
+try:
+    import fsspec.parquet as fsspec_parquet
+except ImportError:
+    fsspec_parquet = None
+
 from dask import dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
 
@@ -77,11 +82,21 @@ class CudfEngine(ArrowDatasetEngine):
             paths_or_fobs = paths
             if not cudf.utils.ioutils._is_local_filesystem(fs):
 
+                # Define remote_open
+                if fsspec_parquet is None:
+                    remote_open = fs.open
+                else:
+                    remote_open = partial(
+                        fsspec_parquet.open_parquet_file,
+                        fs=fs,
+                        columns=columns,
+                        row_groups=row_groups,
+                        engine="pyarrow",
+                    )
+
                 # Convert paths to file objects for remote data
                 paths_or_fobs = [
-                    stack.enter_context(
-                        fs.open(path, mode="rb", cache_type="none")
-                    )
+                    stack.enter_context(remote_open(path, mode="rb"))
                     for path in paths
                 ]
 

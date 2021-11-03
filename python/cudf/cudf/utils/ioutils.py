@@ -1207,6 +1207,7 @@ def get_filepath_or_buffer(
     iotypes=(BytesIO, NativeFile),
     byte_ranges=None,
     use_python_file_object=False,
+    remote_open=None,
     **kwargs,
 ):
     """Return either a filepath string to data, or a memory buffer of data.
@@ -1228,6 +1229,9 @@ def get_filepath_or_buffer(
     use_python_file_object : boolean, default False
         If True, Arrow-backed PythonFile objects will be used in place
         of fsspec AbstractBufferedFile objects.
+    remote_open : callable, optional
+        Optional file-open function to use for remote storage. Only
+        used for when path_or_data is a str (or list of str).
 
     Returns
     -------
@@ -1261,10 +1265,17 @@ def get_filepath_or_buffer(
 
         else:
             if use_python_file_object:
-                pa_fs = PyFileSystem(FSSpecHandler(fs))
-                path_or_data = [
-                    pa_fs.open_input_file(fpath) for fpath in paths
-                ]
+                if remote_open is None:
+                    # Use pyarrow filesystem API
+                    pa_fs = PyFileSystem(FSSpecHandler(fs))
+                    path_or_data = [
+                        pa_fs.open_input_file(fpath) for fpath in paths
+                    ]
+                else:
+                    # Use provided remote_open function
+                    path_or_data = [
+                        ArrowPythonFile(remote_open(fpath)) for fpath in paths
+                    ]
             else:
                 path_or_data = [
                     BytesIO(

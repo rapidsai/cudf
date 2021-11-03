@@ -3,9 +3,15 @@
 import io
 import warnings
 from collections import defaultdict
+from functools import partial
 from uuid import uuid4
 
 import fsspec
+
+try:
+    import fsspec.parquet as fsspec_parquet
+except ImportError:
+    fsspec_parquet = None
 from pyarrow import dataset as ds, parquet as pq
 
 import cudf
@@ -296,11 +302,24 @@ def read_parquet(
     num_rows=None,
     strings_to_categorical=False,
     use_pandas_metadata=True,
-    use_python_file_object=False,
+    use_python_file_object=None,
     *args,
     **kwargs,
 ):
     """{docstring}"""
+
+    # For newer versions of fsspec, use
+    # use_python_file_object=False by default
+    # TODO: Remove the use_python_file_object=False
+    #       code path altogether, since it should no
+    #       longer outperform fsspec in the future.
+    #       The user should still be able to pass in
+    #       native pyarrow files directly, if desired.
+    if use_python_file_object is None:
+        if fsspec_parquet is None:
+            use_python_file_object = True
+        else:
+            use_python_file_object = False
 
     # Multiple sources are passed as a list. If a single source is passed,
     # wrap it in a list for unified processing downstream.
@@ -341,6 +360,7 @@ def read_parquet(
     # local filesystem object. We can also do it without a
     # file-system object for `AbstractBufferedFile` buffers
     byte_ranges, footers, file_sizes = None, None, None
+    remote_open, use_remote_open = None, False
     if not use_python_file_object:
         need_byte_ranges = fs is not None and not ioutils._is_local_filesystem(
             fs
@@ -354,9 +374,22 @@ def read_parquet(
             byte_ranges, footers, file_sizes = _get_byte_ranges(
                 filepath_or_buffer, row_groups, columns, fs,
             )
+    elif fs is not None and not ioutils._is_local_filesystem(fs):
+        use_remote_open = fsspec_parquet is not None
 
     filepaths_or_buffers = []
     for i, source in enumerate(filepath_or_buffer):
+
+        if use_remote_open:
+            # Use fsspec.parquet.open_parquet_file to transfer
+            # the required column-chunks more efficiently
+            remote_open = partial(
+                fsspec_parquet.open_parquet_file,
+                fs=fs,
+                columns=columns,
+                row_groups=None if row_groups is None else row_groups[i],
+                engine="pyarrow",
+            )
 
         if ioutils.is_directory(source, **kwargs):
             # Note: For now, we know `fs` is an fsspec filesystem
@@ -376,6 +409,7 @@ def read_parquet(
             file_size=file_sizes[i] if file_sizes else None,
             add_par1_magic=True,
             use_python_file_object=use_python_file_object,
+            remote_open=remote_open,
             **kwargs,
         )
 
