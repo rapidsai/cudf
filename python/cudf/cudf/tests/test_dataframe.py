@@ -8732,12 +8732,12 @@ def test_explode(data, labels, ignore_index, p_index, label_to_explode):
         (
             cudf.DataFrame({"a": [10, 0, 2], "b": [-10, 10, 1]}),
             True,
-            cudf.Series([1, 2, 0], dtype="int32"),
+            cupy.array([1, 2, 0], dtype="int32"),
         ),
         (
             cudf.DataFrame({"a": [10, 0, 2], "b": [-10, 10, 1]}),
             False,
-            cudf.Series([0, 2, 1], dtype="int32"),
+            cupy.array([0, 2, 1], dtype="int32"),
         ),
     ],
 )

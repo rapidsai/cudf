@@ -88,68 +88,37 @@ public class Rmm {
    *                       {@link RmmAllocationMode#ARENA},
    *                       {@link RmmAllocationMode#CUDA_ASYNC} and
    *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
-   * @param enableLogging  Enable logging memory manager events
-   * @param poolSize       The initial pool size in bytes
-   * @throws IllegalStateException if RMM has already been initialized
-   */
-  public static void initialize(int allocationMode, boolean enableLogging, long poolSize)
-      throws RmmException {
-    initialize(allocationMode, enableLogging, poolSize, 0);
-  }
-
-  /**
-   * Initialize memory manager state and storage. This will always initialize
-   * the CUDA context for the calling thread if it is not already set. The
-   * caller is responsible for setting the desired CUDA device prior to this
-   * call if a specific device is already set.
-   * <p>NOTE: All cudf methods will set the chosen CUDA device in the CUDA
-   * context of the calling thread after this returns.
-   * @param allocationMode Allocation strategy to use. Bit set using
-   *                       {@link RmmAllocationMode#CUDA_DEFAULT},
-   *                       {@link RmmAllocationMode#POOL},
-   *                       {@link RmmAllocationMode#ARENA},
-   *                       {@link RmmAllocationMode#CUDA_ASYNC} and
-   *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
-   * @param enableLogging  Enable logging memory manager events
-   * @param poolSize       The initial pool size in bytes
-   * @param maxPoolSize    The maximum size the pool is allowed to grow. If the specified value
-   *                       is <= 0 then the maximum pool size will not be artificially limited.
-   * @throws IllegalStateException if RMM has already been initialized
-   */
-  public static void initialize(int allocationMode, boolean enableLogging, long poolSize,
-      long maxPoolSize) throws RmmException {
-    LogConf lc = null;
-    if (enableLogging) {
-      String f = System.getenv("RMM_LOG_FILE");
-      if (f != null) {
-        lc = logTo(new File(f));
-      } else {
-        lc = logToStderr();
-      }
-    }
-    initialize(allocationMode, lc, poolSize, maxPoolSize);
-  }
-
-  /**
-   * Initialize memory manager state and storage. This will always initialize
-   * the CUDA context for the calling thread if it is not already set. The
-   * caller is responsible for setting the desired CUDA device prior to this
-   * call if a specific device is already set.
-   * <p>NOTE: All cudf methods will set the chosen CUDA device in the CUDA
-   * context of the calling thread after this returns.
-   * @param allocationMode Allocation strategy to use. Bit set using
-   *                       {@link RmmAllocationMode#CUDA_DEFAULT},
-   *                       {@link RmmAllocationMode#POOL},
-   *                       {@link RmmAllocationMode#ARENA},
-   *                       {@link RmmAllocationMode#CUDA_ASYNC} and
-   *                       {@link RmmAllocationMode#CUDA_MANAGED_MEMORY}
    * @param logConf        How to do logging or null if you don't want to
    * @param poolSize       The initial pool size in bytes
    * @throws IllegalStateException if RMM has already been initialized
    */
   public static synchronized void initialize(int allocationMode, LogConf logConf, long poolSize)
       throws RmmException {
-    initialize(allocationMode, logConf, poolSize, 0);
+    if (initialized) {
+      throw new IllegalStateException("RMM is already initialized");
+    }
+
+    boolean isPool = (allocationMode & RmmAllocationMode.POOL) != 0;
+    boolean isArena = (allocationMode & RmmAllocationMode.ARENA) != 0;
+    boolean isAsync = (allocationMode & RmmAllocationMode.CUDA_ASYNC) != 0;
+    boolean isManaged = (allocationMode & RmmAllocationMode.CUDA_MANAGED_MEMORY) != 0;
+
+    if (isAsync && isManaged) {
+      throw new IllegalArgumentException(
+          "CUDA Unified Memory is not supported in CUDA_ASYNC allocation mode");
+    }
+    LogLoc loc = LogLoc.NONE;
+    String path = null;
+    if (logConf != null) {
+      if (logConf.file != null) {
+        path = logConf.file.getAbsolutePath();
+      }
+      loc = logConf.loc;
+    }
+
+    initializeInternal(allocationMode, loc.internalId, path, poolSize);
+    MemoryCleaner.setDefaultGpu(Cuda.getDevice());
+    initialized = true;
   }
 
   /**
@@ -175,44 +144,11 @@ public class Rmm {
    *                                  {@link RmmAllocationMode#ARENA} or
    *                                  {@link RmmAllocationMode#CUDA_ASYNC}, or the maximum pool
    *                                  size is below the initial size.
+   * @deprecated Use the version without the maxPoolSize parameter instead.
    */
   public static synchronized void initialize(int allocationMode, LogConf logConf, long poolSize,
       long maxPoolSize) throws RmmException {
-    if (initialized) {
-      throw new IllegalStateException("RMM is already initialized");
-    }
-
-    boolean isPool = (allocationMode & RmmAllocationMode.POOL) != 0;
-    boolean isArena = (allocationMode & RmmAllocationMode.ARENA) != 0;
-    boolean isAsync = (allocationMode & RmmAllocationMode.CUDA_ASYNC) != 0;
-    boolean isManaged = (allocationMode & RmmAllocationMode.CUDA_MANAGED_MEMORY) != 0;
-
-    if (maxPoolSize > 0) {
-      if (!isPool && !isArena && !isAsync) {
-        throw new IllegalArgumentException(
-            "Pool limit only supported in POOL, ARENA, or CUDA_ASYNC allocation mode");
-      }
-      if (maxPoolSize < poolSize) {
-        throw new IllegalArgumentException("Pool limit of " + maxPoolSize
-            + " is less than initial pool size of " + poolSize);
-      }
-    }
-    if (isAsync && isManaged) {
-      throw new IllegalArgumentException(
-          "CUDA Unified Memory is not supported in CUDA_ASYNC allocation mode");
-    }
-    LogLoc loc = LogLoc.NONE;
-    String path = null;
-    if (logConf != null) {
-      if (logConf.file != null) {
-        path = logConf.file.getAbsolutePath();
-      }
-      loc = logConf.loc;
-    }
-
-    initializeInternal(allocationMode, loc.internalId, path, poolSize, maxPoolSize);
-    MemoryCleaner.setDefaultGpu(Cuda.getDevice());
-    initialized = true;
+    initialize(allocationMode, logConf, poolSize);
   }
 
   /**
@@ -256,7 +192,7 @@ public class Rmm {
   }
 
   private static native void initializeInternal(int allocationMode, int logTo, String path,
-      long poolSize, long maxPoolSize) throws RmmException;
+      long poolSize) throws RmmException;
 
   /**
    * Shut down any initialized RMM instance.  This should be used very rarely.  It does not need to
