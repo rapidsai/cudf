@@ -146,7 +146,7 @@ void inplace_bitmask_binop(
   stream.synchronize();
 }
 
-// Count set bits in a segmented null mask, using indices on the device
+// Count set bits in a segmented null mask, using indices on the device.
 rmm::device_uvector<size_type> segmented_count_set_bits(
   bitmask_type const* bitmask,
   rmm::device_uvector<size_type> const& d_indices,
@@ -198,12 +198,15 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
     return ret;
   }
 
-  // Construct a contiguous host buffer of indices and copy to device
+  // Construct a contiguous host buffer of indices and copy to device.
   auto const h_indices = std::vector(indices_begin, indices_end);
   auto const d_indices = make_device_uvector_async(h_indices, stream);
+
+  // Compute the null counts over each segment.
   rmm::device_uvector<size_type> d_null_counts =
     segmented_count_set_bits(bitmask, d_indices, stream);
 
+  // Copy the results back to the host.
   size_type const num_ranges = num_indices / 2;
   std::vector<size_type> ret(num_ranges);
   CUDA_TRY(cudaMemcpyAsync(ret.data(),
