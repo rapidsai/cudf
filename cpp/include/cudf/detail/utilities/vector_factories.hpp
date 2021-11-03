@@ -185,33 +185,6 @@ rmm::device_uvector<typename Container::value_type> make_device_uvector_async(
 }
 
 /**
- * @brief Asynchronously construct a `device_uvector` containing a deep copy of data from a begin
- * and end iterator.
- *
- * @note This function does not synchronize `stream`.
- *
- * @tparam ContiguousIterator The iterator type from which data is copied
- * @param begin The starting pointer from which to copy
- * @param end The ending pointer after the last element
- * @param stream The stream on which to allocate memory and perform the copy
- * @param mr The memory resource to use for allocating the returned device_uvector
- * @return A device_uvector containing the copied data
- */
-template <typename T>
-rmm::device_uvector<T> make_device_uvector_async(
-  T const* begin,
-  T const* end,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
-{
-  auto const num_elements = std::distance(begin, end);
-  rmm::device_uvector<T> ret(num_elements, stream, mr);
-  CUDA_TRY(cudaMemcpyAsync(
-    ret.data(), begin, num_elements * sizeof(T), cudaMemcpyDefault, stream.value()));
-  return ret;
-}
-
-/**
  * @brief Synchronously construct a `device_uvector` containing a deep copy of data from a
  * `host_span`
  *
