@@ -585,8 +585,6 @@ def __dataframe__(
     allowed to make a copy of the data. For example, copying data would be
     necessary if a library supports strided buffers, given that this protocol
     specifies contiguous buffers.
-    Currently, if this flag is set to ``False`` and a copy is needed, a
-    ``RuntimeError`` will be raised.
     """
     return _CuDFDataFrame(self, nan_as_null=nan_as_null, allow_copy=allow_copy)
 
