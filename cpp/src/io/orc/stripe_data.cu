@@ -448,19 +448,19 @@ inline __device__ int decode_base128_varint(volatile orc_bytestream_s* bs, int p
 /**
  * @brief Decodes a signed int128 encoded as base-128 varint (used for decimals)
  */
-inline __device__ __int128_t decode_varint128(volatile orc_bytestream_s* bs, int pos)
-{
-  uint32_t b           = bytestream_readbyte(bs, pos++);
-  __int128_t sign_mask = -(int32_t)(b & 1);
-  __int128_t v         = (b >> 1) & 0x3f;
-  uint32_t bitpos      = 6;
-  while (b > 0x7f && bitpos < 128) {
-    b = bytestream_readbyte(bs, pos++);
-    v |= ((uint64_t)(b & 0x7f)) << (bitpos & 0x3f);
-    bitpos += 7;
-  }
-  return v ^ sign_mask;
-}
+ inline __device__ __int128_t decode_varint128(volatile orc_bytestream_s* bs, int pos)
+ {
+   auto byte                  = bytestream_readbyte(bs, pos++);
+   __int128_t const sign_mask = -(int32_t)(byte & 1);
+   __int128_t value           = (byte >> 1) & 0x3f;
+   uint32_t bitpos            = 6;
+   while (byte & 0x80 && bitpos < 128) {
+     byte = bytestream_readbyte(bs, pos++);
+     value |= ((__uint128_t)(byte & 0x7f)) << bitpos;
+     bitpos += 7;
+   }
+   return value ^ sign_mask;
+ }
 
 /**
  * @brief Decodes an unsigned 32-bit varint
@@ -1017,7 +1017,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
                                       volatile orcdec_state_s::values& vals,
                                       int val_scale,
                                       int numvals,
-                                      TypeKind dtype_kind,
+                                      type_id dtype_id,
                                       int col_scale,
                                       int t)
 {
@@ -1045,7 +1045,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
       auto const pos = static_cast<int>(vals.i64[2 * t]);
       __int128_t v   = decode_varint128(bs, pos);
 
-      if (dtype_kind == DOUBLE) {
+      if (dtype_id == type_id::FLOAT64) {
         double f      = v;
         int32_t scale = (t < numvals) ? val_scale : 0;
         if (scale >= 0)
@@ -1630,7 +1630,7 @@ __global__ void __launch_bounds__(block_size)
                                     s->vals,
                                     val_scale,
                                     numvals,
-                                    s->chunk.type_kind,
+                                    s->chunk.dtype_id,
                                     s->chunk.decimal_scale,
                                     t);
         }
