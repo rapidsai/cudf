@@ -448,19 +448,19 @@ inline __device__ int decode_base128_varint(volatile orc_bytestream_s* bs, int p
 /**
  * @brief Decodes a signed int128 encoded as base-128 varint (used for decimals)
  */
- inline __device__ __int128_t decode_varint128(volatile orc_bytestream_s* bs, int pos)
- {
-   auto byte                  = bytestream_readbyte(bs, pos++);
-   __int128_t const sign_mask = -(int32_t)(byte & 1);
-   __int128_t value           = (byte >> 1) & 0x3f;
-   uint32_t bitpos            = 6;
-   while (byte & 0x80 && bitpos < 128) {
-     byte = bytestream_readbyte(bs, pos++);
-     value |= ((__uint128_t)(byte & 0x7f)) << bitpos;
-     bitpos += 7;
-   }
-   return value ^ sign_mask;
- }
+inline __device__ __int128_t decode_varint128(volatile orc_bytestream_s* bs, int pos)
+{
+  auto byte                  = bytestream_readbyte(bs, pos++);
+  __int128_t const sign_mask = -(int32_t)(byte & 1);
+  __int128_t value           = (byte >> 1) & 0x3f;
+  uint32_t bitpos            = 6;
+  while (byte & 0x80 && bitpos < 128) {
+    byte = bytestream_readbyte(bs, pos++);
+    value |= ((__uint128_t)(byte & 0x7f)) << bitpos;
+    bitpos += 7;
+  }
+  return value ^ sign_mask;
+}
 
 /**
  * @brief Decodes an unsigned 32-bit varint
