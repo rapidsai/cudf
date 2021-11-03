@@ -177,8 +177,8 @@ __global__ void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bi
   cudf::size_type range_id  = tid;
 
   while (range_id < num_ranges) {
-    size_type const first_bit_index = *(bit_indices + 2 * range_id);
-    size_type const last_bit_index  = *(bit_indices + 2 * range_id + 1);
+    size_type const first_bit_index = bit_indices[2 * range_id];
+    size_type const last_bit_index  = bit_indices[2 * range_id + 1];
     size_type delta                 = 0;
     size_type num_slack_bits        = 0;
 
