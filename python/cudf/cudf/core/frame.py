@@ -1568,7 +1568,7 @@ class Frame:
 
         # if compile_or_get succeeds, it is safe to create a kernel that only
         # consumes the columns that are of supported dtype
-        for name, col in frame_metadata.supported_cols.items():
+        for col in frame_metadata.supported_cols.values():
             data = col.data
             mask = col.mask
             if mask is None:

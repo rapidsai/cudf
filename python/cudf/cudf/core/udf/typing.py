@@ -45,9 +45,9 @@ class MaskedType(types.Type):
             # output its own error message. Putting the message in the repr
             # then is one way of getting the true cause to the user
             self.value_type = types.Poison(
-                "\n\n\n Unsupported MaskedType. If you are seeing this, "
-                "you are likely trying to use a column of unsupported "
-                f"dtype in a UDF. Unsupported type: {value} \n\n\n"
+                "\n\n\n Unsupported MaskedType. This is usually caused by "
+                "attempting to use a column of unsupported dtype in a UDF. "
+                f"supported dtypes are {SUPPORTED_NUMBA_TYPES}"
             )
         super().__init__(name=f"Masked{self.value_type}")
 

@@ -18,13 +18,14 @@ MASK_BITSIZE = np.dtype("int32").itemsize * 8
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
 
-class _FrameJitMetadata(object):
+class _FrameJitMetadata:
+    """
+    Contains dtype information about the columns in a frame
+    that is used in JIT compilation of a user-defined function
+    (UDF) into a CUDA kernel.
+    """
+
     def __init__(self, frame):
-        """
-        convenience class that contains the metadata from the
-        frame the UDF is targeting that is needed for jitting
-        the eventual kernel.
-        """
         self.all_dtypes = {}
         self.supported_dtypes = {}
         self.frame = frame
@@ -44,11 +45,11 @@ class _FrameJitMetadata(object):
 
 
 def generate_cache_key(frame_meta: _FrameJitMetadata, func: Callable):
-    """
-    Create a cache key that uniquely identifies a compilation. A new
-    compilation is needed any time any of the following things change:
+    """Create a cache key that uniquely identifies a compilation.
+
+    A new compilation is needed any time any of the following things change:
     - The UDF itself as defined in python by the user
-    - The types of the columns actually logically utilized by the UDF
+    - The types of the columns utilized by the UDF
     - The existence of the input columns masks
     """
     cache_key = (
@@ -286,15 +287,12 @@ def _define_function(
         )
         row_initializers.append(row_initializer)
 
-    masked_input_initializers = "\n".join(initializers)
-    row_initializer_list = "\n".join(row_initializers)
-
     # Incorporate all of the above into the kernel code template
     d = {
         "input_columns": input_columns,
         "input_offsets": input_offsets,
-        "masked_input_initializers": masked_input_initializers,
-        "row_initializers": row_initializer_list,
+        "masked_input_initializers": "\n".join(initializers),
+        "row_initializers": "\n".join(row_initializers),
         "numba_rectype": row_type,  # from global
     }
 
@@ -303,7 +301,7 @@ def _define_function(
 
 def _check_return_type(ty):
     """
-    In almost every case, get_udf_return_type will throw a typing error
+    In almost every case, get_udf_return_type will throw a TypingError
     if the user tries to use a field in the row containing a dtype that
     is not supported. It does this by simply "not finding" overloads of
     any operators for the ancillary dtype we type that field as. But it
@@ -346,17 +344,17 @@ def compile_or_get(frame_meta, func):
     # check to see if we already compiled this function
     cache_key = generate_cache_key(frame_meta, func)
     if precompiled.get(cache_key) is not None:
-        kernel, scalar_return_type = precompiled[cache_key]
-        return kernel, scalar_return_type
+        kernel, masked_or_scalar = precompiled[cache_key]
+        return kernel, masked_or_scalar
 
     # precompile the user udf to get the right return type.
     # could be a MaskedType or a scalar type.
-    scalar_return_type = get_udf_return_type(frame_meta, func)
-    _check_return_type(scalar_return_type)
-    _is_scalar_return = not isinstance(scalar_return_type, MaskedType)
+    masked_or_scalar = get_udf_return_type(frame_meta, func)
+    _check_return_type(masked_or_scalar)
+    _is_scalar_return = not isinstance(masked_or_scalar, MaskedType)
 
     # this is the signature for the final full kernel compilation
-    sig = construct_signature(frame_meta, scalar_return_type)
+    sig = construct_signature(frame_meta, masked_or_scalar)
 
     # this row type is used within the kernel to pack up the column and
     # mask data into the dict like data structure the user udf expects
@@ -384,7 +382,7 @@ def compile_or_get(frame_meta, func):
     # The python function definition representing the kernel
     _kernel = local_exec_context["_kernel"]
     kernel = cuda.jit(sig)(_kernel)
-    scalar_return_type = numpy_support.as_dtype(scalar_return_type)
-    precompiled[cache_key] = (kernel, scalar_return_type)
+    np_return_type = numpy_support.as_dtype(masked_or_scalar)
+    precompiled[cache_key] = (kernel, np_return_type)
 
-    return kernel, scalar_return_type
+    return kernel, np_return_type
