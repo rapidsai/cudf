@@ -448,14 +448,18 @@ class IndexedFrame(Frame):
         result._copy_type_metadata(self, include_index=keep_index)
         return result
 
-    def _positions_from_column_names(self, column_names, include_index=False):
+    def _positions_from_column_names(
+        self, column_names, offset_by_index_columns=False
+    ):
         """Map each column name into their positions in the frame.
 
         Return positions of the provided column names, offset by the number of
-        index columns if index exists and `include_index` is True. The order
-        of indices returned corresponds to the column order in this Frame.
+        index columns `offset_by_index_columns` is True. The order of indices
+        returned corresponds to the column order in this Frame.
         """
-        num_index_columns = len(self._index._data) if include_index else 0
+        num_index_columns = (
+            len(self._index._data) if offset_by_index_columns else 0
+        )
         return [
             i + num_index_columns
             for i, name in enumerate(self._column_names)
@@ -499,7 +503,7 @@ class IndexedFrame(Frame):
             return self.copy(deep=True)
 
         keys = self._positions_from_column_names(
-            subset, include_index=not ignore_index
+            subset, offset_by_index_columns=not ignore_index
         )
         result = self.__class__._from_columns(
             libcudf.stream_compaction.drop_duplicates(

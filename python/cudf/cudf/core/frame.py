@@ -1442,7 +1442,7 @@ class Frame:
                 list(self._index._data.columns + frame._columns),
                 how=how,
                 keys=self._positions_from_column_names(
-                    subset, include_index=True
+                    subset, offset_by_index_columns=True
                 ),
                 thresh=thresh,
             ),
@@ -2314,9 +2314,8 @@ class Frame:
     def _positions_from_column_names(self, column_names):
         """Map each column name into their positions in the frame.
 
-        Return positions of the provided column names, offset by the number of
-        index columns if index exists and `include_index` is True. The order
-        of indices returned corresponds to the column order in this Frame.
+        Return positions of the provided column names. The order of indices
+        returned corresponds to the column order in this Frame.
         """
         return [
             i
