@@ -28,7 +28,7 @@ namespace detail {
  * @tparam T Type of the underlying data. This is the fallback for the cases when T does not support
  * '<' operator.
  */
-template <typename T, bool has_nulls>
+template <bool has_nulls>
 struct row_arg_minmax_fn {
   size_type const num_rows;
   row_lexicographic_comparator<has_nulls> const comp;
