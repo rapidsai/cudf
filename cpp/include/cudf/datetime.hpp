@@ -379,7 +379,7 @@ std::unique_ptr<column> ceil_nanosecond(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Round up to the nearest day
+ * @brief Round down to the nearest day
  *
  * @param column cudf::column_view of the input datetime values
  * @param mr Device memory resource used to allocate device memory of the returned column.
@@ -392,7 +392,7 @@ std::unique_ptr<cudf::column> floor_day(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Round up to the nearest hour
+ * @brief Round down to the nearest hour
  *
  * @param column cudf::column_view of the input datetime values
  * @param mr Device memory resource used to allocate device memory of the returned column.
@@ -405,7 +405,7 @@ std::unique_ptr<cudf::column> floor_hour(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Round up to the nearest minute
+ * @brief Round down to the nearest minute
  *
  * @param column cudf::column_view of the input datetime values
  * @param mr Device memory resource used to allocate device memory of the returned column.
@@ -418,7 +418,7 @@ std::unique_ptr<cudf::column> floor_minute(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Round up to the nearest second
+ * @brief Round down to the nearest second
  *
  * @param column cudf::column_view of the input datetime values
  * @param mr Device memory resource used to allocate device memory of the returned column.
@@ -431,7 +431,7 @@ std::unique_ptr<cudf::column> floor_second(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Round up to the nearest millisecond
+ * @brief Round down to the nearest millisecond
  *
  * @param column cudf::column_view of the input datetime values
  * @param mr Device memory resource used to allocate device memory of the returned column.
@@ -444,7 +444,7 @@ std::unique_ptr<column> floor_millisecond(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Round up to the nearest microsecond
+ * @brief Round down to the nearest microsecond
  *
  * @param column cudf::column_view of the input datetime values
  * @param mr Device memory resource used to allocate device memory of the returned column.
@@ -457,7 +457,7 @@ std::unique_ptr<column> floor_microsecond(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Round up to the nearest nanosecond
+ * @brief Round down to the nearest nanosecond
  *
  * @param column cudf::column_view of the input datetime values
  * @param mr Device memory resource used to allocate device memory of the returned column.
