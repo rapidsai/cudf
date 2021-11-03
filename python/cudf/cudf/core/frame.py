@@ -46,7 +46,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import merge
-from cudf.core.udf.pipeline import FrameJitMetadata, compile_or_get
+from cudf.core.udf.pipeline import _FrameJitMetadata, compile_or_get
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
@@ -1557,8 +1557,8 @@ class Frame:
         """
         Apply `func` across the rows of the frame.
         """
-        md = FrameJitMetadata(self, func)
-        kernel, retty = compile_or_get(md)
+        frame_metadata = _FrameJitMetadata(self)
+        kernel, retty = compile_or_get(frame_metadata, func)
 
         # Mask and data column preallocated
         ans_col = cupy.empty(len(self), dtype=retty)
@@ -1566,9 +1566,9 @@ class Frame:
         launch_args = [(ans_col, ans_mask)]
         offsets = []
 
-        # if compile_or_get succeeds, its safe to create a kernel that only
+        # if compile_or_get succeeds, it is safe to create a kernel that only
         # consumes the columns that are of supported dtype
-        for name, col in md.supported_cols.items():
+        for name, col in frame_metadata.supported_cols.items():
             data = col.data
             mask = col.mask
             if mask is None:

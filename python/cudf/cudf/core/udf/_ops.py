@@ -67,7 +67,7 @@ comparison_ops = [
 SUPPORTED_TYPES = NUMERIC_TYPES | BOOL_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES
 
 
-def _is_supported_type(dtype):
+def _is_jit_supported_type(dtype):
     # category dtype isn't hashable
     if isinstance(dtype, CategoricalDtype):
         return False
