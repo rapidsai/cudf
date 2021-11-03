@@ -86,13 +86,23 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> build_list_column()
 {
   using LCW                     = cudf::test::lists_column_wrapper<T, int>;
   constexpr size_type type_size = sizeof(device_storage_type_t<T>) * CHAR_BIT;
+
+  // {
+  //  {{1, 2}, {3, 4, 5}},
+  //  {{}},
+  //  {LCW{10}},
+  //  {{6, 7, 8}, {9}},
+  //  {{-1, -2}, {-3, -4}},
+  //  {{-5, -6, -7}, {-8, -9}}
+  // }
   cudf::test::fixed_width_column_wrapper<T> values{
     1, 2, 3, 4, 5, 10, 6, 7, 8, 9, -1, -2, -3, -4, -5, -6, -7, -8, -9};
   cudf::test::fixed_width_column_wrapper<offset_type> inner_offsets{
     0, 2, 5, 6, 9, 10, 12, 14, 17, 19};
   auto inner_list = cudf::make_lists_column(9, inner_offsets.release(), values.release(), 0, {});
   cudf::test::fixed_width_column_wrapper<offset_type> outer_offsets{0, 2, 2, 3, 5, 7, 9};
-  auto col = cudf::make_lists_column(6, outer_offsets.release(), std::move(inner_list), 0, {});
+  auto list = cudf::make_lists_column(6, outer_offsets.release(), std::move(inner_list), 0, {});
+
   // expected size = (num rows at level 1 + num_rows at level 2) + # values in the leaf
   cudf::test::fixed_width_column_wrapper<size_type> expected{
     ((4 + 8) * CHAR_BIT) + (type_size * 5),
@@ -101,7 +111,8 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> build_list_column()
     ((4 + 8) * CHAR_BIT) + (type_size * 4),
     ((4 + 8) * CHAR_BIT) + (type_size * 4),
     ((4 + 8) * CHAR_BIT) + (type_size * 5)};
-  return {std::move(col), expected.release()};
+
+  return {std::move(list), expected.release()};
 }
 
 TYPED_TEST(RowBitCountTyped, Lists)
@@ -120,21 +131,30 @@ TYPED_TEST(RowBitCountTyped, Lists)
 
 TYPED_TEST(RowBitCountTyped, ListsWithNulls)
 {
-  using T   = TypeParam;
-  using LCW = cudf::test::lists_column_wrapper<T, int>;
-
+  using T                       = TypeParam;
+  using LCW                     = cudf::test::lists_column_wrapper<T, int>;
   constexpr size_type type_size = sizeof(device_storage_type_t<T>) * CHAR_BIT;
+
+  // {
+  //  {{1, 2}, {3, null, 5}},
+  //  {{}},
+  //  {LCW{10}},
+  //  {{null, 7, null}, null},
+  // }
   cudf::test::fixed_width_column_wrapper<T> values{{1, 2, 3, 4, 5, 10, 6, 7, 8},
                                                    {1, 1, 1, 0, 1, 1, 0, 1, 0}};
   cudf::test::fixed_width_column_wrapper<offset_type> inner_offsets{0, 2, 5, 6, 9, 9};
-  std::vector<bool> inner_validity{1, 1, 1, 1, 0};
-  auto inner_null_mask =
-    cudf::test::detail::make_null_mask(inner_validity.begin(), inner_validity.end());
+  std::vector<bool> inner_list_validity{1, 1, 1, 1, 0};
   auto inner_list = cudf::make_lists_column(
-    5, inner_offsets.release(), values.release(), 1, std::move(inner_null_mask));
+    5,
+    inner_offsets.release(),
+    values.release(),
+    1,
+    cudf::test::detail::make_null_mask(inner_list_validity.begin(), inner_list_validity.end()));
   cudf::test::fixed_width_column_wrapper<offset_type> outer_offsets{0, 2, 2, 3, 5};
-  auto col = cudf::make_lists_column(4, outer_offsets.release(), std::move(inner_list), 0, {});
-  table_view t({*col});
+  auto list = cudf::make_lists_column(4, outer_offsets.release(), std::move(inner_list), 0, {});
+
+  table_view t({*list});
   auto result = cudf::row_bit_count(t);
 
   // expected size = (num rows at level 1 + num_rows at level 2) + # values in the leaf + validity
