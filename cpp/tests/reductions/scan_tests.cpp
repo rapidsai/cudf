@@ -393,7 +393,6 @@ TYPED_TEST(ScanDurationTest, Sum)
   result = cudf::scan(
     col, cudf::make_sum_aggregation(), cudf::scan_type::INCLUSIVE, cudf::null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected);
-  // cudf::test::print(result->view());
 
   EXPECT_THROW(cudf::scan(col, cudf::make_sum_aggregation(), cudf::scan_type::EXCLUSIVE),
                cudf::logic_error);
