@@ -85,11 +85,6 @@ struct DictionaryEntry {
 };
 
 /**
- * @brief Mask to indicate conversion from decimals to float64
- */
-constexpr int orc_decimal2float64_scale = 0x80;
-
-/**
  * @brief Struct to describe per stripe's column information
  */
 struct ColumnDesc {
@@ -111,6 +106,7 @@ struct ColumnDesc {
   ColumnEncodingKind encoding_kind;        // column encoding kind
   TypeKind type_kind;                      // column data type
   uint8_t dtype_len;          // data type length (for types that can be mapped to different sizes)
+  type_id dtype_id;           // TODO
   int32_t decimal_scale;      // number of fractional decimal digits for decimal type
   type_id timestamp_type_id;  // output timestamp type id (type_id::EMPTY by default)
   column_validity_info parent_validity_info;  // consists of parent column valid_map and null count
