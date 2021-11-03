@@ -287,14 +287,14 @@ def _define_function(
         row_initializers.append(row_initializer)
 
     masked_input_initializers = "\n".join(initializers)
-    row_initializers = "\n".join(row_initializers)
+    row_initializer_list = "\n".join(row_initializers)
 
     # Incorporate all of the above into the kernel code template
     d = {
         "input_columns": input_columns,
         "input_offsets": input_offsets,
         "masked_input_initializers": masked_input_initializers,
-        "row_initializers": row_initializers,
+        "row_initializers": row_initializer_list,
         "numba_rectype": row_type,  # from global
     }
 
