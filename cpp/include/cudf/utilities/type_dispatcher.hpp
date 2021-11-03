@@ -26,14 +26,6 @@
 
 #include <string>
 
-// Define a new macro analogous to CUDA_HOST_DEVICE_CALLABLE that maximizes the
-// chances of inlining when applied to a callable that is called on the GPU.
-#ifdef __CUDACC__
-#define CUDA_HOST_DEVICE_FORCEINLINE_CALLABLE __host__ __device__ __forceinline__
-#else
-#define CUDA_HOST_DEVICE_FORCEINLINE_CALLABLE inline
-#endif
-
 /**
  * @file
  * @brief Defines the mapping between `cudf::type_id` runtime type information
