@@ -28,6 +28,26 @@ namespace cudf {
 namespace detail {
 
 /**
+ * @brief Device functor to determine if two pairs are identical.
+ */
+class pair_equality {
+ public:
+  pair_equality(table_device_view lhs, table_device_view rhs, bool nulls_are_equal = true)
+    : _check_row_equality{lhs, rhs, nulls_are_equal}
+  {
+  }
+
+  __device__ __forceinline__ bool operator()(const pair_type& lhs,
+                                             const pair_type& rhs) const noexcept
+  {
+    return lhs.first == rhs.first and _check_row_equality(rhs.second, lhs.second);
+  }
+
+ private:
+  row_equality _check_row_equality;
+};
+
+/**
  * @brief Computes the trivial left join operation for the case when the
  * right table is empty.
  *
