@@ -360,9 +360,8 @@ def compile_or_get(frame_meta, func):
 
     # this row type is used within the kernel to pack up the column and
     # mask data into the dict like data structure the user udf expects
-    row_type = get_frame_row_type(
-        np.dtype(list(frame_meta.supported_dtypes.items()))
-    )
+    np_field_types = np.dtype(list(frame_meta.supported_dtypes.items()))
+    row_type = get_frame_row_type(np_field_types)
 
     f_ = cuda.jit(device=True)(func)
     # Dict of 'local' variables into which `_kernel` is defined

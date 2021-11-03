@@ -585,22 +585,24 @@ def test_masked_udf_subset_selection(data):
 
 
 @pytest.mark.parametrize(
-    "unsupported_dtype",
-    ["string", "decimal", "categorical", "interval", "list", "struct"],
+    "unsupported_col",
+    [
+        ["a", "b", "c"],
+        _decimal_series(
+            ["1.0", "2.0", "3.0"], dtype=cudf.Decimal64Dtype(2, 1)
+        ),
+        cudf.Series([1, 2, 3], dtype="category"),
+        cudf.interval_range(start=0, end=3, closed=True),
+        [[1, 2], [3, 4], [5, 6]],
+        [{"a": 1}, {"a": 2}, {"a": 3}],
+    ],
 )
-def test_masked_udf_unsupported_dtype(unsupported_dtype):
-    def func(row):
-        return row[unsupported_dtype]
-
+def test_masked_udf_unsupported_dtype(unsupported_col):
     data = cudf.DataFrame()
-    data["string"] = ["a", "b", "c"]
-    data["decimal"] = _decimal_series(
-        ["1.0", "2.0", "3.0"], dtype=cudf.Decimal64Dtype(2, 1)
-    )
-    data["categorical"] = cudf.Series([1, 2, 3], dtype="category")
-    data["interval"] = cudf.interval_range(start=0, end=3, closed=True)
-    data["list"] = [[1, 2], [3, 4], [5, 6]]
-    data["struct"] = [{"a": 1}, {"a": 2}, {"a": 3}]
+    data["unsupported_col"] = unsupported_col
+
+    def func(row):
+        return row["unsupported_col"]
 
     # check that we fail when an unsupported type is used within a function
     with pytest.raises(TypeError):
@@ -608,11 +610,10 @@ def test_masked_udf_unsupported_dtype(unsupported_dtype):
 
     # also check that a DF containing unsupported dtypes can still run a
     # function that does NOT involve any of the unsupported dtype columns
-
-    data["supported_dtype"] = 1
+    data["supported_col"] = 1
 
     def other_func(row):
-        return row["supported_dtype"]
+        return row["supported_col"]
 
     expect = cudf.Series(np.ones(len(data)))
     got = data.apply(other_func, axis=1)

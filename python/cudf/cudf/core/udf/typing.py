@@ -46,8 +46,8 @@ class MaskedType(types.Type):
             # then is one way of getting the true cause to the user
             self.value_type = types.Poison(
                 "\n\n\n Unsupported MaskedType. If you are seeing this, "
-                "you are likely trying to use a column of unsupported"
-                f" dtype in a UDF. Unsupported type: {value} \n\n\n"
+                "you are likely trying to use a column of unsupported "
+                f"dtype in a UDF. Unsupported type: {value} \n\n\n"
             )
         super().__init__(name=f"Masked{self.value_type}")
 
@@ -288,7 +288,8 @@ class MaskedScalarScalarOp(AbstractTemplate):
             args[1], MaskedType
         ):
             to_resolve_types = (args[1].value_type, args[0])
-        if to_resolve_types is None:
+        else:
+            # fail typing
             return None
         return_type = self.context.resolve_function_type(
             self.key, to_resolve_types, kws
