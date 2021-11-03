@@ -23,6 +23,7 @@
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/table/table_view.hpp>
+#include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/span.hpp>
@@ -433,13 +434,125 @@ rmm::device_buffer bitmask_or(table_view const& view,
   return null_mask;
 }
 
+namespace {
+
+/**
+ * @brief Functor that converts bit indices to word indices.
+ *
+ * Converts [first_bit_index, last_bit_index) to [first_word_index,
+ * last_word_index). Accounts for the last bit being at the start of a new word
+ * or in the middle of a word.
+ */
+struct to_word_index_functor {
+  /**
+   * @brief Construct a new to word index functor object
+   *
+   * @param is_end_of_range Indicates whether the bit is at the end of a range,
+   * in which case the word index should be incremented for bits at the start of
+   * a word.
+   * @param bit_indices Pointer to an array of bit indices.
+   */
+  to_word_index_functor(bool is_end_of_range, size_type const* bit_indices)
+    : is_end_of_range(is_end_of_range), bit_indices(bit_indices)
+  {
+  }
+
+  CUDA_DEVICE_CALLABLE size_type operator()(const size_type& i) const
+  {
+    auto bit_index = bit_indices[2 * i + (is_end_of_range ? 1 : 0)];
+    return word_index(bit_index) + ((!is_end_of_range || intra_word_index(bit_index) == 0) ? 0 : 1);
+  }
+
+  const bool is_end_of_range;
+  size_type const* const bit_indices;
+};
+
+/**
+ * @brief Functor that returns the number of set bits for a specified word
+ * of a bitmask array.
+ *
+ */
+struct word_num_set_bits_functor {
+  word_num_set_bits_functor(bitmask_type const* bitmask) : bitmask(bitmask) {}
+  CUDA_DEVICE_CALLABLE size_type operator()(size_type i) const
+  {
+    return static_cast<size_type>(__popc(bitmask[i]));
+  }
+  bitmask_type const* bitmask;
+};
+
+/**
+ * For each range `[first_bit_indices[i], last_bit_indices[i])`
+ * (where 0 <= i < `num_ranges`), count the number of bits set outside the range
+ * in the boundary words (i.e. words that include either
+ * `first_bit_indices[i]'th` bit or `(last_bit_indices[i] - 1)'th` bit) and
+ * subtract the count from the range's null count.
+ *
+ * Expects `0 <= first_bit_indices[i] <= last_bit_indices[i]`.
+ *
+ * @param[in] bitmask The bitmask whose non-zero bits outside the range in the
+ * boundary words will be counted.
+ * @param[in] num_ranges The number of ranges
+ * @param[in] first_bit_indices The indices (inclusive) of the first bit in each
+ * range
+ * @param[in] last_bit_indices The indices (exclusive) of the last bit in each
+ * range
+ * @param[in,out] null_counts The number of non-zero bits in each range to be
+ * updated
+ */
+template <typename OffsetIterator, typename OutputIterator>
+__global__ void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bitmask,
+                                                          size_type num_ranges,
+                                                          OffsetIterator bit_indices,
+                                                          OutputIterator null_counts)
+{
+  constexpr size_type const word_size_in_bits{detail::size_in_bits<bitmask_type>()};
+
+  cudf::size_type const tid = threadIdx.x + blockIdx.x * blockDim.x;
+  cudf::size_type range_id  = tid;
+
+  while (range_id < num_ranges) {
+    size_type const first_bit_index = bit_indices[2 * range_id];
+    size_type const last_bit_index  = bit_indices[2 * range_id + 1];
+    size_type delta                 = 0;
+    size_type num_slack_bits        = 0;
+
+    // compute delta due to the preceding bits in the first word in the range
+
+    num_slack_bits = intra_word_index(first_bit_index);
+    if (num_slack_bits > 0) {
+      bitmask_type word       = bitmask[word_index(first_bit_index)];
+      bitmask_type slack_mask = set_least_significant_bits(num_slack_bits);
+      delta -= __popc(word & slack_mask);
+    }
+
+    // compute delta due to the following bits in the last word in the range
+
+    num_slack_bits = (last_bit_index % word_size_in_bits) == 0
+                       ? 0
+                       : word_size_in_bits - intra_word_index(last_bit_index);
+    if (num_slack_bits > 0) {
+      bitmask_type word       = bitmask[word_index(last_bit_index)];
+      bitmask_type slack_mask = set_most_significant_bits(num_slack_bits);
+      delta -= __popc(word & slack_mask);
+    }
+
+    size_type updated_null_count = *(null_counts + range_id) + delta;
+    *(null_counts + range_id)    = updated_null_count;
+
+    range_id += blockDim.x * gridDim.x;
+  }
+}
+
+}  // namespace
+
 // Count set bits in a segmented null mask, using indices on the device
 rmm::device_uvector<size_type> segmented_count_set_bits(
   bitmask_type const* bitmask,
   rmm::device_uvector<size_type> const& d_indices,
   rmm::cuda_stream_view stream)
 {
-  size_type num_ranges = d_indices.size() / 2;
+  size_type const num_ranges = d_indices.size() / 2;
   rmm::device_uvector<size_type> d_null_counts(num_ranges, stream);
 
   auto word_num_set_bits  = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
