@@ -1114,10 +1114,10 @@ table_with_metadata reader::impl::read(size_type skip_rows,
             chunk.num_child_rows          = (chunk.type_kind != orc::STRUCT) ? 0 : chunk.num_rows;
             auto const decimal_as_float64 = should_convert_decimal_column_to_float(
               _decimal_cols_as_float, _metadata.per_file_metadata[0], columns_level[col_idx].id);
+            chunk.dtype_id      = column_types[col_idx].id();
             chunk.decimal_scale = _metadata.per_file_metadata[stripe_source_mapping.source_idx]
                                     .ff.types[columns_level[col_idx].id]
-                                    .scale.value_or(0) |
-                                  (decimal_as_float64 ? orc::gpu::orc_decimal2float64_scale : 0);
+                                    .scale.value_or(0);
 
             chunk.rowgroup_id   = rowgroup_id;
             chunk.dtype_len     = (column_types[col_idx].id() == type_id::STRING)

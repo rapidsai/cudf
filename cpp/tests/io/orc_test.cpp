@@ -343,10 +343,10 @@ TEST_F(OrcWriterTest, MultiColumn)
   auto col5_data = random_values<double>(num_rows);
   auto col6_vals = random_values<int64_t>(num_rows);
   auto col6_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return numeric::decimal128{col6_vals[i], numeric::scale_type{2}};
+    return numeric::decimal128{col6_vals[i], numeric::scale_type{12}};
   });
   auto col7_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return numeric::decimal128{col6_vals[i], numeric::scale_type{-2}};
+    return numeric::decimal128{col6_vals[i], numeric::scale_type{-12}};
   });
   auto validity  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
