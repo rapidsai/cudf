@@ -1,10 +1,19 @@
 import collections
 import enum
-from typing import Any, Dict, Iterable, Optional, Sequence, Tuple
+from typing import (
+    Any,
+    Dict,
+    Iterable,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+    Mapping
+)
 
 import cupy as cp
 import numpy as np
-from numba import cuda
+from numba.cuda import as_cuda_array
 
 import cudf
 from cudf.core.buffer import Buffer
@@ -44,6 +53,7 @@ _SUPPORTED_KINDS = (
     _k.BOOL,
     _k.STRING,
 )
+ProtoDtype = Tuple[_DtypeKind, int, str, str]
 
 
 class _CuDFBuffer:
@@ -85,7 +95,7 @@ class _CuDFBuffer:
         DLPack not implemented in NumPy yet, so leave it out here.
         """
         try:
-            cudarray = cuda.as_cuda_array(self._buf).view(self._dtype)
+            cudarray = as_cuda_array(self._buf).view(self._dtype)
             res = cp.asarray(cudarray).toDlpack()
 
         except ValueError:
@@ -136,13 +146,12 @@ class _CuDFColumn:
         Note: doesn't deal with extension arrays yet, just assume a regular
         Series/ndarray for now.
         """
-        if not isinstance(column, cudf.Series):
-            raise NotImplementedError(
-                "Columns of type {} not handled yet".format(type(column))
+        if not isinstance(column, cudf.core.column.ColumnBase):
+            raise TypeError(
+                "column must be a subtype of df.core.column.ColumnBase,"
+                f"got {type(column)}"
             )
-
-        # Store the column as a private attribute
-        self._col = as_column(column)
+        self._col = column
         self._nan_as_null = nan_as_null
         self._allow_copy = allow_copy
 
@@ -161,7 +170,7 @@ class _CuDFColumn:
         return 0
 
     @property
-    def dtype(self) -> Tuple[_DtypeKind, int, str, str]:
+    def dtype(self) -> ProtoDtype:
         """
         Dtype description as a tuple
         ``(kind, bit-width, format string, endianness)``
@@ -210,7 +219,7 @@ class _CuDFColumn:
 
         return self._dtype_from_cudfdtype(dtype)
 
-    def _dtype_from_cudfdtype(self, dtype) -> Tuple[_DtypeKind, int, str, str]:
+    def _dtype_from_cudfdtype(self, dtype) -> ProtoDtype:
         """
         See `self.dtype` for details.
         """
@@ -345,7 +354,7 @@ class _CuDFColumn:
         """
         return (self,)
 
-    def get_buffers(self) -> Dict[str, _CuDFBuffer]:
+    def get_buffers(self) -> Mapping[str, Union[Tuple[_CuDFBuffer, ProtoDtype], None]]:
         """
         Return a dictionary containing the underlying buffers.
 
@@ -382,7 +391,7 @@ class _CuDFColumn:
 
     def _get_data_buffer(
         self,
-    ) -> Tuple[_CuDFBuffer, Tuple[_DtypeKind, int, str, str]]:
+    ) -> Tuple[_CuDFBuffer, ProtoDtype]:
         """
         Return the buffer containing the data and
                the buffer's associated dtype.
@@ -421,7 +430,7 @@ class _CuDFColumn:
 
     def _get_validity_buffer(
         self,
-    ) -> Tuple[_CuDFBuffer, Tuple[_DtypeKind, int, str, str]]:
+    ) -> Tuple[_CuDFBuffer, ProtoDtype]:
         """
         Return the buffer containing the mask values
         indicating missing data and the buffer's associated dtype.
@@ -463,7 +472,7 @@ class _CuDFColumn:
 
     def _get_offsets_buffer(
         self,
-    ) -> Tuple[_CuDFBuffer, Tuple[_DtypeKind, int, str, str]]:
+    ) -> Tuple[_CuDFBuffer, ProtoDtype]:
         """
         Return the buffer containing the offset values for
         variable-size binary data (e.g., variable-length strings)
@@ -536,14 +545,17 @@ class _CuDFDataFrame:
         return self._df.columns.tolist()
 
     def get_column(self, i: int) -> _CuDFColumn:
-        return _CuDFColumn(self._df.iloc[:, i], allow_copy=self._allow_copy)
+        return _CuDFColumn(as_column(self._df.iloc[:, i]),
+                           allow_copy=self._allow_copy)
 
     def get_column_by_name(self, name: str) -> _CuDFColumn:
-        return _CuDFColumn(self._df[name], allow_copy=self._allow_copy)
+        return _CuDFColumn(as_column(self._df[name]),
+                           allow_copy=self._allow_copy)
 
     def get_columns(self) -> Iterable[_CuDFColumn]:
         return [
-            _CuDFColumn(self._df[name], allow_copy=self._allow_copy)
+            _CuDFColumn(as_column(self._df[name]),
+                        allow_copy=self._allow_copy)
             for name in self._df.columns
         ]
 
@@ -674,22 +686,24 @@ def _from_dataframe(df: DataFrameObject) -> _CuDFDataFrame:
 
 
 def _protocol_to_cudf_column_numeric(
-    col: ColumnObject,
-) -> Tuple[cudf.core.column.NumericalColumn, _CuDFBuffer]:
+    col: _CuDFColumn,
+) -> Tuple[cudf.core.column.NumericalColumn, 
+           Dict[str, Tuple[_CuDFBuffer, ProtoDtype]]]:
     """
     Convert an int, uint, float or bool protocol column
     to the corresponding cudf column
     """
     if col.offset != 0:
         raise NotImplementedError("column.offset > 0 not handled yet")
-
-    _dbuffer, _ddtype = col.get_buffers()["data"]
+    
+    buffers = col.get_buffers()
+    _dbuffer, _ddtype = buffers["data"]
     _check_buffer_is_on_gpu(_dbuffer)
     dcol = build_column(
         Buffer(_dbuffer.ptr, _dbuffer.bufsize),
         protocol_dtype_to_cupy_dtype(_ddtype),
     )
-    return _set_missing_values(col, dcol), _dbuffer
+    return _set_missing_values(col, dcol), buffers
 
 
 def _check_buffer_is_on_gpu(buffer: _CuDFBuffer) -> None:
@@ -704,23 +718,20 @@ def _check_buffer_is_on_gpu(buffer: _CuDFBuffer) -> None:
 
 
 def _set_missing_values(
-    protocol_col: _CuDFColumn, cudf_col: "cudf.core.dataframe.DataFrame"
+    protocol_col: _CuDFColumn, cudf_col: cudf.core.column.ColumnBase
 ) -> cudf.core.column.ColumnBase:
 
-    null_kind, null_value = protocol_col.describe_null
-    if null_kind != 0:
-        assert null_kind == 3, "cudf supports only bit mask, "
-        f"null_kind should be 3, got: {null_kind}."
-        _mask_buffer, _mask_dtype = protocol_col.get_buffers()["validity"]
+    valid_mask = protocol_col.get_buffers()["validity"]
+    if valid_mask is not None:
         bitmask = cp.asarray(
-            Buffer(_mask_buffer.ptr, _mask_buffer.bufsize), cp.bool8
+            Buffer(valid_mask[0].ptr, valid_mask[0].bufsize), cp.bool8
         )
         cudf_col[~bitmask] = None
 
     return cudf_col
 
 
-def protocol_dtype_to_cupy_dtype(_dtype) -> cp.dtype:
+def protocol_dtype_to_cupy_dtype(_dtype: ProtoDtype) -> cp.dtype:
     kind = _dtype[0]
     bitwidth = _dtype[1]
     if _dtype[0] not in _SUPPORTED_KINDS:
@@ -730,8 +741,9 @@ def protocol_dtype_to_cupy_dtype(_dtype) -> cp.dtype:
 
 
 def _protocol_to_cudf_column_categorical(
-    col: ColumnObject,
-) -> Tuple[cudf.core.column.CategoricalColumn, _CuDFBuffer]:
+    col: _CuDFColumn,
+) -> Tuple[cudf.core.column.CategoricalColumn, 
+           Dict[str, Tuple[_CuDFBuffer, ProtoDtype]]]:
     """
     Convert a categorical column to a Series instance
     """
@@ -742,7 +754,8 @@ def _protocol_to_cudf_column_categorical(
         )
 
     categories = as_column(mapping.values())
-    codes_buffer, codes_dtype = col.get_buffers()["data"]
+    buffers = col.get_buffers()
+    codes_buffer, codes_dtype = buffers["data"]
     _check_buffer_is_on_gpu(codes_buffer)
     cdtype = protocol_dtype_to_cupy_dtype(codes_dtype)
     codes = build_column(
@@ -757,12 +770,13 @@ def _protocol_to_cudf_column_categorical(
         ordered=ordered,
     )
 
-    return _set_missing_values(col, cudfcol), codes_buffer
+    return _set_missing_values(col, cudfcol), buffers
 
 
 def _protocol_to_cudf_column_string(
-    col: ColumnObject,
-) -> Tuple[cudf.core.column.StringColumn, Tuple[_CuDFBuffer]]:
+    col: _CuDFColumn,
+) -> Tuple[cudf.core.column.StringColumn, 
+           Dict[str, Tuple[_CuDFBuffer, ProtoDtype]]]:
     """
     Convert a string ColumnObject to cudf Column object.
     """
