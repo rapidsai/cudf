@@ -1625,8 +1625,8 @@ def test_error_values():
 @pytest.mark.parametrize("resolution", ["D", "H", "T", "S", "L", "U", "N"])
 def test_ceil(data, time_type, resolution):
 
-    ps = pd.Series(data, dtype=time_type)
-    gs = cudf.from_pandas(ps)
+    gs = cudf.Series(data, dtype=time_type)
+    ps = gs.to_pandas()
 
     expect = ps.dt.ceil(resolution)
     got = gs.dt.ceil(resolution)
@@ -1654,8 +1654,8 @@ def test_ceil(data, time_type, resolution):
 @pytest.mark.parametrize("resolution", ["D", "H", "T", "S", "L", "U", "N"])
 def test_floor(data, time_type, resolution):
 
-    ps = pd.Series(data, dtype=time_type)
-    gs = cudf.from_pandas(ps)
+    gs = cudf.Series(data, dtype=time_type)
+    ps = gs.to_pandas()
 
     expect = ps.dt.floor(resolution)
     got = gs.dt.floor(resolution)

@@ -91,7 +91,7 @@ def floor_datetime(Column col, object field):
     cdef column_view col_view = col.view()
 
     with nogil:
-        # https://pandas.pydata.org/pandas-docs/version/0.25.0/reference/api/pandas.Timedelta.resolution.html
+        # https://pandas.pydata.org/docs/reference/api/pandas.Timedelta.resolution_string.html
         if field == "D":
             c_result = move(libcudf_datetime.floor_day(col_view))
         elif field == "H":
