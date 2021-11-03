@@ -451,33 +451,32 @@ struct word_num_set_bits_functor {
 };
 
 /**
- * @brief Functor that converts bit indices to word indices.
+ * @brief Functor that converts bit segment indices to word segment indices.
  *
  * Converts [first_bit_index, last_bit_index) to [first_word_index,
- * last_word_index). Accounts for the last bit being at the start of a new word
- * or in the middle of a word.
+ * last_word_index).
  */
-struct bit_index_to_word_index_functor {
+struct bit_to_word_segment_indices_functor {
   /**
-   * @brief Construct a `bit_index_to_word_index_functor`.
+   * @brief Construct a `bit_segment_to_word_segment_functor`.
    *
-   * @param is_end_of_range Indicates whether the bit is at the end of a range,
+   * @param end_of_segment Indicates whether the bit is at the end of a segment,
    * in which case the word index should be incremented for bits at the start of
    * a word.
    * @param bit_indices Pointer to an array of bit indices.
    */
-  bit_index_to_word_index_functor(bool is_end_of_range, size_type const* bit_indices)
-    : is_end_of_range(is_end_of_range), bit_indices(bit_indices)
+  bit_to_word_segment_indices_functor(bool end_of_segment, size_type const* bit_indices)
+    : end_of_segment(end_of_segment), bit_indices(bit_indices)
   {
   }
 
   CUDA_DEVICE_CALLABLE size_type operator()(const size_type& i) const
   {
-    auto bit_index = bit_indices[2 * i + (is_end_of_range ? 1 : 0)];
-    return word_index(bit_index) + ((!is_end_of_range || intra_word_index(bit_index) == 0) ? 0 : 1);
+    auto bit_index = bit_indices[2 * i + (end_of_segment ? 1 : 0)];
+    return word_index(bit_index) + ((!end_of_segment || intra_word_index(bit_index) == 0) ? 0 : 1);
   }
 
-  bool const is_end_of_range;
+  bool const end_of_segment;
   size_type const* const bit_indices;
 };
 
@@ -551,12 +550,13 @@ rmm::device_uvector<size_type> segmented_count_set_bits(
   size_type const num_ranges = d_indices.size() / 2;
   rmm::device_uvector<size_type> d_null_counts(num_ranges, stream);
 
-  auto word_num_set_bits  = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
+  auto word_num_set_bits = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
                                                            word_num_set_bits_functor{bitmask});
-  auto first_word_indices = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0), bit_index_to_word_index_functor{false, d_indices.data()});
+  auto first_word_indices =
+    thrust::make_transform_iterator(thrust::make_counting_iterator(0),
+                                    bit_to_word_segment_indices_functor{false, d_indices.data()});
   auto last_word_indices = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0), bit_index_to_word_index_functor{true, d_indices.data()});
+    thrust::make_counting_iterator(0), bit_to_word_segment_indices_functor{true, d_indices.data()});
 
   // Allocate temporary memory.
   size_t temp_storage_bytes{0};
