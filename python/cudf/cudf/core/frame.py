@@ -1562,7 +1562,7 @@ class Frame:
         # Mask and data column preallocated
         ans_col = cupy.empty(len(self), dtype=retty)
         ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
-        launch_args = [(ans_col, ans_mask)]
+        launch_args = [(ans_col, ans_mask), len(self)]
         offsets = []
         for col in self._data.values():
             data = col.data
@@ -1574,7 +1574,6 @@ class Frame:
             offsets.append(col.offset)
         launch_args += offsets
         launch_args += list(args)
-        launch_args.append(len(self))  # size
         kernel.forall(len(self))(*launch_args)
 
         result = cudf.Series(ans_col).set_mask(

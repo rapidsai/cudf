@@ -111,13 +111,13 @@ def construct_signature(df, return_type, args):
     # Tuple of arrays, first the output data array, then the mask
     return_type = Tuple((return_type[::1], boolean[::1]))
     offsets = []
-    sig = [return_type]
+    sig = [return_type, int64]
     for col in df._data.values():
         sig.append(masked_array_type_from_col(col))
         offsets.append(int64)
 
-    # return_type + data,masks + offsets + size + extra args
-    sig = void(*(sig + offsets + [int64] + [typeof(arg) for arg in args]))
+    # return_type, size, data, masks, offsets, extra args
+    sig = void(*(sig + offsets + [typeof(arg) for arg in args]))
 
     return sig
 
@@ -128,7 +128,7 @@ def mask_get(mask, pos):
 
 
 kernel_template = """\
-def _kernel(retval, {input_columns}, {input_offsets}, {extra_args} size):
+def _kernel(retval, size, {input_columns}, {input_offsets}, {extra_args}):
     i = cuda.grid(1)
     ret_data_arr, ret_mask_arr = retval
     if i < size:
@@ -201,11 +201,7 @@ def _define_function(fr, row_type, args, scalar_return=False):
     # Create argument list for kernel
     input_columns = ", ".join([f"input_col_{i}" for i in range(len(fr._data))])
     input_offsets = ", ".join([f"offset_{i}" for i in range(len(fr._data))])
-    extra_args = (
-        ", ".join([f"extra_arg_{i}" for i in range(len(args))]) + ","
-        if len(args) > 0
-        else ""
-    )
+    extra_args = ", ".join([f"extra_arg_{i}" for i in range(len(args))])
 
     # Generate the initializers for each device function argument
     initializers = []
