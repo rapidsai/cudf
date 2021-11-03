@@ -144,8 +144,6 @@ TYPED_TEST(FixedPointTestAllReps, GroupBySortSumScanDecimalAsValue)
   using decimalXX  = TypeParam;
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = fixed_point_column_wrapper<RepType>;
-  using SumType    = std::conditional_t<std::is_same_v<decimal128, TypeParam>, __int128_t, int64_t>;
-  using out_fp_wrapper = fixed_point_column_wrapper<SumType>;
 
   for (auto const i : {2, 1, 0, -1, -2}) {
     auto const scale = scale_type{i};
@@ -153,8 +151,8 @@ TYPED_TEST(FixedPointTestAllReps, GroupBySortSumScanDecimalAsValue)
     auto const keys = key_wrapper{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
     auto const vals = fp_wrapper{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, scale};
 
-    auto const expect_keys     = key_wrapper    {1, 1, 1, 2, 2, 2, 2, 3, 3, 3};
-    auto const expect_vals_sum = out_fp_wrapper{{0, 3, 9, 1, 5, 10, 19, 2, 9, 17}, scale};
+    auto const expect_keys     = key_wrapper{1, 1, 1, 2, 2,  2,  2, 3, 3,  3};
+    auto const expect_vals_sum = fp_wrapper{{0, 3, 9, 1, 5, 10, 19, 2, 9, 17}, scale};
     // clang-format on
 
     auto agg2 = cudf::make_sum_aggregation<groupby_scan_aggregation>();
