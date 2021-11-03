@@ -5,7 +5,7 @@ import cachetools
 import numpy as np
 from numba import cuda
 from numba.np import numpy_support
-from numba.types import Dummy, Record, Tuple, boolean, int64, void
+from numba.types import Poison, Record, Tuple, boolean, int64, void
 from nvtx import annotate
 
 from cudf.core.udf._ops import _is_jit_supported_type
@@ -29,16 +29,6 @@ class _FrameJitMetadata(object):
         self.supported_dtypes = {}
         self.frame = frame
 
-        self.preprocess_dtypes()
-
-    @property
-    def supported_cols(self):
-        return {
-            name: self.frame._data[name]
-            for name in self.supported_dtypes.keys()
-        }
-
-    def preprocess_dtypes(self):
         for colname, col in self.frame._data.items():
             if _is_jit_supported_type(col.dtype):
                 self.supported_dtypes[colname] = col.dtype
@@ -47,8 +37,20 @@ class _FrameJitMetadata(object):
                 np_type = np.dtype("O")
             self.all_dtypes[colname] = np_type
 
+        self.supported_cols = {
+            name: self.frame._data[name]
+            for name in self.supported_dtypes.keys()
+        }
+
 
 def generate_cache_key(frame_meta: _FrameJitMetadata, func: Callable):
+    """
+    Create a cache key that uniquely identifies a compilation. A new
+    compilation is needed any time any of the following things change:
+    - The UDF itself as defined in python by the user
+    - The types of the columns actually logically utilized by the UDF
+    - The existence of the input columns masks
+    """
     cache_key = (
         *cudautils.make_cache_key(func, frame_meta.all_dtypes.values()),
         *(col.mask is None for col in frame_meta.frame._data.values()),
@@ -314,7 +316,7 @@ def _check_return_type(ty):
     and won't throw because no operators were ever used. This function
     explicitly checks for that case.
     """
-    if isinstance(ty, Dummy):
+    if isinstance(ty, Poison):
         raise TypeError(str(ty))
 
 

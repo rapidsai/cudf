@@ -44,7 +44,7 @@ class MaskedType(types.Type):
             # for whatever operands and operation failed to type and then
             # output its own error message. Putting the message in the repr
             # then is one way of getting the true cause to the user
-            self.value_type = types.Dummy(
+            self.value_type = types.Poison(
                 "\n\n\n Unsupported MaskedType. If you are seeing this, "
                 "you are likely trying to use a column of unsupported"
                 f" dtype in a UDF. Unsupported type: {value} \n\n\n"
