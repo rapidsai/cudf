@@ -433,7 +433,7 @@ class IndexedFrame(Frame):
         if not nullify and not _gather_map_is_valid(gather_map, len(self)):
             raise IndexError("Gather map index is out of bounds.")
 
-        result = self.__class__._from_columns(
+        result = self.__class__._from_maybe_indexed_columns(
             libcudf.copying.gather(
                 list(self._index._columns + self._columns)
                 if keep_index
@@ -498,14 +498,13 @@ class IndexedFrame(Frame):
         diff = set(subset) - set(self._data)
         if len(diff) != 0:
             raise KeyError(f"columns {diff} do not exist")
-        subset_cols = [name for name in self._column_names if name in subset]
-        if len(subset_cols) == 0:
+        if len(subset) == 0:
             return self.copy(deep=True)
 
         keys = self._positions_from_column_names(
             subset, offset_by_index_columns=not ignore_index
         )
-        result = self.__class__._from_columns(
+        result = self.__class__._from_maybe_indexed_columns(
             libcudf.stream_compaction.drop_duplicates(
                 list(self._columns)
                 if ignore_index

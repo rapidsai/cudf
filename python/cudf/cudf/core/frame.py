@@ -142,7 +142,7 @@ class Frame:
         return obj
 
     @classmethod
-    def _from_columns(
+    def _from_maybe_indexed_columns(
         cls,
         columns: List[ColumnBase],
         column_names: List[str],
@@ -565,7 +565,7 @@ class Frame:
         if not nullify and not _gather_map_is_valid(gather_map, len(self)):
             raise IndexError("Gather map index is out of bounds.")
 
-        result = self.__class__._from_columns(
+        result = self.__class__._from_maybe_indexed_columns(
             libcudf.copying.gather(
                 list(self._columns), gather_map, nullify=nullify,
             ),
@@ -1437,7 +1437,7 @@ class Frame:
                 else:
                     frame._data[name] = col
 
-        result = self.__class__._from_columns(
+        result = self.__class__._from_maybe_indexed_columns(
             libcudf.stream_compaction.drop_nulls(
                 list(self._index._data.columns + frame._columns),
                 how=how,
@@ -2286,37 +2286,14 @@ class Frame:
             {name: col.to_arrow() for name, col in self._data.items()}
         )
 
-    def drop_duplicates(
-        self, keep="first", nulls_are_equal=True,
-    ):
-        """
-        Drop duplicate rows in frame.
-
-        keep : ["first", "last", False]
-            "first" will keep first of duplicate, "last" will keep last of the
-            duplicate and "False" drop all duplicate
-        nulls_are_equal: bool, default True
-            Null elements are considered equal to other null elements.
-        """
-
-        result = self.__class__._from_columns(
-            libcudf.stream_compaction.drop_duplicates(
-                list(self._columns),
-                keys=range(len(self._columns)),
-                keep=keep,
-                nulls_are_equal=nulls_are_equal,
-            ),
-            self._column_names,
-        )
-        result._copy_type_metadata(self)
-        return result
-
-    def _positions_from_column_names(self, column_names):
+    def _positions_from_column_names(self, column_names=None):
         """Map each column name into their positions in the frame.
 
         The order of indices returned corresponds to the column order in this
-        Frame.
+        Frame. If `column_names` is `None`, use all data columns.
         """
+        if column_names is None:
+            return range(len(self._column_names))
         return [
             i
             for i, name in enumerate(self._column_names)

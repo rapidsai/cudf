@@ -9,6 +9,7 @@ from typing import Any, Set
 import pandas as pd
 
 import cudf
+from cudf._lib.stream_compaction import drop_duplicates
 from cudf._typing import DtypeObj
 from cudf.api.types import is_dtype_equal, is_integer, is_list_like, is_scalar
 from cudf.core.abc import Serializable
@@ -1408,6 +1409,32 @@ class BaseIndex(Serializable):
     @property
     def _constructor_expanddim(self):
         return cudf.MultiIndex
+
+    def drop_duplicates(
+        self, keep="first", nulls_are_equal=True,
+    ):
+        """
+        Drop duplicate rows in index.
+
+        keep : ["first", "last", False]
+            "first" will keep first of duplicate, "last" will keep last of the
+            duplicate and "False" drop all duplicate.
+        nulls_are_equal: bool, default True
+            Null elements are considered equal to other null elements.
+        """
+
+        # This utilizes the fact that all `Index` is also a `Frame`.
+        result = self.__class__._from_maybe_indexed_columns(
+            drop_duplicates(
+                list(self._columns),
+                keys=range(len(self._data)),
+                keep=keep,
+                nulls_are_equal=nulls_are_equal,
+            ),
+            self._column_names,
+        )
+        result._copy_type_metadata(self)
+        return result
 
 
 def _get_result_name(left_name, right_name):
