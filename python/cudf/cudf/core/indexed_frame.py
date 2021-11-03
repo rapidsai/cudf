@@ -453,9 +453,9 @@ class IndexedFrame(Frame):
     ):
         """Map each column name into their positions in the frame.
 
-        Return positions of the provided column names, offset by the number of
-        index columns `offset_by_index_columns` is True. The order of indices
-        returned corresponds to the column order in this Frame.
+        If `offset_by_index_columns` is True, offset positions by the number of
+        index columns. The order of indices returned corresponds to the column
+        order in this Frame.
         """
         num_index_columns = (
             len(self._index._data) if offset_by_index_columns else 0
