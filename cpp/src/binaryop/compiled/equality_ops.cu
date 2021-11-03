@@ -15,24 +15,70 @@
  */
 
 #include "binary_ops.cuh"
+#include "struct_binary_ops.cuh"
+
+#include <cudf/detail/structs/utilities.hpp>
+#include <cudf/table/row_operators.cuh>
 
 namespace cudf::binops::compiled {
-void dispatch_equality_op(mutable_column_device_view& outd,
-                          column_device_view const& lhsd,
-                          column_device_view const& rhsd,
+void dispatch_equality_op(mutable_column_view& out,
+                          column_view const& lhs,
+                          column_view const& rhs,
                           bool is_lhs_scalar,
                           bool is_rhs_scalar,
                           binary_operator op,
                           rmm::cuda_stream_view stream)
 {
-  auto common_dtype = get_common_type(outd.type(), lhsd.type(), rhsd.type());
+  if (is_struct(lhs.type()) && is_struct(rhs.type())) {
+    if (!is_supported_operation(out.type(), lhs, rhs, op))
+      CUDF_FAIL("Unsupported operator for these types");
 
-  // Execute it on every element
-  for_each(
-    stream,
-    outd.size(),
-    [op, outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, common_dtype] __device__(size_type i) {
-      // clang-format off
+    auto const nullability =
+      structs::detail::contains_null_structs(lhs) || structs::detail::contains_null_structs(rhs)
+        ? structs::detail::column_nullability::FORCE
+        : structs::detail::column_nullability::MATCH_INCOMING;
+    auto const lhs_flattened =
+      structs::detail::flatten_nested_columns(table_view{{lhs}}, {}, {}, nullability);
+    auto const rhs_flattened =
+      structs::detail::flatten_nested_columns(table_view{{rhs}}, {}, {}, nullability);
+    auto d_lhs = table_device_view::create(lhs_flattened);
+    auto d_rhs = table_device_view::create(rhs_flattened);
+
+    switch (op) {
+      case binary_operator::EQUAL:
+      case binary_operator::NOT_EQUAL:
+        has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)
+          ? detail::struct_compare(out,
+                                   row_equality_comparator<true>{*d_lhs, *d_rhs, true},
+                                   is_lhs_scalar,
+                                   is_rhs_scalar,
+                                   op == binary_operator::NOT_EQUAL,
+                                   stream)
+          : detail::struct_compare(out,
+                                   row_equality_comparator<false>{*d_lhs, *d_rhs, true},
+                                   is_lhs_scalar,
+                                   is_rhs_scalar,
+                                   op == binary_operator::NOT_EQUAL,
+                                   stream);
+        break;
+      default: CUDF_FAIL("Unsupported operator for these types");
+    }
+  } else {
+    auto common_dtype = get_common_type(out.type(), lhs.type(), rhs.type());
+    auto lhsd         = column_device_view::create(lhs, stream);
+    auto rhsd         = column_device_view::create(rhs, stream);
+    auto outd         = mutable_column_device_view::create(out, stream);
+    // Execute it on every element
+    for_each(stream,
+             out.size(),
+             [op,
+              outd = *outd,
+              lhsd = *lhsd,
+              rhsd = *rhsd,
+              is_lhs_scalar,
+              is_rhs_scalar,
+              common_dtype] __device__(size_type i) {
+               // clang-format off
       // Similar enabled template types should go together (better performance)
       switch (op) {
       case binary_operator::EQUAL:         device_type_dispatcher<ops::Equal>{outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, common_dtype}(i); break;
@@ -40,7 +86,8 @@ void dispatch_equality_op(mutable_column_device_view& outd,
       case binary_operator::NULL_EQUALS:   device_type_dispatcher<ops::NullEquals>{outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, common_dtype}(i); break;
       default:;
       }
-      // clang-format on
-    });
+               // clang-format on
+             });
+  }
 }
 }  // namespace cudf::binops::compiled

@@ -15,12 +15,21 @@
  */
 
 #include "binary_ops.cuh"
+#include "struct_binary_ops.cuh"
 
 namespace cudf::binops::compiled {
-template void apply_binary_op<ops::LessEqual>(mutable_column_device_view&,
-                                              column_device_view const&,
-                                              column_device_view const&,
-                                              bool is_lhs_scalar,
-                                              bool is_rhs_scalar,
-                                              rmm::cuda_stream_view);
+template <>
+void apply_binary_op<ops::LessEqual>(mutable_column_view& out,
+                                     column_view const& lhs,
+                                     column_view const& rhs,
+                                     bool is_lhs_scalar,
+                                     bool is_rhs_scalar,
+                                     rmm::cuda_stream_view stream)
+{
+  is_struct(lhs.type()) && is_struct(rhs.type())
+    ? detail::struct_lexicographic_compare(
+        out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, order::DESCENDING, true, stream)
+    : detail::apply_unnested_binary_op<ops::LessEqual>(
+        out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream);
 }
+}  // namespace cudf::binops::compiled

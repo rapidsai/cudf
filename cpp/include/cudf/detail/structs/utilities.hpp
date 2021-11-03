@@ -15,7 +15,6 @@
  */
 #pragma once
 
-#include <cudf/scalar/scalar.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
@@ -248,7 +247,7 @@ std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> superimpose_parent
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Checks if column or any of its children are struct columns with structs that are null.
+ * @brief Checks if a column or any of its children is a struct column with structs that are null.
  *
  * This function searches for structs that are null -- differentiating between structs that are null
  * and structs containing null values. Null structs add a column to the result of the flatten column
@@ -259,25 +258,7 @@ std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> superimpose_parent
  * @return true If the column is or contains a struct column with null structs
  * @return false If the column is not a struct column or does not contain null structs
  */
-bool contains_struct_nulls(column_view const& col);
-
-/**
- * @brief Check whether the specified column is of type `STRUCT`.
- *
- * @param col Column whose type is checked
- * @return true If input is a struct column
- * @return false If input is not a struct column
- */
-bool is_struct(column_view const& col);
-
-/**
- * @brief Check whether the specified scalar is of type `STRUCT`.
- *
- * @param scalar_value scalar whose type is checked
- * @return true If input is a struct scalar
- * @return false If input is not a struct scalar
- */
-bool is_struct(scalar const& scalar_value);
+bool contains_null_structs(column_view const& col);
 }  // namespace detail
 }  // namespace structs
 }  // namespace cudf

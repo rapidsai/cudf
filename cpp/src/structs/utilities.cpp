@@ -70,9 +70,12 @@ std::vector<std::vector<column_view>> extract_ordered_struct_children(
   return result;
 }
 
-bool is_struct(column_view const& col) { return col.type().id() == type_id::STRUCT; }
-
-bool is_struct(scalar const& scalar_value) { return scalar_value.type().id() == type_id::STRUCT; }
+namespace {
+/**
+ * @brief Check whether the specified column is of type `STRUCT`.
+ */
+bool is_struct(cudf::column_view const& col) { return col.type().id() == type_id::STRUCT; }
+}  // namespace
 
 bool is_or_has_nested_lists(cudf::column_view const& col)
 {
@@ -199,8 +202,7 @@ flattened_table flatten_nested_columns(table_view const& input,
                                        std::vector<null_order> const& null_precedence,
                                        column_nullability nullability)
 {
-  auto const has_struct =
-    std::any_of(input.begin(), input.end(), [](auto const& col) { return is_struct(col); });
+  auto const has_struct = std::any_of(input.begin(), input.end(), is_struct);
   if (not has_struct) { return flattened_table{input, column_order, null_precedence, {}, {}}; }
 
   return table_flattener{input, column_order, null_precedence, nullability}();
@@ -281,8 +283,7 @@ std::unique_ptr<cudf::table> unflatten_nested_columns(std::unique_ptr<cudf::tabl
   CUDF_EXPECTS(not has_lists, "Unflattening LIST columns is not supported.");
 
   // If there are no STRUCTs, unflattening is a NOOP.
-  auto const has_structs =
-    std::any_of(blueprint.begin(), blueprint.end(), [](auto const& col) { return is_struct(col); });
+  auto const has_structs = std::any_of(blueprint.begin(), blueprint.end(), is_struct);
   if (not has_structs) {
     return std::move(flattened);  // Unchanged.
   }
@@ -436,12 +437,10 @@ std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> superimpose_parent
   return {table_view{superimposed_columns}, std::move(superimposed_nullmasks)};
 }
 
-bool contains_struct_nulls(column_view const& col)
+bool contains_null_structs(column_view const& col)
 {
   return (is_struct(col) && col.has_nulls()) ||
-         std::any_of(col.child_begin(), col.child_end(), [](auto const& child) {
-           return contains_struct_nulls(child);
-         });
+         std::any_of(col.child_begin(), col.child_end(), contains_null_structs);
 }
 
 }  // namespace detail
