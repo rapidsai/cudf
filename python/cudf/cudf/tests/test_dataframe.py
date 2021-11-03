@@ -8964,10 +8964,3 @@ def test_dataframe_pearson_corr(data):
     expected = gdf.groupby("id").corr("pearson")
     actual = pdf.groupby("id").corr("pearson")
     assert_eq(expected, actual)
-
-
-def test_pearson_corr_empty_dataframe():
-    with pytest.raises(
-        ValueError, match="Grouper and object must have same length"
-    ):
-        cudf.DataFrame().corr("pearson")

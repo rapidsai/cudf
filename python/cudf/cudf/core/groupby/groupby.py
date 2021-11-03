@@ -71,6 +71,8 @@ class GroupBy(Serializable):
         """
         self.obj = obj
         self._as_index = as_index
+        self._by = by
+        self._level = level
         self._sort = sort
         self._dropna = dropna
 
@@ -842,14 +844,16 @@ class GroupBy(Serializable):
         # create all combinations of the struct columns-pairs to be correlated
         # i.e (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
         _cols = self.grouping.values.columns.tolist()
-        new_df = cudf.DataFrame({self.grouping.keys.names: self.grouping.keys})
+        # breakpoint()
+        new_df = cudf.DataFrame._from_data(self.grouping.keys._data)
         new_df._data.multiindex = False
         for i in tuple(itertools.combinations_with_replacement(_cols, 2)):
             new_df[i] = cudf.DataFrame(
                 {"x": self.obj[i[0]], "y": self.obj[i[1]]}
             ).to_struct()
-        new_gb = new_df.groupby(self.grouping)
-        gb_corr = new_gb.agg("corr")
+        new_gb = new_df.groupby(by=self._by, level=self._level)
+        # breakpoint()
+        gb_corr = new_gb.agg(lambda x: x.corr(method, min_periods))
         # ensure that column-pair labels are arranged in ascending order
         cols_list = []
         for i, x in enumerate(_cols):
