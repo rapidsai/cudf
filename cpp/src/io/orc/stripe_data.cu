@@ -45,11 +45,6 @@ inline __device__ uint8_t is_dictionary(uint8_t encoding_mode) { return encoding
 static __device__ __constant__ int64_t kORCTimeToUTC =
   1420070400;  // Seconds from January 1st, 1970 to January 1st, 2015
 
-struct int128_s {
-  uint64_t lo;
-  int64_t hi;
-};
-
 struct orc_bytestream_s {
   const uint8_t* base;
   uint32_t pos;
@@ -1022,6 +1017,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
                                       volatile orcdec_state_s::values& vals,
                                       int val_scale,
                                       int numvals,
+                                      TypeKind dtype_kind,
                                       int col_scale,
                                       int t)
 {
@@ -1049,7 +1045,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
       auto const pos = static_cast<int>(vals.i64[2 * t]);
       __int128_t v   = decode_varint128(bs, pos);
 
-      if (col_scale & orc_decimal2float64_scale) {
+      if (dtype_kind == DOUBLE) {
         double f      = v;
         int32_t scale = (t < numvals) ? val_scale : 0;
         if (scale >= 0)
@@ -1066,7 +1062,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
           vals.i128[t] = (v * kPow5i[scale]) << scale;
         } else  // if (scale < 0)
         {
-          scale        = min(-scale, 27);  // should be irrelevant
+          scale        = min(-scale, 27);
           vals.i128[t] = (v / kPow5i[scale]) >> scale;
         }
       }
@@ -1629,8 +1625,14 @@ __global__ void __launch_bounds__(block_size)
           }
           val_scale = (t < numvals) ? (int)s->vals.i64[skip + t] : 0;
           __syncthreads();
-          numvals = Decode_Decimals(
-            &s->bs, &s->u.rle8, s->vals, val_scale, numvals, s->chunk.decimal_scale, t);
+          numvals = Decode_Decimals(&s->bs,
+                                    &s->u.rle8,
+                                    s->vals,
+                                    val_scale,
+                                    numvals,
+                                    s->chunk.type_kind,
+                                    s->chunk.decimal_scale,
+                                    t);
         }
         __syncthreads();
       } else if (s->chunk.type_kind == FLOAT) {
