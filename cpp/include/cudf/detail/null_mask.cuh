@@ -268,8 +268,7 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
                                                 IndexIterator indices_end,
                                                 rmm::cuda_stream_view stream)
 {
-  size_t const num_indices   = std::distance(indices_begin, indices_end);
-  size_type const num_ranges = num_indices / 2;
+  size_t const num_indices = std::distance(indices_begin, indices_end);
 
   CUDF_EXPECTS(num_indices % 2 == 0, "Array of indices needs to have an even number of elements.");
   for (size_t i = 0; i < num_indices / 2; i++) {
@@ -295,6 +294,7 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
   rmm::device_uvector<size_type> d_null_counts =
     segmented_count_set_bits(bitmask, d_indices, stream);
 
+  size_type const num_ranges = num_indices / 2;
   std::vector<size_type> ret(num_ranges);
   CUDA_TRY(cudaMemcpyAsync(ret.data(),
                            d_null_counts.data(),
