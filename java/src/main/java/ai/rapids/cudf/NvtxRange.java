@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,7 @@ package ai.rapids.cudf;
 /**
  * Utility class to mark an NVTX profiling range.
  *
- * This class supports two types of NVTX ranges: push/pop and start/end:
- *
- * Push/pop:
+ * This class supports push/pop NVTX ranges, or "scoped" ranges.
  *
  * The constructor pushes an NVTX range and the close method pops off the most recent range that
  * was pushed. Therefore instances of this class should always be used in a try-with-resources
@@ -41,42 +39,9 @@ package ai.rapids.cudf;
  * Push/pop ranges show a stacking behavior in tools such as Nsight, where newly pushed 
  * ranges are correlated and enclosed by the prior pushed range (in the example above,
  * "b" is enclosed by "a").
- *
- * Start/end:
- *
- * The constructor instantiates a new NVTX range and keeps a handle that comes back from the
- * NVTX api (nvtxRangeId) that used to later close such a range. This type of range does 
- * not have the same order-of-operation requirements that the push/pop ranges have: 
- * the `NvtxRange` instance can be passed to other scopes, and even to other threads 
- * for the eventual call to close.
- *
- * It can be used in the same try-with-resources way as push/pop, or interleaved with other
- * ranges, like so:
- *
- * <pre>
- *   NvtxRange a = new NvtxRange("a", NvtxColor.RED, NvtxRange.Type.STARTEND);
- *   NvtxRange b = new NvtxRange("b", NvtxColor.BLUE, NvtxRange.Type.STARTEND);
- *   a.close();
- *   b.close();
- * </pre>
- *
- * Start/end ranges are different in that they don't have the same correlation that the
- * push/pop ranges have. 
  */
 public class NvtxRange implements AutoCloseable {
-  public enum Type {
-    PUSH,
-    STARTEND
-  }
-  private Type type;
-
   private static final boolean isEnabled = Boolean.getBoolean("ai.rapids.cudf.nvtx.enabled");
-
-  // this is a nvtxRangeId_t in the C++ api side
-  private long nvtxRangeId;
-
-  // true if this range is already closed
-  private boolean closed;
 
   static {
     if (isEnabled) {
@@ -85,41 +50,22 @@ public class NvtxRange implements AutoCloseable {
   }
 
   public NvtxRange(String name, NvtxColor color) {
-    this(name, color.colorBits, Type.PUSH);
+    this(name, color.colorBits);
   }
 
-  public NvtxRange(String name, NvtxColor color, Type type) {
-    this(name, color.colorBits, type);
-  }
-
-  public NvtxRange(String name, int colorBits, Type type) {
-    this.type = type;
+  public NvtxRange(String name, int colorBits) {
     if (isEnabled) {
-      if (type == Type.PUSH) {
-        push(name, colorBits);
-      } else {
-        this.nvtxRangeId = start(name, colorBits);
-      } 
+      push(name, colorBits);
     }
   }
 
   @Override
   public void close() {
     if (isEnabled) {
-      if (closed) {
-        throw new IllegalStateException("Cannot call close on an already closed NvtxRange!");
-      }
-      closed = true;
-      if (type == Type.PUSH) {
-        pop();
-      } else {
-        end(this.nvtxRangeId);
-      }
+      pop();
     }
   }
 
   private native void push(String name, int colorBits);
   private native void pop();
-  private native long start(String name, int colorBits);
-  private native void end(long nvtxRangeId);
 }

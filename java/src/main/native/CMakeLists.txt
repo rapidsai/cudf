@@ -225,6 +225,7 @@ add_library(cudfjni SHARED
     src/HostMemoryBufferNativeUtilsJni.cpp
     src/NvcompJni.cpp
     src/NvtxRangeJni.cpp
+    src/NvtxUnscopedRangeJni.cpp
     src/RmmJni.cpp
     src/ScalarJni.cpp
     src/TableJni.cpp
