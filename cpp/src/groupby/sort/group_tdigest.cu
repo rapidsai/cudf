@@ -57,8 +57,10 @@ struct make_centroid {
 
   centroid operator() __device__(size_type index)
   {
-    return {
-      static_cast<double>(col.element<T>(index)), col.is_valid(index) ? 1 : 0, col.is_valid(index)};
+    auto const is_valid = col.is_valid(index);
+    auto const mean     = is_valid ? static_cast<double>(col.element<T>(index)) : 0.0;
+    auto const weight   = is_valid ? 1.0 : 0.0;
+    return {mean, weight, is_valid};
   }
 };
 
@@ -396,7 +398,7 @@ generate_group_cluster_info(int delta,
     has_nulls);
 
   // generate group cluster offsets (where the clusters for a given group start and end)
-  auto group_cluster_offsets = cudf::make_fixed_width_column(
+  auto group_cluster_offsets = cudf::make_numeric_column(
     data_type{type_id::INT32}, num_groups + 1, mask_state::UNALLOCATED, stream, mr);
   auto cluster_size = cudf::detail::make_counting_transform_iterator(
     0, [group_num_clusters = group_num_clusters.begin(), num_groups] __device__(size_type index) {
@@ -467,24 +469,20 @@ std::unique_ptr<column> build_output_column(size_type num_rows,
   }
 
   // otherwise we need to strip out the stubs.
-
+  auto remove_stubs = [&](column_view const& col, size_type num_stubs) {
+    auto result = cudf::make_numeric_column(
+      data_type{type_id::FLOAT64}, col.size() - num_stubs, mask_state::UNALLOCATED, stream, mr);
+    thrust::remove_copy_if(rmm::exec_policy(stream),
+                           col.begin<double>(),
+                           col.end<double>(),
+                           thrust::make_counting_iterator(0),
+                           result->mutable_view().begin<double>(),
+                           is_stub_weight);
+    return result;
+  };
   // remove from the means and weights column
-  auto _means = cudf::make_fixed_width_column(
-    data_type{type_id::FLOAT64}, means->size() - num_stubs, mask_state::UNALLOCATED, stream, mr);
-  thrust::remove_copy_if(rmm::exec_policy(stream),
-                         means->view().begin<double>(),
-                         means->view().end<double>(),
-                         thrust::make_counting_iterator(0),
-                         _means->mutable_view().begin<double>(),
-                         is_stub_weight);
-  auto _weights = cudf::make_fixed_width_column(
-    data_type{type_id::FLOAT64}, weights->size() - num_stubs, mask_state::UNALLOCATED, stream, mr);
-  thrust::remove_copy_if(rmm::exec_policy(stream),
-                         weights->view().begin<double>(),
-                         weights->view().end<double>(),
-                         thrust::make_counting_iterator(0),
-                         _weights->mutable_view().begin<double>(),
-                         is_stub_weight);
+  auto _means   = remove_stubs(*means, num_stubs);
+  auto _weights = remove_stubs(*weights, num_stubs);
 
   // adjust offsets.
   rmm::device_uvector<offset_type> sizes(num_rows, stream);
@@ -609,9 +607,9 @@ std::unique_ptr<column> compute_tdigests(int delta,
     });
 
   // mean and weight data
-  auto centroid_means = cudf::make_fixed_width_column(
+  auto centroid_means = cudf::make_numeric_column(
     data_type{type_id::FLOAT64}, total_clusters, mask_state::UNALLOCATED, stream, mr);
-  auto centroid_weights = cudf::make_fixed_width_column(
+  auto centroid_weights = cudf::make_numeric_column(
     data_type{type_id::FLOAT64}, total_clusters, mask_state::UNALLOCATED, stream, mr);
   // reduce the centroids down by key.
   cudf::mutable_column_view mean_col(*centroid_means);
@@ -697,9 +695,9 @@ struct typed_group_tdigest {
     auto d_col = cudf::column_device_view::create(col);
 
     // compute min and max columns
-    auto min_col = cudf::make_fixed_width_column(
+    auto min_col = cudf::make_numeric_column(
       data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
-    auto max_col = cudf::make_fixed_width_column(
+    auto max_col = cudf::make_numeric_column(
       data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
     thrust::transform(
       rmm::exec_policy(stream),
@@ -841,7 +839,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
     });
 
   // generate min and max values
-  auto merged_min_col = cudf::make_fixed_width_column(
+  auto merged_min_col = cudf::make_numeric_column(
     data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
   auto min_iter = thrust::make_transform_iterator(
     thrust::make_zip_iterator(thrust::make_tuple(tdv.min_begin(), tdv.size_begin())),
@@ -855,7 +853,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
                         thrust::equal_to<size_type>{},  // key equality check
                         thrust::minimum<double>{});
 
-  auto merged_max_col = cudf::make_fixed_width_column(
+  auto merged_max_col = cudf::make_numeric_column(
     data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
   auto max_iter = thrust::make_transform_iterator(
     thrust::make_zip_iterator(thrust::make_tuple(tdv.max_begin(), tdv.size_begin())),
@@ -905,7 +903,7 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
 
   // generate cumulative weights
   auto merged_weights     = merged->get_column(1).view();
-  auto cumulative_weights = cudf::make_fixed_width_column(
+  auto cumulative_weights = cudf::make_numeric_column(
     data_type{type_id::FLOAT64}, merged_weights.size(), mask_state::UNALLOCATED);
   auto keys = cudf::detail::make_counting_transform_iterator(
     0,
