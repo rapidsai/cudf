@@ -24,6 +24,10 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <algorithm>
+#include <iterator>
+#include <vector>
+
 namespace cudf {
 namespace detail {
 /**
@@ -208,13 +212,13 @@ __global__ void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bi
 // convert [first_bit_index,last_bit_index) to
 // [first_word_index,last_word_index)
 struct to_word_index_functor {
-  const bool last_indices              = false;
+  const bool is_end_of_range           = false;
   size_type const* const d_bit_indices = nullptr;
 
   __device__ size_type operator()(const size_type& i) const
   {
-    auto bit_index = d_bit_indices[2 * i + (last_indices ? 1 : 0)];
-    return word_index(bit_index) + ((!last_indices || intra_word_index(bit_index) == 0) ? 0 : 1);
+    auto bit_index = d_bit_indices[2 * i + (is_end_of_range ? 1 : 0)];
+    return word_index(bit_index) + ((!is_end_of_range || intra_word_index(bit_index) == 0) ? 0 : 1);
   }
 };
 
@@ -264,7 +268,8 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
                                                 IndexIterator indices_end,
                                                 rmm::cuda_stream_view stream)
 {
-  size_t const num_indices = std::distance(indices_begin, indices_end);
+  size_t const num_indices   = std::distance(indices_begin, indices_end);
+  size_type const num_ranges = num_indices / 2;
 
   CUDF_EXPECTS(num_indices % 2 == 0, "Array of indices needs to have an even number of elements.");
   for (size_t i = 0; i < num_indices / 2; i++) {
@@ -284,23 +289,9 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
     return ret;
   }
 
-  auto const d_indices       = make_device_uvector_async(indices_begin, indices_end, stream);
-  size_type const num_ranges = num_indices / 2;
-  /*
-  std::vector<size_type> h_first_indices(num_ranges);
-  std::vector<size_type> h_last_indices(num_ranges);
-  thrust::stable_partition_copy(thrust::seq,
-                                indices_begin,
-                                indices_end,
-                                thrust::make_counting_iterator(0),
-                                h_first_indices.begin(),
-                                h_last_indices.begin(),
-                                [](auto i) { return (i % 2) == 0; });
-
-  auto d_first_indices = make_device_uvector_async(h_first_indices, stream);
-  auto d_last_indices  = make_device_uvector_async(h_last_indices, stream);
-  */
-
+  // Construct a contiguous host buffer of indices and copy to device
+  auto const h_indices = std::vector(indices_begin, indices_end);
+  auto const d_indices = make_device_uvector_async(h_indices, stream);
   rmm::device_uvector<size_type> d_null_counts =
     segmented_count_set_bits(bitmask, d_indices, stream);
 
