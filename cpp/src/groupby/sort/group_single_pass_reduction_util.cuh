@@ -162,10 +162,7 @@ static constexpr bool is_group_redution_supported()
 }
 
 template <aggregation::Kind K, typename T>
-struct group_reduction_functor<K,
-                               T,
-                               std::enable_if_t<is_group_redution_supported<K, T>() and
-                                                not std::is_same_v<T, cudf::struct_view>>> {
+struct group_reduction_functor<K, T, std::enable_if_t<is_group_redution_supported<K, T>()>> {
   static std::unique_ptr<column> invoke(column_view const& values,
                                         size_type num_groups,
                                         cudf::device_span<cudf::size_type const> group_labels,
@@ -228,11 +225,11 @@ struct group_reduction_functor<K,
   }
 };
 
-template <aggregation::Kind K, typename T>
+template <aggregation::Kind K>
 struct group_reduction_functor<
   K,
-  T,
-  std::enable_if_t<is_group_redution_supported<K, T>() and std::is_same_v<T, cudf::struct_view>>> {
+  cudf::struct_view,
+  std::enable_if_t<is_group_redution_supported<K, cudf::struct_view>()>> {
   static std::unique_ptr<column> invoke(column_view const& values,
                                         size_type num_groups,
                                         cudf::device_span<cudf::size_type const> group_labels,
@@ -240,7 +237,7 @@ struct group_reduction_functor<
                                         rmm::mr::device_memory_resource* mr)
   {
     // This is be expected to be size_type.
-    using ResultType = cudf::detail::target_type_t<T, K>;
+    using ResultType = cudf::detail::target_type_t<cudf::struct_view, K>;
 
     auto result = make_fixed_width_column(
       data_type{type_to_id<ResultType>()}, num_groups, mask_state::UNALLOCATED, stream, mr);
@@ -274,10 +271,10 @@ struct group_reduction_functor<
     auto const count_iter   = thrust::make_counting_iterator<ResultType>(0);
     auto const result_begin = result->mutable_view().template begin<ResultType>();
     if (values.has_nulls()) {
-      auto const binop = row_arg_minmax_fn<T, true>(values.size(),
-                                                    *d_flattened_values_ptr,
-                                                    flattened_null_precedences.data(),
-                                                    K == aggregation::ARGMIN);
+      auto const binop = row_arg_minmax_fn<true>(values.size(),
+                                                 *d_flattened_values_ptr,
+                                                 flattened_null_precedences.data(),
+                                                 K == aggregation::ARGMIN);
       do_reduction(count_iter, result_begin, binop);
 
       // Generate bitmask for the output by segmented reduction of the input bitmask.
@@ -291,10 +288,10 @@ struct group_reduction_functor<
         validity.begin(), validity.end(), thrust::identity<bool>{}, stream, mr);
       result->set_null_mask(std::move(null_mask), null_count);
     } else {
-      auto const binop = row_arg_minmax_fn<T, false>(values.size(),
-                                                     *d_flattened_values_ptr,
-                                                     flattened_null_precedences.data(),
-                                                     K == aggregation::ARGMIN);
+      auto const binop = row_arg_minmax_fn<false>(values.size(),
+                                                  *d_flattened_values_ptr,
+                                                  flattened_null_precedences.data(),
+                                                  K == aggregation::ARGMIN);
       do_reduction(count_iter, result_begin, binop);
     }
 

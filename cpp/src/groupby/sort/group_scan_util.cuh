@@ -81,11 +81,7 @@ static constexpr bool is_group_scan_supported()
 }
 
 template <aggregation::Kind K, typename T>
-struct group_scan_functor<
-  K,
-  T,
-  std::enable_if_t<is_group_scan_supported<K, T>() and not std::is_same_v<T, cudf::string_view> and
-                   not std::is_same_v<T, cudf::struct_view>>> {
+struct group_scan_functor<K, T, std::enable_if_t<is_group_scan_supported<K, T>()>> {
   static std::unique_ptr<column> invoke(column_view const& values,
                                         size_type num_groups,
                                         cudf::device_span<cudf::size_type const> group_labels,
@@ -138,11 +134,10 @@ struct group_scan_functor<
   }
 };
 
-template <aggregation::Kind K, typename T>
-struct group_scan_functor<
-  K,
-  T,
-  std::enable_if_t<is_group_scan_supported<K, T>() and std::is_same_v<T, cudf::string_view>>> {
+template <aggregation::Kind K>
+struct group_scan_functor<K,
+                          cudf::string_view,
+                          std::enable_if_t<is_group_scan_supported<K, cudf::string_view>()>> {
   static std::unique_ptr<column> invoke(column_view const& values,
                                         size_type num_groups,
                                         cudf::device_span<cudf::size_type const> group_labels,
@@ -185,11 +180,10 @@ struct group_scan_functor<
   }
 };
 
-template <aggregation::Kind K, typename T>
-struct group_scan_functor<
-  K,
-  T,
-  std::enable_if_t<is_group_scan_supported<K, T>() and std::is_same_v<T, cudf::struct_view>>> {
+template <aggregation::Kind K>
+struct group_scan_functor<K,
+                          cudf::struct_view,
+                          std::enable_if_t<is_group_scan_supported<K, cudf::struct_view>()>> {
   static std::unique_ptr<column> invoke(column_view const& values,
                                         size_type num_groups,
                                         cudf::device_span<cudf::size_type const> group_labels,
@@ -227,16 +221,16 @@ struct group_scan_functor<
     // Find the indices of the prefix min/max elements within each group.
     auto const count_iter = thrust::make_counting_iterator<size_type>(0);
     if (values.has_nulls()) {
-      auto const binop = row_arg_minmax_fn<T, true>(values.size(),
-                                                    *d_flattened_values_ptr,
-                                                    flattened_null_precedences.data(),
-                                                    K == aggregation::MIN);
+      auto const binop = row_arg_minmax_fn<true>(values.size(),
+                                                 *d_flattened_values_ptr,
+                                                 flattened_null_precedences.data(),
+                                                 K == aggregation::MIN);
       do_scan(count_iter, map_begin, binop);
     } else {
-      auto const binop = row_arg_minmax_fn<T, false>(values.size(),
-                                                     *d_flattened_values_ptr,
-                                                     flattened_null_precedences.data(),
-                                                     K == aggregation::MIN);
+      auto const binop = row_arg_minmax_fn<false>(values.size(),
+                                                  *d_flattened_values_ptr,
+                                                  flattened_null_precedences.data(),
+                                                  K == aggregation::MIN);
       do_scan(count_iter, map_begin, binop);
     }
 
