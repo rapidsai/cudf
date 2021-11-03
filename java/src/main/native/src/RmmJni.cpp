@@ -324,8 +324,7 @@ extern "C" {
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, jclass clazz,
                                                                   jint allocation_mode, jint log_to,
-                                                                  jstring jpath, jlong pool_size,
-                                                                  jlong max_pool_size) {
+                                                                  jstring jpath, jlong pool_size) {
   try {
     // make sure the CUDA device is setup in the context
     cudaError_t cuda_status = cudaFree(0);
@@ -339,37 +338,26 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Rmm_initializeInternal(JNIEnv *env, j
     bool use_arena_alloc = allocation_mode & 4;
     bool use_cuda_async_alloc = allocation_mode & 8;
     if (use_pool_alloc) {
-      auto pool_limit = (max_pool_size > 0) ?
-                            thrust::optional<std::size_t>{static_cast<std::size_t>(max_pool_size)} :
-                            thrust::nullopt;
       if (use_managed_mem) {
         Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-            std::make_shared<rmm::mr::managed_memory_resource>(), pool_size, pool_limit);
+            std::make_shared<rmm::mr::managed_memory_resource>(), pool_size, pool_size);
       } else {
         Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::pool_memory_resource>(
-            std::make_shared<rmm::mr::cuda_memory_resource>(), pool_size, pool_limit);
+            std::make_shared<rmm::mr::cuda_memory_resource>(), pool_size, pool_size);
       }
     } else if (use_arena_alloc) {
-      std::size_t pool_limit = (max_pool_size > 0) ? static_cast<std::size_t>(max_pool_size) :
-                                                     std::numeric_limits<std::size_t>::max();
       if (use_managed_mem) {
         Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::arena_memory_resource>(
-            std::make_shared<rmm::mr::managed_memory_resource>(), pool_size, pool_limit);
+            std::make_shared<rmm::mr::managed_memory_resource>(), pool_size, pool_size);
       } else {
         Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::arena_memory_resource>(
-            std::make_shared<rmm::mr::cuda_memory_resource>(), pool_size, pool_limit);
+            std::make_shared<rmm::mr::cuda_memory_resource>(), pool_size, pool_size);
       }
     } else if (use_cuda_async_alloc) {
-      auto const pool_limit = max_pool_size > 0 ? static_cast<std::size_t>(max_pool_size) :
-                                                  std::numeric_limits<std::size_t>::max();
-      auto const release_threshold = max_pool_size > 0 ?
-                                         thrust::optional<std::size_t>{max_pool_size} :
-                                         thrust::optional<std::size_t>{};
       // Use `limiting_resource_adaptor` to set a hard limit on the max pool size since
       // `cuda_async_memory_resource` only has a release threshold.
       Initialized_resource = rmm::mr::make_owning_wrapper<rmm::mr::limiting_resource_adaptor>(
-          std::make_shared<rmm::mr::cuda_async_memory_resource>(pool_size, release_threshold),
-          pool_limit);
+          std::make_shared<rmm::mr::cuda_async_memory_resource>(pool_size, pool_size), pool_size);
     } else if (use_managed_mem) {
       Initialized_resource = std::make_shared<rmm::mr::managed_memory_resource>();
     } else {
