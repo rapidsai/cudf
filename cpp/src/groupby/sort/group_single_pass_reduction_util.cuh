@@ -155,8 +155,7 @@ static constexpr bool is_group_redution_supported()
     case aggregation::MIN:
     case aggregation::MAX: return cudf::is_fixed_width<T>() and is_relationally_comparable<T, T>();
     case aggregation::ARGMIN:
-    case aggregation::ARGMAX:
-      return is_relationally_comparable<T, T>() or std::is_same_v<T, cudf::struct_view>;
+    case aggregation::ARGMAX: return is_relationally_comparable<T, T>();
     default: return false;
   }
 }
@@ -221,80 +220,6 @@ struct group_reduction_functor<K, T, std::enable_if_t<is_group_redution_supporte
         validity.begin(), validity.end(), thrust::identity<bool>{}, stream, mr);
       result->set_null_mask(std::move(null_mask), null_count);
     }
-    return result;
-  }
-};
-
-template <aggregation::Kind K>
-struct group_reduction_functor<
-  K,
-  cudf::struct_view,
-  std::enable_if_t<is_group_redution_supported<K, cudf::struct_view>()>> {
-  static std::unique_ptr<column> invoke(column_view const& values,
-                                        size_type num_groups,
-                                        cudf::device_span<cudf::size_type const> group_labels,
-                                        rmm::cuda_stream_view stream,
-                                        rmm::mr::device_memory_resource* mr)
-  {
-    // This is be expected to be size_type.
-    using ResultType = cudf::detail::target_type_t<cudf::struct_view, K>;
-
-    auto result = make_fixed_width_column(
-      data_type{type_to_id<ResultType>()}, num_groups, mask_state::UNALLOCATED, stream, mr);
-
-    if (values.is_empty()) { return result; }
-
-    // When finding ARGMIN, we need to consider nulls as larger than non-null elements.
-    // Thing is opposite for ARGMAX.
-    auto const null_precedence =
-      (K == aggregation::ARGMIN) ? null_order::AFTER : null_order::BEFORE;
-    auto const flattened_values = structs::detail::flatten_nested_columns(
-      table_view{{values}}, {}, std::vector<null_order>{null_precedence});
-    auto const d_flattened_values_ptr = table_device_view::create(flattened_values, stream);
-    auto const flattened_null_precedences =
-      (K == aggregation::ARGMIN)
-        ? cudf::detail::make_device_uvector_async(flattened_values.null_orders(), stream)
-        : rmm::device_uvector<null_order>(0, stream);
-
-    // Perform segmented reduction to find ARGMIN/ARGMAX.
-    auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
-      thrust::reduce_by_key(rmm::exec_policy(stream),
-                            group_labels.data(),
-                            group_labels.data() + group_labels.size(),
-                            inp_iter,
-                            thrust::make_discard_iterator(),
-                            out_iter,
-                            thrust::equal_to<size_type>{},
-                            binop);
-    };
-
-    auto const count_iter   = thrust::make_counting_iterator<ResultType>(0);
-    auto const result_begin = result->mutable_view().template begin<ResultType>();
-    if (values.has_nulls()) {
-      auto const binop = row_arg_minmax_fn<true>(values.size(),
-                                                 *d_flattened_values_ptr,
-                                                 flattened_null_precedences.data(),
-                                                 K == aggregation::ARGMIN);
-      do_reduction(count_iter, result_begin, binop);
-
-      // Generate bitmask for the output by segmented reduction of the input bitmask.
-      auto const d_values_ptr = column_device_view::create(values, stream);
-      auto validity           = rmm::device_uvector<bool>(num_groups, stream);
-      do_reduction(cudf::detail::make_validity_iterator(*d_values_ptr),
-                   validity.begin(),
-                   thrust::logical_or<bool>{});
-
-      auto [null_mask, null_count] = cudf::detail::valid_if(
-        validity.begin(), validity.end(), thrust::identity<bool>{}, stream, mr);
-      result->set_null_mask(std::move(null_mask), null_count);
-    } else {
-      auto const binop = row_arg_minmax_fn<false>(values.size(),
-                                                  *d_flattened_values_ptr,
-                                                  flattened_null_precedences.data(),
-                                                  K == aggregation::ARGMIN);
-      do_reduction(count_iter, result_begin, binop);
-    }
-
     return result;
   }
 };
