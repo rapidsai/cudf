@@ -28,7 +28,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_NvtxUnscopedRange_start(JNIEnv *env,
     nvtx3::color range_color(static_cast<nvtx3::color::value_type>(color_bits));
     nvtx3::event_attributes attr{range_color, range_name.get()};
     auto nvtxRangeId =
-      nvtxDomainRangeStartEx(nvtx3::domain::get<cudf::jni::java_domain>(), attr.get());
+        nvtxDomainRangeStartEx(nvtx3::domain::get<cudf::jni::java_domain>(), attr.get());
     return static_cast<jlong>(nvtxRangeId);
   }
   CATCH_STD(env, 0);
@@ -38,7 +38,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_NvtxUnscopedRange_end(JNIEnv *env, jc
                                                                  jlong nvtxRangeId) {
   try {
     nvtxDomainRangeEnd(nvtx3::domain::get<cudf::jni::java_domain>(),
-      static_cast<nvtxRangeId_t>(nvtxRangeId));
+                       static_cast<nvtxRangeId_t>(nvtxRangeId));
   }
   CATCH_STD(env, );
 }
