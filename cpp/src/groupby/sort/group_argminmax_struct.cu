@@ -29,6 +29,7 @@
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/functional.h>
+#include <thrust/gather.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/reduce.h>
@@ -101,6 +102,14 @@ std::unique_ptr<column> group_argminmax_struct(aggregation::Kind K,
                                                 K == aggregation::ARGMIN);
     do_reduction(count_iter, result_begin, binop);
   }
+
+  // result now stores the indices of minimum elements in the sorted values.
+  // We need the indices of minimum elements in the original unsorted values.
+  thrust::gather(rmm::exec_policy(stream),
+                 result_begin,
+                 result_begin + num_groups,
+                 key_sort_order.template begin<size_type>(),
+                 result_begin);
 
   return result;
 }
