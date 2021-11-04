@@ -223,6 +223,7 @@ add_library(cudf
     src/groupby/sort/aggregate.cpp
     src/groupby/sort/group_argmax.cu
     src/groupby/sort/group_argmin.cu
+    src/groupby/sort/group_argminmax_struct.cu
     src/groupby/sort/group_collect.cu
     src/groupby/sort/group_correlation.cu
     src/groupby/sort/group_count.cu
@@ -241,6 +242,7 @@ add_library(cudf
     src/groupby/sort/group_count_scan.cu
     src/groupby/sort/group_max_scan.cu
     src/groupby/sort/group_min_scan.cu
+    src/groupby/sort/group_minmax_scan_struct.cu
     src/groupby/sort/group_rank_scan.cu
     src/groupby/sort/group_replace_nulls.cu
     src/groupby/sort/group_sum_scan.cu
