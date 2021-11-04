@@ -174,6 +174,26 @@ std::unique_ptr<column> group_argmin(column_view const& values,
                                      rmm::mr::device_memory_resource* mr);
 
 /**
+ * @brief Internal API to calculate group-wise indices of minimum/maximum values, specialized for
+ * STRUCT type.
+ *
+ * @param K The aggregation kind, must be `aggregation::ARGMIN` or `aggregation::ARGMAX`
+ * @param values Grouped values to get minimum value's index from
+ * @param num_groups Number of groups
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param key_sort_order Indices indicating sort order of groupby keys
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> group_argminmax_struct(aggregation::Kind K,
+                                               column_view const& values,
+                                               size_type num_groups,
+                                               cudf::device_span<size_type const> group_labels,
+                                               column_view const& key_sort_order,
+                                               rmm::cuda_stream_view stream,
+                                               rmm::mr::device_memory_resource* mr);
+
+/**
  * @brief Internal API to calculate number of non-null values in each group of
  *  @p values
  *

@@ -73,6 +73,24 @@ std::unique_ptr<column> max_scan(column_view const& values,
                                  rmm::mr::device_memory_resource* mr);
 
 /**
+ * @brief Internal API to calculate groupwise cumulative minimum/maximum value, specialized for
+ * STRUCT type.
+ *
+ * @param K The aggregation kind, must be `aggregation::MIN` or `aggregation::MAX`
+ * @param values Grouped values to get maximum from
+ * @param num_groups Number of groups
+ * @param group_labels ID of group that the corresponding value belongs to
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ */
+std::unique_ptr<column> minmax_scan_struct(aggregation::Kind K,
+                                           column_view const& values,
+                                           size_type num_groups,
+                                           device_span<size_type const> group_labels,
+                                           rmm::cuda_stream_view stream,
+                                           rmm::mr::device_memory_resource* mr);
+
+/**
  * @brief Internal API to calculate cumulative number of values in each group
  *
  * @param group_labels ID of group that the corresponding value belongs to
