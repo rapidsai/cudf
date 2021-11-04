@@ -52,27 +52,6 @@ auto get_search_keys_device_iterable_view(cudf::scalar const& search_key, rmm::c
 }
 
 /**
- * @brief Choice of nullification semantics to be used with `cudf::lists::detail::index_of<>`.
- *
- * `index_of()` and `contains()` are similar in their semantics. While `index_of()` returns
- * the position of a search key in each list row, `contains()` returns an equivalent `bool`,
- * indicating whether the list row contains the search key.
- *
- * The nullification semantics of `index_of()` and `contains()` differ crucially in the case
- * where both the following conditions are met:
- *  1. The list row does not contain the search key
- *  2. *and* the list row also contains nulls
- *
- * For any list row where both the above hold true:
- *  1. `contains()` returns `null` for that row
- *  2. `index_of()` returns `-1`, indicating that the row wasn't found.
- *
- * The `if_lists_contain_nulls` enum facilitates the choice of strategy in
- * `cudf::lists::detail::index_of()`, used to implement both `index_of()` and `contains()`.
- */
-enum if_lists_contain_nulls : bool { DONT_NULLIFY = false, NULLIFY = true };
-
-/**
  * @brief Enum to indicate whether the `search_key` scalar/column contains nulls.
  */
 enum search_key_nulls : bool { NO_NULLS = false, HAS_NULLS = true };
@@ -83,8 +62,7 @@ enum search_key_nulls : bool { NO_NULLS = false, HAS_NULLS = true };
 template <duplicate_find_option = duplicate_find_option::FIND_FIRST>
 struct finder {
   template <typename ElementType>
-  __device__ thrust::pair<size_type, bool> operator()(list_device_view const& list,
-                                                      ElementType const& search_key) const
+  __device__ size_type operator()(list_device_view const& list, ElementType const& search_key) const
   {
     auto const list_begin = list.pair_rep_begin<ElementType>();
     auto const list_end   = list.pair_rep_end<ElementType>();
@@ -94,16 +72,14 @@ struct finder {
                cudf::equality_compare(element_and_validity.first, search_key);
       });
     auto const is_found = find_iter != list_end;
-    auto const position = is_found ? (find_iter - list_begin) : absent_index;
-    return {position, is_found};
+    return is_found ? (find_iter - list_begin) : absent_index;
   };
 };
 
 template <>
 struct finder<duplicate_find_option::FIND_LAST> {
   template <typename ElementType>
-  __device__ thrust::pair<size_type, bool> operator()(list_device_view const& list,
-                                                      ElementType const& search_key) const
+  __device__ size_type operator()(list_device_view const& list, ElementType const& search_key) const
   {
     auto const begin = thrust::make_reverse_iterator(list.pair_rep_end<ElementType>());
     auto const end   = thrust::make_reverse_iterator(list.pair_rep_begin<ElementType>());
@@ -113,8 +89,7 @@ struct finder<duplicate_find_option::FIND_LAST> {
                cudf::equality_compare(element_and_validity.first, search_key);
       });
     auto const is_found = find_iter != end;
-    auto const position = is_found ? (end - find_iter - 1) : absent_index;
-    return {position, is_found};
+    return is_found ? (end - find_iter - 1) : absent_index;
   };
 };
 
@@ -180,17 +155,9 @@ struct lookup_functor {
         auto list = cudf::list_device_view(d_lists, row_index);
         if (list.is_null()) { return {absent_index, false}; }
 
-        auto const [position, _] = find_option == duplicate_find_option::FIND_FIRST
-                                     ? finder<duplicate_find_option::FIND_FIRST>{}(list, search_key)
-                                     : finder<duplicate_find_option::FIND_LAST>{}(list, search_key);
-        /* // DELETEME!
-        bool is_valid =
-          is_found || !nullify_if_lists_contain_nulls ||
-          thrust::none_of(thrust::seq,
-                          thrust::make_counting_iterator(size_type{0}),
-                          thrust::make_counting_iterator(list.size()),
-                          [&list] __device__(auto const& i) { return list.is_null(i); });
-                          */
+        auto const position = find_option == duplicate_find_option::FIND_FIRST
+                                ? finder<duplicate_find_option::FIND_FIRST>{}(list, search_key)
+                                : finder<duplicate_find_option::FIND_LAST>{}(list, search_key);
         return {position, true};
       });
   }
