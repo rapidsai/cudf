@@ -16,10 +16,12 @@
 
 #pragma once
 
-namespace {
+namespace cudf {
+namespace jni {
 
 struct java_domain {
   static constexpr char const *name{"Java"};
 };
 
-} // anonymous namespace
+} // namespace jni
+} // namespace cudf

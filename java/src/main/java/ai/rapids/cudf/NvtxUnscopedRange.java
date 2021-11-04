@@ -43,7 +43,7 @@ public class NvtxUnscopedRange implements AutoCloseable {
   private static final boolean isEnabled = Boolean.getBoolean("ai.rapids.cudf.nvtx.enabled");
 
   // this is a nvtxRangeId_t in the C++ api side
-  private long nvtxRangeId;
+  private final long nvtxRangeId;
 
   // true if this range is already closed
   private boolean closed;
@@ -60,7 +60,11 @@ public class NvtxUnscopedRange implements AutoCloseable {
 
   public NvtxUnscopedRange(String name, int colorBits) {
     if (isEnabled) {
-      this.nvtxRangeId = start(name, colorBits);
+      nvtxRangeId = start(name, colorBits);
+    } else {
+      // following the implementation in nvtx3, the default value of 0
+      // is given when NVTX is disabled
+      nvtxRangeId = 0;
     }
   }
 
