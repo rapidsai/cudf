@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -375,6 +375,97 @@ std::unique_ptr<column> ceil_microsecond(
  * @return cudf::column of the same datetime resolution as the input column
  */
 std::unique_ptr<column> ceil_nanosecond(
+  column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Round down to the nearest day
+ *
+ * @param column cudf::column_view of the input datetime values
+ * @param mr Device memory resource used to allocate device memory of the returned column.
+ *
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @return cudf::column of the same datetime resolution as the input column
+ */
+std::unique_ptr<cudf::column> floor_day(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Round down to the nearest hour
+ *
+ * @param column cudf::column_view of the input datetime values
+ * @param mr Device memory resource used to allocate device memory of the returned column.
+ *
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @return cudf::column of the same datetime resolution as the input column
+ */
+std::unique_ptr<cudf::column> floor_hour(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Round down to the nearest minute
+ *
+ * @param column cudf::column_view of the input datetime values
+ * @param mr Device memory resource used to allocate device memory of the returned column.
+ *
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @return cudf::column of the same datetime resolution as the input column
+ */
+std::unique_ptr<cudf::column> floor_minute(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Round down to the nearest second
+ *
+ * @param column cudf::column_view of the input datetime values
+ * @param mr Device memory resource used to allocate device memory of the returned column.
+ *
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @return cudf::column of the same datetime resolution as the input column
+ */
+std::unique_ptr<cudf::column> floor_second(
+  cudf::column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Round down to the nearest millisecond
+ *
+ * @param column cudf::column_view of the input datetime values
+ * @param mr Device memory resource used to allocate device memory of the returned column.
+ *
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @return cudf::column of the same datetime resolution as the input column
+ */
+std::unique_ptr<column> floor_millisecond(
+  column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Round down to the nearest microsecond
+ *
+ * @param column cudf::column_view of the input datetime values
+ * @param mr Device memory resource used to allocate device memory of the returned column.
+ *
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @return cudf::column of the same datetime resolution as the input column
+ */
+std::unique_ptr<column> floor_microsecond(
+  column_view const& column,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Round down to the nearest nanosecond
+ *
+ * @param column cudf::column_view of the input datetime values
+ * @param mr Device memory resource used to allocate device memory of the returned column.
+ *
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP
+ * @return cudf::column of the same datetime resolution as the input column
+ */
+std::unique_ptr<column> floor_nanosecond(
   column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

@@ -4617,8 +4617,73 @@ class DatetimeProperties(object):
             data=out_column, index=self.series._index, name=self.series.name
         )
 
-    def ceil(self, field):
-        out_column = self.series._column.ceil(field)
+    def ceil(self, freq):
+        """
+        Perform ceil operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        freq : str
+            One of ["D", "H", "T", "S", "L", "U", "N"]
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`_
+            for more details on these aliases.
+
+        Returns
+        -------
+        Series
+            Series with all timestamps rounded up to the specified frequency.
+            The index is preserved.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> t = cudf.Series(["2001-01-01 00:04:45", "2001-01-01 00:04:58",
+        ... "2001-01-01 00:05:04"], dtype="datetime64[ns]")
+        >>> t.dt.ceil("T")
+        0   2001-01-01 00:05:00
+        1   2001-01-01 00:05:00
+        2   2001-01-01 00:06:00
+        dtype: datetime64[ns]
+        """
+        out_column = self.series._column.ceil(freq)
+
+        return Series(
+            data=out_column, index=self.series._index, name=self.series.name
+        )
+
+    def floor(self, freq):
+        """
+        Perform floor operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        freq : str
+            One of ["D", "H", "T", "S", "L", "U", "N"]
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`_
+            for more details on these aliases.
+
+        Returns
+        -------
+        Series
+            Series with all timestamps rounded up to the specified frequency.
+            The index is preserved.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> t = cudf.Series(["2001-01-01 00:04:45", "2001-01-01 00:04:58",
+        ... "2001-01-01 00:05:04"], dtype="datetime64[ns]")
+        >>> t.dt.floor("T")
+        0   2001-01-01 00:04:00
+        1   2001-01-01 00:04:00
+        2   2001-01-01 00:05:00
+        dtype: datetime64[ns]
+        """
+        out_column = self.series._column.floor(freq)
 
         return Series(
             data=out_column, index=self.series._index, name=self.series.name
