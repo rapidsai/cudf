@@ -134,7 +134,7 @@ std::unique_ptr<column> replace_re(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
   if (patterns.empty())  // no patterns; just return a copy
     return std::make_unique<column>(strings.parent(), stream, mr);
 
