@@ -15,15 +15,16 @@
 # This function finds cucollections and sets any additional necessary environment variables.
 function(find_and_configure_cucollections)
 
-  # Find or install cuCollections
-  rapids_cpm_find(
-    # cuCollections doesn't have a version yet
-    cuco 0.0
-    GLOBAL_TARGETS cuco::cuco
-    CPM_ARGS GITHUB_REPOSITORY NVIDIA/cuCollections
-    GIT_TAG 62b90b7f7adf272455007b1c857e1d621aaf13ca
-    OPTIONS "BUILD_TESTS OFF" "BUILD_BENCHMARKS OFF" "BUILD_EXAMPLES OFF"
-  )
+    # Find or install cuCollections
+    rapids_cpm_find(cuco 0.0
+        GLOBAL_TARGETS cuco::cuco
+        CPM_ARGS
+            GITHUB_REPOSITORY robertmaynard/cuCollections
+            GIT_TAG           bf6a90db78516e099d07e845a39012dbcaa8de18
+            OPTIONS           "BUILD_TESTS OFF"
+                              "BUILD_BENCHMARKS OFF"
+                              "BUILD_EXAMPLES OFF"
+    )
 endfunction()
 
 find_and_configure_cucollections()
