@@ -37,8 +37,8 @@ def test_df_apply_rows(nelem):
         kwargs=dict(extra1=extra1, extra2=extra2),
     )
 
-    got_out1 = outdf["out1"].to_array()
-    got_out2 = outdf["out2"].to_array()
+    got_out1 = outdf["out1"].to_numpy()
+    got_out2 = outdf["out2"].to_numpy()
 
     np.testing.assert_array_almost_equal(got_out1, expect_out1)
     np.testing.assert_array_almost_equal(got_out2, expect_out2)
@@ -74,8 +74,8 @@ def test_df_apply_chunks(nelem, chunksize):
     got_out1 = outdf["out1"]
     got_out2 = outdf["out2"]
 
-    np.testing.assert_array_almost_equal(got_out1.to_array(), expect_out1)
-    np.testing.assert_array_almost_equal(got_out2.to_array(), expect_out2)
+    np.testing.assert_array_almost_equal(got_out1.to_numpy(), expect_out1)
+    np.testing.assert_array_almost_equal(got_out2.to_numpy(), expect_out2)
 
 
 @pytest.mark.parametrize("nelem", [1, 15, 30, 64, 128, 129])
@@ -112,8 +112,8 @@ def test_df_apply_custom_chunks(nelem):
     got_out1 = outdf["out1"]
     got_out2 = outdf["out2"]
 
-    np.testing.assert_array_almost_equal(got_out1.to_array(), expect_out1)
-    np.testing.assert_array_almost_equal(got_out2.to_array(), expect_out2)
+    np.testing.assert_array_almost_equal(got_out1.to_numpy(), expect_out1)
+    np.testing.assert_array_almost_equal(got_out2.to_numpy(), expect_out2)
 
 
 @pytest.mark.parametrize("nelem", [1, 15, 30, 64, 128, 129])
@@ -158,8 +158,8 @@ def test_df_apply_custom_chunks_blkct_tpb(nelem, blkct, tpb):
     got_out1 = outdf["out1"]
     got_out2 = outdf["out2"]
 
-    np.testing.assert_array_almost_equal(got_out1.to_array(), expect_out1)
-    np.testing.assert_array_almost_equal(got_out2.to_array(), expect_out2)
+    np.testing.assert_array_almost_equal(got_out1.to_numpy(), expect_out1)
+    np.testing.assert_array_almost_equal(got_out2.to_numpy(), expect_out2)
 
 
 @pytest.mark.parametrize("nelem", [1, 2, 64, 128, 1000, 5000])

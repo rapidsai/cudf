@@ -144,6 +144,9 @@ cudf::ast::ast_operator jni_to_unary_operator(jbyte jni_op_value) {
     case 20: return cudf::ast::ast_operator::RINT;
     case 21: return cudf::ast::ast_operator::BIT_INVERT;
     case 22: return cudf::ast::ast_operator::NOT;
+    case 23: return cudf::ast::ast_operator::CAST_TO_INT64;
+    case 24: return cudf::ast::ast_operator::CAST_TO_UINT64;
+    case 25: return cudf::ast::ast_operator::CAST_TO_FLOAT64;
     default: throw std::invalid_argument("unexpected JNI AST unary operator value");
   }
 }
@@ -165,16 +168,19 @@ cudf::ast::ast_operator jni_to_binary_operator(jbyte jni_op_value) {
     case 7: return cudf::ast::ast_operator::PYMOD;
     case 8: return cudf::ast::ast_operator::POW;
     case 9: return cudf::ast::ast_operator::EQUAL;
-    case 10: return cudf::ast::ast_operator::NOT_EQUAL;
-    case 11: return cudf::ast::ast_operator::LESS;
-    case 12: return cudf::ast::ast_operator::GREATER;
-    case 13: return cudf::ast::ast_operator::LESS_EQUAL;
-    case 14: return cudf::ast::ast_operator::GREATER_EQUAL;
-    case 15: return cudf::ast::ast_operator::BITWISE_AND;
-    case 16: return cudf::ast::ast_operator::BITWISE_OR;
-    case 17: return cudf::ast::ast_operator::BITWISE_XOR;
-    case 18: return cudf::ast::ast_operator::LOGICAL_AND;
-    case 19: return cudf::ast::ast_operator::LOGICAL_OR;
+    case 10: return cudf::ast::ast_operator::NULL_EQUAL;
+    case 11: return cudf::ast::ast_operator::NOT_EQUAL;
+    case 12: return cudf::ast::ast_operator::LESS;
+    case 13: return cudf::ast::ast_operator::GREATER;
+    case 14: return cudf::ast::ast_operator::LESS_EQUAL;
+    case 15: return cudf::ast::ast_operator::GREATER_EQUAL;
+    case 16: return cudf::ast::ast_operator::BITWISE_AND;
+    case 17: return cudf::ast::ast_operator::BITWISE_OR;
+    case 18: return cudf::ast::ast_operator::BITWISE_XOR;
+    case 19: return cudf::ast::ast_operator::LOGICAL_AND;
+    case 20: return cudf::ast::ast_operator::NULL_LOGICAL_AND;
+    case 21: return cudf::ast::ast_operator::LOGICAL_OR;
+    case 22: return cudf::ast::ast_operator::NULL_LOGICAL_OR;
     default: throw std::invalid_argument("unexpected JNI AST binary operator value");
   }
 }

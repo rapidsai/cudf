@@ -3085,6 +3085,17 @@ public class ColumnVectorTest extends CudfTestBase {
              ColumnVector result = v1.rollingWindow(RollingAggregation.lag(1, defaultOutput), options)) {
           assertColumnsAreEqual(expected, result);
         }
+
+        try (ColumnVector expected = ColumnVector.fromBoxedDoubles(0.7071d, 1.5275d, 1.5275d, 1d, 1.4142);
+             ColumnVector result = v1.rollingWindow(RollingAggregation.standardDeviation(), options)) {
+          assertColumnsAreEqual(expected, result);
+        }
+
+        try (ColumnVector expected =
+                 ColumnVector.fromBoxedDoubles(Double.POSITIVE_INFINITY, 2.1602d, 2.1602d, 1.4142d, Double.POSITIVE_INFINITY);
+             ColumnVector result = v1.rollingWindow(RollingAggregation.standardDeviation(2), options)) {
+          assertColumnsAreEqual(expected, result);
+        }
       }
     }
   }
@@ -4191,6 +4202,28 @@ public class ColumnVectorTest extends CudfTestBase {
            ColumnVector result = tmp.extractListElement(0)) {
           assertColumnsAreEqual(expected, result);
       }
+  }
+
+  @Test
+  void testDropListDuplicates() {
+    List<Integer> list1 = Arrays.asList(1, 2);
+    List<Integer> list2 = Arrays.asList(3, 4, 5);
+    List<Integer> list3 = Arrays.asList(null, 0, 6, 6, 0);
+    List<Integer> dedupeList3 = Arrays.asList(0, 6, null);
+    List<Integer> list4 = Arrays.asList(null, 6, 7, null, 7);
+    List<Integer> dedupeList4 = Arrays.asList(6, 7, null);
+    List<Integer> list5 = null;
+
+    HostColumnVector.DataType listType = new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.INT32));
+    try (ColumnVector v = ColumnVector.fromLists(listType, list1, list2, list3, list4, list5);
+         ColumnVector expected = ColumnVector.fromLists(listType, list1, list2, dedupeList3, dedupeList4, list5);
+         ColumnVector tmp = v.dropListDuplicates();
+         // Note dropping duplicates does not have any ordering guarantee, so sort to make it all
+         // consistent
+         ColumnVector result = tmp.listSortRows(false, false)) {
+      assertColumnsAreEqual(expected, result);
+    }
   }
 
   @Test
@@ -5386,6 +5419,17 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType), list1, list2, list3);
          ColumnVector res = cv.getMapValue(Scalar.fromString("a"));
          ColumnVector expected = ColumnVector.fromStrings("b", "c", null)) {
+      assertColumnsAreEqual(expected, res);
+    }
+  }
+
+  @Test
+  void testGetMapValueEmptyInput() {
+    HostColumnVector.StructType structType = new HostColumnVector.StructType(true, Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
+        new HostColumnVector.BasicType(true, DType.STRING)));
+    try (ColumnVector cv = ColumnVector.fromLists(new HostColumnVector.ListType(true, structType));
+         ColumnVector res = cv.getMapValue(Scalar.fromString("a"));
+         ColumnVector expected = ColumnVector.fromStrings()) {
       assertColumnsAreEqual(expected, res);
     }
   }

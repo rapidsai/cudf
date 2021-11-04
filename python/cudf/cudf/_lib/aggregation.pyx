@@ -405,6 +405,24 @@ cdef class RollingAggregation:
         return agg
 
     @classmethod
+    def var(cls, ddof=1):
+        cdef RollingAggregation agg = cls()
+        agg.c_obj = move(
+            libcudf_aggregation.make_variance_aggregation[rolling_aggregation](
+                ddof
+            )
+        )
+        return agg
+
+    @classmethod
+    def std(cls, ddof=1):
+        cdef RollingAggregation agg = cls()
+        agg.c_obj = move(
+            libcudf_aggregation.make_std_aggregation[rolling_aggregation](ddof)
+        )
+        return agg
+
+    @classmethod
     def count(cls, dropna=True):
         cdef libcudf_types.null_policy c_null_handling
         if dropna:

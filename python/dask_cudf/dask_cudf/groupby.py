@@ -1,6 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 import math
 from operator import getitem
+from typing import Set
 
 import numpy as np
 import pandas as pd
@@ -179,24 +180,24 @@ def groupby_agg(
     sort=False,
     as_index=True,
 ):
-    """ Optimized groupby aggregation for Dask-CuDF.
+    """Optimized groupby aggregation for Dask-CuDF.
 
-        This aggregation algorithm only supports the following options:
+    This aggregation algorithm only supports the following options:
 
-        - "count"
-        - "mean"
-        - "std"
-        - "var"
-        - "sum"
-        - "min"
-        - "max"
-        - "collect"
-        - "first"
-        - "last"
+    - "count"
+    - "mean"
+    - "std"
+    - "var"
+    - "sum"
+    - "min"
+    - "max"
+    - "collect"
+    - "first"
+    - "last"
 
-        This "optimized" approach is more performant than the algorithm
-        in `dask.dataframe`, because it allows the cudf backend to
-        perform multiple aggregations at once.
+    This "optimized" approach is more performant than the algorithm
+    in `dask.dataframe`, because it allows the cudf backend to
+    perform multiple aggregations at once.
     """
     # Assert that aggregations are supported
     aggs = _redirect_aggs(aggs_in)
@@ -347,8 +348,7 @@ def groupby_agg(
 
 
 def _redirect_aggs(arg):
-    """ Redirect aggregations to their corresponding name in cuDF
-    """
+    """Redirect aggregations to their corresponding name in cuDF"""
     redirects = {
         sum: "sum",
         max: "max",
@@ -374,11 +374,10 @@ def _redirect_aggs(arg):
 
 
 def _is_supported(arg, supported: set):
-    """ Check that aggregations in `arg` are a subset of `supported`
-    """
+    """Check that aggregations in `arg` are a subset of `supported`"""
     if isinstance(arg, (list, dict)):
         if isinstance(arg, dict):
-            _global_set = set()
+            _global_set: Set[str] = set()
             for col in arg:
                 if isinstance(arg[col], list):
                     _global_set = _global_set.union(set(arg[col]))
@@ -394,8 +393,7 @@ def _is_supported(arg, supported: set):
 
 
 def _make_name(*args, sep="_"):
-    """ Combine elements of `args` into a new string
-    """
+    """Combine elements of `args` into a new string"""
     _args = (arg for arg in args if arg != "")
     return sep.join(_args)
 
@@ -403,15 +401,15 @@ def _make_name(*args, sep="_"):
 def _groupby_partition_agg(
     df, gb_cols, aggs, columns, split_out, dropna, sort, sep
 ):
-    """ Initial partition-level aggregation task.
+    """Initial partition-level aggregation task.
 
-        This is the first operation to be executed on each input
-        partition in `groupby_agg`.  Depending on `aggs`, four possible
-        groupby aggregations ("count", "sum", "min", and "max") are
-        performed.  The result is then partitioned (by hashing `gb_cols`)
-        into a number of distinct dictionary elements.  The number of
-        elements in the output dictionary (`split_out`) corresponds to
-        the number of partitions in the final output of `groupby_agg`.
+    This is the first operation to be executed on each input
+    partition in `groupby_agg`.  Depending on `aggs`, four possible
+    groupby aggregations ("count", "sum", "min", and "max") are
+    performed.  The result is then partitioned (by hashing `gb_cols`)
+    into a number of distinct dictionary elements.  The number of
+    elements in the output dictionary (`split_out`) corresponds to
+    the number of partitions in the final output of `groupby_agg`.
     """
 
     # Modify dict for initial (partition-wise) aggregations
@@ -458,15 +456,15 @@ def _groupby_partition_agg(
 
 
 def _tree_node_agg(dfs, gb_cols, split_out, dropna, sort, sep):
-    """ Node in groupby-aggregation reduction tree.
+    """Node in groupby-aggregation reduction tree.
 
-        Following the initial `_groupby_partition_agg` tasks,
-        the `groupby_agg` algorithm will perform a tree reduction
-        to combine the data from the input partitions into
-        `split_out` different output partitions.  For each node in
-        the reduction tree, the input DataFrame objects are
-        concatenated, and "sum", "min" and/or "max" groupby
-        aggregations are used to combine the necessary statistics.
+    Following the initial `_groupby_partition_agg` tasks,
+    the `groupby_agg` algorithm will perform a tree reduction
+    to combine the data from the input partitions into
+    `split_out` different output partitions.  For each node in
+    the reduction tree, the input DataFrame objects are
+    concatenated, and "sum", "min" and/or "max" groupby
+    aggregations are used to combine the necessary statistics.
     """
 
     df = _concat(dfs, ignore_index=True)
@@ -492,8 +490,7 @@ def _tree_node_agg(dfs, gb_cols, split_out, dropna, sort, sep):
 
 
 def _var_agg(df, col, count_name, sum_name, pow2_sum_name, ddof=1):
-    """ Calculate variance (given count, sum, and sum-squared columns).
-    """
+    """Calculate variance (given count, sum, and sum-squared columns)."""
 
     # Select count, sum, and sum-squared
     n = df[count_name]
@@ -525,13 +522,13 @@ def _finalize_gb_agg(
     str_cols_out,
     aggs_renames,
 ):
-    """ Final aggregation task.
+    """Final aggregation task.
 
-        This is the final operation on each output partitions
-        of the `groupby_agg` algorithm.  This function must
-        take care of higher-order aggregations, like "mean",
-        "std" and "var".  We also need to deal with the column
-        index, the row index, and final sorting behavior.
+    This is the final operation on each output partitions
+    of the `groupby_agg` algorithm.  This function must
+    take care of higher-order aggregations, like "mean",
+    "std" and "var".  We also need to deal with the column
+    index, the row index, and final sorting behavior.
     """
 
     # Deal with higher-order aggregations

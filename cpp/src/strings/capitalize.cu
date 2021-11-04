@@ -35,6 +35,18 @@ namespace strings {
 namespace detail {
 namespace {
 
+using char_info = thrust::pair<uint32_t, detail::character_flags_table_type>;
+
+/**
+ * @brief Returns the given character's info flags.
+ */
+__device__ char_info get_char_info(character_flags_table_type const* d_flags, char_utf8 chr)
+{
+  auto const code_point = detail::utf8_to_codepoint(chr);
+  auto const flag = code_point <= 0x00FFFF ? d_flags[code_point] : character_flags_table_type{0};
+  return char_info{code_point, flag};
+}
+
 /**
  * @brief Base class for capitalize and title functors.
  *
@@ -58,15 +70,6 @@ struct base_fn {
       d_special_case_mapping(get_special_case_mapping_table()),
       d_column(d_column)
   {
-  }
-
-  using char_info = thrust::pair<uint32_t, detail::character_flags_table_type>;
-
-  __device__ char_info get_char_info(char_utf8 chr) const
-  {
-    auto const code_point = detail::utf8_to_codepoint(chr);
-    auto const flag = code_point <= 0x00FFFF ? d_flags[code_point] : character_flags_table_type{0};
-    return char_info{code_point, flag};
   }
 
   __device__ int32_t convert_char(char_info const& info, char* d_buffer) const
@@ -111,7 +114,7 @@ struct base_fn {
     auto d_buffer     = d_chars ? d_chars + d_offsets[idx] : nullptr;
     bool capitalize   = true;
     for (auto const chr : d_str) {
-      auto const info        = get_char_info(chr);
+      auto const info        = get_char_info(d_flags, chr);
       auto const flag        = info.second;
       auto const change_case = capitalize ? IS_LOWER(flag) : IS_UPPER(flag);
 
@@ -179,6 +182,36 @@ struct title_fn : base_fn<title_fn> {
 };
 
 /**
+ * @brief Functor for determining title format for each string in a column.
+ *
+ * The first letter of each word should be upper-case (IS_UPPER).
+ * All other characters should be lower-case (IS_LOWER).
+ * Non-upper/lower-case (IS_UPPER_OR_LOWER) characters delimit words.
+ */
+struct is_title_fn {
+  character_flags_table_type const* d_flags;
+  column_device_view const d_column;
+
+  __device__ bool operator()(size_type idx)
+  {
+    if (d_column.is_null(idx)) { return false; }
+    auto const d_str = d_column.element<string_view>(idx);
+
+    bool at_least_one_valid    = false;  // requires one or more cased characters
+    bool should_be_capitalized = true;   // current character should be upper-case
+    for (auto const chr : d_str) {
+      auto const flag = get_char_info(d_flags, chr).second;
+      if (IS_UPPER_OR_LOWER(flag)) {
+        if (should_be_capitalized == !IS_UPPER(flag)) return false;
+        at_least_one_valid = true;
+      }
+      should_be_capitalized = !IS_UPPER_OR_LOWER(flag);
+    }
+    return at_least_one_valid;
+  }
+};
+
+/**
  * @brief Common utility function for title() and capitalize().
  *
  * @tparam CapitalFn The specific functor.
@@ -210,7 +243,7 @@ std::unique_ptr<column> capitalize(strings_column_view const& input,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(delimiters.is_valid(stream), "Delimiter must be a valid string");
-  if (input.is_empty()) return make_empty_column(data_type{type_id::STRING});
+  if (input.is_empty()) return make_empty_column(type_id::STRING);
   auto const d_column     = column_device_view::create(input.parent(), stream);
   auto const d_delimiters = delimiters.value(stream);
   return capitalizer(capitalize_fn{*d_column, d_delimiters}, input, stream, mr);
@@ -221,9 +254,29 @@ std::unique_ptr<column> title(strings_column_view const& input,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) return make_empty_column(data_type{type_id::STRING});
+  if (input.is_empty()) return make_empty_column(type_id::STRING);
   auto d_column = column_device_view::create(input.parent(), stream);
   return capitalizer(title_fn{*d_column, sequence_type}, input, stream, mr);
+}
+
+std::unique_ptr<column> is_title(strings_column_view const& input,
+                                 rmm::cuda_stream_view stream,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  if (input.is_empty()) return make_empty_column(type_id::BOOL8);
+  auto results  = make_numeric_column(data_type{type_id::BOOL8},
+                                     input.size(),
+                                     cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                                     input.null_count(),
+                                     stream,
+                                     mr);
+  auto d_column = column_device_view::create(input.parent(), stream);
+  thrust::transform(rmm::exec_policy(stream),
+                    thrust::make_counting_iterator<size_type>(0),
+                    thrust::make_counting_iterator<size_type>(input.size()),
+                    results->mutable_view().data<bool>(),
+                    is_title_fn{get_character_flags_table(), *d_column});
+  return results;
 }
 
 }  // namespace detail
@@ -242,6 +295,13 @@ std::unique_ptr<column> title(strings_column_view const& input,
 {
   CUDF_FUNC_RANGE();
   return detail::title(input, sequence_type, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> is_title(strings_column_view const& input,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::is_title(input, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

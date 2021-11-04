@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import builtins
 import pickle
+import re
 import warnings
 from typing import (
     TYPE_CHECKING,
@@ -27,22 +28,22 @@ import cudf
 from cudf import _lib as libcudf
 from cudf._lib import string_casting as str_cast, strings as libstrings
 from cudf._lib.column import Column
-from cudf.core.buffer import Buffer
-from cudf.core.column import column, datetime
-from cudf.core.column.methods import ColumnMethods, ParentType
-from cudf.utils import utils
-from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import (
-    can_convert_to_column,
+from cudf.api.types import (
     is_integer,
     is_list_dtype,
     is_scalar,
     is_string_dtype,
 )
+from cudf.core.buffer import Buffer
+from cudf.core.column import column, datetime
+from cudf.core.column.methods import ColumnMethods, ParentType
+from cudf.utils import utils
+from cudf.utils.docutils import copy_docstring
+from cudf.utils.dtypes import can_convert_to_column
 
 
 def str_to_boolean(column: StringColumn):
-    """Takes in string column and returns boolean column """
+    """Takes in string column and returns boolean column"""
     return (
         libstrings.count_characters(column) > cudf.Scalar(0, dtype="int8")
     ).fillna(False)
@@ -95,6 +96,13 @@ _timedelta_to_str_typecast_functions = {
     cudf.dtype("timedelta64[us]"): str_cast.int2timedelta,
     cudf.dtype("timedelta64[ns]"): str_cast.int2timedelta,
 }
+
+
+def _is_supported_regex_flags(flags):
+    return flags == 0 or (
+        (flags & (re.MULTILINE | re.DOTALL) != 0)
+        and (flags & ~(re.MULTILINE | re.DOTALL) == 0)
+    )
 
 
 class StringMethods(ColumnMethods):
@@ -352,7 +360,9 @@ class StringMethods(ColumnMethods):
 
         if len(data) == 1 and data.null_count == 1:
             data = [""]
-        out = self._return_or_inplace(data)
+        # We only want to keep the index if we are adding something to each
+        # row, not if we are joining all the rows into a single string.
+        out = self._return_or_inplace(data, retain_index=others is not None)
         if len(out) == 1 and others is None:
             if isinstance(out, cudf.Series):
                 out = out.iloc[0]
@@ -538,7 +548,7 @@ class StringMethods(ColumnMethods):
 
         offset_col = self._column.children[0]
 
-        res = cudf.core.column.ListColumn(
+        return cudf.core.column.ListColumn(
             size=len(self._column),
             dtype=cudf.ListDtype(self._column.dtype),
             mask=self._column.mask,
@@ -546,12 +556,11 @@ class StringMethods(ColumnMethods):
             null_count=self._column.null_count,
             children=(offset_col, result_col),
         )
-        return res
 
     def extract(
         self, pat: str, flags: int = 0, expand: bool = True
     ) -> SeriesOrIndex:
-        """
+        r"""
         Extract capture groups in the regex `pat` as columns in a DataFrame.
 
         For each subject string in the Series, extract groups from the first
@@ -623,7 +632,7 @@ class StringMethods(ColumnMethods):
         na=np.nan,
         regex: bool = True,
     ) -> SeriesOrIndex:
-        """
+        r"""
         Test if pattern or regex is contained within a string of a Series or
         Index.
 
@@ -636,6 +645,8 @@ class StringMethods(ColumnMethods):
             Character sequence or regular expression.
             If ``pat`` is list-like then regular expressions are not
             accepted.
+        flags : int, default 0 (no flags)
+            Flags to pass through to the regex engine (e.g. re.MULTILINE)
         regex : bool, default True
             If True, assumes the pattern is a regular expression.
             If False, treats the pattern as a literal string.
@@ -649,9 +660,11 @@ class StringMethods(ColumnMethods):
 
         Notes
         -----
-        The parameters `case`, `flags`, and `na` are not yet supported and
-        will raise a NotImplementedError if anything other than the default
+        The parameters `case` and `na` are not yet supported and will
+        raise a NotImplementedError if anything other than the default
         value is set.
+        The `flags` parameter currently only supports re.DOTALL and
+        re.MULTILINE.
 
         Examples
         --------
@@ -729,18 +742,21 @@ class StringMethods(ColumnMethods):
         """  # noqa W605
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
-        elif flags != 0:
-            raise NotImplementedError("`flags` parameter is not yet supported")
-        elif na is not np.nan:
+        if na is not np.nan:
             raise NotImplementedError("`na` parameter is not yet supported")
+        if regex and isinstance(pat, re.Pattern):
+            flags = pat.flags & ~re.U
+            pat = pat.pattern
+        if not _is_supported_regex_flags(flags):
+            raise ValueError("invalid `flags` parameter value")
 
         if pat is None:
             result_col = column.column_empty(
                 len(self._column), dtype="bool", masked=True
             )
         elif is_scalar(pat):
-            if regex is True:
-                result_col = libstrings.contains_re(self._column, pat)
+            if regex:
+                result_col = libstrings.contains_re(self._column, pat, flags)
             else:
                 result_col = libstrings.contains(
                     self._column, cudf.Scalar(pat, "str")
@@ -902,6 +918,10 @@ class StringMethods(ColumnMethods):
         if n == 0:
             n = -1
 
+        # If 'pat' is re.Pattern then get the pattern string from it
+        if regex and isinstance(pat, re.Pattern):
+            pat = pat.pattern
+
         # Pandas forces non-regex replace when pat is a single-character
         return self._return_or_inplace(
             libstrings.replace_re(
@@ -923,7 +943,7 @@ class StringMethods(ColumnMethods):
 
         Parameters
         ----------
-        pat : str
+        pat : str or compiled regex
             Regex with groupings to identify extract sections.
             This should not be a compiled regex.
         repl : str
@@ -942,6 +962,11 @@ class StringMethods(ColumnMethods):
         1    ZV576
         dtype: object
         """
+
+        # If 'pat' is re.Pattern then get the pattern string from it
+        if isinstance(pat, re.Pattern):
+            pat = pat.pattern
+
         return self._return_or_inplace(
             libstrings.replace_with_backrefs(self._column, pat, repl)
         )
@@ -1862,6 +1887,30 @@ class StringMethods(ColumnMethods):
         dtype: object
         """
         return self._return_or_inplace(libstrings.title(self._column))
+
+    def istitle(self) -> SeriesOrIndex:
+        """
+        Check whether each string is title formatted.
+        The first letter of each word should be uppercase and the rest
+        should be lowercase.
+
+        Equivalent to :meth:`str.istitle`.
+
+        Returns : Series or Index of object
+
+        Examples
+        --------
+        >>> import cudf
+        >>> data = ['leopard', 'Golden Eagle', 'SNAKE', ''])
+        >>> s = cudf.Series(data)
+        >>> s.str.istitle()
+        0    False
+        1     True
+        2    False
+        3    False
+        dtype: bool
+        """
+        return self._return_or_inplace(libstrings.is_title(self._column))
 
     def filter_alphanum(
         self, repl: str = None, keep: bool = True
@@ -3245,7 +3294,7 @@ class StringMethods(ColumnMethods):
         return self._return_or_inplace(libstrings.wrap(self._column, width))
 
     def count(self, pat: str, flags: int = 0) -> SeriesOrIndex:
-        """
+        r"""
         Count occurrences of pattern in each string of the Series/Index.
 
         This function is used to count the number of times a particular
@@ -3253,8 +3302,10 @@ class StringMethods(ColumnMethods):
 
         Parameters
         ----------
-        pat : str
+        pat : str or compiled regex
             Valid regular expression.
+        flags : int, default 0 (no flags)
+            Flags to pass through to the regex engine (e.g. re.MULTILINE)
 
         Returns
         -------
@@ -3262,9 +3313,10 @@ class StringMethods(ColumnMethods):
 
         Notes
         -----
-            -  `flags` parameter is currently not supported.
+            -  `flags` parameter currently only supports re.DOTALL
+               and re.MULTILINE.
             -  Some characters need to be escaped when passing
-               in pat. eg. ``'$'`` has a special meaning in regex
+               in pat. e.g. ``'$'`` has a special meaning in regex
                and must be escaped when finding this literal character.
 
         Examples
@@ -3299,10 +3351,15 @@ class StringMethods(ColumnMethods):
         >>> index.str.count('a')
         Int64Index([0, 0, 2, 1], dtype='int64')
         """  # noqa W605
-        if flags != 0:
-            raise NotImplementedError("`flags` parameter is not yet supported")
+        if isinstance(pat, re.Pattern):
+            flags = pat.flags & ~re.U
+            pat = pat.pattern
+        if not _is_supported_regex_flags(flags):
+            raise ValueError("invalid `flags` parameter value")
 
-        return self._return_or_inplace(libstrings.count_re(self._column, pat))
+        return self._return_or_inplace(
+            libstrings.count_re(self._column, pat, flags)
+        )
 
     def findall(
         self, pat: str, flags: int = 0, expand: bool = True
@@ -3819,8 +3876,10 @@ class StringMethods(ColumnMethods):
 
         Parameters
         ----------
-        pat : str
+        pat : str or compiled regex
             Character sequence or regular expression.
+        flags : int, default 0 (no flags)
+            Flags to pass through to the regex engine (e.g. re.MULTILINE)
 
         Returns
         -------
@@ -3828,7 +3887,10 @@ class StringMethods(ColumnMethods):
 
         Notes
         -----
-        Parameters currently not supported are: `case`, `flags` and `na`.
+        Parameters `case` and `na` are currently not supported.
+        The `flags` parameter currently only supports re.DOTALL and
+        re.MULTILINE.
+
 
         Examples
         --------
@@ -3853,10 +3915,15 @@ class StringMethods(ColumnMethods):
         """
         if case is not True:
             raise NotImplementedError("`case` parameter is not yet supported")
-        if flags != 0:
-            raise NotImplementedError("`flags` parameter is not yet supported")
+        if isinstance(pat, re.Pattern):
+            flags = pat.flags & ~re.U
+            pat = pat.pattern
+        if not _is_supported_regex_flags(flags):
+            raise ValueError("invalid `flags` parameter value")
 
-        return self._return_or_inplace(libstrings.match_re(self._column, pat))
+        return self._return_or_inplace(
+            libstrings.match_re(self._column, pat, flags)
+        )
 
     def url_decode(self) -> SeriesOrIndex:
         """
@@ -4347,7 +4414,9 @@ class StringMethods(ColumnMethods):
             retain_index=False,
         )
 
-    def character_ngrams(self, n: int = 2) -> SeriesOrIndex:
+    def character_ngrams(
+        self, n: int = 2, as_list: bool = False
+    ) -> SeriesOrIndex:
         """
         Generate the n-grams from characters in a column of strings.
 
@@ -4356,6 +4425,9 @@ class StringMethods(ColumnMethods):
         n : int
             The degree of the n-gram (number of consecutive characters).
             Default of 2 for bigrams.
+        as_list : bool
+            Set to True to return ngrams in a list column where each
+            list element is the ngrams for each string.
 
         Examples
         --------
@@ -4378,11 +4450,32 @@ class StringMethods(ColumnMethods):
         3    fgh
         4    xyz
         dtype: object
+        >>> str_series.str.character_ngrams(3,True)
+        0    [abc, bcd]
+        1    [efg, fgh]
+        2         [xyz]
+        dtype: list
         """
-        return self._return_or_inplace(
-            libstrings.generate_character_ngrams(self._column, n),
-            retain_index=False,
+        ngrams = libstrings.generate_character_ngrams(self._column, n)
+        if as_list is False:
+            return self._return_or_inplace(ngrams, retain_index=False)
+
+        # convert the output to a list by just generating the
+        # offsets for the output list column
+        sn = (self.len() - (n - 1)).clip(0, None).fillna(0)  # type: ignore
+        sizes = libcudf.concat.concat_columns(
+            [column.as_column(0, dtype=np.int32, length=1), sn._column]
         )
+        oc = libcudf.reduce.scan("cumsum", sizes, True)
+        lc = cudf.core.column.ListColumn(
+            size=self._column.size,
+            dtype=cudf.ListDtype(self._column.dtype),
+            mask=self._column.mask,
+            offset=0,
+            null_count=self._column.null_count,
+            children=(oc, ngrams),
+        )
+        return self._return_or_inplace(lc, retain_index=False)
 
     def ngrams_tokenize(
         self, n: int = 2, delimiter: str = " ", separator: str = "_"
@@ -4593,7 +4686,7 @@ class StringMethods(ColumnMethods):
         This function requires about 21x the number of character bytes
         in the input strings column as working memory.
 
-        ``ser.str.subword_tokenize`` will be depreciated in future versions.
+        ``Series.str.subword_tokenize`` is deprecated and will be removed.
         Use ``cudf.core.subword_tokenizer.SubwordTokenizer`` instead.
 
         Parameters
@@ -4649,7 +4742,7 @@ class StringMethods(ColumnMethods):
         Examples
         --------
         >>> import cudf
-        >>> from cudf.utils.hash_vocab_utils  import hash_vocab
+        >>> from cudf.utils.hash_vocab_utils import hash_vocab
         >>> hash_vocab('bert-base-uncased-vocab.txt', 'voc_hash.txt')
         >>> ser = cudf.Series(['this is the', 'best book'])
         >>> stride, max_length = 8, 8
@@ -4667,14 +4760,13 @@ class StringMethods(ColumnMethods):
         array([[0, 0, 2],
                [1, 0, 1]], dtype=uint32)
         """
-        warning_message = (
-            "`ser.str.subword_tokenize` API will be depreciated"
-            " in future versions of cudf.\n"
-            "Use `cudf.core.subword_tokenizer.SubwordTokenizer` "
-            "instead"
+        warnings.warn(
+            "`Series.str.subword_tokenize` is deprecated and will be removed "
+            "in future versions of cudf. Use "
+            "`cudf.core.subword_tokenizer.SubwordTokenizer` instead.",
+            FutureWarning,
         )
 
-        warnings.warn(warning_message, FutureWarning)
         tokens, masks, metadata = libstrings.subword_tokenize_vocab_file(
             self._column,
             hash_file,
@@ -4743,7 +4835,7 @@ class StringMethods(ColumnMethods):
         0     True
         1    False
         dtype: bool
-         """
+        """
         ltype = libstrings.LetterType.CONSONANT
 
         if can_convert_to_column(position):
@@ -5093,15 +5185,7 @@ class StringColumn(column.ColumnBase):
                 "StringColumns do not use data attribute of Column, use "
                 "`set_base_children` instead"
             )
-        else:
-            super().set_base_data(value)
-
-    def set_base_mask(self, value: Optional[Buffer]):
-        super().set_base_mask(value)
-
-    def set_base_children(self, value: Tuple["column.ColumnBase", ...]):
-        # TODO: Implement dtype validation of the children here somehow
-        super().set_base_children(value)
+        super().set_base_data(value)
 
     def __contains__(self, item: ScalarLike) -> bool:
         if is_scalar(item):
@@ -5174,7 +5258,7 @@ class StringColumn(column.ColumnBase):
                 )
             else:
                 format = datetime.infer_format(
-                    self.apply_boolean_mask(self.notna()).element_indexing(0)
+                    self.apply_boolean_mask(self.notnull()).element_indexing(0)
                 )
 
         return self._as_datetime_or_timedelta_column(out_dtype, format)
@@ -5208,10 +5292,10 @@ class StringColumn(column.ColumnBase):
         """
         Return a CuPy representation of the StringColumn.
         """
-        raise NotImplementedError(
-            "String Arrays is not yet implemented in cudf"
-        )
+        raise TypeError("String Arrays is not yet implemented in cudf")
 
+    # TODO: This method is deprecated and should be removed when the associated
+    # Frame methods are removed.
     def to_array(self, fillna: bool = None) -> np.ndarray:
         """Get a dense numpy array for the data.
 
@@ -5349,7 +5433,7 @@ class StringColumn(column.ColumnBase):
         df = cudf.DataFrame({"old": to_replace_col, "new": replacement_col})
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:
-            res = self.fillna(df._data["new"][df._data["old"].isna()][0])
+            res = self.fillna(df._data["new"][df._data["old"].isnull()][0])
             df = df.dropna(subset=["old"])
         else:
             res = self
@@ -5407,7 +5491,7 @@ class StringColumn(column.ColumnBase):
         else:
             raise TypeError(f"cannot broadcast {type(other)}")
 
-    def default_na_value(self) -> ScalarLike:
+    def _default_na_value(self) -> ScalarLike:
         return None
 
     def binary_operator(

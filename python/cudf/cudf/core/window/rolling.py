@@ -197,6 +197,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase):
         self.min_periods = min_periods
         self.center = center
         self._normalize()
+        self.agg_params = {}
         if axis != 0:
             raise NotImplementedError("axis != 0 is not supported yet.")
         self.axis = axis
@@ -257,6 +258,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase):
             min_periods=min_periods,
             center=self.center,
             op=agg_name,
+            agg_params=self.agg_params,
         )
         return sr._from_data({sr.name: result_col}, sr._index)
 
@@ -272,6 +274,14 @@ class Rolling(GetAttrGetItemMixin, _RollingBase):
     def mean(self):
         return self._apply_agg("mean")
 
+    def var(self, ddof=1):
+        self.agg_params["ddof"] = ddof
+        return self._apply_agg("var")
+
+    def std(self, ddof=1):
+        self.agg_params["ddof"] = ddof
+        return self._apply_agg("std")
+
     def count(self):
         return self._apply_agg("count")
 
@@ -285,6 +295,10 @@ class Rolling(GetAttrGetItemMixin, _RollingBase):
         ----------
         func : function
             A user defined function that takes an 1D array as input
+        args : tuple
+            unsupported.
+        kwargs
+            unsupported
 
         See also
         --------
@@ -295,6 +309,27 @@ class Rolling(GetAttrGetItemMixin, _RollingBase):
         -----
         See notes of the :meth:`cudf.Series.applymap`
 
+        Example
+        -------
+
+        >>> import cudf
+        >>> def count_if_gt_3(window):
+        ...     count = 0
+        ...     for i in window:
+        ...             if i > 3:
+        ...                     count += 1
+        ...     return count
+        ...
+        >>> s = cudf.Series([0, 1.1, 5.8, 3.1, 6.2, 2.0, 1.5])
+        >>> s.rolling(3, min_periods=1).apply(count_if_gt_3)
+        0    0
+        1    0
+        2    1
+        3    2
+        4    3
+        5    2
+        6    1
+        dtype: int64
         """
         has_nulls = False
         if isinstance(self.obj, cudf.Series):

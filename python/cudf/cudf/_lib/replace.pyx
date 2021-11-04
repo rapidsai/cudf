@@ -3,7 +3,7 @@
 from libcpp.memory cimport unique_ptr
 from libcpp.utility cimport move
 
-from cudf.utils.dtypes import is_scalar
+from cudf.api.types import is_scalar
 
 from cudf._lib.column cimport Column
 
@@ -204,12 +204,8 @@ def clip(Column input_col, object lo, object hi):
     and > hi will be replaced by hi
     """
 
-    lo_scalar = as_device_scalar(
-        lo, dtype=input_col.dtype if lo is None else None
-    )
-    hi_scalar = as_device_scalar(
-        hi, dtype=input_col.dtype if hi is None else None
-    )
+    lo_scalar = as_device_scalar(lo, dtype=input_col.dtype)
+    hi_scalar = as_device_scalar(hi, dtype=input_col.dtype)
 
     return clamp(input_col, lo_scalar, hi_scalar)
 

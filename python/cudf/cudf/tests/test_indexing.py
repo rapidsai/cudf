@@ -110,16 +110,16 @@ def test_series_indexing(i1, i2, i3):
     # Indexing
     sr1 = series.iloc[i1]
     assert sr1.null_count == 0
-    np.testing.assert_equal(sr1.to_array(), a1[:12])
+    np.testing.assert_equal(sr1.to_numpy(), a1[:12])
 
     sr2 = sr1.iloc[i2]
     assert sr2.null_count == 0
-    np.testing.assert_equal(sr2.to_array(), a1[3:12])
+    np.testing.assert_equal(sr2.to_numpy(), a1[3:12])
 
     # Index with stride
     sr3 = sr2.iloc[i3]
     assert sr3.null_count == 0
-    np.testing.assert_equal(sr3.to_array(), a1[3:12:2])
+    np.testing.assert_equal(sr3.to_numpy(), a1[3:12:2])
 
     # Integer indexing
     if isinstance(i1, range):
@@ -197,10 +197,10 @@ def test_dataframe_column_name_indexing():
     df["a"] = data
     df[1] = data
     np.testing.assert_equal(
-        df["a"].to_array(), np.asarray(range(10), dtype=np.int32)
+        df["a"].to_numpy(), np.asarray(range(10), dtype=np.int32)
     )
     np.testing.assert_equal(
-        df[1].to_array(), np.asarray(range(10), dtype=np.int32)
+        df[1].to_numpy(), np.asarray(range(10), dtype=np.int32)
     )
 
     pdf = pd.DataFrame()
@@ -245,20 +245,20 @@ def test_dataframe_slicing():
     first_10 = df[:10]
     assert len(first_10) == 10
     assert tuple(first_10.columns) == ("a", "b", "c", "d")
-    np.testing.assert_equal(first_10["a"].to_array(), ha[:10])
-    np.testing.assert_equal(first_10["b"].to_array(), hb[:10])
-    np.testing.assert_equal(first_10["c"].to_array(), hc[:10])
-    np.testing.assert_equal(first_10["d"].to_array(), hd[:10])
+    np.testing.assert_equal(first_10["a"].to_numpy(), ha[:10])
+    np.testing.assert_equal(first_10["b"].to_numpy(), hb[:10])
+    np.testing.assert_equal(first_10["c"].to_numpy(), hc[:10])
+    np.testing.assert_equal(first_10["d"].to_numpy(), hd[:10])
     del first_10
 
     # Row slice last 10
     last_10 = df[-10:]
     assert len(last_10) == 10
     assert tuple(last_10.columns) == ("a", "b", "c", "d")
-    np.testing.assert_equal(last_10["a"].to_array(), ha[-10:])
-    np.testing.assert_equal(last_10["b"].to_array(), hb[-10:])
-    np.testing.assert_equal(last_10["c"].to_array(), hc[-10:])
-    np.testing.assert_equal(last_10["d"].to_array(), hd[-10:])
+    np.testing.assert_equal(last_10["a"].to_numpy(), ha[-10:])
+    np.testing.assert_equal(last_10["b"].to_numpy(), hb[-10:])
+    np.testing.assert_equal(last_10["c"].to_numpy(), hc[-10:])
+    np.testing.assert_equal(last_10["d"].to_numpy(), hd[-10:])
     del last_10
 
     # Row slice [begin:end]
@@ -267,10 +267,10 @@ def test_dataframe_slicing():
     subrange = df[begin:end]
     assert len(subrange) == end - begin
     assert tuple(subrange.columns) == ("a", "b", "c", "d")
-    np.testing.assert_equal(subrange["a"].to_array(), ha[begin:end])
-    np.testing.assert_equal(subrange["b"].to_array(), hb[begin:end])
-    np.testing.assert_equal(subrange["c"].to_array(), hc[begin:end])
-    np.testing.assert_equal(subrange["d"].to_array(), hd[begin:end])
+    np.testing.assert_equal(subrange["a"].to_numpy(), ha[begin:end])
+    np.testing.assert_equal(subrange["b"].to_numpy(), hb[begin:end])
+    np.testing.assert_equal(subrange["c"].to_numpy(), hc[begin:end])
+    np.testing.assert_equal(subrange["d"].to_numpy(), hd[begin:end])
     del subrange
 
 
@@ -361,7 +361,10 @@ def test_dataframe_loc_duplicate_index_scalar():
     pdf = pd.DataFrame({"a": [1, 2, 3, 4, 5]}, index=[1, 2, 1, 4, 2])
     gdf = cudf.DataFrame.from_pandas(pdf)
 
-    assert_eq(pdf.loc[2], gdf.loc[2])
+    pdf_sorted = pdf.sort_values(by=list(pdf.columns), axis=0)
+    gdf_sorted = gdf.sort_values(by=list(gdf.columns), axis=0)
+
+    assert_eq(pdf_sorted, gdf_sorted)
 
 
 @pytest.mark.parametrize(
@@ -527,7 +530,7 @@ def test_series_loc_categorical():
     # order of categories changes, so we can only
     # compare values:
     assert_eq(
-        ps.loc[["a", "d", "e"]].values, gs.loc[["a", "d", "e"]].to_array()
+        ps.loc[["a", "d", "e"]].values, gs.loc[["a", "d", "e"]].to_numpy()
     )
 
     assert_eq(
@@ -594,9 +597,9 @@ def test_series_iloc(nelem):
     np.testing.assert_allclose(gs.iloc[nelem - 1], ps.iloc[nelem - 1])
 
     # positive tests for slice
-    np.testing.assert_allclose(gs.iloc[-1:1].to_array(), ps.iloc[-1:1])
+    np.testing.assert_allclose(gs.iloc[-1:1].to_numpy(), ps.iloc[-1:1])
     np.testing.assert_allclose(
-        gs.iloc[nelem - 1 : -1].to_array(), ps.iloc[nelem - 1 : -1]
+        gs.iloc[nelem - 1 : -1].to_numpy(), ps.iloc[nelem - 1 : -1]
     )
     np.testing.assert_allclose(
         gs.iloc[0 : nelem - 1].to_pandas(), ps.iloc[0 : nelem - 1]
@@ -697,8 +700,8 @@ def test_dataframe_iloc_index_error():
     pdf["b"] = hb
 
     def assert_col(g, p):
-        np.testing.assert_equal(g["a"].to_array(), p["a"])
-        np.testing.assert_equal(g["b"].to_array(), p["b"])
+        np.testing.assert_equal(g["a"].to_numpy(), p["a"])
+        np.testing.assert_equal(g["b"].to_numpy(), p["b"])
 
     assert_col(gdf.iloc[nelem * 2], pdf.iloc[nelem * 2])
 

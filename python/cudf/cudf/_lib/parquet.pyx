@@ -18,13 +18,13 @@ except ImportError:
 import numpy as np
 from cython.operator import dereference
 
-from cudf.utils.dtypes import (
+from cudf.api.types import (
     is_categorical_dtype,
     is_decimal_dtype,
     is_list_dtype,
     is_struct_dtype,
-    np_to_pa_dtype,
 )
+from cudf.utils.dtypes import np_to_pa_dtype
 
 from cudf._lib.utils cimport data_from_unique_ptr, get_column_names
 
@@ -45,24 +45,26 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.io.parquet cimport (
     chunked_parquet_writer_options,
     chunked_parquet_writer_options_builder,
-    column_in_metadata,
     merge_rowgroup_metadata as parquet_merge_metadata,
     parquet_chunked_writer as cpp_parquet_chunked_writer,
     parquet_reader_options,
     parquet_writer_options,
     read_parquet as parquet_reader,
-    table_input_metadata,
     write_parquet as parquet_writer,
 )
+from cudf._lib.cpp.io.types cimport column_in_metadata, table_input_metadata
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type
+from cudf._lib.io.datasource cimport Datasource, NativeFileDatasource
 from cudf._lib.io.utils cimport (
     make_sink_info,
     make_source_info,
     update_struct_field_names,
 )
-from cudf._lib.table cimport Table
+from cudf._lib.utils cimport table_view_from_table
+
+from pyarrow.lib import NativeFile
 
 
 cdef class BufferArrayFromVector:
@@ -116,7 +118,9 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     cudf.io.parquet.read_parquet
     cudf.io.parquet.to_parquet
     """
-
+    for i, datasource in enumerate(filepaths_or_buffers):
+        if isinstance(datasource, NativeFile):
+            filepaths_or_buffers[i] = NativeFileDatasource(datasource)
     cdef cudf_io_types.source_info source = make_source_info(
         filepaths_or_buffers)
 
@@ -161,6 +165,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
     # Access the Parquet user_data json to find the index
     index_col = None
+    is_range_index = False
     cdef map[string, string] user_data = c_out_table.metadata.user_data
     json_str = user_data[b'pandas'].decode('utf-8')
     meta = None
@@ -172,7 +177,6 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                     index_col[0]['kind'] == 'range':
                 is_range_index = True
             else:
-                is_range_index = False
                 index_col_names = OrderedDict()
                 for idx_col in index_col:
                     for c in meta['columns']:
@@ -188,7 +192,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     # update the decimal precision of each column
     if meta is not None:
         for col, col_meta in zip(column_names, meta["columns"]):
-            if isinstance(df._data[col].dtype, cudf.Decimal64Dtype):
+            if is_decimal_dtype(df._data[col].dtype):
                 df._data[col].dtype.precision = (
                     col_meta["metadata"]["precision"]
                 )
@@ -235,7 +239,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                     idx = idx[skiprows:]
                 if num_rows is not None:
                     idx = idx[:num_rows]
-            df.index = idx
+            df._index = idx
         elif set(index_col).issubset(column_names):
             index_data = df[index_col]
             actual_index_names = list(index_col_names.values())
@@ -250,7 +254,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                     names=actual_index_names
                 )
             df.drop(columns=index_col, inplace=True)
-            df.index = idx
+            df._index = idx
         else:
             if use_pandas_metadata:
                 df.index.names = index_col
@@ -258,7 +262,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     return df
 
 cpdef write_parquet(
-        Table table,
+        table,
         object path,
         object index=None,
         object compression="snappy",
@@ -284,7 +288,7 @@ cpdef write_parquet(
     if index is True or (
         index is None and not isinstance(table._index, cudf.RangeIndex)
     ):
-        tv = table.view()
+        tv = table_view_from_table(table)
         tbl_meta = make_unique[table_input_metadata](tv)
         for level, idx_name in enumerate(table._index.names):
             tbl_meta.get().column_metadata[level].set_name(
@@ -294,7 +298,7 @@ cpdef write_parquet(
             )
         num_index_cols_meta = len(table._index.names)
     else:
-        tv = table.data_view()
+        tv = table_view_from_table(table, ignore_index=True)
         tbl_meta = make_unique[table_input_metadata](tv)
         num_index_cols_meta = 0
 
@@ -371,7 +375,7 @@ cdef class ParquetWriter:
         self.index = index
         self.initialized = False
 
-    def write_table(self, Table table):
+    def write_table(self, table):
         """ Writes a single table to the file """
         if not self.initialized:
             self._initialize_chunked_state(table)
@@ -380,9 +384,9 @@ cdef class ParquetWriter:
         if self.index is not False and (
             table._index.name is not None or
                 isinstance(table._index, cudf.core.multiindex.MultiIndex)):
-            tv = table.view()
+            tv = table_view_from_table(table)
         else:
-            tv = table.data_view()
+            tv = table_view_from_table(table, ignore_index=True)
 
         with nogil:
             self.writer.get()[0].write(tv)
@@ -413,17 +417,18 @@ cdef class ParquetWriter:
     def __dealloc__(self):
         self.close()
 
-    def _initialize_chunked_state(self, Table table):
+    def _initialize_chunked_state(self, table):
         """ Prepares all the values required to build the
         chunked_parquet_writer_options and creates a writer"""
         cdef table_view tv
 
         # Set the table_metadata
         num_index_cols_meta = 0
-        self.tbl_meta = make_unique[table_input_metadata](table.data_view())
+        self.tbl_meta = make_unique[table_input_metadata](
+            table_view_from_table(table, ignore_index=True))
         if self.index is not False:
             if isinstance(table._index, cudf.core.multiindex.MultiIndex):
-                tv = table.view()
+                tv = table_view_from_table(table)
                 self.tbl_meta = make_unique[table_input_metadata](tv)
                 for level, idx_name in enumerate(table._index.names):
                     self.tbl_meta.get().column_metadata[level].set_name(
@@ -432,7 +437,7 @@ cdef class ParquetWriter:
                 num_index_cols_meta = len(table._index.names)
             else:
                 if table._index.name is not None:
-                    tv = table.view()
+                    tv = table_view_from_table(table)
                     self.tbl_meta = make_unique[table_input_metadata](tv)
                     self.tbl_meta.get().column_metadata[0].set_name(
                         str.encode(table._index.name)

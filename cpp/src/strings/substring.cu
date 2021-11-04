@@ -109,9 +109,9 @@ std::unique_ptr<column> slice_strings(
   rmm::cuda_stream_view stream           = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource())
 {
-  if (strings.is_empty()) return make_empty_column(data_type{type_id::STRING});
+  if (strings.is_empty()) return make_empty_column(type_id::STRING);
 
-  if (step.is_valid()) CUDF_EXPECTS(step.value(stream) != 0, "Step parameter must not be 0");
+  if (step.is_valid(stream)) CUDF_EXPECTS(step.value(stream) != 0, "Step parameter must not be 0");
 
   auto const d_column = column_device_view::create(strings.parent(), stream);
   auto const d_start  = get_scalar_device_view(const_cast<numeric_scalar<size_type>&>(start));
@@ -192,8 +192,8 @@ struct substring_from_fn {
  * @param null_count Number of nulls for the output column.
  * @param starts Start positions index iterator.
  * @param stops Stop positions index iterator.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  */
 std::unique_ptr<column> compute_substrings_from_fn(column_device_view const& d_column,
                                                    size_type null_count,
@@ -295,7 +295,7 @@ std::unique_ptr<column> slice_strings(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
   CUDF_EXPECTS(starts_column.size() == strings_count,
                "Parameter starts must have the same number of rows as strings.");
   CUDF_EXPECTS(stops_column.size() == strings_count,

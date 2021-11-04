@@ -22,7 +22,7 @@
 #include "writer_impl.hpp"
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/copying.hpp>
+#include <cudf/detail/copy.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/null_mask.hpp>
 #include <cudf/scalar/scalar.hpp>
@@ -135,9 +135,9 @@ struct column_to_strings_fn {
   // instead of column-wise; might be faster
   //
   // Note: Cannot pass `stream` to detail::<fname> version of <fname> calls below, because they are
-  // not exposed in header (see, for example, detail::concatenate(tbl_view, separator, na_rep, mr,
-  // stream) is declared and defined in combine.cu); Possible solution: declare `extern`, or just
-  // declare a prototype inside `namespace cudf::strings::detail`;
+  // not exposed in header (see, for example, detail::concatenate(tbl_view, separator, na_rep,
+  // stream, mr) is declared and defined in combine.cu); Possible solution: declare `extern`, or
+  // just declare a prototype inside `namespace cudf::strings::detail`;
 
   // bools:
   //
@@ -285,8 +285,16 @@ void writer::impl::write_chunked_begin(table_view const& table,
                                        const table_metadata* metadata,
                                        rmm::cuda_stream_view stream)
 {
-  if ((metadata != nullptr) && (options_.is_enabled_include_header())) {
-    auto const& column_names = metadata->column_names;
+  if (options_.is_enabled_include_header()) {
+    // need to generate column names if metadata is not provided
+    std::vector<std::string> generated_col_names;
+    if (metadata == nullptr) {
+      generated_col_names.resize(table.num_columns());
+      thrust::tabulate(generated_col_names.begin(), generated_col_names.end(), [](auto idx) {
+        return std::to_string(idx);
+      });
+    }
+    auto const& column_names = (metadata == nullptr) ? generated_col_names : metadata->column_names;
     CUDF_EXPECTS(column_names.size() == static_cast<size_t>(table.num_columns()),
                  "Mismatch between number of column headers and table columns.");
 
@@ -360,7 +368,7 @@ void writer::impl::write_chunked(strings_column_view const& str_column_view,
   strings_column_view strings_column{p_str_col_w_nl->view()};
 
   auto total_num_bytes      = strings_column.chars_size();
-  char const* ptr_all_bytes = strings_column.chars().data<char>();
+  char const* ptr_all_bytes = strings_column.chars_begin();
 
   if (out_sink_->is_device_write_preferred(total_num_bytes)) {
     // Direct write from device memory
@@ -423,7 +431,7 @@ void writer::impl::write(table_view const& table,
       });
 
       // split table_view into chunks:
-      vector_views = cudf::split(table, splits);
+      vector_views = cudf::detail::split(table, splits, stream);
     }
 
     // convert each chunk to CSV:

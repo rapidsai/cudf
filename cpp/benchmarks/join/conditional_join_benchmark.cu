@@ -20,6 +20,10 @@ template <typename key_type, typename payload_type>
 class ConditionalJoin : public cudf::benchmark {
 };
 
+// For compatibility with the shared logic for equality (hash) joins, all of
+// the join lambdas defined by these macros accept a null_equality parameter
+// but ignore it (don't forward it to the underlying join implementation)
+// because conditional joins do not use this parameter.
 #define CONDITIONAL_INNER_JOIN_BENCHMARK_DEFINE(name, key_type, payload_type, nullable) \
   BENCHMARK_TEMPLATE_DEFINE_F(ConditionalJoin, name, key_type, payload_type)            \
   (::benchmark::State & st)                                                             \
@@ -28,7 +32,7 @@ class ConditionalJoin : public cudf::benchmark {
                    cudf::table_view const& right,                                       \
                    cudf::ast::operation binary_pred,                                    \
                    cudf::null_equality compare_nulls) {                                 \
-      return cudf::conditional_inner_join(left, right, binary_pred, compare_nulls);     \
+      return cudf::conditional_inner_join(left, right, binary_pred);                    \
     };                                                                                  \
     constexpr bool is_conditional = true;                                               \
     BM_join<key_type, payload_type, nullable, is_conditional>(st, join);                \
@@ -47,7 +51,7 @@ CONDITIONAL_INNER_JOIN_BENCHMARK_DEFINE(conditional_inner_join_64bit_nulls, int6
                    cudf::table_view const& right,                                      \
                    cudf::ast::operation binary_pred,                                   \
                    cudf::null_equality compare_nulls) {                                \
-      return cudf::conditional_left_join(left, right, binary_pred, compare_nulls);     \
+      return cudf::conditional_left_join(left, right, binary_pred);                    \
     };                                                                                 \
     constexpr bool is_conditional = true;                                              \
     BM_join<key_type, payload_type, nullable, is_conditional>(st, join);               \
@@ -66,7 +70,7 @@ CONDITIONAL_LEFT_JOIN_BENCHMARK_DEFINE(conditional_left_join_64bit_nulls, int64_
                    cudf::table_view const& right,                                      \
                    cudf::ast::operation binary_pred,                                   \
                    cudf::null_equality compare_nulls) {                                \
-      return cudf::conditional_inner_join(left, right, binary_pred, compare_nulls);    \
+      return cudf::conditional_inner_join(left, right, binary_pred);                   \
     };                                                                                 \
     constexpr bool is_conditional = true;                                              \
     BM_join<key_type, payload_type, nullable, is_conditional>(st, join);               \
@@ -85,7 +89,7 @@ CONDITIONAL_FULL_JOIN_BENCHMARK_DEFINE(conditional_full_join_64bit_nulls, int64_
                    cudf::table_view const& right,                                           \
                    cudf::ast::operation binary_pred,                                        \
                    cudf::null_equality compare_nulls) {                                     \
-      return cudf::conditional_left_anti_join(left, right, binary_pred, compare_nulls);     \
+      return cudf::conditional_left_anti_join(left, right, binary_pred);                    \
     };                                                                                      \
     constexpr bool is_conditional = true;                                                   \
     BM_join<key_type, payload_type, nullable, is_conditional>(st, join);                    \
@@ -116,7 +120,7 @@ CONDITIONAL_LEFT_ANTI_JOIN_BENCHMARK_DEFINE(conditional_left_anti_join_64bit_nul
                    cudf::table_view const& right,                                           \
                    cudf::ast::operation binary_pred,                                        \
                    cudf::null_equality compare_nulls) {                                     \
-      return cudf::conditional_left_semi_join(left, right, binary_pred, compare_nulls);     \
+      return cudf::conditional_left_semi_join(left, right, binary_pred);                    \
     };                                                                                      \
     constexpr bool is_conditional = true;                                                   \
     BM_join<key_type, payload_type, nullable, is_conditional>(st, join);                    \
@@ -144,6 +148,7 @@ BENCHMARK_REGISTER_F(ConditionalJoin, conditional_inner_join_32bit)
   ->Unit(benchmark::kMillisecond)
   ->Args({100'000, 100'000})
   ->Args({100'000, 400'000})
+  ->Args({400'000, 100'000})
   ->Args({100'000, 1'000'000})
   ->UseManualTime();
 
@@ -151,6 +156,7 @@ BENCHMARK_REGISTER_F(ConditionalJoin, conditional_inner_join_64bit)
   ->Unit(benchmark::kMillisecond)
   ->Args({100'000, 100'000})
   ->Args({100'000, 400'000})
+  ->Args({400'000, 100'000})
   ->Args({100'000, 1'000'000})
   ->UseManualTime();
 
@@ -158,6 +164,7 @@ BENCHMARK_REGISTER_F(ConditionalJoin, conditional_inner_join_32bit_nulls)
   ->Unit(benchmark::kMillisecond)
   ->Args({100'000, 100'000})
   ->Args({100'000, 400'000})
+  ->Args({400'000, 100'000})
   ->Args({100'000, 1'000'000})
   ->UseManualTime();
 
@@ -165,6 +172,7 @@ BENCHMARK_REGISTER_F(ConditionalJoin, conditional_inner_join_64bit_nulls)
   ->Unit(benchmark::kMillisecond)
   ->Args({100'000, 100'000})
   ->Args({100'000, 400'000})
+  ->Args({400'000, 100'000})
   ->Args({100'000, 1'000'000})
   ->UseManualTime();
 

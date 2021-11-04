@@ -28,32 +28,32 @@ namespace lists {
  */
 
 /**
- * @brief Create a new lists column by removing duplicated entries from each list element in the
- * given lists column
+ * @brief Create a new lists column by extracting unique entries from list elements in the given
+ * lists column.
  *
- * @throw cudf::logic_error if any row (list element) in the input column is a nested type.
- *
- * Given an `input` lists_column_view, the list elements in the column are copied to an output lists
+ * Given an input lists column, the list elements in the column are copied to an output lists
  * column such that their duplicated entries are dropped out to keep only the unique ones. The
  * order of those entries within each list are not guaranteed to be preserved as in the input. In
  * the current implementation, entries in the output lists are sorted by ascending order (nulls
  * last), but this is not guaranteed in future implementation.
  *
- * @param lists_column The input lists_column_view
- * @param nulls_equal  Flag to specify whether null entries should be considered equal
- * @param nans_equal   Flag to specify whether NaN entries should be considered as equal value (only
- * applicable for floating point data column)
- * @param mr           Device resource used to allocate memory
+ * @throw cudf::logic_error if the child column of the input lists column contains nested type other
+ * than struct.
+ *
+ * @param lists_column The input lists column to extract lists with unique entries.
+ * @param nulls_equal Flag to specify whether null entries should be considered equal.
+ * @param nans_equal Flag to specify whether NaN entries should be considered as equal value (only
+ *        applicable for floating point data column).
+ * @param mr Device resource used to allocate memory.
  *
  * @code{.pseudo}
- * lists_column = { {1, 1, 2, 1, 3}, {4}, NULL, {}, {NULL, NULL, NULL, 5, 6, 6, 6, 5} }
+ * input  = { {1, 1, 2, 1, 3}, {4}, NULL, {}, {NULL, NULL, NULL, 5, 6, 6, 6, 5} }
  * output = { {1, 2, 3}, {4}, NULL, {}, {5, 6, NULL} }
  *
- * Note that permuting the entries of each list in this output also produces another valid
- * output.
+ * Note that permuting the entries of each list in this output also produces another valid output.
  * @endcode
  *
- * @return A list column with list elements having unique entries
+ * @return A lists column with list elements having unique entries.
  */
 std::unique_ptr<column> drop_list_duplicates(
   lists_column_view const& lists_column,

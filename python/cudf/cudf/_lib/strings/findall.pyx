@@ -11,13 +11,12 @@ from cudf._lib.cpp.scalar.scalar cimport string_scalar
 from cudf._lib.cpp.strings.findall cimport findall_re as cpp_findall_re
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.table cimport Table
 from cudf._lib.utils cimport data_from_unique_ptr
 
 
 def findall(Column source_strings, pattern):
     """
-    Returns a Table with all non-overlapping matches of `pattern`
+    Returns data with all non-overlapping matches of `pattern`
     in each string of `source_strings`.
     """
     cdef unique_ptr[table] c_result

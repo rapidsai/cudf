@@ -64,8 +64,6 @@ enum class inclusive { YES, NO };
  * @param left_inclusive Whether or not the left edge is inclusive.
  * @param right_edges Value of the right edge of each bin.
  * @param right_inclusive Whether or not the right edge is inclusive.
- * @param edge_null_precedence Whether nulls in left and right edges are at the beginning or the
- * end.
  * @param mr Device memory resource used to allocate the returned column's device.
  * @return The integer labels of the elements in `input` according to the specified bins.
  */

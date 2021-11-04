@@ -32,7 +32,7 @@
 #include <type_traits>
 
 /**
- * @filename type_lists.hpp
+ * @file type_lists.hpp
  * @brief Provides centralized type lists for use in Google Test
  * type-parameterized tests.
  *
@@ -287,10 +287,22 @@ using FixedWidthTypes = Concat<NumericTypes, ChronoTypes, FixedPointTypes>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all fixed-width types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FixedWidthTypes);
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FixedWidthTypesWithoutFixedPoint);
  * ```
  */
 using FixedWidthTypesWithoutFixedPoint = Concat<NumericTypes, ChronoTypes>;
+
+/**
+ * @brief Provides a list of all fixed-width element types except for the
+ * chrono types for use in GTest typed tests.
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all fixed-width types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FixedWidthTypesWithoutChrono);
+ * ```
+ */
+using FixedWidthTypesWithoutChrono = Concat<NumericTypes, FixedPointTypes>;
 
 /**
  * @brief Provides a list of sortable types for use in GTest typed tests.
@@ -302,6 +314,18 @@ using FixedWidthTypesWithoutFixedPoint = Concat<NumericTypes, ChronoTypes>;
  * ```
  */
 using ComparableTypes = Concat<NumericTypes, ChronoTypes, StringTypes>;
+
+/**
+ * @brief Provides a list of all compound types for use in GTest typed tests.
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all compound types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::CompoundTypes);
+ * ```
+ */
+using CompoundTypes =
+  cudf::test::Types<cudf::string_view, cudf::dictionary32, cudf::list_view, cudf::struct_view>;
 
 /**
  * @brief Provides a list of all types supported in libcudf for use in a GTest
@@ -316,7 +340,7 @@ using ComparableTypes = Concat<NumericTypes, ChronoTypes, StringTypes>;
  * TYPED_TEST_CASE(MyTypedFixture, cudf::test::AllTypes);
  * ```
  */
-using AllTypes = Concat<NumericTypes, ChronoTypes>;
+using AllTypes = Concat<NumericTypes, ChronoTypes, FixedPointTypes>;
 
 /**
  * @brief `std::array` of all `cudf::type_id`s

@@ -14,7 +14,7 @@ source:
 
 build:
   number: {{ GIT_DESCRIBE_NUMBER }}
-  string: py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+  string: cuda_{{ cuda_version }}_py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
     - VERSION_SUFFIX
     - PARALLEL_LEVEL
@@ -26,17 +26,19 @@ requirements:
   host:
     - python
     - cudf {{ version }}
-    - dask>=2021.6.0
-    - distributed>=2021.6.0
+    - dask>=2021.09.1
+    - distributed>=2021.09.1
+    - cudatoolkit {{ cuda_version }}
   run:
     - python
     - cudf {{ version }}
-    - dask>=2021.6.0
-    - distributed>=2021.6.0
-  
-test:
-  requires:
-    - cudatoolkit {{ cuda_version }}.*
+    - dask>=2021.09.1
+    - distributed>=2021.09.1
+    - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
+
+test:                                   # [linux64]
+  requires:                             # [linux64]
+    - cudatoolkit {{ cuda_version }}.*  # [linux64]
 
 
 about:

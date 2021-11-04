@@ -15,19 +15,17 @@ from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
 from cudf._typing import Dtype
-from cudf.api.types import is_integer_dtype
+from cudf.api.types import is_integer_dtype, is_scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype
-from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
 from .numerical_base import NumericalBaseColumn
 
 
 class DecimalBaseColumn(NumericalBaseColumn):
-    """Base column for decimal64 and decimal32 columns
-    """
+    """Base column for decimal64 and decimal32 columns"""
 
     dtype: Union[Decimal32Dtype, Decimal64Dtype]
 
@@ -322,5 +320,5 @@ def _binop_precision(l_dtype, r_dtype, op):
         result = p1 + p2 + 1
     else:
         raise NotImplementedError()
-
+    # TODO
     return min(result, cudf.Decimal64Dtype.MAX_PRECISION)
