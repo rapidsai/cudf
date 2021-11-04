@@ -45,7 +45,7 @@ std::unique_ptr<column> group_argminmax_struct(aggregation::Kind K,
                                                rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(K == aggregation::ARGMIN || aggregation::ARGMAX,
+  CUDF_EXPECTS(K == aggregation::ARGMIN || K == aggregation::ARGMAX,
                "Only groupby ARGMIN/ARGMAX are supported for STRUCT type.");
 
   auto result = make_fixed_width_column(

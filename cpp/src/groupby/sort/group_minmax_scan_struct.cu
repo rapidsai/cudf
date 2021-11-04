@@ -44,6 +44,9 @@ std::unique_ptr<column> minmax_scan_struct(aggregation::Kind K,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(K == aggregation::MIN || K == aggregation::MAX,
+               "Only groupby MIN/MAX scan are supported for STRUCT type.");
+
   if (values.is_empty()) { return cudf::empty_like(values); }
 
   // When finding MIN, we need to consider nulls as larger than non-null elements.
