@@ -15,6 +15,8 @@
  */
 
 #include <algorithm>
+#include <cstdarg>
+#include <cstdint>
 #include <iostream>
 #include <iterator>
 #include <limits>
@@ -24,6 +26,8 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/lists/lists_column_device_view.cuh>
 #include <type_traits>
+
+#include "thrust/scan.h"
 
 #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
 #include <cuda/barrier>
@@ -50,7 +54,6 @@
 #include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <thrust/scan.h>
 
 #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
 constexpr auto NUM_BLOCKS_PER_KERNEL_FROM_ROWS = 2;
@@ -336,7 +339,7 @@ struct block_info {
   int start_row;
   int end_col;
   int end_row;
-  int buffer_num;
+  int batch_number;
 
   __host__ __device__ size_type get_shared_row_size(size_type const *const col_offsets,
                                                     size_type const *const col_sizes) const {
@@ -369,7 +372,7 @@ struct row_batch {
  * @param input_data pointer to raw table data
  * @param col_sizes array of sizes for each element in a column - one per column
  * @param col_offsets offset into input data row for each column's start
- * @param row_offsets offset to a specific row in the input data
+ * @param row_offsets offset to a specific row in the output data
  * @param output_data pointer to output data
  *
  */
@@ -470,7 +473,7 @@ __global__ void copy_to_rows(const size_type num_rows, const size_type num_colum
     auto block = block_infos[blockIdx.x * NUM_BLOCKS_PER_KERNEL_TO_ROWS + subset];
     auto const block_row_size = block.get_shared_row_size(col_offsets, col_sizes);
     auto const column_offset = col_offsets[block.start_col];
-    auto const block_output_buffer = output_data[block.buffer_num];
+    auto const block_output_buffer = output_data[block.batch_number];
 
     // copy entire rows to final dest
     for (auto absolute_row = block.start_row + threadIdx.x; absolute_row <= block.end_row;
@@ -496,7 +499,7 @@ __global__ void copy_to_rows(const size_type num_rows, const size_type num_colum
  * @param num_rows total number of rows in the table
  * @param num_columns total number of columns in the table
  * @param shmem_used_per_block amount of shared memory that is used by a block
- * @param row_offsets offset to a specific row in the input data
+ * @param row_offsets offset to a specific row in the output data
  * @param output_data pointer to output data, partitioned by data size
  * @param validity_offsets offset into input data row for validity data
  * @param block_infos information about the blocks of work
@@ -610,7 +613,7 @@ __global__ void copy_validity_to_rows(const size_type num_rows, const size_type 
     group.sync();
 
     auto const output_data_base =
-        output_data[block.buffer_num] + validity_offset + block.start_col / 8;
+        output_data[block.batch_number] + validity_offset + block.start_col / 8;
 
     // now async memcpy the shared memory out to the final destination
     for (int row = block.start_row + threadIdx.x; row <= block.end_row; row += blockDim.x) {
@@ -1176,12 +1179,18 @@ constexpr size_type max_batch_size = std::numeric_limits<size_type>::max();
  *
  */
 struct batch_data {
+  device_uvector<size_type> batch_row_offsets;
   std::vector<size_type> batch_row_boundaries;
-  device_uvector<size_type> input_data_row_offsets;
   std::vector<row_batch> row_batches;
+};
 
-  batch_data(size_type num_input_offsets, rmm::cuda_stream_view stream)
-      : input_data_row_offsets(num_input_offsets, stream){};
+template <typename RowSize> struct row_size_functor {
+  RowSize _row_sizes;
+  size_type _num_rows;
+  row_size_functor(RowSize row_sizes) : _row_sizes(row_sizes){};
+
+  CUDA_DEVICE_CALLABLE
+  uint64_t operator()(int row_index) { return static_cast<uint64_t>(_row_sizes[row_index]); }
 };
 
 /**
@@ -1199,19 +1208,26 @@ struct batch_data {
 template <typename RowSize>
 batch_data build_batches(size_type num_rows, RowSize row_sizes, rmm::cuda_stream_view stream,
                          rmm::mr::device_memory_resource *mr) {
-  auto const total_size = thrust::reduce(rmm::exec_policy(stream), row_sizes, row_sizes + num_rows);
-  auto const num_batches = util::div_rounding_up_safe(total_size, max_batch_size);
+  auto uint64_row_sizes =
+      cudf::detail::make_counting_transform_iterator(0, row_size_functor(row_sizes));
+  auto const total_size =
+      thrust::reduce(rmm::exec_policy(stream), uint64_row_sizes, uint64_row_sizes + num_rows);
+  auto const num_batches = static_cast<int32_t>(
+      util::div_rounding_up_safe(total_size, static_cast<uint64_t>(max_batch_size)));
   auto const num_offsets = num_batches + 1;
-  batch_data ret(num_rows + 1, stream);
+  std::vector<row_batch> row_batches;
+  std::vector<size_type> batch_row_boundaries;
+  device_uvector<size_type> batch_row_offsets(num_rows, stream);
 
   // at most max gpu memory / 2GB iterations.
-  ret.batch_row_boundaries.reserve(num_offsets);
-  ret.batch_row_boundaries.push_back(0);
+  batch_row_boundaries.reserve(num_offsets);
+  batch_row_boundaries.push_back(0);
   size_type last_row_end = 0;
-  device_uvector<size_type> cumulative_row_sizes(num_rows, stream);
-  thrust::inclusive_scan(rmm::exec_policy(stream), row_sizes, row_sizes + num_rows,
+  device_uvector<uint64_t> cumulative_row_sizes(num_rows, stream);
+  thrust::inclusive_scan(rmm::exec_policy(stream), uint64_row_sizes, uint64_row_sizes + num_rows,
                          cumulative_row_sizes.begin());
-  while ((int)ret.batch_row_boundaries.size() < num_offsets) {
+
+  while ((int)batch_row_boundaries.size() < num_offsets) {
     // find the next max_batch_size boundary
     size_type const row_end =
         ((thrust::lower_bound(rmm::exec_policy(stream), cumulative_row_sizes.begin(),
@@ -1219,6 +1235,9 @@ batch_data build_batches(size_type num_rows, RowSize row_sizes, rmm::cuda_stream
                               max_batch_size) -
           cumulative_row_sizes.begin()) +
          last_row_end);
+
+    // build offset list for each row in this batch
+    auto const num_rows_in_batch = row_end - last_row_end;
 
     // build offset list for each row in this batch
     auto const num_entries = row_end - last_row_end + 1;
@@ -1232,44 +1251,44 @@ batch_data build_batches(size_type num_rows, RowSize row_sizes, rmm::cuda_stream
     thrust::exclusive_scan(rmm::exec_policy(stream), row_size_iter_bounded,
                            row_size_iter_bounded + num_entries, output_batch_row_offsets.begin());
 
-    ret.batch_row_boundaries.push_back(row_end);
-    auto const batch_bytes = output_batch_row_offsets.element(row_end, stream) -
-                             output_batch_row_offsets.element(last_row_end, stream);
-    auto const num_rows_in_batch = row_end - last_row_end;
-    ret.row_batches.push_back(
-        {batch_bytes, num_rows_in_batch, std::move(output_batch_row_offsets)});
+    auto const batch_bytes = output_batch_row_offsets.element(num_rows_in_batch, stream);
+
+    // The output_batch_row_offsets vector is used as the offset column of the returned data. This
+    // needs to be individually allocated, but the kernel needs a contiguous array of offsets or
+    // more global lookups are necessary.
+    cudaMemcpy(batch_row_offsets.data() + last_row_end, output_batch_row_offsets.data(),
+               num_rows_in_batch * sizeof(size_type), cudaMemcpyDeviceToDevice);
+
+    batch_row_boundaries.push_back(row_end);
+    row_batches.push_back({batch_bytes, num_rows_in_batch, std::move(output_batch_row_offsets)});
+
     last_row_end = row_end;
   }
 
-  auto row_size_iter = cudf::detail::make_counting_transform_iterator(
-      0, [row_sizes, num_rows] __device__(auto i) { return (i < num_rows) ? row_sizes[i] : 0; });
-  thrust::exclusive_scan(rmm::exec_policy(stream), row_size_iter, row_size_iter + num_rows + 1,
-                         ret.input_data_row_offsets.begin());
-
-  return ret;
+  return {std::move(batch_row_offsets), batch_row_boundaries, std::move(row_batches)};
 }
 
 /**
  * @brief Computes the number of blocks necessary given a window height and batch offsets
  *
- * @param batch_row_offsets row offsets for each batch
+ * @param batch_row_boundaries row boundaries for each batch
  * @param desired_window_height height of each window in the table
  * @param stream stream to use
  * @return number of windows necessary
  */
-int compute_block_counts(device_span<size_type const> const &batch_row_offsets,
+int compute_block_counts(device_span<size_type const> const &batch_row_boundaries,
                          int desired_window_height, rmm::cuda_stream_view stream) {
-  size_type const num_batches = batch_row_offsets.size() - 1;
+  size_type const num_batches = batch_row_boundaries.size() - 1;
   device_uvector<size_type> num_blocks(num_batches, stream);
   auto iter = thrust::make_counting_iterator(0);
-  thrust::transform(
-      rmm::exec_policy(stream), iter, iter + num_batches, num_blocks.begin(),
-      [desired_window_height,
-       batch_row_offsets = batch_row_offsets.data()] __device__(auto batch_index) -> size_type {
-        return util::div_rounding_up_unsafe(batch_row_offsets[batch_index + 1] -
-                                                batch_row_offsets[batch_index],
-                                            desired_window_height);
-      });
+  thrust::transform(rmm::exec_policy(stream), iter, iter + num_batches, num_blocks.begin(),
+                    [desired_window_height,
+                     batch_row_boundaries =
+                         batch_row_boundaries.data()] __device__(auto batch_index) -> size_type {
+                      return util::div_rounding_up_unsafe(batch_row_boundaries[batch_index + 1] -
+                                                              batch_row_boundaries[batch_index],
+                                                          desired_window_height);
+                    });
   return thrust::reduce(rmm::exec_policy(stream), num_blocks.begin(), num_blocks.end());
 }
 
@@ -1277,7 +1296,7 @@ int compute_block_counts(device_span<size_type const> const &batch_row_offsets,
  * @brief Builds the `block_info` structs for a given table.
  *
  * @param blocks span of blocks to populate
- * @param batch_row_offsets offsets to row batches
+ * @param batch_row_boundaries boundary to row batches
  * @param column_start starting column of the window
  * @param column_end ending column of the window
  * @param desired_window_height height of the window
@@ -1287,20 +1306,20 @@ int compute_block_counts(device_span<size_type const> const &batch_row_offsets,
  */
 size_type
 build_blocks(device_span<block_info> blocks,
-             device_uvector<size_type> const &batch_row_offsets, // comes from build_batches
+             device_uvector<size_type> const &batch_row_boundaries, // comes from build_batches
              int column_start, int column_end, int desired_window_height, int total_number_of_rows,
              rmm::cuda_stream_view stream) {
-  size_type const num_batches = batch_row_offsets.size() - 1;
+  size_type const num_batches = batch_row_boundaries.size() - 1;
   device_uvector<size_type> num_blocks(num_batches, stream);
   auto iter = thrust::make_counting_iterator(0);
-  thrust::transform(
-      rmm::exec_policy(stream), iter, iter + num_batches, num_blocks.begin(),
-      [desired_window_height,
-       batch_row_offsets = batch_row_offsets.data()] __device__(auto batch_index) -> size_type {
-        return util::div_rounding_up_unsafe(batch_row_offsets[batch_index + 1] -
-                                                batch_row_offsets[batch_index],
-                                            desired_window_height);
-      });
+  thrust::transform(rmm::exec_policy(stream), iter, iter + num_batches, num_blocks.begin(),
+                    [desired_window_height,
+                     batch_row_boundaries =
+                         batch_row_boundaries.data()] __device__(auto batch_index) -> size_type {
+                      return util::div_rounding_up_unsafe(batch_row_boundaries[batch_index + 1] -
+                                                              batch_row_boundaries[batch_index],
+                                                          desired_window_height);
+                    });
 
   size_type const total_blocks =
       thrust::reduce(rmm::exec_policy(stream), num_blocks.begin(), num_blocks.end());
@@ -1316,7 +1335,7 @@ build_blocks(device_span<block_info> blocks,
   thrust::transform(
       rmm::exec_policy(stream), iter, iter + total_blocks, blocks.begin(),
       [=, block_starts = block_starts.data(),
-       batch_row_offsets = batch_row_offsets.data()] __device__(size_type block_index) {
+       batch_row_boundaries = batch_row_boundaries.data()] __device__(size_type block_index) {
         // what batch this block falls in
         auto const batch_index_iter =
             thrust::upper_bound(thrust::seq, block_starts, block_starts + num_batches, block_index);
@@ -1324,14 +1343,15 @@ build_blocks(device_span<block_info> blocks,
         // local index within the block
         int const local_block_index = block_index - block_starts[batch_index];
         // the start row for this batch.
-        int const batch_row_start = batch_row_offsets[batch_index];
+        int const batch_row_start = batch_row_boundaries[batch_index];
         // the start row for this block
         int const block_row_start = batch_row_start + (local_block_index * desired_window_height);
         // the end row for this block
-        int const max_row = std::min(total_number_of_rows - 1,
-                                     batch_index + 1 > num_batches ?
-                                         std::numeric_limits<int>::max() :
-                                         static_cast<int>(batch_row_offsets[batch_index + 1]) - 1);
+        int const max_row =
+            std::min(total_number_of_rows - 1,
+                     batch_index + 1 > num_batches ?
+                         std::numeric_limits<int>::max() :
+                         static_cast<int>(batch_row_boundaries[batch_index + 1]) - 1);
         int const block_row_end = std::min(
             batch_row_start + ((local_block_index + 1) * desired_window_height) - 1, max_row);
 
@@ -1420,20 +1440,6 @@ void determine_windows(std::vector<size_type> const &column_sizes,
   }
 }
 
-struct row_size_functor {
-  size_type _fixed_width_size_per_row;
-  size_type _num_columns;
-  row_size_functor(size_t fixed_width_size_per_row, size_t num_columns)
-      : _fixed_width_size_per_row(fixed_width_size_per_row), _num_columns(num_columns){};
-
-  CUDA_DEVICE_CALLABLE
-  int operator()(int row_index) {
-    auto const bytes_needed =
-        _fixed_width_size_per_row + util::div_rounding_up_safe<size_type>(_num_columns, 8);
-    return detail::align_offset(bytes_needed, 8);
-  }
-};
-
 #endif // #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
 
 } // namespace detail
@@ -1502,7 +1508,11 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows(cudf::table_view cons
 
   // total encoded row size. This includes fixed-width data, validity, and variable-width data.
   auto row_size_iter = cudf::detail::make_counting_transform_iterator(
-      0, detail::row_size_functor(fixed_width_size_per_row, num_columns));
+      0, [fixed_width_size_per_row, num_columns] __device__(auto i) {
+        auto const bytes_needed =
+            fixed_width_size_per_row + util::div_rounding_up_safe<size_type>(num_columns, 8);
+        return detail::align_offset(bytes_needed, 8);
+      });
 
   // fixed_width_size_per_row is the size of the fixed-width portion of a row. We need to then
   // calculate the size of each row's variable-width data and validity as well.
@@ -1518,11 +1528,14 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows(cudf::table_view cons
   std::vector<rmm::device_buffer> output_buffers;
   std::vector<int8_t *> output_data;
   output_data.reserve(batch_info.row_batches.size());
-  for (uint i = 0; i < batch_info.row_batches.size(); ++i) {
-    rmm::device_buffer temp(batch_info.row_batches[i].num_bytes, stream, mr);
-    output_data.push_back(static_cast<int8_t *>(temp.data()));
-    output_buffers.push_back(std::move(temp));
-  }
+  output_buffers.reserve(batch_info.row_batches.size());
+  std::transform(batch_info.row_batches.begin(), batch_info.row_batches.end(),
+                 std::back_inserter(output_buffers), [&](auto const &batch) {
+                   return rmm::device_buffer(batch.num_bytes, stream, mr);
+                 });
+  std::transform(output_buffers.begin(), output_buffers.end(), std::back_inserter(output_data),
+                 [](auto &buf) { return static_cast<int8_t *>(buf.data()); });
+
   auto dev_output_data = make_device_uvector_async(output_data, stream, mr);
 
   int info_count = 0;
@@ -1551,11 +1564,6 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows(cudf::table_view cons
   dim3 blocks(util::div_rounding_up_unsafe(gpu_block_infos.size(), NUM_BLOCKS_PER_KERNEL_TO_ROWS));
   dim3 threads(256);
 
-  detail::copy_to_rows<<<blocks, threads, total_shmem, stream.value()>>>(
-      num_rows, num_columns, shmem_limit_per_block, gpu_block_infos, dev_input_data.data(),
-      dev_col_sizes.data(), dev_col_starts.data(), batch_info.input_data_row_offsets.data(),
-      reinterpret_cast<int8_t **>(dev_output_data.data()));
-
   auto validity_block_infos = detail::build_validity_block_infos(
       num_columns, num_rows, shmem_limit_per_block, batch_info.row_batches);
 
@@ -1563,8 +1571,16 @@ std::vector<std::unique_ptr<cudf::column>> convert_to_rows(cudf::table_view cons
   dim3 validity_blocks(
       util::div_rounding_up_unsafe(validity_block_infos.size(), NUM_VALIDITY_BLOCKS_PER_KERNEL));
   dim3 validity_threads(std::min(validity_block_infos.size() * 32, 128lu));
+
+  detail::copy_to_rows<<<blocks, threads, total_shmem, stream.value()>>>(
+      num_rows, num_columns, shmem_limit_per_block, gpu_block_infos, dev_input_data.data(),
+      dev_col_sizes.data(), dev_col_starts.data(),
+      batch_info.batch_row_offsets
+          .data(), // needs to be row offsets per batch, not overall JUST for output.
+      reinterpret_cast<int8_t **>(dev_output_data.data()));
+
   detail::copy_validity_to_rows<<<validity_blocks, validity_threads, total_shmem, stream.value()>>>(
-      num_rows, num_columns, shmem_limit_per_block, batch_info.input_data_row_offsets.data(),
+      num_rows, num_columns, shmem_limit_per_block, batch_info.batch_row_offsets.data(),
       dev_output_data.data(), column_starts.back(), dev_validity_block_infos, dev_input_nm.data());
 
   // split up the output buffer into multiple buffers based on row batch sizes
@@ -1693,11 +1709,6 @@ std::unique_ptr<cudf::table> convert_from_rows(cudf::lists_column_view const &in
   auto dev_col_starts = make_device_uvector_async(column_starts, stream, mr);
   auto dev_col_sizes = make_device_uvector_async(column_sizes, stream, mr);
 
-  // build the row_batches from the passed in list column
-  std::vector<detail::row_batch> row_batches;
-  row_batches.push_back(
-      {detail::row_batch{child.size(), num_rows, device_uvector<size_type>(0, stream)}});
-
   // Allocate the columns we are going to write into
   std::vector<std::unique_ptr<cudf::column>> output_columns;
   std::vector<int8_t *> output_data;
@@ -1710,6 +1721,11 @@ std::unique_ptr<cudf::table> convert_from_rows(cudf::lists_column_view const &in
     output_nm.emplace_back(mut.null_mask());
     output_columns.emplace_back(std::move(column));
   }
+
+  // build the row_batches from the passed in list column
+  std::vector<detail::row_batch> row_batches;
+  row_batches.push_back(
+      {detail::row_batch{child.size(), num_rows, device_uvector<size_type>(0, stream)}});
 
   auto dev_output_data = make_device_uvector_async(output_data, stream, mr);
   auto dev_output_nm = make_device_uvector_async(output_nm, stream, mr);
@@ -1746,10 +1762,6 @@ std::unique_ptr<cudf::table> convert_from_rows(cudf::lists_column_view const &in
   dim3 blocks(
       util::div_rounding_up_unsafe(gpu_block_infos.size(), NUM_BLOCKS_PER_KERNEL_FROM_ROWS));
   dim3 threads(std::min(std::min(256, shmem_limit_per_block / 8), (int)child.size()));
-  detail::copy_from_rows<<<blocks, threads, total_shmem, stream.value()>>>(
-      num_rows, num_columns, shmem_limit_per_block, input.offsets().data<size_type>(),
-      dev_output_data.data(), dev_col_sizes.data(), dev_col_starts.data(), gpu_block_infos,
-      child.data<int8_t>());
 
   auto validity_block_infos =
       detail::build_validity_block_infos(num_columns, num_rows, shmem_limit_per_block, row_batches);
@@ -1760,6 +1772,12 @@ std::unique_ptr<cudf::table> convert_from_rows(cudf::lists_column_view const &in
       util::div_rounding_up_unsafe(validity_block_infos.size(), NUM_VALIDITY_BLOCKS_PER_KERNEL));
 
   dim3 validity_threads(std::min(validity_block_infos.size() * 32, 128lu));
+
+  detail::copy_from_rows<<<blocks, threads, total_shmem, stream.value()>>>(
+      num_rows, num_columns, shmem_limit_per_block, input.offsets().data<size_type>(),
+      dev_output_data.data(), dev_col_sizes.data(), dev_col_starts.data(), gpu_block_infos,
+      child.data<int8_t>());
+
   detail::
       copy_validity_from_rows<<<validity_blocks, validity_threads, total_shmem, stream.value()>>>(
           num_rows, num_columns, shmem_limit_per_block, input.offsets().data<size_type>(),
