@@ -383,7 +383,8 @@ std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_paren
                                                                std::vector<size_type>{0, 0},
                                                                child.offset() + child.size(),
                                                                stream,
-                                                               mr));
+                                                               mr)
+                                       .first);
       return reinterpret_cast<bitmask_type const*>(ret_validity_buffers.back().data());
     }();
 

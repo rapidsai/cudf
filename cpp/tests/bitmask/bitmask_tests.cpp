@@ -545,9 +545,9 @@ TEST_F(MergeBitmaskTest, TestBitmaskAnd)
   auto const input2 = cudf::table_view({bools_col1, bools_col2});
   auto const input3 = cudf::table_view({bools_col1, bools_col2, bools_col3});
 
-  rmm::device_buffer result1 = cudf::bitmask_and(input1);
-  rmm::device_buffer result2 = cudf::bitmask_and(input2);
-  rmm::device_buffer result3 = cudf::bitmask_and(input3);
+  auto [result1, count1] = cudf::bitmask_and(input1);
+  auto [result2, count2] = cudf::bitmask_and(input2);
+  auto [result3, count3] = cudf::bitmask_and(input3);
 
   auto odd_indices =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });

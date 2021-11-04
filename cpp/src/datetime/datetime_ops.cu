@@ -364,7 +364,7 @@ std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_colu
                                 stream,
                                 mr);
 
-  auto output_null_mask =
+  auto [output_null_mask, _] =
     cudf::detail::bitmask_and(table_view{{timestamp_column, months_column}}, stream, mr);
   output->set_null_mask(std::move(output_null_mask));
   return output;

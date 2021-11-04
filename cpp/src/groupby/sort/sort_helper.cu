@@ -276,7 +276,7 @@ column_view sort_groupby_helper::keys_bitmask_column(rmm::cuda_stream_view strea
 {
   if (_keys_bitmask_column) return _keys_bitmask_column->view();
 
-  auto row_bitmask = cudf::detail::bitmask_and(_keys, stream);
+  auto [row_bitmask, _] = cudf::detail::bitmask_and(_keys, stream);
 
   _keys_bitmask_column = make_numeric_column(data_type(type_id::INT8),
                                              _keys.num_rows(),
