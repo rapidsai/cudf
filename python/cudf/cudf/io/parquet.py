@@ -317,9 +317,9 @@ def read_parquet(
     #       native pyarrow files directly, if desired.
     if use_python_file_object is None:
         if fsspec_parquet is None:
-            use_python_file_object = True
-        else:
             use_python_file_object = False
+        else:
+            use_python_file_object = True
 
     # Multiple sources are passed as a list. If a single source is passed,
     # wrap it in a list for unified processing downstream.
