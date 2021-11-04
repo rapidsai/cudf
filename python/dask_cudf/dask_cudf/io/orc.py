@@ -9,6 +9,7 @@ from pyarrow import orc as orc
 from dask import dataframe as dd
 from dask.base import tokenize
 from dask.dataframe.io.utils import _get_pyarrow_dtypes
+from dask import delayed
 
 import cudf
 
@@ -139,14 +140,6 @@ def read_orc(
     else:
         columns = list(schema)
 
-    with fs.open(paths[0], "rb") as f:
-        meta = cudf.read_orc(
-            f,
-            stripes=[0] if nstripes_per_file[0] else None,
-            columns=columns,
-            **kwargs,
-        )
-
     # Read in filtering columns first
     if filters is None:
         filtering_columns_first = False
@@ -176,21 +169,36 @@ def read_orc(
         # Since the call to `read_orc` results in a partition for each relevant
         # stripe, we can simply check which partitions are empty. Then we can read
         # in only those relevant stripes.
-        filtered_partition_lens = filtered_df.map_partitions(lambda df: len(df.query(query_string, local_dict=local_dict))).compute()
+        def _empty(df):
+            if len(df.query(query_string, local_dict=local_dict)) == 0:
+                return df.iloc[0:0,:].copy()
+            else:
+                return df
+        filtered_df = filtered_df.map_partitions(_empty)
+        filtered_partition_lens = filtered_df.map_partitions(lambda df: len(df)).compute()
         is_filtered_partition_empty = filtered_partition_lens == 0
 
-        # Finally we repartition so that we can horizontally concatenate with
-        # the remaining columns
-        filtered_df = filtered_df.repartition(
-            np.count_nonzero(is_filtered_partition_empty)
-        ).reset_index(drop=True)
+        # Cull empty partitions
+        filtered_df_partitions = [
+            filtered_df_partition
+            for i, filtered_df_partition in enumerate(filtered_df.to_delayed())
+            if not is_filtered_partition_empty[i]
+        ]
 
     print(f"{columns=}")
+
+    with fs.open(paths[0], "rb") as f:
+        meta = cudf.read_orc(
+            f,
+            stripes=[0] if nstripes_per_file[0] else None,
+            columns=columns,
+            **kwargs,
+        )
 
     name = "read-orc-" + tokenize(fs_token, path, columns, **kwargs)
     dsk = {}
     N = 0
-    filtered_partition_idx = 0
+    partition_idx = 0
     for path, n in zip(paths, nstripes_per_file):
         for stripe in (
             range(n)
@@ -199,7 +207,7 @@ def read_orc(
         ):
             if (
                 not filtering_columns_first
-                or not is_filtered_partition_empty[filtered_partition_idx]
+                or not is_filtered_partition_empty[partition_idx]
             ):
                 dsk[(name, N)] = (
                     _read_orc_stripe,
@@ -210,7 +218,7 @@ def read_orc(
                     kwargs,
                 )
                 N += 1
-            filtered_partition_idx += 1
+            partition_idx += 1
 
     divisions = [None] * (len(dsk) + 1)
     res = dd.core.new_dd_object(dsk, name, meta, divisions)
@@ -218,12 +226,20 @@ def read_orc(
     if not filtering_columns_first:
         return res
     else:
-        # return filtered_df.merge(
-        #     res.repartition(npartitions=N)
-        #     .reset_index(drop=True), how="left"
-        # )
-        res.repartition(npartitions=N).reset_index(drop=True)
-        return dask_cudf.concat()
+        @delayed(pure=True)
+        def _hcat(a, b):
+            return cudf.concat([a, b], axis=1)
+        
+        remaining_df_partitions = res.to_delayed()
+        print(f"{filtered_df._meta=}")
+        print(f"{res._meta=}")
+        return dd.from_delayed(
+            [
+                _hcat(filtered, remaining)
+                for filtered, remaining in zip(filtered_df_partitions, remaining_df_partitions)
+            ],
+            cudf.concat([filtered_df._meta, res._meta], axis=1)
+        )
 
 
 def write_orc_partition(
