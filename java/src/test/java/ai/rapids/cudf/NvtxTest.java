@@ -22,16 +22,16 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class NvtxTest {
   @Test
   public void testNvtxStartEndEnclosed() {
-    NvtxUnscopedRange range1 = new NvtxUnscopedRange("start/end", NvtxColor.RED);
-    NvtxUnscopedRange range2 = new NvtxUnscopedRange("enclosed start/end", NvtxColor.BLUE);
+    NvtxUniqueRange range1 = new NvtxUniqueRange("start/end", NvtxColor.RED);
+    NvtxUniqueRange range2 = new NvtxUniqueRange("enclosed start/end", NvtxColor.BLUE);
     range2.close();
     range1.close();
   }
 
   @Test
   public void testNvtxStartEndCloseOutOfOrder() {
-    NvtxUnscopedRange range1 = new NvtxUnscopedRange("start/end closes first", NvtxColor.RED);
-    NvtxUnscopedRange range2 = new NvtxUnscopedRange("start/end closes later", NvtxColor.BLUE);
+    NvtxUniqueRange range1 = new NvtxUniqueRange("start/end closes first", NvtxColor.RED);
+    NvtxUniqueRange range2 = new NvtxUniqueRange("start/end closes later", NvtxColor.BLUE);
     range1.close();
     range2.close();
   }
@@ -47,23 +47,23 @@ public class NvtxTest {
   @Test
   public void testNvtxPushPopEnclosingStartEnd() {
     try(NvtxRange range1 = new NvtxRange("push/pop", NvtxColor.RED)) {
-      NvtxUnscopedRange range2 = new NvtxUnscopedRange("enclosed start/end", NvtxColor.BLUE);
+      NvtxUniqueRange range2 = new NvtxUniqueRange("enclosed start/end", NvtxColor.BLUE);
       range2.close();
     }
   }
 
   @Test
   public void testNvtxPushPopAndStartEndCloseOutOfOrder() {
-    NvtxUnscopedRange range2;
+    NvtxUniqueRange range2;
     try(NvtxRange range1 = new NvtxRange("push/pop closes first", NvtxColor.RED)) {
-      range2 = new NvtxUnscopedRange("start/end closes later", NvtxColor.BLUE);
+      range2 = new NvtxUniqueRange("start/end closes later", NvtxColor.BLUE);
     }
     range2.close();
   }
 
   @Test
-  public void testNvtxUnscopedCloseMultipleTimes() {
-    NvtxUnscopedRange range = new NvtxUnscopedRange("range", NvtxColor.RED);
+  public void testNvtxUniqueRangeCloseMultipleTimes() {
+    NvtxUniqueRange range = new NvtxUniqueRange("range", NvtxColor.RED);
     range.close();
     assertThrows(IllegalStateException.class, () -> {
       range.close();

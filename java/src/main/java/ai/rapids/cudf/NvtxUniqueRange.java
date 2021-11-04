@@ -16,30 +16,27 @@
 package ai.rapids.cudf;
 
 /**
- * This class supports start/end NVTX profiling ranges or "unscoped" ranges.
+ * This class supports start/end NVTX profiling ranges.
  *
  * Start/end:
  *
- * The constructor instantiates a new NVTX range and keeps a handle that comes back from the
- * NVTX api (nvtxRangeId) that used to later close such a range. This type of range does 
- * not have the same order-of-operation requirements that the push/pop ranges have: 
- * the `NvtxUnscopedRange` instance can be passed to other scopes, and even to other threads
+ * The constructor instantiates a new NVTX range and keeps a unique handle that comes back
+ * from the NVTX api (nvtxRangeId). The handle is used to later close such a range. This type
+ * of range does not have the same order-of-operation requirements that the push/pop ranges have:
+ * the `NvtxUniqueRange` instance can be passed to other scopes, and even to other threads
  * for the eventual call to close.
  *
  * It can be used in the same try-with-resources way as push/pop, or interleaved with other
  * ranges, like so:
  *
  * <pre>
- *   NvtxUnscopedRange a = new NvtxUnscopedange("a", NvtxColor.RED);
- *   NvtxUnscopedRange b = new NvtxUnscopedange("b", NvtxColor.BLUE);
+ *   NvtxUniqueRange a = new NvtxUniqueRange("a", NvtxColor.RED);
+ *   NvtxUniqueRange b = new NvtxUniqueRange("b", NvtxColor.BLUE);
  *   a.close();
  *   b.close();
  * </pre>
- *
- * Start/end ranges are different in that they don't have the same correlation that the
- * push/pop ranges have. 
  */
-public class NvtxUnscopedRange implements AutoCloseable {
+public class NvtxUniqueRange implements AutoCloseable {
   private static final boolean isEnabled = Boolean.getBoolean("ai.rapids.cudf.nvtx.enabled");
 
   // this is a nvtxRangeId_t in the C++ api side
@@ -54,11 +51,11 @@ public class NvtxUnscopedRange implements AutoCloseable {
     }
   }
 
-  public NvtxUnscopedRange(String name, NvtxColor color) {
+  public NvtxUniqueRange(String name, NvtxColor color) {
     this(name, color.colorBits);
   }
 
-  public NvtxUnscopedRange(String name, int colorBits) {
+  public NvtxUniqueRange(String name, int colorBits) {
     if (isEnabled) {
       nvtxRangeId = start(name, colorBits);
     } else {
@@ -72,7 +69,7 @@ public class NvtxUnscopedRange implements AutoCloseable {
   public synchronized void close() {
     if (closed) {
       throw new IllegalStateException(
-          "Cannot call close on an already closed NvtxUnscopedRange!");
+          "Cannot call close on an already closed NvtxUniqueRange!");
     }
     closed = true;
     if (isEnabled) {

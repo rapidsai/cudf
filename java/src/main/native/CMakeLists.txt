@@ -232,7 +232,7 @@ add_library(
   src/HostMemoryBufferNativeUtilsJni.cpp
   src/NvcompJni.cpp
   src/NvtxRangeJni.cpp
-  src/NvtxUnscopedRangeJni.cpp
+  src/NvtxUniqueRangeJni.cpp
   src/RmmJni.cpp
   src/ScalarJni.cpp
   src/TableJni.cpp
