@@ -40,7 +40,6 @@ auto test(column_view const& values,
                           binop);
   }
 
-
   {
     auto const binop =
       row_lexicographic_comparator<false>(*d_flattened_values_ptr, *d_flattened_values_ptr);
