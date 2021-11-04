@@ -16,9 +16,7 @@
 package ai.rapids.cudf;
 
 /**
- * Utility class to mark an NVTX profiling range.
- *
- * This class supports start/end NVTX ranges or "unscoped".
+ * This class supports start/end NVTX profiling ranges or "unscoped" ranges.
  *
  * Start/end:
  *
@@ -67,13 +65,13 @@ public class NvtxUnscopedRange implements AutoCloseable {
   }
 
   @Override
-  public void close() {
-    if (isEnabled) {
-      if (closed) {
-        throw new IllegalStateException(
+  public synchronized void close() {
+    if (closed) {
+      throw new IllegalStateException(
           "Cannot call close on an already closed NvtxUnscopedRange!");
-      }
-      closed = true;
+    }
+    closed = true;
+    if (isEnabled) {
       end(this.nvtxRangeId);
     }
   }

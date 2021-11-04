@@ -16,9 +16,7 @@
 package ai.rapids.cudf;
 
 /**
- * Utility class to mark an NVTX profiling range.
- *
- * This class supports push/pop NVTX ranges, or "scoped" ranges.
+ * This class supports push/pop NVTX profiling ranges, or "scoped" ranges.
  *
  * The constructor pushes an NVTX range and the close method pops off the most recent range that
  * was pushed. Therefore instances of this class should always be used in a try-with-resources
