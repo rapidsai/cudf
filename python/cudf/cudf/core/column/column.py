@@ -400,8 +400,7 @@ class ColumnBase(Column, Serializable):
 
     @property
     def nullmask(self) -> Buffer:
-        """The gpu buffer for the null-mask
-        """
+        """The gpu buffer for the null-mask"""
         if not self.nullable:
             raise ValueError("Column has no null mask")
         return self.mask_array_view
@@ -630,8 +629,7 @@ class ColumnBase(Column, Serializable):
         )
 
     def isnull(self) -> ColumnBase:
-        """Identify missing values in a Column.
-        """
+        """Identify missing values in a Column."""
         result = libcudf.unary.is_null(self)
 
         if self.dtype.kind == "f":
@@ -642,8 +640,7 @@ class ColumnBase(Column, Serializable):
         return result
 
     def notnull(self) -> ColumnBase:
-        """Identify non-missing values in a Column.
-        """
+        """Identify non-missing values in a Column."""
         result = libcudf.unary.is_valid(self)
 
         if self.dtype.kind == "f":
@@ -697,8 +694,7 @@ class ColumnBase(Column, Serializable):
         keep_index: bool = True,
         nullify: bool = False,
     ) -> T:
-        """Return Column by taking values from the corresponding *indices*.
-        """
+        """Return Column by taking values from the corresponding *indices*."""
         # Handle zero size
         if indices.size == 0:
             return cast(T, column_empty_like(self, newsize=0))
@@ -928,7 +924,7 @@ class ColumnBase(Column, Serializable):
 
         # Re-label self w.r.t. the provided categories
         if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
-            labels = sr.label_encoding(cats=dtype.categories)
+            labels = sr._label_encoding(cats=dtype.categories)
             if "ordered" in kwargs:
                 warnings.warn(
                     "Ignoring the `ordered` parameter passed in `**kwargs`, "
@@ -944,7 +940,9 @@ class ColumnBase(Column, Serializable):
 
         cats = sr.unique().astype(sr.dtype)
         label_dtype = min_unsigned_type(len(cats))
-        labels = sr.label_encoding(cats=cats, dtype=label_dtype, na_sentinel=1)
+        labels = sr._label_encoding(
+            cats=cats, dtype=label_dtype, na_sentinel=1
+        )
 
         # columns include null index in factorization; remove:
         if self.has_nulls:
@@ -1254,8 +1252,7 @@ def column_empty_like(
     masked: bool = False,
     newsize: int = None,
 ) -> ColumnBase:
-    """Allocate a new column like the given *column*
-    """
+    """Allocate a new column like the given *column*"""
     if dtype is None:
         dtype = column.dtype
     row_count = len(column) if newsize is None else newsize
@@ -1297,8 +1294,7 @@ def column_empty_like_same_mask(
 def column_empty(
     row_count: int, dtype: Dtype = "object", masked: bool = False
 ) -> ColumnBase:
-    """Allocate a new column like the given row_count and dtype.
-    """
+    """Allocate a new column like the given row_count and dtype."""
     dtype = cudf.dtype(dtype)
     children = ()  # type: Tuple[ColumnBase, ...]
 

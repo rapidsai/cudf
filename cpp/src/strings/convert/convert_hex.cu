@@ -267,7 +267,7 @@ std::unique_ptr<column> integers_to_hex(column_view const& input,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) { return cudf::make_empty_column(data_type{type_id::STRING}); }
+  if (input.is_empty()) { return cudf::make_empty_column(type_id::STRING); }
   return type_dispatcher(input.type(), dispatch_integers_to_hex_fn{}, input, stream, mr);
 }
 

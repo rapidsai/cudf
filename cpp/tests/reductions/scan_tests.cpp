@@ -429,6 +429,41 @@ TEST_F(ScanStringsTest, MoreStringsMinMax)
 }
 
 template <typename T>
+struct ScanChronoTest : public BaseFixture {
+};
+
+TYPED_TEST_CASE(ScanChronoTest, ChronoTypes);
+
+TYPED_TEST(ScanChronoTest, ChronoMinMax)
+{
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> col({5, 4, 6, 0, 1, 6, 5, 3},
+                                                                 {1, 1, 1, 0, 1, 1, 1, 1});
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> expected_min({5, 4, 4, 0, 1, 1, 1, 1},
+                                                                          {1, 1, 1, 0, 1, 1, 1, 1});
+
+  auto result = cudf::scan(col, cudf::make_min_aggregation(), cudf::scan_type::INCLUSIVE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected_min);
+
+  result = cudf::scan(
+    col, cudf::make_min_aggregation(), cudf::scan_type::INCLUSIVE, cudf::null_policy::EXCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected_min);
+
+  cudf::test::fixed_width_column_wrapper<TypeParam, int32_t> expected_max({5, 5, 6, 0, 6, 6, 6, 6},
+                                                                          {1, 1, 1, 0, 1, 1, 1, 1});
+  result = cudf::scan(col, cudf::make_max_aggregation(), cudf::scan_type::INCLUSIVE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected_max);
+
+  result = cudf::scan(
+    col, cudf::make_max_aggregation(), cudf::scan_type::INCLUSIVE, cudf::null_policy::EXCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result->view(), expected_max);
+
+  EXPECT_THROW(cudf::scan(col, cudf::make_max_aggregation(), cudf::scan_type::EXCLUSIVE),
+               cudf::logic_error);
+  EXPECT_THROW(cudf::scan(col, cudf::make_min_aggregation(), cudf::scan_type::EXCLUSIVE),
+               cudf::logic_error);
+}
+
+template <typename T>
 struct TypedRankScanTest : ScanTest<T> {
   inline void test_ungrouped_rank_scan(column_view const& input,
                                        column_view const& expect_vals,

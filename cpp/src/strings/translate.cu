@@ -87,7 +87,7 @@ std::unique_ptr<column> translate(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  if (strings.is_empty()) return make_empty_column(data_type{type_id::STRING});
+  if (strings.is_empty()) return make_empty_column(type_id::STRING);
 
   size_type table_size = static_cast<size_type>(chars_table.size());
   // convert input table
