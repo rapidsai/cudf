@@ -24,9 +24,9 @@ namespace external {
 namespace kafka {
 
 kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
-                               std::map<std::string, void*> callbacks)
+                               kafka_oauth_callback_t oauth_callback)
   : configs(configs),
-    callbacks(callbacks),
+    oauth_callback(oauth_callback),
     kafka_conf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL))
 {
   for (auto const& key_value : configs) {
@@ -38,7 +38,7 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
 
   // TODO: Just for testing ... want to make sure this works
   std::string error_string;
-  PythonOAuthRefreshCb cb(callbacks.find("oauth_cb")->second);
+  PythonOAuthRefreshCb cb(oauth_callback);
   kafka_conf->set("oauthbearer_token_refresh_cb", &cb, error_string);
 
   // Kafka 0.9 > requires group.id in the configuration
@@ -52,7 +52,7 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
 }
 
 kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
-                               std::map<std::string, void*> callbacks,
+                               kafka_oauth_callback_t oauth_callback,
                                std::string const& topic_name,
                                int partition,
                                int64_t start_offset,
@@ -60,7 +60,7 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
                                int batch_timeout,
                                std::string const& delimiter)
   : configs(configs),
-    callbacks(callbacks),
+    oauth_callback(oauth_callback),
     topic_name(topic_name),
     partition(partition),
     start_offset(start_offset),
@@ -78,7 +78,7 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
 
   // TODO: Just for testing ... want to make sure this works
   std::string error_string;
-  PythonOAuthRefreshCb cb(callbacks.find("oauth_cb")->second);
+  PythonOAuthRefreshCb cb(oauth_callback);
   CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
                  kafka_conf->set("oauthbearer_token_refresh_cb", &cb, error_string),
                "Failed to set Kafka oauth callback");

@@ -3,7 +3,6 @@
 ##############################################
 # cuDF GPU build and test script for CI      #
 ##############################################
-set -x
 set -e
 NUMARGS=$#
 ARGS=$*
@@ -66,7 +65,7 @@ gpuci_logger "Check environment variables"
 env
 
 gpuci_logger "Check GPU usage"
-#nvidia-smi
+nvidia-smi
 
 gpuci_logger "Activate conda env"
 . /opt/conda/etc/profile.d/conda.sh
@@ -88,7 +87,7 @@ gpuci_mamba_retry install -y \
 
 # https://docs.rapids.ai/maintainers/depmgmt/
 #gpuci_mamba_retry remove --force rapids-build-env rapids-notebook-env
-gpuci_mamba_retry install -y "librdkafka=1.7.0"
+#gpuci_mamba_retry install -y "your-pkg=1.0.0"
 
 
 gpuci_logger "Check compiler versions"

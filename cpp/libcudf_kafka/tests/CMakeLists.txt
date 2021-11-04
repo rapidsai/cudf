@@ -14,6 +14,9 @@
 # limitations under the License.
 #=============================================================================
 
+# Locate Python Development headers
+find_package(Python3 REQUIRED COMPONENTS Interpreter Development)
+
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
@@ -21,7 +24,7 @@ function(ConfigureTest test_name )
     add_executable(${test_name} ${ARGN})
     set_target_properties(${test_name}
         PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<BUILD_INTERFACE:${CUDA_KAFKA_BINARY_DIR}/gtests>")
-    target_link_libraries(${test_name} PRIVATE GTest::gmock_main GTest::gtest_main cudf_kafka)
+    target_link_libraries(${test_name} PRIVATE GTest::gmock_main GTest::gtest_main cudf_kafka Python3::Python)
 
     add_test(NAME ${test_name} COMMAND ${test_name})
 endfunction()

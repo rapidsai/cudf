@@ -23,21 +23,27 @@ cdef class KafkaDatasource(Datasource):
                   int32_t batch_timeout=10000,
                   string delimiter=b"",):
 
-        # Convert Python-confluent-kafka configuration dict
-        # to map[string, string] and map[string, void] for callbacks
         cdef map[string, string] configs
-        cdef map[string, void*] callbacks
+        cdef kafka_oauth_callback_t cb
 
         for key in kafka_configs:
-            if callable(kafka_configs[key]):
-                callbacks[key.encode()] = <void *>kafka_configs[key]
+            if key == 'oauth_cb':
+                if callable(kafka_configs[key]):
+                    # kafka_oauth_callback_t in C++ is
+                    # std::function<PyObject*()>
+                    # Takes no params and returns PyObject
+                    # cb = <kafka_oauth_callback_t>kafka_configs[key]
+                    print("^^^ is erroring...")
+                else:
+                    raise TypeError("'oauth_cb' configuration must \
+                                      be a Python callable object")
             else:
                 configs[key.encode()] = kafka_configs[key].encode()
 
         if topic != b"" and partition != -1:
             self.c_datasource = <unique_ptr[datasource]> \
                 make_unique[kafka_consumer](configs,
-                                            callbacks,
+                                            cb,
                                             topic,
                                             partition,
                                             start_offset,
@@ -46,7 +52,7 @@ cdef class KafkaDatasource(Datasource):
                                             delimiter)
         else:
             self.c_datasource = <unique_ptr[datasource]> \
-                make_unique[kafka_consumer](configs, callbacks)
+                make_unique[kafka_consumer](configs, cb)
 
     cdef datasource* get_datasource(self) nogil:
         return <datasource *> self.c_datasource.get()

@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -x
-
 GIT_DESCRIBE_TAG=`git describe --tags`
 MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 

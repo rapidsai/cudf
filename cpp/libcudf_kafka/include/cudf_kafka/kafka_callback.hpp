@@ -15,6 +15,9 @@
  */
 #pragma once
 
+#define PY_SSIZE_T_CLEAN
+#include <Python.h>
+
 #include <librdkafka/rdkafkacpp.h>
 #include <cudf/io/datasource.hpp>
 #include <map>
@@ -27,17 +30,37 @@ namespace external {
 namespace kafka {
 
 /**
+ * @brief Callback function type used for Kafka OAuth events
+ *
+ * The KafkaConsumer calls the `kafka_oauth_callback_t` when the existing
+ * oauth token is considered expired by the KafkaConsumer. Typically that
+ * means this will be invoked a single time when the KafkaConsumer is created
+ * to get the initial token and then intermediately as the token becomes
+ * expired.
+ *
+ * The callback function signature is:
+ *     `PyObject* kafka_oauth_callback_t()`
+ *
+ * The callback function returns a PyObject, Python Tuple,
+ * where the Tuple consists of the Oauth token and its
+ * linux epoch expiration time. Generally the token and expiration
+ * time is retrieved from an external service by the callback.
+ * Ex: [token, token_expiration_in_epoch]
+ */
+using kafka_oauth_callback_t = std::function<PyObject*()>;
+
+/**
  * @brief Callback to retrieve OAuth token from external source. Invoked when
  * token refresh is required.
  */
 class PythonOAuthRefreshCb : public RdKafka::OAuthBearerTokenRefreshCb {
  public:
-  PythonOAuthRefreshCb(void* callback());
+  PythonOAuthRefreshCb(kafka_oauth_callback_t cb);
 
   void oauthbearer_token_refresh_cb(RdKafka::Handle* handle, const std::string& oauthbearer_config);
 
  private:
-  PyObject (*callback)();
+  kafka_oauth_callback_t oauth_callback;
 };
 
 }  // namespace kafka
