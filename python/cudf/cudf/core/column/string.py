@@ -5201,21 +5201,83 @@ class StringColumn(column.ColumnBase):
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
         out_dtype = cudf.dtype(dtype)
-
+        string_col = self
         if out_dtype.kind in {"i", "u"}:
-            if not libstrings.is_integer(self).all():
+            if not libstrings.is_integer(string_col).all():
                 raise ValueError(
                     "Could not convert strings to integer "
                     "type due to presence of non-integer values."
                 )
         elif out_dtype.kind == "f":
-            if not libstrings.is_float(self).all():
+            # TODO: Replace this `replace` call with a
+            # case-insensitive method once following
+            # issue is fixed: https://github.com/rapidsai/cudf/issues/5217
+            old_values = cudf.core.column.as_column(
+                [
+                    "nan",
+                    "NAN",
+                    "Nan",
+                    "naN",
+                    "nAN",
+                    "NAn",
+                    "-inf",
+                    "-INF",
+                    "-InF",
+                    "-inF",
+                    "-iNF",
+                    "-INf",
+                    "+inf",
+                    "+INF",
+                    "+InF",
+                    "+inF",
+                    "+iNF",
+                    "+INf",
+                    "+Inf" "inf",
+                    "INF",
+                    "InF",
+                    "inF",
+                    "iNF",
+                    "INf",
+                ]
+            )
+            new_values = cudf.core.column.as_column(
+                [
+                    "NaN",
+                    "NaN",
+                    "NaN",
+                    "NaN",
+                    "NaN",
+                    "NaN",
+                    "-Inf",
+                    "-Inf",
+                    "-Inf",
+                    "-Inf",
+                    "-Inf",
+                    "-Inf",
+                    "Inf",
+                    "Inf",
+                    "Inf",
+                    "Inf",
+                    "Inf",
+                    "Inf",
+                    "Inf" "Inf",
+                    "Inf",
+                    "Inf",
+                    "Inf",
+                    "Inf",
+                    "Inf",
+                ]
+            )
+            string_col = libcudf.replace.replace(
+                string_col, old_values, new_values
+            )
+            if not libstrings.is_float(string_col).all():
                 raise ValueError(
                     "Could not convert strings to float "
                     "type due to presence of non-floating values."
                 )
 
-        result_col = _str_to_numeric_typecast_functions[out_dtype](self)
+        result_col = _str_to_numeric_typecast_functions[out_dtype](string_col)
         return result_col
 
     def _as_datetime_or_timedelta_column(self, dtype, format):
