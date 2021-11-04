@@ -1,3 +1,76 @@
+diff --git a/thrust/system/cuda/detail/scan_by_key.h b/thrust/system/cuda/detail/scan_by_key.h
+index c9178628..b287b0d4 100644
+--- a/thrust/system/cuda/detail/scan_by_key.h
++++ b/thrust/system/cuda/detail/scan_by_key.h
+@@ -340,7 +340,7 @@ namespace __scan_by_key {
+                            size_value_pair_t (&scan_items)[ITEMS_PER_THREAD])
+       {
+         // Zip values and segment_flags
+-#pragma unroll
++#pragma unroll 1
+         for (int ITEM = 0; ITEM < ITEMS_PER_THREAD; ++ITEM)
+         {
+           // Set segment_flags for first out-of-bounds item, zero for others
+@@ -358,7 +358,7 @@ namespace __scan_by_key {
+           size_value_pair_t (&scan_items)[ITEMS_PER_THREAD])
+       {
+         // Zip values and segment_flags
+-#pragma unroll
++#pragma unroll 1
+         for (int ITEM = 0; ITEM < ITEMS_PER_THREAD; ++ITEM)
+         {
+           values[ITEM] = scan_items[ITEM].value;
+@@ -616,7 +616,7 @@ namespace __scan_by_key {
+     operator()(T (&items)[ITEMS_PER_THREAD],
+                Size (&flags)[ITEMS_PER_THREAD])
+     {
+-#pragma unroll
++#pragma unroll 1
+       for (int ITEM = 0; ITEM < ITEMS_PER_THREAD; ++ITEM)
+       {
+         items[ITEM] = flags[ITEM] ? init : scan_op(init, items[ITEM]);
+
+diff --git a/thrust/system/cuda/detail/reduce_by_key.h b/thrust/system/cuda/detail/reduce_by_key.h
+index ba66f6d8..bb3bff56 100644
+--- a/thrust/system/cuda/detail/reduce_by_key.h
++++ b/thrust/system/cuda/detail/reduce_by_key.h
+@@ -369,7 +369,7 @@ namespace __reduce_by_key {
+                            size_value_pair_t (&scan_items)[ITEMS_PER_THREAD])
+       {
+         // Zip values and segment_flags
+-#pragma unroll
++#pragma unroll 1
+         for (int ITEM = 0; ITEM < ITEMS_PER_THREAD; ++ITEM)
+         {
+           // Set segment_flags for first out-of-bounds item, zero for others
+@@ -389,7 +389,7 @@ namespace __reduce_by_key {
+           key_value_pair_t (&scatter_items)[ITEMS_PER_THREAD])
+       {
+         // Zip values and segment_flags
+-#pragma unroll
++#pragma unroll 1
+         for (int ITEM = 0; ITEM < ITEMS_PER_THREAD; ++ITEM)
+         {
+           scatter_items[ITEM].key   = keys[ITEM];
+@@ -410,7 +410,7 @@ namespace __reduce_by_key {
+           size_type (&segment_indices)[ITEMS_PER_THREAD])
+       {
+         // Scatter flagged keys and values
+-#pragma unroll
++#pragma unroll 1
+         for (int ITEM = 0; ITEM < ITEMS_PER_THREAD; ++ITEM)
+         {
+           if (segment_flags[ITEM])
+@@ -440,7 +440,7 @@ namespace __reduce_by_key {
+         sync_threadblock();
+ 
+         // Compact and scatter keys
+-#pragma unroll
++#pragma unroll 1
+         for (int ITEM = 0; ITEM < ITEMS_PER_THREAD; ++ITEM)
+         {
+           if (segment_flags[ITEM])
+
 diff --git a/thrust/system/cuda/detail/sort.h b/thrust/system/cuda/detail/sort.h
 index 1ffeef0..5e80800 100644
 --- a/thrust/system/cuda/detail/sort.h
