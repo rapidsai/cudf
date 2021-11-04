@@ -27,16 +27,32 @@ auto test(column_view const& values,
   auto const count_iter             = thrust::make_counting_iterator<size_type>(0);
   auto const result_begin           = result->mutable_view().template begin<size_type>();
 
-  auto const binop =
-    row_lexicographic_comparator<true>(*d_flattened_values_ptr, *d_flattened_values_ptr);
-  thrust::reduce_by_key(rmm::exec_policy(stream),
-                        group_labels.data(),
-                        group_labels.data() + group_labels.size(),
-                        count_iter,
-                        thrust::make_discard_iterator(),
-                        result_begin,
-                        thrust::equal_to<size_type>{},
-                        binop);
+  {
+    auto const binop =
+      row_lexicographic_comparator<true>(*d_flattened_values_ptr, *d_flattened_values_ptr);
+    thrust::reduce_by_key(rmm::exec_policy(stream),
+                          group_labels.data(),
+                          group_labels.data() + group_labels.size(),
+                          count_iter,
+                          thrust::make_discard_iterator(),
+                          result_begin,
+                          thrust::equal_to<size_type>{},
+                          binop);
+  }
+
+
+  {
+    auto const binop =
+      row_lexicographic_comparator<false>(*d_flattened_values_ptr, *d_flattened_values_ptr);
+    thrust::reduce_by_key(rmm::exec_policy(stream),
+                          group_labels.data(),
+                          group_labels.data() + group_labels.size(),
+                          count_iter,
+                          thrust::make_discard_iterator(),
+                          result_begin,
+                          thrust::equal_to<size_type>{},
+                          binop);
+  }
 
   return result;
 }
