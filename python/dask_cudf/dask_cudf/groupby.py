@@ -60,6 +60,19 @@ class CudfDataFrameGroupBy(DataFrameGroupBy):
         g._meta = g._meta[key]
         return g
 
+    def mean(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.index,
+            {c: "mean" for c in self.obj.columns if c not in self.index},
+            split_every=split_every,
+            split_out=split_out,
+            dropna=self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )
+
     def collect(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
@@ -117,11 +130,11 @@ class CudfSeriesGroupBy(SeriesGroupBy):
         self.as_index = kwargs.pop("as_index", True)
         super().__init__(*args, **kwargs)
 
-    def collect(self, split_every=None, split_out=1):
+    def mean(self, split_every=None, split_out=1):
         return groupby_agg(
             self.obj,
             self.index,
-            {self._slice: "collect"},
+            {self._slice: "mean"},
             split_every=split_every,
             split_out=split_out,
             dropna=self.dropna,
@@ -148,6 +161,19 @@ class CudfSeriesGroupBy(SeriesGroupBy):
             self.obj,
             self.index,
             {self._slice: "var"},
+            split_every=split_every,
+            split_out=split_out,
+            dropna=self.dropna,
+            sep=self.sep,
+            sort=self.sort,
+            as_index=self.as_index,
+        )[self._slice]
+
+    def collect(self, split_every=None, split_out=1):
+        return groupby_agg(
+            self.obj,
+            self.index,
+            {self._slice: "collect"},
             split_every=split_every,
             split_out=split_out,
             dropna=self.dropna,
