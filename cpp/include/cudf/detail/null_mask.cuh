@@ -199,7 +199,7 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
   }
 
   // Construct a contiguous host buffer of indices and copy to device.
-  auto const h_indices = std::vector(indices_begin, indices_end);
+  auto const h_indices = std::vector<size_type>(indices_begin, indices_end);
   auto const d_indices = make_device_uvector_async(h_indices, stream);
 
   // Compute the null counts over each segment.
