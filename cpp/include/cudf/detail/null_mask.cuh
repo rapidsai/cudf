@@ -74,6 +74,7 @@ __global__ void offset_bitmask_binop(Binop op,
   using BlockReduce = cub::BlockReduce<size_type, block_size>;
   __shared__ typename BlockReduce::TempStorage temp_storage;
   size_type block_valid_count = BlockReduce(temp_storage).Sum(thread_valid_count);
+
   if (threadIdx.x == 0) { atomicAdd(valid_count_ptr, block_valid_count); }
 }
 
