@@ -143,21 +143,18 @@ def read_orc(
     # Read in filtering columns first
     if filters is None:
         filtering_columns_first = False
-    is_filtered_partition_empty = None
-    query_string = None
-    local_dict = None
     if filtering_columns_first:
         import numpy as np
 
-        # Read in only the columns relevant to the filtering
+        # Determine which columns are filtering vs. remaining
         filters = _prepare_filters(filters)
         query_string, local_dict = _filters_to_query(filters)
-        print(f"{query_string=}")
         columns_in_predicate = [
             col for conjunction in filters for (col, op, val) in conjunction
         ]
-        print(f"{columns_in_predicate=}")
         columns = [c for c in columns if c not in columns_in_predicate]
+
+        # Read in only the columns relevant to the filtering
         filtered_df = read_orc(
             path,
             columns=columns_in_predicate,
@@ -184,8 +181,6 @@ def read_orc(
             for i, filtered_df_partition in enumerate(filtered_df.to_delayed())
             if not is_filtered_partition_empty[i]
         ]
-
-    print(f"{columns=}")
 
     with fs.open(paths[0], "rb") as f:
         meta = cudf.read_orc(
@@ -226,19 +221,21 @@ def read_orc(
     if not filtering_columns_first:
         return res
     else:
+        # Create a delayed function to horizontally concatenate filtered
+        # filtering column partitions with partitions of the remaining
+        # columns for which we only read in relevant stripes.
         @delayed(pure=True)
         def _hcat(a, b):
             return cudf.concat([a, b], axis=1)
         
+        # Return a data frame comprised of delayed horizontal concatenation.
         remaining_df_partitions = res.to_delayed()
-        print(f"{filtered_df._meta=}")
-        print(f"{res._meta=}")
         return dd.from_delayed(
             [
                 _hcat(filtered, remaining)
                 for filtered, remaining in zip(filtered_df_partitions, remaining_df_partitions)
             ],
-            cudf.concat([filtered_df._meta, res._meta], axis=1)
+            cudf.concat([filtered_df._meta, res._meta], axis=1),
         )
 
 
