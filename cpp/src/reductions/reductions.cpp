@@ -26,36 +26,42 @@
 #include <cudf/scalar/scalar_factories.hpp>
 
 #include <cudf/structs/structs_column_view.hpp>
+#include <functional>
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
 namespace detail {
 struct reduce_dispatch_functor {
   column_view const col;
+  std::optional<std::reference_wrapper<column_view const>> offsets;
   data_type output_dtype;
   rmm::mr::device_memory_resource* mr;
   rmm::cuda_stream_view stream;
 
   reduce_dispatch_functor(column_view const& col,
+                          std::optional<std::reference_wrapper<column_view const>> offsets,
                           data_type output_dtype,
                           rmm::cuda_stream_view stream,
                           rmm::mr::device_memory_resource* mr)
-    : col(col), output_dtype(output_dtype), mr(mr), stream(stream)
+    : col(col), offsets(offsets), output_dtype(output_dtype), mr(mr), stream(stream)
   {
   }
 
   template <aggregation::Kind k>
-  std::unique_ptr<scalar> operator()(std::unique_ptr<aggregation> const& agg)
+  std::variant<std::unique_ptr<scalar>, std::unique_ptr<column>> operator()(
+    std::unique_ptr<aggregation> const& agg)
   {
     switch (k) {
-      case aggregation::SUM: return reduction::sum(col, output_dtype, stream, mr); break;
-      case aggregation::PRODUCT: return reduction::product(col, output_dtype, stream, mr); break;
+      case aggregation::SUM: return reduction::sum(col, offsets, output_dtype, stream, mr); break;
+      case aggregation::PRODUCT:
+        return reduction::product(col, offsets, output_dtype, stream, mr);
+        break;
       case aggregation::MIN: return reduction::min(col, output_dtype, stream, mr); break;
       case aggregation::MAX: return reduction::max(col, output_dtype, stream, mr); break;
       case aggregation::ANY: return reduction::any(col, output_dtype, stream, mr); break;
       case aggregation::ALL: return reduction::all(col, output_dtype, stream, mr); break;
       case aggregation::SUM_OF_SQUARES:
-        return reduction::sum_of_squares(col, output_dtype, stream, mr);
+        return reduction::sum_of_squares(col, offsets, output_dtype, stream, mr);
         break;
       case aggregation::MEAN: return reduction::mean(col, output_dtype, stream, mr); break;
       case aggregation::VARIANCE: {
@@ -107,8 +113,9 @@ struct reduce_dispatch_functor {
   }
 };
 
-std::unique_ptr<scalar> reduce(
+std::variant<std::unique_ptr<scalar>, std::unique_ptr<column>> reduce(
   column_view const& col,
+  std::optional<std::reference_wrapper<column_view const>> offsets,
   std::unique_ptr<aggregation> const& agg,
   data_type output_dtype,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
@@ -124,7 +131,7 @@ std::unique_ptr<scalar> reduce(
   }
 
   return aggregation_dispatcher(
-    agg->kind, reduce_dispatch_functor{col, output_dtype, stream, mr}, agg);
+    agg->kind, reduce_dispatch_functor{col, offsets, output_dtype, stream, mr}, agg);
 }
 }  // namespace detail
 
@@ -134,7 +141,18 @@ std::unique_ptr<scalar> reduce(column_view const& col,
                                rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::reduce(col, agg, output_dtype, rmm::cuda_stream_default, mr);
+  return std::get<0>(
+    detail::reduce(col, std::nullopt, agg, output_dtype, rmm::cuda_stream_default, mr));
+}
+
+std::unique_ptr<column> segment_reduce(column_view const& col,
+                                       column_view const& offsets,
+                                       std::unique_ptr<aggregation> const& agg,
+                                       data_type output_dtype,
+                                       rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return std::get<1>(detail::reduce(col, offsets, agg, output_dtype, rmm::cuda_stream_default, mr));
 }
 
 }  // namespace cudf

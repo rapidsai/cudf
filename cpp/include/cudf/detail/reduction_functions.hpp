@@ -21,8 +21,13 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <optional>
+#include <variant>
 namespace cudf {
 namespace reduction {
+
+using scalar_or_column_ptr = std::variant<std::unique_ptr<scalar>, std::unique_ptr<column>>;
+
 /**
  * @brief Computes sum of elements in input column
  *
@@ -37,8 +42,9 @@ namespace reduction {
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Sum as scalar of type `output_dtype`.
  */
-std::unique_ptr<scalar> sum(
+scalar_or_column_ptr sum(
   column_view const& col,
+  std::optional<std::reference_wrapper<column_view const>> offsets,
   data_type const output_dtype,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
@@ -135,8 +141,9 @@ std::unique_ptr<scalar> all(
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Product as scalar of type `output_dtype`.
  */
-std::unique_ptr<scalar> product(
+scalar_or_column_ptr product(
   column_view const& col,
+  std::optional<std::reference_wrapper<column_view const>> offsets,
   data_type const output_dtype,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
@@ -155,8 +162,9 @@ std::unique_ptr<scalar> product(
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Sum of squares as scalar of type `output_dtype`.
  */
-std::unique_ptr<scalar> sum_of_squares(
+scalar_or_column_ptr sum_of_squares(
   column_view const& col,
+  std::optional<std::reference_wrapper<column_view const>> offsets,
   data_type const output_dtype,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
