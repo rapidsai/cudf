@@ -1164,7 +1164,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
                               stream))
           break;
         case parquet::SNAPPY:
-          if (nvcomp_integration::is_stable_integration_enabled()) {
+          if (nvcomp_integration::is_stable_enabled()) {
             snappy_decompress(inflate_in_view.subspan(start_pos, argc - start_pos),
                               inflate_out_view.subspan(start_pos, argc - start_pos),
                               codec.max_decompressed_size,

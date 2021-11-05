@@ -36,7 +36,7 @@ namespace {
 /**
  * @brief Defines which nvCOMP usage to enable.
  */
-enum class usage_policy : uint8_t { NONE, STABLE, EXPERIMENTAL };
+enum class usage_policy : uint8_t { OFF, STABLE, ALWAYS };
 
 /**
  * @brief Get the current usage policy.
@@ -44,25 +44,23 @@ enum class usage_policy : uint8_t { NONE, STABLE, EXPERIMENTAL };
 inline usage_policy get_env_policy()
 {
   static auto const env_val = getenv_or("LIBCUDF_NVCOMP_POLICY", "STABLE");
-  if (env_val == "NONE") return usage_policy::NONE;
-  if (env_val == "EXPERIMENTAL") return usage_policy::EXPERIMENTAL;
+  if (env_val == "OFF") return usage_policy::OFF;
+  if (env_val == "ALWAYS") return usage_policy::ALWAYS;
   return usage_policy::STABLE;
 }
 }  // namespace
 
 /**
- * @brief Returns true if stable nvCOMP use is enabled.
+ * @brief Returns true if all nvCOMP uses are enabled.
  */
-inline bool is_stable_integration_enabled() { return get_env_policy() == usage_policy::STABLE; }
+inline bool is_all_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
 
 /**
- * @brief Returns true if experimental nvCOMP use is enabled.
- *
- * Note: When experimental use is enabled, stable use is enabled as well
+ * @brief Returns true if stable nvCOMP use is enabled.
  */
-inline bool is_experimental_integration_enabled()
+inline bool is_stable_enabled()
 {
-  return is_stable_integration_enabled() or get_env_policy() == usage_policy::EXPERIMENTAL;
+  return is_all_enabled() or get_env_policy() == usage_policy::STABLE;
 }
 
 }  // namespace nvcomp_integration

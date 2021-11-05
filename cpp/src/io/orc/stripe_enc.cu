@@ -1310,7 +1310,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
   gpuInitCompressionBlocks<<<dim_grid, dim_block_init, 0, stream.value()>>>(
     strm_desc, enc_streams, comp_in, comp_out, compressed_data, comp_blk_size, max_comp_blk_size);
   if (compression == SNAPPY) {
-    if (detail::nvcomp_integration::is_stable_integration_enabled()) {
+    if (detail::nvcomp_integration::is_stable_enabled()) {
       try {
         size_t temp_size;
         nvcompStatus_t nvcomp_status = nvcompBatchedSnappyCompressGetTempSize(

@@ -993,7 +993,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   gpu::EncodePages(batch_pages, comp_in, comp_stat, stream);
   switch (compression_) {
     case parquet::Compression::SNAPPY:
-      if (nvcomp_integration::is_stable_integration_enabled()) {
+      if (nvcomp_integration::is_stable_enabled()) {
         snappy_compress(comp_in, comp_stat, max_page_uncomp_data_size, stream);
       } else {
         CUDA_TRY(gpu_snap(comp_in.data(), comp_stat.data(), pages_in_batch, stream));
