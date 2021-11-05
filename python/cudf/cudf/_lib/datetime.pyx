@@ -69,13 +69,13 @@ def ceil_datetime(Column col, object field):
             c_result = move(libcudf_datetime.ceil_day(col_view))
         elif field == "H":
             c_result = move(libcudf_datetime.ceil_hour(col_view))
-        elif field == "T":
+        elif field == "T" or field == "min":
             c_result = move(libcudf_datetime.ceil_minute(col_view))
         elif field == "S":
             c_result = move(libcudf_datetime.ceil_second(col_view))
-        elif field == "L":
+        elif field == "L" or field == "ms":
             c_result = move(libcudf_datetime.ceil_millisecond(col_view))
-        elif field == "U":
+        elif field == "U" or field == "us":
             c_result = move(libcudf_datetime.ceil_microsecond(col_view))
         elif field == "N":
             c_result = move(libcudf_datetime.ceil_nanosecond(col_view))
