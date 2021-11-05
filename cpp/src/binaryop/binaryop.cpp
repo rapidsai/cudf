@@ -392,9 +392,13 @@ std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lh
   if (binops::is_null_dependent(op)) {
     return make_fixed_width_column(output_type, rhs.size(), mask_state::ALL_VALID, stream, mr);
   } else {
-    auto new_mask = std::move(cudf::detail::bitmask_and(table_view({lhs, rhs}), stream, mr).mask);
-    return make_fixed_width_column(
-      output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+    auto bitmask_output = cudf::detail::bitmask_and(table_view({lhs, rhs}), stream, mr);
+    return make_fixed_width_column(output_type,
+                                   lhs.size(),
+                                   std::move(bitmask_output.mask),
+                                   bitmask_output.num_unset_bits,
+                                   stream,
+                                   mr);
   }
 };
 
@@ -799,9 +803,13 @@ std::unique_ptr<column> binary_operation(column_view const& lhs,
 
   CUDF_EXPECTS((lhs.size() == rhs.size()), "Column sizes don't match");
 
-  auto new_mask = std::move(bitmask_and(table_view({lhs, rhs}), stream, mr).mask);
-  auto out      = make_fixed_width_column(
-    output_type, lhs.size(), std::move(new_mask), cudf::UNKNOWN_NULL_COUNT, stream, mr);
+  auto bitmask_output = bitmask_and(table_view({lhs, rhs}), stream, mr);
+  auto out            = make_fixed_width_column(output_type,
+                                     lhs.size(),
+                                     std::move(bitmask_output.mask),
+                                     bitmask_output.num_unset_bits,
+                                     stream,
+                                     mr);
 
   // Check for 0 sized data
   if (lhs.is_empty() or rhs.is_empty()) return out;

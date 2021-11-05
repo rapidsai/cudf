@@ -366,10 +366,10 @@ std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_paren
     auto parent_child_null_masks =
       std::vector<cudf::bitmask_type const*>{structs_column.null_mask(), child.null_mask()};
 
-    auto new_child_mask = [&] {
+    auto [new_child_mask, null_count] = [&] {
       if (not child.nullable()) {
         // Adopt parent STRUCT's null mask.
-        return structs_column.null_mask();
+        return std::make_pair(structs_column.null_mask(), 0);
       }
 
       // Both STRUCT and child are nullable. AND() for the child's new null mask.
@@ -379,14 +379,15 @@ std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_paren
       // and the _null_mask(). It would be better to AND the bits from the beginning, and apply
       // offset() uniformly.
       // Alternatively, one could construct a big enough buffer, and use inplace_bitwise_and.
-      ret_validity_buffers.push_back(
-        std::move(cudf::detail::bitmask_and(parent_child_null_masks,
-                                            std::vector<size_type>{0, 0},
-                                            child.offset() + child.size(),
-                                            stream,
-                                            mr)
-                    .mask));
-      return reinterpret_cast<bitmask_type const*>(ret_validity_buffers.back().data());
+      auto bitmask_output = cudf::detail::bitmask_and(parent_child_null_masks,
+                                                      std::vector<size_type>{0, 0},
+                                                      child.offset() + child.size(),
+                                                      stream,
+                                                      mr);
+      ret_validity_buffers.push_back(std::move(bitmask_output.mask));
+      return std::make_pair(
+        reinterpret_cast<bitmask_type const*>(ret_validity_buffers.back().data()),
+        bitmask_output.num_unset_bits);
     }();
 
     return cudf::column_view(
@@ -394,7 +395,7 @@ std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_paren
       child.size(),
       child.head(),
       new_child_mask,
-      cudf::UNKNOWN_NULL_COUNT,
+      null_count,
       child.offset(),
       std::vector<cudf::column_view>{child.child_begin(), child.child_end()});
   };
