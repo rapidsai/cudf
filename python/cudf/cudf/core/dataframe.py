@@ -65,6 +65,7 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     can_convert_to_column,
     cudf_dtype_from_pydata_dtype,
+    find_common_type,
     is_column_like,
     min_scalar_type,
     numeric_normalize_types,
@@ -3048,7 +3049,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ):
             raise TypeError("non-numeric data not yet supported")
 
-        dtype = cudf.utils.dtypes.find_common_type([col.dtype for col in cols])
+        dtype = find_common_type([col.dtype for col in cols])
         for k, c in self._data.items():
             if c.has_nulls:
                 raise ValueError(
@@ -3245,7 +3246,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # TODO: Remove the typecasting below once issue #6846 is fixed
         # link <https://github.com/rapidsai/cudf/issues/6846>
         dtypes = [self[col].dtype for col in self._column_names]
-        common_dtype = cudf.utils.dtypes.find_common_type(dtypes)
+        common_dtype = find_common_type(dtypes)
         df_normalized = self.astype(common_dtype)
 
         if any(is_string_dtype(dt) for dt in dtypes):
@@ -5458,7 +5459,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             filtered = self.copy(deep=False)
 
-        common_dtype = cudf.utils.dtypes.find_common_type(filtered.dtypes)
+        common_dtype = find_common_type(filtered.dtypes)
 
         if filtered._num_columns < self._num_columns:
             msg = (
@@ -6776,9 +6777,7 @@ def _find_common_dtypes_and_categories(non_null_columns, dtypes):
         dtypes[idx] = cols[0].dtype
         # If all the non-null dtypes are int/float, find a common dtype
         if all(is_numeric_dtype(col.dtype) for col in cols):
-            dtypes[idx] = cudf.utils.dtypes.find_common_type(
-                [col.dtype for col in cols]
-            )
+            dtypes[idx] = find_common_type([col.dtype for col in cols])
         # If all categorical dtypes, combine the categories
         elif all(
             isinstance(col, cudf.core.column.CategoricalColumn) for col in cols
