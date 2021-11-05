@@ -549,6 +549,16 @@ TEST_F(MergeBitmaskTest, TestBitmaskAnd)
   auto result2 = cudf::bitmask_and(input2);
   auto result3 = cudf::bitmask_and(input3);
 
+  constexpr cudf::size_type gold_valid_count = 2;
+  constexpr cudf::size_type gold_null_count  = 3;
+
+  EXPECT_EQ(result1.num_set_bits, 0);
+  EXPECT_EQ(result1.num_unset_bits, 0);
+  EXPECT_EQ(result2.num_set_bits, gold_valid_count);
+  EXPECT_EQ(result2.num_unset_bits, gold_null_count);
+  EXPECT_EQ(result3.num_set_bits, gold_valid_count);
+  EXPECT_EQ(result3.num_unset_bits, gold_null_count);
+
   auto odd_indices =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
   auto odd = cudf::test::detail::make_null_mask(odd_indices, odd_indices + input2.num_rows());
