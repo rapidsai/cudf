@@ -1622,7 +1622,9 @@ def test_error_values():
     ],
 )
 @pytest.mark.parametrize("time_type", DATETIME_TYPES)
-@pytest.mark.parametrize("resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"])
+@pytest.mark.parametrize(
+    "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
+)
 def test_ceil(data, time_type, resolution):
 
     gs = cudf.Series(data, dtype=time_type)
@@ -1651,7 +1653,9 @@ def test_ceil(data, time_type, resolution):
     ],
 )
 @pytest.mark.parametrize("time_type", DATETIME_TYPES)
-@pytest.mark.parametrize("resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"])
+@pytest.mark.parametrize(
+    "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
+)
 def test_floor(data, time_type, resolution):
 
     gs = cudf.Series(data, dtype=time_type)

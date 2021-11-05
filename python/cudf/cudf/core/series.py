@@ -4624,10 +4624,10 @@ class DatetimeProperties(object):
         Parameters
         ----------
         freq : str
-            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
             Must be a fixed frequency like 'S' (second) not 'ME' (month end).
             See `frequency aliases <https://pandas.pydata.org/docs/\
-                user_guide/timeseries.html#timeseries-offset-aliases>`_
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
             for more details on these aliases.
 
         Returns
@@ -4660,10 +4660,10 @@ class DatetimeProperties(object):
         Parameters
         ----------
         freq : str
-            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
             Must be a fixed frequency like 'S' (second) not 'ME' (month end).
             See `frequency aliases <https://pandas.pydata.org/docs/\
-                user_guide/timeseries.html#timeseries-offset-aliases>`_
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
             for more details on these aliases.
 
         Returns
