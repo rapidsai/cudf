@@ -229,7 +229,7 @@ template <aggregation::Kind K>
 struct group_reduction_functor<
   K,
   cudf::struct_view,
-  std::enable_if_t<is_group_redution_supported<K, cudf::struct_view>()>> {
+  std::enable_if_t<is_group_reduction_supported<K, cudf::struct_view>()>> {
   static std::unique_ptr<column> invoke(column_view const& values,
                                         size_type num_groups,
                                         cudf::device_span<cudf::size_type const> group_labels,
