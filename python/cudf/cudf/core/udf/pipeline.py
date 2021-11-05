@@ -150,6 +150,7 @@ def get_udf_return_type(frame, func: Callable, args=()):
         else numba_output_type.value_type
     )
 
+
 def masked_array_type_from_col(col):
     """
     Return a type representing a tuple of arrays,
