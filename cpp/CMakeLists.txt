@@ -163,10 +163,7 @@ include(cmake/Modules/FindcuFile.cmake)
 # ##################################################################################################
 # * library targets -------------------------------------------------------------------------------
 
-add_library(
-  cudf
-  src/groupby/test.cu
-)
+add_library(cudf src/groupby/test.cu)
 
 set_target_properties(
   cudf
