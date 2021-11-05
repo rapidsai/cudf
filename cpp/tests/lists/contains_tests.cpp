@@ -137,6 +137,12 @@ TYPED_TEST(TypedContainsTest, ScalarKeyWithNoNulls)
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
+    // CONTAINS NULLS
+    auto result   = lists::contains_null_elements(search_space);
+    auto expected = bools{0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
+  }
+  {
     // FIND_FIRST
     auto result   = lists::index_of(search_space, *search_key_one, FIND_FIRST);
     auto expected = indices{1, absent, absent, 2, absent, absent, absent, absent, 0, absent};
@@ -172,6 +178,12 @@ TYPED_TEST(TypedContainsTest, ScalarKeyWithNullLists)
     // CONTAINS
     auto result   = lists::contains(search_space, *search_key_one);
     auto expected = bools{{1, 0, 0, x, 1, 0, 0, 0, 0, 1, x}, nulls_at({3, 10})};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
+  }
+  {
+    // CONTAINS NULLS
+    auto result   = lists::contains_null_elements(search_space);
+    auto expected = bools{{0, 0, 0, x, 0, 0, 0, 0, 0, 0, x}, nulls_at({3, 10})};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
@@ -220,6 +232,12 @@ TYPED_TEST(TypedContainsTest, SlicedLists)
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, result->view());
     }
     {
+      // CONTAINS NULLS
+      auto result          = lists::contains_null_elements(sliced_column_1);
+      auto expected_result = bools{{0, 0, x, 0, 0, 0, 0}, null_at(2)};
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, result->view());
+    }
+    {
       // FIND_FIRST
       auto result          = lists::index_of(sliced_column_1, *search_key_one, FIND_FIRST);
       auto expected_result = indices{{absent, absent, 0, 2, absent, absent, absent}, null_at(2)};
@@ -241,6 +259,12 @@ TYPED_TEST(TypedContainsTest, SlicedLists)
       // CONTAINS
       auto result          = lists::contains(sliced_column_2, *search_key_one);
       auto expected_result = bools{{x, 1, 0, 0, 0, 0, 1}, null_at(0)};
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, result->view());
+    }
+    {
+      // CONTAINS NULLS
+      auto result          = lists::contains_null_elements(sliced_column_2);
+      auto expected_result = bools{{x, 0, 0, 0, 0, 0, 0}, null_at(0)};
       CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_result, result->view());
     }
     {
@@ -273,6 +297,12 @@ TYPED_TEST(TypedContainsTest, ScalarKeyNonNullListsWithNullValues)
     // CONTAINS
     auto result   = lists::contains(search_space->view(), *search_key_one);
     auto expected = bools{0, 1, 0, 0, 0, 0, 0, 1};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
+  }
+  {
+    // CONTAINS NULLS
+    auto result   = lists::contains_null_elements(search_space->view());
+    auto expected = bools{1, 0, 1, 0, 0, 1, 1, 1};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
@@ -313,6 +343,12 @@ TYPED_TEST(TypedContainsTest, ScalarKeysWithNullsInLists)
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
+    // CONTAINS NULLS.
+    auto result   = lists::contains_null_elements(search_space->view());
+    auto expected = bools{{1, 0, 1, 0, x, 1, 1, 1}, null_at(4)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
+  }
+  {
     // FIND_FIRST.
     auto result   = lists::index_of(search_space->view(), *search_key_one, FIND_FIRST);
     auto expected = indices{{absent, 0, absent, absent, x, absent, absent, 0}, null_at(4)};
@@ -346,6 +382,12 @@ TEST_F(ContainsTest, BoolScalarWithNullsInLists)
     // CONTAINS
     auto result   = lists::contains(search_space->view(), *search_key_one);
     auto expected = bools{{0, 1, 1, 0, x, 1, 0, 1}, null_at(4)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
+  }
+  {
+    // CONTAINS NULLS
+    auto result   = lists::contains_null_elements(search_space->view());
+    auto expected = bools{{1, 0, 1, 0, x, 1, 1, 1}, null_at(4)};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {
@@ -383,6 +425,12 @@ TEST_F(ContainsTest, StringScalarWithNullsInLists)
     // CONTAINS
     auto result   = lists::contains(search_space->view(), *search_key_one);
     auto expected = bools{{0, 1, 0, 0, x, 0, 0, 1}, null_at(4)};
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
+  }
+  {
+    // CONTAINS NULLS
+    auto result   = lists::contains_null_elements(search_space->view());
+    auto expected = bools{{1, 0, 1, 0, x, 1, 1, 1}, null_at(4)};
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected, *result);
   }
   {

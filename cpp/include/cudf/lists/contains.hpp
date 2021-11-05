@@ -37,7 +37,7 @@ namespace lists {
  * Output `column[i]` is set to null if one or more of the following are true:
  *   1. The search key `search_key` is null
  *   2. The list row `lists[i]` is null
- *   3. The list row `lists[i]` does not contain the search key, and contains at least
+ *   3. The list row `lists[i]` does not contain ddthe search key, and contains at least
  *      one null.
  *
  * @param lists Lists column whose `n` rows are to be searched
@@ -72,6 +72,24 @@ std::unique_ptr<column> contains(
 std::unique_ptr<column> contains(
   cudf::lists_column_view const& lists,
   cudf::column_view const& search_keys,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Create a column of bool values indicating whether each row in the `lists` column
+ * contains at least one null element.
+ *
+ * The output column has as many elements as the input `lists` column.
+ * Output `column[i]` is set to null the list row `lists[i]` is null.
+ * Otherwise, `column[i]` is set to a non-null boolean value, depending on whether that list
+ * contains a null element.
+ * (Empty list rows are considered *NOT* to contain a null element.)
+ *
+ * @param lists Lists column whose `n` rows are to be searched
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ * @return std::unique_ptr<column> BOOL8 column of `n` rows with the result of the lookup
+ */
+std::unique_ptr<column> contains_null_elements(
+  cudf::lists_column_view const& lists,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

@@ -4381,6 +4381,22 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testListContainsNulls() {
+    List<String> list1 = Arrays.asList("Héllo there", "thésé");
+    List<String> list2 = Arrays.asList("", "ARé some", "test strings");
+    List<String> list3 = Arrays.asList("FOO", "", "ARé some", "test");
+    List<String> list4 = Arrays.asList(null, "FOO", "", "ARé some", "test");
+    List<String> list5 = Arrays.asList(null, "FOO", "", "ARé some", "test");
+    List<String> list6 = null;
+    try (ColumnVector v = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+        new HostColumnVector.BasicType(true, DType.STRING)), list1, list2, list3, list4, list5, list6);
+         ColumnVector result = v.listContainsNullElements()) {
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, true, true, true);
+      assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
   void testListContainsIntCol() {
     List<Integer> list1 = Arrays.asList(1, 2, 3);
     List<Integer> list2 = Arrays.asList(4, 5, 6);

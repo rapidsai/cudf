@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
@@ -359,6 +360,40 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
 {
   CUDF_FUNC_RANGE();
   return detail::contains(lists, search_keys, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> contains_null_elements(cudf::lists_column_view const& input_lists,
+                                               rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+
+  auto stream = rmm::cuda_stream_default;
+
+  auto const num_rows   = input_lists.size();
+  auto const d_lists    = column_device_view::create(input_lists.parent());
+  auto has_nulls_output = make_numeric_column(
+    data_type{type_id::BOOL8}, input_lists.size(), mask_state::UNALLOCATED, stream, mr);
+  auto const output_begin = has_nulls_output->mutable_view().begin<bool>();
+  thrust::tabulate(
+    rmm::exec_policy(stream),
+    output_begin,
+    output_begin + num_rows,
+    [lists = cudf::detail::lists_column_device_view{*d_lists}] __device__(auto list_idx) {
+      auto list       = list_device_view{lists, list_idx};
+      auto list_begin = thrust::make_counting_iterator(size_type{0});
+      return list.is_null() ||
+             thrust::any_of(thrust::seq, list_begin, list_begin + list.size(), [&list](auto i) {
+               return list.is_null(i);
+             });
+    });
+  auto const validity_begin = cudf::detail::make_counting_transform_iterator(
+    0, [lists = cudf::detail::lists_column_device_view{*d_lists}] __device__(auto list_idx) {
+      return not list_device_view{lists, list_idx}.is_null();
+    });
+  auto [null_mask, num_nulls] = cudf::detail::valid_if(
+    validity_begin, validity_begin + num_rows, thrust::identity<bool>{}, stream, mr);
+  has_nulls_output->set_null_mask(std::move(null_mask), num_nulls);
+  return has_nulls_output;
 }
 
 std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
