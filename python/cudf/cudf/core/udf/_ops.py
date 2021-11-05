@@ -1,7 +1,6 @@
 import math
 import operator
 
-from cudf.core.dtypes import CategoricalDtype
 from cudf.utils.dtypes import (
     BOOL_TYPES,
     DATETIME_TYPES,
@@ -65,10 +64,3 @@ comparison_ops = [
 
 # currently only numeric types are supported.
 SUPPORTED_TYPES = NUMERIC_TYPES | BOOL_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES
-
-
-def _is_jit_supported_type(dtype):
-    # category dtype isn't hashable
-    if isinstance(dtype, CategoricalDtype):
-        return False
-    return str(dtype) in SUPPORTED_TYPES
