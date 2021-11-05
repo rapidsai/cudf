@@ -111,6 +111,9 @@ def _internal_read_csv(path, chunksize="256 MiB", **kwargs):
         return read_csv_without_chunksize(path, **kwargs)
 
     dask_reader = make_reader(cudf.read_csv, "read_csv", "CSV")
+    usecols = kwargs.get("usecols", None)
+    if usecols is not None:
+        kwargs.pop("usecols")
     meta = dask_reader(filenames[0], **kwargs)._meta
 
     dsk = {}
@@ -130,11 +133,14 @@ def _internal_read_csv(path, chunksize="256 MiB", **kwargs):
                     "names"
                 ] = meta.columns  # no header in the middle of the file
                 kwargs2["header"] = None
+            kwargs2["usecols"] = usecols
             dsk[(name, i)] = (apply, _read_csv, [fn, dtypes], kwargs2)
 
             i += 1
 
     divisions = [None] * (len(dsk) + 1)
+    if usecols is not None:
+        meta = meta[usecols]
     return dd.core.new_dd_object(dsk, name, meta, divisions)
 
 
