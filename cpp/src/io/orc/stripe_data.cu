@@ -122,14 +122,14 @@ struct orcdec_state_s {
     orc_rowdec_state_s rowdec;
   } u;
   union values {
-    uint8_t u8[block_size * 8];
-    uint32_t u32[block_size * 2];
-    int32_t i32[block_size * 2];
-    uint64_t u64[block_size];
-    int64_t i64[block_size];
-    double f64[block_size];
-    __int128_t i128[block_size];   // TMP
-    __uint128_t u128[block_size];  // TMP
+    uint8_t u8[block_size * 16];
+    uint32_t u32[block_size * 4];
+    int32_t i32[block_size * 4];
+    uint64_t u64[block_size * 2];
+    int64_t i64[block_size * 2];
+    double f64[block_size * 2];
+    __int128_t i128[block_size];
+    __uint128_t u128[block_size];
   } vals;
 };
 
