@@ -81,7 +81,7 @@ def to_dlpack(cudf_obj):
         )
 
     if any(
-        (not cudf.api.types._is_non_decimal_numeric_dtype(col.dtype))
+        not cudf.api.types._is_non_decimal_numeric_dtype(col.dtype)
         for col in gdf._data.columns
     ):
         raise TypeError("non-numeric data not yet supported")
