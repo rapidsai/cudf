@@ -403,6 +403,22 @@ TYPED_TEST(TypedDatetimeOpsTest, TestCeilDatetime)
   auto expected_millisecond = fixed_width_column_wrapper<T, typename T::duration::rep>(
     ceiled_millisecond.begin(), ceiled_millisecond.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ceil_millisecond(input), expected_millisecond);
+
+  std::vector<T> ceiled_microsecond(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), ceiled_microsecond.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(ceil<microseconds>(i));
+  });
+  auto expected_microsecond = fixed_width_column_wrapper<T, typename T::duration::rep>(
+    ceiled_microsecond.begin(), ceiled_microsecond.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ceil_microsecond(input), expected_microsecond);
+
+  std::vector<T> ceiled_nanosecond(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), ceiled_nanosecond.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(ceil<nanoseconds>(i));
+  });
+  auto expected_nanosecond = fixed_width_column_wrapper<T, typename T::duration::rep>(
+    ceiled_nanosecond.begin(), ceiled_nanosecond.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ceil_millisecond(input), expected_nanosecond);
 }
 
 TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithDate)
@@ -881,6 +897,22 @@ TYPED_TEST(TypedDatetimeOpsTest, TestFloorDatetime)
   auto expected_millisecond = fixed_width_column_wrapper<T, typename T::duration::rep>(
     floored_millisecond.begin(), floored_millisecond.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*floor_millisecond(input), expected_millisecond);
+
+  std::vector<T> floored_microsecond(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), floored_microsecond.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(floor<microseconds>(i));
+  });
+  auto expected_microsecond = fixed_width_column_wrapper<T, typename T::duration::rep>(
+    floored_microsecond.begin(), floored_microsecond.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*floor_second(input), expected_microsecond);
+
+  std::vector<T> floored_nanosecond(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), floored_nanosecond.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(floor<nanoseconds>(i));
+  });
+  auto expected_nanosecond = fixed_width_column_wrapper<T, typename T::duration::rep>(
+    floored_nanosecond.begin(), floored_nanosecond.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*floor_millisecond(input), expected_nanosecond);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
