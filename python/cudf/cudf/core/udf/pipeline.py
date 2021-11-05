@@ -144,14 +144,11 @@ def get_udf_return_type(frame, func: Callable, args=()):
     else:
         numba_output_type = output_type
 
-    scalar_return_type = (
+    return (
         numba_output_type
         if not isinstance(numba_output_type, MaskedType)
         else numba_output_type.value_type
     )
-
-    return scalar_return_type
-
 
 def masked_array_type_from_col(col):
     """
