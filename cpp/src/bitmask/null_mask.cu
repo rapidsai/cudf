@@ -318,11 +318,11 @@ void inplace_bitmask_and(device_span<bitmask_type> dest_mask,
 }
 
 // Bitwise AND of the masks
-std::pair<rmm::device_buffer, size_type> bitmask_and(host_span<bitmask_type const*> masks,
-                                                     host_span<size_type const> begin_bits,
-                                                     size_type mask_size,
-                                                     rmm::cuda_stream_view stream,
-                                                     rmm::mr::device_memory_resource* mr)
+bitmask bitmask_and(host_span<bitmask_type const*> masks,
+                    host_span<size_type const> begin_bits,
+                    size_type mask_size,
+                    rmm::cuda_stream_view stream,
+                    rmm::mr::device_memory_resource* mr)
 {
   return bitmask_binop(
     [] __device__(bitmask_type left, bitmask_type right) { return left & right; },
@@ -334,14 +334,14 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(host_span<bitmask_type cons
 }
 
 // Returns the bitwise AND of the null masks of all columns in the table view
-std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
-                                                     rmm::cuda_stream_view stream,
-                                                     rmm::mr::device_memory_resource* mr)
+bitmask bitmask_and(table_view const& view,
+                    rmm::cuda_stream_view stream,
+                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   rmm::device_buffer null_mask{0, stream, mr};
   if (view.num_rows() == 0 or view.num_columns() == 0) {
-    return std::make_pair(std::move(null_mask), 0);
+    return bitmask{std::move(null_mask), 0, 0};
   }
 
   std::vector<bitmask_type const*> masks;
@@ -363,7 +363,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
       mr);
   }
 
-  return std::make_pair(std::move(null_mask), 0);
+  return bitmask{std::move(null_mask), 0, 0};
 }
 
 cudf::size_type count_set_bits(bitmask_type const* bitmask,
@@ -430,7 +430,7 @@ rmm::device_buffer bitmask_or(table_view const& view,
              view.num_rows(),
              stream,
              mr)
-      .first;
+      .mask;
   }
 
   return null_mask;
@@ -505,8 +505,7 @@ rmm::device_buffer copy_bitmask(column_view const& view, rmm::mr::device_memory_
   return detail::copy_bitmask(view, rmm::cuda_stream_default, mr);
 }
 
-std::pair<rmm::device_buffer, size_type> bitmask_and(table_view const& view,
-                                                     rmm::mr::device_memory_resource* mr)
+bitmask bitmask_and(table_view const& view, rmm::mr::device_memory_resource* mr)
 {
   return detail::bitmask_and(view, rmm::cuda_stream_default, mr);
 }
