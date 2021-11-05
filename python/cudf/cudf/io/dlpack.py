@@ -1,10 +1,9 @@
-# Copyright (c) 2019-2020, NVIDIA CORPORATION.
+# Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
+
+import cudf
 from cudf._lib import interop as libdlpack
 from cudf.core.column import ColumnBase
-from cudf.core.dataframe import DataFrame
-from cudf.core.index import BaseIndex
-from cudf.core.series import Series
 from cudf.utils import ioutils
 
 
@@ -38,9 +37,9 @@ def from_dlpack(pycapsule_obj):
     data, _ = libdlpack.from_dlpack(pycapsule_obj)
 
     if len(data) == 1:
-        return Series._from_data(data)
+        return cudf.Series._from_data(data)
     else:
-        return DataFrame._from_data(data)
+        return cudf.DataFrame._from_data(data)
 
 
 @ioutils.doc_to_dlpack()
@@ -71,14 +70,25 @@ def to_dlpack(cudf_obj):
     if len(cudf_obj) == 0:
         raise ValueError("Cannot create DLPack tensor of 0 size")
 
-    if isinstance(cudf_obj, (DataFrame, Series, BaseIndex)):
-        gdf_cols = cudf_obj
+    if isinstance(cudf_obj, (cudf.DataFrame, cudf.Series, cudf.BaseIndex)):
+        gdf = cudf_obj
     elif isinstance(cudf_obj, ColumnBase):
-        gdf_cols = cudf_obj.as_frame()
+        gdf = cudf_obj.as_frame()
     else:
         raise TypeError(
             f"Input of type {type(cudf_obj)} cannot be converted "
             "to DLPack tensor"
         )
 
-    return libdlpack.to_dlpack(gdf_cols)
+    if any(
+        not cudf.api.types._is_non_decimal_numeric_dtype(col.dtype)
+        for col in gdf._data.columns
+    ):
+        raise TypeError("non-numeric data not yet supported")
+
+    dtype = cudf.utils.dtypes.find_common_type(
+        [col.dtype for col in gdf._data.columns]
+    )
+    gdf = gdf.astype(dtype)
+
+    return libdlpack.to_dlpack(gdf)
