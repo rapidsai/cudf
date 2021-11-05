@@ -268,8 +268,8 @@ class element_relational_comparator {
    * @param null_precedence Indicates how null values are ordered with other
    * values
    */
-  __host__ __device__ element_relational_comparator(column_device_view const& lhs,
-                                                    column_device_view const& rhs,
+  __host__ __device__ element_relational_comparator(column_device_view lhs,
+                                                    column_device_view rhs,
                                                     null_order null_precedence)
     : lhs{lhs}, rhs{rhs}, null_precedence{null_precedence}
   {
@@ -316,28 +316,6 @@ class element_relational_comparator {
 };
 
 /**
- * @brief Performs a relational comparison between two elements in two columns at the
- * corresponding given indices.
- *
- * This function is explicitly prevented from inlining because it is very heavy-weight due
- * type-dispatching.
- *
- * @tparam has_nulls Indicates the potential for null values in either column.
- */
-template <bool has_nulls>
-__attribute__((noinline)) __device__ weak_ordering
-compare_column_elements(data_type type,
-                        column_device_view const& lhs,
-                        column_device_view const& rhs,
-                        null_order null_precedence,
-                        size_type lhs_idx,
-                        size_type rhs_idx)
-{
-  auto const comp = element_relational_comparator<has_nulls>{lhs, rhs, null_precedence};
-  return cudf::type_dispatcher(type, comp, lhs_idx, rhs_idx);
-}
-
-/**
  * @brief Computes whether one row is lexicographically *less* than another row.
  *
  * Lexicographic ordering is determined by:
@@ -372,8 +350,8 @@ class row_lexicographic_comparator {
    * it is nullptr, then null precedence would be `null_order::BEFORE` for all
    * columns.
    */
-  row_lexicographic_comparator(table_device_view const& lhs,
-                               table_device_view const& rhs,
+  row_lexicographic_comparator(table_device_view lhs,
+                               table_device_view rhs,
                                order const* column_order         = nullptr,
                                null_order const* null_precedence = nullptr)
     : _lhs{lhs}, _rhs{rhs}, _column_order{column_order}, _null_precedence{null_precedence}
@@ -395,19 +373,20 @@ class row_lexicographic_comparator {
   __device__ bool operator()(size_type lhs_index, size_type rhs_index) const noexcept
   {
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
-      auto const ascending = (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
-      auto const null_precedence =
+      bool ascending = (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
+
+      weak_ordering state{weak_ordering::EQUIVALENT};
+      null_order null_precedence =
         _null_precedence == nullptr ? null_order::BEFORE : _null_precedence[i];
 
-      auto const state = compare_column_elements<has_nulls>(_lhs.column(i).type(),
-                                                            _lhs.column(i),
-                                                            _rhs.column(i),
-                                                            null_precedence,
-                                                            lhs_index,
-                                                            rhs_index);
-      if (state != weak_ordering::EQUIVALENT) {
-        return state == (ascending ? weak_ordering::LESS : weak_ordering::GREATER);
-      }
+      auto comparator =
+        element_relational_comparator<has_nulls>{_lhs.column(i), _rhs.column(i), null_precedence};
+
+      state = cudf::type_dispatcher(_lhs.column(i).type(), comparator, lhs_index, rhs_index);
+
+      if (state == weak_ordering::EQUIVALENT) { continue; }
+
+      return state == (ascending ? weak_ordering::LESS : weak_ordering::GREATER);
     }
     return false;
   }
