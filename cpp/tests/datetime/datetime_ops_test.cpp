@@ -418,7 +418,7 @@ TYPED_TEST(TypedDatetimeOpsTest, TestCeilDatetime)
   });
   auto expected_nanosecond = fixed_width_column_wrapper<T, typename T::duration::rep>(
     ceiled_nanosecond.begin(), ceiled_nanosecond.end());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ceil_millisecond(input), expected_nanosecond);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*ceil_nanosecond(input), expected_nanosecond);
 }
 
 TEST_F(BasicDatetimeOpsTest, TestDayOfYearWithDate)
