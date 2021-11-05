@@ -111,9 +111,7 @@ def _internal_read_csv(path, chunksize="256 MiB", **kwargs):
         return read_csv_without_chunksize(path, **kwargs)
 
     dask_reader = make_reader(cudf.read_csv, "read_csv", "CSV")
-    usecols = kwargs.get("usecols", None)
-    if usecols is not None:
-        kwargs.pop("usecols")
+    usecols = kwargs.pop("usecols", None)
     meta = dask_reader(filenames[0], **kwargs)._meta
 
     dsk = {}
