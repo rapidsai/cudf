@@ -1449,4 +1449,54 @@ TEST_F(OrcReaderTest, DecimalOptions)
   EXPECT_THROW(cudf_io::read_orc(invalid_opts), cudf::logic_error);
 }
 
+TEST_F(OrcWriterTest, DecimalOptionsNested)
+{
+  auto const num_rows = 100;
+
+  auto dec_vals  = random_values<int32_t>(num_rows);
+  auto keys_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    return numeric::decimal64{dec_vals[i], numeric::scale_type{2}};
+  });
+  auto vals_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+    return numeric::decimal128{dec_vals[i], numeric::scale_type{2}};
+  });
+  auto validity  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  column_wrapper<numeric::decimal64> keys_col{keys_data, keys_data + num_rows, validity};
+  column_wrapper<numeric::decimal128> vals_col{vals_data, vals_data + num_rows, validity};
+
+  auto struct_col = cudf::test::structs_column_wrapper({keys_col, vals_col}).release();
+
+  std::vector<int> row_offsets(num_rows + 1);
+  std::iota(row_offsets.begin(), row_offsets.end(), 0);
+  cudf::test::fixed_width_column_wrapper<int> offsets(row_offsets.begin(), row_offsets.end());
+
+  auto list_col =
+    cudf::make_lists_column(num_rows,
+                            offsets.release(),
+                            std::move(struct_col),
+                            cudf::UNKNOWN_NULL_COUNT,
+                            cudf::test::detail::make_null_mask(validity, validity + num_rows));
+
+  table_view expected({*list_col});
+
+  cudf_io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_name("lists");
+  expected_metadata.column_metadata[0].child(1).child(0).set_name("dec64");
+  expected_metadata.column_metadata[0].child(1).child(1).set_name("dec128");
+
+  auto filepath = temp_env->get_temp_filepath("OrcMultiColumn.orc");
+  cudf_io::orc_writer_options out_opts =
+    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+      .metadata(&expected_metadata);
+  cudf_io::write_orc(out_opts);
+
+  cudf_io::orc_reader_options in_opts =
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
+      .use_index(false)
+      .decimal128_columns({"lists.1.dec128"});
+  auto result = cudf_io::read_orc(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
 CUDF_TEST_PROGRAM_MAIN()

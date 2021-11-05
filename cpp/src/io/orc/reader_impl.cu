@@ -234,15 +234,15 @@ auto decimal_column_type(const std::vector<std::string>& float64_columns,
                          cudf::io::orc::metadata& metadata,
                          int column_index)
 {
-  auto const& column_name = metadata.column_name(column_index);
+  auto const& column_path = metadata.column_path(column_index);
   auto is_column_in       = [&](const std::vector<std::string>& cols) {
-    return std::find(cols.cbegin(), cols.cend(), column_name) != cols.end();
+    return std::find(cols.cbegin(), cols.cend(), column_path) != cols.end();
   };
 
   auto const user_selected_float64    = is_column_in(float64_columns);
   auto const user_selected_decimal128 = is_column_in(decimal128_columns);
   CUDF_EXPECTS(not user_selected_float64 or not user_selected_decimal128,
-               "Both decimal128 and float64 types selected for column " + column_name);
+               "Both decimal128 and float64 types selected for column " + column_path);
 
   if (user_selected_float64) return type_id::FLOAT64;
   if (user_selected_decimal128) return type_id::DECIMAL128;

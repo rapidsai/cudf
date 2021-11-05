@@ -139,7 +139,7 @@ class orc_reader_options {
   data_type get_timestamp_type() const { return _timestamp_type; }
 
   /**
-   * @brief Columns that should be converted from Decimal to Float64.
+   * @brief Fully qualified names of columns that should be converted from Decimal to Float64.
    */
   std::vector<std::string> const& get_decimal_cols_as_float() const
   {
@@ -147,7 +147,7 @@ class orc_reader_options {
   }
 
   /**
-   * @brief Columns that should be read as 128-bit Decimal
+   * @brief Fully qualified names of columns that should be read as 128-bit Decimal.
    */
   std::vector<std::string> const& get_decimal128_columns() const { return _decimal128_columns; }
 
@@ -218,7 +218,7 @@ class orc_reader_options {
   /**
    * @brief Set columns that should be converted from Decimal to Float64
    *
-   * @param val Vector of column names.
+   * @param val Vector of fully qualified column names.
    */
   void set_decimal_cols_as_float(std::vector<std::string> val)
   {
@@ -228,7 +228,7 @@ class orc_reader_options {
   /**
    * @brief Set columns that should be read as 128-bit Decimal
    *
-   * @param val Vector of column names.
+   * @param val Vector of fully qualified column names.
    */
   void set_decimal128_columns(std::vector<std::string> val)
   {

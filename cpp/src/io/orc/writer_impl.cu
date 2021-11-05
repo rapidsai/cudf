@@ -1776,7 +1776,7 @@ void writer::impl::write(table_view const& table)
     [&](column_in_metadata& col_meta, std::string default_name) {
       if (col_meta.get_name().empty()) col_meta.set_name(default_name);
       for (size_type i = 0; i < col_meta.num_children(); ++i) {
-        add_default_name(col_meta.child(i), col_meta.get_name() + "." + std::to_string(i));
+        add_default_name(col_meta.child(i), std::to_string(i));
       }
     };
   for (size_t i = 0; i < table_meta->column_metadata.size(); ++i) {
