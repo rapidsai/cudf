@@ -81,18 +81,11 @@ void scan_result_functor::operator()<aggregation::MIN>(aggregation const& agg)
 {
   if (cache.has_result(values, agg)) return;
 
-  auto result =
-    values.type().id() == type_id::STRUCT
-      ? detail::minmax_scan_struct(aggregation::MIN,
-                                   get_grouped_values(),
-                                   helper.num_groups(stream),
-                                   helper.group_labels(stream),
-                                   stream,
-                                   mr)
-      : detail::min_scan(
-          get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr);
-
-  cache.add_result(values, agg, std::move(result));
+  cache.add_result(
+    values,
+    agg,
+    detail::min_scan(
+      get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr));
 }
 
 template <>
@@ -100,18 +93,11 @@ void scan_result_functor::operator()<aggregation::MAX>(aggregation const& agg)
 {
   if (cache.has_result(values, agg)) return;
 
-  auto result =
-    values.type().id() == type_id::STRUCT
-      ? detail::minmax_scan_struct(aggregation::MAX,
-                                   get_grouped_values(),
-                                   helper.num_groups(stream),
-                                   helper.group_labels(stream),
-                                   stream,
-                                   mr)
-      : detail::max_scan(
-          get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr);
-
-  cache.add_result(values, agg, std::move(result));
+  cache.add_result(
+    values,
+    agg,
+    detail::max_scan(
+      get_grouped_values(), helper.num_groups(stream), helper.group_labels(stream), stream, mr));
 }
 
 template <>

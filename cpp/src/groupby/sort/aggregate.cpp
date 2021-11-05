@@ -117,22 +117,14 @@ void aggregate_result_functor::operator()<aggregation::ARGMAX>(aggregation const
 {
   if (cache.has_result(values, agg)) return;
 
-  auto result = values.type().id() == type_id::STRUCT
-                  ? detail::group_argminmax_struct(aggregation::ARGMAX,
-                                                   get_grouped_values(),
-                                                   helper.num_groups(stream),
-                                                   helper.group_labels(stream),
-                                                   helper.key_sort_order(stream),
-                                                   stream,
-                                                   mr)
-                  : detail::group_argmax(get_grouped_values(),
-                                         helper.num_groups(stream),
-                                         helper.group_labels(stream),
-                                         helper.key_sort_order(stream),
-                                         stream,
-                                         mr);
-
-  cache.add_result(values, agg, std::move(result));
+  cache.add_result(values,
+                   agg,
+                   detail::group_argmax(get_grouped_values(),
+                                        helper.num_groups(stream),
+                                        helper.group_labels(stream),
+                                        helper.key_sort_order(stream),
+                                        stream,
+                                        mr));
 };
 
 template <>
@@ -140,22 +132,14 @@ void aggregate_result_functor::operator()<aggregation::ARGMIN>(aggregation const
 {
   if (cache.has_result(values, agg)) return;
 
-  auto result = values.type().id() == type_id::STRUCT
-                  ? detail::group_argminmax_struct(aggregation::ARGMIN,
-                                                   get_grouped_values(),
-                                                   helper.num_groups(stream),
-                                                   helper.group_labels(stream),
-                                                   helper.key_sort_order(stream),
-                                                   stream,
-                                                   mr)
-                  : detail::group_argmin(get_grouped_values(),
-                                         helper.num_groups(stream),
-                                         helper.group_labels(stream),
-                                         helper.key_sort_order(stream),
-                                         stream,
-                                         mr);
-
-  cache.add_result(values, agg, std::move(result));
+  cache.add_result(values,
+                   agg,
+                   detail::group_argmin(get_grouped_values(),
+                                        helper.num_groups(stream),
+                                        helper.group_labels(stream),
+                                        helper.key_sort_order(stream),
+                                        stream,
+                                        mr));
 };
 
 template <>
