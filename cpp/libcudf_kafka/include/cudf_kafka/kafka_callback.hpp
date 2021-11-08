@@ -39,7 +39,7 @@ namespace kafka {
  * expired.
  *
  * The callback function signature is:
- *     `PyObject* kafka_oauth_callback_t()`
+ *     `PyObject* kafka_oauth_callback_t()
  *
  * The callback function returns a PyObject, Python Tuple,
  * where the Tuple consists of the Oauth token and its
@@ -47,7 +47,7 @@ namespace kafka {
  * time is retrieved from an external service by the callback.
  * Ex: [token, token_expiration_in_epoch]
  */
-using kafka_oauth_callback_t = std::function<PyObject*()>;
+using kafka_oauth_callback_t = PyObject* (*)();
 
 /**
  * @brief Callback to retrieve OAuth token from external source. Invoked when
@@ -60,7 +60,7 @@ class PythonOAuthRefreshCb : public RdKafka::OAuthBearerTokenRefreshCb {
   void oauthbearer_token_refresh_cb(RdKafka::Handle* handle, const std::string& oauthbearer_config);
 
  private:
-  kafka_oauth_callback_t oauth_callback;
+  kafka_oauth_callback_t oauth_callback_;
 };
 
 }  // namespace kafka

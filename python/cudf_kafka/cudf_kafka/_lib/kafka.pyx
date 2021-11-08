@@ -1,6 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 cimport cpython
+from cpython.ref cimport PyObject
 from libc.stdint cimport int32_t, int64_t
 from libcpp cimport bool
 from libcpp.map cimport map
@@ -24,16 +25,12 @@ cdef class KafkaDatasource(Datasource):
                   string delimiter=b"",):
 
         cdef map[string, string] configs
-        cdef kafka_oauth_callback_t cb
+        cdef PyObject* (*cb)()
 
         for key in kafka_configs:
             if key == 'oauth_cb':
                 if callable(kafka_configs[key]):
-                    # kafka_oauth_callback_t in C++ is
-                    # std::function<PyObject*()>
-                    # Takes no params and returns PyObject
-                    # cb = <kafka_oauth_callback_t>kafka_configs[key]
-                    print("^^^ is erroring...")
+                    print("oauth_cb type: " + str(type(kafka_configs[key])))
                 else:
                     raise TypeError("'oauth_cb' configuration must \
                                       be a Python callable object")

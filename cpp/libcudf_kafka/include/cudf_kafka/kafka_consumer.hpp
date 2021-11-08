@@ -55,7 +55,7 @@ class kafka_consumer : public cudf::io::datasource {
    * @param oauth_callback `kafka_oauth_callback_t` Python callable provided by the
    *                user to this constructor. This callback is responsible for both
    *                retrieving the initial OAuth token and refreshing the OAuth
-   *                token when it expires
+   *                token when it expireskafka_oauth_callback_t
    */
   kafka_consumer(std::map<std::string, std::string> configs, kafka_oauth_callback_t oauth_callback);
 
@@ -192,7 +192,7 @@ class kafka_consumer : public cudf::io::datasource {
   std::unique_ptr<RdKafka::KafkaConsumer> consumer;
 
   std::map<std::string, std::string> configs;
-  kafka_oauth_callback_t oauth_callback;
+  kafka_oauth_callback_t oauth_callback_;
 
   std::string topic_name;
   int partition;

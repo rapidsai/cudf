@@ -26,7 +26,7 @@ namespace kafka {
 kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
                                kafka_oauth_callback_t oauth_callback)
   : configs(configs),
-    oauth_callback(oauth_callback),
+    oauth_callback_(oauth_callback),
     kafka_conf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL))
 {
   for (auto const& key_value : configs) {
@@ -60,7 +60,7 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
                                int batch_timeout,
                                std::string const& delimiter)
   : configs(configs),
-    oauth_callback(oauth_callback),
+    oauth_callback_(oauth_callback),
     topic_name(topic_name),
     partition(partition),
     start_offset(start_offset),

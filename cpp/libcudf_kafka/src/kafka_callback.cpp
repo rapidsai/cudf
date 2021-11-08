@@ -21,14 +21,14 @@ namespace io {
 namespace external {
 namespace kafka {
 
-PythonOAuthRefreshCb::PythonOAuthRefreshCb(kafka_oauth_callback_t cb) : oauth_callback(cb){};
+PythonOAuthRefreshCb::PythonOAuthRefreshCb(kafka_oauth_callback_t cb) : oauth_callback_(cb){};
 
 void PythonOAuthRefreshCb::oauthbearer_token_refresh_cb(RdKafka::Handle* handle,
                                                         const std::string& oauthbearer_config)
 {
   // Make sure that we own the GIL
   PyGILState_STATE state = PyGILState_Ensure();
-  PyObject* result       = oauth_callback();
+  PyObject* result       = oauth_callback_();
   Py_XINCREF(result);
 
   // Set the token in the Kafka context
