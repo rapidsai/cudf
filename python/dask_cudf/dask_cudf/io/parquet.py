@@ -69,6 +69,8 @@ class CudfEngine(ArrowDatasetEngine):
         partitions=None,
         partitioning=None,
         partition_keys=None,
+        open_parquet_file_kwargs=None,
+        use_python_file_object=None,
         **kwargs,
     ):
 
@@ -83,7 +85,7 @@ class CudfEngine(ArrowDatasetEngine):
             if not cudf.utils.ioutils._is_local_filesystem(fs):
 
                 # Define remote_open
-                if fsspec_parquet is None:
+                if fsspec_parquet is None or use_python_file_object is False:
                     remote_open = fs.open
                 else:
                     remote_open = partial(
@@ -92,7 +94,9 @@ class CudfEngine(ArrowDatasetEngine):
                         columns=columns,
                         row_groups=row_groups,
                         engine="pyarrow",
+                        **(open_parquet_file_kwargs or {}),
                     )
+                    use_python_file_object = True
 
                 # Convert paths to file objects for remote data
                 paths_or_fobs = [
@@ -107,6 +111,7 @@ class CudfEngine(ArrowDatasetEngine):
                 columns=columns,
                 row_groups=row_groups if row_groups else None,
                 strings_to_categorical=strings_to_categorical,
+                use_python_file_object=use_python_file_object,
                 **kwargs,
             )
 
@@ -186,7 +191,10 @@ class CudfEngine(ArrowDatasetEngine):
         if not isinstance(pieces, list):
             pieces = [pieces]
 
+        # Extract supported kwargs from `kwargs`
         strings_to_cats = kwargs.get("strings_to_categorical", False)
+        open_parquet_file_kwargs = kwargs.get("open_parquet_file", {})
+        read_kwargs = kwargs.get("read", {})
 
         # Assume multi-peice read
         paths = []
@@ -210,7 +218,8 @@ class CudfEngine(ArrowDatasetEngine):
                         partitions=partitions,
                         partitioning=partitioning,
                         partition_keys=last_partition_keys,
-                        **kwargs.get("read", {}),
+                        open_parquet_file_kwargs=open_parquet_file_kwargs,
+                        **read_kwargs,
                     )
                 )
                 paths = rgs = []
@@ -233,13 +242,14 @@ class CudfEngine(ArrowDatasetEngine):
                 partitions=partitions,
                 partitioning=partitioning,
                 partition_keys=last_partition_keys,
-                **kwargs.get("read", {}),
+                open_parquet_file_kwargs=open_parquet_file_kwargs,
+                **read_kwargs,
             )
         )
         df = cudf.concat(dfs) if len(dfs) > 1 else dfs[0]
 
         # Re-set "object" dtypes align with pa schema
-        set_object_dtypes_from_pa_schema(df, kwargs.get("schema", None))
+        set_object_dtypes_from_pa_schema(df, schema)
 
         if index and (index[0] in df.columns):
             df = df.set_index(index[0])
