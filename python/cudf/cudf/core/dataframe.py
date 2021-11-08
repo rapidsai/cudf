@@ -3246,7 +3246,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # TODO: Remove the typecasting below once issue #6846 is fixed
         # link <https://github.com/rapidsai/cudf/issues/6846>
         dtypes = [self[col].dtype for col in self._column_names]
-        common_dtype = cudf.utils.dtypes.find_common_type(dtypes)
+        common_dtype = find_common_type(dtypes)
         df_normalized = self.astype(common_dtype)
 
         if any(is_string_dtype(dt) for dt in dtypes):
@@ -3924,7 +3924,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         result_type: {'expand', 'reduce', 'broadcast', None}, default None
             Not yet supported
         args: tuple
-            Not yet supported
+            Positional arguments to pass to func in addition to the dataframe.
 
         Examples
         --------
@@ -4071,10 +4071,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise ValueError("The `raw` kwarg is not yet supported.")
         if result_type is not None:
             raise ValueError("The `result_type` kwarg is not yet supported.")
-        if args or kwargs:
-            raise ValueError("args and kwargs are not yet supported.")
+        if kwargs:
+            raise ValueError("UDFs using **kwargs are not yet supported.")
 
-        return self._apply(func)
+        return self._apply(func, *args)
 
     @applyutils.doc_apply()
     def apply_rows(
