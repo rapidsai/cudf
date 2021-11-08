@@ -55,50 +55,34 @@ static auto create_data_table(cudf::size_type n_rows)
   return create_random_table(col_ids, num_struct_members, row_count{n_rows}, table_profile);
 }
 
-// Max aggregation technically has the same performance as min.
-void BM_min_aggregation(benchmark::State& state)
+// Max aggregation/scan technically has the same performance as min.
+template <typename OpType>
+void BM_groupby_min_struct(benchmark::State& state)
 {
   auto const n_rows = static_cast<cudf::size_type>(state.range(0));
   auto data_cols    = create_data_table(n_rows)->release();
 
-  // Extract keys (integers column) and values (structs column).
   auto const keys_view = data_cols.front()->view();
   auto const values =
     cudf::make_structs_column(keys_view.size(), std::move(data_cols), 0, rmm::device_buffer());
 
-  auto gb_obj   = cudf::groupby::groupby(cudf::table_view({keys_view}));
-  auto requests = std::vector<cudf::groupby::aggregation_request>();
-  requests.emplace_back(cudf::groupby::aggregation_request());
-  requests.front().values = values->view();
-  requests.front().aggregations.push_back(cudf::make_min_aggregation<cudf::groupby_aggregation>());
-
-  for (auto _ : state) {
-    [[maybe_unused]] auto const timer  = cuda_event_timer(state, true);
-    [[maybe_unused]] auto const result = gb_obj.aggregate(requests);
-  }
-}
-
-// Max aggregation technically has the same performance as min.
-void BM_min_scan(benchmark::State& state)
-{
-  auto const n_rows = static_cast<cudf::size_type>(state.range(0));
-  auto data_cols    = create_data_table(n_rows)->release();
-
-  // Extract keys (integers column) and values (structs column).
-  auto const keys_view = data_cols.front()->view();
-  auto const values =
-    cudf::make_structs_column(keys_view.size(), std::move(data_cols), 0, rmm::device_buffer());
+  using RequestType = std::conditional_t<std::is_same_v<OpType, cudf::groupby_aggregation>,
+                                         cudf::groupby::aggregation_request,
+                                         cudf::groupby::scan_request>;
 
   auto gb_obj   = cudf::groupby::groupby(cudf::table_view({keys_view}));
-  auto requests = std::vector<cudf::groupby::scan_request>();
-  requests.emplace_back(cudf::groupby::scan_request());
+  auto requests = std::vector<RequestType>();
+  requests.emplace_back(RequestType());
   requests.front().values = values->view();
-  requests.front().aggregations.push_back(
-    cudf::make_min_aggregation<cudf::groupby_scan_aggregation>());
+  requests.front().aggregations.push_back(cudf::make_min_aggregation<OpType>());
 
   for (auto _ : state) {
-    [[maybe_unused]] auto const timer  = cuda_event_timer(state, true);
-    [[maybe_unused]] auto const result = gb_obj.scan(requests);
+    [[maybe_unused]] auto const timer = cuda_event_timer(state, true);
+    if constexpr (std::is_same_v<OpType, cudf::groupby_aggregation>) {
+      [[maybe_unused]] auto const result = gb_obj.aggregate(requests);
+    } else {
+      [[maybe_unused]] auto const result = gb_obj.scan(requests);
+    }
   }
 }
 
@@ -108,13 +92,16 @@ class Groupby : public cudf::benchmark {
 #define MIN_RANGE 10'000
 #define MAX_RANGE 10'000'000
 
-#define REGISTER_BENCHMARK(name, func)                                           \
-  BENCHMARK_DEFINE_F(Groupby, name)(::benchmark::State & state) { func(state); } \
-  BENCHMARK_REGISTER_F(Groupby, name)                                            \
-    ->UseManualTime()                                                            \
-    ->Unit(benchmark::kMillisecond)                                              \
-    ->RangeMultiplier(4)                                                         \
+#define REGISTER_BENCHMARK(name, op_type)                       \
+  BENCHMARK_DEFINE_F(Groupby, name)(::benchmark::State & state) \
+  {                                                             \
+    BM_groupby_min_struct<op_type>(state);                      \
+  }                                                             \
+  BENCHMARK_REGISTER_F(Groupby, name)                           \
+    ->UseManualTime()                                           \
+    ->Unit(benchmark::kMillisecond)                             \
+    ->RangeMultiplier(4)                                        \
     ->Ranges({{MIN_RANGE, MAX_RANGE}});
 
-REGISTER_BENCHMARK(Aggregation, BM_min_aggregation)
-REGISTER_BENCHMARK(Scan, BM_min_scan)
+REGISTER_BENCHMARK(Aggregation, cudf::groupby_aggregation)
+REGISTER_BENCHMARK(Scan, cudf::groupby_scan_aggregation)
