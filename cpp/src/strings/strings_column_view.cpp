@@ -14,18 +14,8 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_device_view.cuh>
-#include <cudf/detail/get_value.cuh>
-#include <cudf/detail/nvtx/ranges.hpp>
-#include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/error.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_uvector.hpp>
-#include <rmm/exec_policy.hpp>
-
-#include <thrust/transform.h>
 
 namespace cudf {
 //
@@ -42,6 +32,16 @@ column_view strings_column_view::offsets() const
   return child(offsets_column_index);
 }
 
+strings_column_view::offset_iterator strings_column_view::offsets_begin() const
+{
+  return offsets().begin<offset_type>() + offset();
+}
+
+strings_column_view::offset_iterator strings_column_view::offsets_end() const
+{
+  return offsets_begin() + size() + 1;
+}
+
 column_view strings_column_view::chars() const
 {
   CUDF_EXPECTS(num_children() > 0, "strings column has no children");
@@ -52,6 +52,16 @@ size_type strings_column_view::chars_size() const noexcept
 {
   if (size() == 0) return 0;
   return chars().size();
+}
+
+strings_column_view::chars_iterator strings_column_view::chars_begin() const
+{
+  return chars().begin<char>();
+}
+
+strings_column_view::chars_iterator strings_column_view::chars_end() const
+{
+  return chars_begin() + chars_size();
 }
 
 }  // namespace cudf

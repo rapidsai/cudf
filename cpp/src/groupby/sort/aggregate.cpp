@@ -573,6 +573,7 @@ void aggregate_result_functor::operator()<aggregation::COVARIANCE>(aggregation c
   CUDF_EXPECTS(values.num_children() == 2,
                "Input to `groupby covariance` must be a structs column having 2 children columns.");
 
+  auto const& cov_agg = dynamic_cast<cudf::detail::covariance_aggregation const&>(agg);
   // Covariance only for valid values in both columns.
   // in non-identical null mask cases, this prevents caching of the results - STD, MEAN, COUNT.
   auto [_, values_child0, values_child1] =
@@ -596,6 +597,8 @@ void aggregate_result_functor::operator()<aggregation::COVARIANCE>(aggregation c
                                             count,
                                             mean0,
                                             mean1,
+                                            cov_agg._min_periods,
+                                            cov_agg._ddof,
                                             stream,
                                             mr));
 };
@@ -629,28 +632,33 @@ void aggregate_result_functor::operator()<aggregation::CORRELATION>(aggregation 
   aggregate_result_functor(values_child0, helper, cache, stream, mr).operator()<aggregation::STD>(*std_agg);
   aggregate_result_functor(values_child1, helper, cache, stream, mr).operator()<aggregation::STD>(*std_agg);
 
-  auto const stddev0 = cache.get_result(values_child0, *std_agg);
-  auto const stddev1 = cache.get_result(values_child1, *std_agg);
-
-  auto mean_agg    = make_mean_aggregation();
-  auto const mean0 = cache.get_result(values_child0, *mean_agg);
-  auto const mean1 = cache.get_result(values_child1, *mean_agg);
-  auto count_agg   = make_count_aggregation();
-  auto const count = cache.get_result(values_child0, *count_agg);
-
   // Compute covariance here to avoid repeated computation of mean & count
-  auto cov_agg = make_covariance_aggregation();
-  cache.add_result(values,
-                   *cov_agg,
-                   detail::group_covariance(get_grouped_values().child(0),
-                                            get_grouped_values().child(1),
-                                            helper.group_labels(stream),
-                                            helper.num_groups(stream),
-                                            count,
-                                            mean0,
-                                            mean1,
-                                            stream,
-                                            mr));
+  auto cov_agg = make_covariance_aggregation(corr_agg._min_periods);
+  if (not cache.has_result(values, *cov_agg)) {
+    auto mean_agg    = make_mean_aggregation();
+    auto const mean0 = cache.get_result(values_child0, *mean_agg);
+    auto const mean1 = cache.get_result(values_child1, *mean_agg);
+    auto count_agg   = make_count_aggregation();
+    auto const count = cache.get_result(values_child0, *count_agg);
+
+    auto const& cov_agg_obj = dynamic_cast<cudf::detail::covariance_aggregation const&>(*cov_agg);
+    cache.add_result(values,
+                     *cov_agg,
+                     detail::group_covariance(get_grouped_values().child(0),
+                                              get_grouped_values().child(1),
+                                              helper.group_labels(stream),
+                                              helper.num_groups(stream),
+                                              count,
+                                              mean0,
+                                              mean1,
+                                              cov_agg_obj._min_periods,
+                                              cov_agg_obj._ddof,
+                                              stream,
+                                              mr));
+  }
+
+  auto const stddev0    = cache.get_result(values_child0, *std_agg);
+  auto const stddev1    = cache.get_result(values_child1, *std_agg);
   auto const covariance = cache.get_result(values, *cov_agg);
   cache.add_result(
     values, agg, detail::group_correlation(covariance, stddev0, stddev1, stream, mr));

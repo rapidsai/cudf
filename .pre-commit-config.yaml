@@ -1,6 +1,6 @@
 repos:
       - repo: https://github.com/PyCQA/isort
-        rev: 5.9.3
+        rev: 5.6.4
         hooks:
               - id: isort
                 alias: isort-cudf
@@ -33,7 +33,7 @@ repos:
               - id: black
                 files: python/.*
       - repo: https://github.com/PyCQA/flake8
-        rev: 4.0.1
+        rev: 3.8.3
         hooks:
               - id: flake8
                 alias: flake8
@@ -45,6 +45,17 @@ repos:
                 name: flake8-cython
                 args: ["--config=python/.flake8.cython"]
                 types: [cython]
+      - repo: https://github.com/pre-commit/mirrors-mypy
+        rev: 'v0.782'
+        hooks:
+              - id: mypy
+                args: ["--config-file=python/cudf/setup.cfg", "python/cudf/cudf"]
+                pass_filenames: false
+      - repo: https://github.com/PyCQA/pydocstyle
+        rev: 6.1.1
+        hooks:
+              - id: pydocstyle
+                args: ["--config=python/.flake8"]
       - repo: local
         hooks:
               - id: clang-format
@@ -59,18 +70,24 @@ repos:
                 language: system
                 files: \.(cu|cuh|h|hpp|cpp|inl)$
                 args: ['-fallback-style=none']
-      - repo: https://github.com/pre-commit/mirrors-mypy
-        rev: 'v0.782'
-        hooks:
-              - id: mypy
-                args: ["--config-file=python/cudf/setup.cfg", "python/cudf/cudf"]
-                pass_filenames: false
-      - repo: https://github.com/PyCQA/pydocstyle
-        rev: 6.1.1
-        hooks:
-              - id: pydocstyle
-                args: ["--config=python/.flake8"]
-
+              - id: cmake-format
+                name: cmake-format
+                entry: bash cpp/scripts/run-cmake-format.sh cmake-format
+                language: python
+                types: [cmake]
+                # Note that pre-commit autoupdate does not update the versions
+                # of dependencies, so we'll have to update this manually.
+                additional_dependencies:
+                  - cmake-format==0.6.11
+              - id: cmake-lint
+                name: cmake-lint
+                entry: bash cpp/scripts/run-cmake-format.sh cmake-lint
+                language: python
+                types: [cmake]
+                # Note that pre-commit autoupdate does not update the versions
+                # of dependencies, so we'll have to update this manually.
+                additional_dependencies:
+                  - cmake-format==0.6.11
 
 default_language_version:
       python: python3

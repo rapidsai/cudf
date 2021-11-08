@@ -1110,17 +1110,41 @@ def test_dataframe_hash_columns(nrows, method):
     data[0] = data[-1]  # make first and last the same
     gdf["a"] = data
     gdf["b"] = gdf.a + 100
-    out = gdf.hash_columns(["a", "b"])
+    with pytest.warns(FutureWarning):
+        out = gdf.hash_columns(["a", "b"])
     assert isinstance(out, cudf.Series)
     assert len(out) == nrows
     assert out.dtype == np.int32
 
     # Check default
-    out_all = gdf.hash_columns()
+    with pytest.warns(FutureWarning):
+        out_all = gdf.hash_columns()
     assert_eq(out, out_all)
 
     # Check single column
-    out_one = gdf.hash_columns(["a"], method=method)
+    with pytest.warns(FutureWarning):
+        out_one = gdf.hash_columns(["a"], method=method)
+    # First matches last
+    assert out_one.iloc[0] == out_one.iloc[-1]
+    # Equivalent to the cudf.Series.hash_values()
+    assert_eq(gdf["a"].hash_values(method=method), out_one)
+
+
+@pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
+@pytest.mark.parametrize("method", ["murmur3", "md5"])
+def test_dataframe_hash_values(nrows, method):
+    gdf = cudf.DataFrame()
+    data = np.asarray(range(nrows))
+    data[0] = data[-1]  # make first and last the same
+    gdf["a"] = data
+    gdf["b"] = gdf.a + 100
+    out = gdf.hash_values()
+    assert isinstance(out, cudf.Series)
+    assert len(out) == nrows
+    assert out.dtype == np.int32
+
+    # Check single column
+    out_one = gdf[["a"]].hash_values(method=method)
     # First matches last
     assert out_one.iloc[0] == out_one.iloc[-1]
     # Equivalent to the cudf.Series.hash_values()
@@ -8708,12 +8732,12 @@ def test_explode(data, labels, ignore_index, p_index, label_to_explode):
         (
             cudf.DataFrame({"a": [10, 0, 2], "b": [-10, 10, 1]}),
             True,
-            cudf.Series([1, 2, 0], dtype="int32"),
+            cupy.array([1, 2, 0], dtype="int32"),
         ),
         (
             cudf.DataFrame({"a": [10, 0, 2], "b": [-10, 10, 1]}),
             False,
-            cudf.Series([0, 2, 1], dtype="int32"),
+            cupy.array([0, 2, 1], dtype="int32"),
         ),
     ],
 )

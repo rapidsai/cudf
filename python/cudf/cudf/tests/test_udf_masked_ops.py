@@ -10,21 +10,21 @@ from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
 from cudf.testing._utils import NUMERIC_TYPES, assert_eq
 
 
-def run_masked_udf_test(func_pdf, func_gdf, data, **kwargs):
+def run_masked_udf_test(func_pdf, func_gdf, data, args=(), **kwargs):
     gdf = data
     pdf = data.to_pandas(nullable=True)
 
-    expect = pdf.apply(func_pdf, axis=1)
-    obtain = gdf.apply(func_gdf, axis=1)
+    expect = pdf.apply(func_pdf, args=args, axis=1)
+    obtain = gdf.apply(func_gdf, args=args, axis=1)
     assert_eq(expect, obtain, **kwargs)
 
 
-def run_masked_udf_series(func_psr, func_gsr, data, **kwargs):
+def run_masked_udf_series(func_psr, func_gsr, data, args=(), **kwargs):
     gsr = data
     psr = data.to_pandas(nullable=True)
 
-    expect = psr.apply(func_psr)
-    obtain = gsr.apply(func_gsr)
+    expect = psr.apply(func_psr, args=args)
+    obtain = gsr.apply(func_gsr, args=args)
     assert_eq(expect, obtain, **kwargs)
 
 
@@ -44,6 +44,52 @@ def test_arith_masked_vs_masked(op):
         return op(x, y)
 
     gdf = cudf.DataFrame({"a": [1, None, 3, None], "b": [4, 5, None, None]})
+    run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "dtype_l",
+    ["datetime64[ns]", "datetime64[us]", "datetime64[ms]", "datetime64[s]"],
+)
+@pytest.mark.parametrize(
+    "dtype_r",
+    [
+        "timedelta64[ns]",
+        "timedelta64[us]",
+        "timedelta64[ms]",
+        "timedelta64[s]",
+        "datetime64[ns]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[s]",
+    ],
+)
+@pytest.mark.parametrize("op", [operator.add, operator.sub])
+def test_arith_masked_vs_masked_datelike(op, dtype_l, dtype_r):
+    # Datetime version of the above
+    # does not test all dtype combinations for now
+    if "datetime" in dtype_l and "datetime" in dtype_r and op is operator.add:
+        # don't try adding datetimes to datetimes.
+        pytest.skip("Adding datetime to datetime is not valid")
+
+    def func_pdf(row):
+        x = row["a"]
+        y = row["b"]
+        return op(x, y)
+
+    def func_gdf(row):
+        x = row["a"]
+        y = row["b"]
+        return op(x, y)
+
+    gdf = cudf.DataFrame(
+        {
+            "a": ["2011-01-01", cudf.NA, "2011-03-01", cudf.NA],
+            "b": [4, 5, cudf.NA, cudf.NA],
+        }
+    )
+    gdf["a"] = gdf["a"].astype(dtype_l)
+    gdf["b"] = gdf["b"].astype(dtype_r)
     run_masked_udf_test(func_pdf, func_gdf, gdf, check_dtype=False)
 
 
@@ -540,3 +586,44 @@ def test_masked_udf_subset_selection(data):
 
     data = cudf.DataFrame(data)
     run_masked_udf_test(func, func, data)
+
+
+# tests for `DataFrame.apply(f, args=(x,y,z))`
+# testing the whole space of possibilities is intractable
+# these test the most rudimentary guaranteed functionality
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, cudf.NA, 3]},
+        {"a": [0.5, 2.0, cudf.NA, cudf.NA, 5.0]},
+        {"a": [True, False, cudf.NA]},
+    ],
+)
+@pytest.mark.parametrize("op", arith_ops + comparison_ops)
+def test_masked_udf_scalar_args_binops(data, op):
+    data = cudf.DataFrame(data)
+
+    def func(row, c):
+        return op(row["a"], c)
+
+    run_masked_udf_test(func, func, data, args=(1,), check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, cudf.NA, 3]},
+        {"a": [0.5, 2.0, cudf.NA, cudf.NA, 5.0]},
+        {"a": [True, False, cudf.NA]},
+    ],
+)
+@pytest.mark.parametrize("op", arith_ops + comparison_ops)
+def test_masked_udf_scalar_args_binops_multiple(data, op):
+    data = cudf.DataFrame(data)
+
+    def func(row, c, k):
+        x = op(row["a"], c)
+        y = op(x, k)
+        return y
+
+    run_masked_udf_test(func, func, data, args=(1, 2), check_dtype=False)
