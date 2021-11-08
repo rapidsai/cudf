@@ -326,3 +326,6 @@ def _adjust_dates_anchored(
     if last_tzinfo is not None:
         lresult = lresult.tz_localize("UTC").tz_convert(last_tzinfo)
     return fresult, lresult
+
+
+# TODO: change resolution when upsampling/downsampling
