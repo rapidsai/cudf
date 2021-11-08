@@ -74,12 +74,15 @@ Binary operator functions
    Series.mul
    Series.multiply
    Series.truediv
+   Series.div
+   Series.divide
    Series.floordiv
    Series.mod
    Series.pow
    Series.radd
    Series.rsub
    Series.rmul
+   Series.rdiv
    Series.rtruediv
    Series.rfloordiv
    Series.rmod
