@@ -29,6 +29,20 @@ _unit_dtype_map = {
     "D": "datetime64[s]",
 }
 
+_offset_alias_to_code = {
+    "D": "D",
+    "H": "h",
+    "h": "h",
+    "T": "m",
+    "min": "m",
+    "s": "s",
+    "S": "s",
+    "U": "us",
+    "us": "us",
+    "N": "ns",
+    "ns": "ns",
+}
+
 
 def to_datetime(
     arg,
@@ -784,21 +798,8 @@ def date_range(
     elif isinstance(freq, str):
         # Map pandas `offset alias` into cudf DateOffset `CODE`, only
         # fixed-frequency, non-anchored offset aliases are supported.
-        _map_offset_alias_to_code = {
-            "D": "D",
-            "H": "h",
-            "h": "h",
-            "T": "m",
-            "min": "m",
-            "s": "s",
-            "S": "s",
-            "U": "us",
-            "us": "us",
-            "N": "ns",
-            "ns": "ns",
-        }
         mo = re.fullmatch(
-            rf'(-)*(\d*)({"|".join(_map_offset_alias_to_code.keys())})', freq
+            rf'(-)*(\d*)({"|".join(_offset_alias_to_code.keys())})', freq
         )
         if mo is None:
             raise ValueError(
@@ -806,7 +807,7 @@ def date_range(
             )
 
         sign, n, offset_alias = mo.groups()
-        code = _map_offset_alias_to_code[offset_alias]
+        code = _offset_alias_to_code[offset_alias]
 
         freq = "".join([n, code])
         offset = DateOffset._from_freqstr(freq)
