@@ -49,10 +49,17 @@ __global__ void offset_bitmask_binop(Binop op,
                                      size_type source_size_bits,
                                      size_type* valid_count_ptr)
 {
+  constexpr auto const word_size{detail::size_in_bits<bitmask_type>()};
+
+  auto const tid             = threadIdx.x + blockIdx.x * blockDim.x;
+  auto const first_bit_index = 0;
+  auto const last_bit_index  = source_size_bits - 1;
+  auto const first_word_index{word_index(first_bit_index)};
+  auto const last_word_index{word_index(last_bit_index)};
+
   size_type thread_valid_count = 0;
 
-  for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
-       destination_word_index < destination.size();
+  for (size_type destination_word_index = tid; destination_word_index < destination.size();
        destination_word_index += blockDim.x * gridDim.x) {
     bitmask_type destination_word =
       detail::get_mask_offset_word(source[0],
@@ -69,6 +76,27 @@ __global__ void offset_bitmask_binop(Binop op,
 
     destination[destination_word_index] = destination_word;
     thread_valid_count += __popc(destination_word);
+  }
+
+  // Subtract any slack bits counted from the first and last word
+  // Two threads handle this -- one for first word, one for last
+  if (tid < 2) {
+    bool const first{tid == 0};
+    bool const last{not first};
+
+    size_type bit_index  = (first) ? first_bit_index : last_bit_index;
+    size_type word_index = (first) ? first_word_index : last_word_index;
+
+    size_type num_slack_bits = bit_index % word_size;
+    if (last) { num_slack_bits = word_size - num_slack_bits - 1; }
+
+    if (num_slack_bits > 0) {
+      bitmask_type word = destination[word_index];
+      auto slack_mask   = (first) ? set_least_significant_bits(num_slack_bits)
+                                  : set_most_significant_bits(num_slack_bits);
+
+      thread_valid_count -= __popc(word & slack_mask);
+    }
   }
 
   using BlockReduce = cub::BlockReduce<size_type, block_size>;
