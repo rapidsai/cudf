@@ -30,6 +30,7 @@ _unit_dtype_map = {
 }
 
 _offset_alias_to_code = {
+    "W": "W",
     "D": "D",
     "H": "h",
     "h": "h",
