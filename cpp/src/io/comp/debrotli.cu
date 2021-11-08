@@ -555,9 +555,9 @@ static __device__ uint32_t BuildSimpleHuffmanTable(uint16_t* lut,
       break;
     }
   }
-  while (table_size != goal_size) {
-    memcpy(&lut[table_size], &lut[0], table_size * sizeof(lut[0]));
-    table_size <<= 1;
+  // Copy (tile) the sequence of the first `table_size` elements to fill `lut`
+  for (uint32_t i = 0; i < goal_size - table_size; ++i) {
+    lut[table_size + i] = lut[i];
   }
   return goal_size;
 }
@@ -1885,6 +1885,10 @@ static __device__ void ProcessCommands(debrotli_state_s* s, const brotli_diction
       pos += copy_length;
     }
   }
+
+  // Ensure all other threads have observed prior state of p1 & p2 before overwriting
+  __syncwarp();
+
   if (!t) {
     s->p1          = (uint8_t)p1;
     s->p2          = (uint8_t)p2;
