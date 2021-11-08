@@ -18,4 +18,4 @@ This page provides a list of all publicly accessible modules, methods and classe
     window
     io
     subword_tokenize
-
+    string_handling
