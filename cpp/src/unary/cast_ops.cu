@@ -176,7 +176,7 @@ std::unique_ptr<column> rescale(column_view input,
 {
   using namespace numeric;
 
-  if (input.type().scale() > scale) {
+  if (input.type().scale() >= scale) {
     auto const scalar = make_fixed_point_scalar<T>(0, scale_type{scale});
     auto const type   = cudf::data_type{cudf::type_to_id<T>(), scale};
     return detail::binary_operation(input, *scalar, binary_operator::ADD, type, stream, mr);

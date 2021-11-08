@@ -18,6 +18,8 @@
 #include "orc_field_reader.hpp"
 #include "orc_field_writer.hpp"
 
+#include <cudf/lists/lists_column_view.hpp>
+
 #include <thrust/tabulate.h>
 
 #include <string>
@@ -472,10 +474,16 @@ void metadata::init_column_names()
   thrust::tabulate(column_names.begin(), column_names.end(), [&](auto col_id) {
     if (not column_has_parent(col_id)) return std::string{};
     auto const& parent_field_names = ff.types[parent_id(col_id)].fieldNames;
-    // Child columns of lists don't have a name in ORC files, generate placeholder in that case
-    return field_index(col_id) < static_cast<size_type>(parent_field_names.size())
-             ? parent_field_names[field_index(col_id)]
-             : std::to_string(col_id);
+    if (field_index(col_id) < static_cast<size_type>(parent_field_names.size())) {
+      return parent_field_names[field_index(col_id)];
+    }
+
+    // Generate names for list and map child columns
+    if (ff.types[parent_id(col_id)].subtypes.size() == 1) {
+      return std::to_string(lists_column_view::child_column_index);
+    } else {
+      return std::to_string(field_index(col_id));
+    }
   });
 
   column_paths.resize(get_num_columns());

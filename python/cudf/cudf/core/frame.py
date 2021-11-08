@@ -1559,16 +1559,16 @@ class Frame:
         return result
 
     @annotate("APPLY", color="purple", domain="cudf_python")
-    def _apply(self, func):
+    def _apply(self, func, *args):
         """
         Apply `func` across the rows of the frame.
         """
-        kernel, retty = compile_or_get(self, func)
+        kernel, retty = compile_or_get(self, func, args)
 
         # Mask and data column preallocated
         ans_col = cupy.empty(len(self), dtype=retty)
         ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
-        launch_args = [(ans_col, ans_mask)]
+        launch_args = [(ans_col, ans_mask), len(self)]
         offsets = []
         for col in self._data.values():
             data = col.data
@@ -1579,7 +1579,7 @@ class Frame:
                 launch_args.append((data, mask))
             offsets.append(col.offset)
         launch_args += offsets
-        launch_args.append(len(self))  # size
+        launch_args += list(args)
         kernel.forall(len(self))(*launch_args)
 
         result = cudf.Series(ans_col).set_mask(

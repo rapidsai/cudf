@@ -86,7 +86,7 @@ class aggregate_orc_metadata {
   /**
    * @brief Returns the name of the given column from the given source.
    */
-  auto column_name(const int source_idx, const int column_id) const
+  std::string const& column_name(const int source_idx, const int column_id) const
   {
     CUDF_EXPECTS(source_idx <= static_cast<int>(per_file_metadata.size()),
                  "Out of range source_idx provided");
@@ -98,7 +98,7 @@ class aggregate_orc_metadata {
    *
    * Full name includes ancestor columns' names.
    */
-  auto column_path(const int source_idx, const int column_id) const
+  std::string const& column_path(const int source_idx, const int column_id) const
   {
     CUDF_EXPECTS(source_idx <= static_cast<int>(per_file_metadata.size()),
                  "Out of range source_idx provided");
