@@ -2,6 +2,7 @@ from libcpp.memory cimport unique_ptr
 
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
+from cudf._lib.cpp.scalar.scalar cimport scalar
 
 
 cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:
