@@ -187,6 +187,13 @@ if buildAll || hasArg libcudf; then
 
     cmake --build . -j${PARALLEL_LEVEL} ${VERBOSE_FLAG}
 
+    # Record build times
+    if [[ -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
+        echo "Formatting build times"
+        $REPODIR/ci/utils/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log > ${LIB_BUILD_DIR}/ninja_log.csv
+        cat ${LIB_BUILD_DIR}/ninja_log.csv | head -n 20
+    fi
+
     if [[ ${INSTALL_TARGET} != "" ]]; then
         cmake --build . -j${PARALLEL_LEVEL} --target install ${VERBOSE_FLAG}
     fi
