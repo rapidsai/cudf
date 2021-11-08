@@ -122,14 +122,14 @@ struct orcdec_state_s {
     orc_rowdec_state_s rowdec;
   } u;
   union values {
-    uint8_t u8[block_size * 8];
-    uint32_t u32[block_size * 2];
-    int32_t i32[block_size * 2];
-    uint64_t u64[block_size];
-    int64_t i64[block_size];
-    double f64[block_size];
-    __int128_t i128[block_size];   // TMP
-    __uint128_t u128[block_size];  // TMP
+    uint8_t u8[block_size * 16];
+    uint32_t u32[block_size * 4];
+    int32_t i32[block_size * 4];
+    uint64_t u64[block_size * 2];
+    int64_t i64[block_size * 2];
+    double f64[block_size * 2];
+    __int128_t i128[block_size];
+    __uint128_t u128[block_size];
   } vals;
 };
 
@@ -1053,17 +1053,25 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
         else
           vals.f64[t] = f * kPow10[min(-scale, 39)];
       } else {
-        // Since cuDF column stores just one scale, value needs to
-        // be adjusted to col_scale from val_scale. So the difference
-        // of them will be used to add 0s or remove digits.
-        int32_t scale = (t < numvals) ? col_scale - val_scale : 0;
-        if (scale >= 0) {
-          scale        = min(scale, 27);
-          vals.i128[t] = (v * kPow5i[scale]) << scale;
-        } else  // if (scale < 0)
-        {
-          scale        = min(-scale, 27);
-          vals.i128[t] = (v / kPow5i[scale]) >> scale;
+        auto const scaled_value = [&]() {
+          // Since cuDF column stores just one scale, value needs to be adjusted to col_scale from
+          // val_scale. So the difference of them will be used to add 0s or remove digits.
+          int32_t scale = (t < numvals) ? col_scale - val_scale : 0;
+          if (scale >= 0) {
+            scale = min(scale, 27);
+            return (v * kPow5i[scale]) << scale;
+          } else  // if (scale < 0)
+          {
+            scale = min(-scale, 27);
+            return (v / kPow5i[scale]) >> scale;
+          }
+        }();
+        if (dtype_id == type_id::DECIMAL64) {
+          vals.i64[t] = scaled_value;
+        } else {
+          {
+            vals.i128[t] = scaled_value;
+          }
         }
       }
     }
@@ -1700,7 +1708,13 @@ __global__ void __launch_bounds__(block_size)
             case DOUBLE:
             case LONG: static_cast<uint64_t*>(data_out)[row] = s->vals.u64[t + vals_skipped]; break;
             case DECIMAL:
-              static_cast<__uint128_t*>(data_out)[row] = s->vals.u128[t + vals_skipped];
+              if (s->chunk.dtype_id == type_id::FLOAT64 or
+                  s->chunk.dtype_id == type_id::DECIMAL64) {
+                static_cast<uint64_t*>(data_out)[row] = s->vals.u64[t + vals_skipped];
+              } else {
+                // decimal128
+                static_cast<__uint128_t*>(data_out)[row] = s->vals.u128[t + vals_skipped];
+              }
               break;
             case MAP:
             case LIST: {

@@ -405,8 +405,8 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
 {
   auto const strings_count = strings.size();
   auto const offset_count  = strings_count + 1;
-  auto const d_offsets     = strings.offsets().data<int32_t>() + strings.offset();
-  auto const d_in_chars    = strings.chars().data<char>();
+  auto const d_offsets     = strings.offsets_begin();
+  auto const d_in_chars    = strings.chars_begin();
   auto const chars_bytes   = chars_end - chars_start;
   auto const target_size   = d_target.size_bytes();
 
@@ -598,7 +598,7 @@ std::unique_ptr<column> replace<replace_algorithm::CHAR_PARALLEL>(
   // determine range of characters in the base column
   auto const strings_count = strings.size();
   auto const offset_count  = strings_count + 1;
-  auto const d_offsets     = strings.offsets().data<int32_t>() + strings.offset();
+  auto const d_offsets     = strings.offsets_begin();
   size_type chars_start    = (strings.offset() == 0) ? 0
                                                      : cudf::detail::get_value<int32_t>(
                                                       strings.offsets(), strings.offset(), stream);
