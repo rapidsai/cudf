@@ -8,11 +8,6 @@ from io import BytesIO
 import pandas as pd
 import pytest
 
-try:
-    import fsspec.parquet as fsspec_parquet
-except ImportError:
-    fsspec_parquet = None
-
 import dask_cudf
 
 moto = pytest.importorskip("moto", minversion="1.3.14")
@@ -133,26 +128,3 @@ def test_read_parquet(s3_base, s3so):
         )
         assert df.a.sum().compute() == 10
         assert df.b.sum().compute() == 9
-
-        # Check that `open_parquet_file` arguments are
-        # really passed through to fsspec
-        if fsspec_parquet:
-
-            # Passing `open_parquet_file` kwargs will fail
-            # if you try to modify the engine
-            buffer.seek(0)
-            with pytest.raises(TypeError):
-                dask_cudf.read_parquet(
-                    "s3://daskparquet/*.parq",
-                    storage_options=s3so,
-                    open_parquet_file={"engine": "foo"},
-                ).compute()
-
-            # ...but should work fine if you modify the
-            # maximum block-transfer size (max_block)
-            buffer.seek(0)
-            dask_cudf.read_parquet(
-                "s3://daskparquet/*.parq",
-                storage_options=s3so,
-                open_parquet_file={"max_block": 8_000},
-            ).compute()

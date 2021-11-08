@@ -302,24 +302,12 @@ def read_parquet(
     num_rows=None,
     strings_to_categorical=False,
     use_pandas_metadata=True,
-    use_python_file_object=None,
+    use_python_file_object=False,
+    open_parquet_file=None,
     *args,
     **kwargs,
 ):
     """{docstring}"""
-
-    # For newer versions of fsspec, use
-    # use_python_file_object=False by default
-    # TODO: Remove the use_python_file_object=False
-    #       code path altogether, since it should no
-    #       longer outperform fsspec in the future.
-    #       The user should still be able to pass in
-    #       native pyarrow files directly, if desired.
-    if use_python_file_object is None:
-        if fsspec_parquet is None:
-            use_python_file_object = False
-        else:
-            use_python_file_object = True
 
     # Multiple sources are passed as a list. If a single source is passed,
     # wrap it in a list for unified processing downstream.
@@ -389,6 +377,7 @@ def read_parquet(
                 columns=columns,
                 row_groups=None if row_groups is None else row_groups[i],
                 engine="pyarrow",
+                **(open_parquet_file or {}),
             )
 
         if ioutils.is_directory(source, **kwargs):

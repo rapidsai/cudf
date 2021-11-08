@@ -70,7 +70,7 @@ class CudfEngine(ArrowDatasetEngine):
         partitioning=None,
         partition_keys=None,
         open_parquet_file_kwargs=None,
-        use_python_file_object=None,
+        use_python_file_object=False,
         **kwargs,
     ):
 
