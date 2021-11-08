@@ -45,6 +45,7 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
   auto const gather_index_begin      = gather_map.offsets_begin() + 1;
   auto const gather_index_end        = gather_map.offsets_end();
   auto const value_offsets           = value_column.offsets_begin();
+  auto const value_device_view       = column_device_view::create(value_column.parent(), stream);
   auto const map_begin =
     cudf::detail::indexalator_factory::make_input_iterator(gather_map_sliced_child);
   auto const out_of_bounds = [] __device__(auto const index, auto const list_size) {
@@ -52,7 +53,8 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
   };
 
   // Calculate Flattened gather indices  (value_offset[row]+sub_index
-  auto transformer = [value_offsets,
+  auto transformer = [values_lists_view = *value_device_view,
+                      value_offsets,
                       map_begin,
                       gather_index_begin,
                       gather_index_end,
@@ -64,8 +66,9 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
         thrust::seq, gather_index_begin, gather_index_end, gather_index_begin[-1] + index) -
       gather_index_begin;
     // Get each sub_index in list in each row of gather_map.
-    auto sub_index          = map_begin[index];
-    auto list_size          = value_offsets[offset_idx + 1] - value_offsets[offset_idx];
+    auto sub_index    = map_begin[index];
+    auto list_is_null = values_lists_view.is_null(offset_idx);
+    auto list_size = list_is_null ? 0 : (value_offsets[offset_idx + 1] - value_offsets[offset_idx]);
     auto wrapped_sub_index  = sub_index < 0 ? sub_index + list_size : sub_index;
     auto constexpr null_idx = cuda::std::numeric_limits<cudf::size_type>::max();
     // Add sub_index to value_column offsets, to get gather indices of child of value_column

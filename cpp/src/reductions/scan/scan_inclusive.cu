@@ -18,10 +18,10 @@
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/copy.hpp>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/reduction.hpp>
-#include <cudf/strings/detail/gather.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -62,26 +62,25 @@ rmm::device_buffer mask_scan(column_view const& input_view,
 namespace {
 
 /**
- * @brief Strings inclusive scan operator
+ * @brief Min/Max inclusive scan operator
+ *
+ * This operator will accept index values, check them and then
+ * run the `Op` operation on the individual element objects.
+ * The returned result is the appropriate index value.
  *
  * This was specifically created to workaround a thrust issue
  * https://github.com/NVIDIA/thrust/issues/1479
  * where invalid values are passed to the operator.
- *
- * This operator will accept index values, check them and then
- * run the `Op` operation on the individual string_view objects.
- * The returned result is the appropriate index value.
  */
-template <typename Op>
-struct string_scan_operator {
-  column_device_view const col;          ///< strings column device view
-  string_view const null_replacement{};  ///< value used when element is null
-  bool const has_nulls;                  ///< true if col has null elements
+template <typename Element, typename Op>
+struct min_max_scan_operator {
+  column_device_view const col;      ///< strings column device view
+  Element const null_replacement{};  ///< value used when element is null
+  bool const has_nulls;              ///< true if col has null elements
 
-  string_scan_operator(column_device_view const& col, bool has_nulls = true)
-    : col{col}, null_replacement{Op::template identity<string_view>()}, has_nulls{has_nulls}
+  min_max_scan_operator(column_device_view const& col, bool has_nulls = true)
+    : col{col}, null_replacement{Op::template identity<Element>()}, has_nulls{has_nulls}
   {
-    CUDF_EXPECTS(type_id::STRING == col.type().id(), "the data type mismatch");
     // verify validity bitmask is non-null, otherwise, is_null_nocheck() will crash
     if (has_nulls) CUDF_EXPECTS(col.nullable(), "column with nulls must have a validity bitmask");
   }
@@ -92,41 +91,19 @@ struct string_scan_operator {
     // thrust::inclusive_scan may pass us garbage values so we need to protect ourselves;
     // in these cases the return value does not matter since the result is not used
     if (lhs < 0 || rhs < 0 || lhs >= col.size() || rhs >= col.size()) return 0;
-    string_view d_lhs =
-      has_nulls && col.is_null_nocheck(lhs) ? null_replacement : col.element<string_view>(lhs);
-    string_view d_rhs =
-      has_nulls && col.is_null_nocheck(rhs) ? null_replacement : col.element<string_view>(rhs);
+    Element d_lhs =
+      has_nulls && col.is_null_nocheck(lhs) ? null_replacement : col.element<Element>(lhs);
+    Element d_rhs =
+      has_nulls && col.is_null_nocheck(rhs) ? null_replacement : col.element<Element>(rhs);
     return Op{}(d_lhs, d_rhs) == d_lhs ? lhs : rhs;
   }
 };
 
-/**
- * @brief Dispatcher for running a Scan operation on an input column
- *
- * @tparam Op device binary operator
- */
-template <typename Op>
-struct scan_dispatcher {
- private:
-  template <typename T>
-  static constexpr bool is_string_supported()
-  {
-    return std::is_same_v<T, string_view> &&
-           (std::is_same_v<Op, DeviceMin> || std::is_same_v<Op, DeviceMax>);
-  }
-
-  template <typename T>
-  static constexpr bool is_supported()
-  {
-    return std::is_arithmetic<T>::value || is_string_supported<T>();
-  }
-
-  // for arithmetic types
-  template <typename T, std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
-  auto inclusive_scan(column_view const& input_view,
-                      null_policy,
-                      rmm::cuda_stream_view stream,
-                      rmm::mr::device_memory_resource* mr)
+template <typename Op, typename T>
+struct scan_functor {
+  static std::unique_ptr<column> invoke(column_view const& input_view,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
   {
     auto output_column = detail::allocate_like(
       input_view, input_view.size(), mask_allocation_policy::NEVER, stream, mr);
@@ -141,27 +118,55 @@ struct scan_dispatcher {
     CHECK_CUDA(stream.value());
     return output_column;
   }
+};
 
-  // for string type: only MIN and MAX are supported
-  template <typename T, std::enable_if_t<is_string_supported<T>()>* = nullptr>
-  std::unique_ptr<column> inclusive_scan(column_view const& input_view,
-                                         null_policy,
-                                         rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
+template <typename Op>
+struct scan_functor<Op, cudf::string_view> {
+  static std::unique_ptr<column> invoke(column_view const& input_view,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
   {
     auto d_input = column_device_view::create(input_view, stream);
 
     // build indices of the scan operation results
     rmm::device_uvector<size_type> result(input_view.size(), stream);
-    thrust::inclusive_scan(rmm::exec_policy(stream),
-                           thrust::counting_iterator<size_type>(0),
-                           thrust::counting_iterator<size_type>(input_view.size()),
-                           result.begin(),
-                           string_scan_operator<Op>{*d_input, input_view.has_nulls()});
+    thrust::inclusive_scan(
+      rmm::exec_policy(stream),
+      thrust::counting_iterator<size_type>(0),
+      thrust::counting_iterator<size_type>(input_view.size()),
+      result.begin(),
+      min_max_scan_operator<cudf::string_view, Op>{*d_input, input_view.has_nulls()});
 
     // call gather using the indices to build the output column
-    return cudf::strings::detail::gather(
-      strings_column_view(input_view), result.begin(), result.end(), false, stream, mr);
+    auto result_table = cudf::detail::gather(cudf::table_view({input_view}),
+                                             result,
+                                             out_of_bounds_policy::DONT_CHECK,
+                                             negative_index_policy::NOT_ALLOWED,
+                                             stream,
+                                             mr);
+    return std::move(result_table->release().front());
+  }
+};
+
+/**
+ * @brief Dispatcher for running a Scan operation on an input column
+ *
+ * @tparam Op device binary operator
+ */
+template <typename Op>
+struct scan_dispatcher {
+ private:
+  template <typename T>
+  static constexpr bool is_min_max_supported()
+  {
+    return cudf::is_relationally_comparable<T, T>() && !cudf::is_dictionary<T>() &&
+           (std::is_same_v<Op, DeviceMin> || std::is_same_v<Op, DeviceMax>);
+  }
+
+  template <typename T>
+  static constexpr bool is_supported()
+  {
+    return std::is_arithmetic_v<T> || is_min_max_supported<T>();
   }
 
  public:
@@ -178,17 +183,17 @@ struct scan_dispatcher {
    */
   template <typename T, typename std::enable_if_t<is_supported<T>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input,
-                                     null_policy null_handling,
+                                     null_policy,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    return inclusive_scan<T>(input, null_handling, stream, mr);
+    return scan_functor<Op, T>::invoke(input, stream, mr);
   }
 
   template <typename T, typename... Args>
   std::enable_if_t<!is_supported<T>(), std::unique_ptr<column>> operator()(Args&&...)
   {
-    CUDF_FAIL("Non-arithmetic types not supported for inclusive scan");
+    CUDF_FAIL("Unsupported type for inclusive scan operation");
   }
 };
 
