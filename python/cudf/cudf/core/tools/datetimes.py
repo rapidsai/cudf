@@ -29,6 +29,20 @@ _unit_dtype_map = {
     "D": "datetime64[s]",
 }
 
+_offset_alias_to_code = {
+    "D": "D",
+    "H": "h",
+    "h": "h",
+    "T": "m",
+    "min": "m",
+    "s": "s",
+    "S": "s",
+    "U": "us",
+    "us": "us",
+    "N": "ns",
+    "ns": "ns",
+}
+
 
 def to_datetime(
     arg,
@@ -646,16 +660,6 @@ class DateOffset:
             return pd.tseries.frequencies.to_offset(pd.Timedelta(**self.kwds))
         return pd.DateOffset(**self.kwds, n=1)
 
-    def name(self):
-        return self.to_pandas().name
-
-    @classmethod
-    def from_pandas(cls: Type[_T], offset) -> _T:
-        if offset.kwds:
-            return cls(offset.n, **offset.kwds)
-        else:
-            return cls._from_freqstr(offset.freqstr)
-
 
 def _isin_datetimelike(
     lhs: Union[column.TimeDeltaColumn, column.DatetimeColumn], values: Sequence
@@ -780,7 +784,6 @@ def date_range(
                 dtype='datetime64[ns]')
 
     """
-
     if tz is not None:
         raise NotImplementedError("tz is currently unsupported.")
 
@@ -807,30 +810,13 @@ def date_range(
     # The code logic below assumes `freq` is defined. It is first normalized
     # into `DateOffset` for further computation with timestamps.
 
-    _periods_not_specified = False
-
-    if isinstance(freq, pd.DateOffset):
-        offset = DateOffset.from_pandas(freq)
+    if isinstance(freq, DateOffset):
+        offset = freq
     elif isinstance(freq, str):
         # Map pandas `offset alias` into cudf DateOffset `CODE`, only
         # fixed-frequency, non-anchored offset aliases are supported.
-        _map_offset_alias_to_code = {
-            "D": "D",
-            "H": "h",
-            "h": "h",
-            "T": "m",
-            "min": "m",
-            "s": "s",
-            "S": "s",
-            "U": "us",
-            "us": "us",
-            "N": "ns",
-            "ns": "ns",
-            "W": "W",
-            "M": "M",
-        }
         mo = re.fullmatch(
-            rf'(-)*(\d*)({"|".join(_map_offset_alias_to_code.keys())})', freq
+            rf'(-)*(\d*)({"|".join(_offset_alias_to_code.keys())})', freq
         )
         if mo is None:
             raise ValueError(
@@ -838,16 +824,14 @@ def date_range(
             )
 
         sign, n, offset_alias = mo.groups()
-        code = _map_offset_alias_to_code[offset_alias]
+        code = _offset_alias_to_code[offset_alias]
 
         freq = "".join([n, code])
         offset = DateOffset._from_freqstr(freq)
         if sign:
             offset.kwds.update({s: -i for s, i in offset.kwds.items()})
     else:
-        if not isinstance(freq, cudf.DateOffset):
-            raise TypeError("`freq` must be a `str` or DateOffset object.")
-        offset = freq
+        raise TypeError("`freq` must be a `str` or cudf.DateOffset object.")
 
     if _has_mixed_freqeuency(offset):
         raise NotImplementedError(
