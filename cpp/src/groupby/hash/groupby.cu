@@ -42,8 +42,8 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/traits.cuh>
+#include <cudf/utilities/traits.hpp>
 #include <hash/concurrent_unordered_map.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
