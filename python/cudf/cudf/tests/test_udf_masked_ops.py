@@ -10,21 +10,21 @@ from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
 from cudf.testing._utils import NUMERIC_TYPES, assert_eq
 
 
-def run_masked_udf_test(func_pdf, func_gdf, data, **kwargs):
+def run_masked_udf_test(func_pdf, func_gdf, data, args=(), **kwargs):
     gdf = data
     pdf = data.to_pandas(nullable=True)
 
-    expect = pdf.apply(func_pdf, axis=1)
-    obtain = gdf.apply(func_gdf, axis=1)
+    expect = pdf.apply(func_pdf, args=args, axis=1)
+    obtain = gdf.apply(func_gdf, args=args, axis=1)
     assert_eq(expect, obtain, **kwargs)
 
 
-def run_masked_udf_series(func_psr, func_gsr, data, **kwargs):
+def run_masked_udf_series(func_psr, func_gsr, data, args=(), **kwargs):
     gsr = data
     psr = data.to_pandas(nullable=True)
 
-    expect = psr.apply(func_psr)
-    obtain = gsr.apply(func_gsr)
+    expect = psr.apply(func_psr, args=args)
+    obtain = gsr.apply(func_gsr, args=args)
     assert_eq(expect, obtain, **kwargs)
 
 
@@ -586,3 +586,44 @@ def test_masked_udf_subset_selection(data):
 
     data = cudf.DataFrame(data)
     run_masked_udf_test(func, func, data)
+
+
+# tests for `DataFrame.apply(f, args=(x,y,z))`
+# testing the whole space of possibilities is intractable
+# these test the most rudimentary guaranteed functionality
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, cudf.NA, 3]},
+        {"a": [0.5, 2.0, cudf.NA, cudf.NA, 5.0]},
+        {"a": [True, False, cudf.NA]},
+    ],
+)
+@pytest.mark.parametrize("op", arith_ops + comparison_ops)
+def test_masked_udf_scalar_args_binops(data, op):
+    data = cudf.DataFrame(data)
+
+    def func(row, c):
+        return op(row["a"], c)
+
+    run_masked_udf_test(func, func, data, args=(1,), check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, cudf.NA, 3]},
+        {"a": [0.5, 2.0, cudf.NA, cudf.NA, 5.0]},
+        {"a": [True, False, cudf.NA]},
+    ],
+)
+@pytest.mark.parametrize("op", arith_ops + comparison_ops)
+def test_masked_udf_scalar_args_binops_multiple(data, op):
+    data = cudf.DataFrame(data)
+
+    def func(row, c, k):
+        x = op(row["a"], c)
+        y = op(x, k)
+        return y
+
+    run_masked_udf_test(func, func, data, args=(1, 2), check_dtype=False)

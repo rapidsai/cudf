@@ -25,7 +25,8 @@
     "tab_size": 2,
     "command_case": "unchanged",
     "max_lines_hwrap": 1,
-    "max_pargs_hwrap": 999
+    "max_pargs_hwrap": 999,
+    "dangle_parens": true
   },
   "lint": {
     "disabled_codes": ["C0301"],
