@@ -555,8 +555,8 @@ class OrcDecompressor {
  *
  */
 struct orc_column_meta {
-  uint32_t id;            // orc id for the column
-  uint32_t num_children;  // number of children at the same level of nesting in case of struct
+  size_type id;            // orc id for the column
+  size_type num_children;  // number of children at the same level of nesting in case of struct
 };
 
 /**
@@ -586,12 +586,50 @@ class metadata {
   size_t get_total_rows() const { return ff.numberOfRows; }
   int get_num_stripes() const { return ff.stripes.size(); }
   int get_num_columns() const { return ff.types.size(); }
-  std::string const& get_column_name(int32_t column_id) const
+  /**
+   * @brief Returns the name of the column with the given ID.
+   *
+   * Name might not be unique in the ORC file, since columns with different parents are allowed to
+   * have the same names.
+   */
+  std::string const& column_name(size_type column_id) const
   {
-    if (column_names.empty() && get_num_columns() != 0) { init_column_names(); }
+    CUDF_EXPECTS(column_id < get_num_columns(), "Out of range column id provided");
     return column_names[column_id];
   }
+  /**
+   * @brief Returns the full name of the column with the given ID - includes the ancestor columns
+   * names.
+   *
+   * Each column in the ORC file has a unique path.
+   */
+  std::string const& column_path(size_type column_id) const
+  {
+    CUDF_EXPECTS(column_id < get_num_columns(), "Out of range column id provided");
+    return column_paths[column_id];
+  }
   int get_row_index_stride() const { return ff.rowIndexStride; }
+
+  /**
+   * @brief Returns the ID of the parent column of the given column.
+   */
+  size_type parent_id(size_type column_id) const { return parents.at(column_id).value().id; }
+
+  /**
+   * @brief Returns the index the given column has in its parent's children list.
+   */
+  size_type field_index(size_type column_id) const
+  {
+    return parents.at(column_id).value().field_idx;
+  }
+
+  /**
+   * @brief Returns whether the given column has a parent.
+   */
+  size_type column_has_parent(size_type column_id) const
+  {
+    return parents.at(column_id).has_value();
+  }
 
  public:
   PostScript ps;
@@ -602,14 +640,19 @@ class metadata {
   datasource* const source;
 
  private:
-  struct schema_indexes {
-    int32_t parent = -1;
-    int32_t field  = -1;
+  struct column_parent {
+    // parent's ID
+    size_type id;
+    // Index of this column in the parent's list of children
+    size_type field_idx;
+    column_parent(size_type parent_id, size_type field_idx) : id{parent_id}, field_idx{field_idx} {}
   };
-  std::vector<schema_indexes> get_schema_indexes() const;
-  void init_column_names() const;
+  void init_parent_descriptors();
+  std::vector<std::optional<column_parent>> parents;
 
-  mutable std::vector<std::string> column_names;
+  void init_column_names();
+  std::vector<std::string> column_names;
+  std::vector<std::string> column_paths;
 };
 
 /**
