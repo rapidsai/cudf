@@ -33,7 +33,7 @@ namespace detail {
 class pair_equality {
  public:
   pair_equality(table_device_view lhs, table_device_view rhs, bool nulls_are_equal = true)
-    : _check_row_equality{lhs, rhs, nulls_are_equal}
+    : _check_row_equality{lhs, rhs, true, nulls_are_equal}
   {
   }
 

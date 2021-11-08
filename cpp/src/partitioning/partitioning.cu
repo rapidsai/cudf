@@ -486,7 +486,7 @@ std::pair<std::unique_ptr<table>, std::vector<size_type>> hash_partition_table(
     cudf::detail::make_zeroed_device_uvector_async<size_type>(num_rows, stream);
 
   auto const device_input = table_device_view::create(table_to_hash, stream);
-  auto const hasher       = row_hasher<hash_function, hash_has_nulls>(*device_input, seed);
+  auto const hasher       = row_hasher<hash_function>(*device_input, seed, hash_has_nulls);
 
   // If the number of partitions is a power of two, we can compute the partition
   // number of each row more efficiently with bitwise operations

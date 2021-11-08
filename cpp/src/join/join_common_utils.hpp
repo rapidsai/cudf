@@ -47,7 +47,7 @@ using multimap_type =
 
 using row_hash = cudf::row_hasher<default_hash>;
 
-using row_equality = cudf::row_equality_comparator<true>;
+using row_equality = cudf::row_equality_comparator;
 
 enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_ANTI_JOIN };
 

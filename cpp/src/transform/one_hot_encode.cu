@@ -37,10 +37,10 @@ namespace detail {
 
 namespace {
 
-template <typename InputType, bool has_nulls>
+template <typename InputType>
 struct one_hot_encode_functor {
-  one_hot_encode_functor(column_device_view input, column_device_view category)
-    : _equality_comparator{input, category}, _input_size{input.size()}
+  one_hot_encode_functor(column_device_view input, column_device_view category, bool has_nulls)
+    : _equality_comparator{input, category, has_nulls}, _input_size{input.size()}
   {
   }
 
@@ -52,13 +52,12 @@ struct one_hot_encode_functor {
   }
 
  private:
-  element_equality_comparator<has_nulls> const _equality_comparator;
+  element_equality_comparator const _equality_comparator;
   size_type const _input_size;
 };
 
 }  // anonymous namespace
 
-template <bool has_nulls>
 struct one_hot_encode_launcher {
   template <typename InputType, CUDF_ENABLE_IF(is_equality_comparable<InputType, InputType>())>
   std::pair<std::unique_ptr<column>, table_view> operator()(column_view const& input_column,
@@ -72,8 +71,8 @@ struct one_hot_encode_launcher {
 
     auto d_input_column    = column_device_view::create(input_column, stream);
     auto d_category_column = column_device_view::create(categories, stream);
-    one_hot_encode_functor<InputType, has_nulls> one_hot_encoding_compute_f(*d_input_column,
-                                                                            *d_category_column);
+    one_hot_encode_functor<InputType> one_hot_encoding_compute_f(
+      *d_input_column, *d_category_column, has_nulls);
 
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator(0),
@@ -99,6 +98,8 @@ struct one_hot_encode_launcher {
   {
     CUDF_FAIL("Cannot encode column type without well-defined equality operator.");
   }
+
+  bool has_nulls;
 };
 
 std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const& input,
@@ -118,11 +119,9 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
     return std::make_pair(std::move(empty_data), table_view{views});
   }
 
-  return (!input.nullable() && !categories.nullable())
-           ? type_dispatcher(
-               input.type(), one_hot_encode_launcher<false>{}, input, categories, stream, mr)
-           : type_dispatcher(
-               input.type(), one_hot_encode_launcher<true>{}, input, categories, stream, mr);
+  auto const nullable = input.nullable() || categories.nullable();
+  return type_dispatcher(
+    input.type(), one_hot_encode_launcher{nullable}, input, categories, stream, mr);
 }
 
 }  // namespace detail
