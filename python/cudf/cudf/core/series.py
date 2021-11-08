@@ -4624,10 +4624,10 @@ class DatetimeProperties(object):
         Parameters
         ----------
         freq : str
-            One of ["D", "H", "T", "S", "L", "U", "N"]
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
             Must be a fixed frequency like 'S' (second) not 'ME' (month end).
             See `frequency aliases <https://pandas.pydata.org/docs/\
-                user_guide/timeseries.html#timeseries-offset-aliases>`_
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
             for more details on these aliases.
 
         Returns
@@ -4649,7 +4649,7 @@ class DatetimeProperties(object):
         """
         out_column = self.series._column.ceil(freq)
 
-        return Series(
+        return Series._from_data(
             data=out_column, index=self.series._index, name=self.series.name
         )
 
@@ -4660,10 +4660,10 @@ class DatetimeProperties(object):
         Parameters
         ----------
         freq : str
-            One of ["D", "H", "T", "S", "L", "U", "N"]
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
             Must be a fixed frequency like 'S' (second) not 'ME' (month end).
             See `frequency aliases <https://pandas.pydata.org/docs/\
-                user_guide/timeseries.html#timeseries-offset-aliases>`_
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
             for more details on these aliases.
 
         Returns
@@ -4685,7 +4685,7 @@ class DatetimeProperties(object):
         """
         out_column = self.series._column.floor(freq)
 
-        return Series(
+        return Series._from_data(
             data=out_column, index=self.series._index, name=self.series.name
         )
 

@@ -119,27 +119,29 @@ struct ceil_timestamp {
 template <datetime_component COMPONENT>
 struct floor_timestamp {
   template <typename Timestamp>
-  CUDA_DEVICE_CALLABLE Timestamp operaTono;
-  switch (COMPONENT) {
-    case datetime_component::DAY:
-      return time_point_cast<typename Timestamp::duration>(floor<duration_D>(ts));
-    case datetime_component::HOUR:
-      return time_point_cast<typename Timestamp::duration>(floor<duration_h>(ts));
-    case datetime_component::MINUTE:
-      return time_point_cast<typename Timestamp::duration>(floor<duration_m>(ts));
-    case datetime_component::SECOND:
-      return time_point_cast<typename Timestamp::duration>(floor<duration_s>(ts));
-    case datetime_component::MILLISECOND:
-      return time_point_cast<typename Timestamp::duration>(floor<duration_ms>(ts));
-    case datetime_component::MICROSECOND:
-      return time_point_cast<typename Timestamp::duration>(floor<duration_us>(ts));
-    case datetime_component::NANOSECOND:
-      return time_point_cast<typename Timestamp::duration>(floor<duration_ns>(ts));
-    default: cudf_assert(false && "Unexpected resolution");
-  }
+  CUDA_DEVICE_CALLABLE Timestamp operator()(Timestamp const ts) const
+  {
+    using namespace cuda::std::chrono;
+    switch (COMPONENT) {
+      case datetime_component::DAY:
+        return time_point_cast<typename Timestamp::duration>(floor<duration_D>(ts));
+      case datetime_component::HOUR:
+        return time_point_cast<typename Timestamp::duration>(floor<duration_h>(ts));
+      case datetime_component::MINUTE:
+        return time_point_cast<typename Timestamp::duration>(floor<duration_m>(ts));
+      case datetime_component::SECOND:
+        return time_point_cast<typename Timestamp::duration>(floor<duration_s>(ts));
+      case datetime_component::MILLISECOND:
+        return time_point_cast<typename Timestamp::duration>(floor<duration_ms>(ts));
+      case datetime_component::MICROSECOND:
+        return time_point_cast<typename Timestamp::duration>(floor<duration_us>(ts));
+      case datetime_component::NANOSECOND:
+        return time_point_cast<typename Timestamp::duration>(floor<duration_ns>(ts));
+      default: cudf_assert(false && "Unexpected resolution");
+    }
 
-  return {};
-}
+    return {};
+  }
 };
 
 // Number of days until month indexed by leap year and month (0-based index)
