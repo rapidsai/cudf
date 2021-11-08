@@ -4649,7 +4649,7 @@ class DatetimeProperties(object):
         """
         out_column = self.series._column.ceil(freq)
 
-        return Series(
+        return Series._from_data(
             data=out_column, index=self.series._index, name=self.series.name
         )
 
@@ -4685,7 +4685,7 @@ class DatetimeProperties(object):
         """
         out_column = self.series._column.floor(freq)
 
-        return Series(
+        return Series._from_data(
             data=out_column, index=self.series._index, name=self.series.name
         )
 
