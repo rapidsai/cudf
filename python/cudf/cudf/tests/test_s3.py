@@ -272,7 +272,8 @@ def test_read_parquet_arrow_nativefile(s3_base, s3so, pdf, columns):
     assert_eq(expect, got)
 
 
-def test_read_parquet_filters(s3_base, s3so, pdf):
+@pytest.mark.parametrize("python_file", [True, False])
+def test_read_parquet_filters(s3_base, s3so, pdf, python_file):
     fname = "test_parquet_reader_filters.parquet"
     bname = "parquet"
     buffer = BytesIO()
@@ -284,6 +285,7 @@ def test_read_parquet_filters(s3_base, s3so, pdf):
             "s3://{}/{}".format(bname, fname),
             storage_options=s3so,
             filters=filters,
+            use_python_file_object=python_file,
         )
 
     # All row-groups should be filtered out

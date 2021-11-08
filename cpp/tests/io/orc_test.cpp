@@ -1000,7 +1000,7 @@ TEST_F(OrcStatisticsTest, Basic)
   auto const stats = cudf_io::read_parsed_orc_statistics(cudf_io::source_info{filepath});
 
   auto const expected_column_names =
-    std::vector<std::string>{"col0", "_col0", "_col1", "_col2", "_col3", "_col4"};
+    std::vector<std::string>{"", "_col0", "_col1", "_col2", "_col3", "_col4"};
   EXPECT_EQ(stats.column_names, expected_column_names);
 
   auto validate_statistics = [&](std::vector<cudf_io::column_statistics> const& stats) {
@@ -1369,6 +1369,42 @@ TEST_F(OrcWriterTest, TestMap)
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
+}
+
+TEST_F(OrcReaderTest, NestedColumnSelection)
+{
+  auto const num_rows  = 1000;
+  auto child_col1_data = random_values<int32_t>(num_rows);
+  auto child_col2_data = random_values<int64_t>(num_rows);
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 3; });
+  column_wrapper<int32_t> child_col1 = {child_col1_data.begin(), child_col1_data.end(), validity};
+  column_wrapper<int64_t> child_col2 = {child_col2_data.begin(), child_col2_data.end(), validity};
+  auto struct_col                    = cudf::test::structs_column_wrapper{child_col1, child_col2};
+  table_view expected({struct_col});
+
+  cudf_io::table_input_metadata expected_metadata(expected);
+  expected_metadata.column_metadata[0].set_name("struct_s");
+  expected_metadata.column_metadata[0].child(0).set_name("field_a");
+  expected_metadata.column_metadata[0].child(1).set_name("field_b");
+
+  auto filepath = temp_env->get_temp_filepath("OrcNestedSelection.orc");
+  cudf_io::orc_writer_options out_opts =
+    cudf_io::orc_writer_options::builder(cudf_io::sink_info{filepath}, expected)
+      .metadata(&expected_metadata);
+  cudf_io::write_orc(out_opts);
+
+  cudf_io::orc_reader_options in_opts =
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
+      .use_index(false)
+      .columns({"struct_s.field_b"});
+  auto result = cudf_io::read_orc(in_opts);
+
+  // Verify that only one child column is included in the output table
+  ASSERT_EQ(1, result.tbl->view().column(0).num_children());
+  // Verify that the first child column is `field_b`
+  column_wrapper<int64_t> expected_col = {child_col2_data.begin(), child_col2_data.end(), validity};
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_col, result.tbl->view().column(0).child(0));
+  ASSERT_EQ("field_b", result.metadata.schema_info[0].children[0].name);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

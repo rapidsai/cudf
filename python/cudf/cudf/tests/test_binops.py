@@ -833,6 +833,42 @@ def test_operator_func_dataframe(func, nulls, fill_value, other):
     utils.assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("func", _operators_comparison)
+@pytest.mark.parametrize("nulls", _nulls)
+@pytest.mark.parametrize("other", ["df", "scalar"])
+def test_logical_operator_func_dataframe(func, nulls, other):
+    np.random.seed(0)
+    num_rows = 100
+    num_cols = 3
+
+    def gen_df():
+        pdf = pd.DataFrame()
+        from string import ascii_lowercase
+
+        cols = np.random.choice(num_cols + 5, num_cols, replace=False)
+
+        for i in range(num_cols):
+            colname = ascii_lowercase[cols[i]]
+            data = utils.gen_rand("float64", num_rows) * 10000
+            if nulls == "some":
+                idx = np.random.choice(
+                    num_rows, size=int(num_rows / 2), replace=False
+                )
+                data[idx] = np.nan
+            pdf[colname] = data
+        return pdf
+
+    pdf1 = gen_df()
+    pdf2 = gen_df() if other == "df" else 59.0
+    gdf1 = cudf.DataFrame.from_pandas(pdf1)
+    gdf2 = cudf.DataFrame.from_pandas(pdf2) if other == "df" else 59.0
+
+    got = getattr(gdf1, func)(gdf2)
+    expect = getattr(pdf1, func)(pdf2)[list(got._data)]
+
+    utils.assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("func", _operators_arithmetic + _operators_comparison)
 @pytest.mark.parametrize("rhs", [0, 1, 2, 128])
 def test_binop_bool_uint(func, rhs):
