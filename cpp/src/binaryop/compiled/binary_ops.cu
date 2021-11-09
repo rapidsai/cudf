@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include "binary_ops.hpp"
-#include "operation.cuh"
-#include "struct_binary_ops.cuh"
+#include <binaryop/compiled/binary_ops.hpp>
+#include <binaryop/compiled/operation.cuh>
+#include <binaryop/compiled/struct_binary_ops.cuh>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>

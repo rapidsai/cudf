@@ -22,7 +22,6 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <optional>
-#include "cudf/column/column_view.hpp"
 
 namespace cudf {
 // Forward declarations

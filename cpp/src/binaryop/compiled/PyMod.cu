@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "binary_ops.cuh"
+#include <binaryop/compiled/binary_ops.cuh>
 
 namespace cudf::binops::compiled {
 template void apply_binary_op<ops::PyMod>(mutable_column_view&,

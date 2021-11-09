@@ -676,13 +676,9 @@ constexpr inline bool is_nested(data_type type)
 /**
  * @brief Indicates whether `T` is a struct type.
  *
- * "Nested" types are distinct from compound types in that they
- * can have an arbitrarily deep list of descendants of the same
- * type. Strings are not a nested type, but lists are.
- *
  * @param T The type to verify
- * @return true T is a nested type
- * @return false T is not a nested type
+ * @return true T is a struct type
+ * @return false T is not a struct type
  */
 template <typename T>
 constexpr inline bool is_struct()
@@ -699,15 +695,11 @@ struct is_struct_impl {
 };
 
 /**
- * @brief Indicates whether `type` is a nested type
- *
- * "Nested" types are distinct from compound types in that they
- * can have an arbitrarily deep list of descendants of the same
- * type. Strings are not a nested type, but lists are.
+ * @brief Indicates whether `type` is a struct type.
  *
  * @param type The `data_type` to verify
- * @return true `type` is a nested type
- * @return false `type` is not a nested type
+ * @return true `type` is a struct type
+ * @return false `type` is not a struct type
  */
 constexpr inline bool is_struct(data_type type)
 {
