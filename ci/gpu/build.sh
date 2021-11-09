@@ -176,6 +176,19 @@ else
         ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
     done
 
+    if [[ "$COMPUTE_SANITIZER_ENABLE" == "1" ]]; then
+        gpuci_logger "Memcheck on GoogleTests with rmm_mode=cuda"
+        export GTEST_CUDF_RMM_MODE=cuda
+        COMPUTE_SANITIZER_CMD="compute-sanitizer --tool memcheck --log-file" #  $WORKSPACE/test-results/cudamemcheck-%q{test_name}.log
+        for gt in gtests/* ; do
+            test_name=$(basename ${gt})
+            echo "Running GoogleTest $test_name"
+            ${COMPUTE_SANITIZER_CMD} ${gt} --gtest_output=xml:"$WORKSPACE/test-results/" | tee "$WORKSPACE/test-results/${test_name}.cs.log"
+        done
+        unset GTEST_CUDF_RMM_MODE
+        python ../scripts/compute-sanitizer-to-junit-xml.py -glob "$WORKSPACE/test-results/*.cs.log" -out "$WORKSPACE/test-results/cudamemcheck-junit.xml"
+    fi
+
     CUDF_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf-*.tar.bz2"`
     CUDF_CONDA_FILE=`basename "$CUDF_CONDA_FILE" .tar.bz2` #get filename without extension
     CUDF_CONDA_FILE=${CUDF_CONDA_FILE//-/=} #convert to conda install
