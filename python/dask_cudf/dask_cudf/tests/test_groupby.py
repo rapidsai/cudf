@@ -15,7 +15,8 @@ from dask_cudf.groupby import SUPPORTED_AGGS, _is_supported
 
 
 @pytest.mark.parametrize("aggregation", SUPPORTED_AGGS)
-def test_groupby_basic_frame(aggregation):
+@pytest.mark.parametrize("series", [False, True])
+def test_groupby_basic(series, aggregation):
     pdf = pd.DataFrame(
         {
             "x": np.random.randint(0, 5, size=10000),
@@ -24,49 +25,23 @@ def test_groupby_basic_frame(aggregation):
     )
 
     gdf = cudf.DataFrame.from_pandas(pdf)
+    gdf_grouped = gdf.groupby("x")
+    ddf_grouped = dask_cudf.from_cudf(gdf, npartitions=5).groupby("x")
 
-    ddf = dask_cudf.from_cudf(gdf, npartitions=5)
+    if series:
+        gdf_grouped = gdf_grouped.x
+        ddf_grouped = ddf_grouped.x
 
-    a = getattr(gdf.groupby("x"), aggregation)()
-    b = getattr(ddf.groupby("x"), aggregation)().compute()
-
-    if aggregation == "count":
-        dd.assert_eq(a, b, check_dtype=False)
-    else:
-        dd.assert_eq(a, b)
-
-    a = gdf.groupby("x").agg({"x": aggregation})
-    b = ddf.groupby("x").agg({"x": aggregation}).compute()
+    a = getattr(gdf_grouped, aggregation)()
+    b = getattr(ddf_grouped, aggregation)().compute()
 
     if aggregation == "count":
         dd.assert_eq(a, b, check_dtype=False)
     else:
         dd.assert_eq(a, b)
 
-
-@pytest.mark.parametrize("aggregation", SUPPORTED_AGGS)
-def test_groupby_basic_series(aggregation):
-    pdf = pd.DataFrame(
-        {
-            "x": np.random.randint(0, 5, size=10000),
-            "y": np.random.normal(size=10000),
-        }
-    )
-
-    gdf = cudf.DataFrame.from_pandas(pdf)
-
-    ddf = dask_cudf.from_cudf(gdf, npartitions=5)
-
-    a = getattr(gdf.groupby("x").x, aggregation)()
-    b = getattr(ddf.groupby("x").x, aggregation)().compute()
-
-    if aggregation == "count":
-        dd.assert_eq(a, b, check_dtype=False)
-    else:
-        dd.assert_eq(a, b)
-
-    a = gdf.groupby("x").x.agg({"x": aggregation})
-    b = ddf.groupby("x").x.agg({"x": aggregation}).compute()
+    a = gdf_grouped.agg({"x": aggregation})
+    b = ddf_grouped.agg({"x": aggregation}).compute()
 
     if aggregation == "count":
         dd.assert_eq(a, b, check_dtype=False)
