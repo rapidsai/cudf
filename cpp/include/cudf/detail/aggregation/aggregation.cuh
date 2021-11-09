@@ -23,6 +23,7 @@
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/traits.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -139,7 +140,7 @@ struct update_target_element<
   {
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
-    if constexpr (not std::is_same_v<Source, __int128_t>) {
+    if constexpr (cudf::has_atomic_support<Source>()) {
       using Target = target_type_t<Source, aggregation::MIN>;
       atomicMin(&target.element<Target>(target_index),
                 static_cast<Target>(source.element<Source>(source_index)));
@@ -166,7 +167,7 @@ struct update_target_element<Source,
     using DeviceTarget = device_storage_type_t<Target>;
     using DeviceSource = device_storage_type_t<Source>;
 
-    if constexpr (not std::is_same_v<DeviceSource, __int128_t>) {
+    if constexpr (cudf::has_atomic_support<DeviceSource>()) {
       atomicMin(&target.element<DeviceTarget>(target_index),
                 static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
     }
@@ -189,7 +190,7 @@ struct update_target_element<
   {
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
-    if constexpr (not std::is_same_v<Source, __int128_t>) {
+    if constexpr (cudf::has_atomic_support<Source>()) {
       using Target = target_type_t<Source, aggregation::MAX>;
       atomicMax(&target.element<Target>(target_index),
                 static_cast<Target>(source.element<Source>(source_index)));
@@ -216,7 +217,7 @@ struct update_target_element<Source,
     using DeviceTarget = device_storage_type_t<Target>;
     using DeviceSource = device_storage_type_t<Source>;
 
-    if constexpr (not std::is_same_v<DeviceSource, __int128_t>) {
+    if constexpr (cudf::has_atomic_support<DeviceSource>()) {
       atomicMax(&target.element<DeviceTarget>(target_index),
                 static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
     }
@@ -239,7 +240,7 @@ struct update_target_element<
   {
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
-    if constexpr (not std::is_same_v<Source, __int128_t>) {
+    if constexpr (cudf::has_atomic_support<Source>()) {
       using Target = target_type_t<Source, aggregation::SUM>;
       atomicAdd(&target.element<Target>(target_index),
                 static_cast<Target>(source.element<Source>(source_index)));
@@ -266,7 +267,7 @@ struct update_target_element<Source,
     using DeviceTarget = device_storage_type_t<Target>;
     using DeviceSource = device_storage_type_t<Source>;
 
-    if constexpr (not std::is_same_v<DeviceSource, __int128_t>) {
+    if constexpr (cudf::has_atomic_support<DeviceSource>()) {
       atomicAdd(&target.element<DeviceTarget>(target_index),
                 static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
     }
