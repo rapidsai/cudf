@@ -124,6 +124,19 @@ def pdf(scope="module"):
     return df
 
 
+@pytest.fixture
+def pdf_ext(scope="module"):
+    df = pd.DataFrame()
+    df["Integer"] = np.array([2345, 11987, 9027, 9027])
+    df["Float"] = np.array([9.001, 8.343, 6, 2.781])
+    df["Integer2"] = np.array([2345, 106, 2088, 789277])
+    df["String"] = np.array(["Alpha", "Beta", "Gamma", "Delta"])
+    df["Boolean"] = np.array([True, False, True, False])
+    df["List"] = np.array([[0], [1], [2], [3]])
+    df["Struct"] = np.array([{"a": 0}, {"a": 1}, {"a": 2}, {}])
+    return df
+
+
 @pytest.mark.parametrize("bytes_per_thread", [32, 1024])
 def test_read_csv(s3_base, s3so, pdf, bytes_per_thread):
     # Write to buffer
@@ -218,7 +231,13 @@ def test_write_csv(s3_base, s3so, pdf, chunksize):
 @pytest.mark.parametrize("use_python_file_object", [False, True])
 @pytest.mark.parametrize("use_fsspec_parquet", [False, True])
 def test_read_parquet(
-    s3_base, s3so, pdf, bytes_per_thread, columns, use_python_file_object, use_fsspec_parquet
+    s3_base,
+    s3so,
+    pdf,
+    bytes_per_thread,
+    columns,
+    use_python_file_object,
+    use_fsspec_parquet,
 ):
     fname = "test_parquet_reader.parquet"
     bname = "parquet"
@@ -275,11 +294,11 @@ def test_read_parquet_arrow_nativefile(s3_base, s3so, pdf, columns):
 
 
 @pytest.mark.parametrize("python_file", [True, False])
-def test_read_parquet_filters(s3_base, s3so, pdf, python_file):
+def test_read_parquet_filters(s3_base, s3so, pdf_ext, python_file):
     fname = "test_parquet_reader_filters.parquet"
     bname = "parquet"
     buffer = BytesIO()
-    pdf.to_parquet(path=buffer)
+    pdf_ext.to_parquet(path=buffer)
     buffer.seek(0)
     filters = [("String", "==", "Omega")]
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
@@ -291,7 +310,7 @@ def test_read_parquet_filters(s3_base, s3so, pdf, python_file):
         )
 
     # All row-groups should be filtered out
-    assert_eq(pdf.iloc[:0], got.reset_index(drop=True))
+    assert_eq(pdf_ext.iloc[:0], got.reset_index(drop=True))
 
 
 def test_write_parquet(s3_base, s3so, pdf):

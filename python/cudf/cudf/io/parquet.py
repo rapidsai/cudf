@@ -1,6 +1,7 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
 import io
+import json
 import warnings
 from collections import defaultdict
 from functools import partial
@@ -263,6 +264,22 @@ def _get_byte_ranges(file_list, row_groups, columns, fs):
         # Step 3 - Collect required byte ranges
         byte_ranges = []
         md = pq.ParquetFile(io.BytesIO(footer_sample)).metadata
+        column_set = None if columns is None else set(columns)
+        if column_set is not None:
+            schema = md.schema.to_arrow_schema()
+            has_pandas_metadata = (
+                schema.metadata is not None and b"pandas" in schema.metadata
+            )
+            if has_pandas_metadata:
+                md_index = [
+                    ind
+                    for ind in json.loads(
+                        schema.metadata[b"pandas"].decode("utf8")
+                    ).get("index_columns", [])
+                    # Ignore RangeIndex information
+                    if not isinstance(ind, dict)
+                ]
+                column_set |= set(md_index)
         for r in range(md.num_row_groups):
             # Skip this row-group if we are targetting
             # specific row-groups
@@ -273,7 +290,12 @@ def _get_byte_ranges(file_list, row_groups, columns, fs):
                     name = column.path_in_schema
                     # Skip this column if we are targetting a
                     # specific columns
-                    if columns is None or name in columns:
+                    split_name = name.split(".")[0]
+                    if (
+                        column_set is None
+                        or name in column_set
+                        or split_name in column_set
+                    ):
                         file_offset0 = column.dictionary_page_offset
                         if file_offset0 is None:
                             file_offset0 = column.data_page_offset
