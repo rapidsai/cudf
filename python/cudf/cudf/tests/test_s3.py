@@ -266,13 +266,24 @@ def test_read_parquet(
 @pytest.mark.parametrize("bytes_per_thread", [32, 1024])
 @pytest.mark.parametrize("columns", [None, ["List", "Struct"]])
 @pytest.mark.parametrize("use_python_file_object", [False, True])
+@pytest.mark.parametrize("index", [None, "Integer"])
 def test_read_parquet_ext(
-    s3_base, s3so, pdf_ext, bytes_per_thread, columns, use_python_file_object
+    s3_base,
+    s3so,
+    pdf_ext,
+    bytes_per_thread,
+    columns,
+    use_python_file_object,
+    index,
 ):
     fname = "test_parquet_reader_ext.parquet"
     bname = "parquet"
     buffer = BytesIO()
-    pdf_ext.to_parquet(path=buffer)
+
+    if index:
+        pdf_ext.set_index(index).to_parquet(path=buffer)
+    else:
+        pdf_ext.to_parquet(path=buffer)
 
     # Check direct path handling
     buffer.seek(0)
@@ -285,7 +296,14 @@ def test_read_parquet_ext(
             footer_sample_size=3200,
             columns=columns,
         )
-    expect = pdf_ext[columns] if columns else pdf_ext
+    if index:
+        expect = (
+            pdf_ext.set_index(index)[columns]
+            if columns
+            else pdf_ext.set_index(index)
+        )
+    else:
+        expect = pdf_ext[columns] if columns else pdf_ext
     assert_eq(expect, got1)
 
 
