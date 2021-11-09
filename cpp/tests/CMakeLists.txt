@@ -130,10 +130,7 @@ ConfigureTest(
 
 # ##################################################################################################
 # * reduction tests -------------------------------------------------------------------------------
-ConfigureTest(
-  REDUCTION_TEST reductions/reduction_tests.cpp reductions/segment_reduction_tests.cpp
-  reductions/scan_tests.cpp
-)
+ConfigureTest(REDUCTION_TEST reductions/reduction_tests.cpp reductions/scan_tests.cpp)
 
 # ##################################################################################################
 # * replace tests ---------------------------------------------------------------------------------

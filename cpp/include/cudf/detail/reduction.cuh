@@ -243,14 +243,16 @@ template <typename Op,
           typename std::enable_if_t<is_fixed_width<OutputType>() &&
                                     not cudf::is_fixed_point<OutputType>()>* = nullptr>
 std::unique_ptr<column> segmented_reduce(InputIterator d_in,
-                                         OffsetIterator d_offset_begin,
+                                         OffsetIterator d_offset,
+                                         cudf::size_type num_items,
                                          cudf::size_type num_segments,
                                          op::simple_op<Op> sop,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  auto binary_op = sop.get_binary_op();
-  auto identity  = sop.template get_identity<OutputType>();
+  using InputType = OutputType;
+  auto binary_op  = sop.get_binary_op();
+  auto identity   = sop.template get_identity<OutputType>();
   // auto dev_result = rmm::device_scalar<OutputType>{identity, stream, mr};
   auto dev_result = make_fixed_width_column(
     data_type{type_to_id<OutputType>()}, num_segments, mask_state::UNALLOCATED, stream, mr);
@@ -262,10 +264,11 @@ std::unique_ptr<column> segmented_reduce(InputIterator d_in,
   cub::DeviceSegmentedReduce::Reduce(d_temp_storage.data(),
                                      temp_storage_bytes,
                                      d_in,
-                                     dev_result_mview.data<OutputType>(),
+                                     dev_result_mview.data<InputType>(),
                                      num_segments,
-                                     d_offset_begin,
-                                     d_offset_begin + 1,
+                                     d_offset,
+                                     d_offset + num_segments + 1,
+                                     num_items,
                                      binary_op,
                                      identity,
                                      stream.value());
@@ -275,30 +278,16 @@ std::unique_ptr<column> segmented_reduce(InputIterator d_in,
   cub::DeviceSegmentedReduce::Reduce(d_temp_storage.data(),
                                      temp_storage_bytes,
                                      d_in,
-                                     dev_result_mview.data<OutputType>(),
+                                     dev_result_mview.data<InputType>(),
                                      num_segments,
-                                     d_offset_begin,
-                                     d_offset_begin + 1,
+                                     d_offset,
+                                     d_offset + num_segments + 1,
+                                     num_items,
                                      binary_op,
                                      identity,
                                      stream.value());
 
   return dev_result;
-}
-
-template <typename Op,
-          typename InputIterator,
-          typename OffsetIterator,
-          typename OutputType = typename thrust::iterator_value<InputIterator>::type,
-          typename std::enable_if_t<std::is_same_v<OutputType, string_view>>* = nullptr>
-std::unique_ptr<column> segmented_reduce(InputIterator d_in,
-                                         OffsetIterator d_offset_begin,
-                                         cudf::size_type num_segments,
-                                         op::simple_op<Op> sop,
-                                         rmm::cuda_stream_view stream,
-                                         rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FAIL("Not supported.");
 }
 
 }  // namespace detail

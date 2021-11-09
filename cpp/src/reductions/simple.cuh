@@ -18,7 +18,6 @@
 
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/reduction.cuh>
-#include <cudf/detail/unary.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -30,15 +29,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
-#include <optional>
-#include <variant>
-
 namespace cudf {
 namespace reduction {
 namespace simple {
-
-using scalar_or_column_ptr = std::variant<std::unique_ptr<scalar>, std::unique_ptr<column>>;
-
 /**
  * @brief Reduction for 'sum', 'product', 'min', 'max', 'sum of squares'
  * which directly compute the reduction by a single step reduction call
@@ -53,42 +46,29 @@ using scalar_or_column_ptr = std::variant<std::unique_ptr<scalar>, std::unique_p
  * @return Output scalar in device memory
  */
 template <typename ElementType, typename ResultType, typename Op>
-scalar_or_column_ptr simple_reduction(
-  column_view const& col,
-  std::optional<std::reference_wrapper<column_view const>> offsets,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<scalar> simple_reduction(column_view const& col,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
 {
   // reduction by iterator
-  auto dcol                          = cudf::column_device_view::create(col, stream);
-  auto simple_op                     = Op{};
-  auto [offsets_begin, num_segments] = [&] {
-    if (offsets) {
-      auto offsets_ref = offsets.value();
-      return std::make_pair(offsets_ref.get().begin<size_type>(), offsets_ref.get().size() - 1);
+  auto dcol      = cudf::column_device_view::create(col, stream);
+  auto simple_op = Op{};
+
+  auto result = [&] {
+    if (col.has_nulls()) {
+      auto f  = simple_op.template get_null_replacing_element_transformer<ResultType>();
+      auto it = thrust::make_transform_iterator(dcol->pair_begin<ElementType, true>(), f);
+      return detail::reduce(it, col.size(), simple_op, stream, mr);
     } else {
-      return std::make_pair(decltype(column_view{}.begin<size_type>()){}, -1);
+      auto f  = simple_op.template get_element_transformer<ResultType>();
+      auto it = thrust::make_transform_iterator(dcol->begin<ElementType>(), f);
+      return detail::reduce(it, col.size(), simple_op, stream, mr);
     }
   }();
 
-  if (col.has_nulls()) {
-    auto f  = simple_op.template get_null_replacing_element_transformer<ResultType>();
-    auto it = thrust::make_transform_iterator(dcol->pair_begin<ElementType, true>(), f);
-    if (offsets)
-      return detail::segmented_reduce(it, offsets_begin, num_segments, simple_op, stream, mr);
-    else
-      return detail::reduce(it, col.size(), simple_op, stream, mr);
-  } else {
-    auto f  = simple_op.template get_element_transformer<ResultType>();
-    auto it = thrust::make_transform_iterator(dcol->begin<ElementType>(), f);
-    if (offsets) {
-      return detail::segmented_reduce(it, offsets_begin, num_segments, simple_op, stream, mr);
-    } else
-      return detail::reduce(it, col.size(), simple_op, stream, mr);
-  }
-
   // set scalar is valid
-  // result->set_valid_async(col.null_count() < col.size(), stream);
+  result->set_valid_async(col.null_count() < col.size(), stream);
+  return result;
 }
 
 /**
@@ -151,11 +131,9 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
  * @return Output scalar in device memory
  */
 template <typename ElementType, typename ResultType, typename Op>
-scalar_or_column_ptr dictionary_reduction(
-  column_view const& col,
-  std::optional<std::reference_wrapper<column_view const>> offsets,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<scalar> dictionary_reduction(column_view const& col,
+                                             rmm::cuda_stream_view stream,
+                                             rmm::mr::device_memory_resource* mr)
 {
   auto dcol      = cudf::column_device_view::create(col, stream);
   auto simple_op = Op{};
@@ -248,7 +226,7 @@ struct bool_result_element_dispatcher {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    return std::get<0>(simple_reduction<ElementType, bool, Op>(col, std::nullopt, stream, mr));
+    return simple_reduction<ElementType, bool, Op>(col, stream, mr);
   }
 
   template <typename ElementType,
@@ -308,16 +286,13 @@ struct same_element_type_dispatcher {
                                      rmm::mr::device_memory_resource* mr)
   {
     if (!cudf::is_dictionary(col.type())) {
-      return std::get<0>(
-        simple::simple_reduction<ElementType, ElementType, Op>(col, std::nullopt, stream, mr));
+      return simple::simple_reduction<ElementType, ElementType, Op>(col, stream, mr);
     }
     auto index = simple::simple_reduction<ElementType, ElementType, Op>(
       dictionary_column_view(col).get_indices_annotated(),
-      std::nullopt,
       stream,
       rmm::mr::get_current_device_resource());
-    return resolve_key<ElementType>(
-      dictionary_column_view(col).keys(), *std::get<0>(index), stream, mr);
+    return resolve_key<ElementType>(dictionary_column_view(col).keys(), *index, stream, mr);
   }
 
   template <typename ElementType, std::enable_if_t<cudf::is_fixed_point<ElementType>()>* = nullptr>
@@ -353,32 +328,22 @@ struct element_type_dispatcher {
    */
   template <typename ElementType,
             typename std::enable_if_t<std::is_floating_point<ElementType>::value>* = nullptr>
-  scalar_or_column_ptr reduce_numeric(
-    column_view const& col,
-    data_type const output_type,
-    std::optional<std::reference_wrapper<column_view const>> offsets,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
+  std::unique_ptr<scalar> reduce_numeric(column_view const& col,
+                                         data_type const output_type,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
   {
     auto result = !cudf::is_dictionary(col.type())
-                    ? simple_reduction<ElementType, double, Op>(col, offsets, stream, mr)
-                    : dictionary_reduction<ElementType, double, Op>(col, offsets, stream, mr);
+                    ? simple_reduction<ElementType, double, Op>(col, stream, mr)
+                    : dictionary_reduction<ElementType, double, Op>(col, stream, mr);
+    if (output_type == result->type()) return result;
 
-    if (offsets) {
-      auto slr = std::move(std::get<0>(result));
-      if (output_type == slr->type()) return result;
-
-      // this will cast the result to the output_type
-      return cudf::type_dispatcher(output_type,
-                                   cast_numeric_scalar_fn<double>{},
-                                   static_cast<numeric_scalar<double>*>(slr.get()),
-                                   stream,
-                                   mr);
-    } else {
-      auto col = std::move(std::get<1>(result));
-      if (output_type == col->type()) return result;
-      return cast(col->view(), output_type, stream, mr);
-    }
+    // this will cast the result to the output_type
+    return cudf::type_dispatcher(output_type,
+                                 cast_numeric_scalar_fn<double>{},
+                                 static_cast<numeric_scalar<double>*>(result.get()),
+                                 stream,
+                                 mr);
   }
 
   /**
@@ -386,32 +351,22 @@ struct element_type_dispatcher {
    */
   template <typename ElementType,
             typename std::enable_if_t<std::is_integral<ElementType>::value>* = nullptr>
-  scalar_or_column_ptr reduce_numeric(
-    column_view const& col,
-    data_type const output_type,
-    std::optional<std::reference_wrapper<column_view const>> offsets,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
+  std::unique_ptr<scalar> reduce_numeric(column_view const& col,
+                                         data_type const output_type,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr)
   {
     auto result = !cudf::is_dictionary(col.type())
-                    ? simple_reduction<ElementType, int64_t, Op>(col, offsets, stream, mr)
-                    : dictionary_reduction<ElementType, int64_t, Op>(col, offsets, stream, mr);
+                    ? simple_reduction<ElementType, int64_t, Op>(col, stream, mr)
+                    : dictionary_reduction<ElementType, int64_t, Op>(col, stream, mr);
+    if (output_type == result->type()) return result;
 
-    if (offsets) {
-      auto slr = std::move(std::get<0>(result));
-      if (output_type == slr->type()) return result;
-
-      // this will cast the result to the output_type
-      return cudf::type_dispatcher(output_type,
-                                   cast_numeric_scalar_fn<int64_t>{},
-                                   static_cast<numeric_scalar<int64_t>*>(slr.get()),
-                                   stream,
-                                   mr);
-    } else {
-      auto col = std::move(std::get<1>(result));
-      if (output_type == col->type()) return result;
-      return cast(col->view(), output_type, stream, mr);
-    }
+    // this will cast the result to the output_type
+    return cudf::type_dispatcher(output_type,
+                                 cast_numeric_scalar_fn<int64_t>{},
+                                 static_cast<numeric_scalar<int64_t>*>(result.get()),
+                                 stream,
+                                 mr);
   }
 
   /**
@@ -426,18 +381,17 @@ struct element_type_dispatcher {
    */
   template <typename ElementType,
             typename std::enable_if_t<cudf::is_numeric<ElementType>()>* = nullptr>
-  scalar_or_column_ptr operator()(column_view const& col,
-                                  std::optional<std::reference_wrapper<column_view const>> offsets,
-                                  data_type const output_type,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+  std::unique_ptr<scalar> operator()(column_view const& col,
+                                     data_type const output_type,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     if (output_type.id() == cudf::type_to_id<ElementType>())
       return !cudf::is_dictionary(col.type())
-               ? simple_reduction<ElementType, ElementType, Op>(col, offsets, stream, mr)
-               : dictionary_reduction<ElementType, ElementType, Op>(col, offsets, stream, mr);
+               ? simple_reduction<ElementType, ElementType, Op>(col, stream, mr)
+               : dictionary_reduction<ElementType, ElementType, Op>(col, stream, mr);
     // reduce and map to output type
-    return reduce_numeric<ElementType>(col, output_type, offsets, stream, mr);
+    return reduce_numeric<ElementType>(col, output_type, stream, mr);
   }
 
   /**
@@ -445,11 +399,10 @@ struct element_type_dispatcher {
    */
   template <typename ElementType,
             typename std::enable_if_t<cudf::is_fixed_point<ElementType>()>* = nullptr>
-  scalar_or_column_ptr operator()(column_view const& col,
-                                  std::optional<std::reference_wrapper<column_view const>> offsets,
-                                  data_type const output_type,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+  std::unique_ptr<scalar> operator()(column_view const& col,
+                                     data_type const output_type,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
   {
     CUDF_EXPECTS(output_type == col.type(), "Output type must be same as input column type.");
 
@@ -459,11 +412,10 @@ struct element_type_dispatcher {
   template <typename ElementType,
             typename std::enable_if_t<not cudf::is_numeric<ElementType>() and
                                       not cudf::is_fixed_point<ElementType>()>* = nullptr>
-  scalar_or_column_ptr operator()(column_view const& col,
-                                  std::optional<std::reference_wrapper<column_view const>> offsets,
-                                  data_type const output_type,
-                                  rmm::cuda_stream_view stream,
-                                  rmm::mr::device_memory_resource* mr)
+  std::unique_ptr<scalar> operator()(column_view const&,
+                                     data_type const,
+                                     rmm::cuda_stream_view,
+                                     rmm::mr::device_memory_resource*)
   {
     CUDF_FAIL("Reduction operator not supported for this type");
   }
