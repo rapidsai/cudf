@@ -225,7 +225,8 @@ bitmask bitmask_and(table_view const& view,
                     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Returns a bitwise OR of the bitmasks of columns of a table
+ * @brief Returns a struct of bitwise OR of the bitmasks of columns of a table,
+ * count of valid bits and count of null bits
  *
  * If any of the columns isn't nullable, it is considered all valid.
  * If no column in the table is nullable, an empty bitmask is returned.
@@ -234,9 +235,8 @@ bitmask bitmask_and(table_view const& view,
  * @param mr Device memory resource used to allocate the returned device_buffer
  * @return rmm::device_buffer Output bitmask
  */
-rmm::device_buffer bitmask_or(
-  table_view const& view,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+bitmask bitmask_or(table_view const& view,
+                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

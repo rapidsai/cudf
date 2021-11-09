@@ -299,6 +299,44 @@ rmm::device_buffer copy_bitmask(column_view const& view,
   return null_mask;
 }
 
+cudf::size_type count_set_bits(bitmask_type const* bitmask,
+                               size_type start,
+                               size_type stop,
+                               rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+{
+  if (nullptr == bitmask) { return 0; }
+
+  CUDF_EXPECTS(start >= 0, "Invalid range.");
+  CUDF_EXPECTS(start <= stop, "Invalid bit range.");
+
+  std::size_t num_bits_to_count = stop - start;
+  if (num_bits_to_count == 0) { return 0; }
+
+  auto num_words = num_bitmask_words(num_bits_to_count);
+
+  constexpr size_type block_size{256};
+
+  cudf::detail::grid_1d grid(num_words, block_size);
+
+  rmm::device_scalar<size_type> non_zero_count(0, stream);
+
+  count_set_bits_kernel<block_size>
+    <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
+      bitmask, start, stop - 1, non_zero_count.data());
+
+  return non_zero_count.value(stream);
+}
+
+cudf::size_type count_unset_bits(bitmask_type const* bitmask,
+                                 size_type start,
+                                 size_type stop,
+                                 rmm::cuda_stream_view stream = rmm::cuda_stream_default)
+{
+  if (nullptr == bitmask) { return 0; }
+  auto num_bits = (stop - start);
+  return (num_bits - detail::count_set_bits(bitmask, start, stop, stream));
+}
+
 // Inplace Bitwise AND of the masks
 void inplace_bitmask_and(device_span<bitmask_type> dest_mask,
                          host_span<bitmask_type const*> masks,
@@ -366,52 +404,16 @@ bitmask bitmask_and(table_view const& view,
   return bitmask{std::move(null_mask), 0, 0};
 }
 
-cudf::size_type count_set_bits(bitmask_type const* bitmask,
-                               size_type start,
-                               size_type stop,
-                               rmm::cuda_stream_view stream = rmm::cuda_stream_default)
-{
-  if (nullptr == bitmask) { return 0; }
-
-  CUDF_EXPECTS(start >= 0, "Invalid range.");
-  CUDF_EXPECTS(start <= stop, "Invalid bit range.");
-
-  std::size_t num_bits_to_count = stop - start;
-  if (num_bits_to_count == 0) { return 0; }
-
-  auto num_words = num_bitmask_words(num_bits_to_count);
-
-  constexpr size_type block_size{256};
-
-  cudf::detail::grid_1d grid(num_words, block_size);
-
-  rmm::device_scalar<size_type> non_zero_count(0, stream);
-
-  count_set_bits_kernel<block_size>
-    <<<grid.num_blocks, grid.num_threads_per_block, 0, stream.value()>>>(
-      bitmask, start, stop - 1, non_zero_count.data());
-
-  return non_zero_count.value(stream);
-}
-
-cudf::size_type count_unset_bits(bitmask_type const* bitmask,
-                                 size_type start,
-                                 size_type stop,
-                                 rmm::cuda_stream_view stream = rmm::cuda_stream_default)
-{
-  if (nullptr == bitmask) { return 0; }
-  auto num_bits = (stop - start);
-  return (num_bits - detail::count_set_bits(bitmask, start, stop, stream));
-}
-
 // Returns the bitwise OR of the null masks of all columns in the table view
-rmm::device_buffer bitmask_or(table_view const& view,
-                              rmm::cuda_stream_view stream,
-                              rmm::mr::device_memory_resource* mr)
+bitmask bitmask_or(table_view const& view,
+                   rmm::cuda_stream_view stream,
+                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   rmm::device_buffer null_mask{0, stream, mr};
-  if (view.num_rows() == 0 or view.num_columns() == 0) { return null_mask; }
+  if (view.num_rows() == 0 or view.num_columns() == 0) {
+    return bitmask{std::move(null_mask), 0, 0};
+  }
 
   std::vector<bitmask_type const*> masks;
   std::vector<size_type> offsets;
@@ -424,16 +426,15 @@ rmm::device_buffer bitmask_or(table_view const& view,
 
   if (static_cast<size_type>(masks.size()) == view.num_columns()) {
     return cudf::detail::bitmask_binop(
-             [] __device__(bitmask_type left, bitmask_type right) { return left | right; },
-             masks,
-             offsets,
-             view.num_rows(),
-             stream,
-             mr)
-      .mask;
+      [] __device__(bitmask_type left, bitmask_type right) { return left | right; },
+      masks,
+      offsets,
+      view.num_rows(),
+      stream,
+      mr);
   }
 
-  return null_mask;
+  return bitmask{std::move(null_mask), 0, 0};
 }
 
 /**
@@ -510,7 +511,7 @@ bitmask bitmask_and(table_view const& view, rmm::mr::device_memory_resource* mr)
   return detail::bitmask_and(view, rmm::cuda_stream_default, mr);
 }
 
-rmm::device_buffer bitmask_or(table_view const& view, rmm::mr::device_memory_resource* mr)
+bitmask bitmask_or(table_view const& view, rmm::mr::device_memory_resource* mr)
 {
   return detail::bitmask_or(view, rmm::cuda_stream_default, mr);
 }

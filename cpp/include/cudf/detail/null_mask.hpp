@@ -137,10 +137,9 @@ bitmask bitmask_and(table_view const& view,
  *
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
  */
-rmm::device_buffer bitmask_or(
-  table_view const& view,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+bitmask bitmask_or(table_view const& view,
+                   rmm::cuda_stream_view stream,
+                   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Performs a bitwise AND of the specified bitmasks,
