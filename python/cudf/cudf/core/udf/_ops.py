@@ -1,13 +1,6 @@
 import math
 import operator
 
-from cudf.utils.dtypes import (
-    BOOL_TYPES,
-    DATETIME_TYPES,
-    NUMERIC_TYPES,
-    TIMEDELTA_TYPES,
-)
-
 arith_ops = [
     operator.add,
     operator.sub,
@@ -60,7 +53,3 @@ comparison_ops = [
     operator.gt,
     operator.ge,
 ]
-
-
-# currently only numeric types are supported.
-SUPPORTED_TYPES = NUMERIC_TYPES | BOOL_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES

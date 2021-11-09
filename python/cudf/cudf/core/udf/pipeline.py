@@ -9,21 +9,30 @@ from numba.types import Poison, Record, Tuple, boolean, int64, void
 from nvtx import annotate
 
 from cudf.core.dtypes import CategoricalDtype
-from cudf.core.udf._ops import SUPPORTED_TYPES
 from cudf.core.udf.api import Masked, pack_return
 from cudf.core.udf.typing import MaskedType
 from cudf.utils import cudautils
+from cudf.utils.dtypes import (
+    BOOL_TYPES,
+    DATETIME_TYPES,
+    NUMERIC_TYPES,
+    TIMEDELTA_TYPES,
+)
 
 libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 MASK_BITSIZE = np.dtype("int32").itemsize * 8
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
+
+JIT_SUPPORTED_TYPES = (
+    NUMERIC_TYPES | BOOL_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES
+)
 
 
 def _is_jit_supported_type(dtype):
     # category dtype isn't hashable
     if isinstance(dtype, CategoricalDtype):
         return False
-    return str(dtype) in SUPPORTED_TYPES
+    return str(dtype) in JIT_SUPPORTED_TYPES
 
 
 def all_dtypes_from_frame(frame):
