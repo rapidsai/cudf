@@ -40,7 +40,7 @@ from cudf.api.types import (
     is_string_dtype,
     is_struct_dtype,
 )
-from cudf.core import column, reshape, df_protocol
+from cudf.core import column, df_protocol, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     as_column,
