@@ -8944,16 +8944,19 @@ def test_frame_series_where_other(data):
             "val3": [4, 5, 6, 1, 2, 9, 8, 5, 1],
         },
         {
-            "id": ["a", "a", "b", "b", "c", "c"],
-            "val1": [5, 4, 6, 8, 7, 2],
-            "val2": [4, 5, 1, 2, 9, 5],
-        },
-        {"id": ["a", "a", "b", "b", "c", "c"], "val": [10, 3, 4, 2, -3, 9]},
-        {
             "id": [0] * 4 + [1] * 3,
             "a": [10, 3, 4, 2, -3, 9, 10],
             "b": [10, 23, -4, 2, -3, 9, 19],
-            "c": [10, -23, -4, 21, -3, 19, 19],
+        },
+        {"id": ["a", "a", "b", "b", "c", "c"], "val": [10, 3, 4, 2, -3, 9]},
+        {
+            "id": ["a", "a", "b", "b", "c", "c"],
+            "val": [None, None, None, None, None, None],
+        },
+        {
+            "id": ["a", "a", "b", "b", "c", "c"],
+            "val1": [None, 4, 6, 8, None, 2],
+            "val2": [4, 5, None, 2, 9, None],
         },
     ],
 )
@@ -8964,3 +8967,21 @@ def test_dataframe_pearson_corr(data):
     expected = gdf.groupby("id").corr("pearson")
     actual = pdf.groupby("id").corr("pearson")
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize("method", ["kendall", "spearman"])
+def test_dataframe_pearson_corr_unsupported_methods(method):
+    gdf = cudf.DataFrame(
+        {
+            "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+            "val1": [5, 4, 6, 4, 8, 7, 4, 5, 2],
+            "val2": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+            "val3": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+        }
+    )
+
+    with pytest.raises(
+        NotImplementedError,
+        match="Only pearson correlation is currently supported",
+    ):
+        gdf.groupby("id").corr(method)
