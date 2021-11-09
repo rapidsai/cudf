@@ -88,7 +88,6 @@ scalar_or_column_ptr simple_reduction(
   }
 
   // set scalar is valid
-  // TODO: null handling, gh9552
   // result->set_valid_async(col.null_count() < col.size(), stream);
 }
 
