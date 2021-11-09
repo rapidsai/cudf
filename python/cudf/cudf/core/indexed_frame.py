@@ -427,6 +427,9 @@ class IndexedFrame(Frame):
         Set rows to null for all out of bound indices if nullify is `True`.
         """
         gather_map = cudf.core.column.as_column(gather_map)
+
+        # TODO: For performance, the check and conversion of gather map should
+        # be done by the caller. This check will be removed in future release.
         if not is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
 

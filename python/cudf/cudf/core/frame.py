@@ -558,7 +558,11 @@ class Frame:
 
         Set rows to null for all out of bound indices if nullify is `True`.
         """
+        # TODO: `keep_index` argument is to be removed.
         gather_map = cudf.core.column.as_column(gather_map)
+
+        # TODO: For performance, the check and conversion of gather map should
+        # be done by the caller. This check will be removed in future release.
         if not is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
 
@@ -2308,6 +2312,9 @@ class Frame:
             ),
             self._column_names,
         )
+        # TODO: _copy_type_metadata is a common pattern to apply after the
+        # roundtrip from libcudf. We should build this into a factory function
+        # to increase reusability.
         result._copy_type_metadata(self)
         return result
 

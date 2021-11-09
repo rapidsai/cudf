@@ -697,6 +697,9 @@ class ColumnBase(Column, Serializable):
         # Handle zero size
         if indices.size == 0:
             return cast(T, column_empty_like(self, newsize=0))
+
+        # TODO: For performance, the check and conversion of gather map should
+        # be done by the caller. This check will be removed in future release.
         if not is_integer_dtype(indices.dtype):
             indices = indices.astype("int32")
         if not nullify and not _gather_map_is_valid(indices, len(self)):
