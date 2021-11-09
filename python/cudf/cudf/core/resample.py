@@ -153,6 +153,7 @@ class _ResampleGrouping(_Grouping):
 
         # generate the labels for binning the key column:
         bin_labels = cudf.date_range(start=start, end=end, freq=freq,)
+        bin_labels = bin_labels.astype(key_column.dtype)
 
         # bin the key column:
         bin_numbers = cudf._lib.labeling.label_bins(
