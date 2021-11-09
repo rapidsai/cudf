@@ -236,6 +236,7 @@ add_library(
   src/dictionary/replace.cu
   src/dictionary/search.cu
   src/dictionary/set_keys.cu
+  src/filling/calendrical_month_sequence.cu
   src/filling/fill.cu
   src/filling/repeat.cu
   src/filling/sequence.cu
@@ -413,6 +414,7 @@ add_library(
   src/strings/convert/convert_integers.cu
   src/strings/convert/convert_ipv4.cu
   src/strings/convert/convert_urls.cu
+  src/strings/convert/convert_lists.cu
   src/strings/copying/concatenate.cu
   src/strings/copying/copying.cu
   src/strings/copying/shift.cu
@@ -435,7 +437,7 @@ add_library(
   src/strings/split/split.cu
   src/strings/split/split_record.cu
   src/strings/strings_column_factories.cu
-  src/strings/strings_column_view.cu
+  src/strings/strings_column_view.cpp
   src/strings/strings_scalar_factories.cpp
   src/strings/strip.cu
   src/strings/substring.cu
