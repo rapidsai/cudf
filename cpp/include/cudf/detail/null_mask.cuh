@@ -79,17 +79,17 @@ __global__ void offset_bitmask_binop(Binop op,
     bool const first{tid == 0};
     bool const last{not first};
 
-    auto const first_bit_index = 0;
-    auto const last_bit_index  = source_size_bits - 1;
+    auto constexpr first_bit_index = 0;
+    auto const last_bit_index      = source_size_bits - 1;
 
     size_type bit_index = (first) ? first_bit_index : last_bit_index;
-    size_type word_index =
-      (first) ? cudf::word_index(first_bit_index) : cudf::word_index(last_bit_index);
 
     size_type num_slack_bits = bit_index % word_size;
     if (last) { num_slack_bits = word_size - num_slack_bits - 1; }
 
     if (num_slack_bits > 0) {
+      size_type word_index =
+        (first) ? cudf::word_index(first_bit_index) : cudf::word_index(last_bit_index);
       bitmask_type word = destination[word_index];
       auto slack_mask   = (first) ? set_least_significant_bits(num_slack_bits)
                                   : set_most_significant_bits(num_slack_bits);
