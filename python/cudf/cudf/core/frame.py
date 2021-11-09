@@ -2314,8 +2314,8 @@ class Frame:
     def _positions_from_column_names(self, column_names):
         """Map each column name into their positions in the frame.
 
-        Return positions of the provided column names. The order of indices
-        returned corresponds to the column order in this Frame.
+        The order of indices returned corresponds to the column order in this
+        Frame.
         """
         return [
             i
