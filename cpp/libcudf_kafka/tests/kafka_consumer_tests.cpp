@@ -34,22 +34,30 @@ struct KafkaDatasourceTest : public ::testing::Test {
 TEST_F(KafkaDatasourceTest, MissingGroupID)
 {
   // group.id is a required configuration.
-  PyObject* kafka_configs = Py_BuildValue("{s:s}", "bootstrap.servers", "localhost:9092");
+  std::map<std::string, std::string> kafka_configs;
+  kafka_configs["bootstrap.servers"] = "localhost:9092";
 
-  EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, "csv-topic", 0, 0, 3, 5000, "\n"),
+  kafka::kafka_oauth_callback_t callback;
+
+  EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, callback, "csv-topic", 0, 0, 3, 5000, "\n"),
                cudf::logic_error);
 }
 
 TEST_F(KafkaDatasourceTest, InvalidConfigValues)
 {
   // Give a made up configuration value
-  PyObject* kafka_configs = Py_BuildValue("{s:s}", "completely_made_up_config", "wrong");
+  std::map<std::string, std::string> kafka_configs;
+  kafka_configs["completely_made_up_config"] = "wrong";
 
-  EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, "csv-topic", 0, 0, 3, 5000, "\n"),
+  kafka::kafka_oauth_callback_t callback;
+
+  EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, callback, "csv-topic", 0, 0, 3, 5000, "\n"),
                cudf::logic_error);
 
   // Give a good config property with a bad value
-  kafka_configs = Py_BuildValue("{s:s}", "message.max.bytes", "his should be a number not text");
-  EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, "csv-topic", 0, 0, 3, 5000, "\n"),
+  kafka_configs.clear();
+  kafka_configs["message.max.bytes"] = "this should be a number not text";
+
+  EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, callback, "csv-topic", 0, 0, 3, 5000, "\n"),
                cudf::logic_error);
 }
