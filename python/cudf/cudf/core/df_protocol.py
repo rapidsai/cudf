@@ -10,7 +10,7 @@ from typing import (
     Tuple,
     cast,
 )
-import warnings
+
 import cupy as cp
 import numpy as np
 from numba.cuda import as_cuda_array
@@ -395,7 +395,9 @@ class _CuDFColumn:
 
         return buffers
 
-    def _get_validity_buffer(self,) -> Optional[Tuple[_CuDFBuffer, ProtoDtype]]:
+    def _get_validity_buffer(
+        self,
+    ) -> Optional[Tuple[_CuDFBuffer, ProtoDtype]]:
         """
         Return the buffer containing the mask values
         indicating missing data and the buffer's associated dtype.
