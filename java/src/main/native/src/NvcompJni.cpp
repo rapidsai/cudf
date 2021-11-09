@@ -65,7 +65,7 @@ JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_nvcomp_NvcompJni_isLZ4Data(JNIEnv
     auto in_ptr = reinterpret_cast<void const *>(j_in_ptr);
     auto in_size = static_cast<std::size_t>(j_in_size);
     auto stream = reinterpret_cast<cudaStream_t>(j_stream);
-    return LZ4IsData(in_ptr, in_size, stream);
+    return nvcompLZ4IsData(in_ptr, in_size, stream);
   }
   CATCH_STD(env, 0)
 }
@@ -74,7 +74,7 @@ JNIEXPORT jboolean JNICALL Java_ai_rapids_cudf_nvcomp_NvcompJni_isLZ4Metadata(JN
                                                                               jlong metadata_ptr) {
   try {
     cudf::jni::auto_set_device(env);
-    return LZ4IsMetadata(reinterpret_cast<void *>(metadata_ptr));
+    return nvcompLZ4IsMetadata(reinterpret_cast<void *>(metadata_ptr));
   }
   CATCH_STD(env, 0)
 }
