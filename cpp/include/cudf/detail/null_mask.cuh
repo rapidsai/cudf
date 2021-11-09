@@ -75,11 +75,12 @@ __global__ void offset_bitmask_binop(Binop op,
 
   // Subtract any slack bits from the last word
   if (tid == 0) {
-    size_type const last_bit_index      = source_size_bits - 1;
+    size_type const last_bit_index = source_size_bits - 1;
     size_type const num_slack_bits = word_size - (last_bit_index % word_size) - 1;
     if (num_slack_bits > 0) {
       size_type word_index = cudf::word_index(last_bit_index);
-      thread_valid_count -= __popc(destination[word_index] & set_most_significant_bits(num_slack_bits));
+      thread_valid_count -=
+        __popc(destination[word_index] & set_most_significant_bits(num_slack_bits));
     }
   }
 
