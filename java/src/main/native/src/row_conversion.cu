@@ -23,16 +23,24 @@
 #include <tuple>
 
 #include <cooperative_groups.h>
-#include <cudf/detail/iterator.cuh>
-#include <cudf/lists/lists_column_device_view.cuh>
 #include <type_traits>
-
-#include "thrust/scan.h"
 
 #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
 #include <cuda/barrier>
 #endif
 
+#include <thrust/scan.h>
+#include <thrust/binary_search.h>
+#include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/transform_iterator.h>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_buffer.hpp>
+#include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
+
+#include <cudf/detail/iterator.cuh>
+#include <cudf/lists/lists_column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/sequence.hpp>
@@ -40,20 +48,14 @@
 #include <cudf/detail/utilities/integer_utils.hpp>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_device_view.cuh>
-#include <cudf/row_conversion.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/device_buffer.hpp>
-#include <rmm/device_uvector.hpp>
-#include <rmm/exec_policy.hpp>
-#include <thrust/binary_search.h>
-#include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/transform_iterator.h>
+
+#include "row_conversion.hpp"
 
 #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
 constexpr auto NUM_BLOCKS_PER_KERNEL_FROM_ROWS = 2;
