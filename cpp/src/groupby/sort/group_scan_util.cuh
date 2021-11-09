@@ -27,6 +27,7 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/functional.h>
@@ -43,18 +44,19 @@ struct scan_functor {
     if (K == aggregation::SUM)
       return cudf::is_numeric<T>() || cudf::is_duration<T>() || cudf::is_fixed_point<T>();
     else if (K == aggregation::MIN or K == aggregation::MAX)
-      return cudf::is_fixed_width<T>() and is_relationally_comparable<T, T>();
+      return !cudf::is_dictionary<T>() and is_relationally_comparable<T, T>();
     else
       return false;
   }
 
   template <typename T>
-  std::enable_if_t<is_supported<T>(), std::unique_ptr<column>> operator()(
-    column_view const& values,
-    size_type num_groups,
-    cudf::device_span<cudf::size_type const> group_labels,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr)
+  std::enable_if_t<is_supported<T>() and not std::is_same_v<T, cudf::string_view>,
+                   std::unique_ptr<column>>
+  operator()(column_view const& values,
+             size_type num_groups,
+             cudf::device_span<cudf::size_type const> group_labels,
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr)
   {
     using DeviceType       = device_storage_type_t<T>;
     using OpType           = cudf::detail::corresponding_operator_t<K>;
@@ -100,6 +102,53 @@ struct scan_functor {
                                     OpType{});
     }
     return result;
+  }
+
+  template <typename T>
+  std::enable_if_t<is_supported<T>() and std::is_same_v<T, cudf::string_view>,
+                   std::unique_ptr<column>>
+  operator()(column_view const& values,
+             size_type num_groups,
+             cudf::device_span<cudf::size_type const> group_labels,
+             rmm::cuda_stream_view stream,
+             rmm::mr::device_memory_resource* mr)
+  {
+    using OpType = cudf::detail::corresponding_operator_t<K>;
+
+    if (values.is_empty()) {
+      return cudf::make_empty_column(cudf::data_type{cudf::type_id::STRING});
+    }
+
+    // create an empty output vector we can fill with string_view instances
+    auto results_vector = rmm::device_uvector<string_view>(values.size(), stream);
+
+    auto values_view = column_device_view::create(values, stream);
+
+    if (values.has_nulls()) {
+      auto input = make_null_replacement_iterator(
+        *values_view, OpType::template identity<string_view>(), values.has_nulls());
+      thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+                                    group_labels.begin(),
+                                    group_labels.end(),
+                                    input,
+                                    results_vector.begin(),
+                                    thrust::equal_to<size_type>{},
+                                    OpType{});
+    } else {
+      thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
+                                    group_labels.begin(),
+                                    group_labels.end(),
+                                    values_view->begin<string_view>(),
+                                    results_vector.begin(),
+                                    thrust::equal_to<size_type>{},
+                                    OpType{});
+    }
+
+    // turn the string_view vector into a strings column
+    auto results = make_strings_column(results_vector, string_view{}, stream, mr);
+    if (values.has_nulls())
+      results->set_null_mask(cudf::detail::copy_bitmask(values, stream), values.null_count());
+    return results;
   }
 
   template <typename T, typename... Args>
