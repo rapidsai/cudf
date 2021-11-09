@@ -144,6 +144,8 @@ struct update_target_element<
       using Target = target_type_t<Source, aggregation::MIN>;
       atomicMin(&target.element<Target>(target_index),
                 static_cast<Target>(source.element<Source>(source_index)));
+    } else {
+      cudf_assert(false and "Source has no atomic support.");
     }
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
@@ -170,6 +172,8 @@ struct update_target_element<Source,
     if constexpr (cudf::has_atomic_support<DeviceSource>()) {
       atomicMin(&target.element<DeviceTarget>(target_index),
                 static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+    } else {
+      cudf_assert(false and "DeviceSource has no atomic support.");
     }
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
@@ -194,6 +198,8 @@ struct update_target_element<
       using Target = target_type_t<Source, aggregation::MAX>;
       atomicMax(&target.element<Target>(target_index),
                 static_cast<Target>(source.element<Source>(source_index)));
+    } else {
+      cudf_assert(false and "Source has no atomic support.");
     }
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
@@ -220,6 +226,8 @@ struct update_target_element<Source,
     if constexpr (cudf::has_atomic_support<DeviceSource>()) {
       atomicMax(&target.element<DeviceTarget>(target_index),
                 static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+    } else {
+      cudf_assert(false and "DeviceSource has no atomic support.");
     }
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
@@ -244,6 +252,8 @@ struct update_target_element<
       using Target = target_type_t<Source, aggregation::SUM>;
       atomicAdd(&target.element<Target>(target_index),
                 static_cast<Target>(source.element<Source>(source_index)));
+    } else {
+      cudf_assert(false and "Source has no atomic support.");
     }
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
@@ -270,6 +280,8 @@ struct update_target_element<Source,
     if constexpr (cudf::has_atomic_support<DeviceSource>()) {
       atomicAdd(&target.element<DeviceTarget>(target_index),
                 static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
+    } else {
+      cudf_assert(false and "DeviceSource has no atomic support.");
     }
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
