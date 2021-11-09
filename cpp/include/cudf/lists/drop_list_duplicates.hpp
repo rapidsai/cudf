@@ -19,8 +19,6 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/stream_compaction.hpp>
 
-#include <optional>
-
 namespace cudf {
 namespace lists {
 /**
