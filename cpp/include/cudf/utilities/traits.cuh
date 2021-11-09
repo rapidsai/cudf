@@ -32,9 +32,9 @@ namespace cudf {
 /**
  * @brief Indicates whether the type `T` has support for atomics
  *
- * @tparam T  The type to verify
- * @return true `T` has support for atomics
- * @return false  `T` no support for atomics
+ * @tparam T     The type to verify
+ * @return true  `T` has support for atomics
+ * @return false `T` no support for atomics
  */
 template <typename T>
 constexpr inline bool has_atomic_support()
@@ -53,8 +53,8 @@ struct has_atomic_support_impl {
 /**
  * @brief Indicates whether `type` has support for atomics
  *
- * @param type The `data_type` to verify
- * @return true `type` has support for atomics
+ * @param type   The `data_type` to verify
+ * @return true  `type` has support for atomics
  * @return false `type` no support for atomics
  */
 constexpr inline bool has_atomic_support(data_type type)
