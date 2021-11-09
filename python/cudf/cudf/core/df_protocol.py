@@ -10,7 +10,7 @@ from typing import (
     Tuple,
     cast,
 )
-
+import warnings
 import cupy as cp
 import numpy as np
 from numba.cuda import as_cuda_array
@@ -381,7 +381,6 @@ class _CuDFColumn:
                          buffer.
         """
         buffers = {}
-        buffers["data"] = self._get_data_buffer()
         try:
             buffers["validity"] = self._get_validity_buffer()
         except RuntimeError:
@@ -392,7 +391,78 @@ class _CuDFColumn:
         except RuntimeError:
             buffers["offsets"] = None
 
+        buffers["data"] = self._get_data_buffer()
+
         return buffers
+
+    def _get_validity_buffer(self,) -> Optional[Tuple[_CuDFBuffer, ProtoDtype]]:
+        """
+        Return the buffer containing the mask values
+        indicating missing data and the buffer's associated dtype.
+
+        Raises RuntimeError if null representation is not a bit or byte mask.
+        """
+
+        null, invalid = self.describe_null
+        if null == 3:
+            _k = _DtypeKind
+            if self.dtype[0] == _k.CATEGORICAL:
+                valid_mask = cast(
+                    cudf.core.column.CategoricalColumn, self._col
+                ).codes._get_mask_as_column()
+            else:
+                valid_mask = self._col._get_mask_as_column()
+
+            assert (valid_mask is not None) and (
+                valid_mask.data is not None
+            ), "valid_mask(.data) should not be None when "
+            "_CuDFColumn.describe_null[0] = 3"
+            buffer = _CuDFBuffer(
+                valid_mask.data, cp.uint8, allow_copy=self._allow_copy
+            )
+            dtype = (_k.UINT, 8, "C", "=")
+            return buffer, dtype
+
+        elif null == 1:
+            raise RuntimeError(
+                "This column uses NaN as null "
+                "so does not have a separate mask"
+            )
+        elif null == 0:
+            raise RuntimeError(
+                "This column is non-nullable so does not have a mask"
+            )
+        else:
+            raise NotImplementedError(
+                f"See {self.__class__.__name__}.describe_null method."
+            )
+
+    def _get_offsets_buffer(self,) -> Optional[Tuple[_CuDFBuffer, ProtoDtype]]:
+        """
+        Return the buffer containing the offset values for
+        variable-size binary data (e.g., variable-length strings)
+        and the buffer's associated dtype.
+
+        Raises RuntimeError if the data buffer does not have an associated
+        offsets buffer.
+        """
+        _k = _DtypeKind
+        if self.dtype[0] == _k.STRING:
+            offsets = self._col.children[0]
+            assert (offsets is not None) and (offsets.data is not None), " "
+            "offsets(.data) should not be None for string column"
+
+            buffer = _CuDFBuffer(
+                offsets.data, offsets.dtype, allow_copy=self._allow_copy
+            )
+            dtype = self._dtype_from_cudfdtype(offsets.dtype)
+        else:
+            raise RuntimeError(
+                "This column has a fixed-length dtype "
+                "so does not have an offsets buffer"
+            )
+
+        return buffer, dtype
 
     def _get_data_buffer(self,) -> Tuple[_CuDFBuffer, ProtoDtype]:
         """
@@ -423,78 +493,6 @@ class _CuDFColumn:
         buffer = _CuDFBuffer(
             col_data.data, col_data.dtype, allow_copy=self._allow_copy
         )
-
-        return buffer, dtype
-
-    def _get_validity_buffer(self,) -> Tuple[_CuDFBuffer, ProtoDtype]:
-        """
-        Return the buffer containing the mask values
-        indicating missing data and the buffer's associated dtype.
-
-        Raises RuntimeError if null representation is not a bit or byte mask.
-        """
-
-        null, invalid = self.describe_null
-        if null == 3:
-            _k = _DtypeKind
-            if self.dtype[0] == _k.CATEGORICAL:
-                valid_mask = cast(
-                    cudf.core.column.CategoricalColumn, self._col
-                ).codes._get_mask_as_column()
-            else:
-                valid_mask = self._col._get_mask_as_column()
-
-            # if (valid_mask is None) or (valid_mask.data is None) :
-            #     raise RuntimeError("valid_mask and valid_mask.data"
-            #     " should not be None when _CuDFColumn.describe_null[0] = 3")
-            assert (valid_mask is not None) and (
-                valid_mask.data is not None
-            ), "valid_mask(.data) should not be None when "
-            "_CuDFColumn.describe_null[0] = 3"
-            buffer = _CuDFBuffer(
-                valid_mask.data, cp.uint8, allow_copy=self._allow_copy
-            )
-            dtype = (_k.UINT, 8, "C", "=")
-            return buffer, dtype
-
-        elif null == 1:
-            raise RuntimeError(
-                "This column uses NaN as null "
-                "so does not have a separate mask"
-            )
-        elif null == 0:
-            raise RuntimeError(
-                "This column is non-nullable so does not have a mask"
-            )
-        else:
-            raise NotImplementedError(
-                f"See {self.__class__.__name__}.describe_null method."
-            )
-
-    def _get_offsets_buffer(self,) -> Tuple[_CuDFBuffer, ProtoDtype]:
-        """
-        Return the buffer containing the offset values for
-        variable-size binary data (e.g., variable-length strings)
-        and the buffer's associated dtype.
-
-        Raises RuntimeError if the data buffer does not have an associated
-        offsets buffer.
-        """
-        _k = _DtypeKind
-        if self.dtype[0] == _k.STRING:
-            offsets = self._col.children[0]
-            assert (offsets is not None) and (offsets.data is not None), " "
-            "offsets(.data) should not be None for string column"
-
-            buffer = _CuDFBuffer(
-                offsets.data, offsets.dtype, allow_copy=self._allow_copy
-            )
-            dtype = self._dtype_from_cudfdtype(offsets.dtype)
-        else:
-            raise RuntimeError(
-                "This column has a fixed-length dtype "
-                "so does not have an offsets buffer"
-            )
 
         return buffer, dtype
 
