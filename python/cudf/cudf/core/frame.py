@@ -6304,6 +6304,7 @@ class Frame:
 
     # Alias for truediv
     div = truediv
+    divide = truediv
 
     def rtruediv(self, other, axis, level=None, fill_value=None):
         """

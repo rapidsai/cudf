@@ -3246,7 +3246,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         # TODO: Remove the typecasting below once issue #6846 is fixed
         # link <https://github.com/rapidsai/cudf/issues/6846>
         dtypes = [self[col].dtype for col in self._column_names]
-        common_dtype = cudf.utils.dtypes.find_common_type(dtypes)
+        common_dtype = find_common_type(dtypes)
         df_normalized = self.astype(common_dtype)
 
         if any(is_string_dtype(dt) for dt in dtypes):
@@ -6398,6 +6398,7 @@ for binop in [
     "rfloordiv",
     "truediv",
     "div",
+    "divide",
     "rtruediv",
     "rdiv",
 ]:
