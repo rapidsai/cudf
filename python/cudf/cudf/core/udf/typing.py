@@ -47,7 +47,7 @@ class MaskedType(types.Type):
             self.value_type = types.Poison(
                 "\n\n\n Unsupported MaskedType. This is usually caused by "
                 "attempting to use a column of unsupported dtype in a UDF. "
-                f"supported dtypes are {SUPPORTED_NUMBA_TYPES}"
+                f"Supported dtypes are {SUPPORTED_NUMBA_TYPES}"
             )
         super().__init__(name=f"Masked{self.value_type}")
 
