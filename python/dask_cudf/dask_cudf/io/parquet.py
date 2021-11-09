@@ -3,19 +3,9 @@ import warnings
 from contextlib import ExitStack
 from functools import partial
 from io import BufferedWriter, BytesIO, IOBase
-from packaging.version import parse as parse_version
 
 import numpy as np
 from pyarrow import dataset as pa_ds, parquet as pq
-
-import fsspec
-
-if parse_version(fsspec.__version__) > parse_version("2021.11.0"):
-    # For new-enough versions of fsspec, we can use
-    # the fsspec.parquet module to open remote files
-    import fsspec.parquet as fsspec_parquet
-else:
-    fsspec_parquet = None
 
 from dask import dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
@@ -30,6 +20,7 @@ except ImportError:
 import cudf
 from cudf.core.column import as_column, build_categorical_column
 from cudf.io import write_to_dataset
+from cudf.utils import ioutils
 from cudf.utils.dtypes import cudf_dtype_from_pa_type
 
 
@@ -79,14 +70,14 @@ class CudfEngine(ArrowDatasetEngine):
         **kwargs,
     ):
 
-        # Convert `use_fsspec_parquet` to bool and define
-        # separate `use_fsspec_parquet_kwargs`. For now,
-        # we override `use_python_file_object=False` if
-        # the (experimental) `use_fsspec_parquet` option
-        # is used
-        use_fsspec_parquet_kwargs = use_fsspec_parquet if isinstance(use_fsspec_parquet, dict) else {}
-        use_fsspec_parquet = bool(use_fsspec_parquet) and fsspec_parquet
-        use_python_file_object = True if use_fsspec_parquet else use_python_file_object
+        # Check `use_fsspec_parquet` kwarg
+        (
+            use_fsspec_parquet,
+            use_fsspec_parquet_kwargs,
+            use_python_file_object,
+        ) = ioutils._handle_fsspec_parquet(
+            use_fsspec_parquet, use_python_file_object
+        )
 
         # Simplify row_groups if all None
         if row_groups == [None for path in paths]:
@@ -99,22 +90,20 @@ class CudfEngine(ArrowDatasetEngine):
             if not cudf.utils.ioutils._is_local_filesystem(fs):
 
                 # Define remote_open
-                if use_fsspec_parquet:
-                    remote_open = partial(
-                        fsspec_parquet.open_parquet_file,
-                        fs=fs,
-                        columns=columns,
-                        row_groups=row_groups,
-                        engine="pyarrow",
-                        **(use_fsspec_parquet_kwargs or {}),
-                    )
-                else:
-                    remote_open = fs.open
+                remote_open = partial(
+                    ioutils._open_parquet_file,
+                    mode="rb",
+                    fs=fs,
+                    columns=columns,
+                    row_groups=row_groups,
+                    engine="pyarrow",
+                    use_fsspec_parquet=use_fsspec_parquet,
+                    **(use_fsspec_parquet_kwargs or {}),
+                )
 
                 # Convert paths to file objects for remote data
                 paths_or_fobs = [
-                    stack.enter_context(remote_open(path, mode="rb"))
-                    for path in paths
+                    stack.enter_context(remote_open(path)) for path in paths
                 ]
 
             # Use cudf to read in data

@@ -5,17 +5,8 @@ import warnings
 from collections import defaultdict
 from functools import partial
 from uuid import uuid4
-from packaging.version import parse as parse_version
 
 import fsspec
-
-if parse_version(fsspec.__version__) > parse_version("2021.11.0"):
-    # For new-enough versions of fsspec, we can use
-    # the fsspec.parquet module to open remote files
-    import fsspec.parquet as fsspec_parquet
-else:
-    fsspec_parquet = None
-
 from pyarrow import dataset as ds, parquet as pq
 
 import cudf
@@ -286,7 +277,7 @@ def _get_byte_ranges(file_list, row_groups, columns, fs):
                         file_offset0 = column.dictionary_page_offset
                         if file_offset0 is None:
                             file_offset0 = column.data_page_offset
-                        num_bytes = column.total_uncompressed_size
+                        num_bytes = column.total_compressed_size
                         byte_ranges.append((file_offset0, num_bytes))
 
         all_byte_ranges.append(byte_ranges)
@@ -313,14 +304,14 @@ def read_parquet(
 ):
     """{docstring}"""
 
-    # Convert `use_fsspec_parquet` to bool and define
-    # separate `use_fsspec_parquet_kwargs`. For now,
-    # we override `use_python_file_object=False` if
-    # the (experimental) `use_fsspec_parquet` option
-    # is used
-    use_fsspec_parquet_kwargs = use_fsspec_parquet if isinstance(use_fsspec_parquet, dict) else {}
-    use_fsspec_parquet = bool(use_fsspec_parquet) and fsspec_parquet
-    use_python_file_object = True if use_fsspec_parquet else use_python_file_object
+    # Check `use_fsspec_parquet` kwarg
+    (
+        use_fsspec_parquet,
+        use_fsspec_parquet_kwargs,
+        use_python_file_object,
+    ) = ioutils._handle_fsspec_parquet(
+        use_fsspec_parquet, use_python_file_object
+    )
 
     # Multiple sources are passed as a list. If a single source is passed,
     # wrap it in a list for unified processing downstream.
@@ -376,9 +367,7 @@ def read_parquet(
             )
 
     # Only use fsspec.parquet if the fs is remote
-    if use_fsspec_parquet and (
-        fs is None or ioutils._is_local_filesystem(fs)
-    ):
+    if use_fsspec_parquet and (fs is None or ioutils._is_local_filesystem(fs)):
         use_fsspec_parquet = False
 
     filepaths_or_buffers = []
@@ -389,11 +378,12 @@ def read_parquet(
             # Use fsspec.parquet.open_parquet_file to transfer
             # the required column-chunks more efficiently
             remote_open = partial(
-                fsspec_parquet.open_parquet_file,
+                ioutils._open_parquet_file,
                 fs=fs,
                 columns=columns,
                 row_groups=None if row_groups is None else row_groups[i],
                 engine="pyarrow",
+                use_fsspec_parquet=use_fsspec_parquet,
                 **use_fsspec_parquet_kwargs,
             )
 

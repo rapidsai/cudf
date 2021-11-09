@@ -11,9 +11,17 @@ import fsspec.implementations.local
 import numpy as np
 import pandas as pd
 from fsspec.core import get_fs_token_paths
+from packaging.version import parse as parse_version
 from pyarrow import PythonFile as ArrowPythonFile
 from pyarrow.fs import FSSpecHandler, PyFileSystem
 from pyarrow.lib import NativeFile
+
+if parse_version(fsspec.__version__) > parse_version("2021.11.0"):
+    # For new-enough versions of fsspec, we can use
+    # the fsspec.parquet module to open remote files
+    import fsspec.parquet as fsspec_parquet
+else:
+    fsspec_parquet = None
 
 from cudf.utils.docutils import docfmt_partial
 
@@ -1666,3 +1674,38 @@ def _read_byte_ranges(
 
     for worker in workers:
         worker.join()
+
+
+def _handle_fsspec_parquet(use_fsspec_parquet, use_python_file_object):
+    # Convert `use_fsspec_parquet` to bool and define
+    # separate `use_fsspec_parquet_kwargs`. For now,
+    # we override `use_python_file_object=False` if
+    # the (experimental) `use_fsspec_parquet` option
+    # is used
+    use_fsspec_parquet_kwargs = (
+        use_fsspec_parquet if isinstance(use_fsspec_parquet, dict) else {}
+    )
+    use_fsspec_parquet = bool(use_fsspec_parquet) and fsspec_parquet
+    use_python_file_object = (
+        True if use_fsspec_parquet else use_python_file_object
+    )
+
+    return (
+        use_fsspec_parquet,
+        use_fsspec_parquet_kwargs,
+        use_python_file_object,
+    )
+
+
+def _open_parquet_file(
+    path, mode="rb", fs=None, use_fsspec_parquet=False, **kwargs
+):
+    # Redirect `open` to `fs.open` or `fsspec.open_parquet_file`,
+    # depending on `use_fsspec_parquet` and `fs`
+    if use_fsspec_parquet:
+        return fsspec_parquet.open_parquet_file(
+            path, fs=fs, mode=mode, **kwargs,
+        )
+    if fs is None:
+        return open(path, mode=mode)
+    return fs.open(path, mode=mode)
