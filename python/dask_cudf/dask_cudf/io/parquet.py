@@ -3,13 +3,18 @@ import warnings
 from contextlib import ExitStack
 from functools import partial
 from io import BufferedWriter, BytesIO, IOBase
+from packaging.version import parse as parse_version
 
 import numpy as np
 from pyarrow import dataset as pa_ds, parquet as pq
 
-try:
+import fsspec
+
+if parse_version(fsspec.__version__) > parse_version("2021.11.0"):
+    # For new-enough versions of fsspec, we can use
+    # the fsspec.parquet module to open remote files
     import fsspec.parquet as fsspec_parquet
-except ImportError:
+else:
     fsspec_parquet = None
 
 from dask import dataframe as dd
@@ -69,10 +74,19 @@ class CudfEngine(ArrowDatasetEngine):
         partitions=None,
         partitioning=None,
         partition_keys=None,
-        open_parquet_file_kwargs=None,
         use_python_file_object=False,
+        use_fsspec_parquet=False,
         **kwargs,
     ):
+
+        # Convert `use_fsspec_parquet` to bool and define
+        # separate `use_fsspec_parquet_kwargs`. For now,
+        # we override `use_python_file_object=False` if
+        # the (experimental) `use_fsspec_parquet` option
+        # is used
+        use_fsspec_parquet_kwargs = use_fsspec_parquet if isinstance(use_fsspec_parquet, dict) else {}
+        use_fsspec_parquet = bool(use_fsspec_parquet) and fsspec_parquet
+        use_python_file_object = True if use_fsspec_parquet else use_python_file_object
 
         # Simplify row_groups if all None
         if row_groups == [None for path in paths]:
@@ -85,18 +99,17 @@ class CudfEngine(ArrowDatasetEngine):
             if not cudf.utils.ioutils._is_local_filesystem(fs):
 
                 # Define remote_open
-                if fsspec_parquet is None or use_python_file_object is False:
-                    remote_open = fs.open
-                else:
+                if use_fsspec_parquet:
                     remote_open = partial(
                         fsspec_parquet.open_parquet_file,
                         fs=fs,
                         columns=columns,
                         row_groups=row_groups,
                         engine="pyarrow",
-                        **(open_parquet_file_kwargs or {}),
+                        **(use_fsspec_parquet_kwargs or {}),
                     )
-                    use_python_file_object = True
+                else:
+                    remote_open = fs.open
 
                 # Convert paths to file objects for remote data
                 paths_or_fobs = [
@@ -193,7 +206,7 @@ class CudfEngine(ArrowDatasetEngine):
 
         # Extract supported kwargs from `kwargs`
         strings_to_cats = kwargs.get("strings_to_categorical", False)
-        open_parquet_file_kwargs = kwargs.get("open_parquet_file", {})
+        use_fsspec_parquet = kwargs.get("use_fsspec_parquet", False)
         read_kwargs = kwargs.get("read", {})
 
         # Assume multi-peice read
@@ -218,7 +231,7 @@ class CudfEngine(ArrowDatasetEngine):
                         partitions=partitions,
                         partitioning=partitioning,
                         partition_keys=last_partition_keys,
-                        open_parquet_file_kwargs=open_parquet_file_kwargs,
+                        use_fsspec_parquet=use_fsspec_parquet,
                         **read_kwargs,
                     )
                 )
@@ -242,7 +255,7 @@ class CudfEngine(ArrowDatasetEngine):
                 partitions=partitions,
                 partitioning=partitioning,
                 partition_keys=last_partition_keys,
-                open_parquet_file_kwargs=open_parquet_file_kwargs,
+                use_fsspec_parquet=use_fsspec_parquet,
                 **read_kwargs,
             )
         )

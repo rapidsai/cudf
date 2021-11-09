@@ -4,6 +4,7 @@ import subprocess
 import time
 from contextlib import contextmanager
 from io import BytesIO
+from packaging.version import parse as parse_version
 
 import pandas as pd
 import pytest
@@ -115,7 +116,8 @@ def test_read_csv(s3_base, s3so):
         assert df.a.sum().compute() == 4
 
 
-def test_read_parquet(s3_base, s3so):
+@pytest.mark.parametrize("use_fsspec_parquet", [False, True])
+def test_read_parquet(s3_base, s3so, use_fsspec_parquet):
     pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": [2.1, 2.2, 2.3, 2.4]})
     buffer = BytesIO()
     pdf.to_parquet(path=buffer)
@@ -124,7 +126,7 @@ def test_read_parquet(s3_base, s3so):
         s3_base=s3_base, bucket="daskparquet", files={"file.parq": buffer}
     ):
         df = dask_cudf.read_parquet(
-            "s3://daskparquet/*.parq", storage_options=s3so
+            "s3://daskparquet/*.parq", storage_options=s3so, use_fsspec_parquet=use_fsspec_parquet,
         )
         assert df.a.sum().compute() == 10
         assert df.b.sum().compute() == 9

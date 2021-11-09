@@ -216,8 +216,9 @@ def test_write_csv(s3_base, s3so, pdf, chunksize):
 @pytest.mark.parametrize("bytes_per_thread", [32, 1024])
 @pytest.mark.parametrize("columns", [None, ["Float", "String"]])
 @pytest.mark.parametrize("use_python_file_object", [False, True])
+@pytest.mark.parametrize("use_fsspec_parquet", [False, True])
 def test_read_parquet(
-    s3_base, s3so, pdf, bytes_per_thread, columns, use_python_file_object
+    s3_base, s3so, pdf, bytes_per_thread, columns, use_python_file_object, use_fsspec_parquet
 ):
     fname = "test_parquet_reader.parquet"
     bname = "parquet"
@@ -230,6 +231,7 @@ def test_read_parquet(
         got1 = cudf.read_parquet(
             "s3://{}/{}".format(bname, fname),
             use_python_file_object=use_python_file_object,
+            use_fsspec_parquet=use_fsspec_parquet,
             storage_options=s3so,
             bytes_per_thread=bytes_per_thread,
             columns=columns,

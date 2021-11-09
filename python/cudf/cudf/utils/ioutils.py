@@ -161,6 +161,12 @@ use_python_file_object : boolean, default False
     If True, Arrow-backed PythonFile objects will be used in place of fsspec
     AbstractBufferedFile objects at IO time. This option is likely to improve
     performance when making small reads from larger parquet files.
+use_fsspec_parquet : boolean or dict, default False
+    WARNING: This option is experimental, and may be removed in the future.
+    If True, or a non-empty dictionary of key-word arguments is passed, the
+    optimized `fsspec.parquet.open_parquet_file` function will be used to open
+    remote parquet files. Note that `use_python_file_object=False` will be
+    overriden if `bool(use_fsspec_parquet) == True`.
 
 Returns
 -------
