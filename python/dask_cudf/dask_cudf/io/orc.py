@@ -156,7 +156,7 @@ def read_orc(
 
         # Read in only the columns relevant to the filtering
         filtered_df = read_orc(
-            path,
+            paths,
             columns=columns_in_predicate,
             filters=None,
             storage_options=None,
