@@ -116,6 +116,7 @@ test:
     - test -f $PREFIX/include/cudf/dictionary/update_keys.hpp
     - test -f $PREFIX/include/cudf/filling.hpp
     - test -f $PREFIX/include/cudf/fixed_point/fixed_point.hpp
+    - test -f $PREFIX/include/cudf/fixed_point/temporary.hpp
     - test -f $PREFIX/include/cudf/groupby.hpp
     - test -f $PREFIX/include/cudf/hashing.hpp
     - test -f $PREFIX/include/cudf/interop.hpp
@@ -189,6 +190,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/convert/convert_floats.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_integers.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_ipv4.hpp
+    - test -f $PREFIX/include/cudf/strings/convert/convert_lists.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_urls.hpp
     - test -f $PREFIX/include/cudf/strings/detail/combine.hpp
     - test -f $PREFIX/include/cudf/strings/detail/concatenate.hpp

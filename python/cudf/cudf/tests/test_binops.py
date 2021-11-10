@@ -668,6 +668,8 @@ _operators_arithmetic = [
     "rmod",
     "pow",
     "rpow",
+    "div",
+    "divide",
     "floordiv",
     "rfloordiv",
     "truediv",

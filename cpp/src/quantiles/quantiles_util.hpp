@@ -153,10 +153,7 @@ select_quantile(ValueAccessor get_value, size_type size, double q, interpolation
   }
 }
 
-template <typename Result,
-          typename Iterator,
-          typename std::enable_if_t<not cudf::is_fixed_point<Result>()>* =
-            nullptr>  // TODO revisit if this is needed
+template <typename Result, typename Iterator>
 CUDA_HOST_DEVICE_CALLABLE Result
 select_quantile_data(Iterator begin, size_type size, double q, interpolation interp)
 {

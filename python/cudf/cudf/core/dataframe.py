@@ -4052,17 +4052,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Available only using cuda 11.1+ due to particular required
         runtime compilation features
         """
-
-        for dtype in self.dtypes:
-            if (
-                isinstance(dtype, cudf.core.dtypes._BaseDtype)
-                or dtype == "object"
-            ):
-                raise TypeError(
-                    "DataFrame.apply currently only "
-                    "supports non decimal numeric types"
-                )
-
         if axis != 1:
             raise ValueError(
                 "DataFrame.apply currently only supports row wise ops"
@@ -6409,6 +6398,7 @@ for binop in [
     "rfloordiv",
     "truediv",
     "div",
+    "divide",
     "rtruediv",
     "rdiv",
 ]:
