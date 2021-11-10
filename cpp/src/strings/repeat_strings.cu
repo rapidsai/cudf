@@ -319,14 +319,14 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
   // We generate new bitmask by AND of the input columns' bitmasks.
   // Note that if the input columns are nullable, the output column will also be nullable (which may
   // not have nulls).
-  auto bitmask_out =
+  auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{input.parent(), repeat_times}}, stream, mr);
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
                              std::move(chars_column),
-                             bitmask_out.num_unset_bits,
-                             std::move(bitmask_out.mask));
+                             null_count,
+                             std::move(null_mask));
 }
 
 std::pair<std::unique_ptr<column>, int64_t> repeat_strings_output_sizes(

@@ -379,15 +379,14 @@ std::tuple<cudf::column_view, std::vector<rmm::device_buffer>> superimpose_paren
       // and the _null_mask(). It would be better to AND the bits from the beginning, and apply
       // offset() uniformly.
       // Alternatively, one could construct a big enough buffer, and use inplace_bitwise_and.
-      auto bitmask_output = cudf::detail::bitmask_and(parent_child_null_masks,
-                                                      std::vector<size_type>{0, 0},
-                                                      child.offset() + child.size(),
-                                                      stream,
-                                                      mr);
-      ret_validity_buffers.push_back(std::move(bitmask_output.mask));
+      auto [new_mask, null_count] = cudf::detail::bitmask_and(parent_child_null_masks,
+                                                              std::vector<size_type>{0, 0},
+                                                              child.offset() + child.size(),
+                                                              stream,
+                                                              mr);
+      ret_validity_buffers.push_back(std::move(new_mask));
       return std::make_pair(
-        reinterpret_cast<bitmask_type const*>(ret_validity_buffers.back().data()),
-        bitmask_output.num_unset_bits);
+        reinterpret_cast<bitmask_type const*>(ret_validity_buffers.back().data()), null_count);
     }();
 
     return cudf::column_view(
