@@ -463,8 +463,7 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_indices(
   // function.
   return cudf::detail::gather(input_table,
                               device_span<size_type const>(
-                                unique_indices.data(),
-                                static_cast<size_type>(thrust::distance(output_begin, output_end))),
+                                unique_indices.data(), thrust::distance(output_begin, output_end)),
                               cudf::out_of_bounds_policy::DONT_CHECK,
                               cudf::detail::negative_index_policy::NOT_ALLOWED,
                               stream,
