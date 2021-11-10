@@ -8935,49 +8935,58 @@ def test_frame_series_where_other(data):
 
 
 @pytest.mark.parametrize(
-    "data",
+    "data, gkey",
     [
-        {
-            "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
-            "val1": [5, 4, 6, 4, 8, 7, 4, 5, 2],
-            "val2": [4, 5, 6, 1, 2, 9, 8, 5, 1],
-            "val3": [4, 5, 6, 1, 2, 9, 8, 5, 1],
-        },
-        {
-            "id": [0] * 4 + [1] * 3,
-            "a": [10, 3, 4, 2, -3, 9, 10],
-            "b": [10, 23, -4, 2, -3, 9, 19],
-        },
-        {"id": ["a", "a", "b", "b", "c", "c"], "val": [10, 3, 4, 2, -3, 9]},
-        {
-            "id": ["a", "a", "b", "b", "c", "c"],
-            "val": [None, None, None, None, None, None],
-        },
-        {
-            "id": ["a", "a", "b", "b", "c", "c"],
-            "val1": [None, 4, 6, 8, None, 2],
-            "val2": [4, 5, None, 2, 9, None],
-        },
-        {"id": ["a"], "val1": [2], "val2": [3]},
+        (
+            {
+                "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+                "val1": [5, 4, 6, 4, 8, 7, 4, 5, 2],
+                "val2": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+                "val3": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+            },
+            ["id", "val1", "val2"],
+        ),
+        (
+            {
+                "id": [0] * 4 + [1] * 3,
+                "a": [10, 3, 4, 2, -3, 9, 10],
+                "b": [10, 23, -4, 2, -3, 9, 19],
+            },
+            ["id", "a"],
+        ),
+        (
+            {
+                "id": ["a", "a", "b", "b", "c", "c"],
+                "val": [None, None, None, None, None, None],
+            },
+            ["id"],
+        ),
+        (
+            {
+                "id": ["a", "a", "b", "b", "c", "c"],
+                "val1": [None, 4, 6, 8, None, 2],
+                "val2": [4, 5, None, 2, 9, None],
+            },
+            ["id"],
+        ),
+        ({"id": [1.0], "val1": [2.0], "val2": [3.0]}, ["id"]),
     ],
 )
 @pytest.mark.parametrize(
-    "min_periods", [0, 1, 2, 3, 4],
+    "min_per", [0, 1, 2, 3, 4],
 )
-def test_dataframe_pearson_corr(data, min_periods):
+def test_dataframe_pearson_corr(data, gkey, min_per):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
-    expected = gdf.groupby("id").corr(
-        method="pearson", min_periods=min_periods
-    )
-    actual = pdf.groupby("id").corr(method="pearson", min_periods=min_periods)
+    expected = gdf.groupby(gkey).corr(method="pearson", min_periods=min_per)
+    actual = pdf.groupby(gkey).corr(method="pearson", min_periods=min_per)
 
     assert_eq(expected, actual)
 
 
 @pytest.mark.parametrize("method", ["kendall", "spearman"])
-def test_dataframe_pearson_corr_unsupported_methods(method):
+def test_pearson_corr_unsupported_methods(method):
     gdf = cudf.DataFrame(
         {
             "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
@@ -8994,7 +9003,7 @@ def test_dataframe_pearson_corr_unsupported_methods(method):
         gdf.groupby("id").corr(method)
 
 
-def test_pearson_corr_empty_dataframe():
+def test_pearson_corr_empty_columns():
     gdf = cudf.DataFrame(columns=["id", "val1", "val2"])
     pdf = gdf.to_pandas()
 
@@ -9021,10 +9030,10 @@ def test_pearson_corr_empty_dataframe():
         },
     ],
 )
-@pytest.mark.parametrize("groupby", ["id", "val1", "val2"])
-def test_pearson_corr_invalid_column_types(data, groupby):
+@pytest.mark.parametrize("gkey", ["id", "val1", "val2"])
+def test_pearson_corr_invalid_column_types(data, gkey):
     try:
-        cudf.DataFrame(data).groupby(groupby).corr("pearson")
+        cudf.DataFrame(data).groupby(gkey).corr("pearson")
     except RuntimeError as e:
         if "Unsupported type-agg combination" in str(e):
             raise TypeError(
