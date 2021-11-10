@@ -317,7 +317,7 @@ static __device__ void* local_alloc(debrotli_state_s* s, uint32_t bytes)
   auto const prev_heap_used = s->heap_used;
   auto const len            = allocation_size(bytes);
   if (prev_heap_used + len > s->heap_limit) { return nullptr; }
-  s->heap_used = prev_heap_used + len;
+  s->heap_used += len;
   return &s->heap[prev_heap_used];
 }
 
@@ -327,7 +327,7 @@ static __device__ void* local_heap_shrink(debrotli_state_s* s, uint32_t bytes)
 {
   auto const len = allocation_size(bytes);
   if (s->heap_used + len > s->heap_limit) { return nullptr; }
-  s->heap_limit = s->heap_limit - len;
+  s->heap_limit -= len;
   return &s->heap[s->heap_limit];
 }
 
@@ -1288,7 +1288,7 @@ static __device__ void InverseMoveToFrontTransform(debrotli_state_s* s, uint8_t*
   // Make mtf[-1] addressable and keep alignment.
   auto const mtf = s->mtf + 4;
   // Reinitialize elements that could have been changed.
-  thrust::sequence(thrust::seq, mtf, mtf + s->mtf_upper_bound, uint8_t{0});
+  thrust::sequence(thrust::seq, mtf, mtf + (s->mtf_upper_bound + 1) * 4, uint8_t{0});
 
   // Transform the input.
   uint32_t upper_bound = 0;
