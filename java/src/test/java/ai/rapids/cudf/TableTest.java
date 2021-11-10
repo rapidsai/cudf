@@ -3340,6 +3340,10 @@ public class TableTest extends CudfTestBase {
         }
       } finally {
         for (HostColumnVector c: hostColumns) {
+          // close child columns for multiple times should NOT throw exceptions
+          for (int i = 0; i < c.getNumChildren(); i++) {
+            c.getChildColumnView(i).close();
+          }
           c.close();
         }
       }

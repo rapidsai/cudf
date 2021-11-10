@@ -55,7 +55,6 @@ test:
     - test -f $PREFIX/include/cudf/ast/detail/operators.hpp
     - test -f $PREFIX/include/cudf/ast/expressions.hpp
     - test -f $PREFIX/include/cudf/binaryop.hpp
-    - test -f $PREFIX/include/cudf/labeling/label_bins.hpp
     - test -f $PREFIX/include/cudf/column/column_factories.hpp
     - test -f $PREFIX/include/cudf/column/column.hpp
     - test -f $PREFIX/include/cudf/column/column_view.hpp
@@ -66,6 +65,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/aggregation/result_cache.hpp
     - test -f $PREFIX/include/cudf/detail/label_bins.hpp
     - test -f $PREFIX/include/cudf/detail/binaryop.hpp
+    - test -f $PREFIX/include/cudf/detail/calendrical_month_sequence.cuh
     - test -f $PREFIX/include/cudf/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/detail/copy.hpp
     - test -f $PREFIX/include/cudf/detail/datetime.hpp
@@ -142,6 +142,7 @@ test:
     - test -f $PREFIX/include/cudf/io/types.hpp
     - test -f $PREFIX/include/cudf/ipc.hpp
     - test -f $PREFIX/include/cudf/join.hpp
+    - test -f $PREFIX/include/cudf/labeling/label_bins.hpp
     - test -f $PREFIX/include/cudf/lists/detail/combine.hpp
     - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
@@ -188,6 +189,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/convert/convert_floats.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_integers.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_ipv4.hpp
+    - test -f $PREFIX/include/cudf/strings/convert/convert_lists.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_urls.hpp
     - test -f $PREFIX/include/cudf/strings/detail/combine.hpp
     - test -f $PREFIX/include/cudf/strings/detail/concatenate.hpp
@@ -203,6 +205,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/find_multiple.hpp
     - test -f $PREFIX/include/cudf/strings/json.hpp
     - test -f $PREFIX/include/cudf/strings/padding.hpp
+    - test -f $PREFIX/include/cudf/strings/regex/flags.hpp
     - test -f $PREFIX/include/cudf/strings/repeat_strings.hpp
     - test -f $PREFIX/include/cudf/strings/replace.hpp
     - test -f $PREFIX/include/cudf/strings/replace_re.hpp
