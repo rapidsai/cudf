@@ -98,6 +98,7 @@ from cudf.io import (
     read_parquet,
     read_text,
 )
+from cudf.core.tools.datetimes import date_range
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import set_allocator
 
