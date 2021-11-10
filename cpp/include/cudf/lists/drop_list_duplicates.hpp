@@ -41,7 +41,7 @@ namespace lists {
  * are also copied or ignored along with them.
  *
  * The users are responsible for the keys-values lists columns having the same number of entries
- * at each row. Otherwise, a crash may happen, or the results will be undefined.
+ * at each row. Otherwise, behavior is undefined.
  *
  * When copying unique key entries for the output, depending on the value of the @p keep_option
  * parameter:
