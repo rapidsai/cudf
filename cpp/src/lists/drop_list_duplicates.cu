@@ -454,7 +454,7 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_indices(
   auto const list_indices_view = column_view(data_type{type_to_id<size_type>()},
                                              static_cast<size_type>(entries_list_indices.size()),
                                              entries_list_indices.data());
-  auto const input_table       = values_entries.has_value()
+  auto const input_table       = values_entries
                                    ? table_view{{keys_entries, values_entries.value(), list_indices_view}}
                                    : table_view{{keys_entries, list_indices_view}};
 
