@@ -1322,3 +1322,16 @@ def test_set_index_unequal_length():
     s = cudf.Series()
     with pytest.raises(ValueError):
         s.index = [1, 2, 3]
+
+
+@pytest.mark.parametrize(
+    "lhs, rhs", [("a", "a"), ("a", "b"), (1, 1.0), (None, None), (None, "a")]
+)
+def test_equals_names(lhs, rhs):
+    lhs = cudf.Series([1, 2], name=lhs)
+    rhs = cudf.Series([1, 2], name=rhs)
+
+    got = lhs.equals(rhs)
+    expect = lhs.to_pandas().equals(rhs.to_pandas())
+
+    assert_eq(expect, got)
