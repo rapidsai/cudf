@@ -2131,3 +2131,12 @@ def test_parquet_decimal_precision_empty(tmpdir):
     df.to_parquet(fname)
     df = cudf.read_parquet(fname)
     assert df.val.dtype.precision == 5
+
+
+def test_parquet_reader_brotli(datadir):
+    fname = datadir / "brotli_int16.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname).to_pandas(nullable=True)
+
+    assert_eq(expect, got)
