@@ -78,7 +78,7 @@ template <typename T>
 struct TypedRollingEmptyInputTest : RollingEmptyInputTest {
 };
 
-TYPED_TEST_CASE(TypedRollingEmptyInputTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(TypedRollingEmptyInputTest, cudf::test::FixedWidthTypes);
 
 using cudf::rolling_aggregation;
 using agg_vector_t = std::vector<std::unique_ptr<rolling_aggregation>>;

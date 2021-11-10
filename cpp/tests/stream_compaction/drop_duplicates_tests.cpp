@@ -35,7 +35,7 @@ template <typename T>
 struct DistinctCountCommon : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(DistinctCountCommon, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(DistinctCountCommon, cudf::test::NumericTypes);
 
 TYPED_TEST(DistinctCountCommon, NoNull)
 {

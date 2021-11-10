@@ -39,7 +39,7 @@ template <typename T>
 struct TypedContainsTest : public ContainsTest {
 };
 
-TYPED_TEST_CASE(TypedContainsTest, ContainsTestTypes);
+TYPED_TEST_SUITE(TypedContainsTest, ContainsTestTypes);
 
 namespace {
 template <typename T, std::enable_if_t<cudf::is_numeric<T>(), void>* = nullptr>
@@ -370,7 +370,7 @@ struct TypedVectorContainsTest : public ContainsTest {
 using VectorContainsTestTypes =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
 
-TYPED_TEST_CASE(TypedVectorContainsTest, VectorContainsTestTypes);
+TYPED_TEST_SUITE(TypedVectorContainsTest, VectorContainsTestTypes);
 
 TYPED_TEST(TypedVectorContainsTest, ListContainsVectorWithNoNulls)
 {
@@ -603,7 +603,7 @@ template <typename T>
 struct TypedContainsNaNsTest : public ContainsTest {
 };
 
-TYPED_TEST_CASE(TypedContainsNaNsTest, FloatingPointTypes);
+TYPED_TEST_SUITE(TypedContainsNaNsTest, FloatingPointTypes);
 
 template <typename T>
 T get_nan(const char* nan_contents)
@@ -713,7 +713,7 @@ template <typename T>
 struct TypedContainsDecimalsTest : public ContainsTest {
 };
 
-TYPED_TEST_CASE(TypedContainsDecimalsTest, FixedPointTypes);
+TYPED_TEST_SUITE(TypedContainsDecimalsTest, FixedPointTypes);
 
 TYPED_TEST(TypedContainsDecimalsTest, ListContainsScalar)
 {

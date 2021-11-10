@@ -81,7 +81,7 @@ template <typename T>
 struct CsvFixedPointWriterTest : public CsvWriterTest {
 };
 
-TYPED_TEST_CASE(CsvFixedPointWriterTest, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(CsvFixedPointWriterTest, cudf::test::FixedPointTypes);
 
 // Base test fixture for tests
 struct CsvReaderTest : public cudf::test::BaseFixture {
@@ -94,7 +94,7 @@ struct CsvReaderNumericTypeTest : public CsvReaderTest {
 
 // Declare typed test cases
 using SupportedNumericTypes = cudf::test::Types<int64_t, double>;
-TYPED_TEST_CASE(CsvReaderNumericTypeTest, SupportedNumericTypes);
+TYPED_TEST_SUITE(CsvReaderNumericTypeTest, SupportedNumericTypes);
 
 // Typed test to be instantiated for numeric::decimal32 and numeric::decimal64
 template <typename DecimalType>
@@ -125,7 +125,7 @@ struct CsvFixedPointReaderTest : public CsvReaderTest {
   }
 };
 
-TYPED_TEST_CASE(CsvFixedPointReaderTest, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(CsvFixedPointReaderTest, cudf::test::FixedPointTypes);
 
 namespace {
 // Generates a vector of uniform random values of type T

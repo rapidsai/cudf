@@ -32,7 +32,7 @@ struct groupby_argmin_test : public cudf::test::BaseFixture {
 };
 using K = int32_t;
 
-TYPED_TEST_CASE(groupby_argmin_test, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(groupby_argmin_test, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(groupby_argmin_test, basic)
 {
@@ -181,6 +181,78 @@ TEST_F(groupby_dictionary_argmin_test, basic)
                   expect_vals,
                   cudf::make_argmin_aggregation<groupby_aggregation>(),
                   force_use_sort_impl::YES);
+}
+
+struct groupby_argmin_struct_test : public cudf::test::BaseFixture {
+};
+
+TEST_F(groupby_argmin_struct_test, basic)
+{
+  auto const keys = fixed_width_column_wrapper<int32_t>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  auto const vals = [] {
+    auto child1 =
+      strings_column_wrapper{"año", "bit", "₹1", "aaa", "zit", "bat", "aab", "$1", "€1", "wut"};
+    auto child2 = fixed_width_column_wrapper<int32_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    return structs_column_wrapper{{child1, child2}};
+  }();
+
+  auto const expect_keys    = fixed_width_column_wrapper<int32_t>{1, 2, 3};
+  auto const expect_indices = fixed_width_column_wrapper<int32_t>{3, 5, 7};
+
+  auto agg = cudf::make_argmin_aggregation<groupby_aggregation>();
+  test_single_agg(keys, vals, expect_keys, expect_indices, std::move(agg));
+}
+
+TEST_F(groupby_argmin_struct_test, slice_input)
+{
+  constexpr int32_t dont_care{1};
+  auto const keys_original = fixed_width_column_wrapper<int32_t>{
+    dont_care, dont_care, 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, dont_care};
+  auto const vals_original = [] {
+    auto child1 = strings_column_wrapper{"dont_care",
+                                         "dont_care",
+                                         "año",
+                                         "bit",
+                                         "₹1",
+                                         "aaa",
+                                         "zit",
+                                         "bat",
+                                         "aab",
+                                         "$1",
+                                         "€1",
+                                         "wut",
+                                         "dont_care"};
+    auto child2 = fixed_width_column_wrapper<int32_t>{
+      dont_care, dont_care, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, dont_care};
+    return structs_column_wrapper{{child1, child2}};
+  }();
+
+  auto const keys           = cudf::slice(keys_original, {2, 12})[0];
+  auto const vals           = cudf::slice(vals_original, {2, 12})[0];
+  auto const expect_keys    = fixed_width_column_wrapper<int32_t>{1, 2, 3};
+  auto const expect_indices = fixed_width_column_wrapper<int32_t>{3, 5, 7};
+
+  auto agg = cudf::make_argmin_aggregation<groupby_aggregation>();
+  test_single_agg(keys, vals, expect_keys, expect_indices, std::move(agg));
+}
+
+TEST_F(groupby_argmin_struct_test, null_keys_and_values)
+{
+  constexpr int32_t null{0};
+  auto const keys =
+    fixed_width_column_wrapper<int32_t>{{1, 2, 3, 1, 2, 2, 1, null, 3, 2, 4}, null_at(7)};
+  auto const vals = [] {
+    auto child1 = strings_column_wrapper{
+      "año", "bit", "₹1", "aaa", "zit", "" /*NULL*/, "" /*NULL*/, "$1", "€1", "wut", "" /*NULL*/};
+    auto child2 = fixed_width_column_wrapper<int32_t>{9, 8, 7, 6, 5, null, null, 2, 1, 0, null};
+    return structs_column_wrapper{{child1, child2}, nulls_at({5, 6, 10})};
+  }();
+
+  auto const expect_keys    = fixed_width_column_wrapper<int32_t>{{1, 2, 3, 4}, no_nulls()};
+  auto const expect_indices = fixed_width_column_wrapper<int32_t>{{3, 1, 8, null}, null_at(3)};
+
+  auto agg = cudf::make_argmin_aggregation<groupby_aggregation>();
+  test_single_agg(keys, vals, expect_keys, expect_indices, std::move(agg));
 }
 
 }  // namespace test

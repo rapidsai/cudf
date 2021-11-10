@@ -60,7 +60,7 @@ struct GroupbyMergeSetsTypedTest : public cudf::test::BaseFixture {
 using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                                   cudf::test::FloatingPointTypes,
                                                   cudf::test::TimestampTypes>;
-TYPED_TEST_CASE(GroupbyMergeSetsTypedTest, FixedWidthTypesNotBool);
+TYPED_TEST_SUITE(GroupbyMergeSetsTypedTest, FixedWidthTypesNotBool);
 
 TYPED_TEST(GroupbyMergeSetsTypedTest, InvalidInput)
 {
