@@ -133,10 +133,10 @@ probe_join_hash_table(cudf::table_device_view build_table,
                                                       ? cudf::detail::join_kind::LEFT_JOIN
                                                       : JoinKind;
 
-  size_t const join_size = output_size
-                             ? *output_size
-                             : compute_join_output_size<ProbeJoinKind>(
-                                 build_table, probe_table, hash_table, compare_nulls, stream);
+  std::size_t const join_size = output_size
+                                  ? *output_size
+                                  : compute_join_output_size<ProbeJoinKind>(
+                                      build_table, probe_table, hash_table, compare_nulls, stream);
 
   // If output size is zero, return immediately
   if (join_size == 0) {
