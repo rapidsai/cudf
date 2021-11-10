@@ -239,7 +239,7 @@ class _CuDFColumn:
         if kind is None:
             # Not a NumPy/CuPy dtype. Check if it's a categorical maybe
             if isinstance(dtype, cudf.CategoricalDtype):
-                kind = _k.CATEGORICAL
+                kind = _DtypeKind.CATEGORICAL
                 # Codes and categories' dtypes are different.
                 # We use codes' dtype as these are stored in the buffer.
                 codes = cast(
