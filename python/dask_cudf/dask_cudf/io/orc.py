@@ -6,10 +6,9 @@ from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
 from pyarrow import orc as orc
 
-from dask import dataframe as dd
+from dask import dataframe as dd, delayed
 from dask.base import tokenize
 from dask.dataframe.io.utils import _get_pyarrow_dtypes
-from dask import delayed
 
 import cudf
 
@@ -53,7 +52,6 @@ def _filters_to_query(filters):
 
         # Generate string for conjunction
         query_string += "("
-        is_first_predicate = True
         for i, (col, op, val) in enumerate(conjunction):
             if i > 0:
                 query_string += " and "
@@ -107,7 +105,6 @@ def read_orc(
         columns.
     storage_options: None or dict
         Further parameters to pass to the bytes backend.
-    
 
     Returns
     -------
@@ -144,8 +141,6 @@ def read_orc(
     if filters is None:
         filtering_columns_first = False
     if filtering_columns_first:
-        import numpy as np
-
         # Determine which columns are filtering vs. remaining
         filters = _prepare_filters(filters)
         query_string, local_dict = _filters_to_query(filters)
@@ -164,8 +159,8 @@ def read_orc(
         )
 
         # Since the call to `read_orc` results in a partition for each relevant
-        # stripe, we can simply check which partitions are empty. Then we can read
-        # in only those relevant stripes.
+        # stripe, we can simply check which partitions are empty. Then we can
+        # read in only those relevant stripes.
         def _empty(df):
             if len(df.query(query_string, local_dict=local_dict)) == 0:
                 return df.iloc[0:0, :].copy()
@@ -177,6 +172,7 @@ def read_orc(
             lambda df: len(df)
         ).compute()
         is_filtered_partition_empty = filtered_partition_lens == 0
+        print(f"{list(is_filtered_partition_empty)=}")
 
         # Cull empty partitions
         filtered_df_partitions = [
@@ -217,6 +213,7 @@ def read_orc(
                 )
                 N += 1
             partition_idx += 1
+    print(f"Filtered {partition_idx} partitions to {N} partitions")
 
     divisions = [None] * (len(dsk) + 1)
     res = dd.core.new_dd_object(dsk, name, meta, divisions)
