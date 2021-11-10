@@ -8,6 +8,7 @@ import cudf
 from cudf.core.buffer import Buffer
 from cudf.core.column import build_column
 from cudf.core.df_protocol import (
+    DataFrameObject,
     _CuDFBuffer,
     _CuDFColumn,
     _DtypeKind,
@@ -15,8 +16,6 @@ from cudf.core.df_protocol import (
     protocol_dtype_to_cupy_dtype,
 )
 from cudf.testing._utils import assert_eq
-
-DataFrameObject = Any
 
 
 def assert_buffer_equal(buffer_and_dtype: Tuple[_CuDFBuffer, Any], cudfcol):
