@@ -40,9 +40,9 @@ struct RoundTestsFloatingPointTypes : public cudf::test::BaseFixture {
 
 using IntegerTypes = cudf::test::Types<int16_t, int32_t, int64_t>;
 
-TYPED_TEST_CASE(RoundTestsIntegerTypes, IntegerTypes);
-TYPED_TEST_CASE(RoundTestsFixedPointTypes, cudf::test::FixedPointTypes);
-TYPED_TEST_CASE(RoundTestsFloatingPointTypes, cudf::test::FloatingPointTypes);
+TYPED_TEST_SUITE(RoundTestsIntegerTypes, IntegerTypes);
+TYPED_TEST_SUITE(RoundTestsFixedPointTypes, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(RoundTestsFloatingPointTypes, cudf::test::FloatingPointTypes);
 
 TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfUpZero)
 {

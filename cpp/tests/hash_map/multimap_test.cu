@@ -81,7 +81,7 @@ typedef ::testing::Types<KeyValueTypes<int, int>,
                          KeyValueTypes<unsigned long long int, unsigned long long int>>
   Implementations;
 
-TYPED_TEST_CASE(MultimapTest, Implementations);
+TYPED_TEST_SUITE(MultimapTest, Implementations);
 
 TYPED_TEST(MultimapTest, InitialState)
 {

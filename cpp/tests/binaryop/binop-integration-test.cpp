@@ -2023,7 +2023,7 @@ struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 
 template <typename T>
 using wrapper = cudf::test::fixed_width_column_wrapper<T>;
-TYPED_TEST_CASE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTestAllReps, FixedPointBinaryOpAdd)
 {
@@ -2674,7 +2674,7 @@ struct FixedPointTest_64_128_Reps : public cudf::test::BaseFixture {
 };
 
 using Decimal64And128Types = cudf::test::Types<numeric::decimal64, numeric::decimal128>;
-TYPED_TEST_CASE(FixedPointTest_64_128_Reps, Decimal64And128Types);
+TYPED_TEST_SUITE(FixedPointTest_64_128_Reps, Decimal64And128Types);
 
 TYPED_TEST(FixedPointTest_64_128_Reps, FixedPoint_64_128_ComparisonTests)
 {
