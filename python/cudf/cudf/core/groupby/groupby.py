@@ -789,12 +789,12 @@ class GroupBy(Serializable):
 
         Parameters
         ----------
-        method: Method of correlation, default 'Pearson'
+        method: Method of correlation
             Pearson: standard correlation coefficient.
             Kendall, Spearman correlation and callable method
             not yet supported.
 
-        min_periods: int, default 1
+        min_periods: int, optional
             Minimum number of observations required per pair of columns
             to have a valid result.
 
@@ -841,7 +841,8 @@ class GroupBy(Serializable):
             raise NotImplementedError(
                 "Only pearson correlation is currently supported"
             )
-        # create all combinations of the struct columns-pairs to be correlated
+        # create expanded dataframe consisting all combinations of the
+        # struct columns-pairs to be correlated
         # i.e (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
         _cols = self.grouping.values.columns.tolist()
         # breakpoint()
