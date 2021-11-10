@@ -414,6 +414,7 @@ add_library(
   src/strings/convert/convert_integers.cu
   src/strings/convert/convert_ipv4.cu
   src/strings/convert/convert_urls.cu
+  src/strings/convert/convert_lists.cu
   src/strings/copying/concatenate.cu
   src/strings/copying/copying.cu
   src/strings/copying/shift.cu

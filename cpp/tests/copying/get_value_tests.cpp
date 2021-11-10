@@ -41,7 +41,7 @@ template <typename T>
 struct FixedWidthGetValueTest : public BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedWidthGetValueTest, FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(FixedWidthGetValueTest, FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(FixedWidthGetValueTest, BasicGet)
 {
@@ -131,7 +131,7 @@ template <typename T>
 struct DictionaryGetValueTest : public BaseFixture {
 };
 
-TYPED_TEST_CASE(DictionaryGetValueTest, FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(DictionaryGetValueTest, FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(DictionaryGetValueTest, BasicGet)
 {
@@ -193,7 +193,7 @@ struct ListGetFixedWidthValueTest : public BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(ListGetFixedWidthValueTest, FixedWidthTypes);
+TYPED_TEST_SUITE(ListGetFixedWidthValueTest, FixedWidthTypes);
 
 TYPED_TEST(ListGetFixedWidthValueTest, NonNestedGetNonNullNonEmpty)
 {
@@ -603,7 +603,7 @@ struct ListGetStructValueTest : public BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(ListGetStructValueTest, FixedWidthTypes);
+TYPED_TEST_SUITE(ListGetStructValueTest, FixedWidthTypes);
 
 TYPED_TEST(ListGetStructValueTest, NonNestedGetNonNullNonEmpty)
 {
@@ -800,7 +800,7 @@ template <typename T>
 struct StructGetValueTestTyped : public BaseFixture {
 };
 
-TYPED_TEST_CASE(StructGetValueTestTyped, FixedWidthTypes);
+TYPED_TEST_SUITE(StructGetValueTestTyped, FixedWidthTypes);
 
 TYPED_TEST(StructGetValueTestTyped, mixed_types_valid)
 {

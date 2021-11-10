@@ -40,9 +40,9 @@ template <typename T>
 class ExplodeOuterTypedTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ExplodeTypedTest, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(ExplodeTypedTest, cudf::test::FixedPointTypes);
 
-TYPED_TEST_CASE(ExplodeOuterTypedTest, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(ExplodeOuterTypedTest, cudf::test::FixedPointTypes);
 
 TEST_F(ExplodeTest, Empty)
 {

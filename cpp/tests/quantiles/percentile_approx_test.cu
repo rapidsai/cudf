@@ -306,7 +306,7 @@ using PercentileApproxTypes =
 template <typename T>
 struct PercentileApproxInputTypesTest : public cudf::test::BaseFixture {
 };
-TYPED_TEST_CASE(PercentileApproxInputTypesTest, PercentileApproxTypes);
+TYPED_TEST_SUITE(PercentileApproxInputTypesTest, PercentileApproxTypes);
 
 TYPED_TEST(PercentileApproxInputTypesTest, Simple)
 {
