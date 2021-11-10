@@ -2472,21 +2472,27 @@ def test_index_type_methods(data, func):
         assert_eq(expected, actual)
 
 
-def test_index_datetime_ceil():
+@pytest.mark.parametrize(
+    "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
+)
+def test_index_datetime_ceil(resolution):
     cuidx = cudf.DatetimeIndex([1000000, 2000000, 3000000, 4000000, 5000000])
     pidx = cuidx.to_pandas()
 
-    pidx_ceil = pidx.ceil("T")
-    cuidx_ceil = cuidx.ceil("T")
+    pidx_ceil = pidx.ceil(resolution)
+    cuidx_ceil = cuidx.ceil(resolution)
 
     assert_eq(pidx_ceil, cuidx_ceil)
 
 
-def test_index_datetime_floor():
+@pytest.mark.parametrize(
+    "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
+)
+def test_index_datetime_floor(resolution):
     cuidx = cudf.DatetimeIndex([1000000, 2000000, 3000000, 4000000, 5000000])
     pidx = cuidx.to_pandas()
 
-    pidx_floor = pidx.floor("T")
-    cuidx_floor = cuidx.floor("T")
+    pidx_floor = pidx.floor(resolution)
+    cuidx_floor = cuidx.floor(resolution)
 
     assert_eq(pidx_floor, cuidx_floor)
