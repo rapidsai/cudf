@@ -328,7 +328,7 @@ public:
     return data()[index];
   }
 
-  T *const *data() const { return reinterpret_cast<T **>(wrapped.data()); }
+  T *const *data() const { return reinterpret_cast<T *const *>(wrapped.data()); }
 
   T **data() { return reinterpret_cast<T **>(wrapped.data()); }
 
