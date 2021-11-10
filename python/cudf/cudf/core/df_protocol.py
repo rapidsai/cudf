@@ -256,7 +256,7 @@ class _CuDFColumn:
 
         bitwidth = dtype.itemsize * 8
         format_str = dtype.str
-        endianness = dtype.byteorder if kind != _k.CATEGORICAL else "="
+        endianness = dtype.byteorder if kind != _DtypeKind.CATEGORICAL else "="
         return (kind, bitwidth, format_str, endianness)
 
     @property
