@@ -44,15 +44,14 @@ class _Device(enum.IntEnum):
     ROCM = 10
 
 
-_k = _DtypeKind
-_SUPPORTED_KINDS = (
-    _k.INT,
-    _k.UINT,
-    _k.FLOAT,
-    _k.CATEGORICAL,
-    _k.BOOL,
-    _k.STRING,
-)
+_SUPPORTED_KINDS = {
+    _DtypeKind.INT,
+    _DtypeKind.UINT,
+    _DtypeKind.FLOAT,
+    _DtypeKind.CATEGORICAL,
+    _DtypeKind.BOOL,
+    _DtypeKind.STRING,
+}
 ProtoDtype = Tuple[_DtypeKind, int, str, str]
 
 
