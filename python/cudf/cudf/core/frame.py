@@ -47,7 +47,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import merge
-from cudf.core.udf.pipeline import compile_or_get
+from cudf.core.udf.pipeline import compile_or_get, supported_cols_from_frame
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
@@ -1570,7 +1570,10 @@ class Frame:
         ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
         launch_args = [(ans_col, ans_mask), len(self)]
         offsets = []
-        for col in self._data.values():
+
+        # if compile_or_get succeeds, it is safe to create a kernel that only
+        # consumes the columns that are of supported dtype
+        for col in supported_cols_from_frame(self).values():
             data = col.data
             mask = col.mask
             if mask is None:
