@@ -841,11 +841,11 @@ class GroupBy(Serializable):
             raise NotImplementedError(
                 "Only pearson correlation is currently supported"
             )
+
         # create expanded dataframe consisting all combinations of the
         # struct columns-pairs to be correlated
         # i.e (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
         _cols = self.grouping.values.columns.tolist()
-        # breakpoint()
         new_df = cudf.DataFrame._from_data(self.grouping.keys._data)
         new_df._data.multiindex = False
         for i in tuple(itertools.combinations_with_replacement(_cols, 2)):
@@ -853,8 +853,8 @@ class GroupBy(Serializable):
                 {"x": self.obj[i[0]], "y": self.obj[i[1]]}
             ).to_struct()
         new_gb = new_df.groupby(by=self._by, level=self._level)
-        # breakpoint()
         gb_corr = new_gb.agg(lambda x: x.corr(method, min_periods))
+
         # ensure that column-pair labels are arranged in ascending order
         cols_list = []
         for i, x in enumerate(_cols):
@@ -867,22 +867,23 @@ class GroupBy(Serializable):
             cols_list[i : i + len(_cols)]
             for i in range(0, len(cols_list), len(_cols))
         ]
-        # interleave: combine the correlation results of each column-pair
+
+        # interleave: combine the correlation results for each column-pair
         # into a single column
         res = cudf.DataFrame()
         for i, x in zip(cols_split, _cols):
             ic = gb_corr.loc[:, i].interleave_columns()
             res[x] = ic
+
         # create a multiindex for the groupby correlated dataframe,
         # to match pandas behavior
         _idx = gb_corr._index.to_pandas().values.tolist()
         _index = cudf.DataFrame(
-            {
-                gb_corr.index.name: sorted(_idx * len(_cols)),
-                None: _cols * (len(gb_corr.index)),
-            }
+            sorted(_idx * len(_cols)), columns=gb_corr.index.names
         )
+        _index[None] = _cols * (len(gb_corr.index))
         res.index = _index
+
         return res
 
     def var(self, ddof=1):
