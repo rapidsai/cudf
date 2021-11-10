@@ -84,6 +84,33 @@ TYPED_TEST(StringsFixedPointConvertTest, ToFixedPointVeryLarge)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
 }
 
+TEST_F(StringsConvertTest, ToFixedPointVeryLargeDecimal128)
+{
+  using namespace numeric;
+  using RepType    = cudf::device_storage_type_t<decimal128>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const strings = cudf::test::strings_column_wrapper(
+    {"1234000000000000000000",
+     "-876000000000000000000",
+     "5432e+17",
+     "-12E016",
+     "250000000000000000",
+     "-2800000000000000",
+     "",
+     "-0.0",
+     "170141183460469231731687303715884105727",
+     "17014118346046923173168730371588410572700000000000000000000"});
+
+  auto const type     = cudf::data_type{cudf::type_to_id<decimal128>(), scale_type{20}};
+  auto const results  = cudf::strings::to_fixed_point(cudf::strings_column_view(strings), type);
+  auto const expected = fp_wrapper{
+    {12, -8, 5, 0, 0, 0, 0, 0, 1701411834604692317, cuda::std::numeric_limits<__int128_t>::max()},
+    scale_type{20}};
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+}
+
 TYPED_TEST(StringsFixedPointConvertTest, ToFixedPointVerySmall)
 {
   using DecimalType  = TypeParam;
