@@ -168,11 +168,14 @@ def read_orc(
         # in only those relevant stripes.
         def _empty(df):
             if len(df.query(query_string, local_dict=local_dict)) == 0:
-                return df.iloc[0:0,:].copy()
+                return df.iloc[0:0, :].copy()
             else:
                 return df
+
         filtered_df = filtered_df.map_partitions(_empty)
-        filtered_partition_lens = filtered_df.map_partitions(lambda df: len(df)).compute()
+        filtered_partition_lens = filtered_df.map_partitions(
+            lambda df: len(df)
+        ).compute()
         is_filtered_partition_empty = filtered_partition_lens == 0
 
         # Cull empty partitions
@@ -227,13 +230,15 @@ def read_orc(
         @delayed(pure=True)
         def _hcat(a, b):
             return cudf.concat([a, b], axis=1)
-        
+
         # Return a data frame comprised of delayed horizontal concatenation.
         remaining_df_partitions = res.to_delayed()
         return dd.from_delayed(
             [
                 _hcat(filtered, remaining)
-                for filtered, remaining in zip(filtered_df_partitions, remaining_df_partitions)
+                for filtered, remaining in zip(
+                    filtered_df_partitions, remaining_df_partitions
+                )
             ],
             cudf.concat([filtered_df._meta, res._meta], axis=1),
         )
