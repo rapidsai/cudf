@@ -39,7 +39,7 @@ namespace detail {
  * @param source_begin_bits Array of offsets into corresponding @p source masks.
  *                          Must be same size as source array
  * @param source_size_bits Number of bits in each mask in @p source
- * @param count Pointer to valid-bit counter
+ * @param count Pointer to counter of set bits
  */
 template <int block_size, typename Binop>
 __global__ void offset_bitmask_binop(Binop op,
@@ -123,7 +123,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_binop(
 
 /**
  * @brief Performs a merge of the specified bitmasks using the binary operator
- *        provided, writes in place to destination and returns count of valid bits
+ *        provided, writes in place to destination and returns count of set bits
  *
  * @param[in] op The binary operator used to combine the bitmasks
  * @param[out] dest_mask Destination to which the merged result is written
@@ -132,7 +132,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_binop(
  * @param[in] mask_size_bits The number of bits to be ANDed in each mask
  * @param[in] stream CUDA stream used for device memory operations and kernel launches
  * @param[in] mr Device memory resource used to allocate the returned device_buffer
- * @return size_type Count of valid bits
+ * @return size_type Count of set bits
  */
 template <typename Binop>
 size_type inplace_bitmask_binop(
