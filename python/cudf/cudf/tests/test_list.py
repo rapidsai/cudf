@@ -541,6 +541,26 @@ def test_listcol_setitem(data, item):
 
 
 @pytest.mark.parametrize(
+    "data",
+    [
+        [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+        [
+            [[1, 2, 3], [4, 5, 6]],
+            [[1, 2, 3], [4, 5, 6]],
+            [[1, 2, 3], [4, 5, 6]],
+        ],
+        [[[1, 2, 3], [4, None, 6]], [], None, [[7, 8], [], None, [9]]],
+        [[1, 2, 3], [4, None, 6], [7, 8], [], None, [9]],
+        [[1.0, 2.0, 3.0], [4.0, None, 6.0], [7.0, 8.0], [], None, [9.0]],
+    ],
+)
+def test_listcol_as_string(data):
+    got = cudf.Series(data).astype("str")
+    expect = pd.Series(data).astype("str")
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
     "data,item,error",
     [
         (

@@ -1,13 +1,14 @@
 import math
 import operator
 
+import numpy as np
 import pandas as pd
 import pytest
 from numba import cuda
 
 import cudf
 from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
-from cudf.testing._utils import NUMERIC_TYPES, assert_eq
+from cudf.testing._utils import NUMERIC_TYPES, _decimal_series, assert_eq
 
 
 def run_masked_udf_test(func_pdf, func_gdf, data, args=(), **kwargs):
@@ -572,12 +573,7 @@ def test_masked_udf_nested_function_support(op):
     [
         {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]},
         {"a": [1, 2, 3], "c": [4, 5, 6], "b": [7, 8, 9]},
-        pytest.param(
-            {"a": [1, 2, 3], "b": [4, 5, 6], "c": ["a", "b", "c"]},
-            marks=pytest.mark.xfail(
-                reason="Until cudf/9359 is merged, this will fail"
-            ),
-        ),
+        {"a": [1, 2, 3], "b": [4, 5, 6], "c": ["a", "b", "c"]},
     ],
 )
 def test_masked_udf_subset_selection(data):
@@ -586,6 +582,43 @@ def test_masked_udf_subset_selection(data):
 
     data = cudf.DataFrame(data)
     run_masked_udf_test(func, func, data)
+
+
+@pytest.mark.parametrize(
+    "unsupported_col",
+    [
+        ["a", "b", "c"],
+        _decimal_series(
+            ["1.0", "2.0", "3.0"], dtype=cudf.Decimal64Dtype(2, 1)
+        ),
+        cudf.Series([1, 2, 3], dtype="category"),
+        cudf.interval_range(start=0, end=3, closed=True),
+        [[1, 2], [3, 4], [5, 6]],
+        [{"a": 1}, {"a": 2}, {"a": 3}],
+    ],
+)
+def test_masked_udf_unsupported_dtype(unsupported_col):
+    data = cudf.DataFrame()
+    data["unsupported_col"] = unsupported_col
+
+    def func(row):
+        return row["unsupported_col"]
+
+    # check that we fail when an unsupported type is used within a function
+    with pytest.raises(TypeError):
+        data.apply(func, axis=1)
+
+    # also check that a DF containing unsupported dtypes can still run a
+    # function that does NOT involve any of the unsupported dtype columns
+    data["supported_col"] = 1
+
+    def other_func(row):
+        return row["supported_col"]
+
+    expect = cudf.Series(np.ones(len(data)))
+    got = data.apply(other_func, axis=1)
+
+    assert_eq(expect, got, check_dtype=False)
 
 
 # tests for `DataFrame.apply(f, args=(x,y,z))`
