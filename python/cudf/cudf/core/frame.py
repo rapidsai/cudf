@@ -464,10 +464,6 @@ class Frame:
         if other is None or len(self) != len(other):
             return False
 
-        for self_name, other_name in zip(self._data.names, other._data.names):
-            if self_name != other_name:
-                return False
-
         # check data:
         for self_col, other_col in zip(
             self._data.values(), other._data.values()
