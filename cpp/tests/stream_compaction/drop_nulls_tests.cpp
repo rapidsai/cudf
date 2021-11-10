@@ -209,7 +209,7 @@ template <typename T>
 struct DropNullsTestAll : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(DropNullsTestAll, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(DropNullsTestAll, cudf::test::NumericTypes);
 
 TYPED_TEST(DropNullsTestAll, AllNull)
 {

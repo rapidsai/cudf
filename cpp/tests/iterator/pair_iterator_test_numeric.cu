@@ -20,7 +20,7 @@ template <typename T>
 struct NumericPairIteratorTest : public IteratorTest<T> {
 };
 
-TYPED_TEST_CASE(NumericPairIteratorTest, TestingTypes);
+TYPED_TEST_SUITE(NumericPairIteratorTest, TestingTypes);
 TYPED_TEST(NumericPairIteratorTest, nonull_pair_iterator) { nonull_pair_iterator(*this); }
 TYPED_TEST(NumericPairIteratorTest, null_pair_iterator) { null_pair_iterator(*this); }
 

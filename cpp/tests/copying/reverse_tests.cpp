@@ -36,7 +36,7 @@ template <typename T>
 class ReverseTypedTestFixture : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ReverseTypedTestFixture, cudf::test::AllTypes);
+TYPED_TEST_SUITE(ReverseTypedTestFixture, cudf::test::AllTypes);
 TYPED_TEST(ReverseTypedTestFixture, ReverseTable)
 {
   using T = TypeParam;

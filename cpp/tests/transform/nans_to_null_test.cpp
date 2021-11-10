@@ -63,7 +63,7 @@ struct NaNsToNullTest : public cudf::test::BaseFixture {
 
 using test_types = ::testing::Types<float, double>;
 
-TYPED_TEST_CASE(NaNsToNullTest, test_types);
+TYPED_TEST_SUITE(NaNsToNullTest, test_types);
 
 TYPED_TEST(NaNsToNullTest, WithMask)
 {

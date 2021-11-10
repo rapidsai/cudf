@@ -32,7 +32,7 @@ struct groupby_collect_list_test : public cudf::test::BaseFixture {
 using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                                   cudf::test::FloatingPointTypes,
                                                   cudf::test::TimestampTypes>;
-TYPED_TEST_CASE(groupby_collect_list_test, FixedWidthTypesNotBool);
+TYPED_TEST_SUITE(groupby_collect_list_test, FixedWidthTypesNotBool);
 
 TYPED_TEST(groupby_collect_list_test, CollectWithoutNulls)
 {
