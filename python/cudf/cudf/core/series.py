@@ -3856,6 +3856,7 @@ for binop in (
     "rfloordiv",
     "truediv",
     "div",
+    "divide",
     "rtruediv",
     "rdiv",
     "eq",

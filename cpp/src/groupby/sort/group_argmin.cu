@@ -34,7 +34,7 @@ std::unique_ptr<column> group_argmin(column_view const& values,
                                      rmm::mr::device_memory_resource* mr)
 {
   auto indices = type_dispatcher(values.type(),
-                                 reduce_functor<aggregation::ARGMIN>{},
+                                 group_reduction_dispatcher<aggregation::ARGMIN>{},
                                  values,
                                  num_groups,
                                  group_labels,

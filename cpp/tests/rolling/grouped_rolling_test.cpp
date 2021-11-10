@@ -532,7 +532,7 @@ TEST_F(GroupedRollingErrorTest, SumTimestampNotSupported)
     cudf::logic_error);
 }
 
-TYPED_TEST_CASE(GroupedRollingTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(GroupedRollingTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(GroupedRollingTest, SimplePartitionedStaticWindowsWithGroupKeys)
 {
@@ -1110,7 +1110,7 @@ class GroupedTimeRangeRollingTest : public cudf::test::BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(GroupedTimeRangeRollingTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(GroupedTimeRangeRollingTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(GroupedTimeRangeRollingTest,
            SimplePartitionedStaticWindowsWithGroupKeysAndTimeRangesAscending)
@@ -1227,7 +1227,7 @@ struct TypedNullTimestampTestForRangeQueries : public cudf::test::BaseFixture {
 struct NullTimestampTestForRangeQueries : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(TypedNullTimestampTestForRangeQueries, cudf::test::IntegralTypes);
+TYPED_TEST_SUITE(TypedNullTimestampTestForRangeQueries, cudf::test::IntegralTypes);
 
 TYPED_TEST(TypedNullTimestampTestForRangeQueries, CountSingleGroupTimestampASCNullsFirst)
 {
@@ -1541,7 +1541,7 @@ using FixedWidthTypes = cudf::test::Concat<cudf::test::IntegralTypes,
                                            cudf::test::DurationTypes,
                                            cudf::test::TimestampTypes>;
 
-TYPED_TEST_CASE(TypedUnboundedWindowTest, FixedWidthTypes);
+TYPED_TEST_SUITE(TypedUnboundedWindowTest, FixedWidthTypes);
 
 TYPED_TEST(TypedUnboundedWindowTest, UnboundedPrecedingWindowSingleGroupTimestampASCNullsFirst)
 {
