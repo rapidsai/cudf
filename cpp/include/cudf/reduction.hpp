@@ -69,6 +69,13 @@ std::unique_ptr<scalar> reduce(
   data_type output_dtype,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+std::unique_ptr<column> segmented_reduce(
+  column_view const& col,
+  column_view const& offsets,
+  std::unique_ptr<aggregation> const& agg,
+  data_type output_dtype,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /**
  * @brief  Computes the scan of a column.
  *
