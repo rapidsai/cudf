@@ -8958,14 +8958,21 @@ def test_frame_series_where_other(data):
             "val1": [None, 4, 6, 8, None, 2],
             "val2": [4, 5, None, 2, 9, None],
         },
+        {"id": ["a"], "val1": [2], "val2": [3]},
     ],
 )
-def test_dataframe_pearson_corr(data):
+@pytest.mark.parametrize(
+    "min_periods", [0, 1, 2, 3, 4],
+)
+def test_dataframe_pearson_corr(data, min_periods):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
-    expected = gdf.groupby("id").corr("pearson")
-    actual = pdf.groupby("id").corr("pearson")
+    expected = gdf.groupby("id").corr(
+        method="pearson", min_periods=min_periods
+    )
+    actual = pdf.groupby("id").corr(method="pearson", min_periods=min_periods)
+
     assert_eq(expected, actual)
 
 
@@ -8985,3 +8992,52 @@ def test_dataframe_pearson_corr_unsupported_methods(method):
         match="Only pearson correlation is currently supported",
     ):
         gdf.groupby("id").corr(method)
+
+
+def test_pearson_corr_empty_dataframe():
+    gdf = cudf.DataFrame(columns=["id", "val1", "val2"])
+    pdf = gdf.to_pandas()
+
+    expected = gdf.groupby("id").corr("pearson")
+    actual = pdf.groupby("id").corr("pearson")
+
+    assert_eq(
+        expected, actual
+    )  # fails: DataFrame.index classes are not equivalent
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+            "val1": ["v", "n", "k", "l", "m", "i", "y", "r", "w"],
+            "val2": ["d", "d", "d", "e", "e", "e", "f", "f", "f"],
+        },
+        {
+            "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+            "val1": [1, 1, 1, 2, 2, 2, 3, 3, 3],
+            "val2": ["d", "d", "d", "e", "e", "e", "f", "f", "f"],
+        },
+    ],
+)
+@pytest.mark.parametrize("groupby", ["id", "val1", "val2"])
+def test_pearson_corr_invalid_column_types(data, groupby):
+    try:
+        cudf.DataFrame(data).groupby(groupby).corr("pearson")
+    except RuntimeError as e:
+        if "Unsupported type-agg combination" in str(e):
+            raise TypeError(
+                "Correlation accepts only numerical column-pairs"
+            ) from e
+
+
+def test_pearson_corr_multiindex_dataframe():
+    gdf = cudf.DataFrame(
+        {"a": [1, 1, 2, 2], "b": [1, 1, 2, 3], "c": [2, 3, 4, 5]}
+    ).set_index(["a", "b"])
+
+    expected = gdf.groupby(level="a").corr("pearson")
+    actual = gdf.to_pandas().groupby(level="a").corr("pearson")
+
+    assert_eq(expected, actual)
