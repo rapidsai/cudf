@@ -287,10 +287,15 @@ std::unique_ptr<column> segmented_reduce(InputIterator d_in,
 
 template <typename Op,
           typename InputIterator,
+          typename OffsetIterator,
           typename OutputType = typename thrust::iterator_value<InputIterator>::type,
-          typename std::enable_if_t<std::is_same_v<OutputType, string_view>>* = nullptr,
-          typename... Args>
-std::unique_ptr<column> segmented_reduce(Args&&...)
+          typename std::enable_if_t<std::is_same_v<OutputType, string_view>>* = nullptr>
+std::unique_ptr<column> segmented_reduce(InputIterator,
+                                         OffsetIterator,
+                                         cudf::size_type,
+                                         op::simple_op<Op>,
+                                         rmm::cuda_stream_view,
+                                         rmm::mr::device_memory_resource*)
 {
   CUDF_FAIL("Segment reduction for string type is unsupported.");
 }

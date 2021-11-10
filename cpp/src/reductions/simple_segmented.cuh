@@ -33,12 +33,12 @@ namespace simple {
  * @brief Segment reduction for 'sum', 'product', 'min', 'max', 'sum of squares'
  * which directly compute the reduction by a single step reduction call
  *
- * @tparam InputType  the input column data-type
+ * @tparam InputType    the input column data-type
  * @tparam ResultType   the output data-type
  * @tparam Op           the operator of cudf::reduction::op::
 
  * @param col Input column of data to reduce
- * @param offsets Indices to identify segment boundaries
+ * @param offsets Indices to segment boundaries
  * @param stream Used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Output column in device memory
@@ -81,7 +81,7 @@ std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
  * @tparam Op The reduce operation to execute on the column.
  */
 template <typename Op>
-struct bool_result_element_dispatcher {
+struct bool_result_column_dispatcher {
   template <typename ElementType,
             std::enable_if_t<std::is_arithmetic<ElementType>::value>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& col,
@@ -93,9 +93,11 @@ struct bool_result_element_dispatcher {
   }
 
   template <typename ElementType,
-            typename... Args,
             std::enable_if_t<not std::is_arithmetic<ElementType>::value>* = nullptr>
-  std::unique_ptr<column> operator()(Args&&...)
+  std::unique_ptr<column> operator()(column_view const&,
+                                     column_view const&,
+                                     rmm::cuda_stream_view,
+                                     rmm::mr::device_memory_resource*)
   {
     CUDF_FAIL("Reduction operator not supported for this type");
   }
@@ -130,8 +132,11 @@ struct same_column_type_dispatcher {
     return simple_segmented_reduction<ElementType, ElementType, Op>(col, offsets, stream, mr);
   }
 
-  template <typename ElementType, std::enable_if_t<not is_supported<ElementType>()>* = nullptr>
-  std::unique_ptr<scalar> operator()(column_view const&,
+  template <typename ElementType,
+            std::enable_if_t<not is_supported<ElementType>() or
+                             cudf::is_fixed_point<ElementType>()>* = nullptr>
+  std::unique_ptr<column> operator()(column_view const&,
+                                     column_view const&,
                                      rmm::cuda_stream_view,
                                      rmm::mr::device_memory_resource*)
   {
@@ -153,15 +158,15 @@ struct column_type_dispatcher {
   /**
    * @brief Specialization for reducing floating-point column types to any output type.
    */
-  template <typename ColumnType,
-            typename std::enable_if_t<std::is_floating_point<ColumnType>::value>* = nullptr>
+  template <typename ElementType,
+            typename std::enable_if_t<std::is_floating_point<ElementType>::value>* = nullptr>
   std::unique_ptr<column> reduce_numeric(column_view const& col,
                                          column_view const& offsets,
                                          data_type const output_type,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
   {
-    auto result = simple_segmented_reduction<ColumnType, double, Op>(col, offsets, stream, mr);
+    auto result = simple_segmented_reduction<ElementType, double, Op>(col, offsets, stream, mr);
     if (output_type == result->type()) return result;
     return cudf::detail::cast(*result, output_type, stream, mr);
   }
@@ -169,15 +174,15 @@ struct column_type_dispatcher {
   /**
    * @brief Specialization for reducing integer column types to any output type.
    */
-  template <typename ColumnType,
-            typename std::enable_if_t<std::is_integral<ColumnType>::value>* = nullptr>
+  template <typename ElementType,
+            typename std::enable_if_t<std::is_integral<ElementType>::value>* = nullptr>
   std::unique_ptr<column> reduce_numeric(column_view const& col,
                                          column_view const& offsets,
                                          data_type const output_type,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
   {
-    auto result = simple_segmented_reduction<ColumnType, int64_t, Op>(col, offsets, stream, mr);
+    auto result = simple_segmented_reduction<ElementType, int64_t, Op>(col, offsets, stream, mr);
     if (output_type == result->type()) return result;
     return cudf::detail::cast(*result, output_type, stream, mr);
   }
@@ -188,26 +193,27 @@ struct column_type_dispatcher {
    *
    * @tparam ElementType The input column type or key type.
    * @param col Input column (must be numeric)
+   * @param offsets Indices to segment boundaries
    * @param output_type Requested type of the scalar result
    * @param stream CUDA stream used for device memory operations and kernel launches.
    * @param mr Device memory resource used to allocate the returned scalar's device memory
    */
-  template <typename ColumnType,
-            typename std::enable_if_t<cudf::is_numeric<ColumnType>()>* = nullptr>
+  template <typename ElementType,
+            typename std::enable_if_t<cudf::is_numeric<ElementType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& col,
                                      column_view const& offsets,
                                      data_type const output_type,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    if (output_type.id() == cudf::type_to_id<ColumnType>())
-      return simple_segmented_reduction<ColumnType, ColumnType, Op>(col, offsets, stream, mr);
+    if (output_type.id() == cudf::type_to_id<ElementType>())
+      return simple_segmented_reduction<ElementType, ElementType, Op>(col, offsets, stream, mr);
     // reduce and map to output type
-    return reduce_numeric<ColumnType>(col, offsets, output_type, stream, mr);
+    return reduce_numeric<ElementType>(col, offsets, output_type, stream, mr);
   }
 
-  template <typename ColumnType,
-            typename std::enable_if_t<not cudf::is_numeric<ColumnType>()>* = nullptr>
+  template <typename ElementType,
+            typename std::enable_if_t<not cudf::is_numeric<ElementType>()>* = nullptr>
   std::unique_ptr<column> operator()(column_view const&,
                                      column_view const&,
                                      data_type const,

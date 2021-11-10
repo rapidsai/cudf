@@ -48,6 +48,8 @@ enum class scan_type : bool { INCLUSIVE, EXCLUSIVE };
  * output data type.
  * @throw cudf::logic_error if `min` or `max` reduction is called and the
  * output type does not match the input column data type.
+ * @throw cudf::logic_error if `any` or `all` reduction is called and the
+ * output type is not bool8.
  *
  * If the input column has arithmetic type, output_dtype can be any arithmetic
  * type. For `mean`, `var` and `std` ops, a floating point output type must be
@@ -69,6 +71,41 @@ std::unique_ptr<scalar> reduce(
   data_type output_dtype,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief  Compute reduction of each segment in the input column
+ *
+ * This function does not detect overflows in reductions.
+ * Using a higher precision `data_type` may prevent overflow.
+ * Only `min` and `max` ops are supported for reduction of non-arithmetic
+ * types (timestamp, string...).
+ * The null values are skipped for the operation.
+ * If the segment is empty, the row corresponding to the result of the
+ * segment is null.
+ *
+ * @throw cudf::logic_error if reduction is called for non-arithmetic output
+ * type and operator other than `min` and `max`.
+ * @throw cudf::logic_error if input column data type is not convertible to
+ * output data type.
+ * @throw cudf::logic_error if `min` or `max` reduction is called and the
+ * output type does not match the input column data type.
+ * @throw cudf::logic_error if `any` or `all` reduction is called and the
+ * output type is not bool8.
+ *
+ * If the input column has arithmetic type, output_dtype can be any arithmetic
+ * type. For `mean`, `var` and `std` ops, a floating point output type must be
+ * specified. If the input column has non-arithmetic type
+ *   eg.(timestamp, string...), the same type must be specified.
+ *
+ * If the reduction fails, the member is_valid of the output scalar
+ * will contain `false`.
+ *
+ * @param col Input column view
+ * @param agg Aggregation operator applied by the reduction
+ * @param offsets Indices to segment boundaries
+ * @param output_dtype  The computation and output precision.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @returns Output column with segment's reduce result.
+ */
 std::unique_ptr<column> segmented_reduce(
   column_view const& col,
   column_view const& offsets,

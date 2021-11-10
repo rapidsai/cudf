@@ -255,19 +255,19 @@ std::unique_ptr<scalar> nth_element(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Computes sums to each segment of the input column
+ * @brief Compute sum of each segment in input column
  *
- * If all elements in an input segment are null, the result is null.
+ * If all elements in input segment are null, the segment result is null.
  *
  * @throw cudf::logic_error if input column type is not convertible to `output_dtype`
  * @throw cudf::logic_error if `output_dtype` is not arithmetic point type
  *
- * @param col input column to compute sum
+ * @param col Input column to compute sum
  * @param offsets Indices to identify segment boundaries
- * @param output_dtype data type of return type and typecast elements of input column
+ * @param output_dtype Data type of return type and typecast elements of input column
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
- * @return Sum as column of type `output_dtype`.
+ * @return Sums of segments in type `output_dtype`.
  */
 std::unique_ptr<column> segmented_sum(
   column_view const& col,
@@ -276,103 +276,112 @@ std::unique_ptr<column> segmented_sum(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-// /**
-//  * @brief Computes minimum of elements in input column
-//  *
-//  * If all elements in input column are null, output scalar is null.
-//  *
-//  * @throw cudf::logic_error if input column type is convertible to `output_dtype`
-//  *
-//  * @param col input column to compute minimum.
-//  * @param output_dtype data type of return type and typecast elements of input column
-//  * @param stream CUDA stream used for device memory operations and kernel launches.
-//  * @param mr Device memory resource used to allocate the returned scalar's device memory
-//  * @return Minimum element as scalar of type `output_dtype`.
-//  */
-// std::unique_ptr<scalar> min(
-//   column_view const& col,
-//   data_type const output_dtype,
-//   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-//   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+/**
+ * @brief Computes product of elements in input column
+ *
+ * If all elements in input segment are null, the segment result is null.
+ *
+ * @throw cudf::logic_error if input column type is not convertible to `output_dtype`
+ * @throw cudf::logic_error if `output_dtype` is not arithmetic point type
+ *
+ * @param col input column to compute product.
+ * @param output_dtype data type of return type and typecast elements of input column
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Product as scalar of type `output_dtype`.
+ */
+std::unique_ptr<column> segmented_product(
+  column_view const& col,
+  column_view const& offsets,
+  data_type const output_dtype,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-// /**
-//  * @brief Computes maximum of elements in input column
-//  *
-//  * If all elements in input column are null, output scalar is null.
-//  *
-//  * @throw cudf::logic_error if input column type is convertible to `output_dtype`
-//  *
-//  * @param col input column to compute maximum.
-//  * @param output_dtype data type of return type and typecast elements of input column
-//  * @param stream CUDA stream used for device memory operations and kernel launches.
-//  * @param mr Device memory resource used to allocate the returned scalar's device memory
-//  * @return Maximum element as scalar of type `output_dtype`.
-//  */
-// std::unique_ptr<scalar> max(
-//   column_view const& col,
-//   data_type const output_dtype,
-//   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-//   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+/**
+ * @brief Compute minimum of each segment in input column
+ *
+ * If all elements in input segment are null, the segment result is null.
+ *
+ * @throw cudf::logic_error if input column type is convertible to `output_dtype`
+ *
+ * @param col Input column to compute minimum.
+ * @param offsets Indices to identify segment boundaries
+ * @param output_dtype Data type of return type and typecast elements of input column
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Minimums of segments in type `output_dtype`.
+ */
+std::unique_ptr<column> segmented_min(
+  column_view const& col,
+  column_view const& offsets,
+  data_type const output_dtype,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-// /**
-//  * @brief Computes any of elements in input column is true when typecasted to bool
-//  *
-//  * If all elements in input column are null, output scalar is null.
-//  *
-//  * @throw cudf::logic_error if input column type is not convertible to bool
-//  * @throw cudf::logic_error if `output_dtype` is not bool
-//  *
-//  * @param col input column to compute any_of.
-//  * @param output_dtype data type of return type and typecast elements of input column
-//  * @param stream CUDA stream used for device memory operations and kernel launches.
-//  * @param mr Device memory resource used to allocate the returned scalar's device memory
-//  * @return bool scalar if any of elements is true when typecasted to bool
-//  */
-// std::unique_ptr<scalar> any(
-//   column_view const& col,
-//   data_type const output_dtype,
-//   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-//   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+/**
+ * @brief Compute maximum of each segment in input column
+ *
+ * If all elements in input segment are null, the segment result is null.
+ *
+ * @throw cudf::logic_error if input column type is convertible to `output_dtype`
+ *
+ * @param col Input column to compute maximum.
+ * @param offsets Indices to identify segment boundaries
+ * @param output_dtype Data type of return type and typecast elements of input column
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Maximums of segments in type `output_dtype`.
+ */
+std::unique_ptr<column> segmented_max(
+  column_view const& col,
+  column_view const& offsets,
+  data_type const output_dtype,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-// /**
-//  * @brief Computes all of elements in input column is true when typecasted to bool
-//  *
-//  * If all elements in input column are null, output scalar is null.
-//  *
-//  * @throw cudf::logic_error if input column type is not convertible to bool
-//  * @throw cudf::logic_error if `output_dtype` is not bool
-//  *
-//  * @param col input column to compute all_of.
-//  * @param output_dtype data type of return type and typecast elements of input column
-//  * @param stream CUDA stream used for device memory operations and kernel launches.
-//  * @param mr Device memory resource used to allocate the returned scalar's device memory
-//  * @return bool scalar if all of elements is true when typecasted to bool
-//  */
-// std::unique_ptr<scalar> all(
-//   column_view const& col,
-//   data_type const output_dtype,
-//   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-//   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+/**
+ * @brief Compute any of the value in the segment is true when typecasted to bool
+ *
+ * If all elements in input segment are null, the segment result is null.
+ *
+ * @throw cudf::logic_error if input column type is not convertible to bool
+ * @throw cudf::logic_error if `output_dtype` is not bool
+ *
+ * @param col Input column to compute any_of.
+ * @param offsets Indices to identify segment boundaries
+ * @param output_dtype Data type of return type and typecast elements of input column
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Column of bool8 for the results of the segments
+ */
+std::unique_ptr<column> segmented_any(
+  column_view const& col,
+  column_view const& offsets,
+  data_type const output_dtype,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
-// /**
-//  * @brief Computes product of elements in input column
-//  *
-//  * If all elements in input column are null, output scalar is null.
-//  *
-//  * @throw cudf::logic_error if input column type is not convertible to `output_dtype`
-//  * @throw cudf::logic_error if `output_dtype` is not arithmetic point type
-//  *
-//  * @param col input column to compute product.
-//  * @param output_dtype data type of return type and typecast elements of input column
-//  * @param stream CUDA stream used for device memory operations and kernel launches.
-//  * @param mr Device memory resource used to allocate the returned scalar's device memory
-//  * @return Product as scalar of type `output_dtype`.
-//  */
-// std::unique_ptr<scalar> product(
-//   column_view const& col,
-//   data_type const output_dtype,
-//   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-//   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+/**
+ * @brief Compute all of the value in the segment is true when typecasted to bool
+ *
+ * If all elements in input segment are null, the segment result is null.
+ *
+ * @throw cudf::logic_error if input column type is not convertible to bool
+ * @throw cudf::logic_error if `output_dtype` is not bool
+ *
+ * @param col Input column to compute all_of.
+ * @param offsets Indices to identify segment boundaries
+ * @param output_dtype Data type of return type and typecast elements of input column
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
+ * @return Column of bool8 for the results of the segments
+ */
+std::unique_ptr<column> segmented_all(
+  column_view const& col,
+  column_view const& offsets,
+  data_type const output_dtype,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace reduction
 }  // namespace cudf

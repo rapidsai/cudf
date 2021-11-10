@@ -53,11 +53,21 @@ struct segmented_reduce_dispatch_functor {
       case aggregation::SUM:
         return reduction::segmented_sum(col, offsets, output_dtype, stream, mr);
         break;
-      // case aggregation::PRODUCT: return reduction::product(col, output_dtype, stream, mr); break;
-      // case aggregation::MIN: return reduction::min(col, output_dtype, stream, mr); break;
-      // case aggregation::MAX: return reduction::max(col, output_dtype, stream, mr); break;
-      // case aggregation::ANY: return reduction::any(col, output_dtype, stream, mr); break;
-      // case aggregation::ALL: return reduction::all(col, output_dtype, stream, mr); break;
+      case aggregation::PRODUCT:
+        return reduction::segmented_product(col, offsets, output_dtype, stream, mr);
+        break;
+      case aggregation::MIN:
+        return reduction::segmented_min(col, offsets, output_dtype, stream, mr);
+        break;
+      case aggregation::MAX:
+        return reduction::segmented_max(col, offsets, output_dtype, stream, mr);
+        break;
+      case aggregation::ANY:
+        return reduction::segmented_any(col, offsets, output_dtype, stream, mr);
+        break;
+      case aggregation::ALL:
+        return reduction::segmented_all(col, offsets, output_dtype, stream, mr);
+        break;
       default: CUDF_FAIL("Unsupported aggregation type.");
     }
   }
