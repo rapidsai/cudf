@@ -2297,8 +2297,8 @@ class Frame:
         Drop duplicate rows in frame.
 
         keep : ["first", "last", False]
-            "first" will keep first of duplicate, "last" will keep last of the
-            duplicate and "False" drop all duplicate
+            "first" will keep the first duplicate entry, "last" will keep the
+            last duplicate entry, and False will drop all duplicates.
         nulls_are_equal: bool, default True
             Null elements are considered equal to other null elements.
         """

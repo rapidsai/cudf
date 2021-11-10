@@ -482,12 +482,12 @@ class IndexedFrame(Frame):
         subset : list, optional
             List of columns to consider when dropping rows.
         keep : ["first", "last", False]
-            "first" will keep first of duplicate, "last" will keep last of the
-            duplicate and "False" drop all duplicate.
+            "first" will keep the first duplicate entry, "last" will keep the
+            last duplicate entry, and False will drop all duplicates.
         nulls_are_equal: bool, default True
             Null elements are considered equal to other null elements.
         ignore_index: bool, default False
-            If True, the resulting axis will be labeled 0, 1, …, n - 1.
+            If True, the resulting axis will be labeled 0, 1, ..., n - 1.
         """
         if subset is None:
             subset = self._column_names
