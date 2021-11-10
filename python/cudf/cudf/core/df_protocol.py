@@ -721,7 +721,7 @@ def _check_buffer_is_on_gpu(buffer: _CuDFBuffer) -> None:
 
     elif buffer.__dlpack_device__()[0] != _Device.CUDA and buffer._allow_copy:
         raise NotImplementedError(
-            "Only cuDF/GPU dataframes are supported for now."
+            "Only cuDF/GPU dataframes are supported for now. "
             "CPU (like `Pandas`) dataframes will be supported shortly."
         )
 
