@@ -419,7 +419,7 @@ class _CuDFColumn:
             buffer = _CuDFBuffer(
                 valid_mask.data, cp.uint8, allow_copy=self._allow_copy
             )
-            dtype = (_k.UINT, 8, "C", "=")
+            dtype = (_DtypeKind.UINT, 8, "C", "=")
             return buffer, dtype
 
         elif null == 1:
