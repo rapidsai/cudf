@@ -1924,14 +1924,7 @@ class DatetimeIndex(GenericIndex):
         """
         out_column = self._values.ceil(field)
 
-        out_column = column.build_column(
-            data=out_column.base_data,
-            dtype=out_column.dtype,
-            mask=out_column.base_mask,
-            offset=out_column.offset,
-        )
-
-        return as_index(out_column, name=self.name)
+        return self.__class__._from_data({self.name: out_column})
 
     def floor(self, field):
         """
@@ -1961,14 +1954,7 @@ class DatetimeIndex(GenericIndex):
         """
         out_column = self._values.floor(field)
 
-        out_column = column.build_column(
-            data=out_column.base_data,
-            dtype=out_column.dtype,
-            mask=out_column.base_mask,
-            offset=out_column.offset,
-        )
-
-        return as_index(out_column, name=self.name)
+        return self.__class__._from_data({self.name: out_column})
 
 
 class TimedeltaIndex(GenericIndex):
