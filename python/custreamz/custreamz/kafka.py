@@ -167,7 +167,10 @@ class Consumer(CudfKafkaClient):
         kafka_datasource.close(batch_timeout)
 
         if result is not None:
-            return cudf.DataFrame._from_table(result)
+            if isinstance(result, cudf.DataFrame):
+                return result
+            else:
+                return cudf.DataFrame._from_data(result)
         else:
             # empty Dataframe
             return cudf.DataFrame()
