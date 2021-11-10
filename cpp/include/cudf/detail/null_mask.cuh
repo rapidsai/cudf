@@ -47,12 +47,12 @@ __global__ void offset_bitmask_binop(Binop op,
                                      device_span<bitmask_type const*> source,
                                      device_span<size_type const> source_begin_bits,
                                      size_type source_size_bits,
-                                     size_type* valid_count_ptr)
+                                     size_type* count_ptr)
 {
   constexpr auto const word_size{detail::size_in_bits<bitmask_type>()};
   auto const tid = threadIdx.x + blockIdx.x * blockDim.x;
 
-  size_type thread_valid_count = 0;
+  size_type thread_count = 0;
 
   for (size_type destination_word_index = tid; destination_word_index < destination.size();
        destination_word_index += blockDim.x * gridDim.x) {
@@ -70,7 +70,7 @@ __global__ void offset_bitmask_binop(Binop op,
     }
 
     destination[destination_word_index] = destination_word;
-    thread_valid_count += __popc(destination_word);
+    thread_count += __popc(destination_word);
   }
 
   // Subtract any slack bits from the last word
@@ -78,17 +78,16 @@ __global__ void offset_bitmask_binop(Binop op,
     size_type const last_bit_index = source_size_bits - 1;
     size_type const num_slack_bits = word_size - (last_bit_index % word_size) - 1;
     if (num_slack_bits > 0) {
-      size_type word_index = cudf::word_index(last_bit_index);
-      thread_valid_count -=
-        __popc(destination[word_index] & set_most_significant_bits(num_slack_bits));
+      size_type const word_index = cudf::word_index(last_bit_index);
+      thread_count -= __popc(destination[word_index] & set_most_significant_bits(num_slack_bits));
     }
   }
 
   using BlockReduce = cub::BlockReduce<size_type, block_size>;
   __shared__ typename BlockReduce::TempStorage temp_storage;
-  size_type block_valid_count = BlockReduce(temp_storage).Sum(thread_valid_count);
+  size_type block_count = BlockReduce(temp_storage).Sum(thread_count);
 
-  if (threadIdx.x == 0) { atomicAdd(valid_count_ptr, block_valid_count); }
+  if (threadIdx.x == 0) { atomicAdd(count_ptr, block_count); }
 }
 
 /**
