@@ -445,8 +445,7 @@ class _CuDFColumn:
         Raises RuntimeError if the data buffer does not have an associated
         offsets buffer.
         """
-        _k = _DtypeKind
-        if self.dtype[0] == _k.STRING:
+        if self.dtype[0] == _DtypeKind.STRING:
             offsets = self._col.children[0]
             assert (offsets is not None) and (offsets.data is not None), " "
             "offsets(.data) should not be None for string column"
@@ -468,18 +467,22 @@ class _CuDFColumn:
         Return the buffer containing the data and
                the buffer's associated dtype.
         """
-        _k = _DtypeKind
-        if self.dtype[0] in (_k.INT, _k.UINT, _k.FLOAT, _k.BOOL):
+        if self.dtype[0] in (
+            _DtypeKind.INT,
+            _DtypeKind.UINT,
+            _DtypeKind.FLOAT,
+            _DtypeKind.BOOL,
+        ):
             col_data = self._col
             dtype = self.dtype
 
-        elif self.dtype[0] == _k.CATEGORICAL:
+        elif self.dtype[0] == _DtypeKind.CATEGORICAL:
             col_data = cast(
                 cudf.core.column.CategoricalColumn, self._col
             ).codes
             dtype = self._dtype_from_cudfdtype(col_data.dtype)
 
-        elif self.dtype[0] == _k.STRING:
+        elif self.dtype[0] == _DtypeKind.STRING:
             col_data = self._col.children[1]
             dtype = self._dtype_from_cudfdtype(col_data.dtype)
 
@@ -659,18 +662,22 @@ def _from_dataframe(df: DataFrameObject) -> _CuDFDataFrame:
 
     # We need a dict of columns here, with each column being a cudf column.
     columns = dict()
-    _k = _DtypeKind
     _buffers = []  # hold on to buffers, keeps memory alive
     for name in df.column_names():
         col = df.get_column_by_name(name)
 
-        if col.dtype[0] in (_k.INT, _k.UINT, _k.FLOAT, _k.BOOL):
+        if col.dtype[0] in (
+            _DtypeKind.INT,
+            _DtypeKind.UINT,
+            _DtypeKind.FLOAT,
+            _DtypeKind.BOOL,
+        ):
             columns[name], _buf = _protocol_to_cudf_column_numeric(col)
 
-        elif col.dtype[0] == _k.CATEGORICAL:
+        elif col.dtype[0] == _DtypeKind.CATEGORICAL:
             columns[name], _buf = _protocol_to_cudf_column_categorical(col)
 
-        elif col.dtype[0] == _k.STRING:
+        elif col.dtype[0] == _DtypeKind.STRING:
             columns[name], _buf = _protocol_to_cudf_column_string(col)
 
         else:
