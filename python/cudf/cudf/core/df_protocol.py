@@ -226,15 +226,14 @@ class _CuDFColumn:
         #       'b', 'B' (bytes), 'S', 'a', (old-style string) 'V' (void)
         #       not handled datetime and timedelta both map to datetime
         #       (is timedelta handled?)
-        _k = _DtypeKind
         _np_kinds = {
-            "i": _k.INT,
-            "u": _k.UINT,
-            "f": _k.FLOAT,
-            "b": _k.BOOL,
-            "U": _k.STRING,
-            "M": _k.DATETIME,
-            "m": _k.DATETIME,
+            "i": _DtypeKind.INT,
+            "u": _DtypeKind.UINT,
+            "f": _DtypeKind.FLOAT,
+            "b": _DtypeKind.BOOL,
+            "U": _DtypeKind.STRING,
+            "M": _DtypeKind.DATETIME,
+            "m": _DtypeKind.DATETIME,
         }
         kind = _np_kinds.get(dtype.kind, None)
         if kind is None:
