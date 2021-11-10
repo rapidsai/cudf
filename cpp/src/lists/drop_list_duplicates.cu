@@ -162,7 +162,7 @@ struct replace_negative_nans_dispatch {
  *
  * @param num_lists The size of the input lists column.
  * @param num_entries The number of entries in the lists column.
- * @param offsets The list offsets column.
+ * @param offsets_begin The pointer refers to data of list offsets.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return An array containing 1-based list indices corresponding to each list entry.
  */
@@ -481,7 +481,7 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_indices(
  *
  * @param num_lists The number of lists.
  * @param num_entries The number of extracted unique list entries.
- * @param entries_list_indices The mapping from list entries to their list indices.
+ * @param entries_list_indices The mapping from list entries to their (1-based) list indices.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device resource used to allocate memory.
  */
@@ -497,7 +497,7 @@ std::unique_ptr<column> generate_output_offsets(size_type num_lists,
   // extracting unique entries we have the entries_list_indices becomes [1, 1, 1, 4, 5, 5, 5, 7, 7]
   // and num_lists is 7, num_entries is 9. These are the input to this function.
   //
-  // Through extracing unique list entries, one entry in the list index 1 has been removed (first
+  // Through extracting unique list entries, one entry in the list index 1 has been removed (first
   // list, as we are using 1-based list index), and entries in the lists with indices {3, 3, 6} have
   // been removed completely.
 
@@ -573,11 +573,11 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
   // The child column conotaining list entries.
   auto const keys_child = keys.get_sliced_child(stream);
 
-  // Generate a mapping from list entries to their 1-based list indices.
+  // Generate a mapping from list entries to their 1-based list indices for the keys column.
   auto const entries_list_indices =
     generate_entry_list_indices(keys.size(), keys_child.size(), keys.offsets_begin(), stream);
 
-  // Generate the segmented sorted order of the key entries in the keys column.
+  // Generate segmented sorted order for key entries.
   // The keys column will be sorted (gathered) using this order.
   auto const sorted_order = [&]() {
     auto const list_indices_view = column_view(data_type{type_to_id<size_type>()},
@@ -615,13 +615,13 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
                                                  cudf::detail::negative_index_policy::NOT_ALLOWED,
                                                  stream);
 
-  // Extract the segmented sorted entries.
+  // Extract the segmented sorted key entries.
   auto const sorted_keys_entries = sorted_table->get_column(0).view();
   auto const sorted_values_entries =
     values ? std::optional<column_view>(sorted_table->get_column(1).view()) : std::nullopt;
 
-  // Generate columns containing unique entries (along with their list indices).
-  // null_count and bitmask of these column will also be generated in this function.
+  // Generate child columns containing unique entries (along with their list indices).
+  // null_count and bitmask of these columns will also be generated in this function.
   auto unique_entries_and_list_indices = get_unique_entries_and_list_indices(sorted_keys_entries,
                                                                              sorted_values_entries,
                                                                              entries_list_indices,
