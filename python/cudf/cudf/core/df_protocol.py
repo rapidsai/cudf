@@ -405,8 +405,7 @@ class _CuDFColumn:
 
         null, invalid = self.describe_null
         if null == 3:
-            _k = _DtypeKind
-            if self.dtype[0] == _k.CATEGORICAL:
+            if self.dtype[0] == _DtypeKind.CATEGORICAL:
                 valid_mask = cast(
                     cudf.core.column.CategoricalColumn, self._col
                 ).codes._get_mask_as_column()
