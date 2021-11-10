@@ -22,6 +22,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/replace.hpp>
 #include <cudf/detail/sorting.hpp>
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/lists/drop_list_duplicates.hpp>
@@ -50,16 +51,12 @@ namespace {
 template <typename Type>
 struct has_negative_nans_fn {
   column_device_view const d_view;
-  bool const has_nulls;
 
-  has_negative_nans_fn(column_device_view const& d_view, bool const has_nulls)
-    : d_view(d_view), has_nulls(has_nulls)
-  {
-  }
+  has_negative_nans_fn(column_device_view const& d_view) : d_view(d_view) {}
 
   __device__ Type operator()(size_type idx) const noexcept
   {
-    if (has_nulls && d_view.is_null_nocheck(idx)) { return false; }
+    if (d_view.is_null(idx)) { return false; }
 
     auto const val = d_view.element<Type>(idx);
     return std::isnan(val) && std::signbit(val);  // std::signbit(x) == true if x is negative
@@ -82,7 +79,7 @@ struct has_negative_nans_dispatch {
     return thrust::count_if(rmm::exec_policy(stream),
                             thrust::make_counting_iterator(0),
                             thrust::make_counting_iterator(input.size()),
-                            has_negative_nans_fn<Type>{*d_entries_ptr, input.has_nulls()});
+                            has_negative_nans_fn<Type>{*d_entries_ptr});
   }
 
   template <typename Type, std::enable_if_t<std::is_same_v<Type, cudf::struct_view>>* = nullptr>
@@ -109,14 +106,6 @@ struct has_negative_nans_dispatch {
   }
 };
 
-template <typename Type>
-struct replace_negative_nans_fn {
-  __device__ Type operator()(Type val) const noexcept
-  {
-    return std::isnan(val) ? std::numeric_limits<Type>::quiet_NaN() : val;
-  }
-};
-
 /**
  * @brief A structure to be used along with type_dispatcher to replace -NaN by NaN for a
  * floating-point data column.
@@ -126,31 +115,13 @@ struct replace_negative_nans_fn {
  * together.
  */
 struct replace_negative_nans_dispatch {
-  template <typename Type,
-            std::enable_if_t<!cuda::std::is_floating_point_v<Type> &&
-                             !std::is_same_v<Type, cudf::struct_view>>* = nullptr>
-  std::unique_ptr<column> operator()(column_view const& input, rmm::cuda_stream_view) const noexcept
-  {
-    // For non floating point type and non struct, just return a copy of the input.
-    return std::make_unique<column>(input);
-  }
-
-  template <typename Type, std::enable_if_t<cuda::std::is_floating_point_v<Type>>* = nullptr>
+  template <typename Type, std::enable_if_t<!std::is_same_v<Type, cudf::struct_view>>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input,
                                      rmm::cuda_stream_view stream) const noexcept
   {
-    auto new_entries =
-      cudf::detail::allocate_like(input, input.size(), cudf::mask_allocation_policy::NEVER, stream);
-    new_entries->set_null_mask(cudf::detail::copy_bitmask(input, stream), input.null_count());
-
-    // Replace all negative NaN values.
-    thrust::transform(rmm::exec_policy(stream),
-                      input.template begin<Type>(),
-                      input.template end<Type>(),
-                      new_entries->mutable_view().template begin<Type>(),
-                      replace_negative_nans_fn<Type>{});
-
-    return new_entries;
+    return cuda::std::is_floating_point_v<Type>
+             ? cudf::detail::normalize_nans_and_zeros(input, stream)
+             : std::make_unique<column>(input, stream);
   }
 
   template <typename Type, std::enable_if_t<std::is_same_v<Type, cudf::struct_view>>* = nullptr>
@@ -176,43 +147,6 @@ struct replace_negative_nans_dispatch {
 };
 
 /**
- * @brief Generate a 0-based offsets from a lists column.
- *
- * Given a lists column which may have a non-zero offset (i.e. the offset values do not start from
- * `0`), generate a numeric array containing new offset values computed by subtracting the offsets
- * of the input column by the first offset value.
- *
- * @code{.pseudo}
- * input_offsets  = { 3, 7, 9, 13 },
- * output_offsets = { 0, 4, 6, 10 }
- * @endcode
- *
- * @param lists_column The input lists column.
- * @param stream CUDA stream used for device memory operations and kernel launches.
- * @return An array containing 0-based list offsets.
- */
-rmm::device_uvector<offset_type> generate_clean_offsets(lists_column_view const& input,
-                                                        rmm::cuda_stream_view stream)
-{
-  auto output = rmm::device_uvector<offset_type>(input.size() + 1, stream);
-  if (input.offset() == 0) {
-    CUDA_TRY(cudaMemcpyAsync(output.begin(),
-                             input.offsets_begin(),
-                             sizeof(offset_type) * (input.size() + 1),
-                             cudaMemcpyDefault,
-                             stream.value()));
-  } else {
-    thrust::transform(
-      rmm::exec_policy(stream),
-      input.offsets_begin(),
-      input.offsets_end(),
-      output.begin(),
-      [first = input.offsets_begin()] __device__(auto const offset) { return offset - *first; });
-  }
-  return output;
-}
-
-/**
  * @brief Populate 1-based list indices for all list entries.
  *
  * Given a number of total list entries in a lists column and an array containing list offsets,
@@ -222,24 +156,28 @@ rmm::device_uvector<offset_type> generate_clean_offsets(lists_column_view const&
  * Instead of regular 0-based indices, we need to use 1-based indices for later post-processing.
  *
  * @code{.pseudo}
- * num_entries = 10, offsets = { 0, 4, 6, 10 }
+ * num_lists = 3, num_entries = 10, offsets = { 0, 4, 6, 10 }
  * output = { 1, 1, 1, 1, 2, 2, 3, 3, 3, 3 }
  * @endcode
  *
+ * @param num_lists The size of the input lists column.
  * @param num_entries The number of entries in the lists column.
- * @param offsets Array containing the list offsets.
+ * @param offsets The list offsets column.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @return An array containing 1-based list indices corresponding to each list entry.
  */
-rmm::device_uvector<size_type> generate_entry_list_indices(
-  size_type num_entries,
-  rmm::device_uvector<offset_type> const& offsets,
-  rmm::cuda_stream_view stream)
+rmm::device_uvector<size_type> generate_entry_list_indices(size_type num_lists,
+                                                           size_type num_entries,
+                                                           offset_type const* offsets_begin,
+                                                           rmm::cuda_stream_view stream)
 {
   auto entry_list_indices = rmm::device_uvector<size_type>(num_entries, stream);
+
+  auto const input = thrust::make_transform_iterator(
+    offsets_begin, [offsets_begin] __device__(auto const idx) { return idx - *offsets_begin; });
   thrust::upper_bound(rmm::exec_policy(stream),
-                      offsets.begin(),
-                      offsets.end(),
+                      input,
+                      input + num_lists,
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(num_entries),
                       entry_list_indices.begin());
@@ -247,9 +185,12 @@ rmm::device_uvector<size_type> generate_entry_list_indices(
 }
 
 /**
- * @brief Performs an equality comparison between two entries in a lists column.
+ * @brief Perform an equality comparison between two entries in a lists column, specialized from
+ * `cudf::element_equality_comparator` to take into account both parameters `nulls_equal` and
+ * `nans_equal` when comparing floating-point numbers.
  *
  * For the two entries that are NOT in the same list, they will always be considered as different.
+ *
  * If they are from the same list and their type is not floating point, this functor will return the
  * same comparison result as `cudf::element_equality_comparator`.
  *
@@ -359,8 +300,8 @@ struct column_row_comparator_dispatch {
 };
 
 /**
- * @brief Performs an equality comparison between rows of two tables using `column_row_comparator`
- * to compare rows of their corresponding columns.
+ * @brief Performs an equality comparison between rows of two tables using
+ * `column_row_comparator_fn` functor to compare rows of their corresponding columns.
  */
 struct table_row_comparator_fn {
   size_type const* const list_indices;
@@ -485,7 +426,7 @@ struct get_indices_of_unique_entries_dispatch {
 std::vector<std::unique_ptr<column>> get_unique_entries_and_list_indices(
   column_view const& keys_entries,
   std::optional<column_view> const& values_entries,
-  rmm::device_uvector<size_type> const& entries_list_indices,
+  device_span<size_type const> entries_list_indices,
   null_equality nulls_equal,
   nan_equality nans_equal,
   duplicate_keep_option keep_option,
@@ -536,30 +477,25 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_indices(
 }
 
 /**
- * @brief Generate list offsets from entry list indices.
+ * @brief Generate list offsets from entry list indices for the final result lists column(s).
  *
- * Generate a column of list offsets for the final result lists column(s). The list offsets of the
- * original lists column are also taken into account to make sure the result lists column will have
- * the same empty list rows (if any) as in the original lists column.
- *
+ * @param num_lists The number of lists.
  * @param num_entries The number of extracted unique list entries.
  * @param entries_list_indices The mapping from list entries to their list indices.
- * @param original_offsets The list offsets of the original lists column.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device resource used to allocate memory.
  */
-std::unique_ptr<column> generate_output_offsets(
-  size_type num_entries,
-  column_view const& entries_list_indices,
-  rmm::device_uvector<offset_type> const& original_offsets,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> generate_output_offsets(size_type num_lists,
+                                                size_type num_entries,
+                                                column_view const& entries_list_indices,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr)
 {
   // Let consider an example:
   // Given the original offsets of the input lists column is [0, 4, 5, 6, 7, 10, 11, 13].
   // The original entries_list_indices is [1, 1, 1, 1, 2, 3, 4, 5, 5, 5, 6, 7, 7], and after
   // extracting unique entries we have the entries_list_indices becomes [1, 1, 1, 4, 5, 5, 5, 7, 7]
-  // and num_entries is 9. These are the input to this function.
+  // and num_lists is 7, num_entries is 9. These are the input to this function.
   //
   // Through extracing unique list entries, one entry in the list index 1 has been removed (first
   // list, as we are using 1-based list index), and entries in the lists with indices {3, 3, 6} have
@@ -568,11 +504,11 @@ std::unique_ptr<column> generate_output_offsets(
   // This variable stores the (1-based) list indices of the unique entries but only one index value
   // per non-empty list. Given the example above, we will have this array hold the values
   // [1, 4, 5, 7].
-  auto list_indices = rmm::device_uvector<size_type>(original_offsets.size() - 1, stream);
+  auto list_indices = rmm::device_uvector<size_type>(num_lists, stream);
 
   // Stores the non-zero numbers of unique entries per list.
   // Given the example above, we will have this array contains the values [3, 1, 3, 2]
-  auto list_sizes = rmm::device_uvector<size_type>(original_offsets.size() - 1, stream);
+  auto list_sizes = rmm::device_uvector<size_type>(num_lists, stream);
 
   // Count the numbers of unique entries for each non-empty list.
   auto const end                 = thrust::reduce_by_key(rmm::exec_policy(stream),
@@ -584,16 +520,11 @@ std::unique_ptr<column> generate_output_offsets(
   auto const num_non_empty_lists = thrust::distance(list_indices.begin(), end.first);
 
   // The output offsets for the output lists column(s).
-  auto new_offsets         = make_numeric_column(data_type{type_to_id<offset_type>()},
-                                         original_offsets.size(),
-                                         mask_state::UNALLOCATED,
-                                         stream,
-                                         mr);
-  auto const d_new_offsets = new_offsets->mutable_view().template begin<offset_type>();
+  auto new_offsets = rmm::device_uvector<offset_type>(num_lists + 1, stream, mr);
 
   // The new offsets need to be filled with 0 value first.
   thrust::uninitialized_fill_n(
-    rmm::exec_policy(stream), d_new_offsets, original_offsets.size(), offset_type{0});
+    rmm::exec_policy(stream), new_offsets.begin(), num_lists + 1, offset_type{0});
 
   // Scatter non-zero sizes of the output lists into the correct positions.
   // Given the example above, we will have new_offsets = [0, 3, 0, 0, 1, 3, 0, 2]
@@ -601,15 +532,16 @@ std::unique_ptr<column> generate_output_offsets(
                   list_sizes.begin(),
                   list_sizes.begin() + num_non_empty_lists,
                   list_indices.begin(),
-                  d_new_offsets);
+                  new_offsets.begin());
 
   // Generate offsets from sizes.
   // Given the example above, we will have new_offsets = [0, 3, 3, 3, 4, 7, 7, 9]
   thrust::inclusive_scan(
-    rmm::exec_policy(stream), d_new_offsets, d_new_offsets + new_offsets->size(), d_new_offsets);
+    rmm::exec_policy(stream), new_offsets.begin(), new_offsets.end(), new_offsets.begin());
 
   // Done. Hope that your head didn't explode after reading till this point.
-  return new_offsets;
+  return std::make_unique<column>(
+    data_type{type_to_id<offset_type>()}, num_lists + 1, new_offsets.release());
 }
 
 /**
@@ -630,24 +562,20 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
       "Keys of nested types other than STRUCT are not supported in `drop_list_duplicates`.");
   }
 
-  auto const has_values = values.has_value();
-  CUDF_EXPECTS(!has_values || keys.size() == values.value().size(),
+  CUDF_EXPECTS(!values || keys.size() == values.value().size(),
                "Keys and values columns must have the same size.");
 
   if (keys.is_empty()) {
     return std::pair{cudf::empty_like(keys.parent()),
-                     has_values ? cudf::empty_like(values.value().parent()) : nullptr};
+                     values ? cudf::empty_like(values.value().parent()) : nullptr};
   }
-
-  // Generate a 0-based list offsets.
-  auto lists_offsets = generate_clean_offsets(keys, stream);
 
   // The child column conotaining list entries.
   auto const keys_child = keys.get_sliced_child(stream);
 
   // Generate a mapping from list entries to their 1-based list indices.
   auto const entries_list_indices =
-    generate_entry_list_indices(keys_child.size(), lists_offsets, stream);
+    generate_entry_list_indices(keys.size(), keys_child.size(), keys.offsets_begin(), stream);
 
   // Generate the segmented sorted order of the key entries in the keys column.
   // The keys column will be sorted (gathered) using this order.
@@ -665,22 +593,20 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
     if (replace_negative_nan) {
       auto const replaced_nan_keys_child =
         type_dispatcher(keys_child.type(), replace_negative_nans_dispatch{}, keys_child, stream);
-      auto const sorting_cols =
-        std::vector<column_view>{list_indices_view, replaced_nan_keys_child->view()};
-      return cudf::detail::stable_sorted_order(table_view{sorting_cols},
-                                               {order::ASCENDING, order::ASCENDING},
-                                               {null_order::AFTER, null_order::AFTER},
-                                               stream);
+      return cudf::detail::stable_sorted_order(
+        table_view{{list_indices_view, replaced_nan_keys_child->view()}},
+        {order::ASCENDING, order::ASCENDING},
+        {null_order::AFTER, null_order::AFTER},
+        stream);
     } else {
-      auto const sorting_cols = std::vector<column_view>{list_indices_view, keys_child};
-      return cudf::detail::stable_sorted_order(table_view{sorting_cols},
+      return cudf::detail::stable_sorted_order(table_view{{list_indices_view, keys_child}},
                                                {order::ASCENDING, order::ASCENDING},
                                                {null_order::AFTER, null_order::AFTER},
                                                stream);
     }
   }();
 
-  auto const sorting_table = has_values
+  auto const sorting_table = values
                                ? table_view{{keys_child, values.value().get_sliced_child(stream)}}
                                : table_view{{keys_child}};
   auto const sorted_table  = cudf::detail::gather(sorting_table,
@@ -692,7 +618,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
   // Extract the segmented sorted entries.
   auto const sorted_keys_entries = sorted_table->get_column(0).view();
   auto const sorted_values_entries =
-    has_values ? std::optional<column_view>(sorted_table->get_column(1).view()) : std::nullopt;
+    values ? std::optional<column_view>(sorted_table->get_column(1).view()) : std::nullopt;
 
   // Generate columns containing unique entries (along with their list indices).
   // null_count and bitmask of these column will also be generated in this function.
@@ -707,20 +633,20 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
 
   // Generate offsets for the output lists column(s).
   auto output_offsets = generate_output_offsets(
+    keys.size(),
     unique_entries_and_list_indices.front()->size(),  // num unique entries
     unique_entries_and_list_indices.back()->view(),   // unique entries' list indices
-    lists_offsets,
     stream,
     mr);
 
   // If the values lists column is not given, its corresponding output will be nullptr.
   auto out_values =
-    has_values ? make_lists_column(keys.size(),
-                                   std::make_unique<column>(output_offsets->view()),
-                                   std::move(unique_entries_and_list_indices[1]),
-                                   values.value().null_count(),
-                                   cudf::detail::copy_bitmask(values.value().parent(), stream, mr))
-               : nullptr;
+    values ? make_lists_column(keys.size(),
+                               std::make_unique<column>(output_offsets->view()),
+                               std::move(unique_entries_and_list_indices[1]),
+                               values.value().null_count(),
+                               cudf::detail::copy_bitmask(values.value().parent(), stream, mr))
+           : nullptr;
 
   auto out_keys = make_lists_column(keys.size(),
                                     std::move(output_offsets),
