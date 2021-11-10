@@ -40,8 +40,8 @@ namespace lists {
  * to output only the unique list entries. Entries in the values column mapped to these key entries
  * are also copied or ignored along with them.
  *
- * The users are responsible to have the keys-values lists columns having the same number of entries
- * at each row. Otherwise, crash may happen, or the results will be undefined.
+ * The users are responsible for the keys-values lists columns having the same number of entries
+ * at each row. Otherwise, a crash may happen, or the results will be undefined.
  *
  * When copying unique key entries for the output, depending on the value of the @p keep_option
  * parameter:
