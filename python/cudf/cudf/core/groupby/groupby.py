@@ -13,7 +13,8 @@ from cudf._lib import groupby as libgroupby
 from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
-from cudf.core.column.column import arange
+from cudf.core.column.column import arange, as_column
+from cudf.core.index import _index_from_data
 from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
@@ -845,15 +846,32 @@ class GroupBy(Serializable):
         # create expanded dataframe consisting all combinations of the
         # struct columns-pairs to be correlated
         # i.e (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
+        # breakpoint()
         _cols = self.grouping.values.columns.tolist()
-        new_df = cudf.DataFrame._from_data(self.grouping.keys._data)
-        new_df._data.multiindex = False
+
+        if self._by:
+            new_df = cudf.DataFrame._from_data(self.grouping.keys._data)
+            new_df._data.multiindex = False
+        else:
+            new_df = cudf.DataFrame._from_data(
+                {}, index=_index_from_data(self.grouping.keys._data)
+            )
+
         for i in tuple(itertools.combinations_with_replacement(_cols, 2)):
-            new_df[i] = cudf.DataFrame(
-                {"x": self.obj[i[0]], "y": self.obj[i[1]]}
+            new_df._data[i] = cudf.DataFrame._from_data(
+                {"x": self.obj._data[i[0]], "y": self.obj._data[i[1]]}
             ).to_struct()
         new_gb = new_df.groupby(by=self._by, level=self._level)
-        gb_corr = new_gb.agg(lambda x: x.corr(method, min_periods))
+        try:
+
+            gb_corr = new_gb.agg(lambda x: x.corr(method, min_periods))
+        except RuntimeError as e:
+            if "Unsupported type-agg combination" in str(e):
+                raise TypeError(
+                    "Correlation accepts only numerical column-pairs"
+                ) from e
+            else:
+                raise
 
         # ensure that column-pair labels are arranged in ascending order
         cols_list = []
@@ -877,12 +895,16 @@ class GroupBy(Serializable):
 
         # create a multiindex for the groupby correlated dataframe,
         # to match pandas behavior
-        _idx = gb_corr._index.to_pandas().values.tolist()
-        _index = cudf.DataFrame(
-            sorted(_idx * len(_cols)), columns=gb_corr.index.names
-        )
-        _index[None] = _cols * (len(gb_corr.index))
-        res.index = _index
+        _idx = gb_corr.index.repeat(len(_cols))
+        idx_sort_order = _idx._get_sorted_inds()
+        _idx = _idx._gather(idx_sort_order)
+        # breakpoint()
+        if len(gb_corr):
+            # TO-DO: Should the operation below be done on the CPU instead?
+            _idx._data[None] = as_column(
+                cudf.Series(_cols).tile(len(gb_corr.index))
+            )
+        res.index = _index_from_data(_idx._data)
 
         return res
 
