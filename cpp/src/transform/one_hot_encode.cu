@@ -109,11 +109,11 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
   CUDF_EXPECTS(input.type() == categories.type(), "Mismatch type between input and categories.");
 
   if (categories.is_empty()) {
-    return std::make_pair(make_empty_column(data_type{type_id::BOOL8}), table_view{});
+    return std::make_pair(make_empty_column(type_id::BOOL8), table_view{});
   }
 
   if (input.is_empty()) {
-    auto empty_data = make_empty_column(data_type{type_id::BOOL8});
+    auto empty_data = make_empty_column(type_id::BOOL8);
     std::vector<column_view> views(categories.size(), empty_data->view());
     return std::make_pair(std::move(empty_data), table_view{views});
   }

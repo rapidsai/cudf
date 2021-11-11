@@ -34,7 +34,7 @@ struct OneHotEncodingTestTyped : public BaseFixture {
 struct OneHotEncodingTest : public BaseFixture {
 };
 
-TYPED_TEST_CASE(OneHotEncodingTestTyped, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(OneHotEncodingTestTyped, cudf::test::NumericTypes);
 
 TYPED_TEST(OneHotEncodingTestTyped, Basic)
 {

@@ -7,7 +7,7 @@ from pandas._libs.missing import NAType as pd_NAType
 
 import cudf
 from cudf.core.column.column import ColumnBase
-from cudf.core.dtypes import Decimal64Dtype, ListDtype, StructDtype
+from cudf.core.dtypes import ListDtype, StructDtype
 from cudf.core.index import BaseIndex
 from cudf.core.series import Series
 from cudf.utils.dtypes import (
@@ -145,12 +145,12 @@ class Scalar(object):
             else:
                 return NA, dtype
 
-        if isinstance(dtype, Decimal64Dtype):
+        if isinstance(dtype, (cudf.Decimal64Dtype, cudf.Decimal32Dtype)):
             value = pa.scalar(
                 value, type=pa.decimal128(dtype.precision, dtype.scale)
             ).as_py()
         if isinstance(value, decimal.Decimal) and dtype is None:
-            dtype = Decimal64Dtype._from_decimal(value)
+            dtype = cudf.Decimal64Dtype._from_decimal(value)
 
         value = to_cudf_compatible_scalar(value, dtype=dtype)
 
@@ -171,7 +171,7 @@ class Scalar(object):
             else:
                 dtype = value.dtype
 
-        if not isinstance(dtype, Decimal64Dtype):
+        if not isinstance(dtype, (cudf.Decimal64Dtype, cudf.Decimal32Dtype)):
             dtype = cudf.dtype(dtype)
 
         if not valid:

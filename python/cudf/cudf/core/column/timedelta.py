@@ -305,8 +305,7 @@ class TimeDeltaColumn(column.ColumnBase):
         )
 
     def _default_na_value(self) -> ScalarLike:
-        """Returns the default NA value for this column
-        """
+        """Returns the default NA value for this column"""
         return np.timedelta64("nat", self.time_unit)
 
     @property

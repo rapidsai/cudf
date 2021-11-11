@@ -298,8 +298,8 @@ std::unique_ptr<column> make_empty_tdigest_column(rmm::cuda_stream_view stream,
                0);
 
   return make_tdigest_column(1,
-                             make_empty_column(data_type(type_id::FLOAT64)),
-                             make_empty_column(data_type(type_id::FLOAT64)),
+                             make_empty_column(type_id::FLOAT64),
+                             make_empty_column(type_id::FLOAT64),
                              std::move(offsets),
                              std::move(min_col),
                              std::move(max_col),
@@ -331,7 +331,7 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
     return cudf::make_lists_column(
       input.size(),
       std::move(offsets),
-      cudf::make_empty_column(data_type{type_id::FLOAT64}),
+      cudf::make_empty_column(type_id::FLOAT64),
       input.size(),
       cudf::detail::create_null_mask(
         input.size(), mask_state::ALL_NULL, rmm::cuda_stream_view(stream), mr));

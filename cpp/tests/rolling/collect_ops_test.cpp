@@ -48,7 +48,7 @@ using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypes,
                                         cudf::test::DurationTypes,
                                         cudf::test::FixedPointTypes>;
 
-TYPED_TEST_CASE(TypedCollectListTest, TypesForTest);
+TYPED_TEST_SUITE(TypedCollectListTest, TypesForTest);
 
 TYPED_TEST(TypedCollectListTest, BasicRollingWindow)
 {
@@ -1296,7 +1296,7 @@ using TypesForSetTest = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                            cudf::test::DurationTypes,
                                            cudf::test::FixedPointTypes>;
 
-TYPED_TEST_CASE(TypedCollectSetTest, TypesForSetTest);
+TYPED_TEST_SUITE(TypedCollectSetTest, TypesForSetTest);
 
 TYPED_TEST(TypedCollectSetTest, BasicRollingWindow)
 {

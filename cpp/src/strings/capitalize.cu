@@ -243,7 +243,7 @@ std::unique_ptr<column> capitalize(strings_column_view const& input,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(delimiters.is_valid(stream), "Delimiter must be a valid string");
-  if (input.is_empty()) return make_empty_column(data_type{type_id::STRING});
+  if (input.is_empty()) return make_empty_column(type_id::STRING);
   auto const d_column     = column_device_view::create(input.parent(), stream);
   auto const d_delimiters = delimiters.value(stream);
   return capitalizer(capitalize_fn{*d_column, d_delimiters}, input, stream, mr);
@@ -254,7 +254,7 @@ std::unique_ptr<column> title(strings_column_view const& input,
                               rmm::cuda_stream_view stream,
                               rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) return make_empty_column(data_type{type_id::STRING});
+  if (input.is_empty()) return make_empty_column(type_id::STRING);
   auto d_column = column_device_view::create(input.parent(), stream);
   return capitalizer(title_fn{*d_column, sequence_type}, input, stream, mr);
 }
@@ -263,7 +263,7 @@ std::unique_ptr<column> is_title(strings_column_view const& input,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) return make_empty_column(data_type{type_id::BOOL8});
+  if (input.is_empty()) return make_empty_column(type_id::BOOL8);
   auto results  = make_numeric_column(data_type{type_id::BOOL8},
                                      input.size(),
                                      cudf::detail::copy_bitmask(input.parent(), stream, mr),

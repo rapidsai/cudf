@@ -34,14 +34,6 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         out_of_bounds_policy policy
     ) except +
 
-    cdef unique_ptr[table] reverse (
-        const table_view& source_table
-    ) except +
-
-    cdef unique_ptr[column] reverse (
-        const column_view& source_column
-    ) except +
-
     cdef unique_ptr[column] shift(
         const column_view& input,
         size_type offset,

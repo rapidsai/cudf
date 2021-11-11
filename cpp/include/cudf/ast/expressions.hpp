@@ -88,29 +88,32 @@ enum class ast_operator {
                      ///< NULL_LOGICAL_OR(null, false) is null, and NULL_LOGICAL_OR(valid, valid) ==
                      ///< LOGICAL_OR(valid, valid)
   // Unary operators
-  IDENTITY,    ///< Identity function
-  SIN,         ///< Trigonometric sine
-  COS,         ///< Trigonometric cosine
-  TAN,         ///< Trigonometric tangent
-  ARCSIN,      ///< Trigonometric sine inverse
-  ARCCOS,      ///< Trigonometric cosine inverse
-  ARCTAN,      ///< Trigonometric tangent inverse
-  SINH,        ///< Hyperbolic sine
-  COSH,        ///< Hyperbolic cosine
-  TANH,        ///< Hyperbolic tangent
-  ARCSINH,     ///< Hyperbolic sine inverse
-  ARCCOSH,     ///< Hyperbolic cosine inverse
-  ARCTANH,     ///< Hyperbolic tangent inverse
-  EXP,         ///< Exponential (base e, Euler number)
-  LOG,         ///< Natural Logarithm (base e)
-  SQRT,        ///< Square-root (x^0.5)
-  CBRT,        ///< Cube-root (x^(1.0/3))
-  CEIL,        ///< Smallest integer value not less than arg
-  FLOOR,       ///< largest integer value not greater than arg
-  ABS,         ///< Absolute value
-  RINT,        ///< Rounds the floating-point argument arg to an integer value
-  BIT_INVERT,  ///< Bitwise Not (~)
-  NOT          ///< Logical Not (!)
+  IDENTITY,        ///< Identity function
+  SIN,             ///< Trigonometric sine
+  COS,             ///< Trigonometric cosine
+  TAN,             ///< Trigonometric tangent
+  ARCSIN,          ///< Trigonometric sine inverse
+  ARCCOS,          ///< Trigonometric cosine inverse
+  ARCTAN,          ///< Trigonometric tangent inverse
+  SINH,            ///< Hyperbolic sine
+  COSH,            ///< Hyperbolic cosine
+  TANH,            ///< Hyperbolic tangent
+  ARCSINH,         ///< Hyperbolic sine inverse
+  ARCCOSH,         ///< Hyperbolic cosine inverse
+  ARCTANH,         ///< Hyperbolic tangent inverse
+  EXP,             ///< Exponential (base e, Euler number)
+  LOG,             ///< Natural Logarithm (base e)
+  SQRT,            ///< Square-root (x^0.5)
+  CBRT,            ///< Cube-root (x^(1.0/3))
+  CEIL,            ///< Smallest integer value not less than arg
+  FLOOR,           ///< largest integer value not greater than arg
+  ABS,             ///< Absolute value
+  RINT,            ///< Rounds the floating-point argument arg to an integer value
+  BIT_INVERT,      ///< Bitwise Not (~)
+  NOT,             ///< Logical Not (!)
+  CAST_TO_INT64,   ///< Cast value to int64_t
+  CAST_TO_UINT64,  ///< Cast value to uint64_t
+  CAST_TO_FLOAT64  ///< Cast value to double
 };
 
 /**

@@ -1115,7 +1115,8 @@ def _is_local_filesystem(fs):
 
 
 def ensure_single_filepath_or_buffer(path_or_data, **kwargs):
-    """Return False if `path_or_data` resolves to multiple filepaths or buffers
+    """Return False if `path_or_data` resolves to multiple filepaths or
+    buffers.
     """
     path_or_data = stringify_pathlike(path_or_data)
     if isinstance(path_or_data, str):
@@ -1140,8 +1141,7 @@ def ensure_single_filepath_or_buffer(path_or_data, **kwargs):
 
 
 def is_directory(path_or_data, **kwargs):
-    """Returns True if the provided filepath is a directory
-    """
+    """Returns True if the provided filepath is a directory"""
     path_or_data = stringify_pathlike(path_or_data)
     if isinstance(path_or_data, str):
         storage_options = kwargs.get("storage_options")

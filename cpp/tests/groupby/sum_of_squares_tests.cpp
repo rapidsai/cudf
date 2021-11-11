@@ -34,7 +34,7 @@ struct groupby_sum_of_squares_test : public cudf::test::BaseFixture {
 using supported_types = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 using K               = int32_t;
 
-TYPED_TEST_CASE(groupby_sum_of_squares_test, supported_types);
+TYPED_TEST_SUITE(groupby_sum_of_squares_test, supported_types);
 
 TYPED_TEST(groupby_sum_of_squares_test, basic)
 {
