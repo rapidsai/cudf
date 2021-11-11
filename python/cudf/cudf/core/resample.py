@@ -140,9 +140,10 @@ class _ResampleGrouping(_Grouping):
 
         # get the start and end values that will be used to generate
         # the bin labels
+        min_date, max_date = key_column._minmax()
         start, end = _get_timestamp_range_edges(
-            pd.Timestamp(key_column.min()),
-            pd.Timestamp(key_column.max()),
+            pd.Timestamp(min_date.value),
+            pd.Timestamp(max_date.value),
             offset,
             closed=closed,
         )
