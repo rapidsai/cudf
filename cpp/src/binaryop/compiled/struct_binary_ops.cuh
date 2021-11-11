@@ -52,13 +52,13 @@ void struct_compare(mutable_column_view& out,
 
 template <class BinaryOperator>
 void apply_binary_op_impl(mutable_column_view& out,
-                           column_view const& lhs,
-                           column_view const& rhs,
-                           bool is_lhs_scalar,
-                           bool is_rhs_scalar,
-                           order op_order,
-                           bool flip_output,
-                           rmm::cuda_stream_view stream)
+                          column_view const& lhs,
+                          column_view const& rhs,
+                          bool is_lhs_scalar,
+                          bool is_rhs_scalar,
+                          order op_order,
+                          bool flip_output,
+                          rmm::cuda_stream_view stream)
 {
   if (is_struct(lhs.type()) && is_struct(rhs.type())) {
     auto const nullability =
