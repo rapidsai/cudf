@@ -12,6 +12,9 @@
 # the License.
 # =============================================================================
 
+# cmake-lint: disable=R0912,R0913,R0915
+
+# This function finds arrow and sets any additional necessary environment variables.
 function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENABLE_PYTHON
          ENABLE_PARQUET
 )
