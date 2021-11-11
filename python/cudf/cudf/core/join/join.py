@@ -316,10 +316,25 @@ class Merge(object):
             else:
                 del right_names[name]
 
-        # Assemble the data columns of the result:
-        data = left_result._data.__class__(
-            multiindex=self._result_has_multiindex_columns
-        )
+        # determine if the result has multiindex columns.  The result
+        # of a join has a MultiIndex as its columns if:
+        # - both the `lhs` and `rhs` have a MultiIndex columns
+        # OR
+        # - either one of `lhs` or `rhs` have a MultiIndex columns,
+        #   and the other is empty (i.e., no columns)
+        if self.lhs._data and self.rhs._data:
+            multiindex_columns = (
+                self.lhs._data.multiindex and self.rhs._data.multiindex
+            )
+        elif self.lhs._data:
+            multiindex_columns = self.lhs._data.multiindex
+        elif self.rhs._data:
+            multiindex_columns = self.rhs._data.multiindex
+        else:
+            multiindex_columns = False
+
+        # Assemble the data columns of the result
+        data = left_result._data.__class__(multiindex=multiindex_columns)
 
         for lcol in left_names:
             data.set_by_label(
@@ -346,21 +361,6 @@ class Merge(object):
         result = self._out_class._from_data(data=data, index=index)
 
         return result
-
-    @property
-    def _result_has_multiindex_columns(self):
-        # the result of a join has a MultiIndex as its columns if:
-        # - both the `lhs` and `rhs` have a MultiIndex columns
-        # - either one of `lhs` or `rhs` have a MultiIndex columns,
-        #   and the other is empty (i.e., no columns)
-        if self.lhs._data and self.rhs._data:
-            return self.lhs._data.multiindex and self.rhs._data.multiindex
-        elif self.lhs._data:
-            return self.lhs._data.multiindex
-        elif self.rhs._data:
-            return self.rhs._data.multiindex
-        else:
-            return False
 
     def _sort_result(self, result: Frame) -> Frame:
         # Pandas sorts on the key columns in the
