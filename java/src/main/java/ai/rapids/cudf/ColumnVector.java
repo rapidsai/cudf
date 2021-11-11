@@ -452,12 +452,14 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
-   * Create a LIST column from the current column and a given offsets column. The output colum will
-   * contain lists that have elements taken from the current column and their sizes are determined
-   * by the given offsets.
+   * Create a LIST column from the current column and a given offsets column. The output column will
+   * contain lists having elements that are copied from the current column and their sizes are
+   * determined by the given offsets.
    *
-   * Note that the users are responsible to make sure the given offsets column is of type INT32 and
-   * it contains valid values to create a LIST column.
+   * Note that the caller is responsible to make sure the given offsets column is of type INT32 and
+   * it contains valid indices to create a LIST column. There will not be any validity check for
+   * these offsets during calling this function. If the given offsets are invalid, we may have bad
+   * memory accesses and/or data corruption.
    *
    * @param rows the number of rows to create.
    * @param offsets the offsets pointing to row indices of the current column to create output
