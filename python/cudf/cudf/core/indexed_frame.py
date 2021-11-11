@@ -16,6 +16,7 @@ from cudf._typing import ColumnLike
 from cudf.api.types import is_categorical_dtype, is_list_like
 from cudf.core.column import arange
 from cudf.core.frame import Frame
+from cudf.core.groupby.groupby import _get_groupby
 from cudf.core.index import Index
 from cudf.core.multiindex import MultiIndex
 from cudf.utils.utils import cached_property
@@ -569,3 +570,161 @@ class IndexedFrame(Frame):
         result.index.names = self.index.names
 
         return result
+
+    def resample(
+        self,
+        rule,
+        axis=0,
+        closed=None,
+        label=None,
+        convention="start",
+        kind=None,
+        loffset=None,
+        base=None,
+        on=None,
+        level=None,
+        origin="start_day",
+        offset=None,
+    ):
+        """
+        Convert the frequency of ("resample") the given time series data.
+
+        Parameters
+        ----------
+        rule: DateOffset or str
+            The offset string or object representing the frequency to
+            use
+        closed: {"right", "left"}, default None
+            Which side of bin interval is closed. The default is
+            "left" for all frequency offsets except for "M" and "W",
+            which have a default of "right".
+        label: {"right", "left"}, default None
+            Which bin edge label to label bucket with. The default is
+            "left" for all frequency offsets except for "M" and "W",
+            which have a default of "right".
+        on: str, optional
+            For a DataFrame, column to use instead of the index for
+            resampling.  Column must be a datetime-like.
+        level: str or int, optional
+            For a MultiIndex, level to use instead of the index for
+            resampling.  The level must be a datetime-like.
+
+        Returns
+        -------
+        A Resampler object
+
+        Examples
+        --------
+        First, we create a time series with 1 minute intervals:
+
+        >>> index = cudf.date_range(start="2001-01-01", periods=10, freq="1T")
+        >>> sr = cudf.Series(range(10), index=index)
+        >>> sr
+        2001-01-01 00:00:00    0
+        2001-01-01 00:01:00    1
+        2001-01-01 00:02:00    2
+        2001-01-01 00:03:00    3
+        2001-01-01 00:04:00    4
+        2001-01-01 00:05:00    5
+        2001-01-01 00:06:00    6
+        2001-01-01 00:07:00    7
+        2001-01-01 00:08:00    8
+        2001-01-01 00:09:00    9
+        dtype: int64
+
+        Downsampling to 3 minute intervals, followed by a "sum" aggregation:
+
+        >>> sr.resample("3T").sum()
+        2001-01-01 00:00:00     3
+        2001-01-01 00:03:00    12
+        2001-01-01 00:06:00    21
+        2001-01-01 00:09:00     9
+        dtype: int64
+
+        Use the right side of each interval to label the bins:
+
+        >>> sr.resample("3T", label="right").sum()
+        2001-01-01 00:03:00     3
+        2001-01-01 00:06:00    12
+        2001-01-01 00:09:00    21
+        2001-01-01 00:12:00     9
+        dtype: int64
+
+        Close the right side of the interval instead of the left:
+
+        >>> sr.resample("3T", closed="right").sum()
+        2000-12-31 23:57:00     0
+        2001-01-01 00:00:00     6
+        2001-01-01 00:03:00    15
+        2001-01-01 00:06:00    24
+        dtype: int64
+
+        Upsampling to 30 second intervals:
+
+        >>> sr.resample("30s").asfreq()[:5]  # show the first 5 rows
+        2001-01-01 00:00:00       0
+        2001-01-01 00:00:30    <NA>
+        2001-01-01 00:01:00       1
+        2001-01-01 00:01:30    <NA>
+        2001-01-01 00:02:00       2
+        dtype: int64
+
+        Upsample and fill nulls using the "bfill" method:
+
+        >>> sr.resample("30s").bfill()[:5]
+        2001-01-01 00:00:00    0
+        2001-01-01 00:00:30    1
+        2001-01-01 00:01:00    1
+        2001-01-01 00:01:30    2
+        2001-01-01 00:02:00    2
+        dtype: int64
+
+        Resampling by a specified column of a Dataframe:
+
+        >>> df = cudf.DataFrame({
+        ...     "price": [10, 11, 9, 13, 14, 18, 17, 19],
+        ...     "volume": [50, 60, 40, 100, 50, 100, 40, 50],
+        ...     "week_starting": cudf.date_range(
+        ...         "2018-01-01", periods=8, freq="7D"
+        ...     )
+        ... })
+        >>> df
+        price  volume week_starting
+        0     10      50    2018-01-01
+        1     11      60    2018-01-08
+        2      9      40    2018-01-15
+        3     13     100    2018-01-22
+        4     14      50    2018-01-29
+        5     18     100    2018-02-05
+        6     17      40    2018-02-12
+        7     19      50    2018-02-19
+        >>> df.resample("M", on="week_starting").mean()
+                       price     volume
+        week_starting
+        2018-01-31      11.4  60.000000
+        2018-02-28      18.0  63.333333
+        """
+        if (axis, convention, kind, loffset, base, origin, offset) != (
+            0,
+            "start",
+            None,
+            None,
+            None,
+            "start_day",
+            None,
+        ):
+            raise NotImplementedError(
+                "The following arguments are not "
+                "currently supported by resample:\n\n"
+                "- axis\n"
+                "- convention\n"
+                "- kind\n"
+                "- loffset\n"
+                "- base\n"
+                "- origin\n"
+                "- offset"
+            )
+        by = cudf.Grouper(
+            key=on, freq=rule, closed=closed, label=label, level=level
+        )
+        return _get_groupby(self, by=by)
