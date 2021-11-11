@@ -255,8 +255,8 @@ std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> superimpose_parent
  * operations.
  *
  * @param col Column to check for null structs
- * @return true If the column is or contains a struct column with null structs
- * @return false If the column is not a struct column or does not contain null structs
+ * @return A boolean indicating if the column is or contains a struct column that contains a null
+ * struct.
  */
 bool contains_null_structs(column_view const& col);
 }  // namespace detail

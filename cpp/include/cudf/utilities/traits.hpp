@@ -677,8 +677,7 @@ constexpr inline bool is_nested(data_type type)
  * @brief Indicates whether `T` is a struct type.
  *
  * @param T The type to verify
- * @return true T is a struct type
- * @return false T is not a struct type
+ * @return A boolean indicating if T is a struct type
  */
 template <typename T>
 constexpr inline bool is_struct()
@@ -698,8 +697,7 @@ struct is_struct_impl {
  * @brief Indicates whether `type` is a struct type.
  *
  * @param type The `data_type` to verify
- * @return true `type` is a struct type
- * @return false `type` is not a struct type
+ * @return A boolean indicating if `type` is a struct type
  */
 constexpr inline bool is_struct(data_type type)
 {
