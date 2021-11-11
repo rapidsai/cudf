@@ -19,9 +19,9 @@
 package ai.rapids.cudf;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
-import java.util.function.Supplier;
 
 /**
  * Base options class for input formats that can filter columns.
@@ -31,17 +31,26 @@ public abstract class ColumnFilterOptions {
   // If empty all columns are returned.
   private final String[] includeColumnNames;
 
+  private final String[] decimal128Columns;
+
   protected ColumnFilterOptions(Builder<?> builder) {
     includeColumnNames = builder.includeColumnNames.toArray(
         new String[builder.includeColumnNames.size()]);
+    decimal128Columns = builder.decimal128Columns.toArray(
+        new String[builder.decimal128Columns.size()]);
   }
 
   String[] getIncludeColumnNames() {
     return includeColumnNames;
   }
 
+  String[] getDecimal128Columns() {
+    return decimal128Columns;
+  }
+
   public static class Builder<T extends Builder> {
     final List<String> includeColumnNames = new ArrayList<>();
+    final List<String> decimal128Columns = new ArrayList<>();
 
     /**
      * Include one or more specific columns.  Any column not included will not be read.
@@ -60,6 +69,11 @@ public abstract class ColumnFilterOptions {
      */
     public T includeColumn(Collection<String> names) {
       includeColumnNames.addAll(names);
+      return (T) this;
+    }
+
+    public T decimal128Column(String... names) {
+      decimal128Columns.addAll(Arrays.asList(names));
       return (T) this;
     }
   }
