@@ -94,17 +94,16 @@ class _ResampleGrouping(_Grouping):
         label = by.label
         closed = by.closed
 
+        if isinstance(freq, (cudf.DateOffset, pd.DateOffset)):
+            raise NotImplementedError(
+                "Resampling by DateOffset objects is not yet supported."
+            )
+        if not isinstance(freq, str):
+            raise TypeError(
+                f"Unsupported type for freq: {type(freq).__name__}"
+            )
         # convert freq to a pd.DateOffset:
-        if isinstance(freq, str):
-            offset = pd.tseries.frequencies.to_offset(freq)
-        elif isinstance(freq, cudf.DateOffset):
-            offset = freq._maybe_as_fast_pandas_offset()
-        else:
-            if not isinstance(freq, pd.DateOffset):
-                raise TypeError(
-                    f"Unsupported type for freq: {type(freq).__name__}"
-                )
-            offset = freq
+        offset = pd.tseries.frequencies.to_offset(freq)
 
         if offset.freqstr == "M" or offset.freqstr.startswith("W-"):
             label = "right" if label is None else label

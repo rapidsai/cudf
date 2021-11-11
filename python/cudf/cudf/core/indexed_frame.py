@@ -591,9 +591,9 @@ class IndexedFrame(Frame):
 
         Parameters
         ----------
-        rule: DateOffset or str
-            The offset string or object representing the frequency to
-            use
+        rule: str
+            The offset string representing the frequency to use.
+            Note that DateOffset objects are not yet supported.
         closed: {"right", "left"}, default None
             Which side of bin interval is closed. The default is
             "left" for all frequency offsets except for "M" and "W",
