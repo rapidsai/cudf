@@ -458,12 +458,12 @@ public final class ColumnVector extends ColumnView {
    *
    * Note that the caller is responsible to make sure the given offsets column is of type INT32 and
    * it contains valid indices to create a LIST column. There will not be any validity check for
-   * these offsets during calling this function. If the given offsets are invalid, we may have bad
-   * memory accesses and/or data corruption.
+   * these offsets during calling to this function. If the given offsets are invalid, we may have
+   * bad memory accesses and/or data corruption.
    *
    * @param rows the number of rows to create.
-   * @param offsets the offsets pointing to row indices of the current column to create output
-   *                lists column.
+   * @param offsets the offsets pointing to row indices of the current column to create an output
+   *                LIST column.
    */
   public ColumnVector makeListFromOffsets(long rows, ColumnView offsets) {
     return new ColumnVector(makeListFromOffsets(getNativeView(), offsets.getNativeView(), rows));
