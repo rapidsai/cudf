@@ -168,10 +168,10 @@ def to_orc(
     stripe_size_bytes: integer or None, default None
         Maximum size of each stripe of the output.
         If None, 67108864 (64MB) will be used.
-    stripe_size_rows: integer or None, default None 1000000
+    stripe_size_rows: integer or None, default None
         Maximum number of rows of each stripe of the output.
         If None, 1000000 will be used.
-    row_index_stride: integer or None, default None 10000
+    row_index_stride: integer or None, default None
         Row index stride (maximum number of rows in each row group).
         If None, 10000 will be used.
     compute : bool, optional
