@@ -5202,20 +5202,22 @@ class StringColumn(column.ColumnBase):
     ) -> "cudf.core.column.NumericalColumn":
         out_dtype = cudf.dtype(dtype)
 
+        string_col = self
         if out_dtype.kind in {"i", "u"}:
-            if not libstrings.is_integer(self).all():
+            if not libstrings.is_integer(string_col).all():
                 raise ValueError(
                     "Could not convert strings to integer "
                     "type due to presence of non-integer values."
                 )
         elif out_dtype.kind == "f":
-            if not libstrings.is_float(self).all():
+            string_col = libstrings.to_upper(string_col)
+            if not libstrings.is_float(string_col).all():
                 raise ValueError(
                     "Could not convert strings to float "
                     "type due to presence of non-floating values."
                 )
 
-        result_col = _str_to_numeric_typecast_functions[out_dtype](self)
+        result_col = _str_to_numeric_typecast_functions[out_dtype](string_col)
         return result_col
 
     def _as_datetime_or_timedelta_column(self, dtype, format):
