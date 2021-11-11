@@ -259,9 +259,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeListFromOffsets(
     CUDF_EXPECTS(offsets_cv->type().id() == cudf::type_id::INT32,
                  "Input offsets does not have type INT32.");
 
-    auto result = cudf::make_lists_column(
-        static_cast<cudf::size_type>(row_count), std::make_unique<cudf::column>(*offsets_cv),
-        std::make_unique<cudf::column>(*child_cv), 0, rmm::device_buffer());
+    auto result = cudf::make_lists_column(static_cast<cudf::size_type>(row_count),
+                                          std::make_unique<cudf::column>(*offsets_cv),
+                                          std::make_unique<cudf::column>(*child_cv), 0, {});
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);

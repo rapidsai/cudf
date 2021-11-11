@@ -484,10 +484,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_dropListDuplicatesWithKey
         std::move(out_vals_content.children[cudf::lists_column_view::child_column_index]));
     auto &out_offsets = out_keys_content.children[cudf::lists_column_view::offsets_column_index];
 
-    auto out_structs = cudf::make_structs_column(out_child_size, std::move(out_structs_members), 0,
-                                                 rmm::device_buffer());
+    auto out_structs =
+        cudf::make_structs_column(out_child_size, std::move(out_structs_members), 0, {});
     auto result = cudf::make_lists_column(input_cv->size(), std::move(out_offsets),
-                                          std::move(out_structs), 0, rmm::device_buffer());
+                                          std::move(out_structs), 0, {});
 
     return reinterpret_cast<jlong>(result.release());
   }
