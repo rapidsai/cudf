@@ -7412,7 +7412,6 @@ public class TableTest extends CudfTestBase {
     try (Table table0 = getExpectedFileTable(colNames)) {
       ORCWriterOptions.Builder optBuilder = ORCWriterOptions.builder();
       WriteUtils.buildWriterOptions(optBuilder, colNames);
-      System.out.println(optBuilder.children);
       ORCWriterOptions options = optBuilder.build();
       table0.writeORC(options, tempFile.getAbsoluteFile());
       ORCOptions opts = ORCOptions.builder().includeColumn(colNames).build();
