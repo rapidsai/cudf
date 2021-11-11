@@ -111,7 +111,8 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
 
   // skip rows that are null here.
   if ((compare_nulls == null_equality::EQUAL) or (not nullable(right_keys))) {
-    // TODO: Need to enable a stream argument in cuco.
+    // TODO: Need to enable a stream argument in cuco, see
+    // https://github.com/NVIDIA/cuCollections/pull/113
     hash_table.insert(iter, iter + right_num_rows, hash_build, equality_build);
     // hash_table.insert(iter, iter + right_num_rows, hash_build, equality_build, stream.value());
   } else {
@@ -121,7 +122,8 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
     row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
     // insert valid rows
-    // TODO: Need to enable a stream argument in cuco.
+    // TODO: Need to enable a stream argument in cuco, see
+    // https://github.com/NVIDIA/cuCollections/pull/113
     hash_table.insert_if(iter, iter + right_num_rows, stencil, pred, hash_build, equality_build);
     // hash_table.insert_if(iter, iter + right_num_rows, stencil, pred, hash_build, equality_build,
     // stream.value());
@@ -131,7 +133,10 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   // and check to see if they are contained in the hash table
   auto left_rows_d = table_device_view::create(left_flattened_keys, stream);
   row_hash hash_probe{*left_rows_d};
-  // TODO: Make sure this order is correct.
+  // Note: This equality comparator violates symmetry of equality and is
+  // therefore relying on the implementation detail of the order in which its
+  // operator is invoked. If cuco makes no promises about the order of
+  // invocation this seems a bit unsafe.
   row_equality equality_probe{*right_rows_d, *left_rows_d, compare_nulls == null_equality::EQUAL};
 
   // For semi join we want contains to be true, for anti join we want contains to be false
