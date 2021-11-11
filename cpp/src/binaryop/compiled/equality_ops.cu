@@ -30,9 +30,6 @@ void dispatch_equality_op(mutable_column_view& out,
                           rmm::cuda_stream_view stream)
 {
   if (is_struct(lhs.type()) && is_struct(rhs.type())) {
-    if (!is_supported_operation(out.type(), lhs, rhs, op))
-      CUDF_FAIL("Unsupported operator for these types");
-
     auto const nullability =
       structs::detail::contains_null_structs(lhs) || structs::detail::contains_null_structs(rhs)
         ? structs::detail::column_nullability::FORCE
@@ -51,7 +48,6 @@ void dispatch_equality_op(mutable_column_view& out,
     switch (op) {
       case binary_operator::EQUAL:
       case binary_operator::NOT_EQUAL:
-
         has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)
           ? do_compare(row_equality_comparator<true>{*d_lhs, *d_rhs})
           : do_compare(row_equality_comparator<false>{*d_lhs, *d_rhs});

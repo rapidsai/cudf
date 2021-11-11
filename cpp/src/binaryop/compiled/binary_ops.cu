@@ -16,16 +16,11 @@
 
 #include <binaryop/compiled/binary_ops.hpp>
 #include <binaryop/compiled/operation.cuh>
-#include <binaryop/compiled/struct_binary_ops.cuh>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
-#include <cudf/detail/structs/utilities.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/strings/detail/utilities.cuh>
-#include <cudf/table/row_operators.cuh>
-#include <cudf/table/table_device_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -311,7 +306,7 @@ void operator_dispatcher(mutable_column_view& out,
                          binary_operator op,
                          rmm::cuda_stream_view stream)
 {
-  if (!is_supported_operation(out.type(), lhs, rhs, binary_operator::LESS_EQUAL))
+  if (!is_supported_operation(out.type(), lhs, rhs, op))
     CUDF_FAIL("Unsupported operator for these types");
   // clang-format off
 switch (op) {

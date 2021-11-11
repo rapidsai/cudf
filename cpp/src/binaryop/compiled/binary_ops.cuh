@@ -283,11 +283,10 @@ void apply_binary_op(mutable_column_view& out,
                      bool is_rhs_scalar,
                      rmm::cuda_stream_view stream)
 {
-  if (is_struct(lhs.type()) && is_struct(rhs.type())) {
-    CUDF_FAIL("Unsupported operator for these types");
-  }
-  detail::apply_unnested_binary_op<BinaryOperator>(
-    out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream);
+  is_struct(lhs.type()) && is_struct(rhs.type())
+    ? CUDF_FAIL("Unsupported operator for these types")
+    : detail::apply_unnested_binary_op<BinaryOperator>(
+        out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream);
 }
 
 }  // namespace compiled

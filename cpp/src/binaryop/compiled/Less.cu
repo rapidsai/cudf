@@ -26,10 +26,7 @@ void apply_binary_op<ops::Less>(mutable_column_view& out,
                                 bool is_rhs_scalar,
                                 rmm::cuda_stream_view stream)
 {
-  is_struct(lhs.type()) && is_struct(rhs.type())
-    ? detail::struct_lexicographic_compare(
-        out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, order::ASCENDING, false, stream)
-    : detail::apply_unnested_binary_op<ops::Less>(
-        out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream);
+  detail::apply_struct_lexicographic_binop<ops::Less>(
+    out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, order::ASCENDING, false, stream);
 }
 }  // namespace cudf::binops::compiled
