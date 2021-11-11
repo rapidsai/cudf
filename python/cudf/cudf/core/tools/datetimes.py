@@ -877,15 +877,16 @@ def date_range(
             # end == start, return exactly 1 timestamp (start)
             periods = 1
 
-    # The estimated upper bound of `end` is enforced to be computed to make
-    # sure overflow components are raised before actually computing the
-    # sequence.
+    # We compute `end_estim` (the estimated upper bound of the date
+    # range) below, but don't always use it.  We do this to ensure
+    # that the appropriate OverflowError is raised by Pandas in case
+    # of overflow.
     # FIXME: when `end_estim` is out of bound, but the actual `end` is not,
     # we shouldn't raise but compute the sequence as is. The trailing overflow
     # part should get trimmed at the end.
     end_estim = (
         pd.Timestamp(start.value)
-        + (periods - 1) * offset._maybe_as_fast_pandas_offset()
+        + periods * offset._maybe_as_fast_pandas_offset()
     ).to_datetime64()
 
     if "months" in offset.kwds or "years" in offset.kwds:
@@ -899,13 +900,12 @@ def date_range(
                 (res <= end) if _is_increment_sequence else (res <= start)
             ]
     else:
-        # If `offset` is fixed frequency, we treat both timestamps as integers
-        # and evenly divide the given integer range.
-        arr = cp.linspace(
-            start=start.value.astype("int64"),
-            stop=end_estim.astype("int64"),
-            num=periods,
-        )
+        # If `offset` is fixed frequency, we generate a range of
+        # treating `start`, `stop` and `step` as ints:
+        stop = end_estim.astype("int64")
+        start = start.value.astype("int64")
+        step = int(_offset_to_nanoseconds_lower_bound(offset))
+        arr = cp.arange(start=start, stop=stop, step=step)
         res = cudf.core.column.as_column(arr).astype("datetime64[ns]")
 
     return cudf.DatetimeIndex._from_data({name: res})

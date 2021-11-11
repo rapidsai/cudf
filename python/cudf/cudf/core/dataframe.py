@@ -4766,7 +4766,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         b     object
         dtype: object
         """
-
         out_data = {}
         out_index = self.index.to_pandas()
 

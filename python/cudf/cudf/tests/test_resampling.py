@@ -124,3 +124,30 @@ def test_dataframe_resample_level():
         pdf.resample("3T", level="y").mean(),
         gdf.resample("3T", level="y").mean(),
     )
+
+
+@pytest.mark.parametrize(
+    "in_freq, sampling_freq, out_freq",
+    [
+        ("1ns", "1us", "us"),
+        ("1us", "10us", "us"),
+        ("ms", "100us", "us"),
+        ("ms", "1s", "s"),
+        ("s", "1T", "s"),
+    ],
+)
+def test_resampling_frequency_conversion(in_freq, sampling_freq, out_freq):
+    # test that we cast to the appropriate frequency
+    # when resampling:
+    pdf = pd.DataFrame(
+        {
+            "x": np.random.randn(10),
+            "y": pd.date_range("1/1/2012", freq=in_freq, periods=10),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    expect = pdf.resample(sampling_freq, on="y").mean()
+    got = gdf.resample(sampling_freq, on="y").mean()
+    assert_resample_results_equal(expect, got)
+
+    assert got.index.dtype == np.dtype(f"datetime64[{out_freq}]")
