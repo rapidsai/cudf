@@ -159,7 +159,7 @@ template <typename T>
 struct ToArrowTestDurationsTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ToArrowTestDurationsTest, cudf::test::DurationTypes);
+TYPED_TEST_SUITE(ToArrowTestDurationsTest, cudf::test::DurationTypes);
 
 TEST_F(ToArrowTest, EmptyTable)
 {

@@ -391,7 +391,7 @@ struct QuantileTest : public BaseFixture {
 };
 
 using TestTypes = NumericTypes;
-TYPED_TEST_CASE(QuantileTest, TestTypes);
+TYPED_TEST_SUITE(QuantileTest, TestTypes);
 
 TYPED_TEST(QuantileTest, TestSingle) { test(testdata::single<TypeParam>()); }
 
@@ -426,7 +426,7 @@ struct QuantileUnsupportedTypesTest : public BaseFixture {
 
 // TODO add tests for FixedPointTypes
 using UnsupportedTestTypes = RemoveIf<ContainedIn<Concat<TestTypes, FixedPointTypes>>, AllTypes>;
-TYPED_TEST_CASE(QuantileUnsupportedTypesTest, UnsupportedTestTypes);
+TYPED_TEST_SUITE(QuantileUnsupportedTypesTest, UnsupportedTestTypes);
 
 TYPED_TEST(QuantileUnsupportedTypesTest, TestZeroElements)
 {

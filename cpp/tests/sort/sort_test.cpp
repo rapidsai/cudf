@@ -59,7 +59,7 @@ template <typename T>
 struct Sort : public BaseFixture {
 };
 
-TYPED_TEST_CASE(Sort, TestTypes);
+TYPED_TEST_SUITE(Sort, TestTypes);
 
 TYPED_TEST(Sort, WithNullMax)
 {
@@ -678,7 +678,7 @@ struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 
 template <typename T>
 using wrapper = cudf::test::fixed_width_column_wrapper<T>;
-TYPED_TEST_CASE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTestAllReps, FixedPointSortedOrderGather)
 {

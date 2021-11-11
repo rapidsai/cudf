@@ -44,7 +44,7 @@ using TestTypes = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                      cudf::test::DurationTypes,
                                      cudf::test::TimestampTypes>;
 
-TYPED_TEST_CASE(TypedStructSearchTest, TestTypes);
+TYPED_TEST_SUITE(TypedStructSearchTest, TestTypes);
 
 namespace {
 auto search_bounds(cudf::column_view const& t_col_view,

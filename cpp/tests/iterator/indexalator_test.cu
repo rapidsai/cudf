@@ -26,7 +26,7 @@ template <typename T>
 struct IndexalatorTest : public IteratorTest<T> {
 };
 
-TYPED_TEST_CASE(IndexalatorTest, TestingTypes);
+TYPED_TEST_SUITE(IndexalatorTest, TestingTypes);
 
 TYPED_TEST(IndexalatorTest, input_iterator)
 {

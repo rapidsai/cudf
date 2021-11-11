@@ -33,7 +33,7 @@ std::unique_ptr<column> group_product(column_view const& values,
                        ? dictionary_column_view(values).keys().type()
                        : values.type();
   return type_dispatcher(values_type,
-                         reduce_functor<aggregation::PRODUCT>{},
+                         group_reduction_dispatcher<aggregation::PRODUCT>{},
                          values,
                          num_groups,
                          group_labels,

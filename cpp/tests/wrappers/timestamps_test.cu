@@ -69,7 +69,7 @@ struct compare_chrono_elements_to_primitive_representation {
   }
 };
 
-TYPED_TEST_CASE(ChronoColumnTest, cudf::test::ChronoTypes);
+TYPED_TEST_SUITE(ChronoColumnTest, cudf::test::ChronoTypes);
 
 TYPED_TEST(ChronoColumnTest, ChronoDurationsMatchPrimitiveRepresentation)
 {
