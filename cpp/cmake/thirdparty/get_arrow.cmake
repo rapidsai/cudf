@@ -12,15 +12,6 @@
 # the License.
 # =============================================================================
 
-# Finding arrow is far more complex than it should be, and as a result we violate multiple linting
-# rules aiming to limit complexity. Since all our other CMake scripts conform to expectations
-# without undue difficulty, disabling those rules for just this function is our best approach for
-# now. The spacing between this comment, the cmake-lint directives, and the function docstring is
-# necessary to prevent cmake-format from trying to combine the lines.
-
-# cmake-lint: disable=R0912,R0913,R0915
-
-# This function finds arrow and sets any additional necessary environment variables.
 function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENABLE_PYTHON
          ENABLE_PARQUET
 )
@@ -90,7 +81,7 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
 
   rapids_cpm_find(
     Arrow ${VERSION}
-    GLOBAL_TARGETS arrow_shared arrow_cuda_shared
+    GLOBAL_TARGETS arrow_shared parquet_shared arrow_cuda_shared arrow_dataset_shared
     CPM_ARGS
     GIT_REPOSITORY https://github.com/apache/arrow.git
     GIT_TAG apache-arrow-${VERSION}
@@ -137,107 +128,53 @@ function(find_and_configure_arrow VERSION BUILD_STATIC ENABLE_S3 ENABLE_ORC ENAB
       list(APPEND ARROW_LIBRARIES arrow_cuda_shared)
     endif()
 
-    # Set this so Arrow correctly finds the CUDA toolkit when the build machine does not have the
-    # CUDA driver installed. This must be an env var.
-    set(ENV{CUDA_LIB_PATH} "${CUDAToolkit_LIBRARY_DIR}/stubs")
-
-    rapids_cpm_find(
-      Arrow ${VERSION}
-      GLOBAL_TARGETS arrow_shared parquet_shared arrow_cuda_shared arrow_dataset_shared
-      CPM_ARGS
-      GIT_REPOSITORY https://github.com/apache/arrow.git
-      GIT_TAG apache-arrow-${VERSION}
-      GIT_SHALLOW TRUE SOURCE_SUBDIR cpp
-      OPTIONS "CMAKE_VERBOSE_MAKEFILE ON"
-              "CUDA_USE_STATIC_CUDA_RUNTIME ${CUDA_STATIC_RUNTIME}"
-              "ARROW_IPC ON"
-              "ARROW_CUDA ON"
-              "ARROW_DATASET ON"
-              "ARROW_WITH_BACKTRACE ON"
-              "ARROW_CXXFLAGS -w"
-              "ARROW_JEMALLOC OFF"
-              "ARROW_S3 ${ENABLE_S3}"
-              "ARROW_ORC ${ENABLE_ORC}"
-              # e.g. needed by blazingsql-io
-              "ARROW_PARQUET ${ENABLE_PARQUET}"
-              ${ARROW_PYTHON_OPTIONS}
-              # Arrow modifies CMake's GLOBAL RULE_LAUNCH_COMPILE unless this is off
-              "ARROW_USE_CCACHE OFF"
-              "ARROW_ARMV8_ARCH ${ARROW_ARMV8_ARCH}"
-              "ARROW_SIMD_LEVEL ${ARROW_SIMD_LEVEL}"
-              "ARROW_BUILD_STATIC ${ARROW_BUILD_STATIC}"
-              "ARROW_BUILD_SHARED ${ARROW_BUILD_SHARED}"
-              "ARROW_DEPENDENCY_USE_SHARED ${ARROW_BUILD_SHARED}"
-              "ARROW_BOOST_USE_SHARED ${ARROW_BUILD_SHARED}"
-              "ARROW_BROTLI_USE_SHARED ${ARROW_BUILD_SHARED}"
-              "ARROW_GFLAGS_USE_SHARED ${ARROW_BUILD_SHARED}"
-              "ARROW_GRPC_USE_SHARED ${ARROW_BUILD_SHARED}"
-              "ARROW_PROTOBUF_USE_SHARED ${ARROW_BUILD_SHARED}"
-              "ARROW_ZSTD_USE_SHARED ${ARROW_BUILD_SHARED}"
-    )
-
-    set(ARROW_FOUND TRUE)
-    set(ARROW_LIBRARIES "")
-
-    # Arrow_ADDED: set if CPM downloaded Arrow from Github Arrow_DIR:   set if CPM found Arrow on
-    # the system/conda/etc.
-    if(Arrow_ADDED OR Arrow_DIR)
-      if(BUILD_STATIC)
-        list(APPEND ARROW_LIBRARIES arrow_static)
-        list(APPEND ARROW_LIBRARIES arrow_cuda_static)
-      else()
-        list(APPEND ARROW_LIBRARIES arrow_shared)
-        list(APPEND ARROW_LIBRARIES arrow_cuda_shared)
-      endif()
-
-      if(Arrow_DIR)
-        # Set this to enable `find_package(ArrowCUDA)`
-        set(ArrowCUDA_DIR "${Arrow_DIR}")
-        find_package(Arrow REQUIRED QUIET)
-        find_package(ArrowCUDA REQUIRED QUIET)
-        if(ENABLE_PARQUET)
-          if(NOT Parquet_DIR)
-            # Set this to enable `find_package(Parquet)`
-            set(Parquet_DIR "${Arrow_DIR}")
-          endif()
-          # Set this to enable `find_package(ArrowDataset)`
-          set(ArrowDataset_DIR "${Arrow_DIR}")
-          find_package(ArrowDataset REQUIRED QUIET)
+    if(Arrow_DIR)
+      # Set this to enable `find_package(ArrowCUDA)`
+      set(ArrowCUDA_DIR "${Arrow_DIR}")
+      find_package(Arrow REQUIRED QUIET)
+      find_package(ArrowCUDA REQUIRED QUIET)
+      if(ENABLE_PARQUET)
+        if(NOT Parquet_DIR)
+          # Set this to enable `find_package(Parquet)`
+          set(Parquet_DIR "${Arrow_DIR}")
         endif()
-      elseif(Arrow_ADDED)
-        # Copy these files so we can avoid adding paths in Arrow_BINARY_DIR to
-        # target_include_directories. That defeats ccache.
-        file(INSTALL "${Arrow_BINARY_DIR}/src/arrow/util/config.h"
-             DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/arrow/util"
-        )
-        file(INSTALL "${Arrow_BINARY_DIR}/src/arrow/gpu/cuda_version.h"
-             DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/arrow/gpu"
-        )
-        if(ENABLE_PARQUET)
-          file(INSTALL "${Arrow_BINARY_DIR}/src/parquet/parquet_version.h"
-               DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/parquet"
-          )
-        endif()
-        #
-        # This shouldn't be necessary!
-        #
-        # Arrow populates INTERFACE_INCLUDE_DIRECTORIES for the `arrow_static` and `arrow_shared`
-        # targets in FindArrow and FindArrowCUDA respectively, so for static source-builds, we have
-        # to do it after-the-fact.
-        #
-        # This only works because we know exactly which components we're using. Don't forget to
-        # update this list if we add more!
-        #
-        foreach(ARROW_LIBRARY ${ARROW_LIBRARIES})
-          target_include_directories(
-            ${ARROW_LIBRARY}
-            INTERFACE "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/src>"
-                      "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/src/generated>"
-                      "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/thirdparty/hadoop/include>"
-                      "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/thirdparty/flatbuffers/include>"
-          )
-        endforeach()
+        # Set this to enable `find_package(ArrowDataset)`
+        set(ArrowDataset_DIR "${Arrow_DIR}")
+        find_package(ArrowDataset REQUIRED QUIET)
       endif()
+    elseif(Arrow_ADDED)
+      # Copy these files so we can avoid adding paths in Arrow_BINARY_DIR to
+      # target_include_directories. That defeats ccache.
+      file(INSTALL "${Arrow_BINARY_DIR}/src/arrow/util/config.h"
+           DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/arrow/util"
+      )
+      file(INSTALL "${Arrow_BINARY_DIR}/src/arrow/gpu/cuda_version.h"
+           DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/arrow/gpu"
+      )
+      if(ENABLE_PARQUET)
+        file(INSTALL "${Arrow_BINARY_DIR}/src/parquet/parquet_version.h"
+             DESTINATION "${Arrow_SOURCE_DIR}/cpp/src/parquet"
+        )
+      endif()
+      #
+      # This shouldn't be necessary!
+      #
+      # Arrow populates INTERFACE_INCLUDE_DIRECTORIES for the `arrow_static` and `arrow_shared`
+      # targets in FindArrow and FindArrowCUDA respectively, so for static source-builds, we have to
+      # do it after-the-fact.
+      #
+      # This only works because we know exactly which components we're using. Don't forget to update
+      # this list if we add more!
+      #
+      foreach(ARROW_LIBRARY ${ARROW_LIBRARIES})
+        target_include_directories(
+          ${ARROW_LIBRARY}
+          INTERFACE "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/src>"
+                    "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/src/generated>"
+                    "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/thirdparty/hadoop/include>"
+                    "$<BUILD_INTERFACE:${Arrow_SOURCE_DIR}/cpp/thirdparty/flatbuffers/include>"
+        )
+      endforeach()
     endif()
   else()
     set(ARROW_FOUND FALSE)
