@@ -204,7 +204,7 @@ struct ClampTestNumeric : public cudf::test::BaseFixture {
 };
 using Types = cudf::test::FixedWidthTypesWithoutFixedPoint;
 
-TYPED_TEST_CASE(ClampTestNumeric, Types);
+TYPED_TEST_SUITE(ClampTestNumeric, Types);
 
 TYPED_TEST(ClampTestNumeric, WithNoNull)
 {
@@ -292,7 +292,7 @@ template <typename T>
 struct ClampFloatTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ClampFloatTest, cudf::test::FloatingPointTypes);
+TYPED_TEST_SUITE(ClampFloatTest, cudf::test::FloatingPointTypes);
 
 TYPED_TEST(ClampFloatTest, WithNANandNoNull)
 {
@@ -591,7 +591,7 @@ template <typename T>
 struct FixedPointTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTest, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTest, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTest, ZeroScale)
 {

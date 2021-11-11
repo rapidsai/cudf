@@ -36,7 +36,7 @@ template <typename T>
 class MergeTest_ : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(MergeTest_, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(MergeTest_, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(MergeTest_, MergeIsZeroWhenShouldNotBeZero)
 {
@@ -880,7 +880,7 @@ struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 template <typename T>
 using fp_wrapper = cudf::test::fixed_point_column_wrapper<T>;
 
-TYPED_TEST_CASE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTestAllReps, FixedPointMerge)
 {

@@ -45,7 +45,7 @@ class RepeatTypedTestFixture : public cudf::test::BaseFixture,
   cudf::size_type repeat_count() { return this->generate(); }
 };
 
-TYPED_TEST_CASE(RepeatTypedTestFixture, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(RepeatTypedTestFixture, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
 {

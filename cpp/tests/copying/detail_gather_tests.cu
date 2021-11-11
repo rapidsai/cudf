@@ -36,7 +36,7 @@ template <typename T>
 class GatherTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(GatherTest, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(GatherTest, cudf::test::NumericTypes);
 
 // This test exercises using different iterator types as gather map inputs
 // to cudf::detail::gather -- device_uvector and raw pointers.
