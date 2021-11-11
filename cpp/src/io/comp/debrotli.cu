@@ -193,7 +193,7 @@ struct debrotli_state_s {
   uint16_t* block_type_vlc[3];
   huff_scratch_s hs;
   uint32_t mtf[65];
-  char heap[local_heap_size];
+  __align__(8) char heap[local_heap_size];
 };
 
 inline __device__ uint32_t Log2Floor(uint32_t value) { return 32 - __clz(value); }
