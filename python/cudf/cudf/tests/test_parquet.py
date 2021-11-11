@@ -172,7 +172,9 @@ def gdf_day_timestamps(pdf_day_timestamps):
 
 @pytest.fixture(params=["snappy", "gzip", "brotli", None, np.str_("snappy")])
 def parquet_file(request, tmp_path_factory, pdf):
-    fname = tmp_path_factory.mktemp("parquet") / "test.parquet"
+    fname = tmp_path_factory.mktemp("parquet") / (
+        str(request.param) + "_test.parquet"
+    )
     pdf.to_parquet(fname, engine="pyarrow", compression=request.param)
     return fname
 
@@ -2129,3 +2131,12 @@ def test_parquet_decimal_precision_empty(tmpdir):
     df.to_parquet(fname)
     df = cudf.read_parquet(fname)
     assert df.val.dtype.precision == 5
+
+
+def test_parquet_reader_brotli(datadir):
+    fname = datadir / "brotli_int16.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname).to_pandas(nullable=True)
+
+    assert_eq(expect, got)

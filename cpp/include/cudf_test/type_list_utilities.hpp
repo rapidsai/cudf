@@ -32,7 +32,7 @@
  * template <class T>
  * class TestFixture : ::testing::Test { };
  *
- * TYPED_TEST_CASE(TestFixture, TestTypes);
+ * TYPED_TEST_SUITE(TestFixture, TestTypes);
  *
  * TYPED_TEST(TestFixture, mytest){
  *   using Type0 = GetType<TypeParam,0>; // the first type element

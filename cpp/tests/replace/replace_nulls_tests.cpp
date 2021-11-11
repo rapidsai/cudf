@@ -248,7 +248,7 @@ struct ReplaceNullsTest : public cudf::test::BaseFixture {
 
 using test_types = cudf::test::NumericTypes;
 
-TYPED_TEST_CASE(ReplaceNullsTest, test_types);
+TYPED_TEST_SUITE(ReplaceNullsTest, test_types);
 
 template <typename T>
 void ReplaceNullsColumn(cudf::test::fixed_width_column_wrapper<T> input,
@@ -378,7 +378,7 @@ template <typename T>
 struct ReplaceNullsPolicyTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ReplaceNullsPolicyTest, test_types);
+TYPED_TEST_SUITE(ReplaceNullsPolicyTest, test_types);
 
 template <typename T>
 void TestReplaceNullsWithPolicy(cudf::test::fixed_width_column_wrapper<T> input,
@@ -491,7 +491,7 @@ template <typename T>
 struct ReplaceNullsFixedPointTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ReplaceNullsFixedPointTest, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(ReplaceNullsFixedPointTest, cudf::test::FixedPointTypes);
 
 TYPED_TEST(ReplaceNullsFixedPointTest, ReplaceColumn)
 {
@@ -578,7 +578,7 @@ template <typename T>
 struct ReplaceNullsPolicyFixedPointTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ReplaceNullsPolicyFixedPointTest, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(ReplaceNullsPolicyFixedPointTest, cudf::test::FixedPointTypes);
 
 TYPED_TEST(ReplaceNullsPolicyFixedPointTest, PrecedingFill)
 {

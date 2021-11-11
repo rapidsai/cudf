@@ -34,7 +34,7 @@ std::unique_ptr<column> group_argmax(column_view const& values,
                                      rmm::mr::device_memory_resource* mr)
 {
   auto indices = type_dispatcher(values.type(),
-                                 reduce_functor<aggregation::ARGMAX>{},
+                                 group_reduction_dispatcher<aggregation::ARGMAX>{},
                                  values,
                                  num_groups,
                                  group_labels,

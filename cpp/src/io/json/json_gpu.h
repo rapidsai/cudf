@@ -16,8 +16,8 @@
 
 #pragma once
 
+#include <io/utilities/column_type_histogram.hpp>
 #include <io/utilities/parsing_utils.cuh>
-#include "json_common.h"
 
 #include <hash/concurrent_unordered_map.cuh>
 
