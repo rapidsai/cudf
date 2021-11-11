@@ -1,5 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
-
+from libc.stdint cimport int32_t
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -11,6 +11,7 @@ from cudf._lib.cpp.types cimport (
     size_type,
 )
 
+ctypedef int32_t underlying_type_t_correlation_type
 
 cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
 
@@ -115,4 +116,4 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         data_type output_type) except +
 
     cdef unique_ptr[T] make_correlation_aggregation[T](
-        correlation_type type) except +
+        correlation_type type, size_type min_periods) except +

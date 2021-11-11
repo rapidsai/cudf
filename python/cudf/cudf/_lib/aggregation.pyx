@@ -1,6 +1,6 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
-from enum import Enum
+from enum import Enum, IntEnum
 
 import numba
 import numpy as np
@@ -30,6 +30,7 @@ from cudf._lib.types import Interpolation
 
 cimport cudf._lib.cpp.aggregation as libcudf_aggregation
 cimport cudf._lib.cpp.types as libcudf_types
+from cudf._lib.cpp.aggregation cimport underlying_type_t_correlation_type
 
 import cudf
 
@@ -58,6 +59,21 @@ class AggregationKind(Enum):
     PTX = libcudf_aggregation.aggregation.Kind.PTX
     CUDA = libcudf_aggregation.aggregation.Kind.CUDA
     CORRELATION = libcudf_aggregation.aggregation.Kind.CORRELATION
+
+
+class CorrelationType(IntEnum):
+    PEARSON = (
+        <underlying_type_t_correlation_type>
+        libcudf_aggregation.correlation_type.PEARSON
+    )
+    KENDALL = (
+        <underlying_type_t_correlation_type>
+        libcudf_aggregation.correlation_type.KENDALL
+    )
+    SPEARMAN = (
+        <underlying_type_t_correlation_type>
+        libcudf_aggregation.correlation_type.SPEARMAN
+    )
 
 
 cdef class Aggregation:
@@ -323,11 +339,18 @@ cdef class Aggregation:
         return agg
 
     @classmethod
-    def corr(cls):
+    def corr(cls, method, libcudf_types.size_type min_periods):
         cdef Aggregation agg = cls()
+        cdef libcudf_aggregation.correlation_type c_method = (
+            <libcudf_aggregation.correlation_type> (
+                <underlying_type_t_correlation_type> (
+                    CorrelationType[method.upper()]
+                )
+            )
+        )
         agg.c_obj = move(
             libcudf_aggregation.make_correlation_aggregation[aggregation](
-                libcudf_aggregation.correlation_type.PEARSON
+                c_method, min_periods
             ))
         return agg
 
@@ -703,15 +726,22 @@ cdef class GroupbyAggregation:
         return agg
 
     @classmethod
-    def corr(cls):
+    def corr(cls, method, libcudf_types.size_type min_periods):
         cdef GroupbyAggregation agg = cls()
+        cdef libcudf_aggregation.correlation_type c_method = (
+            <libcudf_aggregation.correlation_type> (
+                <underlying_type_t_correlation_type> (
+                    CorrelationType[method.upper()]
+                )
+            )
+        )
         agg.c_obj = move(
             libcudf_aggregation.
             make_correlation_aggregation[groupby_aggregation](
-                libcudf_aggregation.correlation_type.PEARSON
+                c_method, min_periods
             ))
-
         return agg
+
 
 cdef class GroupbyScanAggregation:
     """A Cython wrapper for groupby scan aggregations.
