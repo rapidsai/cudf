@@ -155,26 +155,32 @@ class _ResampleGrouping(_Grouping):
         # generate the labels for binning the key column:
         bin_labels = cudf.date_range(start=start, end=end, freq=freq,)
 
-        # TODO:
-        # libcudf requires the bin labels and key column to have the
-        # same dtype. Due to a limitation in `date_range`,
-        # `bin_labels` currently always has ns precision.  So we cast
-        # `key_column` to `ns` here.  Later in this function, we
-        # perform a `gather` on `key_column` to determine the final
-        # grouping keys. We cast _that_ to a `result_type` determined by
-        # the sampling frequency. Ideally, we want to:
-        #
-        # 1. Provide a `dtype` argument to `date_range` so that
-        #    `bin_labels` is of `result_type`.
-        # 2. Cast `key_columns` up-front to the `result_type` so that
-        #    a second cast isnot necessary later
-        #
-        # I ran into some issues when trying to cast both `key_column`
-        # and `bin_labels` to the `result_type` before binning, having
-        # to do with the edge values losing precision and the `closed`
-        # parameter. This will need to be investigated when we revisit
-        # this code.
-        key_column = key_column.astype(bin_labels.dtype)
+        # We want the (resampled) column of timestamps in the result
+        # to have a resolution closest to the resampling
+        # frequency. For example, if resampling from '1T' to '1s', we
+        # want the resulting timestamp column to by of dtype
+        # 'datetime64[s]'.  libcudf requires the bin labels and key
+        # column to have the same dtype, so we compute a `result_type`
+        # and cast them both to that type.
+        try:
+            from cudf.core.tools.datetimes import (
+                _offset_alias_to_code,
+                _unit_dtype_map,
+            )
+
+            result_type = np.dtype(
+                _unit_dtype_map[_offset_alias_to_code[offset.name]]
+            )
+        except KeyError:
+            # unsupported resolution (we don't support resolutions >s)
+            # fall back to using datetime64[s]
+            result_type = np.dtype("datetime64[s]")
+
+        # TODO: Ideally, we can avoid one cast by having `date_range`
+        # generate timestamps of a given dtype.  Currently, it can
+        # only generate timestamps with 'ns' precision
+        key_column = key_column.astype(result_type)
+        bin_labels = bin_labels.astype(result_type)
 
         # bin the key column:
         bin_numbers = cudf._lib.labeling.label_bins(
@@ -197,22 +203,6 @@ class _ResampleGrouping(_Grouping):
 
         bin_labels.name = self.names[0]
         self.bin_labels = bin_labels
-
-        # cast the key column to a type with precision closest to the
-        # sampling frequency
-        try:
-            from cudf.core.tools.datetimes import (
-                _offset_alias_to_code,
-                _unit_dtype_map,
-            )
-
-            result_type = np.dtype(
-                _unit_dtype_map[_offset_alias_to_code[offset.name]]
-            )
-        except KeyError:
-            # unsupported resolution (we don't support resolutions >s)
-            # fall back to using datetime64[s]
-            result_type = np.dtype("datetime64[s]")
 
         # replace self._key_columns with the binned key column:
         self._key_columns = [

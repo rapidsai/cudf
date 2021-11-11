@@ -134,6 +134,9 @@ def test_dataframe_resample_level():
         ("ms", "100us", "us"),
         ("ms", "1s", "s"),
         ("s", "1T", "s"),
+        ("1T", "30s", "s"),
+        ("1D", "10D", "s"),
+        ("10D", "1D", "s"),
     ],
 )
 def test_resampling_frequency_conversion(in_freq, sampling_freq, out_freq):
@@ -141,8 +144,8 @@ def test_resampling_frequency_conversion(in_freq, sampling_freq, out_freq):
     # when resampling:
     pdf = pd.DataFrame(
         {
-            "x": np.random.randn(10),
-            "y": pd.date_range("1/1/2012", freq=in_freq, periods=10),
+            "x": np.random.randn(100),
+            "y": pd.date_range("1/1/2012", freq=in_freq, periods=100),
         }
     )
     gdf = cudf.from_pandas(pdf)
