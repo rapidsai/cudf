@@ -92,6 +92,9 @@ def test_read_orc_first_file_empty(tmpdir):
 
 
 @pytest.mark.parametrize("compute", [True, False])
+@pytest.mark.parametrize("row_index_stride", [None, 1_000])
+@pytest.mark.parametrize("stripe_size_rows", [None, 2_000])
+@pytest.mark.parametrize("stripe_size_bytes", [None, 65_536])
 @pytest.mark.parametrize("compression", [None, "snappy"])
 @pytest.mark.parametrize(
     "dtypes",
@@ -101,10 +104,18 @@ def test_read_orc_first_file_empty(tmpdir):
         {"index": int, "c": str, "a": object},
     ],
 )
-def test_to_orc(tmpdir, dtypes, compression, compute):
+def test_to_orc(
+    tmpdir,
+    dtypes,
+    compression,
+    stripe_size_bytes,
+    stripe_size_rows,
+    row_index_stride,
+    compute,
+):
 
     # Create cudf and dask_cudf dataframes
-    df = cudf.datasets.randomdata(nrows=10, dtypes=dtypes, seed=1)
+    df = cudf.datasets.randomdata(nrows=30_000, dtypes=dtypes, seed=1)
     df = df.set_index("index").sort_index()
     ddf = dask_cudf.from_cudf(df, npartitions=3)
 
@@ -116,7 +127,13 @@ def test_to_orc(tmpdir, dtypes, compression, compute):
     # Write dask_cudf dataframe as multiple files
     # (preserve index by `write_index=True`)
     to = ddf.to_orc(
-        str(tmpdir), write_index=True, compression=compression, compute=compute
+        str(tmpdir),
+        write_index=True,
+        compression=compression,
+        stripe_size_bytes=stripe_size_bytes,
+        stripe_size_rows=stripe_size_rows,
+        row_index_stride=row_index_stride,
+        compute=compute,
     )
 
     if not compute:
