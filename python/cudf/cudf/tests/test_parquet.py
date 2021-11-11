@@ -351,7 +351,10 @@ def test_parquet_reader_index_col(tmpdir, index_col, columns):
 @pytest.mark.parametrize(
     "columns", [["a"], ["d"], ["a", "b"], ["a", "d"], None]
 )
-def test_parquet_reader_pandas_metadata(tmpdir, columns, pandas_compat):
+@pytest.mark.parametrize("as_bytes", [True, False])
+def test_parquet_reader_pandas_metadata(
+    tmpdir, columns, pandas_compat, as_bytes
+):
     df = pd.DataFrame(
         {
             "a": range(6, 9),
@@ -371,9 +374,11 @@ def test_parquet_reader_pandas_metadata(tmpdir, columns, pandas_compat):
     expect = pa.parquet.read_table(
         fname, columns=columns, use_pandas_metadata=pandas_compat
     ).to_pandas()
-    got = cudf.read_parquet(
-        fname, columns=columns, use_pandas_metadata=pandas_compat
-    )
+    with open(fname) as f:
+        buffer = f.read()
+        got = cudf.read_parquet(
+            buffer, columns=columns, use_pandas_metadata=pandas_compat
+        )
 
     if pandas_compat or columns is None or "b" in columns:
         assert got.index.name == "b"
