@@ -102,7 +102,7 @@ class _ResampleGrouping(_Grouping):
         else:
             if not isinstance(freq, pd.DateOffset):
                 raise TypeError(
-                    "Unsupported type for freq: {type(freq).__name__}"
+                    f"Unsupported type for freq: {type(freq).__name__}"
                 )
             offset = freq
 

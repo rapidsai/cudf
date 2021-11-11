@@ -11,7 +11,6 @@ from hashlib import sha256
 from numbers import Number
 from shutil import get_terminal_size
 from typing import Any, MutableMapping, Optional, Set, Union
-from uuid import uuid4
 
 import cupy
 import numpy as np
@@ -3605,39 +3604,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             out.name = index
 
         return out.copy(deep=copy)
-
-    def _align_to_index(
-        self, index, how="outer", sort=True, allow_non_unique=False
-    ):
-        """
-        Align to the given Index. See _align_indices below.
-        """
-
-        index = as_index(index)
-        if self.index.equals(index):
-            return self
-        if not allow_non_unique:
-            if len(self) != len(self.index.unique()) or len(index) != len(
-                index.unique()
-            ):
-                raise ValueError("Cannot align indices with non-unique values")
-        lhs = self.to_frame(0)
-        rhs = cudf.DataFrame(index=as_index(index))
-        if how == "left":
-            tmp_col_id = str(uuid4())
-            lhs[tmp_col_id] = column.arange(len(lhs))
-        elif how == "right":
-            tmp_col_id = str(uuid4())
-            rhs[tmp_col_id] = column.arange(len(rhs))
-        result = lhs.join(rhs, how=how, sort=sort)
-        if how == "left" or how == "right":
-            result = result.sort_values(tmp_col_id)[0]
-        else:
-            result = result[0]
-
-        result.name = self.name
-        result.index.names = index.names
-        return result
 
     def merge(
         self,

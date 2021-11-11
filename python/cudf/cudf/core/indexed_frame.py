@@ -5,13 +5,16 @@ from __future__ import annotations
 
 import warnings
 from typing import Type, TypeVar
+from uuid import uuid4
 
 import cupy as cp
 import pandas as pd
 from nvtx import annotate
 
 import cudf
+from cudf._typing import ColumnLike
 from cudf.api.types import is_categorical_dtype, is_list_like
+from cudf.core.column import arange
 from cudf.core.frame import Frame
 from cudf.core.index import Index
 from cudf.core.multiindex import MultiIndex
@@ -38,8 +41,8 @@ def _indices_from_labels(obj, labels):
     # join is not guaranteed to maintain the index ordering
     # so we will sort it with its initial ordering which is stored
     # in column "__"
-    lhs = cudf.DataFrame({"__": column.arange(len(labels))}, index=labels)
-    rhs = cudf.DataFrame({"_": column.arange(len(obj))}, index=obj.index)
+    lhs = cudf.DataFrame({"__": arange(len(labels))}, index=labels)
+    rhs = cudf.DataFrame({"_": arange(len(obj))}, index=obj.index)
     return lhs.join(rhs).sort_values("__")["_"]
 
 
@@ -76,6 +79,8 @@ class _FrameIndexer:
 
 _LocIndexerClass = TypeVar("_LocIndexerClass", bound="_FrameIndexer")
 _IlocIndexerClass = TypeVar("_IlocIndexerClass", bound="_FrameIndexer")
+
+T = TypeVar("T", bound="IndexedFrame")
 
 
 class IndexedFrame(Frame):
@@ -526,3 +531,41 @@ class IndexedFrame(Frame):
             return self.take(indices, keep_index=True)
         else:
             raise ValueError('keep must be either "first", "last"')
+
+    def _align_to_index(
+        self: T,
+        index: ColumnLike,
+        how: str = "outer",
+        sort: bool = True,
+        allow_non_unique: bool = False,
+    ) -> T:
+        index = cudf.core.index.as_index(index)
+
+        if self.index.equals(index):
+            return self
+        if not allow_non_unique:
+            if len(self) != len(self.index.unique()) or len(index) != len(
+                index.unique()
+            ):
+                raise ValueError("Cannot align indices with non-unique values")
+
+        lhs = cudf.DataFrame._from_data(self._data, index=self.index)
+        rhs = cudf.DataFrame(index=index)
+
+        tmp_col_id = str(uuid4())
+        if how == "left":
+            lhs[tmp_col_id] = arange(len(lhs))
+        elif how == "right":
+            rhs[tmp_col_id] = arange(len(rhs))
+
+        result = lhs.join(rhs, how=how, sort=sort)
+        if how == "left" or how == "right":
+            result = result.sort_values(tmp_col_id)
+            del result[tmp_col_id]
+
+        result = self.__class__._from_data(result._data, index=result.index)
+        result._data.multiindex = self._data.multiindex
+        result._data._level_names = self._data._level_names
+        result.index.names = self.index.names
+
+        return result

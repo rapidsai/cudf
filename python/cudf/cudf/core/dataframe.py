@@ -12,7 +12,6 @@ import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from typing import Any, MutableMapping, Optional, Set, TypeVar
-from uuid import uuid4
 
 import cupy
 import numpy as np
@@ -821,34 +820,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if columns is not None:
             out.columns = columns
         return out
-
-    def _align_to_index(
-        self, index, how="outer", sort=True, allow_non_unique=False
-    ):
-        # TODO: support other kwargs
-        index = as_index(index)
-        if self.index.equals(index):
-            return self
-
-        lhs = self.copy(deep=False)
-        rhs = cudf.DataFrame(index=as_index(index))
-
-        rng_col_id = str(uuid4())
-        if how == "left":
-            lhs[rng_col_id] = column.arange(len(lhs))
-        else:
-            rhs[rng_col_id] = column.arange(len(rhs))
-
-        result = lhs.join(rhs, how=how, sort=sort)
-
-        if how == "left" or how == "right":
-            result = result.sort_values(rng_col_id)
-
-        del result[rng_col_id]
-
-        result._data.multiindex = self._data.multiindex
-        result._data._level_names = self._data._level_names
-        return result
 
     @staticmethod
     def _align_input_series_indices(data, index):
