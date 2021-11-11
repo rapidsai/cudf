@@ -60,7 +60,7 @@ using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBo
                                                   cudf::test::DurationTypes,
                                                   cudf::test::TimestampTypes>;
 
-TYPED_TEST_CASE(TypedStructColumnWrapperTest, FixedWidthTypesNotBool);
+TYPED_TEST_SUITE(TypedStructColumnWrapperTest, FixedWidthTypesNotBool);
 
 // Test simple struct construction without nullmask, through column factory.
 // Columns must retain their originally set values.

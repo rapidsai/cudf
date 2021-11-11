@@ -2067,6 +2067,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         for k in self:
             yield (k, self[k])
 
+    def equals(self, other, **kwargs):
+        ret = super().equals(other)
+        # If all other checks matched, validate names.
+        if ret:
+            for self_name, other_name in zip(
+                self._data.names, other._data.names
+            ):
+                if self_name != other_name:
+                    ret = False
+                    break
+        return ret
+
     @property
     def iat(self):
         """

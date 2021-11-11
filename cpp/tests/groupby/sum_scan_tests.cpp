@@ -42,7 +42,7 @@ using supported_types =
   cudf::test::Concat<cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>,
                      cudf::test::DurationTypes>;
 
-TYPED_TEST_CASE(groupby_sum_scan_test, supported_types);
+TYPED_TEST_SUITE(groupby_sum_scan_test, supported_types);
 
 TYPED_TEST(groupby_sum_scan_test, basic)
 {
@@ -136,7 +136,7 @@ template <typename T>
 struct FixedPointTestBothReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTestBothReps, GroupBySortSumScanDecimalAsValue)
 {

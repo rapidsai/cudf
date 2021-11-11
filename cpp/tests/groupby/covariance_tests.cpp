@@ -40,7 +40,7 @@ struct groupby_covariance_test : public cudf::test::BaseFixture {
 
 using supported_types = RemoveIf<ContainedIn<Types<bool>>, cudf::test::NumericTypes>;
 
-TYPED_TEST_CASE(groupby_covariance_test, supported_types);
+TYPED_TEST_SUITE(groupby_covariance_test, supported_types);
 using K = int32_t;
 
 TYPED_TEST(groupby_covariance_test, basic)

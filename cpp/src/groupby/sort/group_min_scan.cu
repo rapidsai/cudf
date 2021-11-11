@@ -27,8 +27,13 @@ std::unique_ptr<column> min_scan(column_view const& values,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  return type_dispatcher(
-    values.type(), scan_functor<aggregation::MIN>{}, values, num_groups, group_labels, stream, mr);
+  return type_dispatcher(values.type(),
+                         group_scan_dispatcher<aggregation::MIN>{},
+                         values,
+                         num_groups,
+                         group_labels,
+                         stream,
+                         mr);
 }
 
 }  // namespace detail

@@ -40,7 +40,7 @@ struct NonTimestampTest : public cudf::test::BaseFixture {
 using NonTimestampTypes =
   cudf::test::Concat<cudf::test::NumericTypes, cudf::test::StringTypes, cudf::test::DurationTypes>;
 
-TYPED_TEST_CASE(NonTimestampTest, NonTimestampTypes);
+TYPED_TEST_SUITE(NonTimestampTest, NonTimestampTypes);
 
 TYPED_TEST(NonTimestampTest, TestThrowsOnNonTimestamp)
 {
@@ -152,7 +152,7 @@ struct TypedDatetimeOpsTest : public cudf::test::BaseFixture {
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
-TYPED_TEST_CASE(TypedDatetimeOpsTest, cudf::test::TimestampTypes);
+TYPED_TEST_SUITE(TypedDatetimeOpsTest, cudf::test::TimestampTypes);
 
 TYPED_TEST(TypedDatetimeOpsTest, TestEmptyColumns)
 {
@@ -534,7 +534,7 @@ template <typename T>
 struct TypedAddMonthsTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(TypedAddMonthsTest, ValidMonthIntegerType);
+TYPED_TEST_SUITE(TypedAddMonthsTest, ValidMonthIntegerType);
 
 TYPED_TEST(TypedAddMonthsTest, TestAddMonthsWithSeconds)
 {
