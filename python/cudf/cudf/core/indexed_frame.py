@@ -703,6 +703,15 @@ class IndexedFrame(Frame):
         week_starting
         2018-01-31      11.4  60.000000
         2018-02-28      18.0  63.333333
+
+
+        Notes
+        -----
+        Note that the dtype of the index (or the 'on' column if using
+        'on=') in the result will be of a frequency closest to the
+        resampled frequency.  For example, if resampling from
+        nanoseconds to milliseconds, the index will be of dtype
+        'datetime64[ms]'.
         """
         if (axis, convention, kind, loffset, base, origin, offset) != (
             0,
