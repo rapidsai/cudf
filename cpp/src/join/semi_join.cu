@@ -105,8 +105,6 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   auto right_rows_d = table_device_view::create(right_flattened_keys, stream);
   row_hash const hash_build{*right_rows_d};
   row_equality equality_build{*right_rows_d, *right_rows_d, compare_nulls == null_equality::EQUAL};
-  Hash hash{};  // Need to create a hash because we need a custom equality comparator and the APIs
-                // are ordered (..., Hash, Equality)
   new_pair_function pair_func_build{};
 
   auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func_build);
@@ -114,8 +112,8 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   // skip rows that are null here.
   if ((compare_nulls == null_equality::EQUAL) or (not nullable(right_keys))) {
     // TODO: Need to enable a stream argument in cuco.
-    hash_table.insert(iter, iter + right_num_rows, hash, equality_build);
-    // hash_table.insert(iter, iter + right_num_rows, hash, pair_equality, stream.value());
+    hash_table.insert(iter, iter + right_num_rows, hash_build, equality_build);
+    // hash_table.insert(iter, iter + right_num_rows, hash_build, equality_build, stream.value());
   } else {
     CUDF_FAIL("Not supported yet!");
     // thrust::counting_iterator<size_type> stencil(0);
@@ -124,7 +122,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
     //
     //// insert valid rows
     //// TODO: This needs to be implemented still for static_map, it only exists for multimap.
-    // hash_table.insert_if(iter, iter + right_num_rows, stencil, pred, hash, pair_equality,
+    // hash_table.insert_if(iter, iter + right_num_rows, stencil, pred, hash_build, equality_build,
     // stream.value());
   }
 
@@ -132,7 +130,8 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   // and check to see if they are contained in the hash table
   auto left_rows_d = table_device_view::create(left_flattened_keys, stream);
   row_hash hash_probe{*left_rows_d};
-  row_equality equality_probe{*left_rows_d, *right_rows_d, compare_nulls == null_equality::EQUAL};
+  // TODO: Make sure this order is correct.
+  row_equality equality_probe{*right_rows_d, *left_rows_d, compare_nulls == null_equality::EQUAL};
 
   // For semi join we want contains to be true, for anti join we want contains to be false
   bool const join_type_boolean = (kind == join_kind::LEFT_SEMI_JOIN);
