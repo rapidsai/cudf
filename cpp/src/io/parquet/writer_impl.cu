@@ -1516,7 +1516,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::close(std::string const& column_ch
   return _impl->close(column_chunks_file_path);
 }
 
-std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
+std::unique_ptr<std::vector<uint8_t>> writer::merge_row_group_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list)
 {
   std::vector<uint8_t> output;

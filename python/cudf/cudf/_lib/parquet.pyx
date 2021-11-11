@@ -45,7 +45,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.io.parquet cimport (
     chunked_parquet_writer_options,
     chunked_parquet_writer_options_builder,
-    merge_rowgroup_metadata as parquet_merge_metadata,
+    merge_row_group_metadata as parquet_merge_metadata,
     parquet_chunked_writer as cpp_parquet_chunked_writer,
     parquet_reader_options,
     parquet_writer_options,
@@ -479,11 +479,11 @@ cdef class ParquetWriter:
 
 cpdef merge_filemetadata(object filemetadata_list):
     """
-    Cython function to call into libcudf API, see `merge_rowgroup_metadata`.
+    Cython function to call into libcudf API, see `merge_row_group_metadata`.
 
     See Also
     --------
-    cudf.io.parquet.merge_rowgroup_metadata
+    cudf.io.parquet.merge_row_group_metadata
     """
     cdef vector[unique_ptr[vector[uint8_t]]] list_c
     cdef vector[uint8_t] blob_c
