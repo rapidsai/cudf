@@ -44,22 +44,17 @@ void dispatch_equality_op(mutable_column_view& out,
     auto d_lhs = table_device_view::create(lhs_flattened);
     auto d_rhs = table_device_view::create(rhs_flattened);
 
+    auto const do_compare = [&](auto const& comp) {
+      detail::struct_compare(
+        out, comp, is_lhs_scalar, is_rhs_scalar, op == binary_operator::NOT_EQUAL, stream);
+    };
     switch (op) {
       case binary_operator::EQUAL:
       case binary_operator::NOT_EQUAL:
+
         has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)
-          ? detail::struct_compare(out,
-                                   row_equality_comparator<true>{*d_lhs, *d_rhs, true},
-                                   is_lhs_scalar,
-                                   is_rhs_scalar,
-                                   op == binary_operator::NOT_EQUAL,
-                                   stream)
-          : detail::struct_compare(out,
-                                   row_equality_comparator<false>{*d_lhs, *d_rhs, true},
-                                   is_lhs_scalar,
-                                   is_rhs_scalar,
-                                   op == binary_operator::NOT_EQUAL,
-                                   stream);
+          ? do_compare(row_equality_comparator<true>{*d_lhs, *d_rhs})
+          : do_compare(row_equality_comparator<false>{*d_lhs, *d_rhs});
         break;
       default: CUDF_FAIL("Unsupported operator for these types");
     }

@@ -311,6 +311,8 @@ void operator_dispatcher(mutable_column_view& out,
                          binary_operator op,
                          rmm::cuda_stream_view stream)
 {
+  if (!is_supported_operation(out.type(), lhs, rhs, binary_operator::LESS_EQUAL))
+    CUDF_FAIL("Unsupported operator for these types");
   // clang-format off
 switch (op) {
 case binary_operator::ADD:                  apply_binary_op<ops::Add>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream); break;
@@ -381,48 +383,6 @@ void binary_operation(mutable_column_view& out,
   auto [rhsv, aux] = scalar_to_column_view(rhs, stream);
   operator_dispatcher(out, lhs, rhsv, false, true, op, stream);
 }
-
-namespace detail {
-void struct_lexicographic_compare(mutable_column_view& out,
-                                  column_view const& lhs,
-                                  column_view const& rhs,
-                                  bool is_lhs_scalar,
-                                  bool is_rhs_scalar,
-                                  order op_order,
-                                  bool flip_output,
-                                  rmm::cuda_stream_view stream)
-{
-  if (!is_supported_operation(out.type(), lhs, rhs, binary_operator::LESS_EQUAL))
-    CUDF_FAIL("Unsupported operator for these types");
-  auto const nullability =
-    structs::detail::contains_null_structs(lhs) || structs::detail::contains_null_structs(rhs)
-      ? structs::detail::column_nullability::FORCE
-      : structs::detail::column_nullability::MATCH_INCOMING;
-  auto const lhs_flattened =
-    structs::detail::flatten_nested_columns(table_view{{lhs}}, {}, {}, nullability);
-  auto const rhs_flattened =
-    structs::detail::flatten_nested_columns(table_view{{rhs}}, {}, {}, nullability);
-
-  auto d_lhs = table_device_view::create(lhs_flattened);
-  auto d_rhs = table_device_view::create(rhs_flattened);
-  auto compare_orders =
-    cudf::detail::make_device_uvector_async(std::vector<order>(lhs.size(), op_order), stream);
-
-  has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)
-    ? struct_compare(out,
-                     row_lexicographic_comparator<true>{*d_lhs, *d_rhs, compare_orders.data()},
-                     is_lhs_scalar,
-                     is_rhs_scalar,
-                     flip_output,
-                     stream)
-    : struct_compare(out,
-                     row_lexicographic_comparator<false>{*d_lhs, *d_rhs, compare_orders.data()},
-                     is_lhs_scalar,
-                     is_rhs_scalar,
-                     flip_output,
-                     stream);
-}
-}  // namespace detail
 }  // namespace compiled
 }  // namespace binops
 }  // namespace cudf
