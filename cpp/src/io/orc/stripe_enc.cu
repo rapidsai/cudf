@@ -21,6 +21,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <io/utilities/block_utils.cuh>
+#include <io/utilities/config_utils.hpp>
 #include <io/utilities/time_utils.cuh>
 
 #include <cub/cub.cuh>
@@ -1309,9 +1310,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
   gpuInitCompressionBlocks<<<dim_grid, dim_block_init, 0, stream.value()>>>(
     strm_desc, enc_streams, comp_in, comp_out, compressed_data, comp_blk_size, max_comp_blk_size);
   if (compression == SNAPPY) {
-    auto env_use_nvcomp = std::getenv("LIBCUDF_USE_NVCOMP");
-    bool use_nvcomp     = env_use_nvcomp != nullptr ? std::atoi(env_use_nvcomp) : 0;
-    if (use_nvcomp) {
+    if (detail::nvcomp_integration::is_stable_enabled()) {
       try {
         size_t temp_size;
         nvcompStatus_t nvcomp_status = nvcompBatchedSnappyCompressGetTempSize(

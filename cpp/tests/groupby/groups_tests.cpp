@@ -34,7 +34,7 @@ template <typename V>
 struct groupby_group_keys_and_values_test : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(groupby_group_keys_and_values_test, NumericTypes);
+TYPED_TEST_SUITE(groupby_group_keys_and_values_test, NumericTypes);
 
 TEST_F(groupby_group_keys_test, basic)
 {

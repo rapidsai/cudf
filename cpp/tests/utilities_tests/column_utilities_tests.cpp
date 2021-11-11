@@ -50,10 +50,10 @@ template <typename T>
 struct ColumnUtilitiesTestFixedPoint : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ColumnUtilitiesTest, cudf::test::FixedWidthTypes);
-TYPED_TEST_CASE(ColumnUtilitiesTestIntegral, cudf::test::IntegralTypes);
-TYPED_TEST_CASE(ColumnUtilitiesTestFloatingPoint, cudf::test::FloatingPointTypes);
-TYPED_TEST_CASE(ColumnUtilitiesTestFixedPoint, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(ColumnUtilitiesTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(ColumnUtilitiesTestIntegral, cudf::test::IntegralTypes);
+TYPED_TEST_SUITE(ColumnUtilitiesTestFloatingPoint, cudf::test::FloatingPointTypes);
+TYPED_TEST_SUITE(ColumnUtilitiesTestFixedPoint, cudf::test::FixedPointTypes);
 
 TYPED_TEST(ColumnUtilitiesTest, NonNullableToHost)
 {

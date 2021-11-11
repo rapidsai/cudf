@@ -29,7 +29,7 @@ template <typename T>
 struct CopyTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(CopyTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(CopyTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 #define wrapper cudf::test::fixed_width_column_wrapper
 
@@ -299,7 +299,7 @@ TEST_F(CopyEmptyNested, CopyIfElseTestEmptyNestedScalars)
 template <typename T>
 struct CopyTestNumeric : public cudf::test::BaseFixture {
 };
-TYPED_TEST_CASE(CopyTestNumeric, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(CopyTestNumeric, cudf::test::NumericTypes);
 
 TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarColumn)
 {
@@ -389,7 +389,7 @@ struct create_chrono_scalar {
 template <typename T>
 struct CopyTestChrono : public cudf::test::BaseFixture {
 };
-TYPED_TEST_CASE(CopyTestChrono, cudf::test::ChronoTypes);
+TYPED_TEST_SUITE(CopyTestChrono, cudf::test::ChronoTypes);
 
 TYPED_TEST(CopyTestChrono, CopyIfElseTestScalarColumn)
 {
@@ -579,7 +579,7 @@ template <typename T>
 struct FixedPointTypes : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTypes, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTypes, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTypes, FixedPointSimple)
 {

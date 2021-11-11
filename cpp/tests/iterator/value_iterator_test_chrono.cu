@@ -23,6 +23,6 @@ template <typename T>
 struct ChronoValueIteratorTest : public IteratorTest<T> {
 };
 
-TYPED_TEST_CASE(ChronoValueIteratorTest, TestingTypes);
+TYPED_TEST_SUITE(ChronoValueIteratorTest, TestingTypes);
 TYPED_TEST(ChronoValueIteratorTest, non_null_iterator) { non_null_iterator(*this); }
 TYPED_TEST(ChronoValueIteratorTest, null_iterator) { null_iterator(*this); }

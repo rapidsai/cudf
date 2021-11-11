@@ -36,7 +36,7 @@ template <typename T>
 struct RowBitCountTyped : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(RowBitCountTyped, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(RowBitCountTyped, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(RowBitCountTyped, SimpleTypes)
 {
