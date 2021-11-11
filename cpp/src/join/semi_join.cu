@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <hash/concurrent_unordered_map.cuh>
 #include <join/join_common_utils.cuh>
 #include <join/join_common_utils.hpp>
 
