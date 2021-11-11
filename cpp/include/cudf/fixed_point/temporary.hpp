@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utilities/error.hpp>
 
 // Note: The <cuda/std/*> versions are used in order for Jitify to work with our fixed_point type.
 //       Jitify is needed for several algorithms (binaryop, rolling, etc)
@@ -71,6 +72,15 @@ template <typename T>
 CUDA_HOST_DEVICE_CALLABLE auto max(T lhs, T rhs)
 {
   return lhs > rhs ? lhs : rhs;
+}
+template <typename BaseType>
+constexpr auto exp10(int32_t exponent)
+{
+  CUDF_EXPECTS(exponent >= 0, "Exponent must be greater than 0.");
+  BaseType value = 1;
+  while (exponent > 0)
+    value *= 10, --exponent;
+  return value;
 }
 
 }  // namespace detail

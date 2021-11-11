@@ -117,18 +117,29 @@ TEST_F(StringsConvertTest, FromFixedPointDecimal128)
   using RepType    = cudf::device_storage_type_t<decimal128>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
 
+  auto constexpr max = cuda::std::numeric_limits<__int128_t>::max();
+
   {
-    auto const input    = fp_wrapper{{110}, numeric::scale_type{-2}};
-    auto results        = cudf::strings::from_fixed_point(input);
-    auto const expected = cudf::test::strings_column_wrapper({"1.10"});
+    auto const input = fp_wrapper{{110, max}, numeric::scale_type{-2}};
+    auto results     = cudf::strings::from_fixed_point(input);
+    auto const expected =
+      cudf::test::strings_column_wrapper({"1.10", "1701411834604692317316873037158841057.27"});
 
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
   }
 
   {
-    auto const input =
-      fp_wrapper({110, cuda::std::numeric_limits<__int128_t>::max()}, numeric::scale_type{2});
-    auto results = cudf::strings::from_fixed_point(input);
+    auto const input = fp_wrapper{{max}, numeric::scale_type{-38}};
+    auto results     = cudf::strings::from_fixed_point(input);
+    auto const expected =
+      cudf::test::strings_column_wrapper({"1.70141183460469231731687303715884105727"});
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  }
+
+  {
+    auto const input = fp_wrapper({110, max}, numeric::scale_type{2});
+    auto results     = cudf::strings::from_fixed_point(input);
     auto const expected =
       cudf::test::strings_column_wrapper({"11000", "17014118346046923173168730371588410572700"});
 
