@@ -65,7 +65,7 @@ gpuci_logger "Check environment variables"
 env
 
 gpuci_logger "Check GPU usage"
-nvidia-smi
+#nvidia-smi
 
 gpuci_logger "Activate conda env"
 . /opt/conda/etc/profile.d/conda.sh

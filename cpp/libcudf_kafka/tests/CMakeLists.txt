@@ -23,7 +23,9 @@ function(ConfigureTest test_name)
     ${test_name} PROPERTIES RUNTIME_OUTPUT_DIRECTORY
                             "$<BUILD_INTERFACE:${CUDA_KAFKA_BINARY_DIR}/gtests>"
   )
-  target_link_libraries(${test_name} PRIVATE GTest::gmock_main GTest::gtest_main cudf_kafka)
+  target_link_libraries(
+    ${test_name} PRIVATE GTest::gmock GTest::gmock_main GTest::gtest_main cudf_kafka
+  )
   add_test(NAME ${test_name} COMMAND ${test_name})
 endfunction()
 
