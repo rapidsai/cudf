@@ -32,7 +32,7 @@ template <typename T>
 struct UnaryLogicalOpsTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(UnaryLogicalOpsTest, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(UnaryLogicalOpsTest, cudf::test::NumericTypes);
 
 TYPED_TEST(UnaryLogicalOpsTest, LogicalNot)
 {
@@ -89,7 +89,7 @@ template <typename T>
 struct UnaryMathOpsTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(UnaryMathOpsTest, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(UnaryMathOpsTest, cudf::test::NumericTypes);
 
 TYPED_TEST(UnaryMathOpsTest, ABS)
 {
@@ -238,7 +238,7 @@ struct UnaryMathFloatOpsTest : public cudf::test::BaseFixture {
 
 using floating_point_type_list = ::testing::Types<float, double>;
 
-TYPED_TEST_CASE(UnaryMathFloatOpsTest, floating_point_type_list);
+TYPED_TEST_SUITE(UnaryMathFloatOpsTest, floating_point_type_list);
 
 TYPED_TEST(UnaryMathFloatOpsTest, SimpleSIN)
 {

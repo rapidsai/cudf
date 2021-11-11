@@ -161,7 +161,7 @@ template <typename T>
 struct SplitTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(SplitTest, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(SplitTest, cudf::test::NumericTypes);
 
 TYPED_TEST(SplitTest, SplitEndLessThanSize)
 {
@@ -550,7 +550,7 @@ void split_empty_output_column_value(SplitFunc Split, CompareFunc Compare)
 template <typename T>
 struct SplitTableTest : public cudf::test::BaseFixture {
 };
-TYPED_TEST_CASE(SplitTableTest, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(SplitTableTest, cudf::test::NumericTypes);
 
 TYPED_TEST(SplitTableTest, SplitEndLessThanSize)
 {
@@ -1171,7 +1171,7 @@ struct ContiguousSplitTest : public cudf::test::BaseFixture {
 using FixedWidthTypesWithoutChrono =
   cudf::test::Concat<cudf::test::NumericTypes, cudf::test::FixedPointTypes>;
 
-TYPED_TEST_CASE(ContiguousSplitTest, FixedWidthTypesWithoutChrono);
+TYPED_TEST_SUITE(ContiguousSplitTest, FixedWidthTypesWithoutChrono);
 
 TYPED_TEST(ContiguousSplitTest, LongColumn)
 {
@@ -1387,7 +1387,7 @@ TEST_F(ContiguousSplitStringTableTest, NullStringColumn)
 template <typename T>
 struct ContiguousSplitTableTest : public cudf::test::BaseFixture {
 };
-TYPED_TEST_CASE(ContiguousSplitTableTest, FixedWidthTypesWithoutChrono);
+TYPED_TEST_SUITE(ContiguousSplitTableTest, FixedWidthTypesWithoutChrono);
 
 TYPED_TEST(ContiguousSplitTableTest, SplitEndLessThanSize)
 {

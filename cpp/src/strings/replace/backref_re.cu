@@ -104,7 +104,7 @@ std::unique_ptr<column> replace_with_backrefs(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  if (strings.is_empty()) return make_empty_column(data_type{type_id::STRING});
+  if (strings.is_empty()) return make_empty_column(type_id::STRING);
 
   CUDF_EXPECTS(!pattern.empty(), "Parameter pattern must not be empty");
   CUDF_EXPECTS(!repl.empty(), "Parameter repl must not be empty");

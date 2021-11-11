@@ -32,7 +32,7 @@ struct groupby_nunique_test : public cudf::test::BaseFixture {
 };
 
 using K = int32_t;
-TYPED_TEST_CASE(groupby_nunique_test, cudf::test::AllTypes);
+TYPED_TEST_SUITE(groupby_nunique_test, cudf::test::AllTypes);
 
 TYPED_TEST(groupby_nunique_test, basic)
 {

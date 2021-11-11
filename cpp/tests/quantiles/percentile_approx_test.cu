@@ -306,7 +306,7 @@ using PercentileApproxTypes =
 template <typename T>
 struct PercentileApproxInputTypesTest : public cudf::test::BaseFixture {
 };
-TYPED_TEST_CASE(PercentileApproxInputTypesTest, PercentileApproxTypes);
+TYPED_TEST_SUITE(PercentileApproxInputTypesTest, PercentileApproxTypes);
 
 TYPED_TEST(PercentileApproxInputTypesTest, Simple)
 {
@@ -374,7 +374,7 @@ TEST_F(PercentileApproxTest, EmptyInput)
   auto expected =
     cudf::make_lists_column(3,
                             offsets.release(),
-                            cudf::make_empty_column(data_type{type_id::FLOAT64}),
+                            cudf::make_empty_column(type_id::FLOAT64),
                             3,
                             cudf::test::detail::make_null_mask(nulls.begin(), nulls.end()));
 
@@ -403,7 +403,7 @@ TEST_F(PercentileApproxTest, EmptyPercentiles)
   cudf::test::fixed_width_column_wrapper<offset_type> offsets{0, 0, 0};
   auto expected = cudf::make_lists_column(2,
                                           offsets.release(),
-                                          cudf::make_empty_column(data_type{type_id::FLOAT64}),
+                                          cudf::make_empty_column(type_id::FLOAT64),
                                           2,
                                           cudf::detail::create_null_mask(2, mask_state::ALL_NULL));
 

@@ -40,7 +40,7 @@ struct groupby_covariance_test : public cudf::test::BaseFixture {
 
 using supported_types = RemoveIf<ContainedIn<Types<bool>>, cudf::test::NumericTypes>;
 
-TYPED_TEST_CASE(groupby_covariance_test, supported_types);
+TYPED_TEST_SUITE(groupby_covariance_test, supported_types);
 using K = int32_t;
 
 TYPED_TEST(groupby_covariance_test, basic)
@@ -173,6 +173,53 @@ TYPED_TEST(groupby_covariance_test, null_values_different)
 
   auto agg = cudf::make_covariance_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg), force_use_sort_impl::YES);
+}
+
+TYPED_TEST(groupby_covariance_test, min_periods)
+{
+  using V = TypeParam;
+  using R = cudf::detail::target_type_t<V, aggregation::COVARIANCE>;
+
+  auto keys     = fixed_width_column_wrapper<K>{{1, 2, 3, 1, 2, 2, 1, 3, 3, 2}};
+  auto member_0 = fixed_width_column_wrapper<V>{{1, 1, 1, 2, 2, 3, 3, 1, 1, 4}};
+  auto member_1 = fixed_width_column_wrapper<V>{{1, 1, 1, 2, 0, 3, 3, 1, 1, 2}};
+  auto vals     = structs{{member_0, member_1}};
+
+  fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
+
+  fixed_width_column_wrapper<R, double> expect_vals1{{1.0, 1.0, 0.0}};
+  auto agg1 = cudf::make_covariance_aggregation<groupby_aggregation>(3);
+  test_single_agg(keys, vals, expect_keys, expect_vals1, std::move(agg1), force_use_sort_impl::YES);
+
+  fixed_width_column_wrapper<R, double> expect_vals2{{1.0, 1.0, 0.0}, {0, 1, 0}};
+  auto agg2 = cudf::make_covariance_aggregation<groupby_aggregation>(4);
+  test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg2), force_use_sort_impl::YES);
+
+  fixed_width_column_wrapper<R, double> expect_vals3{{1.0, 1.0, 0.0}, {0, 0, 0}};
+  auto agg3 = cudf::make_covariance_aggregation<groupby_aggregation>(5);
+  test_single_agg(keys, vals, expect_keys, expect_vals3, std::move(agg3), force_use_sort_impl::YES);
+}
+
+TYPED_TEST(groupby_covariance_test, ddof)
+{
+  using V = TypeParam;
+  using R = cudf::detail::target_type_t<V, aggregation::COVARIANCE>;
+
+  auto keys     = fixed_width_column_wrapper<K>{{1, 2, 3, 1, 2, 2, 1, 3, 3, 2}};
+  auto member_0 = fixed_width_column_wrapper<V>{{1, 1, 1, 2, 2, 3, 3, 1, 1, 4}};
+  auto member_1 = fixed_width_column_wrapper<V>{{1, 1, 1, 2, 0, 3, 3, 1, 1, 2}};
+  auto vals     = structs{{member_0, member_1}};
+
+  fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
+
+  fixed_width_column_wrapper<R, double> expect_vals1{{2.0, 1.5, 0.0}};
+  auto agg1 = cudf::make_covariance_aggregation<groupby_aggregation>(1, 2);
+  test_single_agg(keys, vals, expect_keys, expect_vals1, std::move(agg1), force_use_sort_impl::YES);
+
+  auto const inf = std::numeric_limits<double>::infinity();
+  fixed_width_column_wrapper<R, double> expect_vals2{{inf, 3.0, 0.0}, {0, 1, 0}};
+  auto agg2 = cudf::make_covariance_aggregation<groupby_aggregation>(1, 3);
+  test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg2), force_use_sort_impl::YES);
 }
 
 struct groupby_dictionary_covariance_test : public cudf::test::BaseFixture {

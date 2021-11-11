@@ -84,7 +84,7 @@ For example:
 template <typename T>
 class TypedTestFixture : cudf::test::BaseFixture {...};
 using TestTypes = cudf::test:Types<int,float,double>; // Notice custom cudf type list type
-TYPED_TEST_CASE(TypedTestFixture, TestTypes);
+TYPED_TEST_SUITE(TypedTestFixture, TestTypes);
 TYPED_TEST(TypedTestFixture, FirstTest){
     // Access the current type using `TypeParam`
     using T = TypeParam;
@@ -107,7 +107,7 @@ element type that libcudf supports.
 #include <cudf_test/type_lists.hpp>
 
 // All tests using TypeTestFixture will be invoked once for each numeric type
-TYPED_TEST_CASE(TypedTestFixture, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(TypedTestFixture, cudf::test::NumericTypes);
 ```
 
 Whenever possible, use one of the type list provided in `include/utilities/test/type_lists.hpp` 
@@ -131,7 +131,7 @@ template <typename TwoTypes>
 TwoTypesFixture : BaseFixture{...};
 using TwoTypesList = Types< Types<int, int>, Types<int, float>, 
                             Types<float, int>, Types<float, float> >;
-TYPED_TEST_CASE(TwoTypesFixture, TwoTypesList);
+TYPED_TEST_SUITE(TwoTypesFixture, TwoTypesList);
 TYPED_TEST(TwoTypesFixture, FirstTest){
     // TypeParam is a list of two types, i.e., a "nested" type list
     // Use `cudf::test::GetType` to retrieve the individual types

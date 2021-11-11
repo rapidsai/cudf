@@ -42,7 +42,7 @@ typedef thrust::tuple<size_type, double, double> expected_value;
 template <typename T>
 struct TDigestAllTypes : public cudf::test::BaseFixture {
 };
-TYPED_TEST_CASE(TDigestAllTypes, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(TDigestAllTypes, cudf::test::NumericTypes);
 
 template <typename T>
 struct column_min {
@@ -358,9 +358,9 @@ struct TDigestTest : public cudf::test::BaseFixture {
 
 TEST_F(TDigestTest, EmptyMixed)
 {
-  cudf::test::fixed_width_column_wrapper<double> values{{123456.78, 10.0, 20.0, 30.0},
-                                                        {1, 0, 1, 0}};
-  cudf::test::strings_column_wrapper keys{"b", "a", "c", "d"};
+  cudf::test::fixed_width_column_wrapper<double> values{
+    {123456.78, 10.0, 20.0, 25.0, 30.0, 40.0, 50.0, 60.0, 70.0}, {1, 0, 0, 1, 0, 0, 1, 1, 0}};
+  cudf::test::strings_column_wrapper keys{"b", "a", "c", "c", "d", "d", "e", "e", "f"};
 
   auto const delta = 1000;
   cudf::table_view t({keys});
@@ -374,7 +374,9 @@ TEST_F(TDigestTest, EmptyMixed)
   using FCW     = cudf::test::fixed_width_column_wrapper<double>;
   auto expected = make_expected_tdigest_column({{FCW{}, FCW{}, 0, 0},
                                                 {FCW{123456.78}, FCW{1.0}, 123456.78, 123456.78},
-                                                {FCW{20.0}, FCW{1.0}, 20.0, 20.0},
+                                                {FCW{25.0}, FCW{1.0}, 25.0, 25.0},
+                                                {FCW{}, FCW{}, 0, 0},
+                                                {FCW{50.0, 60.0}, FCW{1.0, 1.0}, 50.0, 60.0},
                                                 {FCW{}, FCW{}, 0, 0}});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result.second[0].results[0], *expected);
@@ -938,8 +940,10 @@ TEST_F(TDigestMergeTest, Empty)
 
 TEST_F(TDigestMergeTest, EmptyGroups)
 {
-  cudf::test::fixed_width_column_wrapper<double> values_b{126, 15, 1, 99, 67, 55, 2};
-  cudf::test::fixed_width_column_wrapper<double> values_d{100, 200, 300, 400, 500, 600, 700};
+  cudf::test::fixed_width_column_wrapper<double> values_b{{126, 15, 1, 99, 67, 55, 2},
+                                                          {1, 0, 0, 1, 1, 1, 1}};
+  cudf::test::fixed_width_column_wrapper<double> values_d{{100, 200, 300, 400, 500, 600, 700},
+                                                          {1, 1, 1, 1, 1, 1, 0}};
   cudf::test::fixed_width_column_wrapper<int> keys{0, 0, 0, 0, 0, 0, 0};
   int const delta = 1000;
 
@@ -971,11 +975,10 @@ TEST_F(TDigestMergeTest, EmptyGroups)
 
   using FCW = cudf::test::fixed_width_column_wrapper<double>;
   cudf::test::fixed_width_column_wrapper<double> expected_means{
-    1, 2, 15, 55, 67, 99, 100, 126, 200, 300, 400, 500, 600, 700};
-  cudf::test::fixed_width_column_wrapper<double> expected_weights{
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
+    2, 55, 67, 99, 100, 126, 200, 300, 400, 500, 600};
+  cudf::test::fixed_width_column_wrapper<double> expected_weights{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
   auto expected = make_expected_tdigest_column(
-    {{expected_means, expected_weights, 1, 700}, {FCW{}, FCW{}, 0, 0}, {FCW{}, FCW{}, 0, 0}});
+    {{expected_means, expected_weights, 2, 600}, {FCW{}, FCW{}, 0, 0}, {FCW{}, FCW{}, 0, 0}});
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*expected, *result.second[0].results[0]);
 }

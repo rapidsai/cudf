@@ -57,7 +57,7 @@ struct CollectSetTypedTest : public cudf::test::BaseFixture {
 using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                                   cudf::test::FloatingPointTypes,
                                                   cudf::test::TimestampTypes>;
-TYPED_TEST_CASE(CollectSetTypedTest, FixedWidthTypesNotBool);
+TYPED_TEST_SUITE(CollectSetTypedTest, FixedWidthTypesNotBool);
 
 TYPED_TEST(CollectSetTypedTest, TrivialInput)
 {
