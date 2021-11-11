@@ -420,7 +420,7 @@ class ColumnAccessor(MutableMapping):
     def _select_by_label_slice(self, key: slice) -> ColumnAccessor:
         start, stop = key.start, key.stop
         if key.step is not None:
-            raise TypeError("Label slicing with step is not supported")
+            raise ValueError("Label slicing with step is not supported")
 
         if start is None:
             start = self.names[0]
