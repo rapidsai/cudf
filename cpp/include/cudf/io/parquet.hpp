@@ -402,6 +402,12 @@ class parquet_writer_options {
   bool _write_timestamps_as_int96 = false;
   // Column chunks file path to be set in the raw output metadata
   std::string _column_chunks_file_path;
+  // Maximum size of each rowgroup (unless smaller than a single page)
+  size_t _rowgroup_size_bytes = default_rowgroup_size_bytes;
+  // Maximum number of rows in rowgroup (unless smaller than a single page)
+  size_type _rowgroup_size_rows = default_rowgroup_size_rows;
+  // Target size of each page
+  size_t _page_size_bytes = default_page_size_bytes;
 
   /**
    * @brief Constructor from sink and table.
@@ -477,6 +483,21 @@ class parquet_writer_options {
   std::string get_column_chunks_file_path() const { return _column_chunks_file_path; }
 
   /**
+   * @brief Returns maximum rowgroup size, in bytes.
+   */
+  auto rowgroup_size_bytes() const { return _rowgroup_size_bytes; }
+
+  /**
+   * @brief Returns maximum rowgroup size, in rows.
+   */
+  auto rowgroup_size_rows() const { return _rowgroup_size_rows; }
+
+  /**
+   * @brief Returns the target page size, in bytes.
+   */
+  auto page_size_bytes() const { return std::min(_page_size_bytes, rowgroup_size_bytes()); }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata.
@@ -513,6 +534,36 @@ class parquet_writer_options {
   void set_column_chunks_file_path(std::string file_path)
   {
     _column_chunks_file_path.assign(file_path);
+  }
+
+  /**
+   * @brief Sets the maximum rowgroup size, in bytes.
+   *
+   * If the rowgroup size is smaller that the page size, page size will be reduced to match
+   * the rowgroup size.
+   */
+  void set_rowgroup_size_bytes(size_t size_bytes)
+  {
+    CUDF_EXPECTS(size_bytes >= 64 << 10, "64KB is the minimum rowgorup size");
+    _rowgroup_size_bytes = size_bytes;
+  }
+
+  /**
+   * @brief Sets the maximum rowgroup size, in rows.
+   */
+  void set_rowgroup_size_rows(size_type size_rows)
+  {
+    CUDF_EXPECTS(size_rows >= 512, "Maximum rowgroup size cannot be smaller than 512");
+    _rowgroup_size_rows = size_rows;
+  }
+
+  /**
+   * @brief Sets the target size for each page.
+   */
+  void set_page_size_bytes(size_type size_bytes)
+  {
+    CUDF_EXPECTS(size_bytes >= 512, "Page size cannot be smaller than 512");
+    _page_size_bytes = size_bytes;
   }
 };
 
@@ -583,6 +634,42 @@ class parquet_writer_options_builder {
   parquet_writer_options_builder& column_chunks_file_path(std::string file_path)
   {
     options._column_chunks_file_path.assign(file_path);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the maximum rowgroup size, in bytes.
+   *
+   * @param val maximum rowgroup size
+   * @return this for chaining.
+   */
+  parquet_writer_options_builder& rowgroup_size_bytes(size_t val)
+  {
+    options.set_rowgroup_size_bytes(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the maximum number of rows in output rowgroups.
+   *
+   * @param val maximum number or rows
+   * @return this for chaining.
+   */
+  parquet_writer_options_builder& stripe_size_rows(size_type val)
+  {
+    options.set_rowgroup_size_rows(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the target page size.
+   *
+   * @param val new target page size
+   * @return this for chaining.
+   */
+  parquet_writer_options_builder& page_size_bytes(size_type val)
+  {
+    options.set_page_size_bytes(val);
     return *this;
   }
 
@@ -664,6 +751,12 @@ class chunked_parquet_writer_options {
   // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
   // If true then overrides any per-column setting in _metadata.
   bool _write_timestamps_as_int96 = false;
+  // Maximum size of each rowgroup (unless smaller than a single page)
+  size_t _rowgroup_size_bytes = default_rowgroup_size_bytes;
+  // Maximum number of rows in rowgroup (unless smaller than a single page)
+  size_type _rowgroup_size_rows = default_rowgroup_size_rows;
+  // Target size of each page
+  size_t _page_size_bytes = default_page_size_bytes;
 
   /**
    * @brief Constructor from sink.
@@ -708,6 +801,21 @@ class chunked_parquet_writer_options {
   bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
 
   /**
+   * @brief Returns maximum rowgroup size, in bytes.
+   */
+  auto rowgroup_size_bytes() const { return _rowgroup_size_bytes; }
+
+  /**
+   * @brief Returns maximum rowgroup size, in rows.
+   */
+  auto rowgroup_size_rows() const { return _rowgroup_size_rows; }
+
+  /**
+   * @brief Returns the target page size, in bytes.
+   */
+  auto page_size_bytes() const { return std::min(_page_size_bytes, rowgroup_size_bytes()); }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata.
@@ -735,6 +843,36 @@ class chunked_parquet_writer_options {
    * @param req Boolean value to enable/disable writing of INT96 timestamps
    */
   void enable_int96_timestamps(bool req) { _write_timestamps_as_int96 = req; }
+
+  /**
+   * @brief Sets the maximum rowgroup size, in bytes.
+   *
+   * If the rowgroup size is smaller that the page size, page size will be reduced to match
+   * the rowgroup size.
+   */
+  void set_rowgroup_size_bytes(size_t size_bytes)
+  {
+    CUDF_EXPECTS(size_bytes >= 64 << 10, "64KB is the minimum rowgorup size");
+    _rowgroup_size_bytes = size_bytes;
+  }
+
+  /**
+   * @brief Sets the maximum rowgroup size, in rows.
+   */
+  void set_rowgroup_size_rows(size_type size_rows)
+  {
+    CUDF_EXPECTS(size_rows >= 512, "Maximum rowgroup size cannot be smaller than 512");
+    _rowgroup_size_rows = size_rows;
+  }
+
+  /**
+   * @brief Sets the target size for each page.
+   */
+  void set_page_size_bytes(size_type size_bytes)
+  {
+    CUDF_EXPECTS(size_bytes >= 512, "Page size cannot be smaller than 512");
+    _page_size_bytes = size_bytes;
+  }
 
   /**
    * @brief creates builder to build chunked_parquet_writer_options.
@@ -812,6 +950,42 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options_builder& int96_timestamps(bool enabled)
   {
     options._write_timestamps_as_int96 = enabled;
+    return *this;
+  }
+
+  /**
+   * @brief Sets the maximum rowgroup size, in bytes.
+   *
+   * @param val maximum rowgroup size
+   * @return this for chaining.
+   */
+  chunked_parquet_writer_options_builder& rowgroup_size_bytes(size_t val)
+  {
+    options.set_rowgroup_size_bytes(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the maximum number of rows in output rowgroups.
+   *
+   * @param val maximum number or rows
+   * @return this for chaining.
+   */
+  chunked_parquet_writer_options_builder& stripe_size_rows(size_type val)
+  {
+    options.set_rowgroup_size_rows(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the target page size.
+   *
+   * @param val new target page size
+   * @return this for chaining.
+   */
+  chunked_parquet_writer_options_builder& page_size_bytes(size_type val)
+  {
+    options.set_page_size_bytes(val);
     return *this;
   }
 
