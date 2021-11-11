@@ -37,7 +37,6 @@ class _Resampler(GroupBy):
             )
         else:
             return result.sort_index()
-        return result
 
     def asfreq(self):
         return self.obj._align_to_index(
