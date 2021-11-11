@@ -538,9 +538,7 @@ void aggregate_result_functor::operator()<aggregation::MERGE_M2>(aggregation con
  */
 auto column_view_with_common_nulls(column_view const& column_0, column_view const& column_1)
 {
-  rmm::device_buffer new_nullmask = cudf::bitmask_and(table_view{{column_0, column_1}});
-  auto null_count                 = cudf::count_unset_bits(
-    static_cast<cudf::bitmask_type const*>(new_nullmask.data()), 0, column_0.size());
+  auto [new_nullmask, null_count] = cudf::bitmask_and(table_view{{column_0, column_1}});
   if (null_count == 0) { return std::make_tuple(std::move(new_nullmask), column_0, column_1); }
   auto column_view_with_new_nullmask = [](auto const& col, void* nullmask, auto null_count) {
     return column_view(col.type(),

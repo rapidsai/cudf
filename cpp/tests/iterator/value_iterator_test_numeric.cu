@@ -23,6 +23,6 @@ template <typename T>
 struct NumericValueIteratorTest : public IteratorTest<T> {
 };
 
-TYPED_TEST_CASE(NumericValueIteratorTest, TestingTypes);
+TYPED_TEST_SUITE(NumericValueIteratorTest, TestingTypes);
 TYPED_TEST(NumericValueIteratorTest, non_null_iterator) { non_null_iterator(*this); }
 TYPED_TEST(NumericValueIteratorTest, null_iterator) { null_iterator(*this); }
