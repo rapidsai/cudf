@@ -1,4 +1,6 @@
 #
+# Copyright (c) 2021, NVIDIA CORPORATION.
+#
 import os
 import sys
 
