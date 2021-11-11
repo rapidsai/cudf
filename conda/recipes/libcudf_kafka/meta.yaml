@@ -24,11 +24,13 @@ build:
 requirements:
   build:
     - cmake >=3.20.1
+    - python
   host:
     - libcudf {{version}}
     - librdkafka >=1.7.0
   run:
     - {{ pin_compatible('librdkafka', max_pin='x.x') }} #TODO: librdkafka should be automatically included here by run_exports but is not
+    - python
 
 test:
   commands:
