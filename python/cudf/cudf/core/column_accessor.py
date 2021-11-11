@@ -420,7 +420,7 @@ class ColumnAccessor(MutableMapping):
     def _select_by_label_slice(self, key: slice) -> ColumnAccessor:
         start, stop = key.start, key.stop
         if key.step is not None:
-            raise ValueError("Label slicing with step is not supported")
+            raise TypeError("Label slicing with step is not supported")
 
         if start is None:
             start = self.names[0]
@@ -540,7 +540,7 @@ class ColumnAccessor(MutableMapping):
     def droplevel(self, level):
         # drop the nth level
         if self.nlevels == 1:
-            raise TypeError("Cannot drop the only remaining level")
+            raise ValueError("Cannot drop the only remaining level")
 
         if level < 0:
             level += self.nlevels
