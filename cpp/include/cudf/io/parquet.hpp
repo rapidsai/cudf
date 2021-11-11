@@ -37,6 +37,10 @@ namespace io {
  * @file
  */
 
+constexpr size_t default_rowgroup_size_bytes   = 128 * 1024 * 1024;  // 128MB
+constexpr size_type default_rowgroup_size_rows = 1000000;
+constexpr size_t default_page_size_bytes       = 512 * 1024;  // 512KB
+
 /**
  * @brief Builds parquet_reader_options to use for `read_parquet()`.
  */
