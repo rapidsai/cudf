@@ -32,7 +32,7 @@ template <typename T>
 class ListsElementsNumericsTest : public ListsElementsTest {
 };
 
-TYPED_TEST_CASE(ListsElementsNumericsTest, NumericTypesNotBool);
+TYPED_TEST_SUITE(ListsElementsNumericsTest, NumericTypesNotBool);
 
 TYPED_TEST(ListsElementsNumericsTest, CountElements)
 {

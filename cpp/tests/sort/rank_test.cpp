@@ -103,7 +103,7 @@ struct Rank : public BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(Rank, NumericTypes);
+TYPED_TEST_SUITE(Rank, NumericTypes);
 
 // fixed_width_column_wrapper<T>   col1{{  5,   4,   3,   5,   8,   5}};
 //                                        3,   2,   1,   4,   6,   5
