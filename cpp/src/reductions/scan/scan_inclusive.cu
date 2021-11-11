@@ -29,6 +29,8 @@
 
 #include <thrust/scan.h>
 
+#include <type_traits>
+
 namespace cudf {
 namespace detail {
 
@@ -157,16 +159,9 @@ template <typename Op>
 struct scan_dispatcher {
  private:
   template <typename T>
-  static constexpr bool is_min_max_supported()
-  {
-    return cudf::is_relationally_comparable<T, T>() && !cudf::is_dictionary<T>() &&
-           (std::is_same_v<Op, DeviceMin> || std::is_same_v<Op, DeviceMax>);
-  }
-
-  template <typename T>
   static constexpr bool is_supported()
   {
-    return std::is_arithmetic_v<T> || is_min_max_supported<T>();
+    return std::is_invocable_v<Op, T, T> && !cudf::is_dictionary<T>();
   }
 
  public:

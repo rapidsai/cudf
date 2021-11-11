@@ -368,7 +368,7 @@ struct ConditionalInnerJoinTest : public ConditionalJoinPairReturnTest<T> {
   }
 };
 
-TYPED_TEST_CASE(ConditionalInnerJoinTest, cudf::test::IntegralTypesNotBool);
+TYPED_TEST_SUITE(ConditionalInnerJoinTest, cudf::test::IntegralTypesNotBool);
 
 TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnOneRowAllEqual)
 {
@@ -554,7 +554,7 @@ struct ConditionalLeftJoinTest : public ConditionalJoinPairReturnTest<T> {
   }
 };
 
-TYPED_TEST_CASE(ConditionalLeftJoinTest, cudf::test::IntegralTypesNotBool);
+TYPED_TEST_SUITE(ConditionalLeftJoinTest, cudf::test::IntegralTypesNotBool);
 
 TYPED_TEST(ConditionalLeftJoinTest, TestTwoColumnThreeRowSomeEqual)
 {
@@ -612,7 +612,7 @@ struct ConditionalFullJoinTest : public ConditionalJoinPairReturnTest<T> {
   }
 };
 
-TYPED_TEST_CASE(ConditionalFullJoinTest, cudf::test::IntegralTypesNotBool);
+TYPED_TEST_SUITE(ConditionalFullJoinTest, cudf::test::IntegralTypesNotBool);
 
 TYPED_TEST(ConditionalFullJoinTest, TestOneColumnNoneEqual)
 {
@@ -789,7 +789,7 @@ struct ConditionalLeftSemiJoinTest : public ConditionalJoinSingleReturnTest<T> {
   }
 };
 
-TYPED_TEST_CASE(ConditionalLeftSemiJoinTest, cudf::test::IntegralTypesNotBool);
+TYPED_TEST_SUITE(ConditionalLeftSemiJoinTest, cudf::test::IntegralTypesNotBool);
 
 TYPED_TEST(ConditionalLeftSemiJoinTest, TestTwoColumnThreeRowSomeEqual)
 {
@@ -836,7 +836,7 @@ struct ConditionalLeftAntiJoinTest : public ConditionalJoinSingleReturnTest<T> {
   }
 };
 
-TYPED_TEST_CASE(ConditionalLeftAntiJoinTest, cudf::test::IntegralTypesNotBool);
+TYPED_TEST_SUITE(ConditionalLeftAntiJoinTest, cudf::test::IntegralTypesNotBool);
 
 TYPED_TEST(ConditionalLeftAntiJoinTest, TestTwoColumnThreeRowSomeEqual)
 {

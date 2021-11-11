@@ -55,7 +55,7 @@ template <typename T>
 struct ColumnViewAllTypesTests : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ColumnViewAllTypesTests, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(ColumnViewAllTypesTests, cudf::test::FixedWidthTypes);
 
 template <typename FromType, typename ToType, typename Iterator>
 void do_bit_cast(cudf::column_view const& column_view, Iterator begin, Iterator end)

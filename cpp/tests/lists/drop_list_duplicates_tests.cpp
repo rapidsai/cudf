@@ -29,6 +29,7 @@
 using namespace cudf::test::iterators;
 
 using float_type    = float;
+using IntListsCol   = cudf::test::lists_column_wrapper<int32_t>;
 using FloatListsCol = cudf::test::lists_column_wrapper<float_type>;
 using StrListsCol   = cudf::test::lists_column_wrapper<cudf::string_view>;
 using StringsCol    = cudf::test::strings_column_wrapper;
@@ -48,27 +49,99 @@ struct DropListDuplicatesTest : public cudf::test::BaseFixture {
 TEST_F(DropListDuplicatesTest, FloatingPointTestsWithSignedZero)
 {
   // -0.0 and 0.0 should be considered equal.
-  auto const lists    = FloatListsCol{0.0, 1, 2, -0.0, 1, 2, 0.0, 1, 2, -0.0, -0.0, 0.0, 0.0};
-  auto const expected = FloatListsCol{0, 1, 2};
-  auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
+  auto const keys = FloatListsCol{0.0, 1, 2, -0.0, 1, 2, 0.0, 1, 2, -0.0, -0.0, 0.0, 0.0, 3};
+  auto const vals =
+    StrListsCol{"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14"};
+  auto const expected_keys = FloatListsCol{0, 1, 2, 3};
+
+  // Remove duplicates only from keys.
+  {
+    auto const results = cudf::lists::drop_list_duplicates(cudf::lists_column_view{keys});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected_keys, verbosity);
+  }
+
+  // Remove duplicates with KEEP_FIRST.
+  {
+    auto const expected_vals = StrListsCol{"1", "2", "3", "14"};
+    auto const [results_keys, results_vals] =
+      cudf::lists::drop_list_duplicates(cudf::lists_column_view{keys},
+                                        cudf::lists_column_view{vals},
+                                        cudf::duplicate_keep_option::KEEP_FIRST);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_keys->view(), expected_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_vals->view(), expected_vals, verbosity);
+  }
+
+  // Remove duplicates with KEEP_LAST.
+  {
+    auto const expected_vals = StrListsCol{"13", "8", "9", "14"};
+    auto const [results_keys, results_vals] =
+      cudf::lists::drop_list_duplicates(cudf::lists_column_view{keys},
+                                        cudf::lists_column_view{vals},
+                                        cudf::duplicate_keep_option::KEEP_LAST);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_keys->view(), expected_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_vals->view(), expected_vals, verbosity);
+  }
+
+  // Remove duplicates with KEEP_NONE.
+  {
+    auto const expected_keys = FloatListsCol{3};
+    auto const expected_vals = StrListsCol{"14"};
+    auto const [results_keys, results_vals] =
+      cudf::lists::drop_list_duplicates(cudf::lists_column_view{keys},
+                                        cudf::lists_column_view{vals},
+                                        cudf::duplicate_keep_option::KEEP_NONE);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_keys->view(), expected_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_vals->view(), expected_vals, verbosity);
+  }
 }
 
 TEST_F(DropListDuplicatesTest, FloatingPointTestsWithInf)
 {
-  // Lists contain inf.
+  auto const keys          = FloatListsCol{Inf, 0, neg_Inf, 0, Inf, 0, neg_Inf, 0, Inf, 0, neg_Inf};
+  auto const vals          = IntListsCol{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11};
+  auto const expected_keys = FloatListsCol{neg_Inf, 0, Inf};
+
+  // Remove duplicates only from keys.
   {
-    auto const lists    = FloatListsCol{0, 1, 2, 0, 1, 2, 0, 1, 2, Inf, Inf, Inf};
-    auto const expected = FloatListsCol{0, 1, 2, Inf};
-    auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
+    auto const results = cudf::lists::drop_list_duplicates(cudf::lists_column_view{keys});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected_keys, verbosity);
   }
+
+  // Remove duplicates with KEEP_FIRST.
   {
-    auto const lists    = FloatListsCol{Inf, 0, neg_Inf, 0, Inf, 0, neg_Inf, 0, Inf, 0, neg_Inf};
-    auto const expected = FloatListsCol{neg_Inf, 0, Inf};
-    auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
+    auto const expected_vals = IntListsCol{3, 2, 1};
+    auto const [results_keys, results_vals] =
+      cudf::lists::drop_list_duplicates(cudf::lists_column_view{keys},
+                                        cudf::lists_column_view{vals},
+                                        cudf::duplicate_keep_option::KEEP_FIRST);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_keys->view(), expected_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_vals->view(), expected_vals, verbosity);
   }
+
+  // Remove duplicates with KEEP_LAST.
+  {
+    auto const expected_vals = IntListsCol{11, 10, 9};
+    auto const [results_keys, results_vals] =
+      cudf::lists::drop_list_duplicates(cudf::lists_column_view{keys},
+                                        cudf::lists_column_view{vals},
+                                        cudf::duplicate_keep_option::KEEP_LAST);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_keys->view(), expected_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_vals->view(), expected_vals, verbosity);
+  }
+
+  // Remove duplicates with KEEP_NONE.
+  {
+    auto const expected_keys = FloatListsCol{FloatListsCol{}};
+    auto const expected_vals = IntListsCol{IntListsCol{}};
+    auto const [results_keys, results_vals] =
+      cudf::lists::drop_list_duplicates(cudf::lists_column_view{keys},
+                                        cudf::lists_column_view{vals},
+                                        cudf::duplicate_keep_option::KEEP_NONE);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_keys->view(), expected_keys, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_vals->view(), expected_vals, verbosity);
+  }
+  //  exit(0);
 }
 
 // The position of NaN is undefined after sorting, thus we need to offload the data to CPU to
@@ -235,10 +308,15 @@ TYPED_TEST(DropListDuplicatesTypedTest, TrivialInputTests)
 
   // Empty input.
   {
-    auto const lists    = ListsCol{{}};
-    auto const expected = ListsCol{{}};
+    auto const lists    = ListsCol{};
+    auto const expected = ListsCol{};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
+
+    auto const [results_keys, results_vals] = cudf::lists::drop_list_duplicates(
+      cudf::lists_column_view{lists}, cudf::lists_column_view{lists});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_keys->view(), expected, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_vals->view(), expected, verbosity);
   }
 
   // Trivial cases.
@@ -247,6 +325,11 @@ TYPED_TEST(DropListDuplicatesTypedTest, TrivialInputTests)
     auto const expected = ListsCol{0, 1, 2, 3, 4, 5};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
+
+    auto const [results_keys, results_vals] = cudf::lists::drop_list_duplicates(
+      cudf::lists_column_view{lists}, cudf::lists_column_view{lists});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_keys->view(), expected, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_vals->view(), expected, verbosity);
   }
 
   // Multiple empty lists.
@@ -255,6 +338,11 @@ TYPED_TEST(DropListDuplicatesTypedTest, TrivialInputTests)
     auto const expected = ListsCol{{}, {}, {0, 1, 2, 3, 4, 5}, {}, {6}, {}};
     auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
+
+    auto const [results_keys, results_vals] = cudf::lists::drop_list_duplicates(
+      cudf::lists_column_view{lists}, cudf::lists_column_view{lists});
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_keys->view(), expected, verbosity);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_vals->view(), expected, verbosity);
   }
 }
 
@@ -264,11 +352,44 @@ TYPED_TEST(DropListDuplicatesTypedTest, NonNullInputTests)
 
   // Adjacent lists containing the same entries.
   {
-    auto const lists =
+    auto const keys =
       ListsCol{{1, 1, 1, 1, 1, 1, 1, 1}, {1, 1, 1, 1, 1, 2, 2, 2}, {2, 2, 2, 2, 3, 3, 3, 3}};
-    auto const expected = ListsCol{{1}, {1, 2}, {2, 3}};
-    auto const results  = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
+    auto const vals =
+      ListsCol{{1, 2, 3, 4, 5, 6, 7, 8}, {1, 2, 3, 4, 5, 6, 7, 8}, {1, 2, 3, 4, 5, 6, 7, 8}};
+    auto const expected_keys = ListsCol{{1}, {1, 2}, {2, 3}};
+
+    // Remove duplicates with KEEP_FIRST.
+    {
+      auto const expected_vals = ListsCol{{1}, {1, 6}, {1, 5}};
+      auto const [results_keys, results_vals] =
+        cudf::lists::drop_list_duplicates(cudf::lists_column_view{keys},
+                                          cudf::lists_column_view{vals},
+                                          cudf::duplicate_keep_option::KEEP_FIRST);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_keys->view(), expected_keys, verbosity);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_vals->view(), expected_vals, verbosity);
+    }
+
+    // Remove duplicates with KEEP_LAST.
+    {
+      auto const expected_vals = ListsCol{{8}, {5, 8}, {4, 8}};
+      auto const [results_keys, results_vals] =
+        cudf::lists::drop_list_duplicates(cudf::lists_column_view{keys},
+                                          cudf::lists_column_view{vals},
+                                          cudf::duplicate_keep_option::KEEP_LAST);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_keys->view(), expected_keys, verbosity);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_vals->view(), expected_vals, verbosity);
+    }
+
+    // Remove duplicates with KEEP_NONE.
+    {
+      auto const expected = ListsCol{ListsCol{}, ListsCol{}, ListsCol{}};
+      auto const [results_keys, results_vals] =
+        cudf::lists::drop_list_duplicates(cudf::lists_column_view{keys},
+                                          cudf::lists_column_view{vals},
+                                          cudf::duplicate_keep_option::KEEP_NONE);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_keys->view(), expected, verbosity);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_vals->view(), expected, verbosity);
+    }
   }
 
   // Sliced list column.
@@ -315,26 +436,99 @@ TYPED_TEST(DropListDuplicatesTypedTest, WithNullInputTests)
   using ListsCol      = cudf::test::lists_column_wrapper<TypeParam>;
   auto constexpr null = TypeParam{0};
 
-  // null lists.
+  // null entries and lists.
   {
-    auto const lists = ListsCol{
-      {{3, 2, 1, 4, 1}, {5}, {} /*NULL*/, {} /*NULL*/, {10, 8, 9}, {6, 7}}, nulls_at({2, 3})};
-    auto const expected =
+    auto const keys = ListsCol{{{3, 2, 1, 4, 1}, {5}, {} /*NULL*/, {} /*NULL*/, {10, 8, 9}, {6, 7}},
+                               nulls_at({2, 3})};
+    auto const vals =
+      ListsCol{{ListsCol{{1, 2, null, 4, 5}, null_at(2)}, {1}, {}, {} /*NULL*/, {1, 2, 3}, {1, 2}},
+               null_at(3)};
+    auto const expected_keys =
       ListsCol{{{1, 2, 3, 4}, {5}, {} /*NULL*/, {} /*NULL*/, {8, 9, 10}, {6, 7}}, nulls_at({2, 3})};
-    auto const results = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
+
+    // Remove duplicates with KEEP_FIRST.
+    {
+      auto const expected_vals =
+        ListsCol{{ListsCol{{null, 2, 1, 4}, null_at(0)}, {1}, {}, {} /*NULL*/, {2, 3, 1}, {1, 2}},
+                 null_at(3)};
+      auto const [results_keys, results_vals] =
+        cudf::lists::drop_list_duplicates(cudf::lists_column_view{keys},
+                                          cudf::lists_column_view{vals},
+                                          cudf::duplicate_keep_option::KEEP_FIRST);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_keys->view(), expected_keys, verbosity);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_vals->view(), expected_vals, verbosity);
+    }
+
+    // Remove duplicates with KEEP_LAST.
+    {
+      auto const expected_vals =
+        ListsCol{{ListsCol{5, 2, 1, 4}, {1}, {}, {} /*NULL*/, {2, 3, 1}, {1, 2}}, null_at(3)};
+      auto const [results_keys, results_vals] =
+        cudf::lists::drop_list_duplicates(cudf::lists_column_view{keys},
+                                          cudf::lists_column_view{vals},
+                                          cudf::duplicate_keep_option::KEEP_LAST);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_keys->view(), expected_keys, verbosity);
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results_vals->view(), expected_vals, verbosity);
+    }
+
+    // Remove duplicates with KEEP_NONE.
+    {
+      auto const expected_keys =
+        ListsCol{{{2, 3, 4}, {5}, {} /*NULL*/, {} /*NULL*/, {8, 9, 10}, {6, 7}}, nulls_at({2, 3})};
+      auto const expected_vals =
+        ListsCol{{ListsCol{2, 1, 4}, {1}, {}, {} /*NULL*/, {2, 3, 1}, {1, 2}}, null_at(3)};
+      auto const [results_keys, results_vals] =
+        cudf::lists::drop_list_duplicates(cudf::lists_column_view{keys},
+                                          cudf::lists_column_view{vals},
+                                          cudf::duplicate_keep_option::KEEP_NONE);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_keys->view(), expected_keys, verbosity);
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results_vals->view(), expected_vals, verbosity);
+    }
   }
 
   // null entries are equal.
   {
-    auto const lists = ListsCol{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nulls_at({0, 2, 4, 6, 8})};
-    auto const expected =
-      ListsCol{std::initializer_list<TypeParam>{1, 3, 5, 7, 9, null}, null_at(5)};
-    auto const results = cudf::lists::drop_list_duplicates(cudf::lists_column_view{lists});
-    CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected, verbosity);
+    auto const keys =
+      ListsCol{{null, 1, null, 3, null, 5, null, 7, null, 9}, nulls_at({0, 2, 4, 6, 8})};
+    auto const vals = ListsCol{{null, 1, 2, 3, 4, null, 6, 7, 8, null}, nulls_at({0, 5, 9})};
+    auto const expected_keys = ListsCol{{1, 3, 5, 7, 9, null}, null_at(5)};
+
+    // Remove duplicates with KEEP_FIRST.
+    {
+      auto const expected_vals = ListsCol{{1, 3, null, 7, null, null}, nulls_at({2, 4, 5})};
+      auto const [results_keys, results_vals] =
+        cudf::lists::drop_list_duplicates(cudf::lists_column_view{keys},
+                                          cudf::lists_column_view{vals},
+                                          cudf::duplicate_keep_option::KEEP_FIRST);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_keys->view(), expected_keys, verbosity);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_vals->view(), expected_vals, verbosity);
+    }
+
+    // Remove duplicates with KEEP_LAST.
+    {
+      auto const expected_vals = ListsCol{{1, 3, null, 7, null, 8}, nulls_at({2, 4})};
+      auto const [results_keys, results_vals] =
+        cudf::lists::drop_list_duplicates(cudf::lists_column_view{keys},
+                                          cudf::lists_column_view{vals},
+                                          cudf::duplicate_keep_option::KEEP_LAST);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_keys->view(), expected_keys, verbosity);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_vals->view(), expected_vals, verbosity);
+    }
+
+    // Remove duplicates with KEEP_NONE.
+    {
+      auto const expected_keys = ListsCol{1, 3, 5, 7, 9};
+      auto const expected_vals = ListsCol{{1, 3, null, 7, null}, nulls_at({2, 4})};
+      auto const [results_keys, results_vals] =
+        cudf::lists::drop_list_duplicates(cudf::lists_column_view{keys},
+                                          cudf::lists_column_view{vals},
+                                          cudf::duplicate_keep_option::KEEP_NONE);
+      CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(results_keys->view(), expected_keys, verbosity);
+      CUDF_TEST_EXPECT_COLUMNS_EQUAL(results_vals->view(), expected_vals, verbosity);
+    }
   }
 
-  // nulls entries are not equal.
+  // null entries are not equal.
   {
     auto const lists = ListsCol{{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}, nulls_at({0, 2, 4, 6, 8})};
     auto const expected =
@@ -558,7 +752,7 @@ TEST_F(DropListDuplicatesTest, SlicedInputListsOfStructsWithNaNs)
     cudf::make_lists_column(2, IntsCol{0, 10, 18}.release(), get_structs().release(), 0, {});
   auto const lists2 = cudf::slice(lists_original->view(), {1, 2})[0];  // test on the second list
 
-  // Contain expected values excluding NaN.
+  // Contain expected vals excluding NaN.
   auto const results_children_expected = std::unordered_set<float_type>{0, 1, 2};
 
   // Test for cudf::nan_equality::UNEQUAL.

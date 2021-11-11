@@ -40,7 +40,7 @@ struct FixedPointTestBothReps : public cudf::test::BaseFixture {
 
 using RepresentationTypes = ::testing::Types<int32_t, int64_t>;
 
-TYPED_TEST_CASE(FixedPointTestBothReps, RepresentationTypes);
+TYPED_TEST_SUITE(FixedPointTestBothReps, RepresentationTypes);
 
 TYPED_TEST(FixedPointTestBothReps, SimpleDecimalXXConstruction)
 {
