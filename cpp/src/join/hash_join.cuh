@@ -79,7 +79,6 @@ class make_pair_function {
  * joining two tables together.
  *
  * @throw cudf::logic_error if JoinKind is not INNER_JOIN or LEFT_JOIN
- * @throw cudf::logic_error if the exact size overflows cudf::size_type
  *
  * @tparam JoinKind The type of join to be performed
  * @tparam multimap_type The type of the hash table
@@ -126,13 +125,11 @@ std::size_t compute_join_output_size(table_device_view build_table,
 
   auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func);
 
-  size_type size;
+  std::size_t size;
   if constexpr (JoinKind == join_kind::LEFT_JOIN) {
-    size = static_cast<size_type>(
-      hash_table.pair_count_outer(iter, iter + probe_table_num_rows, equality, stream.value()));
+    size = hash_table.pair_count_outer(iter, iter + probe_table_num_rows, equality, stream.value());
   } else {
-    size = static_cast<size_type>(
-      hash_table.pair_count(iter, iter + probe_table_num_rows, equality, stream.value()));
+    size = hash_table.pair_count(iter, iter + probe_table_num_rows, equality, stream.value());
   }
 
   return size;
