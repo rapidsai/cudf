@@ -1581,9 +1581,9 @@ class Frame:
         launch_args += list(args)
         kernel.forall(len(self))(*launch_args)
 
-        result = cudf.Series(ans_col).set_mask(
-            libcudf.transform.bools_to_mask(ans_mask)
-        )
+        col = as_column(ans_col)
+        col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
+        result = cudf.Series._from_data({None: col}, self._index)
 
         return result
 

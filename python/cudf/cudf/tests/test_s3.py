@@ -124,6 +124,16 @@ def pdf(scope="module"):
     return df
 
 
+@pytest.fixture
+def pdf_ext(scope="module"):
+    size = 100
+    df = pd.DataFrame()
+    df["Integer"] = np.array([i for i in range(size)])
+    df["List"] = [[i] for i in range(size)]
+    df["Struct"] = [{"a": i} for i in range(size)]
+    return df
+
+
 @pytest.mark.parametrize("bytes_per_thread", [32, 1024])
 def test_read_csv(s3_base, s3so, pdf, bytes_per_thread):
     # Write to buffer
@@ -251,6 +261,50 @@ def test_read_parquet(
                 columns=columns,
             )
     assert_eq(expect, got2)
+
+
+@pytest.mark.parametrize("bytes_per_thread", [32, 1024])
+@pytest.mark.parametrize("columns", [None, ["List", "Struct"]])
+@pytest.mark.parametrize("use_python_file_object", [False, True])
+@pytest.mark.parametrize("index", [None, "Integer"])
+def test_read_parquet_ext(
+    s3_base,
+    s3so,
+    pdf_ext,
+    bytes_per_thread,
+    columns,
+    use_python_file_object,
+    index,
+):
+    fname = "test_parquet_reader_ext.parquet"
+    bname = "parquet"
+    buffer = BytesIO()
+
+    if index:
+        pdf_ext.set_index(index).to_parquet(path=buffer)
+    else:
+        pdf_ext.to_parquet(path=buffer)
+
+    # Check direct path handling
+    buffer.seek(0)
+    with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
+        got1 = cudf.read_parquet(
+            "s3://{}/{}".format(bname, fname),
+            use_python_file_object=use_python_file_object,
+            storage_options=s3so,
+            bytes_per_thread=bytes_per_thread,
+            footer_sample_size=3200,
+            columns=columns,
+        )
+    if index:
+        expect = (
+            pdf_ext.set_index(index)[columns]
+            if columns
+            else pdf_ext.set_index(index)
+        )
+    else:
+        expect = pdf_ext[columns] if columns else pdf_ext
+    assert_eq(expect, got1)
 
 
 @pytest.mark.parametrize("columns", [None, ["Float", "String"]])
