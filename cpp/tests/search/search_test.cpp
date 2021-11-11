@@ -1820,7 +1820,7 @@ template <typename T>
 struct FixedPointTestBothReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTestBothReps, FixedPointLowerBound)
 {

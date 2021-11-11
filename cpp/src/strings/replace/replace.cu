@@ -405,8 +405,8 @@ std::unique_ptr<column> replace_char_parallel(strings_column_view const& strings
 {
   auto const strings_count = strings.size();
   auto const offset_count  = strings_count + 1;
-  auto const d_offsets     = strings.offsets().data<int32_t>() + strings.offset();
-  auto const d_in_chars    = strings.chars().data<char>();
+  auto const d_offsets     = strings.offsets_begin();
+  auto const d_in_chars    = strings.chars_begin();
   auto const chars_bytes   = chars_end - chars_start;
   auto const target_size   = d_target.size_bytes();
 
@@ -547,10 +547,10 @@ std::unique_ptr<column> replace<replace_algorithm::AUTO>(strings_column_view con
                                                          rmm::cuda_stream_view stream,
                                                          rmm::mr::device_memory_resource* mr)
 {
-  if (strings.is_empty()) return make_empty_column(data_type{type_id::STRING});
+  if (strings.is_empty()) return make_empty_column(type_id::STRING);
   if (maxrepl == 0) return std::make_unique<cudf::column>(strings.parent(), stream, mr);
-  CUDF_EXPECTS(repl.is_valid(), "Parameter repl must be valid.");
-  CUDF_EXPECTS(target.is_valid(), "Parameter target must be valid.");
+  CUDF_EXPECTS(repl.is_valid(stream), "Parameter repl must be valid.");
+  CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
   CUDF_EXPECTS(target.size() > 0, "Parameter target must not be empty string.");
 
   string_view d_target(target.data(), target.size());
@@ -586,10 +586,10 @@ std::unique_ptr<column> replace<replace_algorithm::CHAR_PARALLEL>(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  if (strings.is_empty()) return make_empty_column(data_type{type_id::STRING});
+  if (strings.is_empty()) return make_empty_column(type_id::STRING);
   if (maxrepl == 0) return std::make_unique<cudf::column>(strings.parent(), stream, mr);
-  CUDF_EXPECTS(repl.is_valid(), "Parameter repl must be valid.");
-  CUDF_EXPECTS(target.is_valid(), "Parameter target must be valid.");
+  CUDF_EXPECTS(repl.is_valid(stream), "Parameter repl must be valid.");
+  CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
   CUDF_EXPECTS(target.size() > 0, "Parameter target must not be empty string.");
 
   string_view d_target(target.data(), target.size());
@@ -598,7 +598,7 @@ std::unique_ptr<column> replace<replace_algorithm::CHAR_PARALLEL>(
   // determine range of characters in the base column
   auto const strings_count = strings.size();
   auto const offset_count  = strings_count + 1;
-  auto const d_offsets     = strings.offsets().data<int32_t>() + strings.offset();
+  auto const d_offsets     = strings.offsets_begin();
   size_type chars_start    = (strings.offset() == 0) ? 0
                                                      : cudf::detail::get_value<int32_t>(
                                                       strings.offsets(), strings.offset(), stream);
@@ -619,10 +619,10 @@ std::unique_ptr<column> replace<replace_algorithm::ROW_PARALLEL>(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  if (strings.is_empty()) return make_empty_column(data_type{type_id::STRING});
+  if (strings.is_empty()) return make_empty_column(type_id::STRING);
   if (maxrepl == 0) return std::make_unique<cudf::column>(strings.parent(), stream, mr);
-  CUDF_EXPECTS(repl.is_valid(), "Parameter repl must be valid.");
-  CUDF_EXPECTS(target.is_valid(), "Parameter target must be valid.");
+  CUDF_EXPECTS(repl.is_valid(stream), "Parameter repl must be valid.");
+  CUDF_EXPECTS(target.is_valid(stream), "Parameter target must be valid.");
   CUDF_EXPECTS(target.size() > 0, "Parameter target must not be empty string.");
 
   string_view d_target(target.data(), target.size());
@@ -679,8 +679,8 @@ std::unique_ptr<column> replace_slice(strings_column_view const& strings,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  if (strings.is_empty()) return make_empty_column(data_type{type_id::STRING});
-  CUDF_EXPECTS(repl.is_valid(), "Parameter repl must be valid.");
+  if (strings.is_empty()) return make_empty_column(type_id::STRING);
+  CUDF_EXPECTS(repl.is_valid(stream), "Parameter repl must be valid.");
   if (stop > 0) CUDF_EXPECTS(start <= stop, "Parameter start must be less than or equal to stop.");
 
   string_view d_repl(repl.data(), repl.size());
@@ -761,7 +761,7 @@ std::unique_ptr<column> replace(strings_column_view const& strings,
                                 rmm::cuda_stream_view stream,
                                 rmm::mr::device_memory_resource* mr)
 {
-  if (strings.is_empty()) return make_empty_column(data_type{type_id::STRING});
+  if (strings.is_empty()) return make_empty_column(type_id::STRING);
   CUDF_EXPECTS(((targets.size() > 0) && (targets.null_count() == 0)),
                "Parameters targets must not be empty and must not have nulls");
   CUDF_EXPECTS(((repls.size() > 0) && (repls.null_count() == 0)),
@@ -790,8 +790,8 @@ std::unique_ptr<column> replace_nulls(strings_column_view const& strings,
                                       rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
-  CUDF_EXPECTS(repl.is_valid(), "Parameter repl must be valid.");
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
+  CUDF_EXPECTS(repl.is_valid(stream), "Parameter repl must be valid.");
 
   string_view d_repl(repl.data(), repl.size());
 

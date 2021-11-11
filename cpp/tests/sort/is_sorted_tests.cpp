@@ -239,7 +239,7 @@ struct IsSortedTest : public BaseFixture {
 };
 
 using SupportedTypes = Concat<ComparableTypes, cudf::test::Types<cudf::struct_view>>;
-TYPED_TEST_CASE(IsSortedTest, SupportedTypes);
+TYPED_TEST_SUITE(IsSortedTest, SupportedTypes);
 
 TYPED_TEST(IsSortedTest, NoColumns)
 {
@@ -449,6 +449,6 @@ template <typename T>
 struct IsSortedFixedWidthOnly : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(IsSortedFixedWidthOnly, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(IsSortedFixedWidthOnly, cudf::test::FixedWidthTypes);
 
 CUDF_TEST_PROGRAM_MAIN()

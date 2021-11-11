@@ -40,7 +40,7 @@ template <typename T>
 class NumericFactoryTest : public ColumnFactoryTest {
 };
 
-TYPED_TEST_CASE(NumericFactoryTest, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(NumericFactoryTest, cudf::test::NumericTypes);
 
 TYPED_TEST(NumericFactoryTest, EmptyNoMask)
 {
@@ -203,7 +203,7 @@ template <typename T>
 class FixedWidthFactoryTest : public ColumnFactoryTest {
 };
 
-TYPED_TEST_CASE(FixedWidthFactoryTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(FixedWidthFactoryTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(FixedWidthFactoryTest, EmptyNoMask)
 {
@@ -219,7 +219,7 @@ template <typename T>
 class EmptyFactoryTest : public ColumnFactoryTest {
 };
 
-TYPED_TEST_CASE(EmptyFactoryTest, cudf::test::AllTypes);
+TYPED_TEST_SUITE(EmptyFactoryTest, cudf::test::AllTypes);
 
 TYPED_TEST(EmptyFactoryTest, Empty)
 {
@@ -466,7 +466,7 @@ template <typename T>
 class ListsFixedWidthLeafTest : public ColumnFactoryTest {
 };
 
-TYPED_TEST_CASE(ListsFixedWidthLeafTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(ListsFixedWidthLeafTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(ListsFixedWidthLeafTest, FromNonNested)
 {
@@ -504,7 +504,7 @@ template <typename T>
 class ListsDictionaryLeafTest : public ColumnFactoryTest {
 };
 
-TYPED_TEST_CASE(ListsDictionaryLeafTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(ListsDictionaryLeafTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(ListsDictionaryLeafTest, FromNonNested)
 {
@@ -613,7 +613,7 @@ class ListsStructsLeafTest : public ColumnFactoryTest {
   }
 };
 
-TYPED_TEST_CASE(ListsStructsLeafTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(ListsStructsLeafTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(ListsStructsLeafTest, FromNonNested)
 {

@@ -33,7 +33,7 @@ template <typename V>
 struct groupby_nth_element_test : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(groupby_nth_element_test, cudf::test::AllTypes);
+TYPED_TEST_SUITE(groupby_nth_element_test, cudf::test::AllTypes);
 
 // clang-format off
 TYPED_TEST(groupby_nth_element_test, basic)
@@ -372,7 +372,7 @@ template <typename T>
 struct groupby_nth_element_lists_test : BaseFixture {
 };
 
-TYPED_TEST_CASE(groupby_nth_element_lists_test, FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(groupby_nth_element_lists_test, FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(groupby_nth_element_lists_test, Basics)
 {

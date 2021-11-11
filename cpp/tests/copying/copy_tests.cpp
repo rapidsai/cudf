@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,20 +21,15 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column.hpp>
-#include <cudf/column/column_device_view.cuh>
 #include <cudf/copying.hpp>
-#include <cudf/detail/copy_if_else.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/scalar/scalar.hpp>
-#include <cudf/utilities/traits.hpp>
-
-#include <rmm/cuda_stream_view.hpp>
 
 template <typename T>
 struct CopyTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(CopyTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(CopyTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 #define wrapper cudf::test::fixed_width_column_wrapper
 
@@ -63,90 +58,6 @@ TYPED_TEST(CopyTest, CopyIfElseTestManyNulls)
   wrapper<T, int32_t> expected_w({5, 6, 6, 6, 6, 6, 6}, {1, 0, 0, 0, 0, 0, 1});
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
-}
-
-struct copy_if_else_tiny_grid_functor {
-  template <typename T, typename Filter, CUDF_ENABLE_IF(cudf::is_rep_layout_compatible<T>())>
-  std::unique_ptr<cudf::column> operator()(cudf::column_view const& lhs,
-                                           cudf::column_view const& rhs,
-                                           Filter filter,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
-  {
-    // output
-    std::unique_ptr<cudf::column> out =
-      cudf::allocate_like(lhs, lhs.size(), cudf::mask_allocation_policy::RETAIN, mr);
-
-    // device views
-    auto lhs_view = cudf::column_device_view::create(lhs);
-    auto rhs_view = cudf::column_device_view::create(rhs);
-    auto lhs_iter = cudf::detail::make_pair_iterator<T>(*lhs_view);
-    auto rhs_iter = cudf::detail::make_pair_iterator<T>(*rhs_view);
-    auto out_dv   = cudf::mutable_column_device_view::create(*out);
-
-    // call the kernel with an artificially small grid
-    cudf::detail::copy_if_else_kernel<32, T, decltype(lhs_iter), decltype(rhs_iter), Filter, false>
-      <<<1, 32, 0, stream.value()>>>(lhs_iter, rhs_iter, filter, *out_dv, nullptr);
-
-    return out;
-  }
-
-  template <typename T, typename Filter, CUDF_ENABLE_IF(not cudf::is_rep_layout_compatible<T>())>
-  std::unique_ptr<cudf::column> operator()(cudf::column_view const& lhs,
-                                           cudf::column_view const& rhs,
-                                           Filter filter,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
-  {
-    CUDF_FAIL("Unexpected test execution");
-  }
-};
-
-std::unique_ptr<cudf::column> tiny_grid_launch(cudf::column_view const& lhs,
-                                               cudf::column_view const& rhs,
-                                               cudf::column_view const& boolean_mask)
-{
-  auto bool_mask_device_p                   = cudf::column_device_view::create(boolean_mask);
-  cudf::column_device_view bool_mask_device = *bool_mask_device_p;
-  auto filter                               = [bool_mask_device] __device__(cudf::size_type i) {
-    return bool_mask_device.element<bool>(i);
-  };
-  return cudf::type_dispatcher(lhs.type(),
-                               copy_if_else_tiny_grid_functor{},
-                               lhs,
-                               rhs,
-                               filter,
-                               rmm::cuda_stream_default,
-                               rmm::mr::get_current_device_resource());
-}
-
-TYPED_TEST(CopyTest, CopyIfElseTestTinyGrid)
-{
-  using T = TypeParam;
-
-  // make sure we span at least 2 warps
-  int num_els = 64;
-
-  bool mask[] = {1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0,
-                 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1,
-                 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-  cudf::test::fixed_width_column_wrapper<bool> mask_w(mask, mask + num_els);
-
-  wrapper<T, int32_t> lhs_w({5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-                             5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-                             5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5});
-
-  wrapper<T, int32_t> rhs_w({6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-                             6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6,
-                             6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6, 6});
-
-  wrapper<T, int32_t> expected_w({5, 6, 5, 6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6,
-                                  6, 5, 5, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 6, 5, 5, 5, 5, 5, 5, 5, 5,
-                                  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5});
-
-  auto out = tiny_grid_launch(lhs_w, rhs_w, mask_w);
-
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
 }
 
@@ -188,6 +99,27 @@ TYPED_TEST(CopyTest, CopyIfElseTestLong)
 
   auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), expected_w);
+}
+
+TYPED_TEST(CopyTest, CopyIfElseTestMultipleBlocks)
+{
+  using T = TypeParam;
+
+  int num = 1000;  // larger than a single block
+  std::vector<int32_t> h_lhs(num, 5);
+  std::vector<int32_t> h_rhs(num, 6);
+  std::vector<bool> h_mask(num, false);
+  std::vector<bool> h_validity(num, true);
+  h_validity[0] = 0;
+
+  cudf::test::fixed_width_column_wrapper<T, int32_t> lhs_w(
+    h_lhs.begin(), h_lhs.end(), h_validity.begin());
+  cudf::test::fixed_width_column_wrapper<T, int32_t> rhs_w(
+    h_rhs.begin(), h_rhs.end(), h_validity.begin());
+  cudf::test::fixed_width_column_wrapper<bool> mask_w(h_mask.begin(), h_mask.end());
+
+  auto out = cudf::copy_if_else(lhs_w, rhs_w, mask_w);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(out->view(), rhs_w);
 }
 
 TYPED_TEST(CopyTest, CopyIfElseTestEmptyInputs)
@@ -367,7 +299,7 @@ TEST_F(CopyEmptyNested, CopyIfElseTestEmptyNestedScalars)
 template <typename T>
 struct CopyTestNumeric : public cudf::test::BaseFixture {
 };
-TYPED_TEST_CASE(CopyTestNumeric, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(CopyTestNumeric, cudf::test::NumericTypes);
 
 TYPED_TEST(CopyTestNumeric, CopyIfElseTestScalarColumn)
 {
@@ -457,7 +389,7 @@ struct create_chrono_scalar {
 template <typename T>
 struct CopyTestChrono : public cudf::test::BaseFixture {
 };
-TYPED_TEST_CASE(CopyTestChrono, cudf::test::ChronoTypes);
+TYPED_TEST_SUITE(CopyTestChrono, cudf::test::ChronoTypes);
 
 TYPED_TEST(CopyTestChrono, CopyIfElseTestScalarColumn)
 {
@@ -647,7 +579,7 @@ template <typename T>
 struct FixedPointTypes : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTypes, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTypes, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTypes, FixedPointSimple)
 {

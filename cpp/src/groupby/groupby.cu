@@ -25,6 +25,7 @@
 #include <cudf/detail/groupby/group_replace_nulls.hpp>
 #include <cudf/detail/groupby/sort_helper.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/strings/string_view.hpp>
@@ -33,7 +34,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
-#include <structs/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -76,8 +76,8 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby::disp
   if (_keys_are_sorted == sorted::NO and not _helper and
       detail::hash::can_use_hash_groupby(_keys, requests)) {
     // Optionally flatten nested key columns.
-    auto [flattened_keys, _, __, ___] =
-      flatten_nested_columns(_keys, {}, {}, column_nullability::FORCE);
+    auto flattened             = flatten_nested_columns(_keys, {}, {}, column_nullability::FORCE);
+    auto flattened_keys        = flattened.flattened_columns();
     auto is_supported_key_type = [](auto col) { return cudf::is_equality_comparable(col.type()); };
     CUDF_EXPECTS(std::all_of(flattened_keys.begin(), flattened_keys.end(), is_supported_key_type),
                  "Unsupported groupby key type does not support equality comparison");
@@ -114,7 +114,7 @@ struct empty_column_constructor {
 
     if constexpr (k == aggregation::Kind::COLLECT_LIST || k == aggregation::Kind::COLLECT_SET) {
       return make_lists_column(
-        0, make_empty_column(data_type{type_to_id<offset_type>()}), empty_like(values), 0, {});
+        0, make_empty_column(type_to_id<offset_type>()), empty_like(values), 0, {});
     }
 
     // If `values` is LIST typed, and the aggregation results match the type,

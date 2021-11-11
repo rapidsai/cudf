@@ -38,8 +38,9 @@ dependencies:
   - black=19.10
   - isort=5.6.4
   - mypy=0.782
+  - pydocstyle=6.1.1
   - typing_extensions
-  - pre_commit
+  - pre-commit
   - dask>=2021.09.1
   - distributed>=2021.09.1
   - streamz
@@ -58,6 +59,8 @@ dependencies:
   - cachetools
   - transformers<=4.10.3
   - pydata-sphinx-theme
+  - librdkafka=1.7.0
+  - python-confluent-kafka=1.7.0
   - pip:
       - git+https://github.com/dask/dask.git@main
       - git+https://github.com/dask/distributed.git@main

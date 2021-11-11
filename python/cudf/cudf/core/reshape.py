@@ -1,16 +1,21 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 import itertools
+from typing import Dict, Optional
 
 import numpy as np
 import pandas as pd
 
 import cudf
+from cudf._lib.transform import one_hot_encode
+from cudf._typing import Dtype
+from cudf.core.column import ColumnBase, as_column, column_empty_like
+from cudf.core.column.categorical import CategoricalColumn
 
 _AXIS_MAP = {0: 0, 1: 1, "index": 0, "columns": 1}
 
 
-def _align_objs(objs, how="outer"):
+def _align_objs(objs, how="outer", sort=None):
     """Align a set of Series or Dataframe objects.
 
     Parameters
@@ -18,16 +23,18 @@ def _align_objs(objs, how="outer"):
     objs : list of DataFrame, Series, or Index
     how : How to handle indexes on other axis (or axes),
     similar to join in concat
+    sort : Whether to sort the resulting Index
     Returns
     -------
-    A bool for if indexes have matched and a set of
-    reindexed and aligned objects ready for concatenation
+    A list of reindexed and aligned objects
+    ready for concatenation
     """
     # Check if multiindex then check if indexes match. GenericIndex
     # returns ndarray tuple of bools requiring additional filter.
     # Then check for duplicate index value.
     i_objs = iter(objs)
     first = next(i_objs)
+
     not_matching_index = any(
         not first.index.equals(rest.index) for rest in i_objs
     )
@@ -38,36 +45,50 @@ def _align_objs(objs, how="outer"):
 
         index = objs[0].index
         name = index.name
-        if how == "inner" or isinstance(index, cudf.MultiIndex):
-            for obj in objs[1:]:
-                index = (
-                    cudf.DataFrame(index=obj.index)
-                    .join(cudf.DataFrame(index=index), how=how)
-                    .index
-                )
-                index.name = name
-            return [obj.reindex(index) for obj in objs], False
 
-        else:
-            all_index_objs = [obj.index for obj in objs]
-            appended_index = all_index_objs[0].append(all_index_objs[1:])
-            df = cudf.DataFrame(
-                {
-                    "idxs": appended_index,
-                    "order": cudf.core.column.arange(
-                        start=0, stop=len(appended_index)
-                    ),
-                }
-            )
-            df = df.drop_duplicates(subset=["idxs"]).sort_values(
-                by=["order"], ascending=True
-            )
-            final_index = df["idxs"]
-            final_index.name = name
+        final_index = _get_combined_index(
+            [obj.index for obj in objs], intersect=how == "inner", sort=sort
+        )
 
-            return [obj.reindex(final_index) for obj in objs], False
+        final_index.name = name
+        return [
+            obj.reindex(final_index)
+            if not final_index.equals(obj.index)
+            else obj
+            for obj in objs
+        ]
     else:
-        return objs, True
+        if sort:
+            if not first.index.is_monotonic_increasing:
+                final_index = first.index.sort_values()
+                return [obj.reindex(final_index) for obj in objs]
+        return objs
+
+
+def _get_combined_index(indexes, intersect: bool = False, sort=None):
+    if len(indexes) == 0:
+        index = cudf.Index([])
+    elif len(indexes) == 1:
+        index = indexes[0]
+    elif intersect:
+        sort = True
+        index = indexes[0]
+        for other in indexes[1:]:
+            # Don't sort for every intersection,
+            # let the sorting happen in the end.
+            index = index.intersection(other, sort=False)
+    else:
+        index = indexes[0]
+        if sort is None:
+            sort = False if isinstance(index, cudf.StringIndex) else True
+        for other in indexes[1:]:
+            index = index.union(other, sort=False)
+
+    if sort:
+        if not index.is_monotonic_increasing:
+            index = index.sort_values()
+
+    return index
 
 
 def _normalize_series_and_dataframe(objs, axis):
@@ -202,7 +223,6 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
     0      a       1    bird   polly
     1      b       2  monkey  george
     """
-
     # TODO: Do we really need to have different error messages for an empty
     # list and a list of None?
     if not objs:
@@ -286,9 +306,12 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
         if len(objs) == 0:
             return df
 
-        objs, match_index = _align_objs(objs, how=join)
+        # Don't need to align indices of all `objs` since we
+        # would anyway return an empty dataframe below
+        if not empty_inner:
+            objs = _align_objs(objs, how=join, sort=sort)
+            df.index = objs[0].index
 
-        df.index = objs[0].index
         for o in objs:
             for name, col in o._data.items():
                 if name in df._data:
@@ -297,7 +320,15 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
                         f"doesn't support having multiple columns with "
                         f"same names yet."
                     )
-                df[name] = col
+                if empty_inner:
+                    # if join is inner and it contains an empty df
+                    # we return an empty df, hence creating an empty
+                    # column with dtype metadata retained.
+                    df[name] = cudf.core.column.column_empty_like(
+                        col, newsize=0
+                    )
+                else:
+                    df[name] = col
 
         result_columns = objs[0].columns.append(
             [obj.columns for obj in objs[1:]]
@@ -314,20 +345,7 @@ def concat(objs, axis=0, join="outer", ignore_index=False, sort=None):
             # we return an empty df
             return df.head(0)
 
-        # This check uses `sort is not False` rather than just `sort=True`
-        # to differentiate between a user-provided `False` value and the
-        # default `None`. This is necessary for pandas compatibility, even
-        # though `True` and `False` are the only valid options from the user.
-        if not match_index and sort is not False:
-            return df.sort_index()
-
-        if sort or join == "inner":
-            # when join='outer' and sort=False string indexes
-            # are returned unsorted. Everything else seems
-            # to be returned sorted when axis = 1
-            return df.sort_index()
-        else:
-            return df
+        return df
 
     # If we get here, we are always concatenating along axis 0 (the rows).
     typ = list(typs)[0]
@@ -499,7 +517,7 @@ def melt(
     dtypes = [frame[col].dtype for col in id_vars + value_vars]
     if any(cudf.api.types.is_categorical_dtype(t) for t in dtypes):
         raise NotImplementedError(
-            "Categorical columns are not yet " "supported for function"
+            "Categorical columns are not yet supported for function"
         )
 
     # Check dtype homogeneity in value_var
@@ -574,7 +592,7 @@ def get_dummies(
     drop_first=False,
     dtype="uint8",
 ):
-    """ Returns a dataframe whose columns are the one hot encodings of all
+    """Returns a dataframe whose columns are the one hot encodings of all
     columns in `df`
 
     Parameters
@@ -654,6 +672,7 @@ def get_dummies(
     3     0  0  1  0
     4     0  0  0  1
     """
+
     if cats is None:
         cats = {}
     if sparse:
@@ -693,43 +712,40 @@ def get_dummies(
         if len(columns) == 0:
             return df.select_dtypes(exclude=encode_fallback_dtypes)
         else:
-            result_df = df.copy(deep=False)
-            result_df.drop(columns=columns, inplace=True)
+            result_data = {
+                col_name: col
+                for col_name, col in df._data.items()
+                if col_name not in columns
+            }
 
             for name in columns:
-                unique = _get_unique(column=df._data[name], dummy_na=dummy_na)
+                if name not in cats:
+                    unique = _get_unique(
+                        column=df._data[name], dummy_na=dummy_na
+                    )
+                else:
+                    unique = as_column(cats[name])
 
-                col_enc_df = df.one_hot_encoding(
-                    name,
+                col_enc_data = _one_hot_encode_column(
+                    column=df._data[name],
+                    categories=unique,
                     prefix=prefix_map.get(name, prefix),
-                    cats=cats.get(name, unique),
                     prefix_sep=prefix_sep_map.get(name, prefix_sep),
                     dtype=dtype,
                 )
-                for col in col_enc_df.columns.difference(df._data.names):
-                    result_df[col] = col_enc_df._data[col]
-
-            return result_df
+                result_data.update(col_enc_data)
+            return cudf.DataFrame._from_data(result_data, index=df._index)
     else:
         ser = cudf.Series(df)
         unique = _get_unique(column=ser._column, dummy_na=dummy_na)
-
-        if hasattr(unique, "to_arrow"):
-            cats = unique.to_arrow().to_pylist()
-        else:
-            cats = pd.Series(unique, dtype="object")
-
-        col_names = ["null" if cat is None else cat for cat in cats]
-
-        if prefix is not None:
-            col_names = [f"{prefix}{prefix_sep}{cat}" for cat in col_names]
-
-        newcols = ser.one_hot_encoding(cats=cats, dtype=dtype)
-        result_df = cudf.DataFrame(index=ser.index)
-        for i, col in enumerate(newcols):
-            result_df._data[col_names[i]] = col
-
-        return result_df
+        data = _one_hot_encode_column(
+            column=ser._column,
+            categories=unique,
+            prefix=prefix,
+            prefix_sep=prefix_sep,
+            dtype=dtype,
+        )
+        return cudf.DataFrame._from_data(data, index=ser._index)
 
 
 def merge_sorted(
@@ -1064,6 +1080,38 @@ def _get_unique(column, dummy_na):
             unique = unique.nans_to_nulls()
         unique = unique.dropna()
     return unique
+
+
+def _one_hot_encode_column(
+    column: ColumnBase,
+    categories: ColumnBase,
+    prefix: Optional[str],
+    prefix_sep: Optional[str],
+    dtype: Optional[Dtype],
+) -> Dict[str, ColumnBase]:
+    """Encode a single column with one hot encoding. The return dictionary
+    contains pairs of (category, encodings). The keys may be prefixed with
+    `prefix`, separated with category name with `prefix_sep`. The encoding
+    columns maybe coerced into `dtype`.
+    """
+    if isinstance(column, CategoricalColumn):
+        if column.size == column.null_count:
+            column = column_empty_like(categories, newsize=column.size)
+        else:
+            column = column._get_decategorized_column()
+
+    if column.size * categories.size >= np.iinfo("int32").max:
+        raise ValueError(
+            "Size limitation exceeded: column.size * category.size < "
+            "np.iinfo('int32').max. Consider reducing size of category"
+        )
+    data = one_hot_encode(column, categories)
+
+    if prefix is not None and prefix_sep is not None:
+        data = {f"{prefix}{prefix_sep}{col}": enc for col, enc in data.items()}
+    if dtype:
+        data = {k: v.astype(dtype) for k, v in data.items()}
+    return data
 
 
 def _length_check_params(obj, columns, name):

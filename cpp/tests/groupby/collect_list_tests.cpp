@@ -32,7 +32,7 @@ struct groupby_collect_list_test : public cudf::test::BaseFixture {
 using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                                   cudf::test::FloatingPointTypes,
                                                   cudf::test::TimestampTypes>;
-TYPED_TEST_CASE(groupby_collect_list_test, FixedWidthTypesNotBool);
+TYPED_TEST_SUITE(groupby_collect_list_test, FixedWidthTypesNotBool);
 
 TYPED_TEST(groupby_collect_list_test, CollectWithoutNulls)
 {
@@ -174,21 +174,17 @@ TYPED_TEST(groupby_collect_list_test, CollectOnEmptyInputListsOfStructs)
   auto struct_column = structs_column_wrapper{{struct_child}};
 
   auto values = cudf::make_lists_column(
-    0, make_empty_column(data_type{type_to_id<offset_type>()}), struct_column.release(), 0, {});
+    0, make_empty_column(type_to_id<offset_type>()), struct_column.release(), 0, {});
 
   fixed_width_column_wrapper<K, int32_t> expect_keys{};
 
   auto expect_struct_child  = LCW{};
   auto expect_struct_column = structs_column_wrapper{{expect_struct_child}};
 
-  auto expect_child =
-    cudf::make_lists_column(0,
-                            make_empty_column(data_type{type_to_id<offset_type>()}),
-                            expect_struct_column.release(),
-                            0,
-                            {});
+  auto expect_child = cudf::make_lists_column(
+    0, make_empty_column(type_to_id<offset_type>()), expect_struct_column.release(), 0, {});
   auto expect_values = cudf::make_lists_column(
-    0, make_empty_column(data_type{type_to_id<offset_type>()}), std::move(expect_child), 0, {});
+    0, make_empty_column(type_to_id<offset_type>()), std::move(expect_child), 0, {});
 
   auto agg = cudf::make_collect_list_aggregation<groupby_aggregation>();
   test_single_agg(keys, values->view(), expect_keys, expect_values->view(), std::move(agg));

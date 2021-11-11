@@ -21,6 +21,7 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <io/utilities/block_utils.cuh>
+#include <io/utilities/config_utils.hpp>
 #include <io/utilities/time_utils.cuh>
 
 #include <cub/cub.cuh>
@@ -349,13 +350,8 @@ template <StreamIndexType cid,
           uint32_t inmask,
           int block_size,
           typename Storage>
-static __device__ uint32_t IntegerRLE(orcenc_state_s* s,
-                                      const T* inbuf,
-                                      uint32_t inpos,
-                                      uint32_t numvals,
-                                      uint32_t flush,
-                                      int t,
-                                      Storage& temp_storage)
+static __device__ uint32_t IntegerRLE(
+  orcenc_state_s* s, const T* inbuf, uint32_t inpos, uint32_t numvals, int t, Storage& temp_storage)
 {
   using block_reduce = cub::BlockReduce<T, block_size>;
   uint8_t* dst       = s->stream.data_ptrs[cid] + s->strm_pos[cid];
@@ -766,7 +762,8 @@ __global__ void __launch_bounds__(block_size)
   auto const column = *s->chunk.column;
   while (s->cur_row < s->chunk.num_rows || s->numvals + s->numlengths != 0) {
     // Fetch non-null values
-    if (s->chunk.type_kind != LIST && !s->stream.data_ptrs[CI_DATA]) {
+    auto const length_stream_only = s->chunk.type_kind == LIST or s->chunk.type_kind == MAP;
+    if (not length_stream_only && s->stream.data_ptrs[CI_DATA] == nullptr) {
       // Pass-through
       __syncthreads();
       if (!t) {
@@ -847,7 +844,8 @@ __global__ void __launch_bounds__(block_size)
             // Reusing the lengths array for the scale stream
             // Note: can be written in a faster manner, given that all values are equal
           case DECIMAL: s->lengths.u32[nz_idx] = zigzag(s->chunk.scale); break;
-          case LIST: {
+          case LIST:
+          case MAP: {
             auto const& offsets = column.child(lists_column_view::offsets_column_index);
             // Compute list length from the offsets
             s->lengths.u32[nz_idx] = offsets.element<size_type>(row + 1 + column.offset()) -
@@ -887,7 +885,7 @@ __global__ void __launch_bounds__(block_size)
         s->nnz += nz;
         s->numvals += nz;
         s->numlengths += (s->chunk.type_kind == TIMESTAMP || s->chunk.type_kind == DECIMAL ||
-                          s->chunk.type_kind == LIST ||
+                          s->chunk.type_kind == LIST || s->chunk.type_kind == MAP ||
                           (s->chunk.type_kind == STRING && s->chunk.encoding_kind != DICTIONARY_V2))
                            ? nz
                            : 0;
@@ -902,12 +900,12 @@ __global__ void __launch_bounds__(block_size)
           case INT:
           case DATE:
             n = IntegerRLE<CI_DATA, int32_t, true, 0x3ff, block_size>(
-              s, s->vals.i32, s->nnz - s->numvals, s->numvals, flush, t, temp_storage.i32);
+              s, s->vals.i32, s->nnz - s->numvals, s->numvals, t, temp_storage.i32);
             break;
           case LONG:
           case TIMESTAMP:
             n = IntegerRLE<CI_DATA, int64_t, true, 0x3ff, block_size>(
-              s, s->vals.i64, s->nnz - s->numvals, s->numvals, flush, t, temp_storage.i64);
+              s, s->vals.i64, s->nnz - s->numvals, s->numvals, t, temp_storage.i64);
             break;
           case BYTE:
             n = ByteRLE<CI_DATA, 0x3ff>(s, s->vals.u8, s->nnz - s->numvals, s->numvals, flush, t);
@@ -933,7 +931,7 @@ __global__ void __launch_bounds__(block_size)
           case STRING:
             if (s->chunk.encoding_kind == DICTIONARY_V2) {
               n = IntegerRLE<CI_DATA, uint32_t, false, 0x3ff, block_size>(
-                s, s->vals.u32, s->nnz - s->numvals, s->numvals, flush, t, temp_storage.u32);
+                s, s->vals.u32, s->nnz - s->numvals, s->numvals, t, temp_storage.u32);
             } else {
               n = s->numvals;
             }
@@ -956,17 +954,18 @@ __global__ void __launch_bounds__(block_size)
       }
       // Encode secondary stream values
       if (s->numlengths > 0) {
-        uint32_t flush = (s->cur_row == s->chunk.num_rows) ? 1 : 0, n;
+        uint32_t n;
         switch (s->chunk.type_kind) {
           case TIMESTAMP:
             n = IntegerRLE<CI_DATA2, uint64_t, false, 0x3ff, block_size>(
-              s, s->lengths.u64, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u64);
+              s, s->lengths.u64, s->nnz - s->numlengths, s->numlengths, t, temp_storage.u64);
             break;
           case DECIMAL:
           case LIST:
+          case MAP:
           case STRING:
             n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
-              s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u32);
+              s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, t, temp_storage.u32);
             break;
           default: n = s->numlengths; break;
         }
@@ -1059,9 +1058,8 @@ __global__ void __launch_bounds__(block_size)
       if (t < numvals) s->lengths.u32[nz_idx] = count;
       __syncthreads();
       if (s->numlengths + numvals > 0) {
-        uint32_t flush = (s->cur_row + numvals == s->nrows) ? 1 : 0;
-        uint32_t n     = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
-          s, s->lengths.u32, s->cur_row, s->numlengths + numvals, flush, t, temp_storage);
+        uint32_t n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
+          s, s->lengths.u32, s->cur_row, s->numlengths + numvals, t, temp_storage);
         __syncthreads();
         if (!t) {
           s->numlengths += numvals;
@@ -1312,9 +1310,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
   gpuInitCompressionBlocks<<<dim_grid, dim_block_init, 0, stream.value()>>>(
     strm_desc, enc_streams, comp_in, comp_out, compressed_data, comp_blk_size, max_comp_blk_size);
   if (compression == SNAPPY) {
-    auto env_use_nvcomp = std::getenv("LIBCUDF_USE_NVCOMP");
-    bool use_nvcomp     = env_use_nvcomp != nullptr ? std::atoi(env_use_nvcomp) : 0;
-    if (use_nvcomp) {
+    if (detail::nvcomp_integration::is_stable_enabled()) {
       try {
         size_t temp_size;
         nvcompStatus_t nvcomp_status = nvcompBatchedSnappyCompressGetTempSize(

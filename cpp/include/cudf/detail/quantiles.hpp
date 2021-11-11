@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/quantiles.hpp>
+#include <cudf/tdigest/tdigest_column_view.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -52,13 +53,13 @@ std::unique_ptr<table> quantiles(
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
 
 /**
- * @copydoc cudf::percentile_approx(column_view const&, column_view const&,
+ * @copydoc cudf::percentile_approx(tdigest_column_view const&, column_view const&,
  * rmm::mr::device_memory_resource*)
  *
  * @param stream CUDA stream used for device memory operations and kernel launches.
  */
 std::unique_ptr<column> percentile_approx(
-  column_view const& input,
+  tdigest::tdigest_column_view const& input,
   column_view const& percentiles,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());

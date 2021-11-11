@@ -81,7 +81,7 @@ template <typename T>
 struct CsvFixedPointWriterTest : public CsvWriterTest {
 };
 
-TYPED_TEST_CASE(CsvFixedPointWriterTest, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(CsvFixedPointWriterTest, cudf::test::FixedPointTypes);
 
 // Base test fixture for tests
 struct CsvReaderTest : public cudf::test::BaseFixture {
@@ -94,7 +94,7 @@ struct CsvReaderNumericTypeTest : public CsvReaderTest {
 
 // Declare typed test cases
 using SupportedNumericTypes = cudf::test::Types<int64_t, double>;
-TYPED_TEST_CASE(CsvReaderNumericTypeTest, SupportedNumericTypes);
+TYPED_TEST_SUITE(CsvReaderNumericTypeTest, SupportedNumericTypes);
 
 // Typed test to be instantiated for numeric::decimal32 and numeric::decimal64
 template <typename DecimalType>
@@ -125,7 +125,7 @@ struct CsvFixedPointReaderTest : public CsvReaderTest {
   }
 };
 
-TYPED_TEST_CASE(CsvFixedPointReaderTest, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(CsvFixedPointReaderTest, cudf::test::FixedPointTypes);
 
 namespace {
 // Generates a vector of uniform random values of type T
@@ -407,7 +407,8 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnNegativeScale)
   auto filepath = temp_env->get_temp_dir() + "FixedPointSingleColumnNegativeScale.csv";
 
   cudf_io::csv_writer_options writer_options =
-    cudf_io::csv_writer_options::builder(cudf_io::sink_info(filepath), input_table);
+    cudf_io::csv_writer_options::builder(cudf_io::sink_info(filepath), input_table)
+      .include_header(false);
 
   cudf_io::write_csv(writer_options);
 
@@ -453,7 +454,8 @@ TYPED_TEST(CsvFixedPointWriterTest, SingleColumnPositiveScale)
   auto filepath = temp_env->get_temp_dir() + "FixedPointSingleColumnPositiveScale.csv";
 
   cudf_io::csv_writer_options writer_options =
-    cudf_io::csv_writer_options::builder(cudf_io::sink_info(filepath), input_table);
+    cudf_io::csv_writer_options::builder(cudf_io::sink_info(filepath), input_table)
+      .include_header(false);
 
   cudf_io::write_csv(writer_options);
 
@@ -2196,6 +2198,34 @@ TEST_F(CsvReaderTest, DtypesMapInvalid)
       .dtypes({{"A", dtype<int16_t>()}});
 
   EXPECT_THROW(cudf_io::read_csv(in_opts), cudf::logic_error);
+}
+
+TEST_F(CsvReaderTest, CsvDefaultOptionsWriteReadMatch)
+{
+  auto const filepath = temp_env->get_temp_dir() + "issue.csv";
+
+  // make up some kind of dataframe
+  auto int_column = column_wrapper<int32_t>{10, 20, 30};
+  auto str_column = column_wrapper<cudf::string_view>{"abc", "mno", "xyz"};
+  cudf::table_view input_table(std::vector<cudf::column_view>{int_column, str_column});
+
+  // write that dataframe to a csv using default options to some temporary file
+  cudf_io::csv_writer_options writer_options =
+    cudf_io::csv_writer_options::builder(cudf_io::sink_info{filepath}, input_table);
+  cudf_io::write_csv(writer_options);
+
+  // read the temp csv file using default options
+  cudf_io::csv_reader_options read_options =
+    cudf_io::csv_reader_options::builder(cudf_io::source_info{filepath})
+      .dtypes(std::vector<data_type>{dtype<int32_t>(), dtype<cudf::string_view>()});
+
+  cudf_io::table_with_metadata new_table_and_metadata = cudf_io::read_csv(read_options);
+
+  // verify that the tables are identical, or as identical as expected.
+  const auto new_table_view = new_table_and_metadata.tbl->view();
+  CUDF_TEST_EXPECT_TABLES_EQUIVALENT(input_table, new_table_view);
+  EXPECT_EQ(new_table_and_metadata.metadata.column_names[0], "0");
+  EXPECT_EQ(new_table_and_metadata.metadata.column_names[1], "1");
 }
 
 CUDF_TEST_PROGRAM_MAIN()

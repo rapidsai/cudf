@@ -130,13 +130,25 @@ def test_read_csv(s3_base, s3so, pdf, bytes_per_thread):
     fname = "test_csv_reader.csv"
     bname = "csv"
     buffer = pdf.to_csv(index=False)
+
+    # Use fsspec file object
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         got = cudf.read_csv(
             "s3://{}/{}".format(bname, fname),
             storage_options=s3so,
             bytes_per_thread=bytes_per_thread,
+            use_python_file_object=False,
         )
+    assert_eq(pdf, got)
 
+    # Use Arrow PythonFile object
+    with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
+        got = cudf.read_csv(
+            "s3://{}/{}".format(bname, fname),
+            storage_options=s3so,
+            bytes_per_thread=bytes_per_thread,
+            use_python_file_object=True,
+        )
     assert_eq(pdf, got)
 
 
@@ -156,19 +168,25 @@ def test_read_csv_arrow_nativefile(s3_base, s3so, pdf):
 
 
 @pytest.mark.parametrize("bytes_per_thread", [32, 1024])
-def test_read_csv_byte_range(s3_base, s3so, pdf, bytes_per_thread):
+@pytest.mark.parametrize("use_python_file_object", [True, False])
+def test_read_csv_byte_range(
+    s3_base, s3so, pdf, bytes_per_thread, use_python_file_object
+):
     # Write to buffer
     fname = "test_csv_reader_byte_range.csv"
     bname = "csv"
     buffer = pdf.to_csv(index=False)
+
+    # Use fsspec file object
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         got = cudf.read_csv(
             "s3://{}/{}".format(bname, fname),
             storage_options=s3so,
             byte_range=(74, 73),
             bytes_per_thread=bytes_per_thread,
-            header=False,
+            header=None,
             names=["Integer", "Float", "Integer2", "String", "Boolean"],
+            use_python_file_object=use_python_file_object,
         )
 
     assert_eq(pdf.iloc[-2:].reset_index(drop=True), got)
@@ -254,7 +272,8 @@ def test_read_parquet_arrow_nativefile(s3_base, s3so, pdf, columns):
     assert_eq(expect, got)
 
 
-def test_read_parquet_filters(s3_base, s3so, pdf):
+@pytest.mark.parametrize("python_file", [True, False])
+def test_read_parquet_filters(s3_base, s3so, pdf, python_file):
     fname = "test_parquet_reader_filters.parquet"
     bname = "parquet"
     buffer = BytesIO()
@@ -266,6 +285,7 @@ def test_read_parquet_filters(s3_base, s3so, pdf):
             "s3://{}/{}".format(bname, fname),
             storage_options=s3so,
             filters=filters,
+            use_python_file_object=python_file,
         )
 
     # All row-groups should be filtered out
@@ -308,7 +328,9 @@ def test_read_json(s3_base, s3so):
     assert_eq(expect, got)
 
 
-def test_read_orc(s3_base, s3so, datadir):
+@pytest.mark.parametrize("use_python_file_object", [False, True])
+@pytest.mark.parametrize("columns", [None, ["string1"]])
+def test_read_orc(s3_base, s3so, datadir, use_python_file_object, columns):
     source_file = str(datadir / "orc" / "TestOrcFile.testSnappy.orc")
     fname = "test_orc_reader.orc"
     bname = "orc"
@@ -319,9 +341,36 @@ def test_read_orc(s3_base, s3so, datadir):
 
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         got = cudf.read_orc(
-            "s3://{}/{}".format(bname, fname), storage_options=s3so
+            "s3://{}/{}".format(bname, fname),
+            columns=columns,
+            storage_options=s3so,
+            use_python_file_object=use_python_file_object,
         )
 
+    if columns:
+        expect = expect[columns]
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("columns", [None, ["string1"]])
+def test_read_orc_arrow_nativefile(s3_base, s3so, datadir, columns):
+    source_file = str(datadir / "orc" / "TestOrcFile.testSnappy.orc")
+    fname = "test_orc_reader.orc"
+    bname = "orc"
+    expect = pa.orc.ORCFile(source_file).read().to_pandas()
+
+    with open(source_file, "rb") as f:
+        buffer = f.read()
+
+    with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
+        fs = pa_fs.S3FileSystem(
+            endpoint_override=s3so["client_kwargs"]["endpoint_url"],
+        )
+        with fs.open_input_file("{}/{}".format(bname, fname)) as fil:
+            got = cudf.read_orc(fil, columns=columns)
+
+    if columns:
+        expect = expect[columns]
     assert_eq(expect, got)
 
 

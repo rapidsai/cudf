@@ -21,6 +21,7 @@
 #include <jni.h>
 
 #include <cudf/utilities/error.hpp>
+#include <rmm/detail/error.hpp>
 
 namespace cudf {
 namespace jni {
@@ -327,7 +328,7 @@ public:
     return data()[index];
   }
 
-  T *const *data() const { return reinterpret_cast<T **>(wrapped.data()); }
+  T *const *data() const { return reinterpret_cast<T *const *>(wrapped.data()); }
 
   T **data() { return reinterpret_cast<T **>(wrapped.data()); }
 
@@ -741,11 +742,7 @@ inline void jni_cuda_check(JNIEnv *const env, cudaError_t cuda_status) {
   }
 
 #define CATCH_STD_CLASS(env, class_name, ret_val)                                                  \
-  catch (const std::bad_alloc &e) {                                                                \
-    /* In some cases a cuda exception can be the cause so peek and clear if needed*/               \
-    if (cudaErrorMemoryAllocation == cudaPeekAtLastError()) {                                      \
-      cudaGetLastError();                                                                          \
-    }                                                                                              \
+  catch (const rmm::out_of_memory &e) {                                                            \
     auto what =                                                                                    \
         std::string("Could not allocate native memory: ") + (e.what() == nullptr ? "" : e.what()); \
     JNI_CHECK_THROW_NEW(env, cudf::jni::OOM_CLASS, what.c_str(), ret_val);                         \

@@ -37,7 +37,7 @@ template <typename T>
 struct TypedStructScalarScatterTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(TypedStructScalarScatterTest, FixedWidthTypes);
+TYPED_TEST_SUITE(TypedStructScalarScatterTest, FixedWidthTypes);
 
 column scatter_single_scalar(scalar const& slr, column_view scatter_map, column_view target)
 {

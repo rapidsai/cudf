@@ -100,9 +100,9 @@ std::unique_ptr<column> strip(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  if (strings.is_empty()) return make_empty_column(data_type{type_id::STRING});
+  if (strings.is_empty()) return make_empty_column(type_id::STRING);
 
-  CUDF_EXPECTS(to_strip.is_valid(), "Parameter to_strip must be valid");
+  CUDF_EXPECTS(to_strip.is_valid(stream), "Parameter to_strip must be valid");
   string_view const d_to_strip(to_strip.data(), to_strip.size());
 
   auto const d_column = column_device_view::create(strings.parent(), stream);

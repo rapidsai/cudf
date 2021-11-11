@@ -108,7 +108,7 @@ struct ReductionTest : public cudf::test::BaseFixture {
       using ScalarType                     = cudf::scalar_type_t<T_out>;
       auto result1                         = static_cast<ScalarType*>(result.get());
       EXPECT_EQ(expected_null, !result1->is_valid());
-      if (result1->is_valid()) { EXPECT_EQ(expected_value, result1->value()); }
+      if (result1->is_valid()) { EXPECT_EQ(expected_value, T_out{result1->value()}); }
     };
 
     if (succeeded_condition) {
@@ -124,7 +124,7 @@ struct MinMaxReductionTest : public ReductionTest<T> {
 };
 
 using MinMaxTypes = cudf::test::AllTypes;
-TYPED_TEST_CASE(MinMaxReductionTest, MinMaxTypes);
+TYPED_TEST_SUITE(MinMaxReductionTest, MinMaxTypes);
 
 // ------------------------------------------------------------------------
 TYPED_TEST(MinMaxReductionTest, MinMax)
@@ -152,8 +152,8 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
   using ScalarType = cudf::scalar_type_t<T>;
   auto min_result  = static_cast<ScalarType*>(res.first.get());
   auto max_result  = static_cast<ScalarType*>(res.second.get());
-  EXPECT_EQ(min_result->value(), expected_min_result);
-  EXPECT_EQ(max_result->value(), expected_max_result);
+  EXPECT_EQ(T{min_result->value()}, expected_min_result);
+  EXPECT_EQ(T{max_result->value()}, expected_max_result);
 
   // test with some nulls
   cudf::test::fixed_width_column_wrapper<T> col_nulls = construct_null_column(v, host_bools);
@@ -174,8 +174,8 @@ TYPED_TEST(MinMaxReductionTest, MinMax)
   using ScalarType     = cudf::scalar_type_t<T>;
   auto min_null_result = static_cast<ScalarType*>(null_res.first.get());
   auto max_null_result = static_cast<ScalarType*>(null_res.second.get());
-  EXPECT_EQ(min_null_result->value(), expected_min_null_result);
-  EXPECT_EQ(max_null_result->value(), expected_max_null_result);
+  EXPECT_EQ(T{min_null_result->value()}, expected_min_null_result);
+  EXPECT_EQ(T{max_null_result->value()}, expected_max_null_result);
 
   // test with all null
   cudf::test::fixed_width_column_wrapper<T> col_all_nulls = construct_null_column(v, all_null);
@@ -214,7 +214,7 @@ template <typename T>
 struct SumReductionTest : public ReductionTest<T> {
 };
 using SumTypes = cudf::test::Concat<cudf::test::NumericTypes, cudf::test::DurationTypes>;
-TYPED_TEST_CASE(SumReductionTest, SumTypes);
+TYPED_TEST_SUITE(SumReductionTest, SumTypes);
 
 TYPED_TEST(SumReductionTest, Sum)
 {
@@ -237,7 +237,7 @@ TYPED_TEST(SumReductionTest, Sum)
     col_nulls, expected_null_value, this->ret_non_arithmetic, cudf::make_sum_aggregation());
 }
 
-TYPED_TEST_CASE(ReductionTest, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(ReductionTest, cudf::test::NumericTypes);
 
 TYPED_TEST(ReductionTest, Product)
 {
@@ -302,7 +302,7 @@ template <typename T>
 struct ReductionAnyAllTest : public ReductionTest<bool> {
 };
 
-TYPED_TEST_CASE(ReductionAnyAllTest, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(ReductionAnyAllTest, cudf::test::NumericTypes);
 
 TYPED_TEST(ReductionAnyAllTest, AnyAllTrueTrue)
 {
@@ -367,7 +367,7 @@ struct MultiStepReductionTest : public ReductionTest<T> {
 };
 
 using MultiStepReductionTypes = cudf::test::NumericTypes;
-TYPED_TEST_CASE(MultiStepReductionTest, MultiStepReductionTypes);
+TYPED_TEST_SUITE(MultiStepReductionTest, MultiStepReductionTypes);
 
 TYPED_TEST(MultiStepReductionTest, Mean)
 {
@@ -477,7 +477,7 @@ struct ReductionMultiStepErrorCheck : public ReductionTest<T> {
   }
 };
 
-TYPED_TEST_CASE(ReductionMultiStepErrorCheck, cudf::test::AllTypes);
+TYPED_TEST_SUITE(ReductionMultiStepErrorCheck, cudf::test::AllTypes);
 
 // This test is disabled for only a Debug build because a compiler error
 // documented in cpp/src/reductions/std.cu and cpp/src/reductions/var.cu
@@ -557,6 +557,20 @@ struct ReductionDtypeTest : public cudf::test::BaseFixture {
     }
   }
 };
+
+TEST_F(ReductionDtypeTest, all_null_output)
+{
+  auto sum_agg = cudf::make_sum_aggregation();
+
+  auto const col =
+    cudf::test::fixed_point_column_wrapper<int32_t>{{0, 0, 0}, {0, 0, 0}, numeric::scale_type{-2}}
+      .release();
+
+  std::unique_ptr<cudf::scalar> result = cudf::reduce(*col, sum_agg, col->type());
+  EXPECT_EQ(result->is_valid(), false);
+  EXPECT_EQ(result->type().id(), col->type().id());
+  EXPECT_EQ(result->type().scale(), col->type().scale());
+}
 
 // test case for different output precision
 TEST_F(ReductionDtypeTest, different_precision)
@@ -1046,7 +1060,7 @@ template <typename T>
 struct FixedPointTestBothReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProductZeroScale)
 {
@@ -1515,7 +1529,7 @@ template <typename T>
 struct DictionaryAnyAllTest : public ReductionTest<bool> {
 };
 
-TYPED_TEST_CASE(DictionaryAnyAllTest, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(DictionaryAnyAllTest, cudf::test::NumericTypes);
 TYPED_TEST(DictionaryAnyAllTest, AnyAll)
 {
   using T = TypeParam;
@@ -1581,7 +1595,7 @@ struct DictionaryReductionTest : public ReductionTest<T> {
 };
 
 using DictionaryTypes = cudf::test::Types<int16_t, uint32_t, float, double>;
-TYPED_TEST_CASE(DictionaryReductionTest, DictionaryTypes);
+TYPED_TEST_SUITE(DictionaryReductionTest, DictionaryTypes);
 TYPED_TEST(DictionaryReductionTest, Sum)
 {
   using T = TypeParam;
