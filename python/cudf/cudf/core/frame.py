@@ -523,7 +523,7 @@ class Frame:
         )
 
     def _gather(
-        self, gather_map, keep_index=True, nullify=False, boundscheck=True
+        self, gather_map, keep_index=True, nullify=False, check_bounds=True
     ):
         if not is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
@@ -533,7 +533,7 @@ class Frame:
                 as_column(gather_map),
                 keep_index=keep_index,
                 nullify=nullify,
-                boundscheck=boundscheck,
+                check_bounds=check_bounds,
             )
         )
 

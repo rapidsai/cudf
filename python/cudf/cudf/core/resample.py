@@ -207,7 +207,7 @@ class _ResampleGrouping(_Grouping):
 
         # replace self._key_columns with the binned key column:
         self._key_columns = [
-            bin_labels._gather(bin_numbers, boundscheck=False)._column.astype(
+            bin_labels._gather(bin_numbers, check_bounds=False)._column.astype(
                 result_type
             )
         ]
