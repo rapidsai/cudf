@@ -276,13 +276,10 @@ column_view sort_groupby_helper::keys_bitmask_column(rmm::cuda_stream_view strea
 {
   if (_keys_bitmask_column) return _keys_bitmask_column->view();
 
-  auto row_bitmask = cudf::detail::bitmask_and(_keys, stream);
+  auto [row_bitmask, null_count] = cudf::detail::bitmask_and(_keys, stream);
 
-  _keys_bitmask_column = make_numeric_column(data_type(type_id::INT8),
-                                             _keys.num_rows(),
-                                             std::move(row_bitmask),
-                                             cudf::UNKNOWN_NULL_COUNT,
-                                             stream);
+  _keys_bitmask_column = make_numeric_column(
+    data_type(type_id::INT8), _keys.num_rows(), std::move(row_bitmask), null_count, stream);
 
   auto keys_bitmask_view = _keys_bitmask_column->mutable_view();
   using T                = id_to_type<type_id::INT8>;
