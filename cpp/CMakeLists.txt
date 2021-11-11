@@ -197,7 +197,6 @@ add_library(
   src/binaryop/compiled/ShiftLeft.cu
   src/binaryop/compiled/ShiftRight.cu
   src/binaryop/compiled/ShiftRightUnsigned.cu
-  src/binaryop/compiled/struct_binary_ops.cu
   src/binaryop/compiled/Sub.cu
   src/binaryop/compiled/TrueDiv.cu
   src/binaryop/compiled/util.cpp
