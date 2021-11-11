@@ -115,13 +115,14 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
     hash_table.insert(iter, iter + right_num_rows, hash_build, equality_build);
     // hash_table.insert(iter, iter + right_num_rows, hash_build, equality_build, stream.value());
   } else {
-    CUDF_FAIL("Not supported yet!");
-    // thrust::counting_iterator<size_type> stencil(0);
-    // auto const row_bitmask = cudf::detail::bitmask_and(right_flattened_keys, stream);;
-    // row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
-    //
-    //// insert valid rows
-    //// TODO: This needs to be implemented still for static_map, it only exists for multimap.
+    thrust::counting_iterator<size_type> stencil(0);
+    auto const row_bitmask = cudf::detail::bitmask_and(right_flattened_keys, stream);
+    ;
+    row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
+
+    // insert valid rows
+    // TODO: Need to enable a stream argument in cuco.
+    hash_table.insert_if(iter, iter + right_num_rows, stencil, pred, hash_build, equality_build);
     // hash_table.insert_if(iter, iter + right_num_rows, stencil, pred, hash_build, equality_build,
     // stream.value());
   }
