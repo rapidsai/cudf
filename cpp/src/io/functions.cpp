@@ -183,8 +183,6 @@ compression_type infer_compression_type(compression_type compression, source_inf
 
 table_with_metadata read_json(json_reader_options options, rmm::mr::device_memory_resource* mr)
 {
-  namespace json = cudf::io::detail::json;
-
   CUDF_FUNC_RANGE();
 
   options.set_compression(infer_compression_type(options.get_compression(), options.get_source()));
@@ -193,10 +191,7 @@ table_with_metadata read_json(json_reader_options options, rmm::mr::device_memor
                                       options.get_byte_range_offset(),
                                       options.get_byte_range_size_with_padding());
 
-  auto reader =
-    std::make_unique<json::reader>(std::move(datasources), options, rmm::cuda_stream_default, mr);
-
-  return reader->read(options);
+  return detail::json::read_json(datasources, options, rmm::cuda_stream_default, mr);
 }
 
 table_with_metadata read_csv(csv_reader_options options, rmm::mr::device_memory_resource* mr)
