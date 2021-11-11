@@ -183,7 +183,19 @@ def test_string_astype(dtype):
     ):
         data = ["1", "2", "3", "4", "5"]
     elif dtype.startswith("float"):
-        data = ["1.0", "2.0", "3.0", "4.0", "5.0"]
+        data = [
+            "1.0",
+            "2.0",
+            "3.0",
+            "4.0",
+            None,
+            "5.0",
+            "nan",
+            "-INF",
+            "NaN",
+            "inF",
+            "NAn",
+        ]
     elif dtype.startswith("bool"):
         data = ["True", "False", "True", "False", "False"]
     elif dtype.startswith("datetime64"):

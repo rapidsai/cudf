@@ -130,7 +130,9 @@ ConfigureTest(
 
 # ##################################################################################################
 # * reduction tests -------------------------------------------------------------------------------
-ConfigureTest(REDUCTION_TEST reductions/reduction_tests.cpp reductions/scan_tests.cpp)
+ConfigureTest(
+  REDUCTION_TEST reductions/rank_tests.cpp reductions/reduction_tests.cpp reductions/scan_tests.cpp
+)
 
 # ##################################################################################################
 # * replace tests ---------------------------------------------------------------------------------
@@ -365,6 +367,7 @@ ConfigureTest(
   strings/find_multiple_tests.cpp
   strings/fixed_point_tests.cpp
   strings/floats_tests.cpp
+  strings/format_lists_tests.cpp
   strings/integers_tests.cpp
   strings/ipv4_tests.cpp
   strings/json_tests.cpp
