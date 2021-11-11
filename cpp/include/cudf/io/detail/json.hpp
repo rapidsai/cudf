@@ -12,12 +12,7 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */
-
-/**
- * @file json.hpp
- * @brief cuDF-IO reader classes API
- */
+ */\
 
 #pragma once
 
@@ -33,10 +28,10 @@ namespace json {
 /**
  * @brief Reads and returns the entire data set.
  *
- * @param[in] sources Input `datasource` objects to read the dataset from
- * @param[in] options Settings for controlling reading behavior
- * @param[in] stream CUDA stream used for device memory operations and kernel launches
- * @param[in] mr Device memory resource to use for device memory allocation
+ * @param sources Input `datasource` objects to read the dataset from
+ * @param options Settings for controlling reading behavior
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ * @param mr Device memory resource to use for device memory allocation
  *
  * @return cudf::table object that contains the array of cudf::column.
  */

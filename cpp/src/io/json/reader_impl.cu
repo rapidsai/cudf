@@ -345,7 +345,7 @@ std::pair<std::vector<std::string>, col_map_ptr_type> get_column_names_and_map(
   rmm::cuda_stream_view stream)
 {
   // If file only contains one row, use the file size for the row size
-  uint64_t first_row_len = d_data.size() / sizeof(char);
+  uint64_t first_row_len = d_data.size();
   if (rec_starts.size() > 1) {
     // Set first_row_len to the offset of the second row, if it exists
     CUDA_TRY(cudaMemcpyAsync(&first_row_len,
