@@ -163,7 +163,7 @@ struct AtomicsTest : public cudf::test::BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(AtomicsTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(AtomicsTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 // tests for atomicAdd/Min/Max
 TYPED_TEST(AtomicsTest, atomicOps)
@@ -319,7 +319,7 @@ struct AtomicsBitwiseOpTest : public cudf::test::BaseFixture {
 using BitwiseOpTestingTypes =
   cudf::test::Types<int8_t, int16_t, int32_t, int64_t, uint8_t, uint16_t, uint32_t, uint64_t>;
 
-TYPED_TEST_CASE(AtomicsBitwiseOpTest, BitwiseOpTestingTypes);
+TYPED_TEST_SUITE(AtomicsBitwiseOpTest, BitwiseOpTestingTypes);
 
 TYPED_TEST(AtomicsBitwiseOpTest, atomicBitwiseOps)
 {

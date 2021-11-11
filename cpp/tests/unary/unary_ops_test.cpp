@@ -58,7 +58,7 @@ template <typename T>
 struct IsNull : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(IsNull, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(IsNull, cudf::test::NumericTypes);
 
 TYPED_TEST(IsNull, AllValid)
 {
@@ -109,7 +109,7 @@ template <typename T>
 struct IsNotNull : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(IsNotNull, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(IsNotNull, cudf::test::NumericTypes);
 
 TYPED_TEST(IsNotNull, AllValid)
 {
@@ -160,7 +160,7 @@ template <typename T>
 struct IsNAN : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(IsNAN, cudf::test::FloatingPointTypes);
+TYPED_TEST_SUITE(IsNAN, cudf::test::FloatingPointTypes);
 
 TYPED_TEST(IsNAN, AllValid)
 {
@@ -213,7 +213,7 @@ template <typename T>
 struct IsNotNAN : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(IsNotNAN, cudf::test::FloatingPointTypes);
+TYPED_TEST_SUITE(IsNotNAN, cudf::test::FloatingPointTypes);
 
 TYPED_TEST(IsNotNAN, AllValid)
 {
@@ -266,7 +266,7 @@ template <typename T>
 struct FixedPointUnaryTests : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointUnaryTests, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointUnaryTests, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointUnaryTests, FixedPointUnaryAbs)
 {

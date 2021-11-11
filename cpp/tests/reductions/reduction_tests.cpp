@@ -124,7 +124,7 @@ struct MinMaxReductionTest : public ReductionTest<T> {
 };
 
 using MinMaxTypes = cudf::test::AllTypes;
-TYPED_TEST_CASE(MinMaxReductionTest, MinMaxTypes);
+TYPED_TEST_SUITE(MinMaxReductionTest, MinMaxTypes);
 
 // ------------------------------------------------------------------------
 TYPED_TEST(MinMaxReductionTest, MinMax)
@@ -214,7 +214,7 @@ template <typename T>
 struct SumReductionTest : public ReductionTest<T> {
 };
 using SumTypes = cudf::test::Concat<cudf::test::NumericTypes, cudf::test::DurationTypes>;
-TYPED_TEST_CASE(SumReductionTest, SumTypes);
+TYPED_TEST_SUITE(SumReductionTest, SumTypes);
 
 TYPED_TEST(SumReductionTest, Sum)
 {
@@ -237,7 +237,7 @@ TYPED_TEST(SumReductionTest, Sum)
     col_nulls, expected_null_value, this->ret_non_arithmetic, cudf::make_sum_aggregation());
 }
 
-TYPED_TEST_CASE(ReductionTest, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(ReductionTest, cudf::test::NumericTypes);
 
 TYPED_TEST(ReductionTest, Product)
 {
@@ -302,7 +302,7 @@ template <typename T>
 struct ReductionAnyAllTest : public ReductionTest<bool> {
 };
 
-TYPED_TEST_CASE(ReductionAnyAllTest, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(ReductionAnyAllTest, cudf::test::NumericTypes);
 
 TYPED_TEST(ReductionAnyAllTest, AnyAllTrueTrue)
 {
@@ -367,7 +367,7 @@ struct MultiStepReductionTest : public ReductionTest<T> {
 };
 
 using MultiStepReductionTypes = cudf::test::NumericTypes;
-TYPED_TEST_CASE(MultiStepReductionTest, MultiStepReductionTypes);
+TYPED_TEST_SUITE(MultiStepReductionTest, MultiStepReductionTypes);
 
 TYPED_TEST(MultiStepReductionTest, Mean)
 {
@@ -477,7 +477,7 @@ struct ReductionMultiStepErrorCheck : public ReductionTest<T> {
   }
 };
 
-TYPED_TEST_CASE(ReductionMultiStepErrorCheck, cudf::test::AllTypes);
+TYPED_TEST_SUITE(ReductionMultiStepErrorCheck, cudf::test::AllTypes);
 
 // This test is disabled for only a Debug build because a compiler error
 // documented in cpp/src/reductions/std.cu and cpp/src/reductions/var.cu
@@ -1060,7 +1060,7 @@ template <typename T>
 struct FixedPointTestBothReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTestBothReps, FixedPointReductionProductZeroScale)
 {
@@ -1529,7 +1529,7 @@ template <typename T>
 struct DictionaryAnyAllTest : public ReductionTest<bool> {
 };
 
-TYPED_TEST_CASE(DictionaryAnyAllTest, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(DictionaryAnyAllTest, cudf::test::NumericTypes);
 TYPED_TEST(DictionaryAnyAllTest, AnyAll)
 {
   using T = TypeParam;
@@ -1595,7 +1595,7 @@ struct DictionaryReductionTest : public ReductionTest<T> {
 };
 
 using DictionaryTypes = cudf::test::Types<int16_t, uint32_t, float, double>;
-TYPED_TEST_CASE(DictionaryReductionTest, DictionaryTypes);
+TYPED_TEST_SUITE(DictionaryReductionTest, DictionaryTypes);
 TYPED_TEST(DictionaryReductionTest, Sum)
 {
   using T = TypeParam;

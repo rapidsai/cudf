@@ -20,7 +20,7 @@ template <typename T>
 struct ChronoOptionalIteratorTest : public IteratorTest<T> {
 };
 
-TYPED_TEST_CASE(ChronoOptionalIteratorTest, TestingTypes);
+TYPED_TEST_SUITE(ChronoOptionalIteratorTest, TestingTypes);
 TYPED_TEST(ChronoOptionalIteratorTest, nonull_optional_iterator)
 {
   nonull_optional_iterator(*this);

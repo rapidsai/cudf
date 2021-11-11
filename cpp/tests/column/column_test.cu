@@ -59,7 +59,7 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
   rmm::device_buffer all_null_mask{create_null_mask(num_elements(), cudf::mask_state::ALL_NULL)};
 };
 
-TYPED_TEST_CASE(TypedColumnTest, cudf::test::Types<int32_t>);
+TYPED_TEST_SUITE(TypedColumnTest, cudf::test::Types<int32_t>);
 
 /**
  * @brief Verifies equality of the properties and data of a `column`'s views.
@@ -443,7 +443,7 @@ struct ListsColumnTest : public cudf::test::BaseFixture {
 using NumericTypesNotBool =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
 
-TYPED_TEST_CASE(ListsColumnTest, NumericTypesNotBool);
+TYPED_TEST_SUITE(ListsColumnTest, NumericTypesNotBool);
 
 TYPED_TEST(ListsColumnTest, ListsColumnViewConstructor)
 {

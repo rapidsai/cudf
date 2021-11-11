@@ -34,7 +34,7 @@ template <typename T>
 class TypedScatterListsTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(TypedScatterListsTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(TypedScatterListsTest, cudf::test::FixedWidthTypes);
 
 class ScatterListsTest : public cudf::test::BaseFixture {
 };

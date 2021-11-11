@@ -41,7 +41,7 @@ struct groupby_correlation_test : public cudf::test::BaseFixture {
 
 using supported_types = RemoveIf<ContainedIn<Types<bool>>, cudf::test::NumericTypes>;
 
-TYPED_TEST_CASE(groupby_correlation_test, supported_types);
+TYPED_TEST_SUITE(groupby_correlation_test, supported_types);
 using K = int32_t;
 
 TYPED_TEST(groupby_correlation_test, basic)

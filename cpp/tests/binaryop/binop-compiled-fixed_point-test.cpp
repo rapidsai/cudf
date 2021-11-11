@@ -38,7 +38,7 @@ struct FixedPointCompiledTestBothReps : public cudf::test::BaseFixture {
 
 template <typename T>
 using wrapper = cudf::test::fixed_width_column_wrapper<T>;
-TYPED_TEST_CASE(FixedPointCompiledTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointCompiledTestBothReps, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpAdd)
 {

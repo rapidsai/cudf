@@ -73,7 +73,7 @@ using TestTypes = ::testing::Types<key_value_types<int32_t, int32_t>,
                                    key_value_types<int32_t, float>,
                                    key_value_types<int64_t, double>>;
 
-TYPED_TEST_CASE(InsertTest, TestTypes);
+TYPED_TEST_SUITE(InsertTest, TestTypes);
 
 template <typename map_type, typename pair_type>
 struct insert_pair {
