@@ -22,14 +22,14 @@
 
 // This version of the macro maximizes the chances of inlining when applied to
 // a callable that is called on the GPU.
-#define CUDA_HOST_DEVICE_FORCEINLINE_CALLABLE __host__ __device__ __forceinline__
-#define CUDA_DEVICE_FORCEINLINE_CALLABLE      __device__ __forceinline__
+#define CUDF_HDFI __host__ __device__ __forceinline__
+#define CUDF_DFI  __device__ __forceinline__
 #else
 #define CUDA_HOST_DEVICE_CALLABLE inline
 #define CUDA_DEVICE_CALLABLE      inline
 
-#define CUDA_HOST_DEVICE_FORCEINLINE_CALLABLE inline
-#define CUDA_DEVICE_FORCEINLINE_CALLABLE      inline
+#define CUDF_HDFI inline
+#define CUDF_DFI  inline
 #endif
 
 #include <cassert>
