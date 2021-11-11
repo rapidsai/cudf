@@ -1024,6 +1024,8 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
                    rmm::mr::device_memory_resource* mr)
   : _mr(mr),
     stream(stream),
+    max_row_group_size{options.get_row_group_size_bytes()},
+    max_row_group_rows{options.get_row_group_size_rows()},
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
@@ -1043,6 +1045,8 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
                    rmm::mr::device_memory_resource* mr)
   : _mr(mr),
     stream(stream),
+    max_row_group_size{options.get_row_group_size_bytes()},
+    max_row_group_rows{options.get_row_group_size_rows()},
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
@@ -1172,8 +1176,8 @@ void writer::impl::write(table_view const& table)
       fragment_data_size += fragments[i][f].fragment_data_size;
     }
     if (f > rowgroup_start &&
-        (rowgroup_size + fragment_data_size > max_rowgroup_size ||
-         (f + 1 - rowgroup_start) * max_page_fragment_size > max_rowgroup_rows)) {
+        (rowgroup_size + fragment_data_size > max_row_group_size ||
+         (f + 1 - rowgroup_start) * max_page_fragment_size > max_row_group_rows)) {
       // update schema
       md.row_groups.resize(md.row_groups.size() + 1);
       md.row_groups[global_r++].num_rows = (f - rowgroup_start) * max_page_fragment_size;

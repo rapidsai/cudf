@@ -37,9 +37,8 @@ namespace io {
  * @file
  */
 
-constexpr size_t default_rowgroup_size_bytes   = 128 * 1024 * 1024;  // 128MB
-constexpr size_type default_rowgroup_size_rows = 1000000;
-constexpr size_t default_page_size_bytes       = 512 * 1024;  // 512KB
+constexpr size_t default_row_group_size_bytes   = 128 * 1024 * 1024;  // 128MB
+constexpr size_type default_row_group_size_rows = 1000000;
 
 /**
  * @brief Builds parquet_reader_options to use for `read_parquet()`.
@@ -402,12 +401,10 @@ class parquet_writer_options {
   bool _write_timestamps_as_int96 = false;
   // Column chunks file path to be set in the raw output metadata
   std::string _column_chunks_file_path;
-  // Maximum size of each rowgroup (unless smaller than a single page)
-  size_t _rowgroup_size_bytes = default_rowgroup_size_bytes;
-  // Maximum number of rows in rowgroup (unless smaller than a single page)
-  size_type _rowgroup_size_rows = default_rowgroup_size_rows;
-  // Target size of each page
-  size_t _page_size_bytes = default_page_size_bytes;
+  // Maximum size of each row group (unless smaller than a single page)
+  size_t _row_group_size_bytes = default_row_group_size_bytes;
+  // Maximum number of rows in row group (unless smaller than a single page)
+  size_type _row_group_size_rows = default_row_group_size_rows;
 
   /**
    * @brief Constructor from sink and table.
@@ -483,19 +480,14 @@ class parquet_writer_options {
   std::string get_column_chunks_file_path() const { return _column_chunks_file_path; }
 
   /**
-   * @brief Returns maximum rowgroup size, in bytes.
+   * @brief Returns maximum row group size, in bytes.
    */
-  auto rowgroup_size_bytes() const { return _rowgroup_size_bytes; }
+  auto get_row_group_size_bytes() const { return _row_group_size_bytes; }
 
   /**
-   * @brief Returns maximum rowgroup size, in rows.
+   * @brief Returns maximum rowngroup size, in rows.
    */
-  auto rowgroup_size_rows() const { return _rowgroup_size_rows; }
-
-  /**
-   * @brief Returns the target page size, in bytes.
-   */
-  auto page_size_bytes() const { return std::min(_page_size_bytes, rowgroup_size_bytes()); }
+  auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
   /**
    * @brief Sets metadata.
@@ -537,33 +529,24 @@ class parquet_writer_options {
   }
 
   /**
-   * @brief Sets the maximum rowgroup size, in bytes.
+   * @brief Sets the maximum row group size, in bytes.
    *
-   * If the rowgroup size is smaller that the page size, page size will be reduced to match
-   * the rowgroup size.
+   * If the row group size is smaller that the page size, page size will be reduced to match
+   * the row_group size.
    */
-  void set_rowgroup_size_bytes(size_t size_bytes)
+  void set_row_group_size_bytes(size_t size_bytes)
   {
-    CUDF_EXPECTS(size_bytes >= 64 << 10, "64KB is the minimum rowgorup size");
-    _rowgroup_size_bytes = size_bytes;
+    CUDF_EXPECTS(size_bytes >= 512 << 10, "512KB is the minimum rowgorup size");
+    _row_group_size_bytes = size_bytes;
   }
 
   /**
-   * @brief Sets the maximum rowgroup size, in rows.
+   * @brief Sets the maximum row group size, in rows.
    */
-  void set_rowgroup_size_rows(size_type size_rows)
+  void set_row_group_size_rows(size_type size_rows)
   {
-    CUDF_EXPECTS(size_rows >= 512, "Maximum rowgroup size cannot be smaller than 512");
-    _rowgroup_size_rows = size_rows;
-  }
-
-  /**
-   * @brief Sets the target size for each page.
-   */
-  void set_page_size_bytes(size_type size_bytes)
-  {
-    CUDF_EXPECTS(size_bytes >= 512, "Page size cannot be smaller than 512");
-    _page_size_bytes = size_bytes;
+    CUDF_EXPECTS(size_rows >= 5000, "Maximum row group size cannot be smaller than 5000");
+    _row_group_size_rows = size_rows;
   }
 };
 
@@ -638,38 +621,26 @@ class parquet_writer_options_builder {
   }
 
   /**
-   * @brief Sets the maximum rowgroup size, in bytes.
+   * @brief Sets the maximum row group size, in bytes.
    *
-   * @param val maximum rowgroup size
+   * @param val maximum row group size
    * @return this for chaining.
    */
-  parquet_writer_options_builder& rowgroup_size_bytes(size_t val)
+  parquet_writer_options_builder& row_group_size_bytes(size_t val)
   {
-    options.set_rowgroup_size_bytes(val);
+    options.set_row_group_size_bytes(val);
     return *this;
   }
 
   /**
-   * @brief Sets the maximum number of rows in output rowgroups.
+   * @brief Sets the maximum number of rows in output row groups.
    *
    * @param val maximum number or rows
    * @return this for chaining.
    */
-  parquet_writer_options_builder& stripe_size_rows(size_type val)
+  parquet_writer_options_builder& row_group_size_rows(size_type val)
   {
-    options.set_rowgroup_size_rows(val);
-    return *this;
-  }
-
-  /**
-   * @brief Sets the target page size.
-   *
-   * @param val new target page size
-   * @return this for chaining.
-   */
-  parquet_writer_options_builder& page_size_bytes(size_type val)
-  {
-    options.set_page_size_bytes(val);
+    options.set_row_group_size_rows(val);
     return *this;
   }
 
@@ -728,7 +699,7 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(
  * @param[in] metadata_list List of input file metadata.
  * @return A parquet-compatible blob that contains the data for all row groups in the list.
  */
-std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
+std::unique_ptr<std::vector<uint8_t>> merge_row_group_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
 
 /**
@@ -751,12 +722,10 @@ class chunked_parquet_writer_options {
   // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
   // If true then overrides any per-column setting in _metadata.
   bool _write_timestamps_as_int96 = false;
-  // Maximum size of each rowgroup (unless smaller than a single page)
-  size_t _rowgroup_size_bytes = default_rowgroup_size_bytes;
-  // Maximum number of rows in rowgroup (unless smaller than a single page)
-  size_type _rowgroup_size_rows = default_rowgroup_size_rows;
-  // Target size of each page
-  size_t _page_size_bytes = default_page_size_bytes;
+  // Maximum size of each row group (unless smaller than a single page)
+  size_t _row_group_size_bytes = default_row_group_size_bytes;
+  // Maximum number of rows in row group (unless smaller than a single page)
+  size_type _row_group_size_rows = default_row_group_size_rows;
 
   /**
    * @brief Constructor from sink.
@@ -801,19 +770,14 @@ class chunked_parquet_writer_options {
   bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
 
   /**
-   * @brief Returns maximum rowgroup size, in bytes.
+   * @brief Returns maximum row group size, in bytes.
    */
-  auto rowgroup_size_bytes() const { return _rowgroup_size_bytes; }
+  auto get_row_group_size_bytes() const { return _row_group_size_bytes; }
 
   /**
-   * @brief Returns maximum rowgroup size, in rows.
+   * @brief Returns maximum row group size, in rows.
    */
-  auto rowgroup_size_rows() const { return _rowgroup_size_rows; }
-
-  /**
-   * @brief Returns the target page size, in bytes.
-   */
-  auto page_size_bytes() const { return std::min(_page_size_bytes, rowgroup_size_bytes()); }
+  auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
   /**
    * @brief Sets metadata.
@@ -845,33 +809,21 @@ class chunked_parquet_writer_options {
   void enable_int96_timestamps(bool req) { _write_timestamps_as_int96 = req; }
 
   /**
-   * @brief Sets the maximum rowgroup size, in bytes.
-   *
-   * If the rowgroup size is smaller that the page size, page size will be reduced to match
-   * the rowgroup size.
+   * @brief Sets the maximum row group size, in bytes.
    */
-  void set_rowgroup_size_bytes(size_t size_bytes)
+  void set_row_group_size_bytes(size_t size_bytes)
   {
-    CUDF_EXPECTS(size_bytes >= 64 << 10, "64KB is the minimum rowgorup size");
-    _rowgroup_size_bytes = size_bytes;
+    CUDF_EXPECTS(size_bytes >= 512 << 10, "512KB is the minimum rowgorup size");
+    _row_group_size_bytes = size_bytes;
   }
 
   /**
-   * @brief Sets the maximum rowgroup size, in rows.
+   * @brief Sets the maximum row group size, in rows.
    */
-  void set_rowgroup_size_rows(size_type size_rows)
+  void set_row_group_size_rows(size_type size_rows)
   {
-    CUDF_EXPECTS(size_rows >= 512, "Maximum rowgroup size cannot be smaller than 512");
-    _rowgroup_size_rows = size_rows;
-  }
-
-  /**
-   * @brief Sets the target size for each page.
-   */
-  void set_page_size_bytes(size_type size_bytes)
-  {
-    CUDF_EXPECTS(size_bytes >= 512, "Page size cannot be smaller than 512");
-    _page_size_bytes = size_bytes;
+    CUDF_EXPECTS(size_rows >= 5000, "Maximum row group size cannot be smaller than 5000");
+    _row_group_size_rows = size_rows;
   }
 
   /**
@@ -954,38 +906,26 @@ class chunked_parquet_writer_options_builder {
   }
 
   /**
-   * @brief Sets the maximum rowgroup size, in bytes.
+   * @brief Sets the maximum row group size, in bytes.
    *
-   * @param val maximum rowgroup size
+   * @param val maximum row group size
    * @return this for chaining.
    */
-  chunked_parquet_writer_options_builder& rowgroup_size_bytes(size_t val)
+  chunked_parquet_writer_options_builder& row_group_size_bytes(size_t val)
   {
-    options.set_rowgroup_size_bytes(val);
+    options.set_row_group_size_bytes(val);
     return *this;
   }
 
   /**
-   * @brief Sets the maximum number of rows in output rowgroups.
+   * @brief Sets the maximum number of rows in output row groups.
    *
    * @param val maximum number or rows
    * @return this for chaining.
    */
-  chunked_parquet_writer_options_builder& stripe_size_rows(size_type val)
+  chunked_parquet_writer_options_builder& row_group_size_rows(size_type val)
   {
-    options.set_rowgroup_size_rows(val);
-    return *this;
-  }
-
-  /**
-   * @brief Sets the target page size.
-   *
-   * @param val new target page size
-   * @return this for chaining.
-   */
-  chunked_parquet_writer_options_builder& page_size_bytes(size_type val)
-  {
-    options.set_page_size_bytes(val);
+    options.set_row_group_size_rows(val);
     return *this;
   }
 
