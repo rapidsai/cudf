@@ -26,7 +26,7 @@ void apply_binary_op<ops::GreaterEqual>(mutable_column_view& out,
                                         bool is_rhs_scalar,
                                         rmm::cuda_stream_view stream)
 {
-  detail::generate_binop_result<ops::GreaterEqual>(
+  detail::apply_binary_op_impl<ops::GreaterEqual>(
     out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, order::ASCENDING, true, stream);
 }
 }  // namespace cudf::binops::compiled

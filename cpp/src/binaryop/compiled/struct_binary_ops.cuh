@@ -51,7 +51,7 @@ void struct_compare(mutable_column_view& out,
 }
 
 template <class BinaryOperator>
-void generate_binop_result(mutable_column_view& out,
+void apply_binary_op_impl(mutable_column_view& out,
                            column_view const& lhs,
                            column_view const& rhs,
                            bool is_lhs_scalar,
