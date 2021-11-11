@@ -40,7 +40,7 @@ template <typename Timestamp>
 struct TimestampRangeWindowBoundsTest : RangeWindowBoundsTest {
 };
 
-TYPED_TEST_CASE(TimestampRangeWindowBoundsTest, cudf::test::TimestampTypes);
+TYPED_TEST_SUITE(TimestampRangeWindowBoundsTest, cudf::test::TimestampTypes);
 
 TEST_F(RangeWindowBoundsTest, TestBasicTimestampRangeTypeMapping)
 {
@@ -103,7 +103,7 @@ struct NumericRangeWindowBoundsTest : RangeWindowBoundsTest {
 
 using TypesForTest = cudf::test::IntegralTypesNotBool;
 
-TYPED_TEST_CASE(NumericRangeWindowBoundsTest, TypesForTest);
+TYPED_TEST_SUITE(NumericRangeWindowBoundsTest, TypesForTest);
 
 TYPED_TEST(NumericRangeWindowBoundsTest, BasicNumericRangeTypeMapping)
 {

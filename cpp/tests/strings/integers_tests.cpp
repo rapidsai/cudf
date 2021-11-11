@@ -287,7 +287,7 @@ template <typename T>
 class StringsIntegerConvertTest : public StringsConvertTest {
 };
 
-TYPED_TEST_CASE(StringsIntegerConvertTest, cudf::test::IntegralTypesNotBool);
+TYPED_TEST_SUITE(StringsIntegerConvertTest, cudf::test::IntegralTypesNotBool);
 
 TYPED_TEST(StringsIntegerConvertTest, FromToInteger)
 {
@@ -330,7 +330,7 @@ class StringsFloatConvertTest : public StringsConvertTest {
 };
 
 using FloatTypes = cudf::test::Types<float, double>;
-TYPED_TEST_CASE(StringsFloatConvertTest, FloatTypes);
+TYPED_TEST_SUITE(StringsFloatConvertTest, FloatTypes);
 
 TYPED_TEST(StringsFloatConvertTest, FromToIntegerError)
 {

@@ -547,4 +547,17 @@ public class Cuda {
       }
     }
   }
+  /**
+   * Begins an Nsight profiling session, if a profiler is currently attached.
+   * @note if a profiler session has a already started, `profilerStart` has
+   * no effect.
+   */
+  public static native void profilerStart();
+
+  /**
+   * Stops an active Nsight profiling session.
+   * @note if a profiler session isn't active, `profilerStop` has
+   * no effect.
+   */
+  public static native void profilerStop();
 }

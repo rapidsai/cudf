@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import pickle
-from typing import Sequence
+from typing import List, Sequence
 
 import numpy as np
 import pyarrow as pa
@@ -17,6 +17,7 @@ from cudf._lib.lists import (
     extract_element,
     sort_lists,
 )
+from cudf._lib.strings.convert.convert_lists import format_list_column
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_list_dtype
 from cudf.core.buffer import Buffer
@@ -316,6 +317,39 @@ class ListColumn(ColumnBase):
             children=(offset_col, data_col),
         )
         return res
+
+    def as_string_column(
+        self, dtype: Dtype, format=None, **kwargs
+    ) -> "cudf.core.column.StringColumn":
+        """
+        Create a strings column from a list column
+        """
+        # Convert the leaf child column to strings column
+        cc: List[ListColumn] = []
+        c: ColumnBase = self
+        while isinstance(c, ListColumn):
+            cc.insert(0, c)
+            c = c.children[1]
+        s = c.as_string_column(dtype)
+
+        # Rebuild the list column replacing just the leaf child
+        lc = s
+        for c in cc:
+            o = c.children[0]
+            lc = cudf.core.column.ListColumn(  # type: ignore
+                size=c.size,
+                dtype=cudf.ListDtype(lc.dtype),
+                mask=c.mask,
+                offset=c.offset,
+                null_count=c.null_count,
+                children=(o, lc),
+            )
+
+        # Separator strings to match the Python format
+        separators = as_column([", ", "[", "]"])
+
+        # Call libcudf to format the list column
+        return format_list_column(lc, separators)
 
 
 class ListMethods(ColumnMethods):

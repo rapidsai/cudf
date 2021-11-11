@@ -835,22 +835,11 @@ class MultiIndex(Frame, BaseIndex):
         return self._num_rows
 
     def take(self, indices):
-        if isinstance(indices, (Integral, Sequence)):
-            indices = np.array(indices)
-        elif isinstance(indices, cudf.Series) and indices.has_nulls:
+        if isinstance(indices, cudf.Series) and indices.has_nulls:
             raise ValueError("Column must have no nulls.")
-        elif isinstance(indices, slice):
-            start, stop, step = indices.indices(len(self))
-            indices = column.arange(start, stop, step)
-        result = MultiIndex.from_frame(
-            self.to_frame(index=False).take(indices)
-        )
-        if self._codes is not None:
-            result._codes = self._codes.take(indices)
-        if self._levels is not None:
-            result._levels = self._levels
-        result.names = self.names
-        return result
+        obj = super().take(indices)
+        obj.names = self.names
+        return obj
 
     def serialize(self):
         header, frames = super().serialize()
@@ -887,11 +876,26 @@ class MultiIndex(Frame, BaseIndex):
         return obj._set_names(column_names)
 
     def __getitem__(self, index):
-        if isinstance(index, int):
-            # we are indexing into a single row of the MultiIndex,
-            # return that row as a tuple:
-            return self.take(index).to_pandas()[0]
-        return self.take(index)
+        flatten = isinstance(index, int)
+
+        if isinstance(index, (Integral, Sequence)):
+            index = np.array(index)
+        elif isinstance(index, slice):
+            start, stop, step = index.indices(len(self))
+            index = column.arange(start, stop, step)
+        result = MultiIndex.from_frame(self.to_frame(index=False).take(index))
+
+        # we are indexing into a single row of the MultiIndex,
+        # return that row as a tuple:
+        if flatten:
+            return result.to_pandas()[0]
+
+        if self._codes is not None:
+            result._codes = self._codes.take(index)
+        if self._levels is not None:
+            result._levels = self._levels
+        result.names = self.names
+        return result
 
     def to_frame(self, index=True, name=None):
         # TODO: Currently this function makes a shallow copy, which is
@@ -1363,23 +1367,6 @@ class MultiIndex(Frame, BaseIndex):
         return self._is_sorted(
             ascending=[False] * len(self.levels), null_position=None
         )
-
-    def argsort(self, ascending=True, **kwargs):
-        return self._get_sorted_inds(ascending=ascending, **kwargs).values
-
-    def sort_values(self, return_indexer=False, ascending=True, key=None):
-        if key is not None:
-            raise NotImplementedError("key parameter is not yet implemented.")
-
-        indices = cudf.Series._from_data(
-            {None: self._get_sorted_inds(ascending=ascending)}
-        )
-        index_sorted = as_index(self.take(indices), name=self.names)
-
-        if return_indexer:
-            return index_sorted, cupy.asarray(indices)
-        else:
-            return index_sorted
 
     def fillna(self, value):
         """

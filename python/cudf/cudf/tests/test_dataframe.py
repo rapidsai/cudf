@@ -7979,7 +7979,9 @@ def test_dataframe_mode(df, numeric_only, dropna):
     assert_eq(expected, actual, check_dtype=False)
 
 
-@pytest.mark.parametrize("lhs, rhs", [("a", "a"), ("a", "b"), (1, 1.0)])
+@pytest.mark.parametrize(
+    "lhs, rhs", [("a", "a"), ("a", "b"), (1, 1.0), (None, None), (None, "a")]
+)
 def test_equals_names(lhs, rhs):
     lhs = cudf.DataFrame({lhs: [1, 2]})
     rhs = cudf.DataFrame({rhs: [1, 2]})
@@ -8732,12 +8734,12 @@ def test_explode(data, labels, ignore_index, p_index, label_to_explode):
         (
             cudf.DataFrame({"a": [10, 0, 2], "b": [-10, 10, 1]}),
             True,
-            cudf.Series([1, 2, 0], dtype="int32"),
+            cupy.array([1, 2, 0], dtype="int32"),
         ),
         (
             cudf.DataFrame({"a": [10, 0, 2], "b": [-10, 10, 1]}),
             False,
-            cudf.Series([0, 2, 1], dtype="int32"),
+            cupy.array([0, 2, 1], dtype="int32"),
         ),
     ],
 )

@@ -79,7 +79,7 @@ struct ColumnViewShallowTests : public cudf::test::BaseFixture {
 };
 
 using AllTypes = cudf::test::Concat<cudf::test::AllTypes, cudf::test::CompoundTypes>;
-TYPED_TEST_CASE(ColumnViewShallowTests, AllTypes);
+TYPED_TEST_SUITE(ColumnViewShallowTests, AllTypes);
 
 // Test for fixed_width, dict, string, list, struct
 // column_view, column_view = same hash.

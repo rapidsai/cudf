@@ -430,8 +430,7 @@ std::unique_ptr<table> split_fn(strings_column_view const& strings_column,
     return std::make_unique<table>(std::move(results));
   }
 
-  auto d_offsets = strings_column.offsets().data<int32_t>();
-  d_offsets += strings_column.offset();  // nvbug-2808421 : do not combine with the previous line
+  auto d_offsets = strings_column.offsets_begin();
   auto const chars_bytes =
     cudf::detail::get_value<int32_t>(
       strings_column.offsets(), strings_column.offset() + strings_count, stream) -
