@@ -204,18 +204,24 @@ bool is_supported_operation(data_type out,
  * @param rhsd device view of right operand column
  * @param is_lhs_scalar true if @p lhsd is a single element column representing a scalar
  * @param is_rhs_scalar true if @p rhsd is a single element column representing a scalar
+ * @param op_order order for row_lexicographic_comparator and only used by struct binary comparison
+ * operations
+ * @param flip_output true for or-equal comparison ops. Flips row_lexicographic_comparator results
+ * and only used by struct binary comparison operations
  * @param stream CUDA stream used for device memory operations
  */
 template <class BinaryOperator>
-void apply_binary_op(mutable_column_view&,
-                     column_view const&,
-                     column_view const&,
+void apply_binary_op(mutable_column_view& out,
+                     column_view const& lhs,
+                     column_view const& rhs,
                      bool is_lhs_scalar,
                      bool is_rhs_scalar,
+                     order op_order,
+                     bool flip_output,
                      rmm::cuda_stream_view stream);
 /**
- * @brief Deploys single type or double type dispatcher that runs equality operation on each element
- * of @p lhsd and @p rhsd columns.
+ * @brief Deploys single type or double type dispatcher that runs equality operation on each
+ * element of @p lhsd and @p rhsd columns.
  *
  * Comparison operators are EQUAL, NOT_EQUAL, NULL_EQUALS.
  * @p outd type is boolean.

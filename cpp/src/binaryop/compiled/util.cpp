@@ -184,8 +184,10 @@ std::optional<data_type> get_common_type(data_type out, data_type lhs, data_type
 bool is_supported_operation(data_type out, data_type lhs, data_type rhs, binary_operator op)
 {
   return double_type_dispatcher(lhs, rhs, is_supported_operation_functor{}, out, op) ||
-         (is_struct(lhs) && is_struct(rhs) && op != binary_operator::GENERIC_BINARY &&
-          op != binary_operator::INVALID_BINARY);
+         (is_struct(lhs) && is_struct(rhs) &&
+          (op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL ||
+           op == binary_operator::LESS || op == binary_operator::LESS_EQUAL ||
+           op == binary_operator::GREATER || op == binary_operator::GREATER_EQUAL));
 }
 
 bool is_supported_operation(data_type out,

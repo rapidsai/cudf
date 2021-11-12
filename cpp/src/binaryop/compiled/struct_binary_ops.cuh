@@ -16,11 +16,7 @@
 
 #pragma once
 
-#include <binaryop/compiled/binary_ops.cuh>
-
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/structs/utilities.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/row_operators.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -48,41 +44,5 @@ void struct_compare(mutable_column_view& out,
       return optional_iter[i].has_value() and
              (flip_output ? not compare(lhs, rhs) : compare(lhs, rhs));
     });
-}
-
-template <class BinaryOperator>
-void apply_binary_op_impl(mutable_column_view& out,
-                          column_view const& lhs,
-                          column_view const& rhs,
-                          bool is_lhs_scalar,
-                          bool is_rhs_scalar,
-                          order op_order,
-                          bool flip_output,
-                          rmm::cuda_stream_view stream)
-{
-  if (is_struct(lhs.type()) && is_struct(rhs.type())) {
-    auto const nullability =
-      structs::detail::contains_null_structs(lhs) || structs::detail::contains_null_structs(rhs)
-        ? structs::detail::column_nullability::FORCE
-        : structs::detail::column_nullability::MATCH_INCOMING;
-    auto const lhs_flattened =
-      structs::detail::flatten_nested_columns(table_view{{lhs}}, {}, {}, nullability);
-    auto const rhs_flattened =
-      structs::detail::flatten_nested_columns(table_view{{rhs}}, {}, {}, nullability);
-
-    auto d_lhs = table_device_view::create(lhs_flattened);
-    auto d_rhs = table_device_view::create(rhs_flattened);
-    auto compare_orders =
-      cudf::detail::make_device_uvector_async(std::vector<order>(lhs.size(), op_order), stream);
-
-    auto const do_compare = [&](auto const& comp) {
-      struct_compare(out, comp, is_lhs_scalar, is_rhs_scalar, flip_output, stream);
-    };
-    has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)
-      ? do_compare(row_lexicographic_comparator<true>{*d_lhs, *d_rhs, compare_orders.data()})
-      : do_compare(row_lexicographic_comparator<false>{*d_lhs, *d_rhs, compare_orders.data()});
-  } else {
-    apply_unnested_binary_op<BinaryOperator>(out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, stream);
-  }
 }
 }  //  namespace cudf::binops::compiled::detail

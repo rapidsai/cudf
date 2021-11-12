@@ -15,18 +15,14 @@
  */
 
 #include <binaryop/compiled/binary_ops.cuh>
-#include <binaryop/compiled/struct_binary_ops.cuh>
 
 namespace cudf::binops::compiled {
-template <>
-void apply_binary_op<ops::Less>(mutable_column_view& out,
-                                column_view const& lhs,
-                                column_view const& rhs,
-                                bool is_lhs_scalar,
-                                bool is_rhs_scalar,
-                                rmm::cuda_stream_view stream)
-{
-  detail::apply_binary_op_impl<ops::Less>(
-    out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, order::ASCENDING, false, stream);
+template void apply_binary_op<ops::Less>(mutable_column_view&,
+                                         column_view const&,
+                                         column_view const&,
+                                         bool is_lhs_scalar,
+                                         bool is_rhs_scalar,
+                                         order op_order,
+                                         bool flip_output,
+                                         rmm::cuda_stream_view stream);
 }
-}  // namespace cudf::binops::compiled

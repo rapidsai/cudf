@@ -22,5 +22,7 @@ template void apply_binary_op<ops::BitwiseAnd>(mutable_column_view&,
                                                column_view const&,
                                                bool is_lhs_scalar,
                                                bool is_rhs_scalar,
-                                               rmm::cuda_stream_view);
+                                               order op_order,
+                                               bool flip_output,
+                                               rmm::cuda_stream_view stream);
 }
