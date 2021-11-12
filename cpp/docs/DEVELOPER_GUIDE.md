@@ -119,7 +119,7 @@ recommend watching Sean Parent's [C++ Seasoning talk](https://www.youtube.com/wa
 and we try to follow his rules: "No raw loops. No raw pointers. No raw synchronization primitives." 
 
  * Prefer algorithms from STL and Thrust to raw loops.
- * Prefer libcudf and RMM [owning data structures and views](libcudf-data-structures) to raw pointers
+ * Prefer libcudf and RMM [owning data structures and views](#libcudf-data-structures) to raw pointers
    and raw memory allocation.
  * libcudf doesn't have a lot of CPU-thread concurrency, but there is some. And currently libcudf
    does use raw synchronization primitives. So we should revisit Parent's third rule and improve 
