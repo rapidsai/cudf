@@ -144,9 +144,9 @@ def read_orc(
         # Determine which columns are filtering vs. remaining
         filters = _prepare_filters(filters)
         query_string, local_dict = _filters_to_query(filters)
-        columns_in_predicate = [
-            col for conjunction in filters for (col, op, val) in conjunction
-        ]
+        columns_in_predicate = list(
+            {col for conjunction in filters for (col, _, _) in conjunction}
+        )
         columns = [c for c in columns if c not in columns_in_predicate]
 
         # Read in only the columns relevant to the filtering
@@ -172,7 +172,6 @@ def read_orc(
             lambda df: len(df)
         ).compute()
         is_filtered_partition_empty = filtered_partition_lens == 0
-        print(f"{list(is_filtered_partition_empty)=}")
 
         # Cull empty partitions
         filtered_df_partitions = [
@@ -213,7 +212,6 @@ def read_orc(
                 )
                 N += 1
             partition_idx += 1
-    print(f"Filtered {partition_idx} partitions to {N} partitions")
 
     divisions = [None] * (len(dsk) + 1)
     res = dd.core.new_dd_object(dsk, name, meta, divisions)

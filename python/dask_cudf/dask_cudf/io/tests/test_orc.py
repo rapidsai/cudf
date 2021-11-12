@@ -68,8 +68,16 @@ def test_read_orc_cols(engine, columns):
         ),
     ],
 )
-def test_read_orc_filtered(tmpdir, engine, predicate, expected_len):
-    df = dask_cudf.read_orc(sample_orc, engine=engine, filters=predicate)
+@pytest.mark.parametrize("filtering_columns_first", [False, True])
+def test_read_orc_filtered(
+    tmpdir, engine, predicate, expected_len, filtering_columns_first
+):
+    df = dask_cudf.read_orc(
+        sample_orc,
+        engine=engine,
+        filters=predicate,
+        filtering_columns_first=filtering_columns_first,
+    )
 
     dd.assert_eq(len(df), expected_len)
 
