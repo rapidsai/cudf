@@ -27,6 +27,7 @@ requirements:
     - python
     - python-confluent-kafka
     - cudf_kafka {{ version }}
+    - cython
   run:
     - python
     - streamz 
@@ -35,6 +36,7 @@ requirements:
     - distributed>=2021.09.1
     - python-confluent-kafka
     - cudf_kafka {{ version }}
+    - cython
 
 test:                                   # [linux64]
   requires:                             # [linux64]
