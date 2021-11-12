@@ -411,9 +411,7 @@ using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceT
 template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl,
           typename Functor,
           typename... Ts>
-CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_type dtype,
-                                                                   Functor f,
-                                                                   Ts&&... args)
+CUDF_HDFI constexpr decltype(auto) type_dispatcher(cudf::data_type dtype, Functor f, Ts&&... args)
 {
   switch (dtype.id()) {
     case type_id::BOOL8:
