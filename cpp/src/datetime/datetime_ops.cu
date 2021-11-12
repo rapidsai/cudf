@@ -54,6 +54,8 @@ enum class datetime_component {
   NANOSECOND
 };
 
+enum class rounding_kind { CEIL, FLOOR, ROUND };
+
 template <datetime_component Component>
 struct extract_component_operator {
   template <typename Timestamp>
@@ -88,59 +90,65 @@ struct extract_component_operator {
   }
 };
 
-template <datetime_component COMPONENT>
-struct ceil_timestamp {
-  template <typename Timestamp>
-  CUDA_DEVICE_CALLABLE Timestamp operator()(Timestamp const ts) const
-  {
-    using namespace cuda::std::chrono;
-    switch (COMPONENT) {
-      case datetime_component::DAY:
-        return time_point_cast<typename Timestamp::duration>(ceil<duration_D>(ts));
-      case datetime_component::HOUR:
-        return time_point_cast<typename Timestamp::duration>(ceil<duration_h>(ts));
-      case datetime_component::MINUTE:
-        return time_point_cast<typename Timestamp::duration>(ceil<duration_m>(ts));
-      case datetime_component::SECOND:
-        return time_point_cast<typename Timestamp::duration>(ceil<duration_s>(ts));
-      case datetime_component::MILLISECOND:
-        return time_point_cast<typename Timestamp::duration>(ceil<duration_ms>(ts));
-      case datetime_component::MICROSECOND:
-        return time_point_cast<typename Timestamp::duration>(ceil<duration_us>(ts));
-      case datetime_component::NANOSECOND:
-        return time_point_cast<typename Timestamp::duration>(ceil<duration_ns>(ts));
-      default: cudf_assert(false && "Unexpected resolution");
-    }
+using duration_D  = std::chrono::duration<int32_t, cuda::std::chrono::days::period>;
+using duration_h  = std::chrono::duration<int32_t, cuda::std::chrono::hours::period>;
+using duration_m  = std::chrono::duration<int32_t, cuda::std::chrono::minutes::period>;
+using duration_s  = std::chrono::duration<int64_t, cuda::std::chrono::seconds::period>;
+using duration_ms = std::chrono::duration<int64_t, cuda::std::chrono::milliseconds::period>;
+using duration_us = std::chrono::duration<int64_t, cuda::std::chrono::microseconds::period>;
+using duration_ns = std::chrono::duration<int64_t, cuda::std::chrono::nanoseconds::period>;
 
-    return {};
+// This functor takes the rounding type as runtime info and dispatches to the ceil/floor/round
+// function.
+template <typename DurationType>
+struct RoundFunctor {
+  template <typename Timestamp>
+  auto operator()(rounding_kind round_kind, Timestamp dt)
+  {
+    switch (round_kind) {
+      case rounding_kind::CEIL: return std::chrono::ceil<DurationType>(dt);
+      case rounding_kind::FLOOR: return std::chrono::floor<DurationType>(dt);
+      case rounding_kind::ROUND: return std::chrono::round<DurationType>(dt);
+      default: throw std::invalid_argument("Unsupported rounding kind.");
+    }
   }
 };
+struct RoundingDispatcher {
+  rounding_kind round_kind;
+  datetime_component component;
 
-template <datetime_component COMPONENT>
-struct floor_timestamp {
+  RoundingDispatcher(rounding_kind round_kind, datetime_component component)
+    : round_kind(round_kind), component(component)
+  {
+  }
+
   template <typename Timestamp>
   CUDA_DEVICE_CALLABLE Timestamp operator()(Timestamp const ts) const
   {
-    using namespace cuda::std::chrono;
-    switch (COMPONENT) {
+    switch (component) {
       case datetime_component::DAY:
-        return time_point_cast<typename Timestamp::duration>(floor<duration_D>(ts));
+        return time_point_cast<typename Timestamp::duration>(
+          RoundFunctor<duration_D>{}(round_kind, ts));
       case datetime_component::HOUR:
-        return time_point_cast<typename Timestamp::duration>(floor<duration_h>(ts));
+        return time_point_cast<typename Timestamp::duration>(
+          RoundFunctor<duration_h>{}(round_kind, ts));
       case datetime_component::MINUTE:
-        return time_point_cast<typename Timestamp::duration>(floor<duration_m>(ts));
+        return time_point_cast<typename Timestamp::duration>(
+          RoundFunctor<duration_m>{}(round_kind, ts));
       case datetime_component::SECOND:
-        return time_point_cast<typename Timestamp::duration>(floor<duration_s>(ts));
+        return time_point_cast<typename Timestamp::duration>(
+          RoundFunctor<duration_s>{}(round_kind, ts));
       case datetime_component::MILLISECOND:
-        return time_point_cast<typename Timestamp::duration>(floor<duration_ms>(ts));
+        return time_point_cast<typename Timestamp::duration>(
+          RoundFunctor<duration_ms>{}(round_kind, ts));
       case datetime_component::MICROSECOND:
-        return time_point_cast<typename Timestamp::duration>(floor<duration_us>(ts));
+        return time_point_cast<typename Timestamp::duration>(
+          RoundFunctor<duration_us>{}(round_kind, ts));
       case datetime_component::NANOSECOND:
-        return time_point_cast<typename Timestamp::duration>(floor<duration_ns>(ts));
+        return time_point_cast<typename Timestamp::duration>(
+          RoundFunctor<duration_ns>{}(round_kind, ts));
       default: cudf_assert(false && "Unexpected resolution");
     }
-
-    return {};
   }
 };
 
@@ -224,9 +232,11 @@ struct is_leap_year_op {
 
 // Specific function for applying ceil/floor date ops
 template <typename TransformFunctor>
-struct dispatch_ceil_or_floor {
+struct dispatch_round {
   template <typename Timestamp>
   std::enable_if_t<cudf::is_timestamp<Timestamp>(), std::unique_ptr<cudf::column>> operator()(
+    rounding_kind round_kind,
+    datetime_component component,
     cudf::column_view const& column,
     rmm::cuda_stream_view stream,
     rmm::mr::device_memory_resource* mr) const
@@ -248,7 +258,7 @@ struct dispatch_ceil_or_floor {
                       column.begin<Timestamp>(),
                       column.end<Timestamp>(),
                       output->mutable_view().begin<Timestamp>(),
-                      TransformFunctor{});
+                      TransformFunctor{round_kind, component});
 
     return output;
   }
@@ -412,21 +422,14 @@ std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_colu
 }
 
 template <datetime_component Component>
-std::unique_ptr<column> ceil_general(column_view const& column,
-                                     rmm::cuda_stream_view stream,
-                                     rmm::mr::device_memory_resource* mr)
-{
-  return cudf::type_dispatcher(
-    column.type(), dispatch_ceil_or_floor<detail::ceil_timestamp<Component>>{}, column, stream, mr);
-}
-
-template <datetime_component Component>
-std::unique_ptr<column> floor_general(column_view const& column,
+std::unique_ptr<column> round_general(rounding_kind round_kind,
+                                      datetime_component component,
+                                      column_view const& column,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
   return cudf::type_dispatcher(column.type(),
-                               dispatch_ceil_or_floor<detail::floor_timestamp<Component>>{},
+                               dispatch_round<detail::RoundingDispatcher(round_kind, component){}>,
                                column,
                                stream,
                                mr);
