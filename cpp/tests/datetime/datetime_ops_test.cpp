@@ -858,16 +858,16 @@ TYPED_TEST(TypedDatetimeOpsTest, TestFloorDatetime)
   auto host_val                     = to_host<T>(input);
   thrust::host_vector<T> timestamps = host_val.first;
 
-  thrust::host_vector<T> floored_day(timestamps.size());
-  thrust::transform(timestamps.begin(), timestamps.end(), floored_day.begin(), [](auto i) {
+  std::vector<T> floored_day(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), floored_day.begin(), [](auto i) {
     return time_point_cast<typename T::duration>(floor<days>(i));
   });
   auto expected_day = fixed_width_column_wrapper<T, typename T::duration::rep>(floored_day.begin(),
                                                                                floored_day.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*floor_day(input), expected_day);
 
-  thrust::host_vector<T> floored_hour(timestamps.size());
-  thrust::transform(timestamps.begin(), timestamps.end(), floored_hour.begin(), [](auto i) {
+  std::vector<T> floored_hour(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), floored_hour.begin(), [](auto i) {
     return time_point_cast<typename T::duration>(floor<hours>(i));
   });
   auto expected_hour = fixed_width_column_wrapper<T, typename T::duration::rep>(
