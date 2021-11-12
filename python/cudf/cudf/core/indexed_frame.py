@@ -552,16 +552,16 @@ class IndexedFrame(Frame):
 
         # create a temporary column that we will later sort by
         # to recover ordering after index alignment.
-        tmp_col_id = str(uuid4())
+        sort_col_id = str(uuid4())
         if how == "left":
-            lhs[tmp_col_id] = arange(len(lhs))
+            lhs[sort_col_id] = arange(len(lhs))
         elif how == "right":
-            rhs[tmp_col_id] = arange(len(rhs))
+            rhs[sort_col_id] = arange(len(rhs))
 
         result = lhs.join(rhs, how=how, sort=sort)
         if how in ("left", "right"):
-            result = result.sort_values(tmp_col_id)
-            del result[tmp_col_id]
+            result = result.sort_values(sort_col_id)
+            del result[sort_col_id]
 
         result = self.__class__._from_data(result._data, index=result.index)
         result._data.multiindex = self._data.multiindex
