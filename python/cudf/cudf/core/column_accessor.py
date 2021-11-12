@@ -539,9 +539,6 @@ class ColumnAccessor(MutableMapping):
 
     def droplevel(self, level):
         # drop the nth level
-        if self.nlevels == 1:
-            raise ValueError("Cannot drop the only remaining level")
-
         if level < 0:
             level += self.nlevels
 
