@@ -233,6 +233,11 @@ def parquet_path_or_buf(datadir):
     yield _make_parquet_path_or_buf
 
 
+@pytest.fixture(scope="module")
+def large_int64_gdf():
+    return cudf.DataFrame.from_pandas(pd.DataFrame({"col": range(0, 1000000)}))
+
+
 @pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.parametrize("engine", ["pyarrow", "cudf"])
 @pytest.mark.parametrize(
@@ -2139,3 +2144,19 @@ def test_parquet_decimal_precision_empty(tmpdir):
     df.to_parquet(fname)
     df = cudf.read_parquet(fname)
     assert df.val.dtype.precision == 5
+
+
+@pytest.mark.parametrize("size_bytes", [4 << 20, 1 << 20, 512 << 10])
+@pytest.mark.parametrize("size_rows", [1000000, 100000, 10000])
+def test_parquet_writer_row_group_size(
+    tmpdir, large_int64_gdf, size_bytes, size_rows
+):
+    fname = tmpdir.join("row_group_size.parquet")
+    large_int64_gdf.to_parquet(
+        fname, row_group_size_bytes=size_bytes, row_group_size_rows=size_rows
+    )
+
+    num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
+    # 8 bytes per row, as the column is int64
+    expected_num_rows = max(num_rows / size_rows, 8 * 1024 * 1024 / size_bytes)
+    assert expected_num_rows == row_groups
