@@ -148,6 +148,7 @@ BENCHMARK_REGISTER_F(ConditionalJoin, conditional_inner_join_32bit)
   ->Unit(benchmark::kMillisecond)
   ->Args({100'000, 100'000})
   ->Args({100'000, 400'000})
+  ->Args({400'000, 100'000})
   ->Args({100'000, 1'000'000})
   ->UseManualTime();
 
@@ -155,6 +156,7 @@ BENCHMARK_REGISTER_F(ConditionalJoin, conditional_inner_join_64bit)
   ->Unit(benchmark::kMillisecond)
   ->Args({100'000, 100'000})
   ->Args({100'000, 400'000})
+  ->Args({400'000, 100'000})
   ->Args({100'000, 1'000'000})
   ->UseManualTime();
 
@@ -162,6 +164,7 @@ BENCHMARK_REGISTER_F(ConditionalJoin, conditional_inner_join_32bit_nulls)
   ->Unit(benchmark::kMillisecond)
   ->Args({100'000, 100'000})
   ->Args({100'000, 400'000})
+  ->Args({400'000, 100'000})
   ->Args({100'000, 1'000'000})
   ->UseManualTime();
 
@@ -169,6 +172,7 @@ BENCHMARK_REGISTER_F(ConditionalJoin, conditional_inner_join_64bit_nulls)
   ->Unit(benchmark::kMillisecond)
   ->Args({100'000, 100'000})
   ->Args({100'000, 400'000})
+  ->Args({400'000, 100'000})
   ->Args({100'000, 1'000'000})
   ->UseManualTime();
 

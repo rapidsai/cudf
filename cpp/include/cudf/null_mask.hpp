@@ -202,30 +202,32 @@ rmm::device_buffer copy_bitmask(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Returns a bitwise AND of the bitmasks of columns of a table
+ * @brief Performs bitwise AND of the bitmasks of columns of a table. Returns
+ * a pair of resulting mask and count of unset bits.
  *
  * If any of the columns isn't nullable, it is considered all valid.
  * If no column in the table is nullable, an empty bitmask is returned.
  *
  * @param view The table of columns
  * @param mr Device memory resource used to allocate the returned device_buffer
- * @return rmm::device_buffer Output bitmask
+ * @return A pair of resulting bitmask and count of unset bits
  */
-rmm::device_buffer bitmask_and(
+std::pair<rmm::device_buffer, size_type> bitmask_and(
   table_view const& view,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Returns a bitwise OR of the bitmasks of columns of a table
+ * @brief Performs bitwise OR of the bitmasks of columns of a table. Returns
+ * a pair of resulting mask and count of unset bits.
  *
  * If any of the columns isn't nullable, it is considered all valid.
  * If no column in the table is nullable, an empty bitmask is returned.
  *
  * @param view The table of columns
  * @param mr Device memory resource used to allocate the returned device_buffer
- * @return rmm::device_buffer Output bitmask
+ * @return A pair of resulting bitmask and count of unset bits
  */
-rmm::device_buffer bitmask_or(
+std::pair<rmm::device_buffer, size_type> bitmask_or(
   table_view const& view,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

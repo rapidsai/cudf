@@ -144,7 +144,7 @@ std::unique_ptr<column> empty_like(column_buffer& buffer,
   switch (buffer.type.id()) {
     case type_id::LIST: {
       // make offsets column
-      auto offsets = cudf::make_empty_column(data_type{type_id::INT32});
+      auto offsets = cudf::make_empty_column(type_id::INT32);
 
       column_name_info* child_info = nullptr;
       if (schema_info != nullptr) {

@@ -25,8 +25,7 @@ from .numerical_base import NumericalBaseColumn
 
 
 class DecimalBaseColumn(NumericalBaseColumn):
-    """Base column for decimal64 and decimal32 columns
-    """
+    """Base column for decimal64 and decimal32 columns"""
 
     dtype: Union[Decimal32Dtype, Decimal64Dtype]
 
@@ -321,5 +320,5 @@ def _binop_precision(l_dtype, r_dtype, op):
         result = p1 + p2 + 1
     else:
         raise NotImplementedError()
-
+    # TODO
     return min(result, cudf.Decimal64Dtype.MAX_PRECISION)

@@ -50,10 +50,10 @@ template <typename T>
 struct ColumnUtilitiesTestFixedPoint : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ColumnUtilitiesTest, cudf::test::FixedWidthTypes);
-TYPED_TEST_CASE(ColumnUtilitiesTestIntegral, cudf::test::IntegralTypes);
-TYPED_TEST_CASE(ColumnUtilitiesTestFloatingPoint, cudf::test::FloatingPointTypes);
-TYPED_TEST_CASE(ColumnUtilitiesTestFixedPoint, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(ColumnUtilitiesTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(ColumnUtilitiesTestIntegral, cudf::test::IntegralTypes);
+TYPED_TEST_SUITE(ColumnUtilitiesTestFloatingPoint, cudf::test::FloatingPointTypes);
+TYPED_TEST_SUITE(ColumnUtilitiesTestFixedPoint, cudf::test::FixedPointTypes);
 
 TYPED_TEST(ColumnUtilitiesTest, NonNullableToHost)
 {
@@ -133,7 +133,7 @@ TYPED_TEST(ColumnUtilitiesTest, NullableToHostAllValid)
 
   auto masks = cudf::test::detail::make_null_mask_vector(all_valid, all_valid + size);
 
-  EXPECT_TRUE(std::equal(masks.begin(), masks.end(), host_data.second.begin()));
+  EXPECT_TRUE(cudf::test::validate_host_masks(masks, host_data.second, size));
 }
 
 struct ColumnUtilitiesEquivalenceTest : public cudf::test::BaseFixture {

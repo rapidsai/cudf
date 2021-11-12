@@ -32,7 +32,7 @@ template <typename T>
 class StringsFixedPointConvertTest : public StringsConvertTest {
 };
 
-TYPED_TEST_CASE(StringsFixedPointConvertTest, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(StringsFixedPointConvertTest, cudf::test::FixedPointTypes);
 
 TYPED_TEST(StringsFixedPointConvertTest, ToFixedPoint)
 {

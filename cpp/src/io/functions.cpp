@@ -183,8 +183,6 @@ compression_type infer_compression_type(compression_type compression, source_inf
 
 table_with_metadata read_json(json_reader_options options, rmm::mr::device_memory_resource* mr)
 {
-  namespace json = cudf::io::detail::json;
-
   CUDF_FUNC_RANGE();
 
   options.set_compression(infer_compression_type(options.get_compression(), options.get_source()));
@@ -193,16 +191,11 @@ table_with_metadata read_json(json_reader_options options, rmm::mr::device_memor
                                       options.get_byte_range_offset(),
                                       options.get_byte_range_size_with_padding());
 
-  auto reader =
-    std::make_unique<json::reader>(std::move(datasources), options, rmm::cuda_stream_default, mr);
-
-  return reader->read(options);
+  return detail::json::read_json(datasources, options, rmm::cuda_stream_default, mr);
 }
 
 table_with_metadata read_csv(csv_reader_options options, rmm::mr::device_memory_resource* mr)
 {
-  namespace csv = cudf::io::detail::csv;
-
   CUDF_FUNC_RANGE();
 
   options.set_compression(infer_compression_type(options.get_compression(), options.get_source()));
@@ -211,10 +204,13 @@ table_with_metadata read_csv(csv_reader_options options, rmm::mr::device_memory_
                                       options.get_byte_range_offset(),
                                       options.get_byte_range_size_with_padding());
 
-  auto reader =
-    std::make_unique<csv::reader>(std::move(datasources), options, rmm::cuda_stream_default, mr);
+  CUDF_EXPECTS(datasources.size() == 1, "Only a single source is currently supported.");
 
-  return reader->read();
+  return cudf::io::detail::csv::read_csv(  //
+    std::move(datasources[0]),
+    options,
+    rmm::cuda_stream_default,
+    mr);
 }
 
 // Freeform API wraps the detail writer class API
@@ -255,7 +251,7 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 
   // Get column names
   for (auto i = 0; i < metadata.get_num_columns(); i++) {
-    result.column_names.push_back(metadata.get_column_name(i));
+    result.column_names.push_back(metadata.column_name(i));
   }
 
   // Get file-level statistics, statistics of each column of file

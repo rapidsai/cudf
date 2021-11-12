@@ -247,47 +247,6 @@ def scatter(object source, Column scatter_map, Column target_column,
     return next(iter(data.values()))
 
 
-def _reverse_column(Column source_column):
-    cdef column_view reverse_column_view = source_column.view()
-
-    cdef unique_ptr[column] c_result
-
-    with nogil:
-        c_result = move(cpp_copying.reverse(
-            reverse_column_view
-        ))
-
-    return Column.from_unique_ptr(
-        move(c_result)
-    )
-
-
-def _reverse_table(source_table):
-    cdef table_view reverse_table_view = table_view_from_columns(source_table)
-
-    cdef unique_ptr[table] c_result
-    with nogil:
-        c_result = move(cpp_copying.reverse(
-            reverse_table_view
-        ))
-
-    return data_from_unique_ptr(
-        move(c_result),
-        column_names=source_table._column_names,
-        index_names=source_table._index_names
-    )
-
-
-def reverse(object source):
-    """
-    Reversing a column or a table
-    """
-    if isinstance(source, Column):
-        return _reverse_column(source)
-    else:
-        return _reverse_table(source)
-
-
 def column_empty_like(Column input_column):
 
     cdef column_view input_column_view = input_column.view()

@@ -901,7 +901,14 @@ class merge_m2_aggregation final : public groupby_aggregation {
  */
 class covariance_aggregation final : public groupby_aggregation {
  public:
-  explicit covariance_aggregation() : aggregation{COVARIANCE} {}
+  explicit covariance_aggregation(size_type min_periods, size_type ddof)
+    : aggregation{COVARIANCE}, _min_periods{min_periods}, _ddof(ddof)
+  {
+  }
+  size_type _min_periods;
+  size_type _ddof;
+
+  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
 
   std::unique_ptr<aggregation> clone() const override
   {
@@ -913,6 +920,12 @@ class covariance_aggregation final : public groupby_aggregation {
     return collector.visit(col_type, *this);
   }
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+
+ protected:
+  size_t hash_impl() const
+  {
+    return std::hash<size_type>{}(_min_periods) ^ std::hash<size_type>{}(_ddof);
+  }
 };
 
 /**
@@ -920,8 +933,12 @@ class covariance_aggregation final : public groupby_aggregation {
  */
 class correlation_aggregation final : public groupby_aggregation {
  public:
-  explicit correlation_aggregation(correlation_type type) : aggregation{CORRELATION}, _type{type} {}
+  explicit correlation_aggregation(correlation_type type, size_type min_periods)
+    : aggregation{CORRELATION}, _type{type}, _min_periods{min_periods}
+  {
+  }
   correlation_type _type;
+  size_type _min_periods;
 
   bool is_equal(aggregation const& _other) const override
   {
@@ -944,7 +961,10 @@ class correlation_aggregation final : public groupby_aggregation {
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
 
  protected:
-  size_t hash_impl() const { return std::hash<int>{}(static_cast<int>(_type)); }
+  size_t hash_impl() const
+  {
+    return std::hash<int>{}(static_cast<int>(_type)) ^ std::hash<size_type>{}(_min_periods);
+  }
 };
 
 /**

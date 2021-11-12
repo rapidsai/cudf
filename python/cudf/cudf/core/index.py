@@ -474,7 +474,12 @@ class RangeIndex(BaseIndex):
         pos = search_range(start, stop, label, step, side=side)
         return pos
 
-    def memory_usage(self, **kwargs):
+    def memory_usage(self, deep=False):
+        if deep:
+            warnings.warn(
+                "The deep parameter is ignored and is only included "
+                "for pandas compatibility."
+            )
         return 0
 
     def unique(self):
@@ -1022,9 +1027,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         mask[true_inds] = True
         return mask
 
-    def __sizeof__(self):
-        return self._values.__sizeof__()
-
     def __repr__(self):
         max_seq_items = get_option("max_seq_items") or len(self)
         mr = 0
@@ -1161,6 +1163,44 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
 
     def is_interval(self):
         return False
+
+    def argsort(
+        self,
+        axis=0,
+        kind="quicksort",
+        order=None,
+        ascending=True,
+        na_position="last",
+    ):
+        """Return the integer indices that would sort the Series values.
+
+        Parameters
+        ----------
+        axis : {0 or "index"}
+            Has no effect but is accepted for compatibility with numpy.
+        kind : {'mergesort', 'quicksort', 'heapsort', 'stable'}, default 'quicksort'
+            Choice of sorting algorithm. See :func:`numpy.sort` for more
+            information. 'mergesort' and 'stable' are the only stable
+            algorithms. Only quicksort is supported in cuDF.
+        order : None
+            Has no effect but is accepted for compatibility with numpy.
+        ascending : bool or list of bool, default True
+            If True, sort values in ascending order, otherwise descending.
+        na_position : {‘first’ or ‘last’}, default ‘last’
+            Argument ‘first’ puts NaNs at the beginning, ‘last’ puts NaNs
+            at the end.
+
+        Returns
+        -------
+        cupy.ndarray: The indices sorted based on input.
+        """  # noqa: E501
+        return super().argsort(
+            axis=axis,
+            kind=kind,
+            order=order,
+            ascending=ascending,
+            na_position=na_position,
+        )
 
 
 class NumericIndex(GenericIndex):
@@ -2370,9 +2410,6 @@ class StringIndex(GenericIndex):
         return pd.Index(
             self.to_numpy(na_value=None), name=self.name, dtype="object"
         )
-
-    def take(self, indices):
-        return self._values[indices]
 
     def __repr__(self):
         return (

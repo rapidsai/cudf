@@ -868,7 +868,7 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    */
   dictionary_column_wrapper() : column_wrapper{}
   {
-    wrapped = cudf::make_empty_column(cudf::data_type{cudf::type_id::DICTIONARY32});
+    wrapped = cudf::make_empty_column(cudf::type_id::DICTIONARY32);
   }
 
   /**
@@ -1401,7 +1401,7 @@ class lists_column_wrapper : public detail::column_wrapper {
    */
   lists_column_wrapper() : column_wrapper{}
   {
-    build_from_non_nested(make_empty_column(cudf::data_type{cudf::type_to_id<T>()}));
+    build_from_non_nested(make_empty_column(cudf::type_to_id<T>()));
   }
 
   /**

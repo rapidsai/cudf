@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cuda_profiler_api.h>
 #include <rmm/device_buffer.hpp>
 
 #include "jni_utils.hpp"
@@ -344,6 +345,20 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_asyncMemcpyOnStream(JNIEnv *env,
     auto kind = static_cast<cudaMemcpyKind>(jkind);
     auto stream = reinterpret_cast<cudaStream_t>(jstream);
     JNI_CUDA_TRY(env, , cudaMemcpyAsync(dst, src, count, kind, stream));
+  }
+  CATCH_STD(env, );
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_profilerStart(JNIEnv *env, jclass clazz) {
+  try {
+    cudaProfilerStart();
+  }
+  CATCH_STD(env, );
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_profilerStop(JNIEnv *env, jclass clazz) {
+  try {
+    cudaProfilerStop();
   }
   CATCH_STD(env, );
 }

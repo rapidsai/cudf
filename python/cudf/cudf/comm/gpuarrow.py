@@ -129,13 +129,11 @@ class GpuArrowNodeReader(object):
         return self._series._column.mask_array_view
 
     def make_series(self):
-        """Make a Series object out of this node
-        """
+        """Make a Series object out of this node"""
         return self._series.copy(deep=False)
 
     def _make_dictionary_series(self):
-        """Make a dictionary-encoded series from this node
-        """
+        """Make a dictionary-encoded series from this node"""
         assert self.is_dictionary
         return self._series.copy(deep=False)
 
