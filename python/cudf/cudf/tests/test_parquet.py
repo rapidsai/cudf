@@ -366,10 +366,14 @@ def test_parquet_reader_pandas_metadata(
     expect = pa.parquet.read_table(
         fname, columns=columns, use_pandas_metadata=pandas_compat
     ).to_pandas()
-    with open(fname) as f:
-        buffer = f.read()
+    if as_bytes:
+        with open(fname) as f:
+            got = cudf.read_parquet(
+                f.read(), columns=columns, use_pandas_metadata=pandas_compat
+            )
+    else:
         got = cudf.read_parquet(
-            buffer, columns=columns, use_pandas_metadata=pandas_compat
+            fname, columns=columns, use_pandas_metadata=pandas_compat
         )
 
     if pandas_compat or columns is None or "b" in columns:
