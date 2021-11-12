@@ -398,10 +398,15 @@ class IndexedFrame(Frame):
                 inds = idx._get_sorted_inds(
                     ascending=ascending, na_position=na_position
                 )
-                # TODO: This line is abusing the fact that take accepts a
-                # column, not just user-facing objects. We will want to
-                # refactor that in the future.
-                out = self.take(inds)
+                out = self._gather(inds)
+                # TODO: frame factory function should handle multilevel column
+                # names
+                if isinstance(
+                    self, cudf.core.dataframe.DataFrame
+                ) and isinstance(
+                    self.columns, pd.core.indexes.multi.MultiIndex
+                ):
+                    out.columns = self.columns
             elif (ascending and idx.is_monotonic_increasing) or (
                 not ascending and idx.is_monotonic_decreasing
             ):
@@ -410,7 +415,13 @@ class IndexedFrame(Frame):
                 inds = idx.argsort(
                     ascending=ascending, na_position=na_position
                 )
-                out = self.take(inds)
+                out = self._gather(inds)
+                if isinstance(
+                    self, cudf.core.dataframe.DataFrame
+                ) and isinstance(
+                    self.columns, pd.core.indexes.multi.MultiIndex
+                ):
+                    out.columns = self.columns
         else:
             labels = sorted(self._data.names, reverse=not ascending)
             out = self[labels]
@@ -487,12 +498,17 @@ class IndexedFrame(Frame):
             return self
 
         # argsort the `by` column
-        return self.take(
+        out = self._gather(
             self._get_columns_by_label(by)._get_sorted_inds(
                 ascending=ascending, na_position=na_position
             ),
             keep_index=not ignore_index,
         )
+        if isinstance(self, cudf.core.dataframe.DataFrame) and isinstance(
+            self.columns, pd.core.indexes.multi.MultiIndex
+        ):
+            out.columns = self.columns
+        return out
 
     def _n_largest_or_smallest(self, largest, n, columns, keep):
         # Get column to operate on
