@@ -544,12 +544,14 @@ class IndexedFrame(Frame):
         if self.index.equals(index):
             return self
         if not allow_non_unique:
-            if not self.index.is_unique or not index.is_unique():
+            if not self.index.is_unique or not index.is_unique:
                 raise ValueError("Cannot align indices with non-unique values")
 
         lhs = cudf.DataFrame._from_data(self._data, index=self.index)
         rhs = cudf.DataFrame._from_data({}, index=index)
 
+        # create a temporary column that we will later sort by
+        # to recover ordering after index alignment.
         tmp_col_id = str(uuid4())
         if how == "left":
             lhs[tmp_col_id] = arange(len(lhs))
@@ -557,7 +559,7 @@ class IndexedFrame(Frame):
             rhs[tmp_col_id] = arange(len(rhs))
 
         result = lhs.join(rhs, how=how, sort=sort)
-        if how == "left" or how == "right":
+        if how in ("left", "right"):
             result = result.sort_values(tmp_col_id)
             del result[tmp_col_id]
 

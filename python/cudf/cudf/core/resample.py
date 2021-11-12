@@ -8,10 +8,10 @@ from cudf._typing import DataFrameOrSeries
 from cudf.core.groupby.groupby import (
     DataFrameGroupBy,
     GroupBy,
-    Grouper,
     SeriesGroupBy,
     _Grouping,
 )
+from cudf.core.tools.datetimes import _offset_alias_to_code, _unit_dtype_map
 
 
 class _Resampler(GroupBy):
@@ -19,10 +19,6 @@ class _Resampler(GroupBy):
     grouping: "_ResampleGrouping"
 
     def __init__(self, obj, by, axis=None, kind=None):
-        if not isinstance(by, Grouper) and by.freq:
-            # TODO
-            raise ValueError()
-
         by = _ResampleGrouping(obj, by)
         super().__init__(obj, by=by)
 
@@ -162,11 +158,6 @@ class _ResampleGrouping(_Grouping):
         # column to have the same dtype, so we compute a `result_type`
         # and cast them both to that type.
         try:
-            from cudf.core.tools.datetimes import (
-                _offset_alias_to_code,
-                _unit_dtype_map,
-            )
-
             result_type = np.dtype(
                 _unit_dtype_map[_offset_alias_to_code[offset.name]]
             )
@@ -355,6 +346,3 @@ def _adjust_dates_anchored(
     if last_tzinfo is not None:
         lresult = lresult.tz_localize("UTC").tz_convert(last_tzinfo)
     return fresult, lresult
-
-
-# TODO: change resolution when upsampling/downsampling
