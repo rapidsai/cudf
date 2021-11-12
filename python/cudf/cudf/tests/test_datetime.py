@@ -1554,6 +1554,19 @@ def test_date_range_end_freq_periods(end, freq, periods):
     )
 
 
+def test_date_range_freq_does_not_divide_range():
+    expect = pd.date_range(
+        "2001-01-01 00:00:00.000000", "2001-01-01 00:00:00.000010", freq="3us"
+    )
+    got = cudf.date_range(
+        "2001-01-01 00:00:00.000000", "2001-01-01 00:00:00.000010", freq="3us"
+    )
+    np.testing.assert_allclose(
+        expect.to_numpy().astype("int64"),
+        got.to_pandas().to_numpy().astype("int64"),
+    )
+
+
 def test_date_range_raise_overflow():
     # Fixed offset
     start = np.datetime64(np.iinfo("int64").max, "ns")
