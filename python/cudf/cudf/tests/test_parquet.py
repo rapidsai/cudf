@@ -343,10 +343,7 @@ def test_parquet_reader_index_col(tmpdir, index_col, columns):
 @pytest.mark.parametrize(
     "columns", [["a"], ["d"], ["a", "b"], ["a", "d"], None]
 )
-@pytest.mark.parametrize("as_bytes", [True, False])
-def test_parquet_reader_pandas_metadata(
-    tmpdir, columns, pandas_compat, as_bytes
-):
+def test_parquet_reader_pandas_metadata(tmpdir, columns, pandas_compat):
     df = pd.DataFrame(
         {
             "a": range(6, 9),
@@ -366,21 +363,46 @@ def test_parquet_reader_pandas_metadata(
     expect = pa.parquet.read_table(
         fname, columns=columns, use_pandas_metadata=pandas_compat
     ).to_pandas()
-    if as_bytes:
-        with open(fname) as f:
-            got = cudf.read_parquet(
-                f.read(), columns=columns, use_pandas_metadata=pandas_compat
-            )
-    else:
-        got = cudf.read_parquet(
-            fname, columns=columns, use_pandas_metadata=pandas_compat
-        )
+    got = cudf.read_parquet(
+        fname, columns=columns, use_pandas_metadata=pandas_compat
+    )
 
     if pandas_compat or columns is None or "b" in columns:
         assert got.index.name == "b"
     else:
         assert got.index.name is None
     assert_eq(expect, got, check_categorical=False)
+
+
+@pytest.mark.parametrize("pandas_compat", [True, False])
+@pytest.mark.parametrize("as_bytes", [True, False])
+def test_parquet_range_index_pandas_metadata(tmpdir, pandas_compat, as_bytes):
+    df = pd.DataFrame(
+        {"a": range(6, 9), "b": ["abc", "def", "xyz"]},
+        index=pd.RangeIndex(3, 6, 1),
+    )
+    df.index.name = "c"
+
+    fname = tmpdir.join("test_parquet_range_index_pandas_metadata")
+    df.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    # PANDAS `read_parquet()` and PyArrow `read_pandas()` always includes index
+    # Instead, directly use PyArrow to optionally omit the index
+    expect = pa.parquet.read_table(
+        fname, use_pandas_metadata=pandas_compat
+    ).to_pandas()
+    if as_bytes:
+        # Make sure we can handle RangeIndex parsing
+        # in pandas when the input is `bytes`
+        with open(fname, "rb") as f:
+            got = cudf.read_parquet(
+                f.read(), use_pandas_metadata=pandas_compat
+            )
+    else:
+        got = cudf.read_parquet(fname, use_pandas_metadata=pandas_compat)
+
+    assert_eq(expect, got)
 
 
 def test_parquet_read_metadata(tmpdir, pdf):

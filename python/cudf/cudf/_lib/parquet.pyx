@@ -108,6 +108,11 @@ cdef class BufferArrayFromVector:
         pass
 
 
+def _footer_size(buffer):
+    # Return the footer size from a buffered parquet file
+    return int.from_bytes(buffer[-8:-4], "little")
+
+
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                    skiprows=None, num_rows=None, strings_to_categorical=False,
                    use_pandas_metadata=True):
@@ -176,10 +181,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     index_col = None
     is_range_index = False
     cdef map[string, string] user_data = c_out_table.metadata.user_data
-    json_str = (
-        user_data[b'pandas'].decode('utf-8')
-        if use_pandas_metadata else ""
-    )
+    json_str = user_data[b'pandas'].decode('utf-8')
     meta = None
     if json_str != "":
         meta = json.loads(json_str)
@@ -210,14 +212,17 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                 )
 
     # Set the index column
-    if use_pandas_metadata and index_col is not None and len(index_col) > 0:
+    if index_col is not None and len(index_col) > 0:
         if is_range_index:
             range_index_meta = index_col[0]
             if row_groups is not None:
                 per_file_metadata = [
                     pa.parquet.read_metadata(
-                        # Pyarrow cannot read from bytes, wrap in BytesIO
-                        io.BytesIO(s) if isinstance(s, bytes) else s
+                        # Pyarrow cannot read from bytes, wrap the footer
+                        # metadata in BytesIO
+                        io.BytesIO(
+                            b"PAR1" + s[-(_footer_size(s) + 8):]
+                        ) if isinstance(s, bytes) else s
                     ) for s in (
                         pa_buffers or filepaths_or_buffers
                     )
@@ -273,7 +278,8 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
             df.drop(columns=index_col, inplace=True)
             df._index = idx
         else:
-            df.index.names = index_col
+            if use_pandas_metadata:
+                df.index.names = index_col
 
     return df
 
