@@ -464,10 +464,6 @@ class Frame:
         if other is None or len(self) != len(other):
             return False
 
-        for self_name, other_name in zip(self._data.names, other._data.names):
-            if self_name != other_name:
-                return False
-
         # check data:
         for self_col, other_col in zip(
             self._data.values(), other._data.values()
@@ -1585,9 +1581,9 @@ class Frame:
         launch_args += list(args)
         kernel.forall(len(self))(*launch_args)
 
-        result = cudf.Series(ans_col).set_mask(
-            libcudf.transform.bools_to_mask(ans_mask)
-        )
+        col = as_column(ans_col)
+        col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
+        result = cudf.Series._from_data({None: col}, self._index)
 
         return result
 

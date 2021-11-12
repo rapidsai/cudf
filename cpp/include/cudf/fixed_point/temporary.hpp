@@ -72,6 +72,14 @@ CUDA_HOST_DEVICE_CALLABLE auto max(T lhs, T rhs)
 {
   return lhs > rhs ? lhs : rhs;
 }
+template <typename BaseType>
+constexpr auto exp10(int32_t exponent)
+{
+  BaseType value = 1;
+  while (exponent > 0)
+    value *= 10, --exponent;
+  return value;
+}
 
 }  // namespace detail
 }  // namespace numeric
