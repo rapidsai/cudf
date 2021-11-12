@@ -1300,21 +1300,6 @@ class SeriesGroupBy(GroupBy):
         return result
 
 
-def _get_groupby(obj, by, **kwargs):
-    import cudf.core.resample
-
-    if isinstance(by, Grouper) and by.freq:
-        if isinstance(obj, cudf.Series):
-            return cudf.core.resample.SeriesResampler(obj, by=by)
-        else:
-            return cudf.core.resample.DataFrameResampler(obj, by=by)
-
-    if isinstance(obj, cudf.Series):
-        return SeriesGroupBy(obj, by=by, **kwargs)
-    else:
-        return DataFrameGroupBy(obj, by=by, **kwargs)
-
-
 # TODO: should we define this as a dataclass instead?
 class Grouper(object):
     def __init__(

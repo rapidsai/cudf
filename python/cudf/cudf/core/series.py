@@ -58,7 +58,7 @@ from cudf.core.column.string import StringMethods
 from cudf.core.column.struct import StructMethods
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
-from cudf.core.groupby.groupby import SeriesGroupBy, _get_groupby
+from cudf.core.groupby.groupby import SeriesGroupBy
 from cudf.core.index import BaseIndex, RangeIndex, as_index
 from cudf.core.indexed_frame import (
     IndexedFrame,
@@ -3531,6 +3531,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         observed=False,
         dropna=True,
     ):
+        import cudf.core.resample
+
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")
 
@@ -3554,7 +3556,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 "groupby() requires either by or level to be specified."
             )
 
-        return _get_groupby(self, by=by, level=level, dropna=dropna, sort=sort)
+        return (
+            cudf.core.resample.SeriesResampler(self, by=by)
+            if isinstance(by, cudf.Grouper)
+            else SeriesGroupBy(
+                self, by=by, level=level, dropna=dropna, sort=sort
+            )
+        )
 
     def rename(self, index=None, copy=True):
         """

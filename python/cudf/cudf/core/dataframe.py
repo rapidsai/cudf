@@ -51,7 +51,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
-from cudf.core.groupby.groupby import DataFrameGroupBy, _get_groupby
+from cudf.core.groupby.groupby import DataFrameGroupBy
 from cudf.core.index import BaseIndex, RangeIndex, as_index
 from cudf.core.indexed_frame import (
     IndexedFrame,
@@ -59,6 +59,7 @@ from cudf.core.indexed_frame import (
     _get_label_range_or_mask,
     _indices_from_labels,
 )
+from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
@@ -3811,13 +3812,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "groupby() requires either by or level to be specified."
             )
 
-        return _get_groupby(
-            self,
-            by=by,
-            level=level,
-            as_index=as_index,
-            dropna=dropna,
-            sort=sort,
+        return (
+            DataFrameResampler(self, by=by)
+            if isinstance(by, cudf.Grouper)
+            else DataFrameGroupBy(
+                self,
+                by=by,
+                level=level,
+                as_index=as_index,
+                dropna=dropna,
+                sort=sort,
+            )
         )
 
     def query(self, expr, local_dict=None):

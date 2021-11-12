@@ -16,7 +16,6 @@ from cudf._typing import ColumnLike
 from cudf.api.types import is_categorical_dtype, is_list_like
 from cudf.core.column import arange
 from cudf.core.frame import Frame
-from cudf.core.groupby.groupby import _get_groupby
 from cudf.core.index import Index
 from cudf.core.multiindex import MultiIndex
 from cudf.utils.utils import cached_property
@@ -713,6 +712,8 @@ class IndexedFrame(Frame):
         nanoseconds to milliseconds, the index will be of dtype
         'datetime64[ms]'.
         """
+        import cudf.core.resample
+
         if (axis, convention, kind, loffset, base, origin, offset) != (
             0,
             "start",
@@ -736,4 +737,8 @@ class IndexedFrame(Frame):
         by = cudf.Grouper(
             key=on, freq=rule, closed=closed, label=label, level=level
         )
-        return _get_groupby(self, by=by)
+        return (
+            cudf.core.resample.SeriesResampler(self, by=by)
+            if isinstance(self, cudf.Series)
+            else cudf.core.resample.DataFrameResampler(self, by=by)
+        )
