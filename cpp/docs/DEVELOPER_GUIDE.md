@@ -5,7 +5,7 @@ to these additional files for further documentation of libcudf best practices.
 
 * [Documentation Guide](DOCUMENTATION.md) for guidelines on documenting libcudf code.
 * [Testing Guide](TESTING.md) for guidelines on writing unit tests.
-* [Benchmarking Guide](TODO) for guidelines on writing unit benchmarks.
+* [Benchmarking Guide](BENCHMARKING.md) for guidelines on writing unit benchmarks.
 
 # Overview
 
@@ -25,7 +25,7 @@ A column is an array of data of a single type. Along with Tables, columns are th
 structures used in libcudf. Most libcudf algorithms operate on columns. Columns may have a validity
 mask representing whether each element is valid or null (invalid). Columns of nested types are 
 supported, meaning that a column may have child columns. A column is the C++ equivalent to a cuDF
-Python [series](https://docs.rapids.ai/api/cudf/stable/api.html#series)
+Python [Series](https://docs.rapids.ai/api/cudf/stable/api_docs/series.html).
 
 ### Element
 
@@ -37,13 +37,13 @@ A type representing a single element of a data type.
 
 ### Table
 
-A table is a collection of columns with equal number of elements. A table is the C++ equivalent to 
-a cuDF Python [data frame](https://docs.rapids.ai/api/cudf/stable/api.html#dataframe).
+A table is a collection of columns with equal number of elements. A table is the C++ equivalent to
+a cuDF Python [DataFrame](https://docs.rapids.ai/api/cudf/stable/api_docs/dataframe.html).
 
 ### View
 
-A view is a non-owning object that provides zero-copy access (possibly with slicing or offsets) data 
-owned by another object. Examples are column views and table views.
+A view is a non-owning object that provides zero-copy access (possibly with slicing or offsets) to
+data owned by another object. Examples are column views and table views.
 
 # Directory Structure and File Naming
 
@@ -75,10 +75,12 @@ execution policy (always `rmm::exec_policy` in libcudf).
 
 ## Code and Documentation Style and Formatting
 
-libcudf code uses [snake_case](https://en.wikipedia.org/wiki/Snake_case) for all names except in a 
-few cases: template parameters, unit tests and test case names may use Pascal case, aka 
-[UpperCamelCase](https://en.wikipedia.org/wiki/Camel_case). We do not use [Hungarian notation](https://en.wikipedia.org/wiki/Hungarian_notation), except sometimes when naming device data variables and their corresponding
-host copies. Private member variables are typically prefixed with an underscore.
+libcudf code uses [snake_case](https://en.wikipedia.org/wiki/Snake_case) for all names except in a
+few cases: template parameters, unit tests and test case names may use Pascal case, aka
+[UpperCamelCase](https://en.wikipedia.org/wiki/Camel_case). We do not use
+[Hungarian notation](https://en.wikipedia.org/wiki/Hungarian_notation), except sometimes when naming
+device data variables and their corresponding host copies. Private member variables are typically
+prefixed with an underscore.
 
 ```c++
 template <typename IteratorType>
@@ -138,7 +140,7 @@ The following guidelines apply to organizing `#include` lines.
    from other RAPIDS libraries, then includes from related libraries, like `<thrust/...>`, then 
    includes from dependencies installed with cuDF, and then standard headers (for example `<string>`, 
    `<iostream>`).
- * Use <> instead of "" unless the header is in the same directory as the source file.
+ * Use `<>` instead of `""` unless the header is in the same directory as the source file.
  * Tools like `clangd` often auto-insert includes when they can, but they usually get the grouping
    and brackets wrong.
  * Always check that includes are only necessary for the file in which they are included. 
