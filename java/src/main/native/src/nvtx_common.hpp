@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,12 @@
 
 #pragma once
 
-#include <cudf/types.hpp>
-#include <io/utilities/column_buffer.hpp>
-#include <io/utilities/column_type_histogram.hpp>
+namespace cudf {
+namespace jni {
 
-using cudf::io::detail::string_index_pair;
+struct java_domain {
+  static constexpr char const *name{"Java"};
+};
+
+} // namespace jni
+} // namespace cudf

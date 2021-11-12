@@ -940,11 +940,22 @@ struct column_view_printer {
                   std::vector<std::string>& out,
                   std::string const& indent)
   {
-    //
     //  For timestamps, convert timestamp column to column of strings, then
     //  call string version
-    //
-    auto col_as_strings = cudf::strings::from_timestamps(col);
+    std::string format = [&]() {
+      if constexpr (std::is_same_v<cudf::timestamp_s, Element>) {
+        return std::string{"%Y-%m-%dT%H:%M:%SZ"};
+      } else if constexpr (std::is_same_v<cudf::timestamp_ms, Element>) {
+        return std::string{"%Y-%m-%dT%H:%M:%S.%3fZ"};
+      } else if constexpr (std::is_same_v<cudf::timestamp_us, Element>) {
+        return std::string{"%Y-%m-%dT%H:%M:%S.%6fZ"};
+      } else if constexpr (std::is_same_v<cudf::timestamp_ns, Element>) {
+        return std::string{"%Y-%m-%dT%H:%M:%S.%9fZ"};
+      }
+      return std::string{"%Y-%m-%d"};
+    }();
+
+    auto col_as_strings = cudf::strings::from_timestamps(col, format);
     if (col_as_strings->size() == 0) { return; }
 
     this->template operator()<cudf::string_view>(*col_as_strings, out, indent);

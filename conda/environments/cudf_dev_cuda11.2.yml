@@ -59,6 +59,8 @@ dependencies:
   - cachetools
   - transformers<=4.10.3
   - pydata-sphinx-theme
+  - librdkafka=1.7.0
+  - python-confluent-kafka=1.7.0
   - pip:
       - git+https://github.com/dask/dask.git@main
       - git+https://github.com/dask/distributed.git@main

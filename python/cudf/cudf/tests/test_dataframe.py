@@ -3649,19 +3649,6 @@ def test_empty_dataframe_any(axis):
     assert_eq(got, expected, check_index_type=False)
 
 
-@pytest.mark.parametrize("indexed", [False, True])
-def test_dataframe_sizeof(indexed):
-    rows = int(1e6)
-    index = list(i for i in range(rows)) if indexed else None
-
-    gdf = cudf.DataFrame({"A": [8] * rows, "B": [32] * rows}, index=index)
-
-    for c in gdf._data.columns:
-        assert gdf._index.__sizeof__() == gdf._index.__sizeof__()
-    cols_sizeof = sum(c.__sizeof__() for c in gdf._data.columns)
-    assert gdf.__sizeof__() == (gdf._index.__sizeof__() + cols_sizeof)
-
-
 @pytest.mark.parametrize("a", [[], ["123"]])
 @pytest.mark.parametrize("b", ["123", ["123"]])
 @pytest.mark.parametrize(
@@ -5394,8 +5381,8 @@ def test_memory_usage_cat():
     gdf = cudf.from_pandas(df)
 
     expected = (
-        gdf.B._column.categories.__sizeof__()
-        + gdf.B._column.codes.__sizeof__()
+        gdf.B._column.categories.memory_usage()
+        + gdf.B._column.codes.memory_usage()
     )
 
     # Check cat column
@@ -5408,8 +5395,8 @@ def test_memory_usage_cat():
 def test_memory_usage_list():
     df = cudf.DataFrame({"A": [[0, 1, 2, 3], [4, 5, 6], [7, 8], [9]]})
     expected = (
-        df.A._column.offsets._memory_usage()
-        + df.A._column.elements._memory_usage()
+        df.A._column.offsets.memory_usage()
+        + df.A._column.elements.memory_usage()
     )
     assert expected == df.A.memory_usage()
 
@@ -7979,7 +7966,9 @@ def test_dataframe_mode(df, numeric_only, dropna):
     assert_eq(expected, actual, check_dtype=False)
 
 
-@pytest.mark.parametrize("lhs, rhs", [("a", "a"), ("a", "b"), (1, 1.0)])
+@pytest.mark.parametrize(
+    "lhs, rhs", [("a", "a"), ("a", "b"), (1, 1.0), (None, None), (None, "a")]
+)
 def test_equals_names(lhs, rhs):
     lhs = cudf.DataFrame({lhs: [1, 2]})
     rhs = cudf.DataFrame({rhs: [1, 2]})
@@ -8732,12 +8721,12 @@ def test_explode(data, labels, ignore_index, p_index, label_to_explode):
         (
             cudf.DataFrame({"a": [10, 0, 2], "b": [-10, 10, 1]}),
             True,
-            cudf.Series([1, 2, 0], dtype="int32"),
+            cupy.array([1, 2, 0], dtype="int32"),
         ),
         (
             cudf.DataFrame({"a": [10, 0, 2], "b": [-10, 10, 1]}),
             False,
-            cudf.Series([0, 2, 1], dtype="int32"),
+            cupy.array([0, 2, 1], dtype="int32"),
         ),
     ],
 )

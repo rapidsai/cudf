@@ -33,7 +33,7 @@ template <typename T>
 struct TypedScalarDeviceViewTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(TypedScalarDeviceViewTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(TypedScalarDeviceViewTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 template <typename ScalarDeviceViewType>
 __global__ void test_set_value(ScalarDeviceViewType s, ScalarDeviceViewType s1)
