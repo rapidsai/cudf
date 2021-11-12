@@ -90,29 +90,22 @@ struct extract_component_operator {
   }
 };
 
-using duration_D  = std::chrono::duration<int32_t, cuda::std::chrono::days::period>;
-using duration_h  = std::chrono::duration<int32_t, cuda::std::chrono::hours::period>;
-using duration_m  = std::chrono::duration<int32_t, cuda::std::chrono::minutes::period>;
-using duration_s  = std::chrono::duration<int64_t, cuda::std::chrono::seconds::period>;
-using duration_ms = std::chrono::duration<int64_t, cuda::std::chrono::milliseconds::period>;
-using duration_us = std::chrono::duration<int64_t, cuda::std::chrono::microseconds::period>;
-using duration_ns = std::chrono::duration<int64_t, cuda::std::chrono::nanoseconds::period>;
-
 // This functor takes the rounding type as runtime info and dispatches to the ceil/floor/round
 // function.
 template <typename DurationType>
 struct RoundFunctor {
   template <typename Timestamp>
-  auto operator()(rounding_kind round_kind, Timestamp dt)
+  CUDA_DEVICE_CALLABLE auto operator()(rounding_kind round_kind, Timestamp dt)
   {
     switch (round_kind) {
       case rounding_kind::CEIL: return std::chrono::ceil<DurationType>(dt);
       case rounding_kind::FLOOR: return std::chrono::floor<DurationType>(dt);
       case rounding_kind::ROUND: return std::chrono::round<DurationType>(dt);
-      default: throw std::invalid_argument("Unsupported rounding kind.");
+      default: cudf_assert(false && "Unsupported rounding kind.");
     }
   }
 };
+
 struct RoundingDispatcher {
   rounding_kind round_kind;
   datetime_component component;
@@ -147,7 +140,7 @@ struct RoundingDispatcher {
       case datetime_component::NANOSECOND:
         return time_point_cast<typename Timestamp::duration>(
           RoundFunctor<duration_ns>{}(round_kind, ts));
-      default: cudf_assert(false && "Unexpected resolution");
+      default: cudf_assert(false && "Unsupported datetime rounding resolution.");
     }
   }
 };
@@ -421,7 +414,6 @@ std::unique_ptr<column> add_calendrical_months(column_view const& timestamp_colu
   }
 }
 
-template <datetime_component Component>
 std::unique_ptr<column> round_general(rounding_kind round_kind,
                                       datetime_component component,
                                       column_view const& column,
@@ -540,8 +532,7 @@ std::unique_ptr<column> extract_quarter(column_view const& column,
 std::unique_ptr<column> ceil_day(column_view const& column, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::ceil_general<detail::datetime_component::DAY>(
-    column, rmm::cuda_stream_default, mr);
+  return detail::round_general(rounding_kind::CEIL, datetime_component::DAY, column, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> ceil_hour(column_view const& column, rmm::mr::device_memory_resource* mr)
