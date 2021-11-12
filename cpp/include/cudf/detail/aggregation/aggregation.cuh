@@ -132,7 +132,8 @@ struct update_target_element<
   aggregation::MIN,
   target_has_nulls,
   source_has_nulls,
-  std::enable_if_t<is_fixed_width<Source>() && !is_fixed_point<Source>()>> {
+  std::enable_if_t<is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
+                   !is_fixed_point<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -140,24 +141,22 @@ struct update_target_element<
   {
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
-    if constexpr (cudf::has_atomic_support<Source>()) {
-      using Target = target_type_t<Source, aggregation::MIN>;
-      atomicMin(&target.element<Target>(target_index),
-                static_cast<Target>(source.element<Source>(source_index)));
-    } else {
-      cudf_assert(false and "Source has no atomic support.");
-    }
+    using Target = target_type_t<Source, aggregation::MIN>;
+    atomicMin(&target.element<Target>(target_index),
+              static_cast<Target>(source.element<Source>(source_index)));
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
-struct update_target_element<Source,
-                             aggregation::MIN,
-                             target_has_nulls,
-                             source_has_nulls,
-                             std::enable_if_t<is_fixed_point<Source>()>> {
+struct update_target_element<
+  Source,
+  aggregation::MIN,
+  target_has_nulls,
+  source_has_nulls,
+  std::enable_if_t<is_fixed_point<Source>() &&
+                   cudf::has_atomic_support<device_storage_type_t<Source>>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -169,12 +168,8 @@ struct update_target_element<Source,
     using DeviceTarget = device_storage_type_t<Target>;
     using DeviceSource = device_storage_type_t<Source>;
 
-    if constexpr (cudf::has_atomic_support<DeviceSource>()) {
-      atomicMin(&target.element<DeviceTarget>(target_index),
-                static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
-    } else {
-      cudf_assert(false and "DeviceSource has no atomic support.");
-    }
+    atomicMin(&target.element<DeviceTarget>(target_index),
+              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -186,7 +181,8 @@ struct update_target_element<
   aggregation::MAX,
   target_has_nulls,
   source_has_nulls,
-  std::enable_if_t<is_fixed_width<Source>() && !is_fixed_point<Source>()>> {
+  std::enable_if_t<is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
+                   !is_fixed_point<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -194,24 +190,22 @@ struct update_target_element<
   {
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
-    if constexpr (cudf::has_atomic_support<Source>()) {
-      using Target = target_type_t<Source, aggregation::MAX>;
-      atomicMax(&target.element<Target>(target_index),
-                static_cast<Target>(source.element<Source>(source_index)));
-    } else {
-      cudf_assert(false and "Source has no atomic support.");
-    }
+    using Target = target_type_t<Source, aggregation::MAX>;
+    atomicMax(&target.element<Target>(target_index),
+              static_cast<Target>(source.element<Source>(source_index)));
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
-struct update_target_element<Source,
-                             aggregation::MAX,
-                             target_has_nulls,
-                             source_has_nulls,
-                             std::enable_if_t<is_fixed_point<Source>()>> {
+struct update_target_element<
+  Source,
+  aggregation::MAX,
+  target_has_nulls,
+  source_has_nulls,
+  std::enable_if_t<is_fixed_point<Source>() &&
+                   cudf::has_atomic_support<device_storage_type_t<Source>>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -223,12 +217,8 @@ struct update_target_element<Source,
     using DeviceTarget = device_storage_type_t<Target>;
     using DeviceSource = device_storage_type_t<Source>;
 
-    if constexpr (cudf::has_atomic_support<DeviceSource>()) {
-      atomicMax(&target.element<DeviceTarget>(target_index),
-                static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
-    } else {
-      cudf_assert(false and "DeviceSource has no atomic support.");
-    }
+    atomicMax(&target.element<DeviceTarget>(target_index),
+              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -240,7 +230,8 @@ struct update_target_element<
   aggregation::SUM,
   target_has_nulls,
   source_has_nulls,
-  std::enable_if_t<is_fixed_width<Source>() && !is_fixed_point<Source>()>> {
+  std::enable_if_t<is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
+                   !is_fixed_point<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -248,24 +239,22 @@ struct update_target_element<
   {
     if (source_has_nulls and source.is_null(source_index)) { return; }
 
-    if constexpr (cudf::has_atomic_support<Source>()) {
-      using Target = target_type_t<Source, aggregation::SUM>;
-      atomicAdd(&target.element<Target>(target_index),
-                static_cast<Target>(source.element<Source>(source_index)));
-    } else {
-      cudf_assert(false and "Source has no atomic support.");
-    }
+    using Target = target_type_t<Source, aggregation::SUM>;
+    atomicAdd(&target.element<Target>(target_index),
+              static_cast<Target>(source.element<Source>(source_index)));
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
 };
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
-struct update_target_element<Source,
-                             aggregation::SUM,
-                             target_has_nulls,
-                             source_has_nulls,
-                             std::enable_if_t<is_fixed_point<Source>()>> {
+struct update_target_element<
+  Source,
+  aggregation::SUM,
+  target_has_nulls,
+  source_has_nulls,
+  std::enable_if_t<is_fixed_point<Source>() &&
+                   cudf::has_atomic_support<device_storage_type_t<Source>>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -277,12 +266,8 @@ struct update_target_element<Source,
     using DeviceTarget = device_storage_type_t<Target>;
     using DeviceSource = device_storage_type_t<Source>;
 
-    if constexpr (cudf::has_atomic_support<DeviceSource>()) {
-      atomicAdd(&target.element<DeviceTarget>(target_index),
-                static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
-    } else {
-      cudf_assert(false and "DeviceSource has no atomic support.");
-    }
+    atomicAdd(&target.element<DeviceTarget>(target_index),
+              static_cast<DeviceTarget>(source.element<DeviceSource>(source_index)));
 
     if (target_has_nulls and target.is_null(target_index)) { target.set_valid(target_index); }
   }
@@ -292,7 +277,8 @@ struct update_target_element<Source,
  * @brief Function object to update a single element in a target column using
  * the dictionary key addressed by the specific index.
  *
- * SFINAE is used to prevent recursion for dictionary type. Dictionary keys cannot be a dictionary.
+ * SFINAE is used to prevent recursion for dictionary type. Dictionary keys cannot be a
+ * dictionary.
  *
  */
 template <bool target_has_nulls = true>
