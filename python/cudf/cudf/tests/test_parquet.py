@@ -379,9 +379,8 @@ def test_parquet_reader_pandas_metadata(tmpdir, columns, pandas_compat):
 def test_parquet_range_index_pandas_metadata(tmpdir, pandas_compat, as_bytes):
     df = pd.DataFrame(
         {"a": range(6, 9), "b": ["abc", "def", "xyz"]},
-        index=pd.RangeIndex(3, 6, 1),
+        index=pd.RangeIndex(3, 6, 1, name="c"),
     )
-    df.index.name = "c"
 
     fname = tmpdir.join("test_parquet_range_index_pandas_metadata")
     df.to_parquet(fname)

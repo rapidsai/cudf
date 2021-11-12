@@ -218,8 +218,11 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
             if row_groups is not None:
                 per_file_metadata = [
                     pa.parquet.read_metadata(
-                        # Pyarrow cannot read from bytes, wrap the footer
-                        # metadata in BytesIO
+                        # Pyarrow cannot read from a bytes buffer.
+                        # However, the `read_metadata` call only
+                        # needs the footer metadata. Therefore, we
+                        # find the footer size, and wrap only the
+                        # required byte range in BytesIO
                         io.BytesIO(
                             b"PAR1" + s[-(_footer_size(s) + 8):]
                         ) if isinstance(s, bytes) else s

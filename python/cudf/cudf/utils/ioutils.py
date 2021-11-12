@@ -1287,10 +1287,8 @@ def get_filepath_or_buffer(
         if use_python_file_object:
             path_or_data = ArrowPythonFile(path_or_data)
         else:
-            path_or_data = BytesIO(
-                _fsspec_data_transfer(
-                    path_or_data, mode=mode, byte_ranges=byte_ranges, **kwargs
-                )
+            path_or_data = _fsspec_data_transfer(
+                path_or_data, mode=mode, byte_ranges=byte_ranges, **kwargs
             )
 
     return path_or_data, compression
