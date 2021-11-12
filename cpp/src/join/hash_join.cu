@@ -92,7 +92,7 @@ void build_join_hash_table(cudf::table_view const& build,
     hash_table.insert(iter, iter + build_table_num_rows, stream.value());
   } else {
     thrust::counting_iterator<size_type> stencil(0);
-    auto const row_bitmask = cudf::detail::bitmask_and(build, stream);
+    auto const row_bitmask = cudf::detail::bitmask_and(build, stream).first;
     row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
     // insert valid rows

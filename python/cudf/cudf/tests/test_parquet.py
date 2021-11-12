@@ -17,8 +17,6 @@ from fsspec.core import get_fs_token_paths
 from packaging import version
 from pyarrow import fs as pa_fs, parquet as pq
 
-import rmm
-
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
 from cudf.testing import dataset_generator as dg
@@ -251,12 +249,6 @@ def large_int64_gdf():
     ],
 )
 def test_parquet_reader_basic(parquet_file, columns, engine):
-    if rmm._cuda.gpu.runtimeGetVersion() == 11050 and "brotli_" in str(
-        parquet_file
-    ):
-        pytest.xfail(
-            "Known issue: https://github.com/rapidsai/cudf/issues/9546"
-        )
     expect = pd.read_parquet(parquet_file, columns=columns)
     got = cudf.read_parquet(parquet_file, engine=engine, columns=columns)
     if len(expect) == 0:
@@ -2145,6 +2137,14 @@ def test_parquet_decimal_precision_empty(tmpdir):
     df = cudf.read_parquet(fname)
     assert df.val.dtype.precision == 5
 
+
+def test_parquet_reader_brotli(datadir):
+    fname = datadir / "brotli_int16.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname).to_pandas(nullable=True)
+
+    assert_eq(expect, got)
 
 @pytest.mark.parametrize("size_bytes", [4 << 20, 1 << 20, 512 << 10])
 @pytest.mark.parametrize("size_rows", [1000000, 100000, 10000])
