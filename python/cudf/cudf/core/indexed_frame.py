@@ -548,7 +548,7 @@ class IndexedFrame(Frame):
                 raise ValueError("Cannot align indices with non-unique values")
 
         lhs = cudf.DataFrame._from_data(self._data, index=self.index)
-        rhs = cudf.DataFrame(index=index)
+        rhs = cudf.DataFrame._from_data({}, index=index)
 
         tmp_col_id = str(uuid4())
         if how == "left":
