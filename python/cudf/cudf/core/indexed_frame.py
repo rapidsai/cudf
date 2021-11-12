@@ -398,9 +398,6 @@ class IndexedFrame(Frame):
                 inds = idx._get_sorted_inds(
                     ascending=ascending, na_position=na_position
                 )
-                # TODO: This line is abusing the fact that _gather accepts a
-                # column, not just user-facing objects. We will want to
-                # refactor that in the future.
                 out = self._gather(inds)
                 # TODO: frame factory function should handle multilevel column
                 # names
