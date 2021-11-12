@@ -108,11 +108,6 @@ cdef class BufferArrayFromVector:
         pass
 
 
-def _footer_size(buffer):
-    # Return the footer size from a buffered parquet file
-    return int.from_bytes(buffer[-8:-4], "little")
-
-
 cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
                    skiprows=None, num_rows=None, strings_to_categorical=False,
                    use_pandas_metadata=True):
@@ -218,14 +213,8 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
             if row_groups is not None:
                 per_file_metadata = [
                     pa.parquet.read_metadata(
-                        # Pyarrow cannot read from a bytes buffer.
-                        # However, the `read_metadata` call only
-                        # needs the footer metadata. Therefore, we
-                        # find the footer size, and wrap only the
-                        # required byte range in BytesIO
-                        io.BytesIO(
-                            b"PAR1" + s[-(_footer_size(s) + 8):]
-                        ) if isinstance(s, bytes) else s
+                        # Pyarrow cannot read directly from bytes
+                        io.BytesIO(s) if isinstance(s, bytes) else s
                     ) for s in (
                         pa_buffers or filepaths_or_buffers
                     )
