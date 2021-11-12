@@ -574,12 +574,12 @@ def _compare_keys(target: Any, key: Any) -> bool:
     return True
 
 
-def _remove_key_level(key: Any, level: int, detupleize=True) -> Any:
+def _remove_key_level(key: Any, level: int) -> Any:
     """
     Remove a level from key. If detupleize is True, and if only a
     single level remains, convert the tuple to a scalar.
     """
     result = key[:level] + key[level + 1 :]
-    if detupleize and len(result) == 1:
+    if len(result) == 1:
         return result[0]
     return result
