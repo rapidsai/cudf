@@ -846,7 +846,6 @@ class GroupBy(Serializable):
         # create expanded dataframe consisting all combinations of the
         # struct columns-pairs to be correlated
         # i.e (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
-        # breakpoint()
         _cols = self.grouping.values.columns.tolist()
 
         if self._by:
@@ -862,11 +861,11 @@ class GroupBy(Serializable):
                 {"x": self.obj._data[i[0]], "y": self.obj._data[i[1]]}
             ).to_struct()
         new_gb = new_df.groupby(by=self._by, level=self._level)
-        try:
 
+        try:
             gb_corr = new_gb.agg(lambda x: x.corr(method, min_periods))
         except RuntimeError as e:
-            if "Unsupported type-agg combination" in str(e):
+            if "Unsupported groupby reduction type-agg combination" in str(e):
                 raise TypeError(
                     "Correlation accepts only numerical column-pairs"
                 ) from e
@@ -874,13 +873,11 @@ class GroupBy(Serializable):
                 raise
 
         # ensure that column-pair labels are arranged in ascending order
-        cols_list = []
-        for i, x in enumerate(_cols):
-            for j, y in enumerate(_cols):
-                if i > j:
-                    cols_list.append((_cols[j], _cols[i]))
-                else:
-                    cols_list.append((_cols[i], _cols[j]))
+        cols_list = [
+            (_cols[j], _cols[i]) if i > j else (_cols[i], _cols[j])
+            for j, y in enumerate(_cols)
+            for i, x in enumerate(_cols)
+        ]
         cols_split = [
             cols_list[i : i + len(_cols)]
             for i in range(0, len(cols_list), len(_cols))
@@ -895,16 +892,15 @@ class GroupBy(Serializable):
 
         # create a multiindex for the groupby correlated dataframe,
         # to match pandas behavior
-        _idx = gb_corr.index.repeat(len(_cols))
-        idx_sort_order = _idx._get_sorted_inds()
-        _idx = _idx._gather(idx_sort_order)
-        # breakpoint()
+        unsorted_idx = gb_corr.index.repeat(len(_cols))
+        idx_sort_order = unsorted_idx._get_sorted_inds()
+        sorted_idx = unsorted_idx._gather(idx_sort_order)
         if len(gb_corr):
             # TO-DO: Should the operation below be done on the CPU instead?
-            _idx._data[None] = as_column(
+            sorted_idx._data[None] = as_column(
                 cudf.Series(_cols).tile(len(gb_corr.index))
             )
-        res.index = _index_from_data(_idx._data)
+        res.index = _index_from_data(sorted_idx._data)
 
         return res
 
