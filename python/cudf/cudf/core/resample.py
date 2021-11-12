@@ -110,11 +110,6 @@ class _ResampleGrouping(_Grouping):
         # determine the key column
         if by.key is None and by.level is None:
             # then assume that the key is the index of `self._obj`:
-            if not isinstance(self._obj.index, cudf.DatetimeIndex):
-                raise TypeError(
-                    f"Can only resample with a DatetimeIndex, "
-                    f"got {type(self._obj.index).__name__}"
-                )
             self._handle_index(self._obj.index)
         elif by.key:
             self._handle_label(by.key)
