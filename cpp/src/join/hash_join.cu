@@ -92,7 +92,7 @@ void build_join_hash_table(cudf::table_view const& build,
     hash_table.insert(iter, iter + build_table_num_rows, stream.value());
   } else {
     thrust::counting_iterator<size_type> stencil(0);
-    auto const row_bitmask = cudf::detail::bitmask_and(build, stream);
+    auto const row_bitmask = cudf::detail::bitmask_and(build, stream).first;
     row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
     // insert valid rows
@@ -132,8 +132,11 @@ probe_join_hash_table(cudf::table_device_view build_table,
   constexpr cudf::detail::join_kind ProbeJoinKind = (JoinKind == cudf::detail::join_kind::FULL_JOIN)
                                                       ? cudf::detail::join_kind::LEFT_JOIN
                                                       : JoinKind;
-  std::size_t const join_size = output_size.value_or(compute_join_output_size<ProbeJoinKind>(
-    build_table, probe_table, hash_table, compare_nulls, stream));
+
+  std::size_t const join_size = output_size
+                                  ? *output_size
+                                  : compute_join_output_size<ProbeJoinKind>(
+                                      build_table, probe_table, hash_table, compare_nulls, stream);
 
   // If output size is zero, return immediately
   if (join_size == 0) {

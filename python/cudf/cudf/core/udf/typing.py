@@ -18,7 +18,12 @@ from numba.cuda.cudadecl import registry as cuda_decl_registry
 from pandas._libs.missing import NAType as _NAType
 
 from cudf.core.udf import api
-from cudf.core.udf._ops import arith_ops, comparison_ops, unary_ops
+from cudf.core.udf._ops import (
+    arith_ops,
+    bitwise_ops,
+    comparison_ops,
+    unary_ops,
+)
 
 SUPPORTED_NUMBA_TYPES = (
     types.Number,
@@ -341,7 +346,7 @@ class UnpackReturnToMasked(AbstractTemplate):
             return nb_signature(return_type, args[0])
 
 
-for binary_op in arith_ops + comparison_ops:
+for binary_op in arith_ops + bitwise_ops + comparison_ops:
     # Every op shares the same typing class
     cuda_decl_registry.register_global(binary_op)(MaskedScalarArithOp)
     cuda_decl_registry.register_global(binary_op)(MaskedScalarNullOp)

@@ -95,7 +95,7 @@ class utility_class
   std::unique_ptr<cudf::column> _column{};
 }
 
-TYPED_TEST_CASE(RepeatTypedTestFixture, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(RepeatTypedTestFixture, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(RepeatTypedTestFixture, RepeatScalarCount)
 {

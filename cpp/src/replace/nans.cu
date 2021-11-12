@@ -190,33 +190,37 @@ void normalize_nans_and_zeros(mutable_column_view in_out, rmm::cuda_stream_view 
     input.type(), normalize_nans_and_zeros_kernel_forwarder{}, *device_in, *device_out, stream);
 }
 
+std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::mr::device_memory_resource* mr)
+{
+  // output. copies the input
+  auto out = std::make_unique<column>(input, stream, mr);
+
+  // from device. unique_ptr which gets automatically cleaned up when we leave.
+  auto out_view = out->mutable_view();
+  normalize_nans_and_zeros(out_view, stream);
+
+  return out;
+}
+
 }  // namespace detail
 
 /**
- * @brief Makes all NaNs and zeroes positive.
+ * @brief Makes all Nans and zeroes positive.
  *
- * Converts floating point values from @p input using the following rules:
+ * Converts floating point values from @p in_out using the following rules:
  *        Convert  -NaN  -> NaN
  *        Convert  -0.0  -> 0.0
  *
- * @throws cudf::logic_error if column does not have floating point data type.
- * @param[in] input column_view representing input data
- * @param[in] mr device_memory_resource allocator for allocating output data
- *
- * @returns new column with the modified data
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  */
 std::unique_ptr<column> normalize_nans_and_zeros(column_view const& input,
                                                  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  // output. copies the input
-  std::unique_ptr<column> out = std::make_unique<column>(input, rmm::cuda_stream_default, mr);
-  // from device. unique_ptr which gets automatically cleaned up when we leave.
-  auto out_view = out->mutable_view();
-
-  detail::normalize_nans_and_zeros(out_view, rmm::cuda_stream_default);
-
-  return out;
+  return detail::normalize_nans_and_zeros(input, rmm::cuda_stream_default, mr);
 }
 
 /**
