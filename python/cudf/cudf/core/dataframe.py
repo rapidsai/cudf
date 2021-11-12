@@ -3814,7 +3814,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return (
             DataFrameResampler(self, by=by)
-            if isinstance(by, cudf.Grouper)
+            if isinstance(by, cudf.Grouper) and by.freq
             else DataFrameGroupBy(
                 self,
                 by=by,

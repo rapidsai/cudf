@@ -3558,7 +3558,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return (
             cudf.core.resample.SeriesResampler(self, by=by)
-            if isinstance(by, cudf.Grouper)
+            if isinstance(by, cudf.Grouper) and by.freq
             else SeriesGroupBy(
                 self, by=by, level=level, dropna=dropna, sort=sort
             )

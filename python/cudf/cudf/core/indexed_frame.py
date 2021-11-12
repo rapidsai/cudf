@@ -544,9 +544,7 @@ class IndexedFrame(Frame):
         if self.index.equals(index):
             return self
         if not allow_non_unique:
-            if len(self) != len(self.index.unique()) or len(index) != len(
-                index.unique()
-            ):
+            if not self.index.is_unique or not index.is_unique():
                 raise ValueError("Cannot align indices with non-unique values")
 
         lhs = cudf.DataFrame._from_data(self._data, index=self.index)
