@@ -1138,11 +1138,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         self._drop_column(name)
 
-    def __sizeof__(self):
-        columns = sum(col.__sizeof__() for col in self._data.columns)
-        index = self._index.__sizeof__()
-        return columns + index
-
     def _slice(self: T, arg: slice) -> T:
         """
         _slice : slice the frame as per the arg
@@ -1253,12 +1248,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> df['object'].astype('category').memory_usage(deep=True)
         5048
         """
+        if deep:
+            warnings.warn(
+                "The deep parameter is ignored and is only included "
+                "for pandas compatibility."
+            )
         ind = list(self.columns)
-        sizes = [col._memory_usage(deep=deep) for col in self._data.columns]
+        sizes = [col.memory_usage() for col in self._data.columns]
         if index:
             ind.append("Index")
             ind = cudf.Index(ind, dtype="str")
-            sizes.append(self.index.memory_usage(deep=deep))
+            sizes.append(self.index.memory_usage())
         return Series(sizes, index=ind)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):

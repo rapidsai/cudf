@@ -68,7 +68,7 @@ def test_pickle_dataframe_categorical():
     check_serialization(df)
 
 
-def test_sizeof_dataframe():
+def test_memory_usage_dataframe():
     np.random.seed(0)
     df = DataFrame()
     nelem = 1000
@@ -76,7 +76,7 @@ def test_sizeof_dataframe():
     df["vals"] = hvals = np.random.random(nelem)
 
     nbytes = hkeys.nbytes + hvals.nbytes
-    sizeof = sys.getsizeof(df)
+    sizeof = df.memory_usage().sum()
     assert sizeof >= nbytes
 
     serialized_nbytes = len(pickle.dumps(df, protocol=pickle.HIGHEST_PROTOCOL))
