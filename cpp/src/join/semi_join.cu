@@ -43,9 +43,6 @@ namespace cudf {
 namespace detail {
 
 namespace {
-// Use the default cuco hasher.
-using Hash = cuco::detail::MurmurHash3_32<hash_value_type>;
-
 /**
  * @brief Device functor to create a pair of hash value and index for a given row.
  */
