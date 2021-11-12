@@ -24,45 +24,8 @@
 
 #include <cub/cub.cuh>
 
-// TODO: Figure out what to include for cuco::make_pair.
-
 namespace cudf {
 namespace detail {
-
-/**
- * @brief Remaps a hash value to a new value if it is equal to the specified sentinel value.
- *
- * @param hash The hash value to potentially remap
- * @param sentinel The reserved value
- */
-template <typename H, typename S>
-constexpr auto remap_sentinel_hash(H hash, S sentinel)
-{
-  // Arbitrarily choose hash - 1
-  return (hash == sentinel) ? (hash - 1) : hash;
-}
-
-/**
- * @brief Device functor to create a pair of hash value and index for a given row.
- */
-class make_pair_function {
- public:
-  make_pair_function(row_hash const& hash, hash_value_type const empty_key_sentinel)
-    : _hash{hash}, _empty_key_sentinel{empty_key_sentinel}
-  {
-  }
-
-  __device__ __forceinline__ cudf::detail::pair_type operator()(size_type i) const noexcept
-  {
-    // Compute the hash value of row `i`
-    auto row_hash_value = remap_sentinel_hash(_hash(i), _empty_key_sentinel);
-    return cuco::make_pair<hash_value_type, size_type>(std::move(row_hash_value), std::move(i));
-  }
-
- private:
-  row_hash _hash;
-  hash_value_type const _empty_key_sentinel;
-};
 
 /**
  * @brief Device functor to determine if a row is valid.

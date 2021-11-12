@@ -49,10 +49,9 @@ using Hash = cuco::detail::MurmurHash3_32<hash_value_type>;
 /**
  * @brief Device functor to create a pair of hash value and index for a given row.
  */
-struct new_pair_function {
+struct make_pair_function {
   __device__ __forceinline__ cudf::detail::pair_type operator()(size_type i) const noexcept
   {
-    // Compute the hash value of row `i`
     return cuco::make_pair<hash_value_type, size_type>(i, true);
   }
 };
@@ -104,7 +103,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   auto right_rows_d = table_device_view::create(right_flattened_keys, stream);
   row_hash const hash_build{*right_rows_d};
   row_equality equality_build{*right_rows_d, *right_rows_d, compare_nulls == null_equality::EQUAL};
-  new_pair_function pair_func_build{};
+  make_pair_function pair_func_build{};
 
   auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func_build);
 
