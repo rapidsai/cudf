@@ -6337,17 +6337,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return super()._explode(column, ignore_index)
 
-    def _gather(self, gather_map, keep_index=True, nullify=False):
-        out = super()._gather(
-            gather_map, keep_index=keep_index, nullify=nullify
-        )
-        # TODO: ideally dataframe factory functions should handle the .columns
-        # attribute correctly so this logic doesn't have to be applied case
-        # by case.
-        if isinstance(self.columns, pd.core.indexes.multi.MultiIndex):
-            out.columns = self.columns
-        return out
-
 
 def make_binop_func(op, postprocess=None):
     # This function is used to wrap binary operations in Frame with an
