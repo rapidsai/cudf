@@ -176,7 +176,10 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     index_col = None
     is_range_index = False
     cdef map[string, string] user_data = c_out_table.metadata.user_data
-    json_str = user_data[b'pandas'].decode('utf-8') if use_pandas_metadata else ""
+    json_str = (
+        user_data[b'pandas'].decode('utf-8')
+        if use_pandas_metadata else ""
+    )
     meta = None
     if json_str != "":
         meta = json.loads(json_str)
