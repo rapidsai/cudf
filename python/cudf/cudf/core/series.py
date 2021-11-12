@@ -4651,7 +4651,7 @@ class DatetimeProperties(object):
         out_column = self.series._column.ceil(freq)
 
         return Series._from_data(
-            data=out_column, index=self.series._index, name=self.series.name
+            data={self.series.name: out_column}, index=self.series._index
         )
 
     def floor(self, freq):
@@ -4687,7 +4687,7 @@ class DatetimeProperties(object):
         out_column = self.series._column.floor(freq)
 
         return Series._from_data(
-            data=out_column, index=self.series._index, name=self.series.name
+            data={self.series.name: out_column}, index=self.series._index
         )
 
     def strftime(self, date_format, *args, **kwargs):
