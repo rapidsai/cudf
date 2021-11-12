@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 import cudf
+import cudf._lib.labeling
 from cudf._typing import DataFrameOrSeries
 from cudf.core.groupby.groupby import (
     DataFrameGroupBy,
@@ -83,7 +84,6 @@ class _ResampleGrouping(_Grouping):
         # if `by` is a time frequency grouper, we bin the key column
         # using bin intervals specified by `by.freq`, then use *that*
         # as the groupby key
-        import cudf._lib.labeling
 
         freq = by.freq
         label = by.label
