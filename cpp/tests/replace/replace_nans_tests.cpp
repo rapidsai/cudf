@@ -73,7 +73,7 @@ struct ReplaceNaNsTest : public BaseFixture {
 
 using test_types = Types<float, double>;
 
-TYPED_TEST_CASE(ReplaceNaNsTest, test_types);
+TYPED_TEST_SUITE(ReplaceNaNsTest, test_types);
 
 template <typename T>
 void ReplaceNaNsColumn(fixed_width_column_wrapper<T> input,
