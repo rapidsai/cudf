@@ -19,9 +19,9 @@
 package ai.rapids.cudf;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * Base options class for input formats that can filter columns.
