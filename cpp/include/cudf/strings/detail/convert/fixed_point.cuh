@@ -52,13 +52,7 @@ __device__ inline thrust::pair<UnsignedDecimalType, int32_t> parse_integer(
 
   while (iter < iter_end) {
     auto const ch = *iter++;
-    if (ch == decimal_pt_char) {
-      if(decimal_found) {
-         // Decimal value can't contain two decimal points
-         // invalid number, returning value = 0 will cause the `parse_decimal` to return
-         // Decimal(0)
-        return {0, -1};
-      }
+    if (ch == decimal_pt_char && !decimal_found) {
       decimal_found = true;
       continue;
     }
@@ -133,11 +127,6 @@ __device__ thrust::optional<int32_t> parse_exponent(char const* iter, char const
 template <typename DecimalType>
 __device__ DecimalType parse_decimal(char const* iter, char const* iter_end, int32_t scale)
 {
-  if (iter_end == iter) {
-     // No digits found
-    return DecimalType{0};
-  }
-
   auto const sign = [&] {
     if (iter_end <= iter) { return 0; }
     if (*iter == '-') { return -1; }
