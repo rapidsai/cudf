@@ -3056,7 +3056,7 @@ TEST_F(ParquetReaderTest, EmptyOutput)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
-TEST_F(ParquetWriterTest, StripeSizeInvalid)
+TEST_F(ParquetWriterTest, RowGroupSizeInvalid)
 {
   const auto unused_table = std::make_unique<table>();
   std::vector<char> out_buffer;

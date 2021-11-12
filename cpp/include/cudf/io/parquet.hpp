@@ -485,7 +485,7 @@ class parquet_writer_options {
   auto get_row_group_size_bytes() const { return _row_group_size_bytes; }
 
   /**
-   * @brief Returns maximum rowngroup size, in rows.
+   * @brief Returns maximum row group size, in rows.
    */
   auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
@@ -530,9 +530,6 @@ class parquet_writer_options {
 
   /**
    * @brief Sets the maximum row group size, in bytes.
-   *
-   * If the row group size is smaller that the page size, page size will be reduced to match
-   * the row_group size.
    */
   void set_row_group_size_bytes(size_t size_bytes)
   {
