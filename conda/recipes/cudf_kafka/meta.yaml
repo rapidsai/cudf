@@ -27,6 +27,10 @@ requirements:
     - cmake >=3.20.1
     - python
     - numpy
+    - cython >=0.29,<0.30
+    - setuptools
+    - libcudf_kafka {{ version }}
+    - cudatoolkit {{ cuda_version }}
   host:
     - python
     - cython >=0.29,<0.30
@@ -39,6 +43,8 @@ requirements:
     - cudf {{ version }}
     - python
     - numpy
+    - packaging
+    - cachetools
 
 test:                                   # [linux64]
   requires:                             # [linux64]
