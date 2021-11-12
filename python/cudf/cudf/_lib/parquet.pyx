@@ -118,9 +118,17 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     cudf.io.parquet.read_parquet
     cudf.io.parquet.to_parquet
     """
+
+    # Convert NativeFile buffers to NativeFileDatasource,
+    # but save original buffers in case we need to use
+    # pyarrow for metadata processing
+    # (See: https://github.com/rapidsai/cudf/issues/9599)
+    pa_buffers = []
     for i, datasource in enumerate(filepaths_or_buffers):
         if isinstance(datasource, NativeFile):
+            pa_buffers.append(datasource)
             filepaths_or_buffers[i] = NativeFileDatasource(datasource)
+
     cdef cudf_io_types.source_info source = make_source_info(
         filepaths_or_buffers)
 
@@ -192,7 +200,7 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
     # update the decimal precision of each column
     if meta is not None:
         for col, col_meta in zip(column_names, meta["columns"]):
-            if isinstance(df._data[col].dtype, cudf.Decimal64Dtype):
+            if is_decimal_dtype(df._data[col].dtype):
                 df._data[col].dtype.precision = (
                     col_meta["metadata"]["precision"]
                 )
@@ -203,7 +211,9 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
             range_index_meta = index_col[0]
             if row_groups is not None:
                 per_file_metadata = [
-                    pa.parquet.read_metadata(s) for s in filepaths_or_buffers
+                    pa.parquet.read_metadata(s) for s in (
+                        pa_buffers or filepaths_or_buffers
+                    )
                 ]
 
                 filtered_idx = []

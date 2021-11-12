@@ -142,8 +142,7 @@ struct minmax_functor {
   template <typename T>
   static constexpr bool is_supported()
   {
-    return !(cudf::is_fixed_point<T>() || std::is_same_v<T, cudf::list_view> ||
-             std::is_same_v<T, cudf::struct_view>);
+    return !(std::is_same_v<T, cudf::list_view> || std::is_same_v<T, cudf::struct_view>);
   }
 
   template <typename T>
@@ -187,15 +186,16 @@ struct minmax_functor {
   std::pair<std::unique_ptr<scalar>, std::unique_ptr<scalar>> operator()(
     cudf::column_view const& col, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr)
   {
+    using storage_type = device_storage_type_t<T>;
     // compute minimum and maximum values
-    auto dev_result = reduce<T>(col, stream);
+    auto dev_result = reduce<storage_type>(col, stream);
     // create output scalars
     using ScalarType = cudf::scalar_type_t<T>;
     auto minimum     = new ScalarType(T{}, true, stream, mr);
     auto maximum     = new ScalarType(T{}, true, stream, mr);
     // copy dev_result to the output scalars
-    device_single_thread(assign_min_max<T>{dev_result.data(), minimum->data(), maximum->data()},
-                         stream);
+    device_single_thread(
+      assign_min_max<storage_type>{dev_result.data(), minimum->data(), maximum->data()}, stream);
     return {std::unique_ptr<scalar>(minimum), std::unique_ptr<scalar>(maximum)};
   }
 

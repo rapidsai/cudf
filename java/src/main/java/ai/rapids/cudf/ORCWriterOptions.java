@@ -18,7 +18,11 @@
 
 package ai.rapids.cudf;
 
-public class ORCWriterOptions extends CompressedMetadataWriterOptions {
+/**
+ * This class represents settings for writing ORC files. It includes meta data information
+ * that will be used by the ORC writer to write the file.
+ */
+public class ORCWriterOptions extends CompressionMetadataWriterOptions {
 
   private ORCWriterOptions(Builder builder) {
     super(builder);
@@ -28,7 +32,9 @@ public class ORCWriterOptions extends CompressedMetadataWriterOptions {
     return new Builder();
   }
 
-  public static class Builder extends CMWriterBuilder<Builder> {
+  public static class Builder extends CompressionMetadataWriterOptions.Builder
+          <Builder, ORCWriterOptions> {
+
     public ORCWriterOptions build() {
       return new ORCWriterOptions(this);
     }

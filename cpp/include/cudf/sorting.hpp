@@ -81,7 +81,7 @@ std::unique_ptr<column> stable_sorted_order(
  * @brief Checks whether the rows of a `table` are sorted in a lexicographical
  *        order.
  *
- * @param[in] in                table whose rows need to be compared for ordering
+ * @param[in] table             Table whose rows need to be compared for ordering
  * @param[in] column_order      The expected sort order for each column. Size
  *                              must be equal to `in.num_columns()` or empty. If
  *                              empty, it is expected all columns are in
@@ -212,6 +212,18 @@ std::unique_ptr<column> segmented_sorted_order(
   rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Returns sorted order after stably sorting each segment in the table.
+ *
+ * @copydoc cudf::segmented_sorted_order
+ */
+std::unique_ptr<column> stable_segmented_sorted_order(
+  table_view const& keys,
+  column_view const& segment_offsets,
+  std::vector<order> const& column_order         = {},
+  std::vector<null_order> const& null_precedence = {},
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Performs a lexicographic segmented sort of a table
  *
  * If segment_offsets contains values larger than number of rows, behavior is undefined.
@@ -234,6 +246,19 @@ std::unique_ptr<column> segmented_sorted_order(
  *
  */
 std::unique_ptr<table> segmented_sort_by_key(
+  table_view const& values,
+  table_view const& keys,
+  column_view const& segment_offsets,
+  std::vector<order> const& column_order         = {},
+  std::vector<null_order> const& null_precedence = {},
+  rmm::mr::device_memory_resource* mr            = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Performs a stably lexicographic segmented sort of a table
+ *
+ * @copydoc cudf::segmented_sort_by_key
+ */
+std::unique_ptr<table> stable_segmented_sort_by_key(
   table_view const& values,
   table_view const& keys,
   column_view const& segment_offsets,

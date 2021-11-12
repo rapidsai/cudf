@@ -29,12 +29,14 @@ namespace cudf {
 /**
  * @brief Computes the hash value of each row in the input set of columns.
  *
- * @param input The table of columns to hash
+ * @param input The table of columns to hash.
+ * @param hash_function The hash function enum to use.
  * @param initial_hash Optional host_span of initial hash values for each column.
  * If this span is empty then each element will be hashed as-is.
+ * @param seed Optional seed value to use for the hash function.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  *
- * @returns A column where each row is the hash of a column from the input
+ * @returns A column where each row is the hash of a column from the input.
  */
 std::unique_ptr<column> hash(
   table_view const& input,

@@ -22,11 +22,19 @@ def set_index_post(df, index_name, drop, column_dtype):
     return df2
 
 
-def _set_partitions_pre(s, divisions):
-    partitions = divisions.searchsorted(s, side="right") - 1
-    partitions[
-        divisions.tail(1).searchsorted(s, side="right").astype("bool")
-    ] = (len(divisions) - 2)
+def _set_partitions_pre(s, divisions, ascending=True, na_position="last"):
+    if ascending:
+        partitions = divisions.searchsorted(s, side="right") - 1
+    else:
+        partitions = (
+            len(divisions) - divisions.searchsorted(s, side="right") - 1
+        )
+    partitions[(partitions < 0) | (partitions >= len(divisions) - 1)] = (
+        0 if ascending else (len(divisions) - 2)
+    )
+    partitions[s._columns[0].isnull().values] = (
+        len(divisions) - 2 if na_position == "last" else 0
+    )
     return partitions
 
 
@@ -38,7 +46,7 @@ def _quantile(a, q):
 
 
 def merge_quantiles(finalq, qs, vals):
-    """ Combine several quantile calculations of different data.
+    """Combine several quantile calculations of different data.
     [NOTE: Same logic as dask.array merge_percentiles]
     """
     if isinstance(finalq, Iterator):
@@ -201,7 +209,7 @@ def quantile_divisions(df, by, npartitions):
                 divisions[col].iloc[-1] = chr(
                     ord(divisions[col].iloc[-1][0]) + 1
                 )
-        divisions = divisions.drop_duplicates()
+        divisions = divisions.drop_duplicates().sort_index()
     return divisions
 
 
@@ -212,9 +220,13 @@ def sort_values(
     divisions=None,
     set_divisions=False,
     ignore_index=False,
+    ascending=True,
+    na_position="last",
 ):
-    """ Sort by the given list/tuple of column names.
-    """
+    """Sort by the given list/tuple of column names."""
+    if na_position not in ("first", "last"):
+        raise ValueError("na_position must be either 'first' or 'last'")
+
     npartitions = df.npartitions
     if isinstance(by, tuple):
         by = list(by)
@@ -232,7 +244,11 @@ def sort_values(
         divisions = df._meta._constructor_sliced(divisions, dtype=dtype)
 
     partitions = df[by].map_partitions(
-        _set_partitions_pre, divisions=divisions, meta=meta
+        _set_partitions_pre,
+        divisions=divisions,
+        ascending=ascending,
+        na_position=na_position,
+        meta=meta,
     )
 
     df2 = df.assign(_partitions=partitions)
@@ -247,8 +263,11 @@ def sort_values(
     df3.divisions = (None,) * (df3.npartitions + 1)
 
     # Step 3 - Return final sorted df
-    df4 = df3.map_partitions(M.sort_values, by)
+    df4 = df3.map_partitions(
+        M.sort_values, by, ascending=ascending, na_position=na_position
+    )
     if not isinstance(divisions, gd.DataFrame) and set_divisions:
         # Can't have multi-column divisions elsewhere in dask (yet)
         df4.divisions = methods.tolist(divisions)
+
     return df4

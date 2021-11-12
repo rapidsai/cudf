@@ -63,7 +63,7 @@ template <typename T>
 struct ShiftTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ShiftTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(ShiftTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(ShiftTest, OneColumnEmpty)
 {

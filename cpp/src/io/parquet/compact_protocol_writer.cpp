@@ -21,7 +21,7 @@ namespace io {
 namespace parquet {
 
 /**
- * @Brief Parquet CompactProtocolWriter class
+ * @brief Parquet CompactProtocolWriter class
  */
 
 size_t CompactProtocolWriter::write(const FileMetaData& f)

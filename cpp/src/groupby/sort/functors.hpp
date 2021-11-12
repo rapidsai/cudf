@@ -36,13 +36,12 @@ namespace detail {
  * of these values.
  */
 struct store_result_functor {
-  store_result_functor(size_type col_idx,
-                       column_view const& values,
+  store_result_functor(column_view const& values,
                        sort::sort_groupby_helper& helper,
                        cudf::detail::result_cache& cache,
                        rmm::cuda_stream_view stream,
                        rmm::mr::device_memory_resource* mr)
-    : col_idx(col_idx), helper(helper), cache(cache), values(values), stream(stream), mr(mr)
+    : helper(helper), cache(cache), values(values), stream(stream), mr(mr)
   {
   }
 
@@ -80,7 +79,6 @@ struct store_result_functor {
   };
 
  protected:
-  size_type col_idx;                  ///< Index of column in requests being operated on
   sort::sort_groupby_helper& helper;  ///< Sort helper
   cudf::detail::result_cache& cache;  ///< cache of results to store into
   column_view const& values;          ///< Column of values to group and aggregate

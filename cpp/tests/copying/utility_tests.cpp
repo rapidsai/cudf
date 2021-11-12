@@ -31,7 +31,7 @@ struct EmptyLikeTest : public cudf::test::BaseFixture {
 
 using numeric_types = cudf::test::NumericTypes;
 
-TYPED_TEST_CASE(EmptyLikeTest, numeric_types);
+TYPED_TEST_SUITE(EmptyLikeTest, numeric_types);
 
 TYPED_TEST(EmptyLikeTest, ColumnNumericTests)
 {
@@ -76,7 +76,7 @@ template <typename T>
 struct EmptyLikeScalarTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(EmptyLikeScalarTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(EmptyLikeScalarTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(EmptyLikeScalarTest, FixedWidth)
 {
@@ -191,7 +191,7 @@ struct AllocateLikeTest : public cudf::test::BaseFixture {
 };
 ;
 
-TYPED_TEST_CASE(AllocateLikeTest, numeric_types);
+TYPED_TEST_SUITE(AllocateLikeTest, numeric_types);
 
 TYPED_TEST(AllocateLikeTest, ColumnNumericTestSameSize)
 {

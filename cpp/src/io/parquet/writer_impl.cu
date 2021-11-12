@@ -23,6 +23,7 @@
 #include "writer_impl.hpp"
 
 #include <io/utilities/column_utils.cuh>
+#include <io/utilities/config_utils.hpp>
 #include "compact_protocol_writer.hpp"
 
 #include <cudf/column/column_device_view.cuh>
@@ -990,11 +991,9 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   device_span<gpu_inflate_status_s> comp_stat{compression_status.data(), compression_status.size()};
 
   gpu::EncodePages(batch_pages, comp_in, comp_stat, stream);
-  auto env_use_nvcomp = std::getenv("LIBCUDF_USE_NVCOMP");
-  bool use_nvcomp     = env_use_nvcomp != nullptr ? std::atoi(env_use_nvcomp) : 0;
   switch (compression_) {
     case parquet::Compression::SNAPPY:
-      if (use_nvcomp) {
+      if (nvcomp_integration::is_stable_enabled()) {
         snappy_compress(comp_in, comp_stat, max_page_uncomp_data_size, stream);
       } else {
         CUDA_TRY(gpu_snap(comp_in.data(), comp_stat.data(), pages_in_batch, stream));
@@ -1379,6 +1378,7 @@ void writer::impl::write(table_view const& table)
       (stats_granularity_ == statistics_freq::STATISTICS_PAGE) ? page_stats.data() : nullptr,
       (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? page_stats.data() + num_pages
                                                                : nullptr);
+    std::vector<std::future<void>> write_tasks;
     for (; r < rnext; r++, global_r++) {
       for (auto i = 0; i < num_columns; i++) {
         gpu::EncColumnChunk* ck = &chunks[r][i];
@@ -1392,7 +1392,8 @@ void writer::impl::write(table_view const& table)
 
         if (out_sink_->is_device_write_preferred(ck->compressed_size)) {
           // let the writer do what it wants to retrieve the data from the gpu.
-          out_sink_->device_write(dev_bfr + ck->ck_stat_size, ck->compressed_size, stream);
+          write_tasks.push_back(
+            out_sink_->device_write_async(dev_bfr + ck->ck_stat_size, ck->compressed_size, stream));
           // we still need to do a (much smaller) memcpy for the statistics.
           if (ck->ck_stat_size != 0) {
             md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
@@ -1437,6 +1438,9 @@ void writer::impl::write(table_view const& table)
         md.row_groups[global_r].columns[i].meta_data.total_compressed_size   = ck->compressed_size;
         current_chunk_offset += ck->compressed_size;
       }
+    }
+    for (auto const& task : write_tasks) {
+      task.wait();
     }
   }
 }

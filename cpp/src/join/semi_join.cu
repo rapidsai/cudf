@@ -16,12 +16,12 @@
 
 #include <hash/concurrent_unordered_map.cuh>
 #include <join/join_common_utils.hpp>
-#include <structs/utilities.hpp>
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table.hpp>
@@ -68,8 +68,8 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   auto left_flattened_tables = structs::detail::flatten_nested_columns(
     left_keys, {}, {}, structs::detail::column_nullability::FORCE);
 
-  auto right_flattened_keys = std::get<0>(right_flattened_tables);
-  auto left_flattened_keys  = std::get<0>(left_flattened_tables);
+  auto right_flattened_keys = right_flattened_tables.flattened_columns();
+  auto left_flattened_keys  = left_flattened_tables.flattened_columns();
 
   // Only care about existence, so we'll use an unordered map (other joins need a multimap)
   using hash_table_type = concurrent_unordered_map<cudf::size_type, bool, row_hash, row_equality>;
@@ -97,7 +97,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   // contain a NULL in any column as they will never compare to equal.
   auto const row_bitmask = (compare_nulls == null_equality::EQUAL)
                              ? rmm::device_buffer{}
-                             : cudf::detail::bitmask_and(right_flattened_keys, stream);
+                             : cudf::detail::bitmask_and(right_flattened_keys, stream).first;
   // skip rows that are null here.
   thrust::for_each_n(
     rmm::exec_policy(stream),

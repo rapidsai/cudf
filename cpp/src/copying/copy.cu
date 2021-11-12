@@ -20,10 +20,13 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/scatter.hpp>
+#include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/detail/copy_if_else.cuh>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/traits.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
 namespace cudf {
 namespace detail {
@@ -72,28 +75,18 @@ struct copy_if_else_functor_impl<T, std::enable_if_t<is_rep_layout_compatible<T>
     auto const& lhs = *p_lhs;
     auto const& rhs = *p_rhs;
 
-    if (left_nullable) {
-      if (right_nullable) {
-        auto lhs_iter = cudf::detail::make_pair_iterator<T, true>(lhs);
-        auto rhs_iter = cudf::detail::make_pair_iterator<T, true>(rhs);
-        return detail::copy_if_else(
-          true, lhs_iter, lhs_iter + size, rhs_iter, filter, lhs.type(), stream, mr);
-      }
-      auto lhs_iter = cudf::detail::make_pair_iterator<T, true>(lhs);
-      auto rhs_iter = cudf::detail::make_pair_iterator<T, false>(rhs);
-      return detail::copy_if_else(
-        true, lhs_iter, lhs_iter + size, rhs_iter, filter, lhs.type(), stream, mr);
-    }
-    if (right_nullable) {
-      auto lhs_iter = cudf::detail::make_pair_iterator<T, false>(lhs);
-      auto rhs_iter = cudf::detail::make_pair_iterator<T, true>(rhs);
-      return detail::copy_if_else(
-        true, lhs_iter, lhs_iter + size, rhs_iter, filter, lhs.type(), stream, mr);
-    }
-    auto lhs_iter = cudf::detail::make_pair_iterator<T, false>(lhs);
-    auto rhs_iter = cudf::detail::make_pair_iterator<T, false>(rhs);
-    return detail::copy_if_else(
-      false, lhs_iter, lhs_iter + size, rhs_iter, filter, lhs.type(), stream, mr);
+    auto lhs_iter =
+      cudf::detail::make_optional_iterator<T>(lhs, contains_nulls::DYNAMIC{}, left_nullable);
+    auto rhs_iter =
+      cudf::detail::make_optional_iterator<T>(rhs, contains_nulls::DYNAMIC{}, right_nullable);
+    return detail::copy_if_else(left_nullable || right_nullable,
+                                lhs_iter,
+                                lhs_iter + size,
+                                rhs_iter,
+                                filter,
+                                lhs.type(),
+                                stream,
+                                mr);
   }
 };
 
@@ -119,24 +112,10 @@ struct copy_if_else_functor_impl<string_view> {
     auto const& lhs = *p_lhs;
     auto const& rhs = *p_rhs;
 
-    if (left_nullable) {
-      if (right_nullable) {
-        auto lhs_iter = cudf::detail::make_pair_iterator<T, true>(lhs);
-        auto rhs_iter = cudf::detail::make_pair_iterator<T, true>(rhs);
-        return strings::detail::copy_if_else(
-          lhs_iter, lhs_iter + size, rhs_iter, filter, stream, mr);
-      }
-      auto lhs_iter = cudf::detail::make_pair_iterator<T, true>(lhs);
-      auto rhs_iter = cudf::detail::make_pair_iterator<T, false>(rhs);
-      return strings::detail::copy_if_else(lhs_iter, lhs_iter + size, rhs_iter, filter, stream, mr);
-    }
-    if (right_nullable) {
-      auto lhs_iter = cudf::detail::make_pair_iterator<T, false>(lhs);
-      auto rhs_iter = cudf::detail::make_pair_iterator<T, true>(rhs);
-      return strings::detail::copy_if_else(lhs_iter, lhs_iter + size, rhs_iter, filter, stream, mr);
-    }
-    auto lhs_iter = cudf::detail::make_pair_iterator<T, false>(lhs);
-    auto rhs_iter = cudf::detail::make_pair_iterator<T, false>(rhs);
+    auto lhs_iter =
+      cudf::detail::make_optional_iterator<T>(lhs, contains_nulls::DYNAMIC{}, left_nullable);
+    auto rhs_iter =
+      cudf::detail::make_optional_iterator<T>(rhs, contains_nulls::DYNAMIC{}, right_nullable);
     return strings::detail::copy_if_else(lhs_iter, lhs_iter + size, rhs_iter, filter, stream, mr);
   }
 };
@@ -260,6 +239,38 @@ std::unique_ptr<column> scatter_gather_based_if_else(cudf::scalar const& lhs,
   return scatter_gather_based_if_else(lhs, rhs_col->view(), size, is_left, stream, mr);
 }
 
+template <>
+struct copy_if_else_functor_impl<struct_view> {
+  template <typename Left, typename Right, typename Filter>
+  std::unique_ptr<column> operator()(Left const& lhs,
+                                     Right const& rhs,
+                                     size_type size,
+                                     bool,
+                                     bool,
+                                     Filter filter,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    return scatter_gather_based_if_else(lhs, rhs, size, filter, stream, mr);
+  }
+};
+
+template <>
+struct copy_if_else_functor_impl<list_view> {
+  template <typename Left, typename Right, typename Filter>
+  std::unique_ptr<column> operator()(Left const& lhs,
+                                     Right const& rhs,
+                                     size_type size,
+                                     bool,
+                                     bool,
+                                     Filter filter,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    return scatter_gather_based_if_else(lhs, rhs, size, filter, stream, mr);
+  }
+};
+
 /**
  * @brief Functor called by the `type_dispatcher` to invoke copy_if_else on combinations
  *        of column_view and scalar
@@ -275,12 +286,6 @@ struct copy_if_else_functor {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    if constexpr (std::is_same_v<T, cudf::list_view> or std::is_same_v<T, cudf::struct_view>) {
-      (void)left_nullable;
-      (void)right_nullable;
-      return scatter_gather_based_if_else(lhs, rhs, size, filter, stream, mr);
-    }
-
     copy_if_else_functor_impl<T> copier{};
     return copier(lhs, rhs, size, left_nullable, right_nullable, filter, stream, mr);
   }
@@ -305,35 +310,21 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
   auto bool_mask_device_p             = column_device_view::create(boolean_mask);
   column_device_view bool_mask_device = *bool_mask_device_p;
 
-  if (boolean_mask.has_nulls()) {
-    auto filter = [bool_mask_device] __device__(cudf::size_type i) {
-      return bool_mask_device.is_valid_nocheck(i) and bool_mask_device.element<bool>(i);
-    };
-    return cudf::type_dispatcher<dispatch_storage_type>(lhs.type(),
-                                                        copy_if_else_functor{},
-                                                        lhs,
-                                                        rhs,
-                                                        boolean_mask.size(),
-                                                        left_nullable,
-                                                        right_nullable,
-                                                        filter,
-                                                        stream,
-                                                        mr);
-  } else {
-    auto filter = [bool_mask_device] __device__(cudf::size_type i) {
-      return bool_mask_device.element<bool>(i);
-    };
-    return cudf::type_dispatcher<dispatch_storage_type>(lhs.type(),
-                                                        copy_if_else_functor{},
-                                                        lhs,
-                                                        rhs,
-                                                        boolean_mask.size(),
-                                                        left_nullable,
-                                                        right_nullable,
-                                                        filter,
-                                                        stream,
-                                                        mr);
-  }
+  auto const has_nulls = boolean_mask.has_nulls();
+  auto filter          = [bool_mask_device, has_nulls] __device__(cudf::size_type i) {
+    return (!has_nulls || bool_mask_device.is_valid_nocheck(i)) and
+           bool_mask_device.element<bool>(i);
+  };
+  return cudf::type_dispatcher<dispatch_storage_type>(lhs.type(),
+                                                      copy_if_else_functor{},
+                                                      lhs,
+                                                      rhs,
+                                                      boolean_mask.size(),
+                                                      left_nullable,
+                                                      right_nullable,
+                                                      filter,
+                                                      stream,
+                                                      mr);
 }
 
 };  // namespace
@@ -358,7 +349,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
 {
   CUDF_EXPECTS(boolean_mask.size() == rhs.size(),
                "Boolean mask column must be the same size as rhs column");
-  return copy_if_else(lhs, rhs, !lhs.is_valid(), rhs.has_nulls(), boolean_mask, stream, mr);
+  return copy_if_else(lhs, rhs, !lhs.is_valid(stream), rhs.has_nulls(), boolean_mask, stream, mr);
 }
 
 std::unique_ptr<column> copy_if_else(column_view const& lhs,
@@ -369,7 +360,7 @@ std::unique_ptr<column> copy_if_else(column_view const& lhs,
 {
   CUDF_EXPECTS(boolean_mask.size() == lhs.size(),
                "Boolean mask column must be the same size as lhs column");
-  return copy_if_else(lhs, rhs, lhs.has_nulls(), !rhs.is_valid(), boolean_mask, stream, mr);
+  return copy_if_else(lhs, rhs, lhs.has_nulls(), !rhs.is_valid(stream), boolean_mask, stream, mr);
 }
 
 std::unique_ptr<column> copy_if_else(scalar const& lhs,
@@ -378,7 +369,8 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
 {
-  return copy_if_else(lhs, rhs, !lhs.is_valid(), !rhs.is_valid(), boolean_mask, stream, mr);
+  return copy_if_else(
+    lhs, rhs, !lhs.is_valid(stream), !rhs.is_valid(stream), boolean_mask, stream, mr);
 }
 
 };  // namespace detail

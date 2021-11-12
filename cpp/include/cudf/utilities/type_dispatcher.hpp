@@ -411,9 +411,7 @@ using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceT
 template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl,
           typename Functor,
           typename... Ts>
-CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_type dtype,
-                                                                   Functor f,
-                                                                   Ts&&... args)
+CUDF_HDFI constexpr decltype(auto) type_dispatcher(cudf::data_type dtype, Functor f, Ts&&... args)
 {
   switch (dtype.id()) {
     case type_id::BOOL8:
@@ -553,6 +551,7 @@ struct double_type_dispatcher_first_type {
  * parameter of the callable `F`
  * @param type2 The `data_type` used to dispatch a type for the second template
  * parameter of the callable `F`
+ * @param f The callable whose `operator()` template is invoked
  * @param args Parameter pack forwarded to the `operator()` invocation `F`.
  */
 #pragma nv_exec_check_disable

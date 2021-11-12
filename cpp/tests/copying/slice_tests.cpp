@@ -36,7 +36,7 @@ template <typename T>
 struct SliceTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(SliceTest, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(SliceTest, cudf::test::NumericTypes);
 
 TYPED_TEST(SliceTest, NumericColumnsWithNulls)
 {
@@ -341,7 +341,7 @@ template <typename T>
 struct SliceTableTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(SliceTableTest, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(SliceTableTest, cudf::test::NumericTypes);
 
 TYPED_TEST(SliceTableTest, NumericColumnsWithNulls)
 {

@@ -1,6 +1,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 from __future__ import annotations
 
+import pandas as pd
 import pyarrow as pa
 
 import cudf
@@ -79,6 +80,16 @@ class StructColumn(ColumnBase):
         return pa.StructArray.from_buffers(
             pa_type, len(self), buffers, children=children
         )
+
+    def to_pandas(self, index: pd.Index = None, **kwargs) -> "pd.Series":
+        # We cannot go via Arrow's `to_pandas` because of the following issue:
+        # https://issues.apache.org/jira/browse/ARROW-12680
+
+        pd_series = pd.Series(self.to_arrow().tolist(), dtype="object")
+
+        if index is not None:
+            pd_series.index = index
+        return pd_series
 
     def __getitem__(self, args):
         result = super().__getitem__(args)

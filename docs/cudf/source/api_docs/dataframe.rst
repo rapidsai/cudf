@@ -75,9 +75,12 @@ Binary operator functions
 
    DataFrame.add
    DataFrame.sub
+   DataFrame.subtract
    DataFrame.mul
-   DataFrame.div
+   DataFrame.multiply
    DataFrame.truediv
+   DataFrame.div
+   DataFrame.divide
    DataFrame.floordiv
    DataFrame.mod
    DataFrame.pow
@@ -89,6 +92,14 @@ Binary operator functions
    DataFrame.rfloordiv
    DataFrame.rmod
    DataFrame.rpow
+   DataFrame.round
+   DataFrame.lt
+   DataFrame.gt
+   DataFrame.le
+   DataFrame.ge
+   DataFrame.ne
+   DataFrame.eq
+   DataFrame.product
 
 Function application, GroupBy & window
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -192,6 +203,7 @@ Reshaping, sorting, transposing
    DataFrame.unstack
    DataFrame.melt
    DataFrame.explode
+   DataFrame.to_struct
    DataFrame.T
    DataFrame.transpose
 
@@ -241,6 +253,7 @@ Serialization / IO / conversion
    DataFrame.from_pandas
    DataFrame.from_records
    DataFrame.hash_columns
+   DataFrame.hash_values
    DataFrame.to_arrow
    DataFrame.to_dlpack
    DataFrame.to_parquet

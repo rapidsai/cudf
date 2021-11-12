@@ -1729,7 +1729,7 @@ __global__ void __launch_bounds__(block_size)
               // Since the offsets column in cudf is `size_type`,
               // If the limit exceeds then value will be 0, which is Fail.
               cudf_assert(
-                (s->vals.u64[t + vals_skipped] > std::numeric_limits<size_type>::max()) and
+                (s->vals.u64[t + vals_skipped] <= std::numeric_limits<size_type>::max()) and
                 "Number of elements is more than what size_type can handle");
               list_child_elements                   = s->vals.u64[t + vals_skipped];
               static_cast<uint32_t*>(data_out)[row] = list_child_elements;
@@ -1789,17 +1789,29 @@ __global__ void __launch_bounds__(block_size)
                 seconds += get_gmt_offset(tz_table.ttimes, tz_table.offsets, seconds);
               }
               if (seconds < 0 && nanos != 0) { seconds -= 1; }
-              if (s->chunk.ts_clock_rate) {
-                duration_ns d_ns{nanos};
-                d_ns += duration_s{seconds};
-                static_cast<int64_t*>(data_out)[row] =
-                  d_ns.count() * s->chunk.ts_clock_rate /
-                  duration_ns::period::den;  // Output to desired clock rate
-              } else {
-                cudf::duration_s d{seconds};
-                static_cast<int64_t*>(data_out)[row] =
-                  cuda::std::chrono::duration_cast<cudf::duration_ns>(d).count() + nanos;
-              }
+
+              duration_ns d_ns{nanos};
+              duration_s d_s{seconds};
+
+              static_cast<int64_t*>(data_out)[row] = [&]() {
+                using cuda::std::chrono::duration_cast;
+                switch (s->chunk.timestamp_type_id) {
+                  case type_id::TIMESTAMP_SECONDS:
+                    return d_s.count() + duration_cast<duration_s>(d_ns).count();
+                  case type_id::TIMESTAMP_MILLISECONDS:
+                    return duration_cast<duration_ms>(d_s).count() +
+                           duration_cast<duration_ms>(d_ns).count();
+                  case type_id::TIMESTAMP_MICROSECONDS:
+                    return duration_cast<duration_us>(d_s).count() +
+                           duration_cast<duration_us>(d_ns).count();
+                  case type_id::TIMESTAMP_NANOSECONDS:
+                  default:
+                    return duration_cast<duration_ns>(d_s).count() +
+                           d_ns.count();  // nanoseconds as output in case of `type_id::EMPTY` and
+                                          // `type_id::TIMESTAMP_NANOSECONDS`
+                }
+              }();
+
               break;
             }
           }

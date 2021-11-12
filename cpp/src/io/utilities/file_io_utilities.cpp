@@ -15,6 +15,7 @@
  */
 #include "file_io_utilities.hpp"
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <io/utilities/config_utils.hpp>
 
 #include <rmm/device_buffer.hpp>
 
@@ -47,12 +48,6 @@ file_wrapper::file_wrapper(std::string const& filepath, int flags, mode_t mode)
 }
 
 file_wrapper::~file_wrapper() { close(fd); }
-
-std::string getenv_or(std::string const& env_var_name, std::string const& default_val)
-{
-  auto const env_val = std::getenv(env_var_name.c_str());
-  return (env_val == nullptr) ? default_val : std::string(env_val);
-}
 
 #ifdef CUFILE_FOUND
 
@@ -185,6 +180,31 @@ std::unique_ptr<datasource::buffer> cufile_input_impl::read(size_t offset,
   return datasource::buffer::create(std::move(out_data));
 }
 
+namespace {
+
+template <typename DataT,
+          typename F,
+          typename ResultT = std::invoke_result_t<F, DataT*, size_t, size_t>>
+std::vector<std::future<ResultT>> make_sliced_tasks(
+  F function, DataT* ptr, size_t offset, size_t size, cudf::detail::thread_pool& pool)
+{
+  std::vector<std::future<ResultT>> slice_tasks;
+  constexpr size_t max_slice_bytes = 4 * 1024 * 1024;
+  size_t const n_slices            = util::div_rounding_up_safe(size, max_slice_bytes);
+  size_t slice_offset              = 0;
+  for (size_t t = 0; t < n_slices; ++t) {
+    DataT* ptr_slice = ptr + slice_offset;
+
+    size_t const slice_size = (t == n_slices - 1) ? size % max_slice_bytes : max_slice_bytes;
+    slice_tasks.push_back(pool.submit(function, ptr_slice, slice_size, offset + slice_offset));
+
+    slice_offset += slice_size;
+  }
+  return slice_tasks;
+}
+
+}  // namespace
+
 std::future<size_t> cufile_input_impl::read_async(size_t offset,
                                                   size_t size,
                                                   uint8_t* dst,
@@ -193,32 +213,22 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
   int device;
   cudaGetDevice(&device);
 
-  auto read_slice = [=](void* dst, size_t size, size_t offset) -> ssize_t {
+  auto read_slice = [device, gds_read = shim->read, file_handle = cf_file.handle()](
+                      void* dst, size_t size, size_t offset) -> ssize_t {
     cudaSetDevice(device);
-    auto read_size = shim->read(cf_file.handle(), dst, size, offset, 0);
+    auto read_size = gds_read(file_handle, dst, size, offset, 0);
     CUDF_EXPECTS(read_size != -1, "cuFile error reading from a file");
     return read_size;
   };
 
-  std::vector<std::future<ssize_t>> slice_tasks;
-  constexpr size_t max_slice_bytes = 4 * 1024 * 1024;
-  size_t n_slices                  = util::div_rounding_up_safe(size, max_slice_bytes);
-  size_t slice_size                = max_slice_bytes;
-  size_t slice_offset              = 0;
-  for (size_t t = 0; t < n_slices; ++t) {
-    void* dst_slice = dst + slice_offset;
+  auto slice_tasks = make_sliced_tasks(read_slice, dst, offset, size, pool);
 
-    if (t == n_slices - 1) { slice_size = size % max_slice_bytes; }
-    slice_tasks.push_back(pool.submit(read_slice, dst_slice, slice_size, offset + slice_offset));
-
-    slice_offset += slice_size;
-  }
-  auto waiter = [](decltype(slice_tasks) slice_tasks) -> size_t {
+  auto waiter = [](auto slice_tasks) -> size_t {
     return std::accumulate(slice_tasks.begin(), slice_tasks.end(), 0, [](auto sum, auto& task) {
       return sum + task.get();
     });
   };
-  // The future returned from this function is deferred, not async becasue we want to avoid creating
+  // The future returned from this function is deferred, not async because we want to avoid creating
   // threads for each read_async call. This overhead is significant in case of multiple small reads.
   return std::async(std::launch::deferred, waiter, std::move(slice_tasks));
 }
@@ -233,14 +243,42 @@ size_t cufile_input_impl::read(size_t offset,
 }
 
 cufile_output_impl::cufile_output_impl(std::string const& filepath)
-  : shim{cufile_shim::instance()}, cf_file(shim, filepath, O_CREAT | O_RDWR | O_DIRECT, 0664)
+  : shim{cufile_shim::instance()},
+    cf_file(shim, filepath, O_CREAT | O_RDWR | O_DIRECT, 0664),
+    pool(16)
 {
 }
 
 void cufile_output_impl::write(void const* data, size_t offset, size_t size)
 {
-  CUDF_EXPECTS(shim->write(cf_file.handle(), data, size, offset, 0) != -1,
-               "cuFile error writing to a file");
+  write_async(data, offset, size).wait();
+}
+
+std::future<void> cufile_output_impl::write_async(void const* data, size_t offset, size_t size)
+{
+  int device;
+  cudaGetDevice(&device);
+
+  auto write_slice = [device, gds_write = shim->write, file_handle = cf_file.handle()](
+                       void const* src, size_t size, size_t offset) -> void {
+    cudaSetDevice(device);
+    auto write_size = gds_write(file_handle, src, size, offset, 0);
+    CUDF_EXPECTS(write_size != -1 and write_size == static_cast<decltype(write_size)>(size),
+                 "cuFile error writing to a file");
+  };
+
+  auto source      = static_cast<uint8_t const*>(data);
+  auto slice_tasks = make_sliced_tasks(write_slice, source, offset, size, pool);
+
+  auto waiter = [](auto slice_tasks) -> void {
+    for (auto const& task : slice_tasks) {
+      task.wait();
+    }
+  };
+  // The future returned from this function is deferred, not async because we want to avoid creating
+  // threads for each write_async call. This overhead is significant in case of multiple small
+  // writes.
+  return std::async(std::launch::deferred, waiter, std::move(slice_tasks));
 }
 #endif
 

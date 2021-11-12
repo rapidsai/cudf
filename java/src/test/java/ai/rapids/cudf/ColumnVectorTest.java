@@ -3085,6 +3085,17 @@ public class ColumnVectorTest extends CudfTestBase {
              ColumnVector result = v1.rollingWindow(RollingAggregation.lag(1, defaultOutput), options)) {
           assertColumnsAreEqual(expected, result);
         }
+
+        try (ColumnVector expected = ColumnVector.fromBoxedDoubles(0.7071d, 1.5275d, 1.5275d, 1d, 1.4142);
+             ColumnVector result = v1.rollingWindow(RollingAggregation.standardDeviation(), options)) {
+          assertColumnsAreEqual(expected, result);
+        }
+
+        try (ColumnVector expected =
+                 ColumnVector.fromBoxedDoubles(Double.POSITIVE_INFINITY, 2.1602d, 2.1602d, 1.4142d, Double.POSITIVE_INFINITY);
+             ColumnVector result = v1.rollingWindow(RollingAggregation.standardDeviation(2), options)) {
+          assertColumnsAreEqual(expected, result);
+        }
       }
     }
   }
@@ -4212,6 +4223,49 @@ public class ColumnVectorTest extends CudfTestBase {
          // consistent
          ColumnVector result = tmp.listSortRows(false, false)) {
       assertColumnsAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testDropListDuplicatesWithKeysValues() {
+    try(ColumnVector inputChildKeys = ColumnVector.fromBoxedInts(
+            1, 2, // list1
+            3, 4, 5, // list2
+            null, 0, 6, 6, 0, // list3
+            null, 6, 7, null, 7 // list 4
+        );
+        ColumnVector inputChildVals = ColumnVector.fromBoxedInts(
+            10, 20, // list1
+            30, 40, 50, // list2
+            60, 70, 80, 90, 100, // list3
+            110, 120, 130, 140, 150 // list4
+        );
+        ColumnVector inputStructsKeysVals = ColumnVector.makeStruct(inputChildKeys, inputChildVals);
+        ColumnVector inputOffsets = ColumnVector.fromInts(0, 2, 5, 10, 15, 15);
+        ColumnVector inputListsKeysVals = inputStructsKeysVals.makeListFromOffsets(5,
+            inputOffsets);
+
+        ColumnVector expectedChildKeys = ColumnVector.fromBoxedInts(
+            1, 2,
+            3, 4, 5,
+            0, 6, null,
+            6, 7, null
+        );
+        ColumnVector expectedChildVals = ColumnVector.fromBoxedInts(
+            10, 20,
+            30, 40, 50,
+            100, 90, 60,
+            120, 150, 140);
+        ColumnVector expectedStructsKeysVals = ColumnVector.makeStruct(expectedChildKeys,
+            expectedChildVals);
+        ColumnVector expectedOffsets = ColumnVector.fromInts(0, 2, 5, 8, 11, 11);
+        ColumnVector expectedListsKeysVals = expectedStructsKeysVals.makeListFromOffsets(5,
+            expectedOffsets);
+
+        ColumnVector output = inputListsKeysVals.dropListDuplicatesWithKeysValues();
+        ColumnVector sortedOutput = output.listSortRows(false, false);
+    ) {
+      assertColumnsAreEqual(expectedListsKeysVals, sortedOutput);
     }
   }
 

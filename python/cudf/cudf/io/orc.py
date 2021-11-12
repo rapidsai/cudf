@@ -287,6 +287,7 @@ def read_orc(
     use_index=True,
     decimal_cols_as_float=None,
     timestamp_type=None,
+    use_python_file_object=True,
     **kwargs,
 ):
     """{docstring}"""
@@ -321,7 +322,10 @@ def read_orc(
             source = fs.sep.join([source, "*.orc"])
 
         tmp_source, compression = ioutils.get_filepath_or_buffer(
-            path_or_data=source, compression=None, **kwargs,
+            path_or_data=source,
+            compression=None,
+            use_python_file_object=use_python_file_object,
+            **kwargs,
         )
         if compression is not None:
             raise ValueError(
@@ -387,7 +391,16 @@ def read_orc(
 
 
 @ioutils.doc_to_orc()
-def to_orc(df, fname, compression=None, enable_statistics=True, **kwargs):
+def to_orc(
+    df,
+    fname,
+    compression=None,
+    enable_statistics=True,
+    stripe_size_bytes=None,
+    stripe_size_rows=None,
+    row_index_stride=None,
+    **kwargs,
+):
     """{docstring}"""
 
     for col in df._data.columns:
@@ -414,9 +427,25 @@ def to_orc(df, fname, compression=None, enable_statistics=True, **kwargs):
     if ioutils.is_fsspec_open_file(path_or_buf):
         with path_or_buf as file_obj:
             file_obj = ioutils.get_IOBase_writer(file_obj)
-            liborc.write_orc(df, file_obj, compression, enable_statistics)
+            liborc.write_orc(
+                df,
+                file_obj,
+                compression,
+                enable_statistics,
+                stripe_size_bytes,
+                stripe_size_rows,
+                row_index_stride,
+            )
     else:
-        liborc.write_orc(df, path_or_buf, compression, enable_statistics)
+        liborc.write_orc(
+            df,
+            path_or_buf,
+            compression,
+            enable_statistics,
+            stripe_size_bytes,
+            stripe_size_rows,
+            row_index_stride,
+        )
 
 
 ORCWriter = liborc.ORCWriter

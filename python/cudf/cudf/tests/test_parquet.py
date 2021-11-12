@@ -24,6 +24,7 @@ from cudf.testing._utils import (
     TIMEDELTA_TYPES,
     assert_eq,
     assert_exceptions_equal,
+    random_bitmask,
 )
 
 
@@ -32,7 +33,7 @@ def datadir(datadir):
     return datadir / "parquet"
 
 
-@pytest.fixture(params=[1, 5, 10, 100])
+@pytest.fixture(params=[1, 5, 10, 100000])
 def simple_pdf(request):
     types = [
         "bool",
@@ -149,12 +150,12 @@ def build_pdf(num_columns, day_resolution_timestamps):
     return test_pdf
 
 
-@pytest.fixture(params=[0, 1, 10, 100])
+@pytest.fixture(params=[0, 1, 10, 10000])
 def pdf(request):
     return build_pdf(request, False)
 
 
-@pytest.fixture(params=[0, 1, 10, 100])
+@pytest.fixture(params=[0, 1, 10, 10000])
 def pdf_day_timestamps(request):
     return build_pdf(request, True)
 
@@ -171,7 +172,9 @@ def gdf_day_timestamps(pdf_day_timestamps):
 
 @pytest.fixture(params=["snappy", "gzip", "brotli", None, np.str_("snappy")])
 def parquet_file(request, tmp_path_factory, pdf):
-    fname = tmp_path_factory.mktemp("parquet") / "test.parquet"
+    fname = tmp_path_factory.mktemp("parquet") / (
+        str(request.param) + "_test.parquet"
+    )
     pdf.to_parquet(fname, engine="pyarrow", compression=request.param)
     return fname
 
@@ -372,6 +375,9 @@ def test_parquet_reader_pandas_metadata(tmpdir, columns, pandas_compat):
 
 
 def test_parquet_read_metadata(tmpdir, pdf):
+    if len(pdf) > 100:
+        pytest.skip("Skipping long setup test")
+
     def num_row_groups(rows, group_size):
         return max(1, (rows + (group_size - 1)) // group_size)
 
@@ -505,6 +511,9 @@ def test_parquet_read_filtered_complex_predicate(
 
 @pytest.mark.parametrize("row_group_size", [1, 5, 100])
 def test_parquet_read_row_groups(tmpdir, pdf, row_group_size):
+    if len(pdf) > 100:
+        pytest.skip("Skipping long setup test")
+
     if "col_category" in pdf.columns:
         pdf = pdf.drop(columns=["col_category"])
     fname = tmpdir.join("row_group.parquet")
@@ -529,6 +538,9 @@ def test_parquet_read_row_groups(tmpdir, pdf, row_group_size):
 
 @pytest.mark.parametrize("row_group_size", [1, 5, 100])
 def test_parquet_read_row_groups_non_contiguous(tmpdir, pdf, row_group_size):
+    if len(pdf) > 100:
+        pytest.skip("Skipping long setup test")
+
     fname = tmpdir.join("row_group.parquet")
     pdf.to_parquet(fname, compression="gzip", row_group_size=row_group_size)
 
@@ -554,6 +566,9 @@ def test_parquet_read_row_groups_non_contiguous(tmpdir, pdf, row_group_size):
 
 @pytest.mark.parametrize("row_group_size", [1, 4, 33])
 def test_parquet_read_rows(tmpdir, pdf, row_group_size):
+    if len(pdf) > 100:
+        pytest.skip("Skipping long setup test")
+
     fname = tmpdir.join("row_group.parquet")
     pdf.to_parquet(fname, compression="None", row_group_size=row_group_size)
 
@@ -1867,6 +1882,10 @@ def test_parquet_allnull_str(tmpdir, engine):
 
 
 def normalized_equals(value1, value2):
+    if value1 is pd.NA or value1 is pd.NaT:
+        value1 = None
+    if value2 is pd.NA or value2 is pd.NaT:
+        value2 = None
     if isinstance(value1, pd.Timestamp):
         value1 = value1.to_pydatetime()
     if isinstance(value2, pd.Timestamp):
@@ -1887,15 +1906,22 @@ def normalized_equals(value1, value2):
     return value1 == value2
 
 
-def test_parquet_writer_statistics(tmpdir, pdf):
+@pytest.mark.parametrize("add_nulls", [True, False])
+def test_parquet_writer_statistics(tmpdir, pdf, add_nulls):
     file_path = tmpdir.join("cudf.parquet")
     if "col_category" in pdf.columns:
         pdf = pdf.drop(columns=["col_category", "col_bool"])
 
-    for t in TIMEDELTA_TYPES:
-        pdf["col_" + t] = pd.Series(np.arange(len(pdf.index))).astype(t)
+    if not add_nulls:
+        # Timedelta types convert NA to None when reading from parquet into
+        # pandas which interferes with series.max()/min()
+        for t in TIMEDELTA_TYPES:
+            pdf["col_" + t] = pd.Series(np.arange(len(pdf.index))).astype(t)
 
     gdf = cudf.from_pandas(pdf)
+    if add_nulls:
+        for col in gdf:
+            gdf[col] = gdf[col].set_mask(random_bitmask(len(gdf)))
     gdf.to_parquet(file_path, index=False)
 
     # Read back from pyarrow
@@ -1915,6 +1941,9 @@ def test_parquet_writer_statistics(tmpdir, pdf):
             actual_max = pd_slice[col].max()
             stats_max = stats.max
             assert normalized_equals(actual_max, stats_max)
+
+            assert stats.null_count == pd_slice[col].isna().sum()
+            assert stats.num_values == pd_slice[col].count()
 
 
 def test_parquet_writer_list_statistics(tmpdir):
@@ -2102,3 +2131,12 @@ def test_parquet_decimal_precision_empty(tmpdir):
     df.to_parquet(fname)
     df = cudf.read_parquet(fname)
     assert df.val.dtype.precision == 5
+
+
+def test_parquet_reader_brotli(datadir):
+    fname = datadir / "brotli_int16.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname).to_pandas(nullable=True)
+
+    assert_eq(expect, got)

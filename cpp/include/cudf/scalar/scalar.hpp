@@ -413,7 +413,7 @@ class string_scalar : public scalar {
   /**
    * @brief Construct a new string scalar object.
    *
-   * @param value The value of the string.
+   * @param string The value of the string.
    * @param is_valid Whether the value held by the scalar is valid.
    * @param stream CUDA stream used for device memory operations.
    * @param mr Device memory resource to use for device memory allocation.

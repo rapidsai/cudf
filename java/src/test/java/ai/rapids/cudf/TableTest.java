@@ -52,7 +52,7 @@ import java.nio.file.Files;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static ai.rapids.cudf.ParquetColumnWriterOptions.mapColumn;
+import static ai.rapids.cudf.ColumnWriterOptions.mapColumn;
 import static ai.rapids.cudf.ParquetWriterOptions.listBuilder;
 import static ai.rapids.cudf.ParquetWriterOptions.structBuilder;
 import static ai.rapids.cudf.Table.TestBuilder;
@@ -2918,13 +2918,23 @@ public class TableTest extends CudfTestBase {
         .build();
          ColumnVector parts = ColumnVector
              .fromInts(1, 2, 1, 2, 1, 2, 1, 2, 1, 2);
-         PartitionedTable pt = t.partition(parts, 3);
-         Table expected = new Table.TestBuilder()
-             .column(1, 3, 5, 7, 9, 2, 4, 6, 8, 10)
-             .build()) {
-      int[] partCutoffs = pt.getPartitions();
-      assertArrayEquals(new int[]{0, 0, 5}, partCutoffs);
-      assertTablesAreEqual(expected, pt.getTable());
+         PartitionedTable pt = t.partition(parts, 3)) {
+      assertArrayEquals(new int[]{0, 0, 5}, pt.getPartitions());
+      // order within partitions is not guaranteed, so sort each partition to compare
+      ColumnVector[] slicedColumns = pt.getTable().getColumn(0).slice(0, 5, 5, 10);
+      try (Table part1 = new Table(slicedColumns[0]);
+           Table part1Sorted = part1.orderBy(OrderByArg.asc(0));
+           Table part1Expected = new Table.TestBuilder().column(1, 3, 5, 7, 9).build();
+           Table part2 = new Table(slicedColumns[1]);
+           Table part2Sorted = part2.orderBy(OrderByArg.asc(0));
+           Table part2Expected = new Table.TestBuilder().column(2, 4, 6, 8, 10).build()) {
+        assertTablesAreEqual(part1Expected, part1Sorted);
+        assertTablesAreEqual(part2Expected, part2Sorted);
+      } finally {
+        for (ColumnVector c : slicedColumns) {
+          c.close();
+        }
+      }
     }
   }
 
@@ -3138,6 +3148,28 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testSerializationRoundTripToHostEmpty() throws IOException {
+    DataType listStringsType = new ListType(true, new BasicType(true, DType.STRING));
+    DataType mapType = new ListType(true,
+            new StructType(true,
+                    new BasicType(false, DType.STRING),
+                    new BasicType(false, DType.STRING)));
+    DataType structType = new StructType(true,
+            new BasicType(true, DType.INT8),
+            new BasicType(false, DType.FLOAT32));
+    try (ColumnVector emptyInt = ColumnVector.fromInts();
+         ColumnVector emptyDouble = ColumnVector.fromDoubles();
+         ColumnVector emptyString = ColumnVector.fromStrings();
+         ColumnVector emptyListString = ColumnVector.fromLists(listStringsType);
+         ColumnVector emptyMap = ColumnVector.fromLists(mapType);
+         ColumnVector emptyStruct = ColumnVector.fromStructs(structType);
+         Table t = new Table(emptyInt, emptyInt, emptyDouble, emptyString,
+                 emptyListString, emptyMap, emptyStruct)) {
+      testSerializationRoundTripToHost(t);
+    }
+  }
+
+  @Test
   void testRoundRobinPartition() {
     try (Table t = new Table.TestBuilder()
         .column(     100,      202,      3003,    40004,        5,      -60,       1,      null,        3,  null,        5,     null,        7, null,        9,      null,       11,      null,        13,      null,       15)
@@ -3270,6 +3302,49 @@ public class TableTest extends CudfTestBase {
           for (HostMemoryBuffer buff: buffers) {
             buff.close();
           }
+        }
+      }
+    }
+  }
+
+  @Test
+  void testSerializationRoundTripToHost() throws IOException {
+    try (Table t = buildTestTable()) {
+      testSerializationRoundTripToHost(t);
+    }
+  }
+
+  private void testSerializationRoundTripToHost(Table t) throws IOException {
+    long rowCount = t.getRowCount();
+    ByteArrayOutputStream bout = new ByteArrayOutputStream();
+    JCudfSerialization.writeToStream(t, bout, 0, rowCount);
+    ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
+    DataInputStream din = new DataInputStream(bin);
+
+    JCudfSerialization.SerializedTableHeader header =
+            new JCudfSerialization.SerializedTableHeader(din);
+    assertTrue(header.wasInitialized());
+    try (HostMemoryBuffer buffer = HostMemoryBuffer.allocate(header.getDataLen())) {
+      JCudfSerialization.readTableIntoBuffer(din, header, buffer);
+      assertTrue(header.wasDataRead());
+      HostColumnVector[] hostColumns =
+              JCudfSerialization.unpackHostColumnVectors(header, buffer);
+      try {
+        assertEquals(t.getNumberOfColumns(), hostColumns.length);
+        for (int i = 0; i < hostColumns.length; i++) {
+          HostColumnVector actual = hostColumns[i];
+          assertEquals(rowCount, actual.getRowCount());
+          try (HostColumnVector expected = t.getColumn(i).copyToHost()) {
+            assertPartialColumnsAreEqual(expected, 0, rowCount, actual, "COLUMN " + i, true, false);
+          }
+        }
+      } finally {
+        for (HostColumnVector c: hostColumns) {
+          // close child columns for multiple times should NOT throw exceptions
+          for (int i = 0; i < c.getNumChildren(); i++) {
+            c.getChildColumnView(i).close();
+          }
+          c.close();
         }
       }
     }
@@ -6757,8 +6832,8 @@ public class TableTest extends CudfTestBase {
   void testParquetWriteMap() throws IOException {
     ParquetWriterOptions options = ParquetWriterOptions.builder()
         .withMapColumn(mapColumn("my_map",
-            new ParquetColumnWriterOptions("key0", false),
-            new ParquetColumnWriterOptions("value0"))).build();
+            new ColumnWriterOptions("key0", false),
+            new ColumnWriterOptions("value0"))).build();
     File f = File.createTempFile("test-map", ".parquet");
     List<HostColumnVector.StructData> list1 =
         Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
@@ -6974,11 +7049,9 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testORCWriteToBufferChunked() {
-    try (Table table0 = getExpectedFileTable();
+    try (Table table0 = getExpectedFileTable(true);
          MyBufferConsumer consumer = new MyBufferConsumer()) {
-      String[] colNames = new String[table0.getNumberOfColumns()];
-      Arrays.fill(colNames, "");
-      ORCWriterOptions opts = ORCWriterOptions.builder().withColumnNames(colNames).build();
+      ORCWriterOptions opts = createORCWriterOptionsWithNested();
       try (TableWriter writer = Table.writeORCChunked(opts, consumer)) {
         writer.write(table0);
         writer.write(table0);
@@ -6987,6 +7060,50 @@ public class TableTest extends CudfTestBase {
       try (Table table1 = Table.readORC(ORCOptions.DEFAULT, consumer.buffer, 0, consumer.offset);
            Table concat = Table.concatenate(table0, table0, table0)) {
         assertTablesAreEqual(concat, table1);
+      }
+    }
+  }
+
+  @Test
+  void testORCWriteToFileChunked() throws IOException {
+    File tempFile = File.createTempFile("test", ".orc");
+    try (Table table0 = getExpectedFileTable(true)) {
+      ORCWriterOptions opts = createORCWriterOptionsWithNested();
+      try (TableWriter writer = Table.writeORCChunked(opts, tempFile.getAbsoluteFile())) {
+        writer.write(table0);
+      }
+      try (Table table1 = Table.readORC(tempFile.getAbsoluteFile())) {
+        assertTablesAreEqual(table0, table1);
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  @Test
+  void testORCWriteMapChunked() throws IOException {
+    ORCWriterOptions options = ORCWriterOptions.builder()
+            .withMapColumn(mapColumn("my_map",
+                    new ColumnWriterOptions("key0", false),
+                    new ColumnWriterOptions("value0"))).build();
+    File f = File.createTempFile("test-map", ".parquet");
+    List<HostColumnVector.StructData> list1 =
+            Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
+    List<HostColumnVector.StructData> list2 =
+            Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "c")));
+    List<HostColumnVector.StructData> list3 =
+            Arrays.asList(new HostColumnVector.StructData(Arrays.asList("e", "d")));
+    HostColumnVector.StructType structType = new HostColumnVector.StructType(true,
+            Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
+                    new HostColumnVector.BasicType(true, DType.STRING)));
+    try (ColumnVector listColumn = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+            structType), list1, list2, list3);
+         Table t0 = new Table(listColumn)) {
+      try (TableWriter writer = Table.writeORCChunked(options, f)) {
+        writer.write(t0);
+      }
+      try (Table res = Table.readORC(f)) {
+        assertTablesAreEqual(t0, res);
       }
     }
   }
@@ -7010,7 +7127,7 @@ public class TableTest extends CudfTestBase {
     final String[] colNames = new String[]{"bool", "int", "byte","long","str","float","double"};
     try (Table table0 = getExpectedFileTable()) {
       ORCWriterOptions options = ORCWriterOptions.builder()
-          .withColumnNames(colNames)
+          .withColumns(true, colNames)
           .withMetadata("somekey", "somevalue")
           .build();
       table0.writeORC(options, tempFile.getAbsoluteFile());
@@ -7030,7 +7147,7 @@ public class TableTest extends CudfTestBase {
       String[] colNames = new String[table0.getNumberOfColumns()];
       Arrays.fill(colNames, "");
       ORCWriterOptions opts = ORCWriterOptions.builder()
-              .withColumnNames(colNames)
+              .withColumns(true, colNames)
               .withCompressionType(CompressionType.NONE)
               .build();
       table0.writeORC(opts, tempFileUncompressed.getAbsoluteFile());
@@ -7131,6 +7248,26 @@ public class TableTest extends CudfTestBase {
   }
 
   // utility methods to reduce typing
+
+  private ORCWriterOptions createORCWriterOptionsWithNested() {
+    // The column metadata should match the table returned from
+    // 'getExpectedFileTable(true)'.
+    return ORCWriterOptions.builder()
+        .withNullableColumns("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
+        .withStructColumn(structBuilder("_c7")
+            .withNullableColumns("_c7-1")
+            .withNullableColumns("_c7-2")
+            .build())
+        .withListColumn(listBuilder("_c8")
+            .withNullableColumns("_c8-1").build())
+        .withListColumn(listBuilder("_c9")
+            .withStructColumn(structBuilder("_c9-1")
+                .withNullableColumns("_c9-1-1")
+                .withNullableColumns("_c9-1-2")
+                .build())
+            .build())
+        .build();
+  }
 
   private StructData struct(Object... values) {
     return new StructData(values);

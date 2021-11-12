@@ -656,8 +656,7 @@ class MultiIndex(Frame, BaseIndex):
         self._codes = cudf.DataFrame._from_data(codes)
 
     def _compute_validity_mask(self, index, row_tuple, max_length):
-        """ Computes the valid set of indices of values in the lookup
-        """
+        """Computes the valid set of indices of values in the lookup"""
         lookup = cudf.DataFrame()
         for name, row in zip(index.names, row_tuple):
             if isinstance(row, slice) and row == slice(None):
@@ -836,22 +835,11 @@ class MultiIndex(Frame, BaseIndex):
         return self._num_rows
 
     def take(self, indices):
-        if isinstance(indices, (Integral, Sequence)):
-            indices = np.array(indices)
-        elif isinstance(indices, cudf.Series) and indices.has_nulls:
+        if isinstance(indices, cudf.Series) and indices.has_nulls:
             raise ValueError("Column must have no nulls.")
-        elif isinstance(indices, slice):
-            start, stop, step = indices.indices(len(self))
-            indices = column.arange(start, stop, step)
-        result = MultiIndex.from_frame(
-            self.to_frame(index=False).take(indices)
-        )
-        if self._codes is not None:
-            result._codes = self._codes.take(indices)
-        if self._levels is not None:
-            result._levels = self._levels
-        result.names = self.names
-        return result
+        obj = super().take(indices)
+        obj.names = self.names
+        return obj
 
     def serialize(self):
         header, frames = super().serialize()
@@ -867,7 +855,7 @@ class MultiIndex(Frame, BaseIndex):
                 "21.10 or older will no longer be deserializable "
                 "after version 21.12. Please load and resave any "
                 "pickles before upgrading to version 22.02.",
-                DeprecationWarning,
+                FutureWarning,
             )
             header["column_names"] = header["names"]
         column_names = pickle.loads(header["column_names"])
@@ -877,7 +865,7 @@ class MultiIndex(Frame, BaseIndex):
                 "21.08 or older will no longer be deserializable "
                 "after version 21.10. Please load and resave any "
                 "pickles before upgrading to version 21.12.",
-                DeprecationWarning,
+                FutureWarning,
             )
             df = cudf.DataFrame.deserialize(header["source_data"], frames)
             return cls.from_frame(df)._set_names(column_names)
@@ -888,11 +876,26 @@ class MultiIndex(Frame, BaseIndex):
         return obj._set_names(column_names)
 
     def __getitem__(self, index):
-        if isinstance(index, int):
-            # we are indexing into a single row of the MultiIndex,
-            # return that row as a tuple:
-            return self.take(index).to_pandas()[0]
-        return self.take(index)
+        flatten = isinstance(index, int)
+
+        if isinstance(index, (Integral, Sequence)):
+            index = np.array(index)
+        elif isinstance(index, slice):
+            start, stop, step = index.indices(len(self))
+            index = column.arange(start, stop, step)
+        result = MultiIndex.from_frame(self.to_frame(index=False).take(index))
+
+        # we are indexing into a single row of the MultiIndex,
+        # return that row as a tuple:
+        if flatten:
+            return result.to_pandas()[0]
+
+        if self._codes is not None:
+            result._codes = self._codes.take(index)
+        if self._levels is not None:
+            result._levels = self._levels
+        result.names = self.names
+        return result
 
     def to_frame(self, index=True, name=None):
         # TODO: Currently this function makes a shallow copy, which is
@@ -940,6 +943,27 @@ class MultiIndex(Frame, BaseIndex):
             level_idx = colnames.index(level)
         level_values = as_index(self._data[level], name=self.names[level_idx])
         return level_values
+
+    def is_numeric(self):
+        return False
+
+    def is_boolean(self):
+        return False
+
+    def is_integer(self):
+        return False
+
+    def is_floating(self):
+        return False
+
+    def is_object(self):
+        return False
+
+    def is_categorical(self):
+        return False
+
+    def is_interval(self):
+        return False
 
     @classmethod
     def _concat(cls, objs):
@@ -1344,23 +1368,6 @@ class MultiIndex(Frame, BaseIndex):
             ascending=[False] * len(self.levels), null_position=None
         )
 
-    def argsort(self, ascending=True, **kwargs):
-        return self._get_sorted_inds(ascending=ascending, **kwargs).values
-
-    def sort_values(self, return_indexer=False, ascending=True, key=None):
-        if key is not None:
-            raise NotImplementedError("key parameter is not yet implemented.")
-
-        indices = cudf.Series._from_data(
-            {None: self._get_sorted_inds(ascending=ascending)}
-        )
-        index_sorted = as_index(self.take(indices), name=self.names)
-
-        if return_indexer:
-            return index_sorted, cupy.asarray(indices)
-        else:
-            return index_sorted
-
     def fillna(self, value):
         """
         Fill null values with the specified value.
@@ -1649,3 +1656,74 @@ class MultiIndex(Frame, BaseIndex):
         mask = cupy.full(self._data.nrows, False)
         mask[true_inds] = True
         return mask
+
+    def _get_reconciled_name_object(self, other) -> MultiIndex:
+        """
+        If the result of a set operation will be self,
+        return self, unless the names change, in which
+        case make a shallow copy of self.
+        """
+        names = self._maybe_match_names(other)
+        if self.names != names:
+            return self.rename(names)
+        return self
+
+    def _maybe_match_names(self, other):
+        """
+        Try to find common names to attach to the result of an operation
+        between a and b. Return a consensus list of names if they match
+        at least partly or list of None if they have completely
+        different names.
+        """
+        if len(self.names) != len(other.names):
+            return [None] * len(self.names)
+        return [
+            self_name if self_name == other_name else None
+            for self_name, other_name in zip(self.names, other.names)
+        ]
+
+    def _union(self, other, sort=None):
+        # TODO: When to_frame is refactored to return a
+        # deep copy in future, we should push most of the common
+        # logic between MultiIndex._union & BaseIndex._union into
+        # GenericIndex._union.
+        other_df = other.copy(deep=True).to_frame(index=False)
+        self_df = self.copy(deep=True).to_frame(index=False)
+        col_names = list(range(0, self.nlevels))
+        self_df.columns = col_names
+        other_df.columns = col_names
+        self_df["order"] = self_df.index
+        other_df["order"] = other_df.index
+
+        result_df = self_df.merge(other_df, on=col_names, how="outer")
+        result_df = result_df.sort_values(
+            by=result_df.columns[self.nlevels :], ignore_index=True
+        )
+
+        midx = MultiIndex.from_frame(result_df.iloc[:, : self.nlevels])
+        midx.names = self.names if self.names == other.names else None
+        if sort is None and len(other):
+            return midx.sort_values()
+        return midx
+
+    def _intersection(self, other, sort=None):
+        if self.names != other.names:
+            deep = True
+            col_names = list(range(0, self.nlevels))
+            res_name = (None,) * self.nlevels
+        else:
+            deep = False
+            col_names = None
+            res_name = self.names
+
+        other_df = other.copy(deep=deep).to_frame(index=False)
+        self_df = self.copy(deep=deep).to_frame(index=False)
+        if col_names is not None:
+            other_df.columns = col_names
+            self_df.columns = col_names
+
+        result_df = cudf.merge(self_df, other_df, how="inner")
+        midx = self.__class__.from_frame(result_df, names=res_name)
+        if sort is None and len(other):
+            return midx.sort_values()
+        return midx

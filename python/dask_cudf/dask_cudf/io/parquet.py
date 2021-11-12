@@ -5,7 +5,6 @@ from functools import partial
 from io import BufferedWriter, BytesIO, IOBase
 
 import numpy as np
-import pyarrow as pa
 from pyarrow import dataset as pa_ds, parquet as pq
 
 from dask import dataframe as dd
@@ -229,9 +228,8 @@ class CudfEngine(ArrowDatasetEngine):
 
         if index and (index[0] in df.columns):
             df = df.set_index(index[0])
-        elif index is False and set(df.index.names).issubset(columns):
-            # If index=False, we need to make sure all of the
-            # names in `columns` are actually in `df.columns`
+        elif index is False and df.index.names != (None,):
+            # If index=False, we shouldn't have a named index
             df.reset_index(inplace=True)
 
         return df
@@ -332,13 +330,18 @@ def set_object_dtypes_from_pa_schema(df, schema):
     # pyarrow schema.
     if schema:
         for col_name, col in df._data.items():
-            typ = schema.field(col_name).type
+            if col_name is None:
+                # Pyarrow cannot handle `None` as a field name.
+                # However, this should be a simple range index that
+                # we can ignore anyway
+                continue
+            typ = cudf_dtype_from_pa_type(schema.field(col_name).type)
             if (
                 col_name in schema.names
-                and not isinstance(typ, (pa.ListType, pa.StructType))
+                and not isinstance(typ, (cudf.ListDtype, cudf.StructDtype))
                 and isinstance(col, cudf.core.column.StringColumn)
             ):
-                df._data[col_name] = col.astype(cudf_dtype_from_pa_type(typ))
+                df._data[col_name] = col.astype(typ)
 
 
 def read_parquet(
@@ -348,7 +351,7 @@ def read_parquet(
     row_groups_per_part=None,
     **kwargs,
 ):
-    """ Read parquet files into a Dask DataFrame
+    """Read parquet files into a Dask DataFrame
 
     Calls ``dask.dataframe.read_parquet`` to cordinate the execution of
     ``cudf.read_parquet``, and ultimately read multiple partitions into
@@ -371,7 +374,8 @@ def read_parquet(
     if row_groups_per_part:
         warnings.warn(
             "row_groups_per_part is deprecated. "
-            "Pass an integer value to split_row_groups instead."
+            "Pass an integer value to split_row_groups instead.",
+            FutureWarning,
         )
         if split_row_groups is None:
             split_row_groups = row_groups_per_part

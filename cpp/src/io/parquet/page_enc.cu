@@ -1595,7 +1595,7 @@ struct def_level_fn {
  *
  * 4. LLSLSSi = L   L   SL   SSi
  *              - | - | -- | ---
-```
+ * ```
  */
 dremel_data get_dremel_data(column_view h_col,
                             // TODO(cp): use device_span once it is converted to a single hd_vec
