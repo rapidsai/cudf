@@ -257,15 +257,16 @@ void for_each(rmm::cuda_stream_view stream, cudf::size_type size, Functor f)
   for_each_kernel<<<grid_size, block_size, 0, stream.value()>>>(size, std::forward<Functor&&>(f));
 }
 
+namespace detail {
 template <class BinaryOperator>
-void apply_binary_op(mutable_column_view& out,
-                     column_view const& lhs,
-                     column_view const& rhs,
-                     bool is_lhs_scalar,
-                     bool is_rhs_scalar,
-                     order op_order,
-                     bool flip_output,
-                     rmm::cuda_stream_view stream)
+void apply_binary_op_impl(mutable_column_view& out,
+                          column_view const& lhs,
+                          column_view const& rhs,
+                          bool is_lhs_scalar,
+                          bool is_rhs_scalar,
+                          order op_order,
+                          bool flip_output,
+                          rmm::cuda_stream_view stream)
 {
   if (is_struct(lhs.type()) && is_struct(rhs.type())) {
     auto const nullability =
@@ -300,6 +301,19 @@ void apply_binary_op(mutable_column_view& out,
     // Execute it on every element
     for_each(stream, out.size(), binop_func);
   }
+}
+}  // namespace detail
+
+template <class BinaryOperator>
+void apply_binary_op(mutable_column_view& out,
+                     column_view const& lhs,
+                     column_view const& rhs,
+                     bool is_lhs_scalar,
+                     bool is_rhs_scalar,
+                     rmm::cuda_stream_view stream)
+{
+  detail::apply_binary_op_impl<BinaryOperator>(
+    out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, order::ASCENDING, false, stream);
 }
 }  // namespace compiled
 }  // namespace binops
