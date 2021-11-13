@@ -2103,6 +2103,33 @@ def test_string_join_values_nulls():
     assert_join_results_equal(expect, got, how="left")
 
 
+def test_merge_multiindex_columns():
+    lhs = pd.DataFrame({"a": [1, 2, 3], "b": [2, 3, 4]})
+    lhs.columns = pd.MultiIndex.from_tuples([("a", "x"), ("a", "y")])
+    rhs = pd.DataFrame({"a": [1, 2, 3], "b": [2, 3, 4]})
+    rhs.columns = pd.MultiIndex.from_tuples([("a", "x"), ("a", "z")])
+    expect = lhs.merge(rhs, on=[("a", "x")], how="inner")
+
+    lhs = cudf.from_pandas(lhs)
+    rhs = cudf.from_pandas(rhs)
+    got = lhs.merge(rhs, on=[("a", "x")], how="inner")
+
+    assert_join_results_equal(expect, got, how="inner")
+
+
+def test_join_multiindex_empty():
+    lhs = pd.DataFrame({"a": [1, 2, 3], "b": [2, 3, 4]}, index=["a", "b", "c"])
+    lhs.columns = pd.MultiIndex.from_tuples([("a", "x"), ("a", "y")])
+    rhs = pd.DataFrame(index=["a", "c", "d"])
+    expect = lhs.join(rhs, how="inner")
+
+    lhs = cudf.from_pandas(lhs)
+    rhs = cudf.from_pandas(rhs)
+    got = lhs.join(rhs, how="inner")
+
+    assert_join_results_equal(expect, got, how="inner")
+
+
 def test_join_on_index_with_duplicate_names():
     # although index levels with duplicate names are poorly supported
     # overall, we *should* be able to join on them:
