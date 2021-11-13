@@ -4,6 +4,7 @@ import collections
 import pickle
 import warnings
 
+import numpy as np
 import pandas as pd
 from nvtx import annotate
 
@@ -31,8 +32,6 @@ def _quantile_75(x):
     return x.quantile(0.75)
 
 
-# Note that all valid aggregation methods (e.g. GroupBy.min) are bound to the
-# class after its definition (see below).
 class GroupBy(Serializable):
 
     _MAX_GROUPS_BEFORE_WARN = 100
@@ -240,22 +239,20 @@ class GroupBy(Serializable):
             result = result.sort_index()
 
         if not _is_multi_agg(func):
-            if result.columns.nlevels == 1:
+            if result._data.nlevels <= 1:  # 0 or 1 levels
                 # make sure it's a flat index:
-                result.columns = result.columns.get_level_values(0)
+                result._data.multiindex = False
 
-            if result.columns.nlevels > 1:
-                try:
-                    # drop the last level
-                    result.columns = result.columns.droplevel(-1)
-                except IndexError:
-                    # Pandas raises an IndexError if we are left
-                    # with an all-nan MultiIndex when dropping
-                    # the last level
-                    if result.shape[1] == 1:
-                        result.columns = [None]
-                    else:
-                        raise
+            if result._data.nlevels > 1:
+                result._data.droplevel(-1)
+
+                # if, after dropping the last level, the only
+                # remaining key is `NaN`, we need to convert to `None`
+                # for Pandas compat:
+                if result._data.names == (np.nan,):
+                    result._data = result._data.rename_levels(
+                        {np.nan: None}, level=0
+                    )
 
         if libgroupby._is_all_scan_aggregate(normalized_aggs):
             # Scan aggregations return rows in original index order
@@ -1303,14 +1300,20 @@ class SeriesGroupBy(GroupBy):
         return result
 
 
+# TODO: should we define this as a dataclass instead?
 class Grouper(object):
-    def __init__(self, key=None, level=None):
+    def __init__(
+        self, key=None, level=None, freq=None, closed=None, label=None
+    ):
         if key is not None and level is not None:
             raise ValueError("Grouper cannot specify both key and level")
-        if key is None and level is None:
+        if (key, level) == (None, None) and not freq:
             raise ValueError("Grouper must specify either key or level")
         self.key = key
         self.level = level
+        self.freq = freq
+        self.closed = closed
+        self.label = label
 
 
 class _Grouping(Serializable):
@@ -1318,14 +1321,6 @@ class _Grouping(Serializable):
         self._obj = obj
         self._key_columns = []
         self.names = []
-        # For transform operations, we want to filter out only the value
-        # columns that will be used. When part of the key columns are composed
-        # from columns in `obj`, these columns are not included in the value
-        # columns. This only happens when `by` is specified with
-        # column labels or `Grouper` object with `key` param. To avoid that
-        # external objects overlaps in names to `obj`, these column
-        # names are recorded separately in this list.
-        self._key_column_names_from_obj = []
 
         # Need to keep track of named key columns
         # to support `as_index=False` correctly
@@ -1390,9 +1385,7 @@ class _Grouping(Serializable):
         """
         # If the key columns are in `obj`, filter them out
         value_column_names = [
-            x
-            for x in self._obj._data.names
-            if x not in self._key_column_names_from_obj
+            x for x in self._obj._data.names if x not in self._named_columns
         ]
         value_columns = self._obj._data.select_by_label(value_column_names)
         return self._obj.__class__._from_data(value_columns)
@@ -1418,13 +1411,17 @@ class _Grouping(Serializable):
         self._key_columns.append(self._obj._data[by])
         self.names.append(by)
         self._named_columns.append(by)
-        self._key_column_names_from_obj.append(by)
 
     def _handle_grouper(self, by):
-        if by.key:
+        if by.freq:
+            self._handle_frequency_grouper(by)
+        elif by.key:
             self._handle_label(by.key)
         else:
             self._handle_level(by.level)
+
+    def _handle_frequency_grouper(self, by):
+        raise NotImplementedError()
 
     def _handle_level(self, by):
         level_values = self._obj.index.get_level_values(by)
