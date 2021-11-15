@@ -369,7 +369,7 @@ void write_chunked(data_sink* out_sink,
   strings_column_view strings_column{p_str_col_w_nl->view()};
 
   auto total_num_bytes      = strings_column.chars_size();
-  char const* ptr_all_bytes = strings_column.chars().data<char>();
+  char const* ptr_all_bytes = strings_column.chars_begin();
 
   if (out_sink->is_device_write_preferred(total_num_bytes)) {
     // Direct write from device memory

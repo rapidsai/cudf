@@ -30,10 +30,10 @@ void result_cache::add_result(column_view const& input,
 {
   // We can't guarantee that agg will outlive the cache, so we need to take ownership of a copy.
   // To allow lookup by reference, make the key a reference and keep the owner in the value pair.
-  auto owned_agg       = agg.clone();
-  auto const& key      = *owned_agg;
-  auto value           = std::make_pair(std::move(owned_agg), std::move(col));
-  _cache[{input, key}] = std::move(value);
+  auto owned_agg  = agg.clone();
+  auto const& key = *owned_agg;
+  // try_emplace doesn't update/insert if already present
+  _cache.try_emplace({input, key}, std::move(owned_agg), std::move(col));
 }
 
 column_view result_cache::get_result(column_view const& input, aggregation const& agg) const

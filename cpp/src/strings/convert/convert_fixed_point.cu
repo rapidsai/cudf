@@ -314,7 +314,7 @@ std::unique_ptr<column> from_fixed_point(column_view const& input,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) return make_empty_column(data_type{type_id::STRING});
+  if (input.is_empty()) return make_empty_column(type_id::STRING);
   return type_dispatcher(input.type(), dispatch_from_fixed_point_fn{}, input, stream, mr);
 }
 
@@ -379,7 +379,7 @@ std::unique_ptr<column> is_fixed_point(strings_column_view const& input,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) return cudf::make_empty_column(data_type{type_id::BOOL8});
+  if (input.is_empty()) return cudf::make_empty_column(type_id::BOOL8);
   return type_dispatcher(
     decimal_type, dispatch_is_fixed_point_fn{}, input, decimal_type, stream, mr);
 }

@@ -299,7 +299,7 @@ def test_multiindex_loc(pdf, gdf, pdfIndex, key_tuple):
     assert_eq(pdfIndex, gdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    assert_eq(pdf.loc[key_tuple], gdf.loc[key_tuple])
+    assert_eq(pdf.loc[key_tuple].sort_index(), gdf.loc[key_tuple].sort_index())
 
 
 @pytest.mark.parametrize(
@@ -666,8 +666,7 @@ def test_multiindex_equals():
 )
 @pytest.mark.parametrize("names", [["X", "Y"]])
 def test_multiindex_copy_sem(data, levels, codes, names):
-    """Test semantic equality for MultiIndex.copy
-    """
+    """Test semantic equality for MultiIndex.copy"""
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
@@ -740,8 +739,8 @@ def test_multiindex_copy_sem(data, levels, codes, names):
 @pytest.mark.parametrize("deep", [True, False])
 def test_multiindex_copy_deep(data, deep):
     """Test memory idendity for deep copy
-        Case1: Constructed from GroupBy, StringColumns
-        Case2: Constrcuted from MultiIndex, NumericColumns
+    Case1: Constructed from GroupBy, StringColumns
+    Case2: Constrcuted from MultiIndex, NumericColumns
     """
     same_ref = not deep
 
@@ -967,26 +966,34 @@ def test_multiindex_rows_with_wildcard(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    assert_eq(pdf.loc[("a",), :], gdf.loc[("a",), :])
-    assert_eq(pdf.loc[(("a"), ("store")), :], gdf.loc[(("a"), ("store")), :])
+    assert_eq(pdf.loc[("a",), :].sort_index(), gdf.loc[("a",), :].sort_index())
     assert_eq(
-        pdf.loc[(("a"), ("store"), ("storm")), :],
-        gdf.loc[(("a"), ("store"), ("storm")), :],
+        pdf.loc[(("a"), ("store")), :].sort_index(),
+        gdf.loc[(("a"), ("store")), :].sort_index(),
     )
     assert_eq(
-        pdf.loc[(("a"), ("store"), ("storm"), ("smoke")), :],
-        gdf.loc[(("a"), ("store"), ("storm"), ("smoke")), :],
+        pdf.loc[(("a"), ("store"), ("storm")), :].sort_index(),
+        gdf.loc[(("a"), ("store"), ("storm")), :].sort_index(),
     )
     assert_eq(
-        pdf.loc[(slice(None), "store"), :], gdf.loc[(slice(None), "store"), :]
+        pdf.loc[(("a"), ("store"), ("storm"), ("smoke")), :].sort_index(),
+        gdf.loc[(("a"), ("store"), ("storm"), ("smoke")), :].sort_index(),
     )
     assert_eq(
-        pdf.loc[(slice(None), slice(None), "storm"), :],
-        gdf.loc[(slice(None), slice(None), "storm"), :],
+        pdf.loc[(slice(None), "store"), :].sort_index(),
+        gdf.loc[(slice(None), "store"), :].sort_index(),
     )
     assert_eq(
-        pdf.loc[(slice(None), slice(None), slice(None), "smoke"), :],
-        gdf.loc[(slice(None), slice(None), slice(None), "smoke"), :],
+        pdf.loc[(slice(None), slice(None), "storm"), :].sort_index(),
+        gdf.loc[(slice(None), slice(None), "storm"), :].sort_index(),
+    )
+    assert_eq(
+        pdf.loc[
+            (slice(None), slice(None), slice(None), "smoke"), :
+        ].sort_index(),
+        gdf.loc[
+            (slice(None), slice(None), slice(None), "smoke"), :
+        ].sort_index(),
     )
 
 

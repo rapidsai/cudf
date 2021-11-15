@@ -28,12 +28,11 @@
 struct StringsCharsTest : public cudf::test::BaseFixture {
 };
 
-class StringsCharsTestTypes
-  : public StringsCharsTest,
-    public testing::WithParamInterface<cudf::strings::string_character_types> {
+class CharsTypes : public StringsCharsTest,
+                   public testing::WithParamInterface<cudf::strings::string_character_types> {
 };
 
-TEST_P(StringsCharsTestTypes, AllTypes)
+TEST_P(CharsTypes, AllTypes)
 {
   std::vector<const char*> h_strings{"Héllo",
                                      "thesé",
@@ -84,8 +83,8 @@ TEST_P(StringsCharsTestTypes, AllTypes)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, expected);
 }
 
-INSTANTIATE_TEST_CASE_P(StringsCharsTestAllTypes,
-                        StringsCharsTestTypes,
+INSTANTIATE_TEST_CASE_P(StringsCharsTest,
+                        CharsTypes,
                         testing::ValuesIn(std::array<cudf::strings::string_character_types, 7>{
                           cudf::strings::string_character_types::DECIMAL,
                           cudf::strings::string_character_types::NUMERIC,

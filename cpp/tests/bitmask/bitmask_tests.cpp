@@ -545,19 +545,25 @@ TEST_F(MergeBitmaskTest, TestBitmaskAnd)
   auto const input2 = cudf::table_view({bools_col1, bools_col2});
   auto const input3 = cudf::table_view({bools_col1, bools_col2, bools_col3});
 
-  rmm::device_buffer result1 = cudf::bitmask_and(input1);
-  rmm::device_buffer result2 = cudf::bitmask_and(input2);
-  rmm::device_buffer result3 = cudf::bitmask_and(input3);
+  auto [result1_mask, result1_null_count] = cudf::bitmask_and(input1);
+  auto [result2_mask, result2_null_count] = cudf::bitmask_and(input2);
+  auto [result3_mask, result3_null_count] = cudf::bitmask_and(input3);
+
+  constexpr cudf::size_type gold_null_count = 3;
+
+  EXPECT_EQ(result1_null_count, 0);
+  EXPECT_EQ(result2_null_count, gold_null_count);
+  EXPECT_EQ(result3_null_count, gold_null_count);
 
   auto odd_indices =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 2; });
   auto odd = cudf::test::detail::make_null_mask(odd_indices, odd_indices + input2.num_rows());
 
-  EXPECT_EQ(nullptr, result1.data());
+  EXPECT_EQ(nullptr, result1_mask.data());
   CUDF_TEST_EXPECT_EQUAL_BUFFERS(
-    result2.data(), odd.data(), cudf::num_bitmask_words(input2.num_rows()));
+    result2_mask.data(), odd.data(), cudf::num_bitmask_words(input2.num_rows()));
   CUDF_TEST_EXPECT_EQUAL_BUFFERS(
-    result3.data(), odd.data(), cudf::num_bitmask_words(input2.num_rows()));
+    result3_mask.data(), odd.data(), cudf::num_bitmask_words(input2.num_rows()));
 }
 
 TEST_F(MergeBitmaskTest, TestBitmaskOr)
@@ -570,19 +576,23 @@ TEST_F(MergeBitmaskTest, TestBitmaskOr)
   auto const input2 = cudf::table_view({bools_col1, bools_col2});
   auto const input3 = cudf::table_view({bools_col1, bools_col2, bools_col3});
 
-  rmm::device_buffer result1 = cudf::bitmask_or(input1);
-  rmm::device_buffer result2 = cudf::bitmask_or(input2);
-  rmm::device_buffer result3 = cudf::bitmask_or(input3);
+  auto [result1_mask, result1_null_count] = cudf::bitmask_or(input1);
+  auto [result2_mask, result2_null_count] = cudf::bitmask_or(input2);
+  auto [result3_mask, result3_null_count] = cudf::bitmask_or(input3);
+
+  EXPECT_EQ(result1_null_count, 0);
+  EXPECT_EQ(result2_null_count, 1);
+  EXPECT_EQ(result3_null_count, 0);
 
   auto all_but_index3 =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 3; });
   auto null3 =
     cudf::test::detail::make_null_mask(all_but_index3, all_but_index3 + input2.num_rows());
 
-  EXPECT_EQ(nullptr, result1.data());
+  EXPECT_EQ(nullptr, result1_mask.data());
   CUDF_TEST_EXPECT_EQUAL_BUFFERS(
-    result2.data(), null3.data(), cudf::num_bitmask_words(input2.num_rows()));
-  EXPECT_EQ(nullptr, result3.data());
+    result2_mask.data(), null3.data(), cudf::num_bitmask_words(input2.num_rows()));
+  EXPECT_EQ(nullptr, result3_mask.data());
 }
 
 CUDF_TEST_PROGRAM_MAIN()
