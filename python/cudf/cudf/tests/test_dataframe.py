@@ -968,8 +968,13 @@ def test_dataframe_to_cupy():
         df[k] = np.random.random(nelem)
 
     # Check all columns
+    mat = df.to_cupy()
+    assert mat.shape == (nelem, 4)
+    assert mat.strides == (8, 984)
+
     mat = df.to_numpy()
     assert mat.shape == (nelem, 4)
+    assert mat.strides == (8, 984)
     for i, k in enumerate(df.columns):
         np.testing.assert_array_equal(df[k].to_numpy(), mat[:, i])
 
