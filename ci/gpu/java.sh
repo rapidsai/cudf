@@ -87,6 +87,8 @@ gpuci_conda_retry install -y \
 # https://docs.rapids.ai/maintainers/depmgmt/
 # gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
 # gpuci_conda_retry install -y "your-pkg=1.0.0"
+gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
+gpuci_conda_retry install -y "arrow-cpp=6.0.0" "pyarrow=6.0.0" 'arrow-cpp-proc=*=cuda' "pyorc" "python-confluent-kafka=1.7.0"
 
 
 gpuci_logger "Check compiler versions"
