@@ -33,7 +33,7 @@ def parse_args():
         type=str,
         default=None,
         required="-glob" in sys.argv,
-        help="Output compute-sanitizer juni xml file path",
+        help="Output compute-sanitizer junit xml file path",
     )
     argparser.add_argument(
         "-classname",

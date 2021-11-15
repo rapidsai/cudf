@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 ##############################################
 # cuDF GPU build and test script for CI      #
 ##############################################
@@ -179,7 +179,7 @@ else
     if [[ "$COMPUTE_SANITIZER_ENABLE" == "1" ]]; then
         gpuci_logger "Memcheck on GoogleTests with rmm_mode=cuda"
         export GTEST_CUDF_RMM_MODE=cuda
-        COMPUTE_SANITIZER_CMD="compute-sanitizer --tool memcheck --log-file" #  $WORKSPACE/test-results/cudamemcheck-%q{test_name}.log
+        COMPUTE_SANITIZER_CMD="compute-sanitizer --tool memcheck"
         for gt in gtests/* ; do
             test_name=$(basename ${gt})
             echo "Running GoogleTest $test_name"
