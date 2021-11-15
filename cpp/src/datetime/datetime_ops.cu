@@ -98,11 +98,12 @@ struct RoundFunctor {
   CUDA_DEVICE_CALLABLE auto operator()(rounding_kind round_kind, Timestamp dt)
   {
     switch (round_kind) {
-      case rounding_kind::CEIL: return std::chrono::ceil<DurationType>(dt);
-      case rounding_kind::FLOOR: return std::chrono::floor<DurationType>(dt);
-      case rounding_kind::ROUND: return std::chrono::round<DurationType>(dt);
+      case rounding_kind::CEIL: return cuda::std::chrono::ceil<DurationType>(dt);
+      case rounding_kind::FLOOR: return cuda::std::chrono::floor<DurationType>(dt);
+      case rounding_kind::ROUND: return cuda::std::chrono::round<DurationType>(dt);
       default: cudf_assert(false && "Unsupported rounding kind.");
     }
+    __builtin_unreachable();
   }
 };
 
@@ -142,6 +143,7 @@ struct RoundingDispatcher {
           RoundFunctor<duration_ns>{}(round_kind, ts));
       default: cudf_assert(false && "Unsupported datetime rounding resolution.");
     }
+    __builtin_unreachable();
   }
 };
 
@@ -224,7 +226,6 @@ struct is_leap_year_op {
 };
 
 // Specific function for applying ceil/floor date ops
-template <typename TransformFunctor>
 struct dispatch_round {
   template <typename Timestamp>
   std::enable_if_t<cudf::is_timestamp<Timestamp>(), std::unique_ptr<cudf::column>> operator()(
@@ -251,7 +252,7 @@ struct dispatch_round {
                       column.begin<Timestamp>(),
                       column.end<Timestamp>(),
                       output->mutable_view().begin<Timestamp>(),
-                      TransformFunctor{round_kind, component});
+                      RoundingDispatcher{round_kind, component});
 
     return output;
   }
@@ -420,11 +421,8 @@ std::unique_ptr<column> round_general(rounding_kind round_kind,
                                       rmm::cuda_stream_view stream,
                                       rmm::mr::device_memory_resource* mr)
 {
-  return cudf::type_dispatcher(column.type(),
-                               dispatch_round<detail::RoundingDispatcher(round_kind, component){}>,
-                               column,
-                               stream,
-                               mr);
+  return cudf::type_dispatcher(
+    column.type(), dispatch_round{}, round_kind, component, column, stream, mr);
 }
 
 std::unique_ptr<column> extract_year(column_view const& column,
@@ -532,104 +530,147 @@ std::unique_ptr<column> extract_quarter(column_view const& column,
 std::unique_ptr<column> ceil_day(column_view const& column, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::round_general(rounding_kind::CEIL, datetime_component::DAY, column, rmm::cuda_stream_default, mr);
+  return detail::round_general(detail::rounding_kind::CEIL,
+                               detail::datetime_component::DAY,
+                               column,
+                               rmm::cuda_stream_default,
+                               mr);
 }
 
 std::unique_ptr<column> ceil_hour(column_view const& column, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::ceil_general<detail::datetime_component::HOUR>(
-    column, rmm::cuda_stream_default, mr);
+  return detail::round_general(detail::rounding_kind::CEIL,
+                               detail::datetime_component::HOUR,
+                               column,
+                               rmm::cuda_stream_default,
+                               mr);
 }
 
 std::unique_ptr<column> ceil_minute(column_view const& column, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::ceil_general<detail::datetime_component::MINUTE>(
-    column, rmm::cuda_stream_default, mr);
+  return detail::round_general(detail::rounding_kind::CEIL,
+                               detail::datetime_component::MINUTE,
+                               column,
+                               rmm::cuda_stream_default,
+                               mr);
 }
 
 std::unique_ptr<column> ceil_second(column_view const& column, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::ceil_general<detail::datetime_component::SECOND>(
-    column, rmm::cuda_stream_default, mr);
+  return detail::round_general(detail::rounding_kind::CEIL,
+                               detail::datetime_component::SECOND,
+                               column,
+                               rmm::cuda_stream_default,
+                               mr);
 }
 
 std::unique_ptr<column> ceil_millisecond(column_view const& column,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::ceil_general<detail::datetime_component::MILLISECOND>(
-    column, rmm::cuda_stream_default, mr);
+  return detail::round_general(detail::rounding_kind::CEIL,
+                               detail::datetime_component::MILLISECOND,
+                               column,
+                               rmm::cuda_stream_default,
+                               mr);
 }
 
 std::unique_ptr<column> ceil_microsecond(column_view const& column,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::ceil_general<detail::datetime_component::MICROSECOND>(
-    column, rmm::cuda_stream_default, mr);
+  return detail::round_general(detail::rounding_kind::CEIL,
+                               detail::datetime_component::MICROSECOND,
+                               column,
+                               rmm::cuda_stream_default,
+                               mr);
 }
 
 std::unique_ptr<column> ceil_nanosecond(column_view const& column,
                                         rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::ceil_general<detail::datetime_component::NANOSECOND>(
-    column, rmm::cuda_stream_default, mr);
+  return detail::round_general(detail::rounding_kind::CEIL,
+                               detail::datetime_component::NANOSECOND,
+                               column,
+                               rmm::cuda_stream_default,
+                               mr);
 }
 
 std::unique_ptr<column> floor_day(column_view const& column, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::floor_general<detail::datetime_component::DAY>(
-    column, rmm::cuda_stream_default, mr);
+  return detail::round_general(detail::rounding_kind::FLOOR,
+                               detail::datetime_component::DAY,
+                               column,
+                               rmm::cuda_stream_default,
+                               mr);
 }
 
 std::unique_ptr<column> floor_hour(column_view const& column, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::floor_general<detail::datetime_component::HOUR>(
-    column, rmm::cuda_stream_default, mr);
+  return detail::round_general(detail::rounding_kind::FLOOR,
+                               detail::datetime_component::HOUR,
+                               column,
+                               rmm::cuda_stream_default,
+                               mr);
 }
 
 std::unique_ptr<column> floor_minute(column_view const& column, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::floor_general<detail::datetime_component::MINUTE>(
-    column, rmm::cuda_stream_default, mr);
+  return detail::round_general(detail::rounding_kind::FLOOR,
+                               detail::datetime_component::MINUTE,
+                               column,
+                               rmm::cuda_stream_default,
+                               mr);
 }
 
 std::unique_ptr<column> floor_second(column_view const& column, rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::floor_general<detail::datetime_component::SECOND>(
-    column, rmm::cuda_stream_default, mr);
+  return detail::round_general(detail::rounding_kind::FLOOR,
+                               detail::datetime_component::SECOND,
+                               column,
+                               rmm::cuda_stream_default,
+                               mr);
 }
 
 std::unique_ptr<column> floor_millisecond(column_view const& column,
                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::floor_general<detail::datetime_component::MILLISECOND>(
-    column, rmm::cuda_stream_default, mr);
+  return detail::round_general(detail::rounding_kind::FLOOR,
+                               detail::datetime_component::MILLISECOND,
+                               column,
+                               rmm::cuda_stream_default,
+                               mr);
 }
 
 std::unique_ptr<column> floor_microsecond(column_view const& column,
                                           rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::floor_general<detail::datetime_component::MICROSECOND>(
-    column, rmm::cuda_stream_default, mr);
+  return detail::round_general(detail::rounding_kind::FLOOR,
+                               detail::datetime_component::MICROSECOND,
+                               column,
+                               rmm::cuda_stream_default,
+                               mr);
 }
 
 std::unique_ptr<column> floor_nanosecond(column_view const& column,
                                          rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::floor_general<detail::datetime_component::NANOSECOND>(
-    column, rmm::cuda_stream_default, mr);
+  return detail::round_general(detail::rounding_kind::FLOOR,
+                               detail::datetime_component::NANOSECOND,
+                               column,
+                               rmm::cuda_stream_default,
+                               mr);
 }
 
 std::unique_ptr<column> extract_year(column_view const& column, rmm::mr::device_memory_resource* mr)
