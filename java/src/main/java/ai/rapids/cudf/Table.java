@@ -2652,6 +2652,23 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * For details about how this method functions refer to
+   * {@link #convertToRowsFixedWidthOptimized()}.
+   *
+   * The only thing different between this method and {@link #convertToRowsFixedWidthOptimized()}
+   * is that this can handle rougly 250M columns while {@link #convertToRowsFixedWidthOptimized()}
+   * can only handle columns less than 100
+   */
+  public ColumnVector[] convertToRows() {
+    long[] ptrs = convertToRows(nativeHandle);
+    ColumnVector[] ret = new ColumnVector[ptrs.length];
+    for (int i = 0; i < ptrs.length; i++) {
+      ret[i] = new ColumnVector(ptrs[i]);
+    }
+    return ret;
+  }
+
+  /**
    * Convert this table of columns into a row major format that is useful for interacting with other
    * systems that do row major processing of the data. Currently only fixed-width column types are
    * supported.
@@ -2725,15 +2742,6 @@ public final class Table implements AutoCloseable {
    * There are some limits on the size of a single row.  If the row is larger than 1KB this will
    * throw an exception.
    */
-  public ColumnVector[] convertToRows() {
-    long[] ptrs = convertToRows(nativeHandle);
-    ColumnVector[] ret = new ColumnVector[ptrs.length];
-    for (int i = 0; i < ptrs.length; i++) {
-      ret[i] = new ColumnVector(ptrs[i]);
-    }
-    return ret;
-  }
-
   public ColumnVector[] convertToRowsFixedWidthOptimized() {
     long[] ptrs = convertToRowsFixedWidthOptimized(nativeHandle);
     ColumnVector[] ret = new ColumnVector[ptrs.length];
