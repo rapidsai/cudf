@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "scan_tests.hpp"
+#include <tests/reductions/scan_tests.hpp>
 
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
@@ -344,7 +344,7 @@ template <typename T>
 struct ScanChronoTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ScanChronoTest, cudf::test::ChronoTypes);
+TYPED_TEST_SUITE(ScanChronoTest, cudf::test::ChronoTypes);
 
 TYPED_TEST(ScanChronoTest, ChronoMinMax)
 {
@@ -379,7 +379,7 @@ template <typename T>
 struct ScanDurationTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ScanDurationTest, cudf::test::DurationTypes);
+TYPED_TEST_SUITE(ScanDurationTest, cudf::test::DurationTypes);
 
 TYPED_TEST(ScanDurationTest, Sum)
 {

@@ -43,7 +43,7 @@ template <typename T>
 class TypedTraitsTest : public TraitsTest {
 };
 
-TYPED_TEST_CASE(TypedTraitsTest, cudf::test::AllTypes);
+TYPED_TEST_SUITE(TypedTraitsTest, cudf::test::AllTypes);
 
 TEST_F(TraitsTest, NumericDataTypesAreNumeric)
 {
