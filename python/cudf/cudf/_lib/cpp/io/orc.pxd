@@ -68,8 +68,8 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_writer_options()
         cudf_io_types.sink_info get_sink() except+
         cudf_io_types.compression_type get_compression() except+
-        bool enable_statistics() except+
-        size_t stripe_size_bytes() except+
+        bool is_enabled_statistics() except+
+        size_t get_stripe_size_bytes() except+
         size_type get_stripe_size_rows() except+
         size_type get_row_index_stride() except+
         cudf_table_view.table_view get_table() except+
