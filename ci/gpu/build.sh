@@ -147,6 +147,8 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
         export LD_LIBRARY_PATH="$LIB_BUILD_DIR:$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
         gpuci_logger "Debug CI"
         env
+        gpuci_logger "conda lib"
+        ls $CONDA_PREFIX/lib
         readelf -d $CONDA_PREFIX/lib/libgtest_main.so
         readelf -d $CONDA_PREFIX/lib/libgmock_main.so
 
