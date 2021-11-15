@@ -2754,13 +2754,14 @@ public final class Table implements AutoCloseable {
   /**
    * Convert a column of list of bytes that is formatted like the output from `convertToRows`
    * and convert it back to a table.
+   *
+   * NOTE: This method doesn't support nested types
+   *
    * @param vec the row data to process.
    * @param schema the types of each column.
    * @return the parsed table.
    */
   public static Table convertFromRows(ColumnView vec, DType ... schema) {
-    // TODO at some point we need a schema that support nesting so we can support nested types
-    // TODO we will need scale at some point very soon too
     int[] types = new int[schema.length];
     int[] scale = new int[schema.length];
     for (int i = 0; i < schema.length; i++) {
@@ -2774,13 +2775,14 @@ public final class Table implements AutoCloseable {
   /**
    * Convert a column of list of bytes that is formatted like the output from `convertToRows`
    * and convert it back to a table.
+   *
+   * NOTE: This method doesn't support nested types
+   *
    * @param vec the row data to process.
    * @param schema the types of each column.
    * @return the parsed table.
    */
   public static Table convertFromRowsFixedWidthOptimized(ColumnView vec, DType ... schema) {
-    // TODO at some point we need a schema that support nesting so we can support nested types
-    // TODO we will need scale at some point very soon too
     int[] types = new int[schema.length];
     int[] scale = new int[schema.length];
     for (int i = 0; i < schema.length; i++) {
