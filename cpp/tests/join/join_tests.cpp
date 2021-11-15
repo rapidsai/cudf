@@ -1418,6 +1418,19 @@ TEST_F(JoinTest, HashJoinWithStructsAndNulls)
   }
 }
 
+TEST_F(JoinTest, HashJoinLargeOutputSize)
+{
+  // self-join a table of zeroes to generate an output row count that would overflow int32_t
+  std::size_t col_size = 65567;
+  rmm::device_buffer zeroes(col_size * sizeof(int32_t), rmm::cuda_stream_default);
+  CUDA_TRY(cudaMemsetAsync(zeroes.data(), 0, zeroes.size(), rmm::cuda_stream_default.value()));
+  cudf::column_view col_zeros(cudf::data_type{cudf::type_id::INT32}, col_size, zeroes.data());
+  cudf::table_view tview{{col_zeros}};
+  cudf::hash_join hash_join(tview, cudf::null_equality::UNEQUAL);
+  std::size_t output_size = hash_join.inner_join_size(tview);
+  EXPECT_EQ(col_size * col_size, output_size);
+}
+
 struct JoinDictionaryTest : public cudf::test::BaseFixture {
 };
 

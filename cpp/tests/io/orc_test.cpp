@@ -99,11 +99,11 @@ struct OrcWriterTimestampTypeTest : public OrcWriterTest {
 // Declare typed test cases
 // TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5351
 using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
-TYPED_TEST_CASE(OrcWriterNumericTypeTest, SupportedTypes);
+TYPED_TEST_SUITE(OrcWriterNumericTypeTest, SupportedTypes);
 using SupportedTimestampTypes =
   cudf::test::RemoveIf<cudf::test::ContainedIn<cudf::test::Types<cudf::timestamp_D>>,
                        cudf::test::TimestampTypes>;
-TYPED_TEST_CASE(OrcWriterTimestampTypeTest, SupportedTimestampTypes);
+TYPED_TEST_SUITE(OrcWriterTimestampTypeTest, SupportedTimestampTypes);
 
 // Base test fixture for chunked writer tests
 struct OrcChunkedWriterTest : public cudf::test::BaseFixture {
@@ -116,7 +116,7 @@ struct OrcChunkedWriterNumericTypeTest : public OrcChunkedWriterTest {
 };
 
 // Declare typed test cases
-TYPED_TEST_CASE(OrcChunkedWriterNumericTypeTest, SupportedTypes);
+TYPED_TEST_SUITE(OrcChunkedWriterNumericTypeTest, SupportedTypes);
 
 // Test fixture for reader tests
 struct OrcReaderTest : public cudf::test::BaseFixture {

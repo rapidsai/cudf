@@ -125,7 +125,7 @@ using Add_types =
 template <typename T>
 struct BinaryOperationCompiledTest_Add : public BinaryOperationCompiledTest<T> {
 };
-TYPED_TEST_CASE(BinaryOperationCompiledTest_Add, Add_types);
+TYPED_TEST_SUITE(BinaryOperationCompiledTest_Add, Add_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Add, Vector_Vector)
 {
@@ -149,7 +149,7 @@ using Sub_types =
 template <typename T>
 struct BinaryOperationCompiledTest_Sub : public BinaryOperationCompiledTest<T> {
 };
-TYPED_TEST_CASE(BinaryOperationCompiledTest_Sub, Sub_types);
+TYPED_TEST_SUITE(BinaryOperationCompiledTest_Sub, Sub_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Sub, Vector_Vector)
 {
@@ -172,7 +172,7 @@ using Mul_types =
 template <typename T>
 struct BinaryOperationCompiledTest_Mul : public BinaryOperationCompiledTest<T> {
 };
-TYPED_TEST_CASE(BinaryOperationCompiledTest_Mul, Mul_types);
+TYPED_TEST_SUITE(BinaryOperationCompiledTest_Mul, Mul_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Mul, Vector_Vector)
 {
@@ -197,7 +197,7 @@ using Div_types =
 template <typename T>
 struct BinaryOperationCompiledTest_Div : public BinaryOperationCompiledTest<T> {
 };
-TYPED_TEST_CASE(BinaryOperationCompiledTest_Div, Div_types);
+TYPED_TEST_SUITE(BinaryOperationCompiledTest_Div, Div_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Div, Vector_Vector)
 {
@@ -219,7 +219,7 @@ using TrueDiv_types =
 template <typename T>
 struct BinaryOperationCompiledTest_TrueDiv : public BinaryOperationCompiledTest<T> {
 };
-TYPED_TEST_CASE(BinaryOperationCompiledTest_TrueDiv, TrueDiv_types);
+TYPED_TEST_SUITE(BinaryOperationCompiledTest_TrueDiv, TrueDiv_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_TrueDiv, Vector_Vector)
 {
@@ -249,7 +249,7 @@ using Mod_types = cudf::test::Types<cudf::test::Types<int16_t, u_int64_t, u_int6
 template <typename T>
 struct BinaryOperationCompiledTest_Mod : public BinaryOperationCompiledTest<T> {
 };
-TYPED_TEST_CASE(BinaryOperationCompiledTest_Mod, Mod_types);
+TYPED_TEST_SUITE(BinaryOperationCompiledTest_Mod, Mod_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Mod, Vector_Vector)
 {
@@ -268,7 +268,7 @@ using PyMod_types = cudf::test::Types<cudf::test::Types<int16_t, u_int64_t, u_in
 template <typename T>
 struct BinaryOperationCompiledTest_PyMod : public BinaryOperationCompiledTest<T> {
 };
-TYPED_TEST_CASE(BinaryOperationCompiledTest_PyMod, PyMod_types);
+TYPED_TEST_SUITE(BinaryOperationCompiledTest_PyMod, PyMod_types);
 TYPED_TEST(BinaryOperationCompiledTest_PyMod, Vector_Vector)
 {
   this->template test<cudf::library::operation::PyMod>(cudf::binary_operator::PYMOD);
@@ -292,7 +292,7 @@ using Pow_types = cudf::test::Types<cudf::test::Types<double, int64_t, int64_t>,
 template <typename T>
 struct BinaryOperationCompiledTest_FloatOps : public BinaryOperationCompiledTest<T> {
 };
-TYPED_TEST_CASE(BinaryOperationCompiledTest_FloatOps, Pow_types);
+TYPED_TEST_SUITE(BinaryOperationCompiledTest_FloatOps, Pow_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_FloatOps, Pow_Vector_Vector)
 {
@@ -395,7 +395,7 @@ using Bit_types = cudf::test::Types<cudf::test::Types<int16_t, int8_t, int16_t>,
 template <typename T>
 struct BinaryOperationCompiledTest_Bit : public BinaryOperationCompiledTest<T> {
 };
-TYPED_TEST_CASE(BinaryOperationCompiledTest_Bit, Bit_types);
+TYPED_TEST_SUITE(BinaryOperationCompiledTest_Bit, Bit_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Bit, BitwiseAnd_Vector_Vector)
 {
@@ -444,7 +444,7 @@ using Logical_types = cudf::test::Types<cudf::test::Types<bool, int8_t, int16_t>
 template <typename T>
 struct BinaryOperationCompiledTest_Logical : public BinaryOperationCompiledTest<T> {
 };
-TYPED_TEST_CASE(BinaryOperationCompiledTest_Logical, Logical_types);
+TYPED_TEST_SUITE(BinaryOperationCompiledTest_Logical, Logical_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Logical, LogicalAnd_Vector_Vector)
 {
@@ -472,7 +472,7 @@ using Comparison_types =
 template <typename T>
 struct BinaryOperationCompiledTest_Comparison : public BinaryOperationCompiledTest<T> {
 };
-TYPED_TEST_CASE(BinaryOperationCompiledTest_Comparison, Comparison_types);
+TYPED_TEST_SUITE(BinaryOperationCompiledTest_Comparison, Comparison_types);
 
 TYPED_TEST(BinaryOperationCompiledTest_Comparison, Equal_Vector_Vector)
 {
@@ -526,7 +526,7 @@ using Null_types =
 template <typename T>
 struct BinaryOperationCompiledTest_NullOps : public BinaryOperationCompiledTest<T> {
 };
-TYPED_TEST_CASE(BinaryOperationCompiledTest_NullOps, Null_types);
+TYPED_TEST_SUITE(BinaryOperationCompiledTest_NullOps, Null_types);
 
 template <typename T>
 using column_wrapper = std::conditional_t<std::is_same_v<T, std::string>,

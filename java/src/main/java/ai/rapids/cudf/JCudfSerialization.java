@@ -1662,9 +1662,10 @@ public class JCudfSerialization {
   // COLUMN AND TABLE READ
   /////////////////////////////////////////////
 
-  private static HostColumnVector buildHostColumn(SerializedColumnHeader column,
-                                                  ArrayDeque<ColumnOffsets> columnOffsets,
-                                                  HostMemoryBuffer buffer) {
+  private static HostColumnVectorCore buildHostColumn(SerializedColumnHeader column,
+                                                      ArrayDeque<ColumnOffsets> columnOffsets,
+                                                      HostMemoryBuffer buffer,
+                                                      boolean isRootColumn) {
     ColumnOffsets offsetsInfo = columnOffsets.remove();
     SerializedColumnHeader[] children = column.getChildren();
     int numChildren = children != null ? children.length : 0;
@@ -1672,7 +1673,7 @@ public class JCudfSerialization {
     try {
       if (children != null) {
         for (SerializedColumnHeader child : children) {
-          childColumns.add(buildHostColumn(child, columnOffsets, buffer));
+          childColumns.add(buildHostColumn(child, columnOffsets, buffer, false));
         }
       }
       DType dtype = column.getType();
@@ -1693,9 +1694,17 @@ public class JCudfSerialization {
         long offsetsSize = rowCount > 0 ? (rowCount + 1) * Integer.BYTES : 0;
         offsetsBuffer = buffer.slice(offsetsInfo.offsets, offsetsSize);
       }
-      HostColumnVector result = new HostColumnVector(dtype, column.getRowCount(),
-              Optional.of(column.getNullCount()), dataBuffer, validityBuffer, offsetsBuffer,
-              childColumns);
+      HostColumnVectorCore result;
+      // Only creates HostColumnVector for root columns, since child columns are managed by their parents.
+      if (isRootColumn) {
+        result = new HostColumnVector(dtype, column.getRowCount(),
+            Optional.of(column.getNullCount()), dataBuffer, validityBuffer, offsetsBuffer,
+            childColumns);
+      } else {
+        result = new HostColumnVectorCore(dtype, column.getRowCount(),
+            Optional.of(column.getNullCount()), dataBuffer, validityBuffer, offsetsBuffer,
+            childColumns);
+      }
       childColumns = null;
       return result;
     } finally {
@@ -1832,7 +1841,7 @@ public class JCudfSerialization {
     try {
       for (int i = 0; i < numColumns; i++) {
         SerializedColumnHeader column = header.getColumnHeader(i);
-        columns[i] = buildHostColumn(column, columnOffsets, hostBuffer);
+        columns[i] = (HostColumnVector) buildHostColumn(column, columnOffsets, hostBuffer, true);
       }
       assert columnOffsets.isEmpty();
       succeeded = true;

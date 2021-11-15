@@ -175,3 +175,15 @@ def test_to_dlpack_cupy_1d_null(data_1d):
         cupy_host_array = cupy_array.get()
 
         assert_eq(cudf_host_array, cupy_host_array)
+
+
+def test_to_dlpack_mixed_dtypes():
+    df = cudf.DataFrame({"a": [1, 2, 3, 4], "b": [10.32, 0.4, -0.2, -1000.32]})
+
+    cudf_host_array = df.to_numpy()
+    dlt = df.to_dlpack()
+
+    cupy_array = cupy.fromDlpack(dlt)
+    cupy_host_array = cupy_array.get()
+
+    assert_eq(cudf_host_array, cupy_host_array)
