@@ -1166,11 +1166,10 @@ void writer::impl::write(table_view const& table)
   auto const global_rowgroup_base = static_cast<size_type>(md.row_groups.size());
 
   // Decide row group boundaries based on uncompressed data size
-  size_t rowgroup_size    = 0;
-  size_type num_rowgroups = 0;
-  for (size_type f = 0, global_r = global_rowgroup_base, rowgroup_start = 0; f < num_fragments;
-       f++) {
-    size_t fragment_data_size = 0;
+  auto rowgroup_size = 0ul;
+  auto num_rowgroups = 0;
+  for (auto f = 0, global_r = global_rowgroup_base, rowgroup_start = 0; f < num_fragments; f++) {
+    auto fragment_data_size = 0ul;
     // Replace with STL algorithm to transform and sum
     for (auto i = 0; i < num_columns; i++) {
       fragment_data_size += fragments[i][f].fragment_data_size;
@@ -1207,13 +1206,13 @@ void writer::impl::write(table_view const& table)
   // Initialize row groups and column chunks
   auto const num_chunks = num_rowgroups * num_columns;
   hostdevice_2dvector<gpu::EncColumnChunk> chunks(num_rowgroups, num_columns, stream);
-  for (size_type r = 0, global_r = global_rowgroup_base, f = 0, start_row = 0; r < num_rowgroups;
+  for (auto r = 0, global_r = global_rowgroup_base, f = 0, start_row = 0; r < num_rowgroups;
        r++, global_r++) {
     size_type const fragments_in_chunk =
       (md.row_groups[global_r].num_rows + max_page_fragment_size - 1) / max_page_fragment_size;
     md.row_groups[global_r].total_byte_size = 0;
     md.row_groups[global_r].columns.resize(num_columns);
-    for (size_type i = 0; i < num_columns; i++) {
+    for (auto i = 0; i < num_columns; i++) {
       gpu::EncColumnChunk* ck = &chunks[r][i];
 
       *ck             = {};
@@ -1245,8 +1244,8 @@ void writer::impl::write(table_view const& table)
   }
 
   auto dict_info_owner = build_chunk_dictionaries(chunks, col_desc, num_rows, stream);
-  for (size_type rg = 0, global_rg = global_rowgroup_base; rg < num_rowgroups; rg++, global_rg++) {
-    for (size_type col = 0; col < num_columns; col++) {
+  for (auto rg = 0, global_rg = global_rowgroup_base; rg < num_rowgroups; rg++, global_rg++) {
+    for (auto col = 0; col < num_columns; col++) {
       if (chunks.host_view()[rg][col].use_dictionary) {
         md.row_groups[global_rg].columns[col].meta_data.encodings.push_back(
           Encoding::PLAIN_DICTIONARY);
@@ -1332,11 +1331,11 @@ void writer::impl::write(table_view const& table)
 
   // This contains stats for both the pages and the rowgroups. TODO: make them separate.
   rmm::device_uvector<statistics_chunk> page_stats(num_stats_bfr, stream);
-  for (uint32_t b = 0, r = 0; b < (uint32_t)batch_list.size(); b++) {
-    uint8_t* bfr   = static_cast<uint8_t*>(uncomp_bfr.data());
-    uint8_t* bfr_c = static_cast<uint8_t*>(comp_bfr.data());
-    for (size_type j = 0; j < batch_list[b]; j++, r++) {
-      for (size_type i = 0; i < num_columns; i++) {
+  for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
+    auto bfr   = static_cast<uint8_t*>(uncomp_bfr.data());
+    auto bfr_c = static_cast<uint8_t*>(comp_bfr.data());
+    for (auto j = 0; j < batch_list[b]; j++, r++) {
+      for (auto i = 0; i < num_columns; i++) {
         gpu::EncColumnChunk* ck = &chunks[r][i];
         ck->uncompressed_bfr    = bfr;
         ck->compressed_bfr      = bfr_c;
@@ -1361,7 +1360,7 @@ void writer::impl::write(table_view const& table)
   pinned_buffer<uint8_t> host_bfr{nullptr, cudaFreeHost};
 
   // Encode row groups in batches
-  for (size_type b = 0, r = 0, global_r = global_rowgroup_base;
+  for (auto b = 0, r = 0, global_r = global_rowgroup_base;
        b < static_cast<size_type>(batch_list.size());
        b++) {
     // Count pages in this batch
