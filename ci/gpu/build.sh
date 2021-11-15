@@ -86,8 +86,8 @@ gpuci_mamba_retry install -y \
                   "ucx-py=0.23.*"
 
 # https://docs.rapids.ai/maintainers/depmgmt/
-gpuci_mamba_retry remove --force rapids-build-env rapids-notebook-env
-gpuci_mamba_retry install -y "librdkafka=1.7.0" "gtest" "gmock"
+gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
+gpuci_conda_retry install -y "librdkafka=1.7.0"
 
 
 gpuci_logger "Check compiler versions"
