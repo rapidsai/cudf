@@ -15,7 +15,6 @@
  */
 #include <cudf/detail/copy_range.cuh>
 #include <cudf/detail/gather.cuh>
-#include <cudf/detail/gather.hpp>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
