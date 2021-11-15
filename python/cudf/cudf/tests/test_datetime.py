@@ -1452,7 +1452,14 @@ date_range_test_dates_end = [
 date_range_test_periods = [1, 10, 100]
 date_range_test_freq = [
     {"months": 3, "years": 1},
-    {"hours": 10, "days": 57, "nanoseconds": 3},
+    pytest.param(
+        {"hours": 10, "days": 57, "nanoseconds": 3},
+        marks=pytest.mark.xfail(
+            True,
+            reason="Pandas ignoring nanoseconds component. "
+            "https://github.com/pandas-dev/pandas/issues/44393",
+        ),
+    ),
     "83D",
     "17h",
     "-680T",
@@ -1541,6 +1548,19 @@ def test_date_range_end_freq_periods(end, freq, periods):
     expect = pd.date_range(end=end, periods=periods, freq=_pfreq, name="a")
     got = cudf.date_range(end=end, periods=periods, freq=_gfreq, name="a")
 
+    np.testing.assert_allclose(
+        expect.to_numpy().astype("int64"),
+        got.to_pandas().to_numpy().astype("int64"),
+    )
+
+
+def test_date_range_freq_does_not_divide_range():
+    expect = pd.date_range(
+        "2001-01-01 00:00:00.000000", "2001-01-01 00:00:00.000010", freq="3us"
+    )
+    got = cudf.date_range(
+        "2001-01-01 00:00:00.000000", "2001-01-01 00:00:00.000010", freq="3us"
+    )
     np.testing.assert_allclose(
         expect.to_numpy().astype("int64"),
         got.to_pandas().to_numpy().astype("int64"),

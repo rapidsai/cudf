@@ -3649,19 +3649,6 @@ def test_empty_dataframe_any(axis):
     assert_eq(got, expected, check_index_type=False)
 
 
-@pytest.mark.parametrize("indexed", [False, True])
-def test_dataframe_sizeof(indexed):
-    rows = int(1e6)
-    index = list(i for i in range(rows)) if indexed else None
-
-    gdf = cudf.DataFrame({"A": [8] * rows, "B": [32] * rows}, index=index)
-
-    for c in gdf._data.columns:
-        assert gdf._index.__sizeof__() == gdf._index.__sizeof__()
-    cols_sizeof = sum(c.__sizeof__() for c in gdf._data.columns)
-    assert gdf.__sizeof__() == (gdf._index.__sizeof__() + cols_sizeof)
-
-
 @pytest.mark.parametrize("a", [[], ["123"]])
 @pytest.mark.parametrize("b", ["123", ["123"]])
 @pytest.mark.parametrize(
@@ -5394,8 +5381,8 @@ def test_memory_usage_cat():
     gdf = cudf.from_pandas(df)
 
     expected = (
-        gdf.B._column.categories.__sizeof__()
-        + gdf.B._column.codes.__sizeof__()
+        gdf.B._column.categories.memory_usage()
+        + gdf.B._column.codes.memory_usage()
     )
 
     # Check cat column
@@ -5408,8 +5395,8 @@ def test_memory_usage_cat():
 def test_memory_usage_list():
     df = cudf.DataFrame({"A": [[0, 1, 2, 3], [4, 5, 6], [7, 8], [9]]})
     expected = (
-        df.A._column.offsets._memory_usage()
-        + df.A._column.elements._memory_usage()
+        df.A._column.offsets.memory_usage()
+        + df.A._column.elements.memory_usage()
     )
     assert expected == df.A.memory_usage()
 
