@@ -1421,7 +1421,7 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
       }
     }
     if (col.orc_kind() == LIST or col.orc_kind() == MAP) {
-      // Need a new pushdown mask unless both the parent and current colmn are not nullable
+      // Need a new pushdown mask unless both the parent and current column are not nullable
       auto const child_col = orc_table.column(col.child_begin()[0]);
       // pushdown mask applies to child column(s); use the child column size
       pd_masks.emplace_back(num_bitmask_words(child_col.size()), stream);
