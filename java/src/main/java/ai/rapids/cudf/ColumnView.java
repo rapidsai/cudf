@@ -353,6 +353,17 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * TRUE for any entry that is a fixed-point, and FALSE if its not a fixed-point.
    * A null will be returned for null entries.
    *
+   * The sign and the exponent is optional. The decimal point may only appear once.
+   * The integer component must fit within the size limits of the underlying fixed-point
+   * storage type. The value of the integer component is based on the scale of the target
+   * decimalType.
+   *
+   * Example:
+   * vec = ["A", "nan", "Inf", "-Inf", "Infinity", "infinity", "2.1474", "112.383", "-2.14748",
+   *        "NULL", "null", null, "1.2", "1.2e-4", "0.00012"]
+   * vec.isFixedPoint() = [false, false, false, false, false, false, true, true, true, false, false,
+   *                       null, true, true, true]
+   *
    * @param decimalType the data type that should be used for bounds checking. Note that only
    *                Decimal types (fixed-point) are allowed.
    * @return Boolean vector
