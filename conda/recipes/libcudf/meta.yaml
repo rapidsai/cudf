@@ -38,7 +38,7 @@ requirements:
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
-    - arrow-cpp 5.0.0 *cuda
+    - arrow-cpp 6.0.0 *cuda
     - arrow-cpp-proc * cuda
     - dlpack>=0.5,<0.6.0a0
   run:

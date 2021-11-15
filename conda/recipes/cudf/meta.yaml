@@ -31,7 +31,7 @@ requirements:
     - setuptools
     - numba >=0.53.1
     - dlpack>=0.5,<0.6.0a0
-    - pyarrow 5.0.0 *cuda
+    - pyarrow 6.0.0 *cuda
     - libcudf {{ version }}
     - rmm {{ minor_version }}
     - cudatoolkit {{ cuda_version }}
