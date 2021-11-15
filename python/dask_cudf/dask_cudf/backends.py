@@ -26,6 +26,7 @@ from dask.dataframe.utils import (
     is_scalar,
     make_meta_obj,
 )
+from dask.sizeof import sizeof as sizeof_dispatch
 
 import cudf
 from cudf.api.types import is_string_dtype
@@ -345,3 +346,13 @@ def group_split_cudf(df, c, k, ignore_index=False):
             ),
         )
     )
+
+
+@sizeof_dispatch.register(cudf.DataFrame)
+def sizeof_cudf_dataframe(df):
+    return int(df.memory_usage().sum())
+
+
+@sizeof_dispatch.register((cudf.Series, cudf.BaseIndex))
+def sizeof_cudf_series_index(obj):
+    return obj.memory_usage()
