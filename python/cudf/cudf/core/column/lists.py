@@ -42,41 +42,34 @@ class ListColumn(ColumnBase):
             children=children,
         )
 
-    def __sizeof__(self):
-        if self._cached_sizeof is None:
-            n = 0
-            if self.nullable:
-                n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
-                    self.size
-                )
+    def memory_usage(self):
+        n = 0
+        if self.nullable:
+            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
 
-            child0_size = (self.size + 1) * self.base_children[
-                0
-            ].dtype.itemsize
-            current_base_child = self.base_children[1]
-            current_offset = self.offset
+        child0_size = (self.size + 1) * self.base_children[0].dtype.itemsize
+        current_base_child = self.base_children[1]
+        current_offset = self.offset
+        n += child0_size
+        while type(current_base_child) is ListColumn:
+            child0_size = (
+                current_base_child.size + 1 - current_offset
+            ) * current_base_child.base_children[0].dtype.itemsize
+            current_offset = current_base_child.base_children[0][
+                current_offset
+            ]
             n += child0_size
-            while type(current_base_child) is ListColumn:
-                child0_size = (
-                    current_base_child.size + 1 - current_offset
-                ) * current_base_child.base_children[0].dtype.itemsize
-                current_offset = current_base_child.base_children[0][
-                    current_offset
-                ]
-                n += child0_size
-                current_base_child = current_base_child.base_children[1]
+            current_base_child = current_base_child.base_children[1]
 
-            n += (
-                current_base_child.size - current_offset
-            ) * current_base_child.dtype.itemsize
+        n += (
+            current_base_child.size - current_offset
+        ) * current_base_child.dtype.itemsize
 
-            if current_base_child.nullable:
-                n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
-                    current_base_child.size
-                )
-            self._cached_sizeof = n
-
-        return self._cached_sizeof
+        if current_base_child.nullable:
+            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
+                current_base_child.size
+            )
+        return n
 
     def __setitem__(self, key, value):
         if isinstance(value, list):
