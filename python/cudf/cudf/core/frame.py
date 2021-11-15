@@ -47,7 +47,7 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import merge
-from cudf.core.udf.pipeline import compile_or_get
+from cudf.core.udf.pipeline import compile_or_get, supported_cols_from_frame
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
@@ -464,10 +464,6 @@ class Frame:
         if other is None or len(self) != len(other):
             return False
 
-        for self_name, other_name in zip(self._data.names, other._data.names):
-            if self_name != other_name:
-                return False
-
         # check data:
         for self_col, other_col in zip(
             self._data.values(), other._data.values()
@@ -521,7 +517,9 @@ class Frame:
             data, columns=data.to_pandas_index(), index=self.index
         )
 
-    def _gather(self, gather_map, keep_index=True, nullify=False):
+    def _gather(
+        self, gather_map, keep_index=True, nullify=False, check_bounds=True
+    ):
         if not is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
         result = self.__class__._from_data(
@@ -530,6 +528,7 @@ class Frame:
                 as_column(gather_map),
                 keep_index=keep_index,
                 nullify=nullify,
+                check_bounds=check_bounds,
             )
         )
 
@@ -1358,6 +1357,12 @@ class Frame:
 
         return self._mimic_inplace(result, inplace=inplace)
 
+    def ffill(self):
+        return self.fillna(method="ffill")
+
+    def bfill(self):
+        return self.fillna(method="bfill")
+
     def _drop_na_rows(
         self, how="any", subset=None, thresh=None, drop_nan=False
     ):
@@ -1570,7 +1575,10 @@ class Frame:
         ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
         launch_args = [(ans_col, ans_mask), len(self)]
         offsets = []
-        for col in self._data.values():
+
+        # if compile_or_get succeeds, it is safe to create a kernel that only
+        # consumes the columns that are of supported dtype
+        for col in supported_cols_from_frame(self).values():
             data = col.data
             mask = col.mask
             if mask is None:
@@ -1582,9 +1590,9 @@ class Frame:
         launch_args += list(args)
         kernel.forall(len(self))(*launch_args)
 
-        result = cudf.Series(ans_col).set_mask(
-            libcudf.transform.bools_to_mask(ans_mask)
-        )
+        col = as_column(ans_col)
+        col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
+        result = cudf.Series._from_data({None: col}, self._index)
 
         return result
 
