@@ -533,7 +533,9 @@ class parquet_writer_options {
    */
   void set_row_group_size_bytes(size_t size_bytes)
   {
-    CUDF_EXPECTS(size_bytes >= 512 * 1024, "The maximum row group size must be at least 512KB.");
+    CUDF_EXPECTS(
+      size_bytes >= 512 * 1024,
+      "The maximum row group size cannot be smaller than the page size, which is 512KB.");
     _row_group_size_bytes = size_bytes;
   }
 
@@ -542,7 +544,9 @@ class parquet_writer_options {
    */
   void set_row_group_size_rows(size_type size_rows)
   {
-    CUDF_EXPECTS(size_rows >= 5000, "The maximum row group size must be at least 5000 rows.");
+    CUDF_EXPECTS(
+      size_rows >= 5000,
+      "The maximum row group size cannot be smaller than the page size, which is 5000 rows.");
     _row_group_size_rows = size_rows;
   }
 };
@@ -810,7 +814,9 @@ class chunked_parquet_writer_options {
    */
   void set_row_group_size_bytes(size_t size_bytes)
   {
-    CUDF_EXPECTS(size_bytes >= 512 * 1024, "The maximum row group size must be at least 512KB.");
+    CUDF_EXPECTS(
+      size_bytes >= 512 * 1024,
+      "The maximum row group size cannot be smaller than the page size, which is 512KB.");
     _row_group_size_bytes = size_bytes;
   }
 
@@ -819,7 +825,9 @@ class chunked_parquet_writer_options {
    */
   void set_row_group_size_rows(size_type size_rows)
   {
-    CUDF_EXPECTS(size_rows >= 5000, "The maximum row group size must be at least 5000 rows.");
+    CUDF_EXPECTS(
+      size_rows >= 5000,
+      "The maximum row group size cannot be smaller than the page size, which is 5000 rows.");
     _row_group_size_rows = size_rows;
   }
 
