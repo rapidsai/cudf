@@ -59,6 +59,7 @@ from cudf.core.indexed_frame import (
     _get_label_range_or_mask,
     _indices_from_labels,
 )
+from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
@@ -3811,13 +3812,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "groupby() requires either by or level to be specified."
             )
 
-        return DataFrameGroupBy(
-            self,
-            by=by,
-            level=level,
-            as_index=as_index,
-            dropna=dropna,
-            sort=sort,
+        return (
+            DataFrameResampler(self, by=by)
+            if isinstance(by, cudf.Grouper) and by.freq
+            else DataFrameGroupBy(
+                self,
+                by=by,
+                level=level,
+                as_index=as_index,
+                dropna=dropna,
+                sort=sort,
+            )
         )
 
     def query(self, expr, local_dict=None):
@@ -4721,7 +4726,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         b     object
         dtype: object
         """
-
         out_data = {}
         out_index = self.index.to_pandas()
 
