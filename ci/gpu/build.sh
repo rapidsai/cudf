@@ -87,7 +87,7 @@ gpuci_mamba_retry install -y \
 
 # https://docs.rapids.ai/maintainers/depmgmt/
 gpuci_mamba_retry remove --force rapids-build-env rapids-notebook-env
-gpuci_mamba_retry install -y "librdkafka=1.7.0"
+gpuci_mamba_retry install -y "librdkafka=1.7.0" "gtest" "gmock"
 
 
 gpuci_logger "Check compiler versions"
@@ -175,8 +175,9 @@ else
     gpuci_logger "Check GPU usage"
     nvidia-smi
 
-    gpuci_logger "Debug CI"
+    gpuci_logger "Debug CI FLASH"
     env
+    ls $CONDA_PREFIX/lib
     readelf -d $CONDA_PREFIX/lib/libgtest_main.so
     readelf -d $CONDA_PREFIX/lib/libgmock_main.so
 
