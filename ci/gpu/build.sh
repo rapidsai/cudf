@@ -143,7 +143,14 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
         gpuci_logger "Check GPU usage"
         nvidia-smi
 
-        gpuci_logger "GoogleTests"
+        export LIB_BUILD_DIR="$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build"
+        export LD_LIBRARY_PATH="$LIB_BUILD_DIR:$CONDA_PREFIX/lib:$LD_LIBRARY_PATH"
+        gpuci_logger "Debug CI"
+        env
+        readelf -d $CONDA_PREFIX/lib/libgtest_main.so
+        readelf -d $CONDA_PREFIX/lib/libgmock_main.so
+
+        gpuci_logger "GoogleTests-NoFlash"
         set -x
         cd "$WORKSPACE/cpp/build"
 
@@ -166,7 +173,12 @@ else
     gpuci_logger "Check GPU usage"
     nvidia-smi
 
-    gpuci_logger "GoogleTests"
+    gpuci_logger "Debug CI"
+    env
+    readelf -d $CONDA_PREFIX/lib/libgtest_main.so
+    readelf -d $CONDA_PREFIX/lib/libgmock_main.so
+
+    gpuci_logger "GoogleTests Flash"
     set -x
     cd $LIB_BUILD_DIR
 
