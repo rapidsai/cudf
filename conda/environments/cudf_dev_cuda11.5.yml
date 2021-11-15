@@ -66,3 +66,4 @@ dependencies:
       - git+https://github.com/dask/distributed.git@main
       - git+https://github.com/python-streamz/streamz.git@master
       - pyorc
+  - ptxcompiler

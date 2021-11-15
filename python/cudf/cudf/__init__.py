@@ -101,9 +101,15 @@ from cudf.io import (
 from cudf.core.tools.datetimes import date_range
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import set_allocator
+from ptxcompiler.patch import patch_numba_codegen_if_needed
 
 cuda.set_memory_manager(rmm.RMMNumbaManager)
 cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
+
+# Patch Numba to support CUDA enhanced compatibility.
+# See https://github.com/rapidsai/ptxcompiler for
+# details.
+patch_numba_codegen_if_needed()
 
 try:
     # Numba 0.54: Disable low occupancy warnings
@@ -112,6 +118,7 @@ except AttributeError:
     # Numba < 0.54: No occupancy warnings
     pass
 del numba_config
+
 
 __version__ = get_versions()["version"]
 del get_versions
