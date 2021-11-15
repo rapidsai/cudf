@@ -1209,7 +1209,7 @@ void writer::impl::write(table_view const& table)
   hostdevice_2dvector<gpu::EncColumnChunk> chunks(num_rowgroups, num_columns, stream);
   for (size_type r = 0, global_r = global_rowgroup_base, f = 0, start_row = 0; r < num_rowgroups;
        r++, global_r++) {
-    size_type fragments_in_chunk =
+    size_type const fragments_in_chunk =
       (md.row_groups[global_r].num_rows + max_page_fragment_size - 1) / max_page_fragment_size;
     md.row_groups[global_r].total_byte_size = 0;
     md.row_groups[global_r].columns.resize(num_columns);
