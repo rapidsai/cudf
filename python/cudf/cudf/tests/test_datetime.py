@@ -171,7 +171,7 @@ def test_dt_ops(data):
     assert_eq(pd_data > pd_data, gdf_data > gdf_data)
 
 
-# libgdf doesn't respect timezones
+# licudf doesn't respect timezones
 @pytest.mark.parametrize("data", [data1()])
 @pytest.mark.parametrize("field", fields)
 def test_dt_series(data, field):

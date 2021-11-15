@@ -970,7 +970,7 @@ class MultiIndex(Frame, BaseIndex):
 
         source_data = [o.to_frame(index=False) for o in objs]
 
-        # TODO: Verify if this is really necesary or if we can rely on
+        # TODO: Verify if this is really necessary or if we can rely on
         # DataFrame._concat.
         if len(source_data) > 1:
             colnames = source_data[0].columns

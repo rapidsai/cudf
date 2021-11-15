@@ -18,7 +18,7 @@ from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
 # The three functions below return the quantiles [25%, 50%, 75%]
-# respectively, which are called in the describe() method to ouput
+# respectively, which are called in the describe() method to output
 # the summary stats of a GroupBy object
 def _quantile_25(x):
     return x.quantile(0.25)
