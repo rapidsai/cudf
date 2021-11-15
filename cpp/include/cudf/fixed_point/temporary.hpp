@@ -72,6 +72,7 @@ CUDA_HOST_DEVICE_CALLABLE auto max(T lhs, T rhs)
 {
   return lhs > rhs ? lhs : rhs;
 }
+
 template <typename BaseType>
 constexpr auto exp10(int32_t exponent)
 {

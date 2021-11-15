@@ -3,6 +3,7 @@
 # cython: boundscheck = False
 
 import errno
+import io
 import os
 from collections import OrderedDict
 
@@ -211,7 +212,10 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
             range_index_meta = index_col[0]
             if row_groups is not None:
                 per_file_metadata = [
-                    pa.parquet.read_metadata(s) for s in (
+                    pa.parquet.read_metadata(
+                        # Pyarrow cannot read directly from bytes
+                        io.BytesIO(s) if isinstance(s, bytes) else s
+                    ) for s in (
                         pa_buffers or filepaths_or_buffers
                     )
                 ]
