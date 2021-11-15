@@ -549,9 +549,12 @@ class Frame:
             data, columns=data.to_pandas_index(), index=self.index
         )
 
-    def _gather(self, gather_map, keep_index=True, nullify=False, check_bounds=True):
+    def _gather(
+        self, gather_map, keep_index=True, nullify=False, check_bounds=True
+    ):
         """Gather rows of frame specified by indices in `gather_map`.
 
+        Skip bounds checking if check_bounds is False.
         Set rows to null for all out of bound indices if nullify is `True`.
         """
         # TODO: `keep_index` argument is to be removed.
@@ -562,7 +565,9 @@ class Frame:
         if not is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
 
-        if check_bounds and not nullify and not _gather_map_is_valid(gather_map, len(self)):
+        if not _gather_map_is_valid(
+            gather_map, len(self), check_bounds, nullify
+        ):
             raise IndexError("Gather map index is out of bounds.")
 
         result = self.__class__._from_columns(

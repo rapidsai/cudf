@@ -686,9 +686,12 @@ class ColumnBase(Column, Serializable):
     def median(self, skipna: bool = None) -> ScalarLike:
         raise TypeError(f"cannot perform median with type {self.dtype}")
 
-    def take(self: T, indices: ColumnBase, nullify: bool = False) -> T:
+    def take(
+        self: T, indices: ColumnBase, nullify: bool = False, check_bounds=True
+    ) -> T:
         """Return Column by taking values from the corresponding *indices*.
 
+        Skip bounds checking if check_bounds is False.
         Set rows to null for all out of bound indices if nullify is `True`.
         """
         # Handle zero size
@@ -699,7 +702,7 @@ class ColumnBase(Column, Serializable):
         # be done by the caller. This check will be removed in future release.
         if not is_integer_dtype(indices.dtype):
             indices = indices.astype("int32")
-        if not nullify and not _gather_map_is_valid(indices, len(self)):
+        if not _gather_map_is_valid(indices, len(self), check_bounds, nullify):
             raise IndexError("Gather map index is out of bounds.")
 
         return libcudf.copying.gather([self], indices, nullify=nullify)[
