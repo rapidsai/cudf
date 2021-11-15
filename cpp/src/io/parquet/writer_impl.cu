@@ -1277,7 +1277,7 @@ void writer::impl::write(table_view const& table)
   // Initialize batches of rowgroups to encode (mainly to limit peak memory usage)
   std::vector<size_type> batch_list;
   size_type num_pages          = 0;
-  size_t max_bytes_in_batch    = 1024 * 1024 * 1024;  // 1GB - TBD: Tune this
+  size_t max_bytes_in_batch    = 1024 * 1024 * 1024;  // 1GB - TODO: Tune this
   size_t max_uncomp_bfr_size   = 0;
   size_t max_comp_bfr_size     = 0;
   size_t max_chunk_bfr_size    = 0;
@@ -1336,7 +1336,7 @@ void writer::impl::write(table_view const& table)
     uint8_t* bfr   = static_cast<uint8_t*>(uncomp_bfr.data());
     uint8_t* bfr_c = static_cast<uint8_t*>(comp_bfr.data());
     for (size_type j = 0; j < batch_list[b]; j++, r++) {
-      for (int i = 0; i < num_columns; i++) {
+      for (size_type i = 0; i < num_columns; i++) {
         gpu::EncColumnChunk* ck = &chunks[r][i];
         ck->uncompressed_bfr    = bfr;
         ck->compressed_bfr      = bfr_c;
