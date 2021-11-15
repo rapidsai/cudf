@@ -845,19 +845,13 @@ class GroupBy(Serializable):
         # i.e (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
         _cols = self.grouping.values.columns.tolist()
 
-        if self._by:
-            new_df = cudf.DataFrame._from_data(self.grouping.keys._data)
-            new_df._data.multiindex = False
-        else:
-            new_df = cudf.DataFrame._from_data(
-                {}, index=_index_from_data(self.grouping.keys._data)
-            )
+        new_df_data = {}
 
         for i in tuple(itertools.combinations_with_replacement(_cols, 2)):
-            new_df._data[i] = cudf.DataFrame._from_data(
+            new_df_data[i] = cudf.DataFrame._from_data(
                 {"x": self.obj._data[i[0]], "y": self.obj._data[i[1]]}
             ).to_struct()
-        new_gb = new_df.groupby(by=self._by, level=self._level)
+        new_gb = new_gb = cudf.DataFrame._from_data(new_df_data).groupby(by=self.grouping.keys)
 
         try:
             gb_corr = new_gb.agg(lambda x: x.corr(method, min_periods))
