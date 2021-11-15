@@ -634,16 +634,18 @@ class Frame:
         # Early exit for an empty Frame.
         ncol = self._num_columns
         if ncol == 0:
-            return make_empty_matrix(shape=(0, 0), dtype=np.dtype("float64"),
-                                     order='F')
+            return make_empty_matrix(
+                shape=(0, 0), dtype=np.dtype("float64"), order="F"
+            )
 
         if dtype is None:
             dtype = find_common_type(
                 [col.dtype for col in self._data.values()]
             )
 
-        matrix = make_empty_matrix(shape=(len(self), ncol), dtype=dtype,
-                                   order='F')
+        matrix = make_empty_matrix(
+            shape=(len(self), ncol), dtype=dtype, order="F"
+        )
         for i, col in enumerate(self._data.values()):
             # TODO: col.values may fail if there is nullable data or an
             # unsupported dtype. We may want to catch and provide a more
