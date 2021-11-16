@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <groupby/sort/group_util.cuh>
+#include <reductions/arg_minmax_util.cuh>
 
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/reduction.cuh>
