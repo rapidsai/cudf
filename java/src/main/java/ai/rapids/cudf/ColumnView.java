@@ -398,12 +398,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * for null entries.
    *
    * @param intType the data type that should be used for bounds checking. Note that only
-   *                integer types are allowed.
+   *                integer types are allowed including (int8, int16, int32, int64).
    * @return Boolean vector
    */
   public final ColumnVector isInteger(DType intType) {
     assert type.equals(DType.STRING);
-    assert intType.isBackedByInt() || intType.isBackedByLong();
+    assert intType.isBackedByInt() || intType.isBackedByLong() || intType.isBackedByByte()
+        || intType.isBackedByShort();
     return new ColumnVector(isIntegerWithType(getNativeView(),
         intType.getTypeId().getNativeId(), intType.getScale()));
   }
