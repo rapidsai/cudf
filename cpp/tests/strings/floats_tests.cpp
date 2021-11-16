@@ -71,7 +71,7 @@ TEST_F(StringsConvertTest, ToFloats32)
     "-0.12",   ".25",          "-.002",    "",
     "-0.0",    "1.2e4",        "NAN",      "abc123",
     "123abc",  "456e",         "-1.78e+5", "-122.33644782123456789",
-    "12e+309", "3.4028236E38", "INF",      "INFINITY"};
+    "12e+309", "3.4028236E38", "INF",      "Infinity"};
   cudf::test::strings_column_wrapper strings(
     h_strings.begin(),
     h_strings.end(),

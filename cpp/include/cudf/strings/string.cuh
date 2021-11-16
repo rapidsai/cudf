@@ -61,7 +61,9 @@ inline __device__ bool is_integer(string_view const& d_str)
  */
 inline __device__ bool is_nan_str(string_view const& d_str)
 {
-  return d_str.compare("NAN", 3) == 0 || d_str.compare("NaN", 3) == 0;
+  auto const ptr = d_str.data();
+  return (d_str.size_bytes() == 3) && (ptr[0] == 'N' || ptr[0] == 'n') &&
+         (ptr[1] == 'A' || ptr[1] == 'a') && (ptr[2] == 'N' || ptr[2] == 'n');
 }
 
 /**
@@ -73,8 +75,15 @@ inline __device__ bool is_nan_str(string_view const& d_str)
  */
 inline __device__ bool is_inf_str(string_view const& d_str)
 {
-  return d_str.compare("INF", 3) == 0 || d_str.compare("INFINITY", 8) == 0 ||
-         d_str.compare("Inf", 3) == 0;
+  auto const ptr  = d_str.data();
+  auto const size = d_str.size_bytes();
+  if ((size < 3) || (size > 8) || (ptr[0] != 'I' && ptr[0] != 'i') ||
+      (ptr[1] != 'N' && ptr[1] != 'n') || (ptr[2] != 'F' && ptr[2] != 'f')) {
+    return false;
+  }
+  return (size == 3) || (size == 8 && (ptr[3] == 'I' || ptr[3] == 'i') &&
+                         (ptr[4] == 'N' || ptr[4] == 'n') && (ptr[5] == 'I' || ptr[5] == 'i') &&
+                         (ptr[6] == 'T' || ptr[6] == 't') && (ptr[7] == 'Y' || ptr[7] == 'y'));
 }
 
 /**
