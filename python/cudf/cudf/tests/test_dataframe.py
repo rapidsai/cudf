@@ -5406,9 +5406,8 @@ def test_memory_usage_list():
     assert expected == df.A.memory_usage()
 
 
-@pytest.mark.xfail
-def test_memory_usage_multi():
-    rows = int(100)
+@pytest.mark.parametrize("rows", [10, 100])
+def test_memory_usage_multi(rows):
     deep = True
     df = pd.DataFrame(
         {
@@ -5418,7 +5417,6 @@ def test_memory_usage_multi():
         }
     ).set_index(["B", "C"])
     gdf = cudf.from_pandas(df)
-
     # Assume MultiIndex memory footprint is just that
     # of the underlying columns, levels, and codes
     expect = rows * 16  # Source Columns
