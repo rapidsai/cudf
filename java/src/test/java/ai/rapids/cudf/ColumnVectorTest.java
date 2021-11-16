@@ -4777,13 +4777,14 @@ public class ColumnVectorTest extends CudfTestBase {
 
   @Test
   void testIsFixedPoint() {
-    String[] decimalStrings = {"123", "-456", "", "1.2.3", "+17E30", "12.34", ".789", "-0.005"};
+    String[] decimalStrings = {"A", "nan", "Inf", "-Inf", "Infinity", "infinity",
+        "2.1474", "112.383", "-2.14748", "NULL", "null", null, "1.2", "1.2e-4", "0.00012"};
 
     DType dt = DType.create(DType.DTypeEnum.DECIMAL32, -3);
     try (ColumnVector decStringCV = ColumnVector.fromStrings(decimalStrings);
          ColumnVector isFixedPoint = decStringCV.isFixedPoint(dt);
-         ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, false, false, true,
-             true, true, true)) {
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, false, false
+             , false, true, true, true, false, false, null, true, true, true)) {
       assertColumnsAreEqual(expected, isFixedPoint);
     }
   }
