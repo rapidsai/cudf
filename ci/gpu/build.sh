@@ -176,17 +176,23 @@ else
         ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
     done
 
-    if [[ "$COMPUTE_SANITIZER_ENABLE" == "1" ]]; then
-        gpuci_logger "Memcheck on GoogleTests with rmm_mode=cuda"
-        export GTEST_CUDF_RMM_MODE=cuda
-        COMPUTE_SANITIZER_CMD="compute-sanitizer --tool memcheck"
-        for gt in gtests/* ; do
-            test_name=$(basename ${gt})
-            echo "Running GoogleTest $test_name"
-            ${COMPUTE_SANITIZER_CMD} ${gt} --gtest_output=xml:"$WORKSPACE/test-results/" | tee "$WORKSPACE/test-results/${test_name}.cs.log"
-        done
-        unset GTEST_CUDF_RMM_MODE
-        python ../scripts/compute-sanitizer-to-junit-xml.py -glob "$WORKSPACE/test-results/*.cs.log" -out "$WORKSPACE/test-results/cudamemcheck-junit.xml"
+    ################################################################################
+    # MEMCHECK - Run compute-sanitizer on GoogleTest (only in nightly builds)
+    ################################################################################
+    if [[ "$BUILD_MODE" == "branch" && "$BUILD_TYPE" == "gpu" ]]; then
+        if [[ "$COMPUTE_SANITIZER_ENABLE" == "1" ]]; then
+            gpuci_logger "Memcheck on GoogleTests with rmm_mode=cuda"
+            export GTEST_CUDF_RMM_MODE=cuda
+            COMPUTE_SANITIZER_CMD="compute-sanitizer --tool memcheck"
+            mkdir -p "$WORKSPACE/test-results/"
+            for gt in gtests/*; do
+                test_name=$(basename ${gt})
+                echo "Running GoogleTest $test_name"
+                ${COMPUTE_SANITIZER_CMD} ${gt} --gtest_output=xml:"$WORKSPACE/test-results/" | tee "$WORKSPACE/test-results/${test_name}.cs.log"
+            done
+            unset GTEST_CUDF_RMM_MODE
+            python ../scripts/compute-sanitizer-to-junit-xml.py -glob "$WORKSPACE/test-results/*.cs.log" -out "$WORKSPACE/test-results/cudamemcheck-junit.xml"
+        fi
     fi
 
     CUDF_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf-*.tar.bz2"`
