@@ -296,6 +296,7 @@ struct same_element_type_dispatcher {
 
     auto constexpr is_min_op = std::is_same_v<Op, cudf::reduction::op::min>;
 
+    // We will do reduction to find the ARGMIN/ARGMAX index, then return the element at that index.
     // When finding ARGMIN, we need to consider nulls as larger than non-null elements.
     // Thing is opposite for ARGMAX.
     auto constexpr null_precedence = is_min_op ? cudf::null_order::AFTER : cudf::null_order::BEFORE;
