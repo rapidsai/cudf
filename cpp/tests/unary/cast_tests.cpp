@@ -274,7 +274,7 @@ template <typename T>
 struct CastChronosTyped : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(CastChronosTyped, cudf::test::ChronoTypes);
+TYPED_TEST_SUITE(CastChronosTyped, cudf::test::ChronoTypes);
 
 // Return a list of chrono type ids whose precision is greater than or equal
 // to the input type id
@@ -446,7 +446,7 @@ template <typename T>
 struct CastToDurations : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(CastToDurations, cudf::test::IntegralTypes);
+TYPED_TEST_SUITE(CastToDurations, cudf::test::IntegralTypes);
 
 TYPED_TEST(CastToDurations, AllValid)
 {
@@ -479,7 +479,7 @@ template <typename T>
 struct CastFromDurations : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(CastFromDurations, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(CastFromDurations, cudf::test::NumericTypes);
 
 TYPED_TEST(CastFromDurations, AllValid)
 {
@@ -554,7 +554,7 @@ template <typename T>
 struct FixedPointTests : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTests, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTests, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTests, CastToDouble)
 {

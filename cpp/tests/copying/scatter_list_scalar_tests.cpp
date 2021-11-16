@@ -46,7 +46,7 @@ template <typename T>
 class ScatterListOfFixedWidthScalarTest : public ScatterListScalarTests {
 };
 
-TYPED_TEST_CASE(ScatterListOfFixedWidthScalarTest, FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(ScatterListOfFixedWidthScalarTest, FixedWidthTypesWithoutFixedPoint);
 
 // Test grid
 // Dim1 : {Fixed width, strings, lists, structs}
@@ -211,7 +211,7 @@ template <typename T>
 class ScatterListOfListScalarTest : public ScatterListScalarTests {
 };
 
-TYPED_TEST_CASE(ScatterListOfListScalarTest, FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(ScatterListOfListScalarTest, FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(ScatterListOfListScalarTest, Basic)
 {
@@ -308,7 +308,7 @@ class ScatterListOfStructScalarTest : public ScatterListScalarTests {
   }
 };
 
-TYPED_TEST_CASE(ScatterListOfStructScalarTest, FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(ScatterListOfStructScalarTest, FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(ScatterListOfStructScalarTest, Basic)
 {
