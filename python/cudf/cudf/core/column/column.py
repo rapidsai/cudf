@@ -2060,6 +2060,11 @@ def as_column(
                         return cudf.core.column.Decimal32Column.from_arrow(
                             data
                         )
+                    if is_bool_dtype(dtype):
+                        # Need this special case handling for bool dtypes,
+                        # since 'boolean' & 'pd.BooleanDtype' are not
+                        # understood by np.dtype below.
+                        dtype = "bool"
                     np_type = np.dtype(dtype).type
                     pa_type = np_to_pa_dtype(np.dtype(dtype))
                 data = as_column(

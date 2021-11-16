@@ -291,9 +291,17 @@ cdef class Column:
             if self.base_children == ():
                 self._children = ()
             else:
-                self._children = Column.from_unique_ptr(
+                children = Column.from_unique_ptr(
                     make_unique[column](self.view())
                 ).base_children
+                dtypes = [
+                    base_child.dtype for base_child in self.base_children
+                ]
+                self._children = [
+                    child._with_type_metadata(dtype) for child, dtype in zip(
+                        children, dtypes
+                    )
+                ]
         return self._children
 
     def set_base_children(self, value):
