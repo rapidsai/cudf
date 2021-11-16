@@ -428,9 +428,9 @@ class RollingGroupby(Rolling):
         # of `groupby.grouping.keys` and `groupby.obj`.
         # As an optimization, avoid gathering those twice.
         self._group_keys = groupby.grouping.keys.take(sort_order)
-        obj = groupby.obj.drop(
-            columns=groupby.grouping._key_column_names_from_obj
-        ).take(sort_order)
+        obj = groupby.obj.drop(columns=groupby.grouping._named_columns).take(
+            sort_order
+        )
 
         gb_size = groupby.size().sort_index()
         self._group_starts = (
