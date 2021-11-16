@@ -88,6 +88,11 @@ def test_execute_masked_binary(op, ty):
         # Check masks are as expected, and unmasked result matches masked
         # result
         if r0.valid:
+            # TODO: ideally, we would raise an exception here rather
+            # than return an "error code", and that is what the
+            # previous version of this (and below) tests did. But,
+            # Numba kernels cannot currently use `debug=True` with
+            # CUDA enhanced compatibility.
             err[0] = 1
         if not r1.valid:
             err[0] = 2
