@@ -80,6 +80,7 @@ def test_read_orc_filtered(
     )
 
     dd.assert_eq(len(df), expected_len)
+    dd.assert_eq(df.columns, dask_cudf.read_orc(sample_orc).columns)
 
 
 def test_read_orc_first_file_empty(tmpdir):
