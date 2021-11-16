@@ -92,7 +92,9 @@ def test_execute_masked_binary(op, ty):
             # than return an "error code", and that is what the
             # previous version of this (and below) tests did. But,
             # Numba kernels cannot currently use `debug=True` with
-            # CUDA enhanced compatibility.
+            # CUDA enhanced compatibility.  Once a solution to that is
+            # reached, we should switch back to raising exceptions
+            # here.
             err[0] = 1
         if not r1.valid:
             err[0] = 2
