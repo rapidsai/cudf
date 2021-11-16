@@ -110,6 +110,7 @@ cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
 # See https://github.com/rapidsai/ptxcompiler for
 # details.
 patch_numba_codegen_if_needed()
+del patch_numba_codegen_if_needed
 
 try:
     # Numba 0.54: Disable low occupancy warnings
