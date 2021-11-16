@@ -11,7 +11,6 @@ from hashlib import sha256
 from numbers import Number
 from shutil import get_terminal_size
 from typing import Any, MutableMapping, Optional, Set, Union
-from uuid import uuid4
 
 import cupy
 import numpy as np
@@ -979,9 +978,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             {self.name: self._column.set_mask(mask)}, self._index
         )
 
-    def __sizeof__(self):
-        return self._column.__sizeof__() + self._index.__sizeof__()
-
     def memory_usage(self, index=True, deep=False):
         """
         Return the memory usage of the Series.
@@ -1020,9 +1016,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> s.memory_usage(index=False)
         24
         """
-        n = self._column._memory_usage(deep=deep)
+        if deep:
+            warnings.warn(
+                "The deep parameter is ignored and is only included "
+                "for pandas compatibility."
+            )
+        n = self._column.memory_usage()
         if index:
-            n += self._index.memory_usage(deep=deep)
+            n += self._index.memory_usage()
         return n
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
@@ -3532,6 +3533,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         observed=False,
         dropna=True,
     ):
+        import cudf.core.resample
+
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")
 
@@ -3555,8 +3558,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 "groupby() requires either by or level to be specified."
             )
 
-        return SeriesGroupBy(
-            self, by=by, level=level, dropna=dropna, sort=sort
+        return (
+            cudf.core.resample.SeriesResampler(self, by=by)
+            if isinstance(by, cudf.Grouper) and by.freq
+            else SeriesGroupBy(
+                self, by=by, level=level, dropna=dropna, sort=sort
+            )
         )
 
     def rename(self, index=None, copy=True):
@@ -3607,39 +3614,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             out.name = index
 
         return out.copy(deep=copy)
-
-    def _align_to_index(
-        self, index, how="outer", sort=True, allow_non_unique=False
-    ):
-        """
-        Align to the given Index. See _align_indices below.
-        """
-
-        index = as_index(index)
-        if self.index.equals(index):
-            return self
-        if not allow_non_unique:
-            if len(self) != len(self.index.unique()) or len(index) != len(
-                index.unique()
-            ):
-                raise ValueError("Cannot align indices with non-unique values")
-        lhs = self.to_frame(0)
-        rhs = cudf.DataFrame(index=as_index(index))
-        if how == "left":
-            tmp_col_id = str(uuid4())
-            lhs[tmp_col_id] = column.arange(len(lhs))
-        elif how == "right":
-            tmp_col_id = str(uuid4())
-            rhs[tmp_col_id] = column.arange(len(rhs))
-        result = lhs.join(rhs, how=how, sort=sort)
-        if how == "left" or how == "right":
-            result = result.sort_values(tmp_col_id)[0]
-        else:
-            result = result[0]
-
-        result.name = self.name
-        result.index.names = index.names
-        return result
 
     def merge(
         self,

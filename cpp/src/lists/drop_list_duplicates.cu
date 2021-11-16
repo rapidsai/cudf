@@ -475,13 +475,11 @@ std::vector<std::unique_ptr<column>> get_unique_entries_and_list_indices(
  * @brief Generate list offsets from entry list indices for the final result lists column(s).
  *
  * @param num_lists The number of lists.
- * @param num_entries The number of extracted unique list entries.
  * @param entries_list_indices The mapping from list entries to their (1-based) list indices.
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device resource used to allocate memory.
  */
 std::unique_ptr<column> generate_output_offsets(size_type num_lists,
-                                                size_type num_entries,
                                                 column_view const& entries_list_indices,
                                                 rmm::cuda_stream_view stream,
                                                 rmm::mr::device_memory_resource* mr)
@@ -490,7 +488,7 @@ std::unique_ptr<column> generate_output_offsets(size_type num_lists,
   // Given the original offsets of the input lists column is [0, 4, 5, 6, 7, 10, 11, 13].
   // The original entries_list_indices is [1, 1, 1, 1, 2, 3, 4, 5, 5, 5, 6, 7, 7], and after
   // extracting unique entries we have the entries_list_indices becomes [1, 1, 1, 4, 5, 5, 5, 7, 7]
-  // and num_lists is 7, num_entries is 9. These are the input to this function.
+  // and num_lists is 7. These are the input to this function.
   //
   // Through extracting unique list entries, one entry in the list index 1 has been removed (first
   // list, as we are using 1-based list index), and entries in the lists with indices {3, 3, 6} have
@@ -629,8 +627,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
   // Generate offsets for the output lists column(s).
   auto output_offsets = generate_output_offsets(
     keys.size(),
-    unique_entries_and_list_indices.front()->size(),  // num unique entries
-    unique_entries_and_list_indices.back()->view(),   // unique entries' list indices
+    unique_entries_and_list_indices.back()->view(),  // unique entries' list indices
     stream,
     mr);
 

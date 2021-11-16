@@ -5,13 +5,16 @@ from __future__ import annotations
 
 import warnings
 from typing import Type, TypeVar
+from uuid import uuid4
 
 import cupy as cp
 import pandas as pd
 from nvtx import annotate
 
 import cudf
+from cudf._typing import ColumnLike
 from cudf.api.types import is_categorical_dtype, is_list_like
+from cudf.core.column import arange
 from cudf.core.frame import Frame
 from cudf.core.index import Index
 from cudf.core.multiindex import MultiIndex
@@ -38,8 +41,8 @@ def _indices_from_labels(obj, labels):
     # join is not guaranteed to maintain the index ordering
     # so we will sort it with its initial ordering which is stored
     # in column "__"
-    lhs = cudf.DataFrame({"__": column.arange(len(labels))}, index=labels)
-    rhs = cudf.DataFrame({"_": column.arange(len(obj))}, index=obj.index)
+    lhs = cudf.DataFrame({"__": arange(len(labels))}, index=labels)
+    rhs = cudf.DataFrame({"_": arange(len(obj))}, index=obj.index)
     return lhs.join(rhs).sort_values("__")["_"]
 
 
@@ -76,6 +79,8 @@ class _FrameIndexer:
 
 _LocIndexerClass = TypeVar("_LocIndexerClass", bound="_FrameIndexer")
 _IlocIndexerClass = TypeVar("_IlocIndexerClass", bound="_FrameIndexer")
+
+T = TypeVar("T", bound="IndexedFrame")
 
 
 class IndexedFrame(Frame):
@@ -398,10 +403,15 @@ class IndexedFrame(Frame):
                 inds = idx._get_sorted_inds(
                     ascending=ascending, na_position=na_position
                 )
-                # TODO: This line is abusing the fact that take accepts a
-                # column, not just user-facing objects. We will want to
-                # refactor that in the future.
-                out = self.take(inds)
+                out = self._gather(inds)
+                # TODO: frame factory function should handle multilevel column
+                # names
+                if isinstance(
+                    self, cudf.core.dataframe.DataFrame
+                ) and isinstance(
+                    self.columns, pd.core.indexes.multi.MultiIndex
+                ):
+                    out.columns = self.columns
             elif (ascending and idx.is_monotonic_increasing) or (
                 not ascending and idx.is_monotonic_decreasing
             ):
@@ -410,7 +420,13 @@ class IndexedFrame(Frame):
                 inds = idx.argsort(
                     ascending=ascending, na_position=na_position
                 )
-                out = self.take(inds)
+                out = self._gather(inds)
+                if isinstance(
+                    self, cudf.core.dataframe.DataFrame
+                ) and isinstance(
+                    self.columns, pd.core.indexes.multi.MultiIndex
+                ):
+                    out.columns = self.columns
         else:
             labels = sorted(self._data.names, reverse=not ascending)
             out = self[labels]
@@ -487,12 +503,17 @@ class IndexedFrame(Frame):
             return self
 
         # argsort the `by` column
-        return self.take(
+        out = self._gather(
             self._get_columns_by_label(by)._get_sorted_inds(
                 ascending=ascending, na_position=na_position
             ),
             keep_index=not ignore_index,
         )
+        if isinstance(self, cudf.core.dataframe.DataFrame) and isinstance(
+            self.columns, pd.core.indexes.multi.MultiIndex
+        ):
+            out.columns = self.columns
+        return out
 
     def _n_largest_or_smallest(self, largest, n, columns, keep):
         # Get column to operate on
@@ -526,3 +547,214 @@ class IndexedFrame(Frame):
             return self.take(indices, keep_index=True)
         else:
             raise ValueError('keep must be either "first", "last"')
+
+    def _align_to_index(
+        self: T,
+        index: ColumnLike,
+        how: str = "outer",
+        sort: bool = True,
+        allow_non_unique: bool = False,
+    ) -> T:
+        index = cudf.core.index.as_index(index)
+
+        if self.index.equals(index):
+            return self
+        if not allow_non_unique:
+            if not self.index.is_unique or not index.is_unique:
+                raise ValueError("Cannot align indices with non-unique values")
+
+        lhs = cudf.DataFrame._from_data(self._data, index=self.index)
+        rhs = cudf.DataFrame._from_data({}, index=index)
+
+        # create a temporary column that we will later sort by
+        # to recover ordering after index alignment.
+        sort_col_id = str(uuid4())
+        if how == "left":
+            lhs[sort_col_id] = arange(len(lhs))
+        elif how == "right":
+            rhs[sort_col_id] = arange(len(rhs))
+
+        result = lhs.join(rhs, how=how, sort=sort)
+        if how in ("left", "right"):
+            result = result.sort_values(sort_col_id)
+            del result[sort_col_id]
+
+        result = self.__class__._from_data(result._data, index=result.index)
+        result._data.multiindex = self._data.multiindex
+        result._data._level_names = self._data._level_names
+        result.index.names = self.index.names
+
+        return result
+
+    def resample(
+        self,
+        rule,
+        axis=0,
+        closed=None,
+        label=None,
+        convention="start",
+        kind=None,
+        loffset=None,
+        base=None,
+        on=None,
+        level=None,
+        origin="start_day",
+        offset=None,
+    ):
+        """
+        Convert the frequency of ("resample") the given time series data.
+
+        Parameters
+        ----------
+        rule: str
+            The offset string representing the frequency to use.
+            Note that DateOffset objects are not yet supported.
+        closed: {"right", "left"}, default None
+            Which side of bin interval is closed. The default is
+            "left" for all frequency offsets except for "M" and "W",
+            which have a default of "right".
+        label: {"right", "left"}, default None
+            Which bin edge label to label bucket with. The default is
+            "left" for all frequency offsets except for "M" and "W",
+            which have a default of "right".
+        on: str, optional
+            For a DataFrame, column to use instead of the index for
+            resampling.  Column must be a datetime-like.
+        level: str or int, optional
+            For a MultiIndex, level to use instead of the index for
+            resampling.  The level must be a datetime-like.
+
+        Returns
+        -------
+        A Resampler object
+
+        Examples
+        --------
+        First, we create a time series with 1 minute intervals:
+
+        >>> index = cudf.date_range(start="2001-01-01", periods=10, freq="1T")
+        >>> sr = cudf.Series(range(10), index=index)
+        >>> sr
+        2001-01-01 00:00:00    0
+        2001-01-01 00:01:00    1
+        2001-01-01 00:02:00    2
+        2001-01-01 00:03:00    3
+        2001-01-01 00:04:00    4
+        2001-01-01 00:05:00    5
+        2001-01-01 00:06:00    6
+        2001-01-01 00:07:00    7
+        2001-01-01 00:08:00    8
+        2001-01-01 00:09:00    9
+        dtype: int64
+
+        Downsampling to 3 minute intervals, followed by a "sum" aggregation:
+
+        >>> sr.resample("3T").sum()
+        2001-01-01 00:00:00     3
+        2001-01-01 00:03:00    12
+        2001-01-01 00:06:00    21
+        2001-01-01 00:09:00     9
+        dtype: int64
+
+        Use the right side of each interval to label the bins:
+
+        >>> sr.resample("3T", label="right").sum()
+        2001-01-01 00:03:00     3
+        2001-01-01 00:06:00    12
+        2001-01-01 00:09:00    21
+        2001-01-01 00:12:00     9
+        dtype: int64
+
+        Close the right side of the interval instead of the left:
+
+        >>> sr.resample("3T", closed="right").sum()
+        2000-12-31 23:57:00     0
+        2001-01-01 00:00:00     6
+        2001-01-01 00:03:00    15
+        2001-01-01 00:06:00    24
+        dtype: int64
+
+        Upsampling to 30 second intervals:
+
+        >>> sr.resample("30s").asfreq()[:5]  # show the first 5 rows
+        2001-01-01 00:00:00       0
+        2001-01-01 00:00:30    <NA>
+        2001-01-01 00:01:00       1
+        2001-01-01 00:01:30    <NA>
+        2001-01-01 00:02:00       2
+        dtype: int64
+
+        Upsample and fill nulls using the "bfill" method:
+
+        >>> sr.resample("30s").bfill()[:5]
+        2001-01-01 00:00:00    0
+        2001-01-01 00:00:30    1
+        2001-01-01 00:01:00    1
+        2001-01-01 00:01:30    2
+        2001-01-01 00:02:00    2
+        dtype: int64
+
+        Resampling by a specified column of a Dataframe:
+
+        >>> df = cudf.DataFrame({
+        ...     "price": [10, 11, 9, 13, 14, 18, 17, 19],
+        ...     "volume": [50, 60, 40, 100, 50, 100, 40, 50],
+        ...     "week_starting": cudf.date_range(
+        ...         "2018-01-01", periods=8, freq="7D"
+        ...     )
+        ... })
+        >>> df
+        price  volume week_starting
+        0     10      50    2018-01-01
+        1     11      60    2018-01-08
+        2      9      40    2018-01-15
+        3     13     100    2018-01-22
+        4     14      50    2018-01-29
+        5     18     100    2018-02-05
+        6     17      40    2018-02-12
+        7     19      50    2018-02-19
+        >>> df.resample("M", on="week_starting").mean()
+                       price     volume
+        week_starting
+        2018-01-31      11.4  60.000000
+        2018-02-28      18.0  63.333333
+
+
+        Notes
+        -----
+        Note that the dtype of the index (or the 'on' column if using
+        'on=') in the result will be of a frequency closest to the
+        resampled frequency.  For example, if resampling from
+        nanoseconds to milliseconds, the index will be of dtype
+        'datetime64[ms]'.
+        """
+        import cudf.core.resample
+
+        if (axis, convention, kind, loffset, base, origin, offset) != (
+            0,
+            "start",
+            None,
+            None,
+            None,
+            "start_day",
+            None,
+        ):
+            raise NotImplementedError(
+                "The following arguments are not "
+                "currently supported by resample:\n\n"
+                "- axis\n"
+                "- convention\n"
+                "- kind\n"
+                "- loffset\n"
+                "- base\n"
+                "- origin\n"
+                "- offset"
+            )
+        by = cudf.Grouper(
+            key=on, freq=rule, closed=closed, label=label, level=level
+        )
+        return (
+            cudf.core.resample.SeriesResampler(self, by=by)
+            if isinstance(self, cudf.Series)
+            else cudf.core.resample.DataFrameResampler(self, by=by)
+        )

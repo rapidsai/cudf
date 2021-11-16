@@ -517,7 +517,9 @@ class Frame:
             data, columns=data.to_pandas_index(), index=self.index
         )
 
-    def _gather(self, gather_map, keep_index=True, nullify=False):
+    def _gather(
+        self, gather_map, keep_index=True, nullify=False, check_bounds=True
+    ):
         if not is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
         result = self.__class__._from_data(
@@ -526,6 +528,7 @@ class Frame:
                 as_column(gather_map),
                 keep_index=keep_index,
                 nullify=nullify,
+                check_bounds=check_bounds,
             )
         )
 
@@ -1353,6 +1356,12 @@ class Frame:
         result = self._from_data(copy_data, self._index)
 
         return self._mimic_inplace(result, inplace=inplace)
+
+    def ffill(self):
+        return self.fillna(method="ffill")
+
+    def bfill(self):
+        return self.fillna(method="bfill")
 
     def _drop_na_rows(
         self, how="any", subset=None, thresh=None, drop_nan=False
