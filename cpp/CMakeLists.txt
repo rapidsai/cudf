@@ -547,8 +547,8 @@ if(TARGET conda_env)
 endif()
 
 # Add cuFile interface if available
-if(TARGET cuFile::cuFile_interface)
-  target_link_libraries(cudf PRIVATE cuFile::cuFile_interface)
+if(NOT TARGET cuFile::cuFile_interface)
+  message(FATAL_ERROR "cuFile includes not found.")
 endif()
 
 if(CUDA_STATIC_RUNTIME)

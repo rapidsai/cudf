@@ -238,12 +238,10 @@ std::unique_ptr<datasource> datasource::create(const std::string& filepath,
                                                size_t offset,
                                                size_t size)
 {
-#ifdef CUFILE_FOUND
   if (detail::cufile_config::instance()->is_required()) {
     // avoid mmap as GDS is expected to be used for most reads
     return std::make_unique<direct_read_source>(filepath.c_str());
   }
-#endif
   // Use our own memory mapping implementation for direct file reads
   return std::make_unique<memory_mapped_source>(filepath.c_str(), offset, size);
 }

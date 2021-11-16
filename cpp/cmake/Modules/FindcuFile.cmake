@@ -86,7 +86,6 @@ if(cuFile_INCLUDE_DIR AND NOT TARGET cuFile::cuFile_interface)
     cuFile::cuFile_interface INTERFACE "$<BUILD_INTERFACE:${cuFile_INCLUDE_DIR}>"
   )
   target_compile_options(cuFile::cuFile_interface INTERFACE "${cuFile_COMPILE_OPTIONS}")
-  target_compile_definitions(cuFile::cuFile_interface INTERFACE CUFILE_FOUND)
 endif()
 
 if(cuFile_FOUND AND NOT TARGET cuFile::cuFile)

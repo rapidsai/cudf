@@ -16,12 +16,10 @@
 
 #pragma once
 
-#ifdef CUFILE_FOUND
 #include "thread_pool.hpp"
 
 #include <cufile.h>
 #include <cudf_test/file_utilities.hpp>
-#endif
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -158,8 +156,6 @@ class cufile_output : public cufile_io_base {
   virtual std::future<void> write_async(void const* data, size_t offset, size_t size) = 0;
 };
 
-#ifdef CUFILE_FOUND
-
 class cufile_shim;
 
 /**
@@ -263,43 +259,6 @@ class cufile_output_impl final : public cufile_output {
   cufile_registered_file const cf_file;
   cudf::detail::thread_pool pool;
 };
-#else
-
-class cufile_input_impl final : public cufile_input {
- public:
-  std::unique_ptr<datasource::buffer> read(size_t offset,
-                                           size_t size,
-                                           rmm::cuda_stream_view stream) override
-  {
-    CUDF_FAIL("Only used to compile without cufile library, should not be called");
-  }
-
-  size_t read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) override
-  {
-    CUDF_FAIL("Only used to compile without cufile library, should not be called");
-  }
-
-  std::future<size_t> read_async(size_t offset,
-                                 size_t size,
-                                 uint8_t* dst,
-                                 rmm::cuda_stream_view stream) override
-  {
-    CUDF_FAIL("Only used to compile without cufile library, should not be called");
-  }
-};
-
-class cufile_output_impl final : public cufile_output {
- public:
-  void write(void const* data, size_t offset, size_t size) override
-  {
-    CUDF_FAIL("Only used to compile without cufile library, should not be called");
-  }
-  std::future<void> write_async(void const* data, size_t offset, size_t size) override
-  {
-    CUDF_FAIL("Only used to compile without cufile library, should not be called");
-  }
-};
-#endif
 
 /**
  * @brief Creates a `cufile_input_impl` object

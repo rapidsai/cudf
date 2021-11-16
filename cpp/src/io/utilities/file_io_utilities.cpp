@@ -49,8 +49,6 @@ file_wrapper::file_wrapper(std::string const& filepath, int flags, mode_t mode)
 
 file_wrapper::~file_wrapper() { close(fd); }
 
-#ifdef CUFILE_FOUND
-
 cufile_config::cufile_config() : policy{getenv_or("LIBCUDF_CUFILE_POLICY", default_policy)}
 {
   if (is_enabled()) {
@@ -280,11 +278,9 @@ std::future<void> cufile_output_impl::write_async(void const* data, size_t offse
   // writes.
   return std::async(std::launch::deferred, waiter, std::move(slice_tasks));
 }
-#endif
 
 std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath)
 {
-#ifdef CUFILE_FOUND
   if (cufile_config::instance()->is_enabled()) {
     try {
       return std::make_unique<cufile_input_impl>(filepath);
@@ -292,13 +288,11 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath
       if (cufile_config::instance()->is_required()) throw;
     }
   }
-#endif
   return nullptr;
 }
 
 std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepath)
 {
-#ifdef CUFILE_FOUND
   if (cufile_config::instance()->is_enabled()) {
     try {
       return std::make_unique<cufile_output_impl>(filepath);
@@ -306,7 +300,6 @@ std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepa
       if (cufile_config::instance()->is_required()) throw;
     }
   }
-#endif
   return nullptr;
 }
 
