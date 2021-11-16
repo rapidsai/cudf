@@ -945,12 +945,15 @@ __launch_bounds__(block_size) __global__
 
   auto active_threads = __ballot_sync(0xffffffff, i < input.size());
   while (i < input.size()) {
-    size_type preceding_window = preceding_window_begin[i];
-    size_type following_window = following_window_begin[i];
+    // to prevent overflow issues when computing bounds use int64_t
+    int64_t preceding_window = preceding_window_begin[i];
+    int64_t following_window = following_window_begin[i];
 
     // compute bounds
-    size_type start       = min(input.size(), max(0, i - preceding_window + 1));
-    size_type end         = min(input.size(), max(0, i + following_window + 1));
+    size_type start = static_cast<size_type>(
+      min(static_cast<int64_t>(input.size()), max(0L, i - preceding_window + 1)));
+    size_type end = static_cast<size_type>(
+      min(static_cast<int64_t>(input.size()), max(0L, i + following_window + 1)));
     size_type start_index = min(start, end);
     size_type end_index   = max(start, end);
 
