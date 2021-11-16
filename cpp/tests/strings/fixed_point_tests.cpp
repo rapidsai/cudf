@@ -317,7 +317,8 @@ TEST_F(StringsConvertTest, FixedPointStringConversionOperator)
   EXPECT_EQ(static_cast<std::string>(z), "1701411834604692317316873037158841057270000000000");
 
   auto const a = numeric::decimal128{numeric::scaled_integer{max, numeric::scale_type{40}}};
-  EXPECT_EQ(static_cast<std::string>(a), "1701411834604692317316873037158841057270000000000000000000000000000000000000000");
+  EXPECT_EQ(static_cast<std::string>(a),
+            "1701411834604692317316873037158841057270000000000000000000000000000000000000000");
 
   auto const b = numeric::decimal128{numeric::scaled_integer{max, numeric::scale_type{-20}}};
   EXPECT_EQ(static_cast<std::string>(b), "1701411834604692317.31687303715884105727");
