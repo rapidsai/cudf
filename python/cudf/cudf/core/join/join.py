@@ -203,12 +203,22 @@ class Merge:
         gather_index = self._using_left_index or self._using_right_index
 
         left_result = (
-            self.lhs._gather(left_rows, nullify=True, keep_index=gather_index)
+            self.lhs._gather(
+                left_rows,
+                nullify=True,
+                keep_index=gather_index,
+                check_bounds=False,
+            )
             if left_rows is not None
             else cudf.core.frame.Frame()
         )
         right_result = (
-            self.rhs._gather(right_rows, nullify=True, keep_index=gather_index)
+            self.rhs._gather(
+                right_rows,
+                nullify=True,
+                keep_index=gather_index,
+                check_bounds=False,
+            )
             if right_rows is not None
             else cudf.core.frame.Frame()
         )
@@ -261,6 +271,23 @@ class Merge:
             else:
                 data[name] = col
 
+        # determine if the result has multiindex columns.  The result
+        # of a join has a MultiIndex as its columns if:
+        # - both the `lhs` and `rhs` have a MultiIndex columns
+        # OR
+        # - either one of `lhs` or `rhs` have a MultiIndex columns,
+        #   and the other is empty (i.e., no columns)
+        if self.lhs._data and self.rhs._data:
+            multiindex_columns = (
+                self.lhs._data.multiindex and self.rhs._data.multiindex
+            )
+        elif self.lhs._data:
+            multiindex_columns = self.lhs._data.multiindex
+        elif self.rhs._data:
+            multiindex_columns = self.rhs._data.multiindex
+        else:
+            multiindex_columns = False
+
         if self._using_right_index:
             # right_index and left_on
             index = left_result._index
@@ -271,7 +298,12 @@ class Merge:
             index = None
 
         # Construct result from data and index:
-        return data, index
+        return (
+            left_result._data.__class__(
+                data=data, multiindex=multiindex_columns
+            ),
+            index,
+        )
 
     def _sort_result(self, result: Frame) -> Frame:
         # Pandas sorts on the key columns in the
@@ -292,6 +324,7 @@ class Merge:
             result = result._gather(
                 sort_order,
                 keep_index=self._using_left_index or self._using_right_index,
+                check_bounds=False,
             )
         return result
 
