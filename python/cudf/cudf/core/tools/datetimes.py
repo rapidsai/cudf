@@ -38,6 +38,8 @@ _offset_alias_to_code = {
     "min": "m",
     "s": "s",
     "S": "s",
+    "L": "ms",
+    "ms": "ms",
     "U": "us",
     "us": "us",
     "N": "ns",
@@ -448,7 +450,6 @@ class DateOffset:
         "ns": "nanoseconds",
         "us": "microseconds",
         "ms": "milliseconds",
-        "L": "milliseconds",
         "s": "seconds",
         "m": "minutes",
         "h": "hours",
@@ -458,7 +459,7 @@ class DateOffset:
         "Y": "years",
     }
 
-    _FREQSTR_REGEX = re.compile("([0-9]*)([a-zA-Z]+)")
+    _FREQSTR_REGEX = re.compile("(-)*([0-9]*)([a-zA-Z]+)")
 
     def __init__(self, n=1, normalize=False, **kwds):
         if normalize:
@@ -629,27 +630,33 @@ class DateOffset:
         return repr_str
 
     @classmethod
-    def _from_freqstr(cls: Type[_T], freqstr: str) -> _T:
+    def _from_str(cls: Type[_T], freqstr: str) -> _T:
         """
-        Parse a string and return a DateOffset object
-        expects strings of the form 3D, 25W, 10ms, 42ns, etc.
-        """
-        match = cls._FREQSTR_REGEX.match(freqstr)
+        Parse a string and return a DateOffset object.
 
+        Expects strings of the form 3D, 25W, 10ms, 42ns, etc.
+        See `_offset_alias_to_code` and `_CODE_TO_UNITS` for
+        supported list of strings.
+        """
+        match = cls._FREQSTR_REGEX.fullmatch(freqstr)
         if match is None:
             raise ValueError(f"Invalid frequency string: {freqstr}")
 
-        numeric_part = match.group(1)
-        if numeric_part == "":
-            numeric_part = "1"
-        freq_part = match.group(2)
-
-        if freq_part not in cls._CODES_TO_UNITS:
+        sign_part, numeric_part, freq_part = match.groups()
+        if freq_part in _offset_alias_to_code:
+            code = _offset_alias_to_code[freq_part]
+        elif freq_part in cls._CODES_TO_UNITS:
+            code = freq_part
+        else:
             raise ValueError(f"Cannot interpret frequency str: {freqstr}")
 
-        return cls(**{cls._CODES_TO_UNITS[freq_part]: int(numeric_part)})
+        sign = -1 if sign_part else 1
+        n = int(numeric_part) if numeric_part else 1
+        code = _offset_alias_to_code[freq_part]
 
-    def _maybe_as_fast_pandas_offset(self):
+        return cls(**{cls._CODES_TO_UNITS[code]: n * sign})
+
+    def _maybe_as_fast_pandas_offset(self) -> pd.DateOffset:
         if (
             len(self.kwds) == 1
             and _has_fixed_frequency(self)
@@ -814,23 +821,11 @@ def date_range(
     if isinstance(freq, DateOffset):
         offset = freq
     elif isinstance(freq, str):
-        # Map pandas `offset alias` into cudf DateOffset `CODE`, only
-        # fixed-frequency, non-anchored offset aliases are supported.
-        mo = re.fullmatch(
-            rf'(-)*(\d*)({"|".join(_offset_alias_to_code.keys())})', freq
-        )
-        if mo is None:
+        offset = DateOffset._from_str(freq)
+        if "months" in offset.kwds or "years" in offset.kwds:
             raise ValueError(
                 f"Unrecognized or unsupported offset alias {freq}."
             )
-
-        sign, n, offset_alias = mo.groups()
-        code = _offset_alias_to_code[offset_alias]
-
-        freq = "".join([n, code])
-        offset = DateOffset._from_freqstr(freq)
-        if sign:
-            offset.kwds.update({s: -i for s, i in offset.kwds.items()})
     else:
         raise TypeError("`freq` must be a `str` or cudf.DateOffset object.")
 
