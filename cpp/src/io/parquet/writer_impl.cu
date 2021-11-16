@@ -343,7 +343,9 @@ struct leaf_schema_fn {
       col_schema.type        = Type::INT64;
       col_schema.stats_dtype = statistics_dtype::dtype_decimal64;
     } else if (std::is_same_v<T, numeric::decimal128>) {
-      CUDF_FAIL("decimal128 currently not supported for parquet writer");
+      col_schema.type        = Type::FIXED_LEN_BYTE_ARRAY;
+      col_schema.type_length = 16;
+      col_schema.stats_dtype = statistics_dtype::dtype_decimal128;
     } else {
       CUDF_FAIL("Unsupported fixed point type for parquet writer");
     }
@@ -1208,8 +1210,9 @@ void writer::impl::write(table_view const& table)
   hostdevice_2dvector<gpu::EncColumnChunk> chunks(num_rowgroups, num_columns, stream);
   for (uint32_t r = 0, global_r = global_rowgroup_base, f = 0, start_row = 0; r < num_rowgroups;
        r++, global_r++) {
-    uint32_t fragments_in_chunk = (uint32_t)(
-      (md.row_groups[global_r].num_rows + max_page_fragment_size - 1) / max_page_fragment_size);
+    uint32_t fragments_in_chunk =
+      (uint32_t)((md.row_groups[global_r].num_rows + max_page_fragment_size - 1) /
+                 max_page_fragment_size);
     md.row_groups[global_r].total_byte_size = 0;
     md.row_groups[global_r].columns.resize(num_columns);
     for (int i = 0; i < num_columns; i++) {

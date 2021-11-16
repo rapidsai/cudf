@@ -463,6 +463,58 @@ TEST_F(ParquetWriterTest, MultiColumn)
   cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
 }
 
+TEST_F(ParquetWriterTest, DecimalColumns)
+{
+  constexpr auto num_rows = 5;
+
+  // auto col0_data = random_values<bool>(num_rows);
+  auto col6_vals = random_values<int32_t>(num_rows);
+  auto col7_vals = random_values<int64_t>(num_rows);
+  auto col6_data = cudf::detail::make_counting_transform_iterator(0, [col6_vals](auto i) {
+    return numeric::decimal32{col6_vals[i], numeric::scale_type{5}};
+  });
+  auto col7_data = cudf::detail::make_counting_transform_iterator(0, [col6_vals](auto i) {
+    return numeric::decimal64{col6_vals[i], numeric::scale_type{5}};
+  });
+  auto col8_data = cudf::detail::make_counting_transform_iterator(0, [col6_vals](auto i) {
+    return numeric::decimal128{i * 10000, numeric::scale_type{2}};
+  });
+  auto validity  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  // column_wrapper<bool> col0{
+  //    col0_data.begin(), col0_data.end(), validity};
+  column_wrapper<numeric::decimal32> col6{col6_data, col6_data + num_rows, validity};
+  column_wrapper<numeric::decimal64> col7{col7_data, col7_data + num_rows, validity};
+  column_wrapper<numeric::decimal128> col8{col8_data, col8_data + num_rows, validity};
+
+  std::vector<std::unique_ptr<column>> cols;
+  // cols.push_back(col0.release());
+  cols.push_back(col6.release());
+  cols.push_back(col7.release());
+  cols.push_back(col8.release());
+  auto expected = std::make_unique<table>(std::move(cols));
+  EXPECT_EQ(3, expected->num_columns());
+
+  cudf_io::table_input_metadata expected_metadata(*expected);
+  // expected_metadata.column_metadata[0].set_name( "bools");
+  expected_metadata.column_metadata[0].set_name("decimal32s").set_decimal_precision(10);
+  expected_metadata.column_metadata[1].set_name("decimal64s").set_decimal_precision(10);
+  expected_metadata.column_metadata[2].set_name("decimal128s").set_decimal_precision(10);
+
+  auto filepath = ("MultiColumn.parquet");
+  cudf_io::parquet_writer_options out_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+      .metadata(&expected_metadata);
+  cudf_io::write_parquet(out_opts);
+
+  cudf_io::parquet_reader_options in_opts =
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath});
+  auto result = cudf_io::read_parquet(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
+  cudf::test::expect_metadata_equal(expected_metadata, result.metadata);
+}
+
 TEST_F(ParquetWriterTest, MultiColumnWithNulls)
 {
   constexpr auto num_rows = 100;

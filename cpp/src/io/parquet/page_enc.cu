@@ -176,7 +176,8 @@ __global__ void __launch_bounds__(block_size)
     }
   }
   dtype     = s->col.physical_type;
-  dtype_len = (dtype == INT96)                      ? 12
+  dtype_len = (dtype == FIXED_LEN_BYTE_ARRAY)       ? 16
+              : (dtype == INT96)                    ? 12
               : (dtype == INT64 || dtype == DOUBLE) ? 8
               : (dtype == BOOLEAN)                  ? 1
                                                     : 4;
@@ -878,7 +879,8 @@ __global__ void __launch_bounds__(128, 8)
   // Encode data values
   __syncthreads();
   dtype         = s->col.physical_type;
-  dtype_len_out = (dtype == INT96)                      ? 12
+  dtype_len_out = (dtype == FIXED_LEN_BYTE_ARRAY)       ? 16
+                  : (dtype == INT96)                    ? 12
                   : (dtype == INT64 || dtype == DOUBLE) ? 8
                   : (dtype == BOOLEAN)                  ? 1
                                                         : 4;
@@ -1086,6 +1088,29 @@ __global__ void __launch_bounds__(128, 8)
             dst[pos + 2] = v >> 16;
             dst[pos + 3] = v >> 24;
             if (v != 0) memcpy(dst + pos + 4, str.data(), v);
+          } break;
+          case FIXED_LEN_BYTE_ARRAY: {
+            if (s->col.leaf_column->type().id() == type_id::DECIMAL128) {
+              // When using FIXED_LEN_BYTE_ARRAY for decimals, the rep is encoded in big-endian
+              auto v        = s->col.leaf_column->element<numeric::decimal128>(val_idx).value();
+              auto v_       = reinterpret_cast<char*>(&v);
+              dst[pos + 0]  = v_[15];
+              dst[pos + 1]  = v_[14];
+              dst[pos + 2]  = v_[13];
+              dst[pos + 3]  = v_[12];
+              dst[pos + 4]  = v_[11];
+              dst[pos + 5]  = v_[10];
+              dst[pos + 6]  = v_[9];
+              dst[pos + 7]  = v_[8];
+              dst[pos + 8]  = v_[7];
+              dst[pos + 9]  = v_[6];
+              dst[pos + 10] = v_[5];
+              dst[pos + 11] = v_[4];
+              dst[pos + 12] = v_[3];
+              dst[pos + 13] = v_[2];
+              dst[pos + 14] = v_[1];
+              dst[pos + 15] = v_[0];
+            }
           } break;
         }
       }
