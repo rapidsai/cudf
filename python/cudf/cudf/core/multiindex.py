@@ -1425,11 +1425,11 @@ class MultiIndex(Frame, BaseIndex):
         n = 0
         for col in self._data.columns:
             n += col.memory_usage()
-        if self._levels:
-            for level in self._levels:
+        if self.levels:
+            for level in self.levels:
                 n += level.memory_usage(deep=deep)
-        if self._codes:
-            for col in self._codes.columns:
+        if self.codes:
+            for col in self.codes._data.columns:
                 n += col.memory_usage()
         return n
 
