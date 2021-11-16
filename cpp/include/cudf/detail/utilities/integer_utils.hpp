@@ -60,6 +60,15 @@ inline S round_down_safe(S number_to_round, S modulus)
   return rounded_down;
 }
 
+template <typename S>
+constexpr inline S round_up_unsafe(S number_to_round, S modulus) noexcept
+{
+  auto remainder = number_to_round % modulus;
+  if (remainder == 0) { return number_to_round; }
+  auto rounded_up = number_to_round - remainder + modulus;
+  return rounded_up;
+}
+
 /**
  * Divides the left-hand-side by the right-hand-side, rounding up
  * to an integral multiple of the right-hand-side, e.g. (9,5) -> 2 , (10,5) -> 2, (11,5) -> 3.
