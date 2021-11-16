@@ -318,7 +318,6 @@ def test_na_scalar_comparisons(fn, ty):
 
         if unmasked_cmp_na:
             err[0] = 1
-            raise RuntimeError("Unmasked value compared True with NA")
 
     err = cp.asarray([0], dtype="int8")
     test_kernel[1, 1](err)
