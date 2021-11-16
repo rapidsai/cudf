@@ -174,24 +174,8 @@ else
     gpuci_logger "Check GPU usage"
     nvidia-smi
 
-    ###
-    echo "Checking for build time log $/ninja_log.csv"
-    if [[ -f "$WORKSPACE/cpp/build/ninja_log.csv" ]]; then
-        echo "Copying build time results"
-        cp "$WORKSPACE/cpp/build/ninja_log.csv" "$WORKSPACE/test-results/."
-    fi
-
     set -x
     cd $LIB_BUILD_DIR
-
-    ###
-    echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.csv"
-    gpuci_logger "Checking for build time logger $LIB_BUILD_DIR/ninja_log.csv"
-    if [[ -f "$LIB_BUILD_DIR/ninja_log.csv" ]]; then
-        echo "Copying build time results 1"
-        gpuci_logger "Copying build time results 2"
-        cp "$LIB_BUILD_DIR/ninja_log.csv" "$WORKSPACE/test-results/."
-    fi
 
     gpuci_logger "GoogleTests"
 
@@ -200,6 +184,13 @@ else
         echo "Running GoogleTest $test_name"
         ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
     done
+
+    ###
+    echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.csv"
+    if [[ -f "$LIB_BUILD_DIR/ninja_log.csv" ]]; then
+        gpuci_logger "Copying build time results"
+        cp "$LIB_BUILD_DIR/ninja_log.csv" "$WORKSPACE/test-results/."
+    fi
 
     CUDF_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf-*.tar.bz2"`
     CUDF_CONDA_FILE=`basename "$CUDF_CONDA_FILE" .tar.bz2` #get filename without extension
