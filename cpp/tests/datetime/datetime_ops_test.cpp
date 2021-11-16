@@ -357,9 +357,9 @@ TYPED_TEST(TypedDatetimeOpsTest, TestCeilDatetime)
   using namespace cuda::std::chrono;
 
   auto start = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
-  auto stop_ = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
+  auto stop  = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
 
-  auto input = generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop_));
+  auto input = generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop));
 
   auto host_val                     = to_host<T>(input);
   thrust::host_vector<T> timestamps = host_val.first;
@@ -851,9 +851,9 @@ TYPED_TEST(TypedDatetimeOpsTest, TestFloorDatetime)
   using namespace cuda::std::chrono;
 
   auto start = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
-  auto stop_ = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
+  auto stop  = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
 
-  auto input = generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop_));
+  auto input = generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop));
 
   auto host_val                     = to_host<T>(input);
   thrust::host_vector<T> timestamps = host_val.first;
