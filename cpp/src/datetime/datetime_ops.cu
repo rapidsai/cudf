@@ -54,7 +54,7 @@ enum class datetime_component {
   NANOSECOND
 };
 
-enum class rounding_kind { CEIL, FLOOR, ROUND };
+enum class rounding_kind { CEIL, FLOOR };
 
 template <datetime_component Component>
 struct extract_component_operator {
@@ -100,7 +100,6 @@ struct RoundFunctor {
     switch (round_kind) {
       case rounding_kind::CEIL: return cuda::std::chrono::ceil<DurationType>(dt);
       case rounding_kind::FLOOR: return cuda::std::chrono::floor<DurationType>(dt);
-      case rounding_kind::ROUND: return cuda::std::chrono::round<DurationType>(dt);
       default: cudf_assert(false && "Unsupported rounding kind.");
     }
     __builtin_unreachable();
