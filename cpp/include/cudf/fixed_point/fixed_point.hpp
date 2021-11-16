@@ -555,7 +555,7 @@ class fixed_point {
   {
     if (_scale < 0) {
       auto const av = detail::abs(_value);
-      Rep const n   = std::pow(10, -_scale);  // does this work for all values of __int128
+      Rep const n   = detail::exp10<Rep>(-_scale);
       Rep const f   = av % n;
       auto const num_zeros =
         std::max(0, (-_scale - static_cast<int32_t>(detail::to_string(f).size())));
