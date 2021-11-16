@@ -1422,6 +1422,12 @@ class MultiIndex(Frame, BaseIndex):
         )
 
     def memory_usage(self, deep=False):
+        if deep:
+            warnings.warn(
+                "The deep parameter is ignored and is only included "
+                "for pandas compatibility."
+            )
+
         n = 0
         for col in self._data.columns:
             n += col.memory_usage()

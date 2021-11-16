@@ -5403,7 +5403,6 @@ def test_memory_usage_list():
 
 @pytest.mark.parametrize("rows", [10, 100])
 def test_memory_usage_multi(rows):
-    rows = int(rows)
     deep = True
     df = pd.DataFrame(
         {
