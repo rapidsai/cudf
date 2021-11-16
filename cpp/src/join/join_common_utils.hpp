@@ -22,6 +22,7 @@
 #include <hash/concurrent_unordered_multimap.cuh>
 
 #include <cuco/static_multimap.cuh>
+#include <rmm/mr/device/polymorphic_allocator.hpp>
 
 #include <limits>
 
@@ -38,11 +39,13 @@ using pair_type = cuco::pair_type<hash_value_type, size_type>;
 
 using hash_type = cuco::detail::MurmurHash3_32<hash_value_type>;
 
+using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
+
 using multimap_type =
   cuco::static_multimap<hash_value_type,
                         size_type,
                         cuda::thread_scope_device,
-                        default_allocator<char>,
+                        hash_table_allocator_type,
                         cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, hash_type, hash_type>>;
 
 using row_hash = cudf::row_hasher<default_hash>;
