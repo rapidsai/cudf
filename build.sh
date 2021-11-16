@@ -189,8 +189,8 @@ if buildAll || hasArg libcudf; then
 
     # Record build times
     if [[ -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
-        echo "Formatting build times"
-        $REPODIR/ci/utils/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log > ${LIB_BUILD_DIR}/ninja_log.csv
+        echo "Formatting build times [${REPODIR}] [${LIB_BUILD_DIR}]"
+        python ${REPODIR}/ci/utils/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log > ${LIB_BUILD_DIR}/ninja_log.csv
         cat ${LIB_BUILD_DIR}/ninja_log.csv | head -n 20
     fi
 
