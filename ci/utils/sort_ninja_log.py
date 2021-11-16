@@ -17,6 +17,7 @@ with open(log_file, "r") as log:
             elapsed = int(entry[1]) - int(entry[0])
             entries[entry[3]] = elapsed
 
+# check file could be loaded
 if len(entries) == 0:
     print("Could not parse", log_file)
     exit()
