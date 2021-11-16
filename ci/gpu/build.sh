@@ -127,6 +127,12 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
         "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests -l --ptds
     fi
 
+    ###
+    if [[ -f "${WORKSPACE}/cpp/build/ninja_log.csv" ]]; then
+        echo "Copying build time results"
+        cp "${WORKSPACE}/cpp/build/ninja_log.csv" "$WORKSPACE/test-results/."
+    fi
+
     ################################################################################
     # TEST - Run GoogleTest
     ################################################################################
