@@ -539,14 +539,14 @@ TYPED_TEST(ReplaceTest, LargeScaleReplaceTest)
 }
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
 template <typename T>
 using wrapper = cudf::test::fixed_width_column_wrapper<T>;
-TYPED_TEST_SUITE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointReplace)
+TYPED_TEST(FixedPointTestAllReps, FixedPointReplace)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
