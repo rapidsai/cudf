@@ -2251,7 +2251,8 @@ TEST_F(StructReductionTest, StructReductionMinMaxWithNulls)
                               "€1" /*NULL*/,
                               "wut"},
                              nulls_at({2, 7})};
-    auto child2 = INTS_CW{{1, 2, 3 /*NULL*/, 4, 5, 6, 7, 8 /*NULL*/, 9, 10}, nulls_at({2, 7})};
+    auto child2 = INTS_CW{{1, 2, 3 /*NULL*/, 4 /*NULL*/, 5, 6, 7, 8 /*NULL*/, 9 /*NULL*/, 10},
+                          nulls_at({2, 7})};
     return STRUCTS_CW{{child1, child2}, nulls_at({3, 8})};
   }();
 
