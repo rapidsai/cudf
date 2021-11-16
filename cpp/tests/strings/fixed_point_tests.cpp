@@ -22,6 +22,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
+#include <limits>
 
 #include <tests/strings/utilities.h>
 
@@ -300,4 +301,28 @@ TEST_F(StringsConvertTest, IsFixedPoint)
   auto const expected64_scaled = cudf::test::fixed_width_column_wrapper<bool>(
     {true, true, true, false, false, false, false, false, false, false});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected64_scaled);
+}
+
+TEST_F(StringsConvertTest, FixedPointStringConversionOperator)
+{
+  auto const max = cuda::std::numeric_limits<__int128_t>::max();
+
+  auto const x = numeric::decimal128{max, numeric::scale_type{-10}};
+  EXPECT_EQ(static_cast<std::string>(x), "17014118346046923173168730371.5884105727");
+
+  auto const y = numeric::decimal128{max, numeric::scale_type{10}};
+  EXPECT_EQ(static_cast<std::string>(y), "170141183460469231731687303710000000000");
+
+  auto const z = numeric::decimal128{numeric::scaled_integer{max, numeric::scale_type{10}}};
+  EXPECT_EQ(static_cast<std::string>(z), "1701411834604692317316873037158841057270000000000");
+
+  auto const a = numeric::decimal128{numeric::scaled_integer{max, numeric::scale_type{40}}};
+  EXPECT_EQ(static_cast<std::string>(a),
+            "1701411834604692317316873037158841057270000000000000000000000000000000000000000");
+
+  auto const b = numeric::decimal128{numeric::scaled_integer{max, numeric::scale_type{-20}}};
+  EXPECT_EQ(static_cast<std::string>(b), "1701411834604692317.31687303715884105727");
+
+  auto const c = numeric::decimal128{numeric::scaled_integer{max, numeric::scale_type{-38}}};
+  EXPECT_EQ(static_cast<std::string>(c), "1.70141183460469231731687303715884105727");
 }
