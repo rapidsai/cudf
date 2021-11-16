@@ -180,7 +180,7 @@ else
     # MEMCHECK - Run compute-sanitizer on GoogleTest (only in nightly builds)
     ################################################################################
     if [[ "$BUILD_MODE" == "branch" && "$BUILD_TYPE" == "gpu" ]]; then
-        if [[ "$COMPUTE_SANITIZER_ENABLE" == "1" ]]; then
+        if [[ "$COMPUTE_SANITIZER_ENABLE" == "true" ]]; then
             gpuci_logger "Memcheck on GoogleTests with rmm_mode=cuda"
             export GTEST_CUDF_RMM_MODE=cuda
             COMPUTE_SANITIZER_CMD="compute-sanitizer --tool memcheck"
