@@ -652,7 +652,6 @@ class DateOffset:
 
         sign = -1 if sign_part else 1
         n = int(numeric_part) if numeric_part else 1
-        code = _offset_alias_to_code[freq_part]
 
         return cls(**{cls._CODES_TO_UNITS[code]: n * sign})
 
