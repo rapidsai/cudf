@@ -638,6 +638,29 @@ TYPED_TEST(GroupedRollingTest, ZeroWindow)
     grouping_keys, input, expected_group_offsets, preceding_window, following_window, 1);
 }
 
+using GroupedRollingTestInts = GroupedRollingTest<int32_t>;
+
+TEST_F(GroupedRollingTestInts, SumLargeWindow)
+{
+  fixed_width_column_wrapper<int32_t, int32_t> input({1, 1, 1, 1, 1, 1, 1, 1, 1, 1});
+
+  size_type preceding_window = 2147483640;
+  size_type following_window = 2147483642;
+
+  cudf::table_view groupby_keys;
+
+  auto result =
+    cudf::grouped_rolling_window(groupby_keys,
+                                 input,
+                                 preceding_window,
+                                 following_window,
+                                 1,
+                                 *cudf::make_sum_aggregation<cudf::rolling_aggregation>());
+
+  fixed_width_column_wrapper<int64_t, int32_t> expected({10, 10, 10, 10, 10, 10, 10, 10, 10, 10});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*result, expected);
+}
+
 // ------------- non-fixed-width types --------------------
 
 using GroupedRollingTestStrings = GroupedRollingTest<cudf::string_view>;
