@@ -73,89 +73,6 @@ class cufile_io_base {
   static constexpr size_t op_size_threshold = 128 << 10;
 };
 
-/**
- * @brief Interface class for cufile input.
- */
-class cufile_input : public cufile_io_base {
- public:
-  /**
-   * @brief Reads into a new device buffer.
-   *
-   *  @throws cudf::logic_error on cuFile error
-   *
-   * @param offset Number of bytes from the start
-   * @param size Number of bytes to read
-   * @param stream CUDA stream to use
-   *
-   * @return The data buffer in the device memory
-   */
-  virtual std::unique_ptr<datasource::buffer> read(size_t offset,
-                                                   size_t size,
-                                                   rmm::cuda_stream_view stream) = 0;
-
-  /**
-   * @brief Reads into existing device memory.
-   *
-   *  @throws cudf::logic_error on cuFile error
-   *
-   * @param offset Number of bytes from the start
-   * @param size Number of bytes to read
-   * @param dst Address of the existing device memory
-   * @param stream CUDA stream to use
-   *
-   * @return The number of bytes read
-   */
-  virtual size_t read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) = 0;
-
-  /**
-   * @brief Asynchronously reads into existing device memory.
-   *
-   *  @throws cudf::logic_error on cuFile error
-   *
-   * @param offset Number of bytes from the start
-   * @param size Number of bytes to read
-   * @param dst Address of the existing device memory
-   * @param stream CUDA stream to use
-   *
-   * @return The number of bytes read as an std::future
-   */
-  virtual std::future<size_t> read_async(size_t offset,
-                                         size_t size,
-                                         uint8_t* dst,
-                                         rmm::cuda_stream_view stream) = 0;
-};
-
-/**
- * @brief Interface class for cufile output.
- */
-class cufile_output : public cufile_io_base {
- public:
-  /**
-   * @brief Writes the data from a device buffer into a file.
-   *
-   *  @throws cudf::logic_error on cuFile error
-   *
-   * @param data Pointer to the buffer to be written into the output file
-   * @param offset Number of bytes from the start
-   * @param size Number of bytes to write
-   */
-  virtual void write(void const* data, size_t offset, size_t size) = 0;
-
-  /**
-   * @brief Asynchronously writes the data from a device buffer into a file.
-   *
-   * It is the caller's responsibility to not invalidate `data` until the result from this function
-   * is synchronized.
-   *
-   * @throws cudf::logic_error on cuFile error
-   *
-   * @param data Pointer to the buffer to be written into the output file
-   * @param offset Number of bytes from the start
-   * @param size Number of bytes to write
-   */
-  virtual std::future<void> write_async(void const* data, size_t offset, size_t size) = 0;
-};
-
 class cufile_shim;
 
 /**
@@ -221,20 +138,55 @@ struct cufile_registered_file {
  *
  * Exposes APIs to read directly from a file into device memory.
  */
-class cufile_input_impl final : public cufile_input {
+class cufile_input final : public cufile_io_base {
  public:
-  cufile_input_impl(std::string const& filepath);
+  cufile_input(std::string const& filepath);
 
+  /**
+   * @brief Reads into a new device buffer.
+   *
+   *  @throws cudf::logic_error on cuFile error
+   *
+   * @param offset Number of bytes from the start
+   * @param size Number of bytes to read
+   * @param stream CUDA stream to use
+   *
+   * @return The data buffer in the device memory
+   */
   std::unique_ptr<datasource::buffer> read(size_t offset,
                                            size_t size,
-                                           rmm::cuda_stream_view stream) override;
+                                           rmm::cuda_stream_view stream);
 
-  size_t read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream) override;
+  /**
+   * @brief Reads into existing device memory.
+   *
+   *  @throws cudf::logic_error on cuFile error
+   *
+   * @param offset Number of bytes from the start
+   * @param size Number of bytes to read
+   * @param dst Address of the existing device memory
+   * @param stream CUDA stream to use
+   *
+   * @return The number of bytes read
+   */
+  size_t read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream);
 
+  /**
+   * @brief Asynchronously reads into existing device memory.
+   *
+   *  @throws cudf::logic_error on cuFile error
+   *
+   * @param offset Number of bytes from the start
+   * @param size Number of bytes to read
+   * @param dst Address of the existing device memory
+   * @param stream CUDA stream to use
+   *
+   * @return The number of bytes read as an std::future
+   */
   std::future<size_t> read_async(size_t offset,
                                  size_t size,
                                  uint8_t* dst,
-                                 rmm::cuda_stream_view stream) override;
+                                 rmm::cuda_stream_view stream);
 
  private:
   cufile_shim const* shim = nullptr;
@@ -247,12 +199,34 @@ class cufile_input_impl final : public cufile_input {
  *
  * Exposes an API to write directly into a file from device memory.
  */
-class cufile_output_impl final : public cufile_output {
+class cufile_output final : public cufile_io_base {
  public:
-  cufile_output_impl(std::string const& filepath);
+  cufile_output(std::string const& filepath);
 
-  void write(void const* data, size_t offset, size_t size) override;
-  std::future<void> write_async(void const* data, size_t offset, size_t size) override;
+  /**
+   * @brief Writes the data from a device buffer into a file.
+   *
+   *  @throws cudf::logic_error on cuFile error
+   *
+   * @param data Pointer to the buffer to be written into the output file
+   * @param offset Number of bytes from the start
+   * @param size Number of bytes to write
+   */
+  void write(void const* data, size_t offset, size_t size);
+
+  /**
+   * @brief Asynchronously writes the data from a device buffer into a file.
+   *
+   * It is the caller's responsibility to not invalidate `data` until the result from this function
+   * is synchronized.
+   *
+   * @throws cudf::logic_error on cuFile error
+   *
+   * @param data Pointer to the buffer to be written into the output file
+   * @param offset Number of bytes from the start
+   * @param size Number of bytes to write
+   */
+  std::future<void> write_async(void const* data, size_t offset, size_t size);
 
  private:
   cufile_shim const* shim = nullptr;
@@ -261,20 +235,20 @@ class cufile_output_impl final : public cufile_output {
 };
 
 /**
- * @brief Creates a `cufile_input_impl` object
+ * @brief Creates a `cufile_input` object
  *
- * Returns a null pointer if an exception occurs in the `cufile_input_impl` constructor, or if the
+ * Returns a null pointer if an exception occurs in the `cufile_input` constructor, or if the
  * cuFile library is not installed.
  */
-std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath);
+std::unique_ptr<cufile_input> make_cufile_input(std::string const& filepath);
 
 /**
- * @brief Creates a `cufile_output_impl` object
+ * @brief Creates a `cufile_output` object
  *
- * Returns a null pointer if an exception occurs in the `cufile_output_impl` constructor, or if the
+ * Returns a null pointer if an exception occurs in the `cufile_output` constructor, or if the
  * cuFile library is not installed.
  */
-std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepath);
+std::unique_ptr<cufile_output> make_cufile_output(std::string const& filepath);
 
 }  // namespace detail
 }  // namespace io

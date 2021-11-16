@@ -160,7 +160,7 @@ void cufile_registered_file::register_handle()
 
 cufile_registered_file::~cufile_registered_file() { shim->handle_deregister(cf_handle); }
 
-cufile_input_impl::cufile_input_impl(std::string const& filepath)
+cufile_input::cufile_input(std::string const& filepath)
   : shim{cufile_shim::instance()},
     cf_file(shim, filepath, O_RDONLY | O_DIRECT),
     pool(16)  // The benefit from multithreaded read plateaus around 16 threads
@@ -168,9 +168,9 @@ cufile_input_impl::cufile_input_impl(std::string const& filepath)
   pool.sleep_duration = 10;
 }
 
-std::unique_ptr<datasource::buffer> cufile_input_impl::read(size_t offset,
-                                                            size_t size,
-                                                            rmm::cuda_stream_view stream)
+std::unique_ptr<datasource::buffer> cufile_input::read(size_t offset,
+                                                       size_t size,
+                                                       rmm::cuda_stream_view stream)
 {
   rmm::device_buffer out_data(size, stream);
   auto read_size = read(offset, size, reinterpret_cast<uint8_t*>(out_data.data()), stream);
@@ -203,10 +203,10 @@ std::vector<std::future<ResultT>> make_sliced_tasks(
 
 }  // namespace
 
-std::future<size_t> cufile_input_impl::read_async(size_t offset,
-                                                  size_t size,
-                                                  uint8_t* dst,
-                                                  rmm::cuda_stream_view stream)
+std::future<size_t> cufile_input::read_async(size_t offset,
+                                             size_t size,
+                                             uint8_t* dst,
+                                             rmm::cuda_stream_view stream)
 {
   int device;
   cudaGetDevice(&device);
@@ -231,28 +231,25 @@ std::future<size_t> cufile_input_impl::read_async(size_t offset,
   return std::async(std::launch::deferred, waiter, std::move(slice_tasks));
 }
 
-size_t cufile_input_impl::read(size_t offset,
-                               size_t size,
-                               uint8_t* dst,
-                               rmm::cuda_stream_view stream)
+size_t cufile_input::read(size_t offset, size_t size, uint8_t* dst, rmm::cuda_stream_view stream)
 {
   auto result = read_async(offset, size, dst, stream);
   return result.get();
 }
 
-cufile_output_impl::cufile_output_impl(std::string const& filepath)
+cufile_output::cufile_output(std::string const& filepath)
   : shim{cufile_shim::instance()},
     cf_file(shim, filepath, O_CREAT | O_RDWR | O_DIRECT, 0664),
     pool(16)
 {
 }
 
-void cufile_output_impl::write(void const* data, size_t offset, size_t size)
+void cufile_output::write(void const* data, size_t offset, size_t size)
 {
   write_async(data, offset, size).wait();
 }
 
-std::future<void> cufile_output_impl::write_async(void const* data, size_t offset, size_t size)
+std::future<void> cufile_output::write_async(void const* data, size_t offset, size_t size)
 {
   int device;
   cudaGetDevice(&device);
@@ -279,11 +276,11 @@ std::future<void> cufile_output_impl::write_async(void const* data, size_t offse
   return std::async(std::launch::deferred, waiter, std::move(slice_tasks));
 }
 
-std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath)
+std::unique_ptr<cufile_input> make_cufile_input(std::string const& filepath)
 {
   if (cufile_config::instance()->is_enabled()) {
     try {
-      return std::make_unique<cufile_input_impl>(filepath);
+      return std::make_unique<cufile_input>(filepath);
     } catch (...) {
       if (cufile_config::instance()->is_required()) throw;
     }
@@ -291,11 +288,11 @@ std::unique_ptr<cufile_input_impl> make_cufile_input(std::string const& filepath
   return nullptr;
 }
 
-std::unique_ptr<cufile_output_impl> make_cufile_output(std::string const& filepath)
+std::unique_ptr<cufile_output> make_cufile_output(std::string const& filepath)
 {
   if (cufile_config::instance()->is_enabled()) {
     try {
-      return std::make_unique<cufile_output_impl>(filepath);
+      return std::make_unique<cufile_output>(filepath);
     } catch (...) {
       if (cufile_config::instance()->is_required()) throw;
     }

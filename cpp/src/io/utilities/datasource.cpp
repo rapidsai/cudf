@@ -84,7 +84,7 @@ class file_source : public datasource {
   detail::file_wrapper _file;
 
  private:
-  std::unique_ptr<detail::cufile_input_impl> _cufile_in;
+  std::unique_ptr<detail::cufile_input> _cufile_in;
 };
 
 /**
