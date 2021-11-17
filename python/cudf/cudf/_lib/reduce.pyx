@@ -42,7 +42,10 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
         to the same type as the input column
     """
 
-    col_dtype = incol._resolve_reduction_dtype(reduction_op, dtype)
+    col_dtype = (
+        dtype if dtype is not None 
+        else incol._resolve_reduction_dtype(reduction_op)
+    )
 
     cdef column_view c_incol_view = incol.view()
     cdef unique_ptr[scalar] c_result
