@@ -26,6 +26,7 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
 #include <cub/block/block_reduce.cuh>
@@ -373,7 +374,7 @@ struct index_alternator {
 };
 
 /**
- * @brief Given a bitmask, counts the number of set (1) bits in every range
+ * @brief Given a bitmask, counts the number of set (1) or unset (0) bits in every range
  * `[indices_begin[2*i], indices_begin[(2*i)+1])` (where 0 <= i < std::distance(indices_begin,
  * indices_end) / 2).
  *
@@ -386,9 +387,9 @@ struct index_alternator {
  *
  * @param bitmask Bitmask residing in device memory whose bits will be counted
  * @param indices_begin An iterator representing the beginning of the range of indices specifying
- * ranges to count the number of set bits within
+ * ranges to count the number of set/unset bits within
  * @param indices_end An iterator representing the end of the range of indices specifying ranges to
- * count the number of set bits within
+ * count the number of set/unset bits within
  * @param count_bits If SET_BITS, count set (1) bits. If UNSET_BITS, count unset (0) bits
  * @param stream CUDA stream used for device memory operations and kernel launches
  *
@@ -404,7 +405,7 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
   size_t const num_indices = std::distance(indices_begin, indices_end);
 
   CUDF_EXPECTS(num_indices % 2 == 0, "Array of indices needs to have an even number of elements.");
-  for (size_t i = 0; i < num_indices / 2; i++) {
+  for (size_type i = 0; i < num_indices / 2; i++) {
     auto begin = indices_begin[i * 2];
     auto end   = indices_begin[i * 2 + 1];
     CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.");
@@ -416,7 +417,7 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
   } else if (bitmask == nullptr) {
     std::vector<size_type> ret(num_indices / 2, 0);
     if (count_bits == count_bits_policy::SET_BITS) {
-      for (size_t i = 0; i < num_indices / 2; i++) {
+      for (size_type i = 0; i < num_indices / 2; i++) {
         ret[i] = indices_begin[2 * i + 1] - indices_begin[2 * i];
       }
     }
