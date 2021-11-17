@@ -217,20 +217,20 @@ __global__ void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bi
     size_type delta                 = 0;
 
     // Compute delta due to the preceding bits in the first word in the range.
-    size_type num_slack_bits = intra_word_index(first_bit_index);
-    if (num_slack_bits > 0) {
+    size_type const first_num_slack_bits = intra_word_index(first_bit_index);
+    if (first_num_slack_bits > 0) {
       bitmask_type const word       = bitmask[word_index(first_bit_index)];
-      bitmask_type const slack_mask = set_least_significant_bits(num_slack_bits);
+      bitmask_type const slack_mask = set_least_significant_bits(first_num_slack_bits);
       delta -= __popc(word & slack_mask);
     }
 
     // Compute delta due to the following bits in the last word in the range.
-    num_slack_bits = (last_bit_index % word_size_in_bits) == 0
-                       ? 0
-                       : word_size_in_bits - intra_word_index(last_bit_index);
-    if (num_slack_bits > 0) {
+    size_type const last_num_slack_bits = (last_bit_index % word_size_in_bits) == 0
+                                            ? 0
+                                            : word_size_in_bits - intra_word_index(last_bit_index);
+    if (last_num_slack_bits > 0) {
       bitmask_type const word       = bitmask[word_index(last_bit_index)];
-      bitmask_type const slack_mask = set_most_significant_bits(num_slack_bits);
+      bitmask_type const slack_mask = set_most_significant_bits(last_num_slack_bits);
       delta -= __popc(word & slack_mask);
     }
 
