@@ -49,7 +49,7 @@ struct nunique_functor {
 
     auto values_view = column_device_view::create(values, stream);
     if (values.has_nulls()) {
-      auto equal              = element_equality_comparator{*values_view, *values_view, true};
+      auto equal = element_equality_comparator<contains_nulls::YES>{*values_view, *values_view};
       auto is_unique_iterator = thrust::make_transform_iterator(
         thrust::make_counting_iterator<size_type>(0),
         [v = *values_view,
@@ -72,7 +72,7 @@ struct nunique_functor {
                             thrust::make_discard_iterator(),
                             result->mutable_view().begin<size_type>());
     } else {
-      auto equal              = element_equality_comparator{*values_view, *values_view, false};
+      auto equal = element_equality_comparator<contains_nulls::NO>{*values_view, *values_view};
       auto is_unique_iterator = thrust::make_transform_iterator(
         thrust::make_counting_iterator<size_type>(0),
         [v = *values_view,

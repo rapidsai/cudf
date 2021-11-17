@@ -69,17 +69,18 @@ std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
     output_view.begin<int32_t>(),
     output_view.end<int32_t>(),
     [device_input = *device_input, nulls = has_nulls(leaf_table), seed] __device__(auto row_index) {
-      return thrust::reduce(thrust::seq,
-                            device_input.begin(),
-                            device_input.end(),
-                            seed,
-                            [rindex = row_index, nulls] __device__(auto hash, auto column) {
-                              return cudf::type_dispatcher(
-                                column.type(),
-                                element_hasher_with_seed<hash_function>{hash, hash, nulls},
-                                column,
-                                rindex);
-                            });
+      return thrust::reduce(
+        thrust::seq,
+        device_input.begin(),
+        device_input.end(),
+        seed,
+        [rindex = row_index, nulls] __device__(auto hash, auto column) {
+          return cudf::type_dispatcher(
+            column.type(),
+            element_hasher_with_seed<hash_function, contains_nulls::DYNAMIC>{hash, nulls, hash},
+            column,
+            rindex);
+        });
     });
 
   return output;

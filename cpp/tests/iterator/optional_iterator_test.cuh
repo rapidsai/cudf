@@ -36,11 +36,11 @@ void nonull_optional_iterator(IteratorTest<T>& testFixture)
   // GPU test
   testFixture.iterator_test_thrust(
     replaced_array,
-    cudf::detail::make_optional_iterator<T>(*d_col, cudf::contains_nulls::DYNAMIC{}, false),
+    cudf::detail::make_optional_iterator<T, cudf::contains_nulls::DYNAMIC>(*d_col, false),
     host_values.size());
   testFixture.iterator_test_thrust(
     replaced_array,
-    cudf::detail::make_optional_iterator<T>(*d_col, cudf::contains_nulls::NO{}),
+    cudf::detail::make_optional_iterator<T, cudf::contains_nulls::NO>(*d_col),
     host_values.size());
 }
 
@@ -73,21 +73,21 @@ void null_optional_iterator(IteratorTest<T>& testFixture)
 
   // GPU test for correct null mapping
   testFixture.iterator_test_thrust(optional_values,
-                                   d_col->optional_begin<T>(cudf::contains_nulls::DYNAMIC{}, true),
+                                   d_col->optional_begin<T, cudf::contains_nulls::DYNAMIC>(true),
                                    host_values.size());
 
   testFixture.iterator_test_thrust(
-    optional_values, d_col->optional_begin<T>(cudf::contains_nulls::YES{}), host_values.size());
+    optional_values, d_col->optional_begin<T, cudf::contains_nulls::YES>(), host_values.size());
   testFixture.iterator_test_thrust(
-    optional_values, d_col->optional_begin<T>(cudf::contains_nulls::YES{}), host_values.size());
+    optional_values, d_col->optional_begin<T, cudf::contains_nulls::YES>(), host_values.size());
 
   // GPU test for ignoring null mapping
   testFixture.iterator_test_thrust(value_all_valid,
-                                   d_col->optional_begin<T>(cudf::contains_nulls::DYNAMIC{}, false),
+                                   d_col->optional_begin<T, cudf::contains_nulls::DYNAMIC>(false),
                                    host_values.size());
 
   testFixture.iterator_test_thrust(
-    value_all_valid, d_col->optional_begin<T>(cudf::contains_nulls::NO{}), host_values.size());
+    value_all_valid, d_col->optional_begin<T, cudf::contains_nulls::NO>(), host_values.size());
   testFixture.iterator_test_thrust(
-    value_all_valid, d_col->optional_begin<T>(cudf::contains_nulls::NO{}), host_values.size());
+    value_all_valid, d_col->optional_begin<T, cudf::contains_nulls::NO>(), host_values.size());
 }

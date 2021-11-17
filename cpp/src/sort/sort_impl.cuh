@@ -128,11 +128,12 @@ std::unique_ptr<column> sorted_order(table_view input,
   auto const d_column_order = make_device_uvector_async(flattened.orders(), stream);
 
   auto const d_null_precedence = make_device_uvector_async(flattened.null_orders(), stream);
-  auto const comparator        = row_lexicographic_comparator(*device_table,
-                                                       *device_table,
-                                                       has_nulls(flattened),
-                                                       d_column_order.data(),
-                                                       d_null_precedence.data());
+  auto const comparator =
+    row_lexicographic_comparator<contains_nulls::DYNAMIC>(*device_table,
+                                                          *device_table,
+                                                          has_nulls(flattened),
+                                                          d_column_order.data(),
+                                                          d_null_precedence.data());
   if (stable) {
     thrust::stable_sort(rmm::exec_policy(stream),
                         mutable_indices_view.begin<size_type>(),

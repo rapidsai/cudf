@@ -327,11 +327,13 @@ class corresponding_rows_unequal {
                              column_device_view lhs_row_indices_,
                              column_device_view rhs_row_indices_,
                              size_type /*fp_ulps*/)
-    : comp(d_lhs, d_rhs, true), lhs_row_indices(lhs_row_indices_), rhs_row_indices(rhs_row_indices_)
+    : comp(d_lhs, d_rhs, cudf::null_equality::EQUAL),
+      lhs_row_indices(lhs_row_indices_),
+      rhs_row_indices(rhs_row_indices_)
   {
   }
 
-  cudf::row_equality_comparator comp;
+  cudf::row_equality_comparator<cudf::contains_nulls::YES> comp;
 
   __device__ bool operator()(size_type index)
   {
@@ -360,7 +362,7 @@ class corresponding_rows_not_equivalent {
                                     size_type fp_ulps_)
     : d_lhs(d_lhs),
       d_rhs(d_rhs),
-      comp(d_lhs, d_rhs, true),
+      comp(d_lhs, d_rhs, null_equality::EQUAL),
       lhs_row_indices(lhs_row_indices_),
       rhs_row_indices(rhs_row_indices_),
       fp_ulps(fp_ulps_)
@@ -406,7 +408,7 @@ class corresponding_rows_not_equivalent {
     }
   };
 
-  cudf::row_equality_comparator comp;
+  cudf::row_equality_comparator<cudf::contains_nulls::YES> comp;
 
   __device__ bool operator()(size_type index)
   {

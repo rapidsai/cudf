@@ -38,6 +38,7 @@ namespace {
  * @param group_offsets group index offsets with group ID indices
  * @param resolver flag value resolver
  * @param scan_op scan operation ran on the flag results
+ * @param has_nulls true if nulls are included in the `order_by` column
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> rank values
@@ -55,7 +56,8 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
   auto const flattened = cudf::structs::detail::flatten_nested_columns(
     table_view{{order_by}}, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
   auto const d_flat_order = table_device_view::create(flattened, stream);
-  row_equality_comparator comparator(*d_flat_order, *d_flat_order, has_nulls, true);
+  row_equality_comparator<contains_nulls::DYNAMIC> comparator(
+    *d_flat_order, *d_flat_order, has_nulls, null_equality::EQUAL);
   auto ranks         = make_fixed_width_column(data_type{type_to_id<size_type>()},
                                        flattened.flattened_columns().num_rows(),
                                        mask_state::UNALLOCATED,

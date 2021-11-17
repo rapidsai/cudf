@@ -76,9 +76,9 @@ struct copy_if_else_functor_impl<T, std::enable_if_t<is_rep_layout_compatible<T>
     auto const& rhs = *p_rhs;
 
     auto lhs_iter =
-      cudf::detail::make_optional_iterator<T>(lhs, contains_nulls::DYNAMIC{}, left_nullable);
+      cudf::detail::make_optional_iterator<T, contains_nulls::DYNAMIC>(lhs, left_nullable);
     auto rhs_iter =
-      cudf::detail::make_optional_iterator<T>(rhs, contains_nulls::DYNAMIC{}, right_nullable);
+      cudf::detail::make_optional_iterator<T, contains_nulls::DYNAMIC>(rhs, right_nullable);
     return detail::copy_if_else(left_nullable || right_nullable,
                                 lhs_iter,
                                 lhs_iter + size,
@@ -113,9 +113,9 @@ struct copy_if_else_functor_impl<string_view> {
     auto const& rhs = *p_rhs;
 
     auto lhs_iter =
-      cudf::detail::make_optional_iterator<T>(lhs, contains_nulls::DYNAMIC{}, left_nullable);
+      cudf::detail::make_optional_iterator<T, contains_nulls::DYNAMIC>(lhs, left_nullable);
     auto rhs_iter =
-      cudf::detail::make_optional_iterator<T>(rhs, contains_nulls::DYNAMIC{}, right_nullable);
+      cudf::detail::make_optional_iterator<T, contains_nulls::DYNAMIC>(rhs, right_nullable);
     return strings::detail::copy_if_else(lhs_iter, lhs_iter + size, rhs_iter, filter, stream, mr);
   }
 };

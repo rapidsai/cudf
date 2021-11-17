@@ -107,7 +107,7 @@ TYPED_TEST(NumericOptionalIteratorTest, mean_var_output)
   // std::cout << "expected <mixed_output> = " << expected_value << std::endl;
 
   // GPU test
-  auto it_dev         = d_col->optional_begin<T>(cudf::contains_nulls::YES{});
+  auto it_dev         = d_col->optional_begin<T, cudf::contains_nulls::YES>();
   auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
   auto result         = thrust::reduce(it_dev_squared,
                                it_dev_squared + d_col->size(),

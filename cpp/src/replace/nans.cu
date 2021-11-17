@@ -56,9 +56,9 @@ struct replace_nans_functor {
     };
 
     auto input_iterator =
-      make_optional_iterator<T>(*input_device_view, contains_nulls::DYNAMIC{}, input.has_nulls());
+      make_optional_iterator<T, contains_nulls::DYNAMIC>(*input_device_view, input.has_nulls());
     auto replacement_iterator =
-      make_optional_iterator<T>(replacement, contains_nulls::DYNAMIC{}, replacement_nullable);
+      make_optional_iterator<T, contains_nulls::DYNAMIC>(replacement, replacement_nullable);
     return copy_if_else(input.has_nulls() or replacement_nullable,
                         input_iterator,
                         input_iterator + size,

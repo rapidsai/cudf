@@ -50,10 +50,8 @@ cudf::size_type distinct_count(table_view const& keys,
   auto sorted_row_index   = sorted_indices->view().data<cudf::size_type>();
   auto device_input_table = cudf::table_device_view::create(keys, stream);
 
-  row_equality_comparator comp(*device_input_table,
-                               *device_input_table,
-                               cudf::has_nulls(keys),
-                               nulls_equal == null_equality::EQUAL);
+  row_equality_comparator<contains_nulls::DYNAMIC> comp(
+    *device_input_table, *device_input_table, cudf::has_nulls(keys), nulls_equal);
   return thrust::count_if(
     rmm::exec_policy(stream),
     thrust::counting_iterator<cudf::size_type>(0),

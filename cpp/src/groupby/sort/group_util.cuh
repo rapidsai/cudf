@@ -30,7 +30,7 @@ namespace detail {
  */
 struct row_arg_minmax_fn {
   size_type const num_rows;
-  row_lexicographic_comparator const comp;
+  row_lexicographic_comparator<contains_nulls::DYNAMIC> const comp;
   bool const arg_min;
 
   row_arg_minmax_fn(size_type const num_rows,

@@ -39,8 +39,8 @@ namespace {
 
 template <typename InputType>
 struct one_hot_encode_functor {
-  one_hot_encode_functor(column_device_view input, column_device_view category, bool has_nulls)
-    : _equality_comparator{input, category, has_nulls}, _input_size{input.size()}
+  one_hot_encode_functor(column_device_view input, column_device_view category, bool nulls)
+    : _equality_comparator{input, category, nulls, null_equality::EQUAL}, _input_size{input.size()}
   {
   }
 
@@ -52,7 +52,7 @@ struct one_hot_encode_functor {
   }
 
  private:
-  element_equality_comparator const _equality_comparator;
+  element_equality_comparator<contains_nulls::DYNAMIC> const _equality_comparator;
   size_type const _input_size;
 };
 
@@ -72,7 +72,7 @@ struct one_hot_encode_launcher {
     auto d_input_column    = column_device_view::create(input_column, stream);
     auto d_category_column = column_device_view::create(categories, stream);
     one_hot_encode_functor<InputType> one_hot_encoding_compute_f(
-      *d_input_column, *d_category_column, has_nulls);
+      *d_input_column, *d_category_column, input_column.nullable() || categories.nullable());
 
     thrust::transform(rmm::exec_policy(stream),
                       thrust::make_counting_iterator(0),
@@ -98,8 +98,6 @@ struct one_hot_encode_launcher {
   {
     CUDF_FAIL("Cannot encode column type without well-defined equality operator.");
   }
-
-  bool has_nulls;
 };
 
 std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const& input,
@@ -119,9 +117,7 @@ std::pair<std::unique_ptr<column>, table_view> one_hot_encode(column_view const&
     return std::make_pair(std::move(empty_data), table_view{views});
   }
 
-  auto const nullable = input.nullable() || categories.nullable();
-  return type_dispatcher(
-    input.type(), one_hot_encode_launcher{nullable}, input, categories, stream, mr);
+  return type_dispatcher(input.type(), one_hot_encode_launcher{}, input, categories, stream, mr);
 }
 
 }  // namespace detail

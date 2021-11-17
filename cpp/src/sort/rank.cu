@@ -40,7 +40,7 @@ namespace {
 template <typename ReturnType, typename Iterator>
 struct unique_comparator {
   unique_comparator(table_device_view device_table, Iterator const sorted_order, bool has_nulls)
-    : comparator(device_table, device_table, has_nulls, true), permute(sorted_order)
+    : comparator(device_table, device_table, has_nulls, null_equality::EQUAL), permute(sorted_order)
   {
   }
   __device__ ReturnType operator()(size_type index) const noexcept
@@ -49,7 +49,7 @@ struct unique_comparator {
   };
 
  private:
-  row_equality_comparator comparator;
+  row_equality_comparator<contains_nulls::DYNAMIC> comparator;
   Iterator const permute;
 };
 
