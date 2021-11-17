@@ -208,7 +208,7 @@ def test_is_na(fn):
             err[0] = 2
 
     err = cp.asarray([0], dtype="int8")
-    test_kernel[1, 1]()
+    test_kernel[1, 1](err)
     assert err[0] == 0
 
 
