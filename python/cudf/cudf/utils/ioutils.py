@@ -1183,8 +1183,6 @@ def _get_filesystem_and_paths(path_or_data, **kwargs):
         else:
             path_or_data = [path_or_data]
 
-        # Pyarrow did not support the protocol or storage options.
-        # Fall back to fsspec
         try:
             fs, _, fs_paths = fsspec.get_fs_token_paths(
                 path_or_data, mode="rb", storage_options=storage_options

@@ -163,7 +163,9 @@ def read_parquet_metadata(path):
     return num_rows, num_row_groups, col_names
 
 
-def _process_row_groups(paths, fs, filters=None, row_groups=None):
+def _process_dataset(
+    paths, fs, filters=None, partitioning="hive", row_groups=None,
+):
 
     # The general purpose of this function is to (1) expand
     # directory input into a list of paths (using the pyarrow
@@ -180,34 +182,105 @@ def _process_row_groups(paths, fs, filters=None, row_groups=None):
 
     # Initialize ds.FilesystemDataset
     dataset = ds.dataset(
-        paths, filesystem=fs, format="parquet", partitioning="hive",
+        paths, filesystem=fs, format="parquet", partitioning=partitioning,
     )
     file_list = dataset.files
     if len(file_list) == 0:
         raise FileNotFoundError(f"{paths} could not be resolved to any files")
 
-    if filters is not None:
-        # Load IDs of filtered row groups for each file in dataset
-        filtered_rg_ids = defaultdict(list)
-        for fragment in dataset.get_fragments(filter=filters):
-            for rg_fragment in fragment.split_by_row_group(filters):
-                for rg_info in rg_fragment.row_groups:
-                    filtered_rg_ids[rg_fragment.path].append(rg_info.id)
+    # Deal with directory partitioning
+    # Get all partition keys (without filters)
+    partition_categories = defaultdict(list)
+    if partitioning is not None:
+        file_fragment = None
+        for file_fragment in dataset.get_fragments():
+            keys = ds._get_partition_keys(file_fragment.partition_expression)
+            if not (keys or partition_categories):
+                break  # Bail - This is not a directory-partitioned dataset
+            for k, v in keys.items():
+                if v not in partition_categories[k]:
+                    partition_categories[k].append(v)
 
-        # Initialize row_groups to be selected
-        if row_groups is None:
-            row_groups = [None for _ in dataset.files]
+        if file_fragment is not None:
+            # Check/correct order of `categories` using last file_frag,
+            # because `_get_partition_keys` does NOT preserve the
+            # partition-hierarchy order of the keys.
+            cat_keys = [
+                part.split("=")[0]
+                for part in file_fragment.path.split(fs.sep)
+                if "=" in part
+            ]
+            if set(partition_categories) == set(cat_keys):
+                partition_categories = {
+                    k: partition_categories[k]
+                    for k in cat_keys
+                    if k in partition_categories
+                }
 
-        # Store IDs of selected row groups for each file
-        for i, file in enumerate(dataset.files):
-            if row_groups[i] is None:
-                row_groups[i] = filtered_rg_ids[file]
-            else:
-                row_groups[i] = filter(
-                    lambda id: id in row_groups[i], filtered_rg_ids[file]
+    # If we do not have partitioned data and
+    # are not filtering, we can return here
+    if not (filters or partition_categories):
+        return file_list, row_groups, None
+
+    # Record initial row_groups input
+    row_groups_map = {}
+    if row_groups is not None:
+        # Make sure paths and row_groups map 1:1
+        # and save the initial mapping
+        if len(paths) != len(file_list):
+            raise ValueError(
+                "Cannot specify a row_group selection for a directory path."
+            )
+        row_groups_map = {path: rgs for path, rgs in zip(paths, row_groups)}
+
+    # Apply filters and discover partition columns
+    partition_keys = []
+    if partition_categories or filters is not None:
+        row_groups, file_list = [], []
+        for file_fragment in dataset.get_fragments(filter=filters):
+            path = file_fragment.path
+
+            # Extract hive-partition keys, and make sure they
+            # are orederd the same as they are in `partition_categories`
+            if partition_categories:
+                raw_keys = ds._get_partition_keys(
+                    file_fragment.partition_expression
+                )
+                partition_keys.append(
+                    [
+                        (name, raw_keys[name])
+                        for name in partition_categories.keys()
+                    ]
                 )
 
-    return file_list, row_groups
+            # Apply row-group filtering
+            selection = row_groups_map.get(path, None)
+            if selection is not None or filters is not None:
+                filtered_row_groups = [
+                    rg_info.id
+                    for rg_fragment in file_fragment.split_by_row_group(
+                        filters
+                    )
+                    for rg_info in rg_fragment.row_groups
+                ]
+            file_list.append(path)
+            if selection is None:
+                row_groups.append(
+                    None if filters is None else filtered_row_groups
+                )
+            else:
+                row_groups.append(
+                    [
+                        rg_id
+                        for rg_id in filtered_row_groups
+                        if rg_id in selection
+                    ]
+                )
+
+    import pdb
+
+    pdb.set_trace()
+    return file_list, row_groups, partition_keys
 
 
 def _get_byte_ranges(file_list, row_groups, columns, fs, **kwargs):
@@ -319,6 +392,7 @@ def read_parquet(
     strings_to_categorical=False,
     use_pandas_metadata=True,
     use_python_file_object=False,
+    partitioning="hive",
     *args,
     **kwargs,
 ):
@@ -345,17 +419,24 @@ def read_parquet(
     # Start by trying construct a filesystem object, so we
     # can apply filters on remote file-systems
     fs, paths = ioutils._get_filesystem_and_paths(filepath_or_buffer, **kwargs)
-    filepath_or_buffer = paths if paths else filepath_or_buffer
-    if fs is None and filters is not None:
-        raise ValueError("cudf cannot apply filters to open file objects.")
 
-    # Apply filters now (before converting non-local paths to buffers).
-    # Note that `_process_row_groups` will also expand `filepath_or_buffer`
-    # into a full list of files if it is a directory.
-    if fs is not None:
-        filepath_or_buffer, row_groups = _process_row_groups(
-            filepath_or_buffer, fs, filters=filters, row_groups=row_groups,
+    # Use pyarrow dataset to detect/process directory-partitioned
+    # data and apply filters. Note that we can only support partitioned
+    # data and filtering if the input is a single directory or list of
+    # paths.
+    partition_info = None
+    if fs and paths:
+        # TODO: Will this handle glob patters?
+        paths, row_groups, partition_info = _process_dataset(
+            paths,
+            fs,
+            filters=filters,
+            partitioning=partitioning,
+            row_groups=row_groups,
         )
+    elif filters is not None:
+        raise ValueError("cudf cannot apply filters to open file objects.")
+    filepath_or_buffer = paths if paths else filepath_or_buffer
 
     # Check if we should calculate the specific byte-ranges
     # needed for each parquet file. We always do this when we
