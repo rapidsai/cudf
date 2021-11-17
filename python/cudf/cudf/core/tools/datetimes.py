@@ -3,7 +3,7 @@
 import math
 import re
 import warnings
-from typing import Sequence, Union
+from typing import Sequence, Type, TypeVar, Union
 
 import cupy as cp
 import numpy as np
@@ -30,6 +30,7 @@ _unit_dtype_map = {
 }
 
 _offset_alias_to_code = {
+    "W": "W",
     "D": "D",
     "H": "h",
     "h": "h",
@@ -365,6 +366,9 @@ def get_units(value):
     return value
 
 
+_T = TypeVar("_T", bound="DateOffset")
+
+
 class DateOffset:
     """
     An object used for binary ops where calendrical arithmetic
@@ -440,7 +444,21 @@ class DateOffset:
         "years": "Y",
     }
 
-    _CODES_TO_UNITS = {v: k for k, v in _UNITS_TO_CODES.items()}
+    _CODES_TO_UNITS = {
+        "ns": "nanoseconds",
+        "us": "microseconds",
+        "ms": "milliseconds",
+        "L": "milliseconds",
+        "s": "seconds",
+        "m": "minutes",
+        "h": "hours",
+        "D": "days",
+        "W": "weeks",
+        "M": "months",
+        "Y": "years",
+    }
+
+    _FREQSTR_REGEX = re.compile("([0-9]*)([a-zA-Z]+)")
 
     def __init__(self, n=1, normalize=False, **kwds):
         if normalize:
@@ -554,7 +572,9 @@ class DateOffset:
             kwargs["seconds"] = seconds
         return kwargs
 
-    def _datetime_binop(self, datetime_col, op, reflect=False):
+    def _datetime_binop(
+        self, datetime_col, op, reflect=False
+    ) -> column.DatetimeColumn:
         if reflect and op == "sub":
             raise TypeError(
                 f"Can not subtract a {type(datetime_col).__name__}"
@@ -588,7 +608,7 @@ class DateOffset:
         return col
 
     @property
-    def _is_no_op(self):
+    def _is_no_op(self) -> bool:
         # some logic could be implemented here for more complex cases
         # such as +1 year, -12 months
         return all([i == 0 for i in self._kwds.values()])
@@ -609,24 +629,22 @@ class DateOffset:
         return repr_str
 
     @classmethod
-    def _from_freqstr(cls, freqstr):
+    def _from_freqstr(cls: Type[_T], freqstr: str) -> _T:
         """
         Parse a string and return a DateOffset object
         expects strings of the form 3D, 25W, 10ms, 42ns, etc.
         """
-        numeric_part = ""
-        freq_part = ""
+        match = cls._FREQSTR_REGEX.match(freqstr)
 
-        for x in freqstr:
-            if x.isdigit():
-                numeric_part += x
-            else:
-                freq_part += x
+        if match is None:
+            raise ValueError(f"Invalid frequency string: {freqstr}")
 
-        if (
-            freq_part not in cls._CODES_TO_UNITS
-            or not numeric_part + freq_part == freqstr
-        ):
+        numeric_part = match.group(1)
+        if numeric_part == "":
+            numeric_part = "1"
+        freq_part = match.group(2)
+
+        if freq_part not in cls._CODES_TO_UNITS:
             raise ValueError(f"Cannot interpret frequency str: {freqstr}")
 
         return cls(**{cls._CODES_TO_UNITS[freq_part]: int(numeric_part)})
@@ -859,15 +877,16 @@ def date_range(
             # end == start, return exactly 1 timestamp (start)
             periods = 1
 
-    # The estimated upper bound of `end` is enforced to be computed to make
-    # sure overflow components are raised before actually computing the
-    # sequence.
+    # We compute `end_estim` (the estimated upper bound of the date
+    # range) below, but don't always use it.  We do this to ensure
+    # that the appropriate OverflowError is raised by Pandas in case
+    # of overflow.
     # FIXME: when `end_estim` is out of bound, but the actual `end` is not,
     # we shouldn't raise but compute the sequence as is. The trailing overflow
     # part should get trimmed at the end.
     end_estim = (
         pd.Timestamp(start.value)
-        + (periods - 1) * offset._maybe_as_fast_pandas_offset()
+        + periods * offset._maybe_as_fast_pandas_offset()
     ).to_datetime64()
 
     if "months" in offset.kwds or "years" in offset.kwds:
@@ -881,13 +900,12 @@ def date_range(
                 (res <= end) if _is_increment_sequence else (res <= start)
             ]
     else:
-        # If `offset` is fixed frequency, we treat both timestamps as integers
-        # and evenly divide the given integer range.
-        arr = cp.linspace(
-            start=start.value.astype("int64"),
-            stop=end_estim.astype("int64"),
-            num=periods,
-        )
+        # If `offset` is fixed frequency, we generate a range of
+        # treating `start`, `stop` and `step` as ints:
+        stop = end_estim.astype("int64")
+        start = start.value.astype("int64")
+        step = int(_offset_to_nanoseconds_lower_bound(offset))
+        arr = cp.arange(start=start, stop=stop, step=step)
         res = cudf.core.column.as_column(arr).astype("datetime64[ns]")
 
     return cudf.DatetimeIndex._from_data({name: res})

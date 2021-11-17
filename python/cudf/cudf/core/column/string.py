@@ -5214,26 +5214,21 @@ class StringColumn(column.ColumnBase):
 
         return self._end_offset
 
-    def __sizeof__(self) -> int:
-        if self._cached_sizeof is None:
-            n = 0
-            if len(self.base_children) == 2:
-                child0_size = (self.size + 1) * self.base_children[
-                    0
-                ].dtype.itemsize
+    def memory_usage(self) -> int:
+        n = 0
+        if len(self.base_children) == 2:
+            child0_size = (self.size + 1) * self.base_children[
+                0
+            ].dtype.itemsize
 
-                child1_size = (
-                    self.end_offset - self.start_offset
-                ) * self.base_children[1].dtype.itemsize
+            child1_size = (
+                self.end_offset - self.start_offset
+            ) * self.base_children[1].dtype.itemsize
 
-                n += child0_size + child1_size
-            if self.nullable:
-                n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
-                    self.size
-                )
-            self._cached_sizeof = n
-
-        return self._cached_sizeof
+            n += child0_size + child1_size
+        if self.nullable:
+            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
+        return n
 
     @property
     def base_size(self) -> int:

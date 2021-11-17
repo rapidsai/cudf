@@ -19,9 +19,17 @@
 #ifdef __CUDACC__
 #define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ inline
 #define CUDA_DEVICE_CALLABLE      __device__ inline
+
+// This version of the macro maximizes the chances of inlining when applied to
+// a callable that is called on the GPU.
+#define CUDF_HDFI __host__ __device__ __forceinline__
+#define CUDF_DFI  __device__ __forceinline__
 #else
 #define CUDA_HOST_DEVICE_CALLABLE inline
 #define CUDA_DEVICE_CALLABLE      inline
+
+#define CUDF_HDFI inline
+#define CUDF_DFI  inline
 #endif
 
 #include <cassert>
@@ -228,6 +236,7 @@ enum class type_id : int32_t {
   LIST,                    ///< List elements
   DECIMAL32,               ///< Fixed-point type with int32_t
   DECIMAL64,               ///< Fixed-point type with int64_t
+  DECIMAL128,              ///< Fixed-point type with __int128_t
   STRUCT,                  ///< Struct elements
   // `NUM_TYPE_IDS` must be last!
   NUM_TYPE_IDS  ///< Total number of type ids
@@ -263,7 +272,7 @@ class data_type {
    */
   explicit data_type(type_id id, int32_t scale) : _id{id}, _fixed_point_scale{scale}
   {
-    assert(id == type_id::DECIMAL32 || id == type_id::DECIMAL64);
+    assert(id == type_id::DECIMAL32 || id == type_id::DECIMAL64 || id == type_id::DECIMAL128);
   }
 
   /**

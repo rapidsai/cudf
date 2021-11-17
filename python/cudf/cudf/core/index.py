@@ -474,7 +474,12 @@ class RangeIndex(BaseIndex):
         pos = search_range(start, stop, label, step, side=side)
         return pos
 
-    def memory_usage(self, **kwargs):
+    def memory_usage(self, deep=False):
+        if deep:
+            warnings.warn(
+                "The deep parameter is ignored and is only included "
+                "for pandas compatibility."
+            )
         return 0
 
     def unique(self):
@@ -1021,9 +1026,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         true_inds = sort_inds.slice(lower_bound, upper_bound).values
         mask[true_inds] = True
         return mask
-
-    def __sizeof__(self):
-        return self._values.__sizeof__()
 
     def __repr__(self):
         max_seq_items = get_option("max_seq_items") or len(self)
@@ -2329,6 +2331,7 @@ class IntervalIndex(GenericIndex):
             data = column.as_column(data)
             data.dtype.closed = closed
 
+        self.closed = closed
         super().__init__(data, **kwargs)
 
     def from_breaks(breaks, closed="right", name=None, copy=False, dtype=None):
