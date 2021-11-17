@@ -279,11 +279,11 @@ struct column_to_strings_fn {
 void write_chunked_begin(data_sink* out_sink,
                          table_view const& table,
                          table_metadata const* metadata,
-                         csv_writer_options const& options_,
+                         csv_writer_options const& options,
                          rmm::cuda_stream_view stream,
-                         rmm::mr::device_memory_resource* mr_)
+                         rmm::mr::device_memory_resource* mr)
 {
-  if (options_.is_enabled_include_header()) {
+  if (options.is_enabled_include_header()) {
     // need to generate column names if metadata is not provided
     std::vector<std::string> generated_col_names;
     if (metadata == nullptr) {
@@ -296,8 +296,8 @@ void write_chunked_begin(data_sink* out_sink,
     CUDF_EXPECTS(column_names.size() == static_cast<size_t>(table.num_columns()),
                  "Mismatch between number of column headers and table columns.");
 
-    auto const delimiter  = options_.get_inter_column_delimiter();
-    auto const terminator = options_.get_line_terminator();
+    auto const delimiter  = options.get_inter_column_delimiter();
+    auto const terminator = options.get_line_terminator();
 
     // process header names:
     // - if the header name includes the delimiter or terminator character,
@@ -346,7 +346,7 @@ void write_chunked_begin(data_sink* out_sink,
 void write_chunked(data_sink* out_sink,
                    strings_column_view const& str_column_view,
                    table_metadata const* metadata,
-                   csv_writer_options const& options_,
+                   csv_writer_options const& options,
                    rmm::cuda_stream_view stream,
                    rmm::mr::device_memory_resource* mr)
 {
@@ -363,7 +363,7 @@ void write_chunked(data_sink* out_sink,
 
   CUDF_EXPECTS(str_column_view.size() > 0, "Unexpected empty strings column.");
 
-  cudf::string_scalar newline{options_.get_line_terminator()};
+  cudf::string_scalar newline{options.get_line_terminator()};
   auto p_str_col_w_nl =
     cudf::strings::detail::join_strings(str_column_view, newline, string_scalar("", false), stream);
   strings_column_view strings_column{p_str_col_w_nl->view()};
@@ -391,26 +391,26 @@ void write_chunked(data_sink* out_sink,
   if (out_sink->is_device_write_preferred(newline.size())) {
     out_sink->device_write(newline.data(), newline.size(), stream);
   } else {
-    out_sink->host_write(options_.get_line_terminator().data(),
-                         options_.get_line_terminator().size());
+    out_sink->host_write(options.get_line_terminator().data(),
+                         options.get_line_terminator().size());
   }
 }
 
 void write_csv(data_sink* out_sink,
                table_view const& table,
                table_metadata const* metadata,
-               csv_writer_options const& options_,
+               csv_writer_options const& options,
                rmm::cuda_stream_view stream,
-               rmm::mr::device_memory_resource* mr_)
+               rmm::mr::device_memory_resource* mr)
 {
   // write header: column names separated by delimiter:
   // (even for tables with no rows)
   //
-  write_chunked_begin(out_sink, table, metadata, options_, stream, mr_);
+  write_chunked_begin(out_sink, table, metadata, options, stream, mr);
 
   if (table.num_rows() > 0) {
     // no need to check same-size columns constraint; auto-enforced by table_view
-    auto n_rows_per_chunk = options_.get_rows_per_chunk();
+    auto n_rows_per_chunk = options.get_rows_per_chunk();
     //
     // This outputs the CSV in row chunks to save memory.
     // Maybe we can use the total_rows*count calculation and a memory threshold
@@ -440,7 +440,7 @@ void write_csv(data_sink* out_sink,
 
     // convert each chunk to CSV:
     //
-    column_to_strings_fn converter{options_, stream, rmm::mr::get_current_device_resource()};
+    column_to_strings_fn converter{options, stream, rmm::mr::get_current_device_resource()};
     for (auto&& sub_view : vector_views) {
       // Skip if the table has no rows
       if (sub_view.num_rows() == 0) continue;
@@ -463,19 +463,19 @@ void write_csv(data_sink* out_sink,
       // concatenate columns in each row into one big string column
       // (using null representation and delimiter):
       //
-      std::string delimiter_str{options_.get_inter_column_delimiter()};
+      std::string delimiter_str{options.get_inter_column_delimiter()};
       auto str_concat_col = [&] {
         if (str_table_view.num_columns() > 1)
           return cudf::strings::detail::concatenate(str_table_view,
                                                     delimiter_str,
-                                                    options_.get_na_rep(),
+                                                    options.get_na_rep(),
                                                     strings::separator_on_nulls::YES,
                                                     stream);
-        cudf::string_scalar narep{options_.get_na_rep()};
+        cudf::string_scalar narep{options.get_na_rep()};
         return cudf::strings::detail::replace_nulls(str_table_view.column(0), narep, stream);
       }();
 
-      write_chunked(out_sink, str_concat_col->view(), metadata, options_, stream, mr_);
+      write_chunked(out_sink, str_concat_col->view(), metadata, options, stream, mr);
     }
   }
 }
