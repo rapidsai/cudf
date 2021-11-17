@@ -154,6 +154,9 @@ num_rows : int, default None
 strings_to_categorical : boolean, default False
     If True, return string columns as GDF_CATEGORY dtype; if False, return a
     as GDF_STRING dtype.
+categorical_partitioning : boolean, default True
+    Whether directory-partitioned columns should be interpreted as categorical
+    or raw dtypes.
 use_pandas_metadata : boolean, default True
     If True and dataset has custom PANDAS schema metadata, ensure that index
     columns are also loaded.

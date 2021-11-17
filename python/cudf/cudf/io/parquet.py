@@ -165,12 +165,7 @@ def read_parquet_metadata(path):
 
 
 def _process_dataset(
-    paths,
-    fs,
-    filters=None,
-    partitioning="hive",
-    row_groups=None,
-    categorical_partitioning=True,
+    paths, fs, filters=None, row_groups=None, categorical_partitioning=True,
 ):
     # Returns:
     #     file_list - Expanded/filtered list of paths
@@ -194,7 +189,7 @@ def _process_dataset(
 
     # Initialize ds.FilesystemDataset
     dataset = ds.dataset(
-        paths, filesystem=fs, format="parquet", partitioning=partitioning,
+        paths, filesystem=fs, format="parquet", partitioning="hive",
     )
     file_list = dataset.files
     if len(file_list) == 0:
@@ -203,37 +198,36 @@ def _process_dataset(
     # Deal with directory partitioning
     # Get all partition keys (without filters)
     partition_categories = defaultdict(list)
-    if partitioning is not None:
-        file_fragment = None
-        for file_fragment in dataset.get_fragments():
-            keys = ds._get_partition_keys(file_fragment.partition_expression)
-            if not (keys or partition_categories):
-                # Bail - This is not a directory-partitioned dataset
-                break
-            for k, v in keys.items():
-                if v not in partition_categories[k]:
-                    partition_categories[k].append(v)
-            if not categorical_partitioning:
-                # Bail - We don't need to discover all categories.
-                # We only need to save the partition keys from this
-                # first `file_fragment`
-                break
+    file_fragment = None
+    for file_fragment in dataset.get_fragments():
+        keys = ds._get_partition_keys(file_fragment.partition_expression)
+        if not (keys or partition_categories):
+            # Bail - This is not a directory-partitioned dataset
+            break
+        for k, v in keys.items():
+            if v not in partition_categories[k]:
+                partition_categories[k].append(v)
+        if not categorical_partitioning:
+            # Bail - We don't need to discover all categories.
+            # We only need to save the partition keys from this
+            # first `file_fragment`
+            break
 
-        if partition_categories and file_fragment is not None:
-            # Check/correct order of `categories` using last file_frag,
-            # because `_get_partition_keys` does NOT preserve the
-            # partition-hierarchy order of the keys.
-            cat_keys = [
-                part.split("=")[0]
-                for part in file_fragment.path.split(fs.sep)
-                if "=" in part
-            ]
-            if set(partition_categories) == set(cat_keys):
-                partition_categories = {
-                    k: partition_categories[k]
-                    for k in cat_keys
-                    if k in partition_categories
-                }
+    if partition_categories and file_fragment is not None:
+        # Check/correct order of `categories` using last file_frag,
+        # because `_get_partition_keys` does NOT preserve the
+        # partition-hierarchy order of the keys.
+        cat_keys = [
+            part.split("=")[0]
+            for part in file_fragment.path.split(fs.sep)
+            if "=" in part
+        ]
+        if set(partition_categories) == set(cat_keys):
+            partition_categories = {
+                k: partition_categories[k]
+                for k in cat_keys
+                if k in partition_categories
+            }
 
     # If we do not have partitioned data and
     # are not filtering, we can return here
@@ -413,7 +407,6 @@ def read_parquet(
     strings_to_categorical=False,
     use_pandas_metadata=True,
     use_python_file_object=False,
-    partitioning="hive",
     categorical_partitioning=True,
     *args,
     **kwargs,
@@ -458,7 +451,6 @@ def read_parquet(
             paths,
             fs,
             filters=filters,
-            partitioning=partitioning,
             row_groups=row_groups,
             categorical_partitioning=categorical_partitioning,
         )
@@ -580,14 +572,14 @@ def _parquet_to_frame(
         )
         # Add partition columns to the last DataFrame
         for (name, value) in part_key:
-            codes = (
-                as_column(partition_categories[name].index(value))
-                .as_frame()
-                .repeat(len(dfs[-1]))
-                ._data[None]
-            )
             if partition_categories and name in partition_categories:
                 # Build the categorical column from `codes`
+                codes = (
+                    as_column(partition_categories[name].index(value))
+                    .as_frame()
+                    .repeat(len(dfs[-1]))
+                    ._data[None]
+                )
                 dfs[-1][name] = build_categorical_column(
                     categories=partition_categories[name],
                     codes=codes,
@@ -597,8 +589,13 @@ def _parquet_to_frame(
                 )
             else:
                 # Not building categorical columns, so
-                # `codes` is already what we want
-                dfs[-1][name] = codes
+                # `value` is already what we want
+                dfs[-1][name] = (
+                    as_column(value)
+                    .as_frame()
+                    .repeat(len(dfs[-1]))
+                    ._data[None]
+                )
 
     # Concatenate dfs and return.
     # Assume we can ignore the index if it has no name.
