@@ -318,11 +318,11 @@ struct same_element_type_dispatcher {
 
     auto const minmax_idx = [&] {
       if (input.has_nulls()) {
-        auto const binop = cudf::groupby::detail::row_arg_minmax_fn<true>(
+        auto const binop = cudf::reduction::detail::row_arg_minmax_fn<true>(
           input.size(), *d_flattened_input_ptr, flattened_null_precedences.data(), is_min_op);
         return do_reduction(binop);
       } else {
-        auto const binop = cudf::groupby::detail::row_arg_minmax_fn<false>(
+        auto const binop = cudf::reduction::detail::row_arg_minmax_fn<false>(
           input.size(), *d_flattened_input_ptr, flattened_null_precedences.data(), is_min_op);
         return do_reduction(binop);
       }
