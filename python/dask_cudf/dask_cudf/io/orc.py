@@ -147,13 +147,14 @@ def read_orc(
         columns_in_predicate = list(
             {col for conjunction in filters for (col, _, _) in conjunction}
         )
-        columns = [c for c in columns if c not in columns_in_predicate]
+        all_columns = columns
+        columns = [c for c in all_columns if c not in columns_in_predicate]
 
         # Read in only the columns relevant to the filtering
         filtered_df = read_orc(
             paths,
             columns=columns_in_predicate,
-            filters=None,
+            filters=filters,
             storage_options=None,
             **kwargs,
         )
@@ -168,10 +169,11 @@ def read_orc(
                 return df
 
         filtered_df = filtered_df.map_partitions(_empty)
-        filtered_partition_lens = filtered_df.map_partitions(
-            lambda df: len(df)
-        ).compute()
-        is_filtered_partition_empty = filtered_partition_lens == 0
+        filtered_partition_lens = filtered_df.map_partitions(len).compute()
+        is_filtered_partition_empty = [
+            filtered_partition_len == 0
+            for filtered_partition_len in filtered_partition_lens
+        ]
 
         # Cull empty partitions
         filtered_df_partitions = [
@@ -224,7 +226,7 @@ def read_orc(
         # columns for which we only read in relevant stripes.
         @delayed(pure=True)
         def _hcat(a, b):
-            return cudf.concat([a, b], axis=1)
+            return cudf.concat([a, b], axis=1)[all_columns]
 
         # Return a data frame comprised of delayed horizontal concatenation.
         remaining_df_partitions = res.to_delayed()
@@ -235,7 +237,7 @@ def read_orc(
                     filtered_df_partitions, remaining_df_partitions
                 )
             ],
-            cudf.concat([filtered_df._meta, res._meta], axis=1),
+            cudf.concat([filtered_df._meta, res._meta], axis=1)[all_columns],
         )
 
 
