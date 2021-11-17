@@ -30,6 +30,41 @@ inline std::string getenv_or(std::string const& env_var_name, std::string_view d
   return std::string{(env_val == nullptr) ? default_val : env_val};
 }
 
+namespace cufile_integration {
+
+namespace {
+/**
+ * @brief Defines which cuFile usage to enable.
+ */
+enum class usage_policy : uint8_t { OFF, GDS, ALWAYS };
+
+/**
+ * @brief Get the current usage policy.
+ */
+inline usage_policy get_env_policy()
+{
+  static auto const env_val = getenv_or("LIBCUDF_CUFILE_POLICY", "GDS");
+  if (env_val == "OFF") return usage_policy::OFF;
+  if (env_val == "ALWAYS") return usage_policy::ALWAYS;
+  return usage_policy::GDS;
+}
+}  // namespace
+
+/**
+ * @brief Returns true if cuFile and its compatiblity mode are enabled.
+ */
+inline bool is_always_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
+
+/**
+ * @brief Returns true if only direct IO through cuFile are enabled (compatiblity mode is disabled).
+ */
+inline bool is_gds_enabled()
+{
+  return is_always_enabled() or get_env_policy() == usage_policy::GDS;
+}
+
+}  // namespace cufile_integration
+
 namespace nvcomp_integration {
 
 namespace {
@@ -64,4 +99,5 @@ inline bool is_stable_enabled()
 }
 
 }  // namespace nvcomp_integration
+
 }  // namespace cudf::io::detail

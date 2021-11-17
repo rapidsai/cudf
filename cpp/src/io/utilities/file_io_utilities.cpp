@@ -49,45 +49,14 @@ file_wrapper::file_wrapper(std::string const& filepath, int flags, mode_t mode)
 
 file_wrapper::~file_wrapper() { close(fd); }
 
-cufile_config::cufile_config() : policy{getenv_or("LIBCUDF_CUFILE_POLICY", default_policy)}
-{
-  if (is_enabled()) {
-    // Modify the config file based on the policy
-    auto const config_file_path = getenv_or(json_path_env_var, "/etc/cufile.json");
-    std::ifstream user_config_file(config_file_path);
-    // Modified config file is stored in a temporary directory
-    auto const cudf_config_path = tmp_config_dir.path() + "/cufile.json";
-    std::ofstream cudf_config_file(cudf_config_path);
-
-    std::string line;
-    while (std::getline(user_config_file, line)) {
-      std::string const tag = "\"allow_compat_mode\"";
-      if (line.find(tag) != std::string::npos) {
-        // TODO: only replace the true/false value
-        // Enable compatiblity mode when cuDF does not fall back to host path
-        cudf_config_file << tag << ": " << (is_required() ? "true" : "false") << ",\n";
-      } else {
-        cudf_config_file << line << '\n';
-      }
-
-      // Point libcufile to the modified config file
-      CUDF_EXPECTS(setenv(json_path_env_var.c_str(), cudf_config_path.c_str(), 0) == 0,
-                   "Failed to set the cuFile config file environment variable.");
-    }
-  }
-}
-cufile_config const* cufile_config::instance()
-{
-  static cufile_config _instance;
-  return &_instance;
-}
-
 /**
  * @brief Class that dynamically loads the cuFile library and manages the cuFile driver.
  */
 class cufile_shim {
  private:
   cufile_shim();
+  void modify_cufile_json();
+  void load_cufile_lib();
 
   void* cf_lib                              = nullptr;
   decltype(cuFileDriverOpen)* driver_open   = nullptr;
@@ -114,25 +83,60 @@ class cufile_shim {
   decltype(cuFileWrite)* write                        = nullptr;
 };
 
+void cufile_shim::modify_cufile_json()
+{
+  std::string const json_path_env_var = "CUFILE_ENV_PATH_JSON";
+  temp_directory tmp_config_dir{"cudf_cufile_config"};
+
+  // Modify the config file based on the policy
+  auto const config_file_path = getenv_or(json_path_env_var, "/etc/cufile.json");
+  std::ifstream user_config_file(config_file_path);
+  // Modified config file is stored in a temporary directory
+  auto const cudf_config_path = tmp_config_dir.path() + "/cufile.json";
+  std::ofstream cudf_config_file(cudf_config_path);
+
+  std::string line;
+  while (std::getline(user_config_file, line)) {
+    std::string const tag = "\"allow_compat_mode\"";
+    if (line.find(tag) != std::string::npos) {
+      // TODO: only replace the true/false value
+      // Enable compatiblity mode when cuDF does not fall back to host path
+      cudf_config_file << tag << ": "
+                       << (cufile_integration::is_always_enabled() ? "true" : "false") << ",\n";
+    } else {
+      cudf_config_file << line << '\n';
+    }
+
+    // Point libcufile to the modified config file
+    CUDF_EXPECTS(setenv(json_path_env_var.c_str(), cudf_config_path.c_str(), 0) == 0,
+                 "Failed to set the cuFile config file environment variable.");
+  }
+}
+
+void cufile_shim::load_cufile_lib()
+{
+  cf_lib      = dlopen("libcufile.so", RTLD_NOW);
+  driver_open = reinterpret_cast<decltype(driver_open)>(dlsym(cf_lib, "cuFileDriverOpen"));
+  CUDF_EXPECTS(driver_open != nullptr, "could not find cuFile cuFileDriverOpen symbol");
+  driver_close = reinterpret_cast<decltype(driver_close)>(dlsym(cf_lib, "cuFileDriverClose"));
+  CUDF_EXPECTS(driver_close != nullptr, "could not find cuFile cuFileDriverClose symbol");
+  handle_register =
+    reinterpret_cast<decltype(handle_register)>(dlsym(cf_lib, "cuFileHandleRegister"));
+  CUDF_EXPECTS(handle_register != nullptr, "could not find cuFile cuFileHandleRegister symbol");
+  handle_deregister =
+    reinterpret_cast<decltype(handle_deregister)>(dlsym(cf_lib, "cuFileHandleDeregister"));
+  CUDF_EXPECTS(handle_deregister != nullptr, "could not find cuFile cuFileHandleDeregister symbol");
+  read = reinterpret_cast<decltype(read)>(dlsym(cf_lib, "cuFileRead"));
+  CUDF_EXPECTS(read != nullptr, "could not find cuFile cuFileRead symbol");
+  write = reinterpret_cast<decltype(write)>(dlsym(cf_lib, "cuFileWrite"));
+  CUDF_EXPECTS(write != nullptr, "could not find cuFile cuFileWrite symbol");
+}
+
 cufile_shim::cufile_shim()
 {
   try {
-    cf_lib      = dlopen("libcufile.so", RTLD_NOW);
-    driver_open = reinterpret_cast<decltype(driver_open)>(dlsym(cf_lib, "cuFileDriverOpen"));
-    CUDF_EXPECTS(driver_open != nullptr, "could not find cuFile cuFileDriverOpen symbol");
-    driver_close = reinterpret_cast<decltype(driver_close)>(dlsym(cf_lib, "cuFileDriverClose"));
-    CUDF_EXPECTS(driver_close != nullptr, "could not find cuFile cuFileDriverClose symbol");
-    handle_register =
-      reinterpret_cast<decltype(handle_register)>(dlsym(cf_lib, "cuFileHandleRegister"));
-    CUDF_EXPECTS(handle_register != nullptr, "could not find cuFile cuFileHandleRegister symbol");
-    handle_deregister =
-      reinterpret_cast<decltype(handle_deregister)>(dlsym(cf_lib, "cuFileHandleDeregister"));
-    CUDF_EXPECTS(handle_deregister != nullptr,
-                 "could not find cuFile cuFileHandleDeregister symbol");
-    read = reinterpret_cast<decltype(read)>(dlsym(cf_lib, "cuFileRead"));
-    CUDF_EXPECTS(read != nullptr, "could not find cuFile cuFileRead symbol");
-    write = reinterpret_cast<decltype(write)>(dlsym(cf_lib, "cuFileWrite"));
-    CUDF_EXPECTS(write != nullptr, "could not find cuFile cuFileWrite symbol");
+    modify_cufile_json();
+    load_cufile_lib();
 
     CUDF_EXPECTS(driver_open().err == CU_FILE_SUCCESS, "Failed to initialize cuFile driver");
   } catch (cudf::logic_error const& err) {
@@ -278,11 +282,11 @@ std::future<void> cufile_output::write_async(void const* data, size_t offset, si
 
 std::unique_ptr<cufile_input> make_cufile_input(std::string const& filepath)
 {
-  if (cufile_config::instance()->is_enabled()) {
+  if (cufile_integration::is_gds_enabled()) {
     try {
       return std::make_unique<cufile_input>(filepath);
     } catch (...) {
-      if (cufile_config::instance()->is_required()) throw;
+      if (cufile_integration::is_always_enabled()) throw;
     }
   }
   return nullptr;
@@ -290,11 +294,11 @@ std::unique_ptr<cufile_input> make_cufile_input(std::string const& filepath)
 
 std::unique_ptr<cufile_output> make_cufile_output(std::string const& filepath)
 {
-  if (cufile_config::instance()->is_enabled()) {
+  if (cufile_integration::is_gds_enabled()) {
     try {
       return std::make_unique<cufile_output>(filepath);
     } catch (...) {
-      if (cufile_config::instance()->is_required()) throw;
+      if (cufile_integration::is_always_enabled()) throw;
     }
   }
   return nullptr;
