@@ -43,6 +43,8 @@
 #include <numeric>
 #include <utility>
 
+#include <cuda/std/limits>
+
 namespace cudf {
 namespace io {
 namespace detail {
@@ -97,7 +99,8 @@ constexpr orc::TypeKind to_orc_type(cudf::type_id id, bool list_column_as_map)
     case cudf::type_id::TIMESTAMP_NANOSECONDS: return TypeKind::TIMESTAMP;
     case cudf::type_id::STRING: return TypeKind::STRING;
     case cudf::type_id::DECIMAL32:
-    case cudf::type_id::DECIMAL64: return TypeKind::DECIMAL;
+    case cudf::type_id::DECIMAL64:
+    case cudf::type_id::DECIMAL128: return TypeKind::DECIMAL;
     case cudf::type_id::LIST: return list_column_as_map ? TypeKind::MAP : TypeKind::LIST;
     case cudf::type_id::STRUCT: return TypeKind::STRUCT;
     default: return TypeKind::INVALID_TYPE_KIND;
@@ -123,9 +126,11 @@ constexpr int32_t to_clockscale(cudf::type_id timestamp_id)
  */
 constexpr auto orc_precision(cudf::type_id decimal_id)
 {
+  using namespace numeric;
   switch (decimal_id) {
-    case cudf::type_id::DECIMAL32: return 9;
-    case cudf::type_id::DECIMAL64: return 18;
+    case cudf::type_id::DECIMAL32: return cuda::std::numeric_limits<decimal32::rep>::digits10;
+    case cudf::type_id::DECIMAL64: return cuda::std::numeric_limits<decimal64::rep>::digits10;
+    case cudf::type_id::DECIMAL128: return cuda::std::numeric_limits<decimal128::rep>::digits10;
     default: return 0;
   }
 }
@@ -1637,13 +1642,17 @@ encoder_decimal_info decimal_chunk_sizes(orc_table_view& orc_table,
                            if (!parent_index.has_value()) return nullptr;
                            return d_cols[parent_index.value()].pushdown_mask;
                          }();
+
                          if (col.is_null(idx) or not bit_value_or(pushdown_mask, idx, true))
                            return 0u;
-                         int64_t const element   = (col.type().id() == type_id::DECIMAL32)
-                                                     ? col.element<int32_t>(idx)
-                                                     : col.element<int64_t>(idx);
-                         int64_t const sign      = (element < 0) ? 1 : 0;
-                         uint64_t zigzaged_value = ((element ^ -sign) * 2) + sign;
+
+                         __int128_t const element =
+                           col.type().id() == type_id::DECIMAL32   ? col.element<int32_t>(idx)
+                           : col.type().id() == type_id::DECIMAL64 ? col.element<int64_t>(idx)
+                                                                   : col.element<__int128_t>(idx);
+
+                         __int128_t const sign      = (element < 0) ? 1 : 0;
+                         __uint128_t zigzaged_value = ((element ^ -sign) * 2) + sign;
 
                          uint32_t encoded_length = 1;
                          while (zigzaged_value > 127) {
@@ -1767,7 +1776,7 @@ void writer::impl::write(table_view const& table)
     [&](column_in_metadata& col_meta, std::string default_name) {
       if (col_meta.get_name().empty()) col_meta.set_name(default_name);
       for (size_type i = 0; i < col_meta.num_children(); ++i) {
-        add_default_name(col_meta.child(i), col_meta.get_name() + "." + std::to_string(i));
+        add_default_name(col_meta.child(i), std::to_string(i));
       }
     };
   for (size_t i = 0; i < table_meta->column_metadata.size(); ++i) {

@@ -117,6 +117,12 @@ static inline __device__ uint64_t zigzag(int64_t v)
   return ((v ^ -s) * 2) + s;
 }
 
+static inline __device__ __uint128_t zigzag(__int128_t v)
+{
+  int64_t s = (v < 0) ? 1 : 0;
+  return ((v ^ -s) * 2) + s;
+}
+
 static inline __device__ uint32_t CountLeadingBytes32(uint32_t v) { return __clz(v) >> 3; }
 static inline __device__ uint32_t CountLeadingBytes64(uint64_t v) { return __clzll(v) >> 3; }
 
@@ -279,11 +285,11 @@ static const __device__ __constant__ uint8_t kByteLengthToRLEv2_W[9] = {
 /**
  * @brief Encode a varint value, return the number of bytes written
  */
-static inline __device__ uint32_t StoreVarint(uint8_t* dst, uint64_t v)
+static inline __device__ uint32_t StoreVarint(uint8_t* dst, __uint128_t v)
 {
   uint32_t bytecnt = 0;
   for (;;) {
-    uint32_t c = (uint32_t)(v & 0x7f);
+    auto c = static_cast<uint32_t>(v & 0x7f);
     v >>= 7u;
     if (v == 0) {
       dst[bytecnt++] = c;
@@ -938,9 +944,11 @@ __global__ void __launch_bounds__(block_size)
             break;
           case DECIMAL: {
             if (is_value_valid) {
-              uint64_t const zz_val = (column.type().id() == type_id::DECIMAL32)
-                                        ? zigzag(column.element<int32_t>(row))
-                                        : zigzag(column.element<int64_t>(row));
+              auto const id = column.type().id();
+              __uint128_t const zz_val =
+                id == type_id::DECIMAL32   ? zigzag(column.element<int32_t>(row))
+                : id == type_id::DECIMAL64 ? zigzag(column.element<int64_t>(row))
+                                           : zigzag(column.element<__int128_t>(row));
               auto const offset =
                 (row == s->chunk.start_row) ? 0 : s->chunk.decimal_offsets[row - 1];
               StoreVarint(s->stream.data_ptrs[CI_DATA] + offset, zz_val);
