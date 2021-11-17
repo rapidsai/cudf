@@ -214,8 +214,8 @@ __global__ void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bi
 {
   constexpr size_type const word_size_in_bits{detail::size_in_bits<bitmask_type>()};
 
-  cudf::size_type const tid = threadIdx.x + blockIdx.x * blockDim.x;
-  cudf::size_type range_id  = tid;
+  size_type const tid = threadIdx.x + blockIdx.x * blockDim.x;
+  size_type range_id  = tid;
 
   while (range_id < num_ranges) {
     size_type const first_bit_index = *(first_bit_indices + range_id);
@@ -270,7 +270,7 @@ struct bit_to_word_index {
 
   CUDA_DEVICE_CALLABLE size_type operator()(const size_type& i) const
   {
-    auto bit_index = *(bit_indices + 2 * i + (end_of_segment ? 1 : 0));
+    auto const bit_index = *(bit_indices + i);
     return word_index(bit_index) + ((!end_of_segment || intra_word_index(bit_index) == 0) ? 0 : 1);
   }
 
@@ -402,10 +402,11 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
                                             count_bits_policy count_bits,
                                             rmm::cuda_stream_view stream)
 {
-  size_t const num_indices = std::distance(indices_begin, indices_end);
-
+  auto const num_indices = static_cast<size_type>(std::distance(indices_begin, indices_end));
   CUDF_EXPECTS(num_indices % 2 == 0, "Array of indices needs to have an even number of elements.");
-  for (size_type i = 0; i < num_indices / 2; i++) {
+  size_type const num_ranges = num_indices / 2;
+
+  for (size_type i = 0; i < num_ranges; i++) {
     auto begin = indices_begin[i * 2];
     auto end   = indices_begin[i * 2 + 1];
     CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.");
@@ -415,9 +416,9 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
   if (num_indices == 0) {
     return std::vector<size_type>{};
   } else if (bitmask == nullptr) {
-    std::vector<size_type> ret(num_indices / 2, 0);
+    std::vector<size_type> ret(num_ranges, 0);
     if (count_bits == count_bits_policy::SET_BITS) {
-      for (size_type i = 0; i < num_indices / 2; i++) {
+      for (size_type i = 0; i < num_ranges; i++) {
         ret[i] = indices_begin[2 * i + 1] - indices_begin[2 * i];
       }
     }
@@ -431,9 +432,8 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
   // Compute the null counts over each segment.
   auto first_bit_indices = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0), index_alternator{false, d_indices.data()});
-  auto last_bit_indices      = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
+  auto last_bit_indices = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
                                                           index_alternator{true, d_indices.data()});
-  size_type const num_ranges = num_indices / 2;
   rmm::device_uvector<size_type> d_null_counts = cudf::detail::segmented_count_bits_device(
     bitmask, num_ranges, first_bit_indices, last_bit_indices, count_bits, stream);
 
