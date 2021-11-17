@@ -60,6 +60,9 @@ constexpr auto NUM_BLOCKS_PER_KERNEL_LOADED = 2;
 constexpr auto NUM_VALIDITY_BLOCKS_PER_KERNEL = 8;
 constexpr auto NUM_VALIDITY_BLOCKS_PER_KERNEL_LOADED = 2;
 
+constexpr auto JCUDF_ROW_ALIGNMENT = 8;
+constexpr auto MAX_BATCH_SIZE = std::numeric_limits<cudf::size_type>::max();
+
 // needed to suppress warning about cuda::barrier
 #pragma nv_diag_suppress static_var_with_dynamic_init
 #endif
@@ -105,10 +108,10 @@ copy_from_rows_fixed_width_optimized(const size_type num_rows, const size_type n
   // are controlled by the x dimension (there are multiple blocks in the x
   // dimension).
 
-  size_type rows_per_group = blockDim.x;
-  size_type row_group_start = blockIdx.x;
-  size_type row_group_stride = gridDim.x;
-  size_type row_group_end = (num_rows + rows_per_group - 1) / rows_per_group + 1;
+  size_type const rows_per_group = blockDim.x;
+  size_type const row_group_start = blockIdx.x;
+  size_type const row_group_stride = gridDim.x;
+  size_type const row_group_end = (num_rows + rows_per_group - 1) / rows_per_group + 1;
 
   extern __shared__ int8_t shared_data[];
 
@@ -117,25 +120,22 @@ copy_from_rows_fixed_width_optimized(const size_type num_rows, const size_type n
   int8_t *row_tmp = &shared_data[row_size * threadIdx.x];
   int8_t *row_vld_tmp = &row_tmp[input_offset_in_row[num_columns - 1] + num_bytes[num_columns - 1]];
 
-  for (size_type row_group_index = row_group_start; row_group_index < row_group_end;
+  for (auto row_group_index = row_group_start; row_group_index < row_group_end;
        row_group_index += row_group_stride) {
     // Step 1: Copy the data into shared memory
     // We know row_size is always aligned with and a multiple of int64_t;
     int64_t *long_shared = reinterpret_cast<int64_t *>(shared_data);
-    const int64_t *long_input = reinterpret_cast<int64_t const *>(input_data);
+    int64_t const *long_input = reinterpret_cast<int64_t const *>(input_data);
 
-    size_type shared_output_index = threadIdx.x + (threadIdx.y * blockDim.x);
-    size_type shared_output_stride = blockDim.x * blockDim.y;
-    size_type row_index_end = ((row_group_index + 1) * rows_per_group);
-    if (row_index_end > num_rows) {
-      row_index_end = num_rows;
-    }
-    size_type num_rows_in_group = row_index_end - (row_group_index * rows_per_group);
-    size_type shared_length = row_size * num_rows_in_group;
+    auto const shared_output_index = threadIdx.x + (threadIdx.y * blockDim.x);
+    auto const shared_output_stride = blockDim.x * blockDim.y;
+    auto const row_index_end = std::min(num_rows, ((row_group_index + 1) * rows_per_group));
+    auto const num_rows_in_group = row_index_end - (row_group_index * rows_per_group);
+    auto const shared_length = row_size * num_rows_in_group;
 
-    size_type shared_output_end = shared_length / sizeof(int64_t);
+    size_type const shared_output_end = shared_length / sizeof(int64_t);
 
-    size_type start_input_index = (row_size * row_group_index * rows_per_group) / sizeof(int64_t);
+    auto const start_input_index = (row_size * row_group_index * rows_per_group) / sizeof(int64_t);
 
     for (size_type shared_index = shared_output_index; shared_index < shared_output_end;
          shared_index += shared_output_stride) {
@@ -148,18 +148,18 @@ copy_from_rows_fixed_width_optimized(const size_type num_rows, const size_type n
 
     // Within the row group there should be 1 thread for each row.  This is a
     // requirement for launching the kernel
-    size_type row_index = (row_group_index * rows_per_group) + threadIdx.x;
+    auto const row_index = (row_group_index * rows_per_group) + threadIdx.x;
     // But we might not use all of the threads if the number of rows does not go
     // evenly into the thread count. We don't want those threads to exit yet
     // because we may need them to copy data in for the next row group.
     uint32_t active_mask = __ballot_sync(0xffffffff, row_index < num_rows);
     if (row_index < num_rows) {
-      size_type col_index_start = threadIdx.y;
-      size_type col_index_stride = blockDim.y;
-      for (size_type col_index = col_index_start; col_index < num_columns;
+      auto const col_index_start = threadIdx.y;
+      auto const col_index_stride = blockDim.y;
+      for (auto col_index = col_index_start; col_index < num_columns;
            col_index += col_index_stride) {
-        size_type col_size = num_bytes[col_index];
-        const int8_t *col_tmp = &(row_tmp[input_offset_in_row[col_index]]);
+        auto const col_size = num_bytes[col_index];
+        int8_t const *col_tmp = &(row_tmp[input_offset_in_row[col_index]]);
         int8_t *col_output = output_data[col_index];
         switch (col_size) {
           case 1: {
@@ -182,9 +182,9 @@ copy_from_rows_fixed_width_optimized(const size_type num_rows, const size_type n
             break;
           }
           default: {
-            size_type output_offset = col_size * row_index;
+            auto const output_offset = col_size * row_index;
             // TODO this should just not be supported for fixed width columns, but just in case...
-            for (size_type b = 0; b < col_size; b++) {
+            for (auto b = 0; b < col_size; b++) {
               col_output[b + output_offset] = col_tmp[b];
             }
             break;
@@ -351,7 +351,7 @@ struct block_info {
   constexpr size_type get_shared_row_size(size_type const *const col_offsets,
                                           size_type const *const col_sizes) const {
     return util::round_up_unsafe(col_offsets[end_col] + col_sizes[end_col] - col_offsets[start_col],
-                                 8);
+                                 JCUDF_ROW_ALIGNMENT);
   }
   constexpr size_type num_cols() const { return end_col - start_col + 1; }
 
@@ -365,9 +365,21 @@ struct block_info {
  *
  */
 struct row_batch {
-  size_type num_bytes;
-  size_type row_count;
-  device_uvector<size_type> row_offsets;
+  size_type num_bytes;                   // number of bytes in this batch
+  size_type row_count;                   // number of rows in the batch
+  device_uvector<size_type> row_offsets; // offsets column of output cudf column
+};
+
+/**
+ * @brief Holds information about the batches of data to be processed
+ *
+ */
+struct batch_data {
+  device_uvector<size_type>
+      batch_row_offsets; // offsets to each row in the JCUDF data from batch start
+  std::vector<size_type>
+      batch_row_boundaries;           // row numbers for different batches like 0, 10000, 20000
+  std::vector<row_batch> row_batches; // information about each batch such as byte count
 };
 
 /**
@@ -412,8 +424,8 @@ __global__ void copy_to_rows(const size_type num_rows, const size_type num_colum
   group.sync();
 
   auto const blocks_remaining =
-      std::min((uint)block_infos.size() - blockIdx.x * NUM_BLOCKS_PER_KERNEL_TO_ROWS,
-               (uint)NUM_BLOCKS_PER_KERNEL_TO_ROWS);
+      std::min(static_cast<uint>(block_infos.size()) - blockIdx.x * NUM_BLOCKS_PER_KERNEL_TO_ROWS,
+               static_cast<uint>(NUM_BLOCKS_PER_KERNEL_TO_ROWS));
 
   size_t fetch;
   size_t subset;
@@ -441,7 +453,7 @@ __global__ void copy_to_rows(const size_type num_rows, const size_type num_colum
       // and do row-based memcopies out.
 
       auto const shared_buffer_base = shared[fetch % stages_count];
-      for (auto el = (int)threadIdx.x; el < num_elements_in_block; el += blockDim.x) {
+      for (auto el = static_cast<int>(threadIdx.x); el < num_elements_in_block; el += blockDim.x) {
         auto const relative_col = el / num_fetch_rows;
         auto const relative_row = el % num_fetch_rows;
         auto const absolute_col = relative_col + fetch_block.start_col;
@@ -533,8 +545,8 @@ __global__ void copy_validity_to_rows(const size_type num_rows, const size_type 
   auto group = cooperative_groups::this_thread_block();
 
   int const blocks_remaining =
-      std::min((uint)block_infos.size() - blockIdx.x * NUM_VALIDITY_BLOCKS_PER_KERNEL,
-               (uint)NUM_VALIDITY_BLOCKS_PER_KERNEL);
+      std::min(static_cast<uint>(block_infos.size()) - blockIdx.x * NUM_VALIDITY_BLOCKS_PER_KERNEL,
+               static_cast<uint>(NUM_VALIDITY_BLOCKS_PER_KERNEL));
 
   __shared__ cuda::barrier<cuda::thread_scope_block>
       shared_block_barriers[NUM_VALIDITY_BLOCKS_PER_KERNEL_LOADED];
@@ -560,7 +572,7 @@ __global__ void copy_validity_to_rows(const size_type num_rows, const size_type 
     auto const num_sections_x = util::div_rounding_up_unsafe(num_block_cols, 32);
     auto const num_sections_y = util::div_rounding_up_unsafe(num_block_rows, 32);
     auto const validity_data_row_length =
-        util::round_up_unsafe(util::div_rounding_up_unsafe(num_block_cols, 8), 8);
+        util::round_up_unsafe(util::div_rounding_up_unsafe(num_block_cols, 8), JCUDF_ROW_ALIGNMENT);
     auto const total_sections = num_sections_x * num_sections_y;
 
     int const warp_id = threadIdx.x / warp_size;
@@ -705,8 +717,8 @@ __global__ void copy_from_rows(const size_type num_rows, const size_type num_col
   group.sync();
 
   auto blocks_remaining =
-      std::min((uint)block_infos.size() - blockIdx.x * NUM_BLOCKS_PER_KERNEL_FROM_ROWS,
-               (uint)NUM_BLOCKS_PER_KERNEL_FROM_ROWS);
+      std::min(static_cast<uint>(block_infos.size()) - blockIdx.x * NUM_BLOCKS_PER_KERNEL_FROM_ROWS,
+               static_cast<uint>(NUM_BLOCKS_PER_KERNEL_FROM_ROWS));
 
   size_t fetch_index;
   size_t processing_index;
@@ -838,8 +850,8 @@ __global__ void copy_validity_from_rows(const size_type num_rows, const size_typ
   auto group = cooperative_groups::this_thread_block();
 
   int const blocks_remaining =
-      std::min((uint)block_infos.size() - blockIdx.x * NUM_VALIDITY_BLOCKS_PER_KERNEL,
-               (uint)NUM_VALIDITY_BLOCKS_PER_KERNEL);
+      std::min(static_cast<uint>(block_infos.size()) - blockIdx.x * NUM_VALIDITY_BLOCKS_PER_KERNEL,
+               static_cast<uint>(NUM_VALIDITY_BLOCKS_PER_KERNEL));
 
   __shared__ cuda::barrier<cuda::thread_scope_block>
       shared_block_barriers[NUM_VALIDITY_BLOCKS_PER_KERNEL_LOADED];
@@ -862,8 +874,8 @@ __global__ void copy_validity_from_rows(const size_type num_rows, const size_typ
     auto const block_start_row = block.start_row;
     auto const num_block_cols = block.num_cols();
     auto const num_block_rows = block.num_rows();
-    auto const num_sections_x = (num_block_cols + 7) / 8;
-    auto const num_sections_y = (num_block_rows + 31) / 32;
+    auto const num_sections_x = util::div_rounding_up_safe(num_block_cols, 8);
+    auto const num_sections_y = util::div_rounding_up_safe(num_block_rows, 32);
     auto const validity_data_col_length = num_sections_y * 4; // words to bytes
     auto const total_sections = num_sections_x * num_sections_y;
     int const warp_id = threadIdx.x / warp_size;
@@ -1015,7 +1027,8 @@ static std::unique_ptr<column> fixed_width_convert_to_rows(
     rmm::mr::device_memory_resource *mr) {
   int64_t const total_allocation = size_per_row * num_rows;
   // We made a mistake in the split somehow
-  CUDF_EXPECTS(total_allocation < std::numeric_limits<int>::max(), "Table is too large to fit!");
+  CUDF_EXPECTS(total_allocation < std::numeric_limits<size_type>::max(),
+               "Table is too large to fit!");
 
   // Allocate and set the offsets row for the byte array
   std::unique_ptr<column> offsets =
@@ -1074,7 +1087,7 @@ static inline int32_t compute_fixed_width_layout(std::vector<data_type> const &s
   // validity comes at the end and is byte aligned so we can pack more in.
   at_offset += validity_bytes_needed;
   // Now we need to pad the end so all rows are 64 bit aligned
-  return util::round_up_unsafe(at_offset, 8); // 8 bytes (64 bits)
+  return util::round_up_unsafe(at_offset, JCUDF_ROW_ALIGNMENT);
 }
 
 #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
@@ -1096,7 +1109,7 @@ static size_type compute_column_information(iterator begin, iterator end,
   size_type fixed_width_size_per_row = 0;
   for (auto cv = begin; cv != end; ++cv) {
     auto col_type = std::get<0>(*cv);
-    bool nested_type = col_type.id() == type_id::LIST || col_type.id() == type_id::STRING;
+    bool nested_type = is_compound(col_type);
 
     // a list or string column will write a single uint64
     // of data here for offset/length
@@ -1129,7 +1142,7 @@ std::vector<detail::block_info>
 build_validity_block_infos(size_type const &num_columns, size_type const &num_rows,
                            size_type const &shmem_limit_per_block,
                            std::vector<row_batch> const &row_batches) {
-  auto const desired_rows_and_columns = (int)sqrt(shmem_limit_per_block);
+  auto const desired_rows_and_columns = static_cast<int>(sqrt(shmem_limit_per_block));
   auto const column_stride = util::round_up_unsafe(
       [&]() {
         if (desired_rows_and_columns > num_columns) {
@@ -1139,12 +1152,13 @@ build_validity_block_infos(size_type const &num_columns, size_type const &num_ro
           return util::round_down_safe(desired_rows_and_columns, 8);
         }
       }(),
-      8);
+      JCUDF_ROW_ALIGNMENT);
 
   // we fit as much as we can given the column stride
   // note that an element in the table takes just 1 bit, but a row with a single
   // element still takes 8 bytes!
-  auto const bytes_per_row = util::round_up_safe(util::div_rounding_up_unsafe(column_stride, 8), 8);
+  auto const bytes_per_row =
+      util::round_up_safe(util::div_rounding_up_unsafe(column_stride, 8), JCUDF_ROW_ALIGNMENT);
   auto const row_stride = std::min(num_rows, shmem_limit_per_block / bytes_per_row);
 
   std::vector<detail::block_info> validity_block_infos;
@@ -1168,18 +1182,6 @@ build_validity_block_infos(size_type const &num_columns, size_type const &num_ro
 
   return validity_block_infos;
 }
-
-constexpr size_type max_batch_size = std::numeric_limits<size_type>::max();
-
-/**
- * @brief Holds information about the batches of data to be processed
- *
- */
-struct batch_data {
-  device_uvector<size_type> batch_row_offsets;
-  std::vector<size_type> batch_row_boundaries;
-  std::vector<row_batch> row_batches;
-};
 
 template <typename RowSize> struct row_size_functor {
   RowSize _row_sizes;
@@ -1205,11 +1207,12 @@ template <typename RowSize> struct row_size_functor {
 template <typename RowSize>
 batch_data build_batches(size_type num_rows, RowSize row_sizes, rmm::cuda_stream_view stream,
                          rmm::mr::device_memory_resource *mr) {
-  auto uint64_row_sizes = cudf::detail::make_counting_transform_iterator(0, row_size_functor(row_sizes));
+  auto uint64_row_sizes =
+      cudf::detail::make_counting_transform_iterator(0, row_size_functor(row_sizes));
   auto const total_size =
       thrust::reduce(rmm::exec_policy(stream), uint64_row_sizes, uint64_row_sizes + num_rows);
   auto const num_batches = static_cast<int32_t>(
-      util::div_rounding_up_safe(total_size, static_cast<uint64_t>(max_batch_size)));
+      util::div_rounding_up_safe(total_size, static_cast<uint64_t>(MAX_BATCH_SIZE)));
   auto const num_offsets = num_batches + 1;
   std::vector<row_batch> row_batches;
   std::vector<size_type> batch_row_boundaries;
@@ -1223,12 +1226,12 @@ batch_data build_batches(size_type num_rows, RowSize row_sizes, rmm::cuda_stream
   thrust::inclusive_scan(rmm::exec_policy(stream), uint64_row_sizes, uint64_row_sizes + num_rows,
                          cumulative_row_sizes.begin());
 
-  while ((int)batch_row_boundaries.size() < num_offsets) {
-    // find the next max_batch_size boundary
+  while (static_cast<int>(batch_row_boundaries.size()) < num_offsets) {
+    // find the next MAX_BATCH_SIZE boundary
     size_type const row_end =
         ((thrust::lower_bound(rmm::exec_policy(stream), cumulative_row_sizes.begin(),
                               cumulative_row_sizes.begin() + (num_rows - last_row_end),
-                              max_batch_size) -
+                              MAX_BATCH_SIZE) -
           cumulative_row_sizes.begin()) +
          last_row_end);
 
@@ -1346,7 +1349,7 @@ build_blocks(device_span<block_info> blocks,
         int const max_row =
             std::min(total_number_of_rows - 1,
                      batch_index + 1 > num_batches ?
-                         std::numeric_limits<int>::max() :
+                         std::numeric_limits<size_type>::max() :
                          static_cast<int>(batch_row_boundaries[batch_index + 1]) - 1);
         int const block_row_end = std::min(
             batch_row_start + ((local_block_index + 1) * desired_window_height) - 1, max_row);
@@ -1387,8 +1390,8 @@ void determine_windows(std::vector<size_type> const &column_sizes,
   // window as far as byte sizes. x * y = shared_mem_size. Which translates to x^2 =
   // shared_mem_size since we want them equal, so height and width are sqrt(shared_mem_size). The
   // trick is that it's in bytes, not rows or columns.
-  size_type const optimal_square_len = size_type(sqrt(shmem_limit_per_block));
-  int const window_height =
+  auto const optimal_square_len = static_cast<size_type>(sqrt(shmem_limit_per_block));
+  auto const window_height =
       std::clamp(util::round_up_safe<int>(
                      std::min(optimal_square_len / column_sizes[0], total_number_of_rows), 32),
                  1, first_row_batch_size);
@@ -1403,14 +1406,15 @@ void determine_windows(std::vector<size_type> const &column_sizes,
   int row_size = 0;
 
   // march each column and build the blocks of appropriate sizes
-  for (unsigned int col = 0; col < column_sizes.size(); ++col) {
+  for (uint col = 0; col < column_sizes.size(); ++col) {
     auto const col_size = column_sizes[col];
 
     // align size for this type
     auto const alignment_needed = col_size; // They are the same for fixed width types
-    auto row_size_aligned = util::round_up_unsafe(row_size, alignment_needed);
-    auto row_size_with_this_col = row_size_aligned + col_size;
-    auto row_size_with_end_pad = util::round_up_unsafe(row_size_with_this_col, 8);
+    auto const row_size_aligned = util::round_up_unsafe(row_size, alignment_needed);
+    auto const row_size_with_this_col = row_size_aligned + col_size;
+    auto const row_size_with_end_pad =
+        util::round_up_unsafe(row_size_with_this_col, JCUDF_ROW_ALIGNMENT);
 
     if (row_size_with_end_pad * window_height +
             calc_admin_data_size(col - current_window_start_col) >
@@ -1432,7 +1436,7 @@ void determine_windows(std::vector<size_type> const &column_sizes,
 
   // build last set of blocks
   if (current_window_width > 0) {
-    f(current_window_start_col, (int)column_sizes.size() - 1, window_height);
+    f(current_window_start_col, static_cast<int>(column_sizes.size()) - 1, window_height);
   }
 }
 
@@ -1444,8 +1448,8 @@ std::vector<std::unique_ptr<column>> convert_to_rows(table_view const &tbl,
                                                      rmm::cuda_stream_view stream,
                                                      rmm::mr::device_memory_resource *mr) {
 #if !defined(__CUDA_ARCH__) || __CUDA_ARCH__ >= 700
-  const size_type num_columns = tbl.num_columns();
-  const size_type num_rows = tbl.num_rows();
+  auto const num_columns = tbl.num_columns();
+  auto const num_rows = tbl.num_rows();
 
   int device_id;
   CUDA_TRY(cudaGetDevice(&device_id));
@@ -1454,7 +1458,7 @@ std::vector<std::unique_ptr<column>> convert_to_rows(table_view const &tbl,
 
   // TODO: why is this needed. kernel fails to launch if all memory is requested.
   total_shmem -= 1024;
-  int shmem_limit_per_block = total_shmem / NUM_BLOCKS_PER_KERNEL_LOADED;
+  auto const shmem_limit_per_block = total_shmem / NUM_BLOCKS_PER_KERNEL_LOADED;
 
   // break up the work into blocks, which are a starting and ending row/col #.
   // this window size is calculated based on the shared memory size available
@@ -1506,7 +1510,7 @@ std::vector<std::unique_ptr<column>> convert_to_rows(table_view const &tbl,
       0, [fixed_width_size_per_row, num_columns] __device__(auto i) {
         auto const bytes_needed =
             fixed_width_size_per_row + util::div_rounding_up_safe<size_type>(num_columns, 8);
-        return util::round_up_unsafe(bytes_needed, 8);
+        return util::round_up_unsafe(bytes_needed, JCUDF_ROW_ALIGNMENT);
       });
 
   auto batch_info = detail::build_batches(num_rows, row_size_iter, stream, mr);
@@ -1621,8 +1625,8 @@ convert_to_rows_fixed_width_optimized(table_view const &tbl, rmm::cuda_stream_vi
 
     // Make the number of rows per batch a multiple of 32 so we don't have to worry about
     // splitting validity at a specific row offset.  This might change in the future.
-    int32_t const max_rows_per_batch =
-        util::round_down_safe(std::numeric_limits<int>::max() / size_per_row, 32);
+    auto const max_rows_per_batch =
+        util::round_down_safe(std::numeric_limits<size_type>::max() / size_per_row, 32);
 
     auto const num_rows = tbl.num_rows();
 
@@ -1695,7 +1699,8 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
 
   auto const validity_size = num_bitmask_words(num_columns) * 4;
 
-  auto const row_size = util::round_up_unsafe(fixed_width_size_per_row + validity_size, 8);
+  auto const row_size =
+      util::round_up_unsafe(fixed_width_size_per_row + validity_size, JCUDF_ROW_ALIGNMENT);
 
   // Ideally we would check that the offsets are all the same, etc. but for now
   // this is probably fine
@@ -1755,7 +1760,7 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
 
   dim3 blocks(
       util::div_rounding_up_unsafe(gpu_block_infos.size(), NUM_BLOCKS_PER_KERNEL_FROM_ROWS));
-  dim3 threads(std::min(std::min(256, shmem_limit_per_block / 8), (int)child.size()));
+  dim3 threads(std::min(std::min(256, shmem_limit_per_block / 8), static_cast<int>(child.size())));
 
   auto validity_block_infos =
       detail::build_validity_block_infos(num_columns, num_rows, shmem_limit_per_block, row_batches);
@@ -1801,8 +1806,7 @@ std::unique_ptr<table> convert_from_rows_fixed_width_optimized(
     std::vector<size_type> column_size;
 
     auto const num_rows = input.parent().size();
-    int32_t const size_per_row =
-        detail::compute_fixed_width_layout(schema, column_start, column_size);
+    auto const size_per_row = detail::compute_fixed_width_layout(schema, column_start, column_size);
 
     // Ideally we would check that the offsets are all the same, etc. but for now
     // this is probably fine
