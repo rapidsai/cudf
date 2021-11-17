@@ -5246,7 +5246,6 @@ class StringColumn(column.ColumnBase):
                     "type due to presence of non-integer values."
                 )
         elif out_dtype.kind == "f":
-            string_col = libstrings.to_upper(string_col)
             if not libstrings.is_float(string_col).all():
                 raise ValueError(
                     "Could not convert strings to float "
