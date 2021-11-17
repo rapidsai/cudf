@@ -190,20 +190,20 @@ enum class count_bits_policy : bool {
 /**
  * For each range `[first_bit_indices[i], last_bit_indices[i])`
  * (where 0 <= i < `num_ranges`), count the number of bits set outside the range
- * in the boundary words (i.e. words that include either the first or last bit and
- * subtract the count from the range's null count.
+ * in the boundary words (i.e. words that include either the first or last bit)
+ * and subtract the count from the range's null count.
  *
  * Expects `0 <= first_bit_indices[i] <= last_bit_indices[i]`.
  *
  * @param[in] bitmask The bitmask whose non-zero bits outside the range in the
  * boundary words will be counted.
- * @param[in] num_ranges The number of ranges
+ * @param[in] num_ranges The number of ranges.
  * @param[in] first_bit_indices Random-access input iterator to the sequence of indices (inclusive)
- * of the first bit in each range
+ * of the first bit in each range.
  * @param[in] last_bit_indices Random-access input iterator to the sequence of indices (exclusive)
- * of the last bit in each range
+ * of the last bit in each range.
  * @param[in,out] null_counts Random-access input/output iterator where the number of non-zero bits
- * in each range is updated
+ * in each range is updated.
  */
 template <typename OffsetIterator, typename OutputIterator>
 __global__ void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bitmask,
@@ -289,7 +289,7 @@ struct count_set_bits_in_word {
   {
     return static_cast<size_type>(__popc(bitmask[i]));
   }
-  bitmask_type const* const bitmask;
+  bitmask_type const* bitmask;
 };
 
 // Count set/unset bits in a segmented null mask, using offset iterators accessible by the device.
@@ -301,7 +301,7 @@ rmm::device_uvector<size_type> segmented_count_bits_device(bitmask_type const* b
                                                            count_bits_policy count_bits,
                                                            rmm::cuda_stream_view stream)
 {
-  rmm::device_uvector<size_type> d_null_counts(num_ranges, stream);
+  rmm::device_uvector<size_type> d_bit_counts(num_ranges, stream);
 
   auto num_set_bits_in_word = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
                                                               count_set_bits_in_word{bitmask});
@@ -317,7 +317,7 @@ rmm::device_uvector<size_type> segmented_count_bits_device(bitmask_type const* b
   CUDA_TRY(cub::DeviceSegmentedReduce::Sum(nullptr,
                                            temp_storage_bytes,
                                            num_set_bits_in_word,
-                                           d_null_counts.begin(),
+                                           d_bit_counts.begin(),
                                            num_ranges,
                                            first_word_indices,
                                            last_word_indices,
@@ -328,7 +328,7 @@ rmm::device_uvector<size_type> segmented_count_bits_device(bitmask_type const* b
   CUDA_TRY(cub::DeviceSegmentedReduce::Sum(d_temp_storage.data(),
                                            temp_storage_bytes,
                                            num_set_bits_in_word,
-                                           d_null_counts.begin(),
+                                           d_bit_counts.begin(),
                                            num_ranges,
                                            first_word_indices,
                                            last_word_indices,
@@ -343,24 +343,25 @@ rmm::device_uvector<size_type> segmented_count_bits_device(bitmask_type const* b
                                               grid.num_threads_per_block,
                                               0,
                                               stream.value()>>>(
-    bitmask, num_ranges, first_bit_indices, last_bit_indices, d_null_counts.begin());
+    bitmask, num_ranges, first_bit_indices, last_bit_indices, d_bit_counts.begin());
 
   if (count_bits == count_bits_policy::UNSET_BITS) {
-    // Subtract the number of set bits from the length of the segment
+    // Convert from set bits counts to unset bits by subtracting the number of
+    // set bits from the length of the segment.
     thrust::for_each(rmm::exec_policy(stream),
                      thrust::make_counting_iterator(0),
-                     thrust::make_counting_iterator(static_cast<size_type>(d_null_counts.size())),
+                     thrust::make_counting_iterator(static_cast<size_type>(d_bit_counts.size())),
                      [first_bit_indices,
                       last_bit_indices,
-                      d_null_counts = d_null_counts.data()] __device__(size_type i) {
+                      d_bit_counts = d_bit_counts.data()] __device__(size_type i) {
                        auto const begin = *(first_bit_indices + i);
                        auto const end   = *(last_bit_indices + i);
-                       d_null_counts[i] = (end - begin) - d_null_counts[i];
+                       d_bit_counts[i]  = (end - begin) - d_bit_counts[i];
                      });
   }
 
   CHECK_CUDA(stream.value());
-  return d_null_counts;
+  return d_bit_counts;
 }
 
 struct index_alternator {
@@ -434,13 +435,13 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
     thrust::make_counting_iterator(0), index_alternator{false, d_indices.data()});
   auto last_bit_indices = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
                                                           index_alternator{true, d_indices.data()});
-  rmm::device_uvector<size_type> d_null_counts = cudf::detail::segmented_count_bits_device(
+  rmm::device_uvector<size_type> d_bit_counts = cudf::detail::segmented_count_bits_device(
     bitmask, num_ranges, first_bit_indices, last_bit_indices, count_bits, stream);
 
   // Copy the results back to the host.
   std::vector<size_type> ret(num_ranges);
   CUDA_TRY(cudaMemcpyAsync(ret.data(),
-                           d_null_counts.data(),
+                           d_bit_counts.data(),
                            num_ranges * sizeof(size_type),
                            cudaMemcpyDeviceToHost,
                            stream.value()));
