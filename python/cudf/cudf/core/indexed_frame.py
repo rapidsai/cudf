@@ -3,8 +3,9 @@
 
 from __future__ import annotations
 
+import operator
 import warnings
-from typing import Type, TypeVar
+from typing import Callable, Type, TypeVar
 from uuid import uuid4
 
 import cupy as cp
@@ -13,11 +14,7 @@ from nvtx import annotate
 
 import cudf
 from cudf._typing import ColumnLike
-from cudf.api.types import (
-    is_categorical_dtype,
-    is_datetime_dtype,
-    is_list_like,
-)
+from cudf.api.types import is_categorical_dtype, is_list_like
 from cudf.core.column import arange
 from cudf.core.frame import Frame
 from cudf.core.index import Index
@@ -105,6 +102,7 @@ class IndexedFrame(Frame):
     # mypy can't handle bound type variables as class members
     _loc_indexer_type: Type[_LocIndexerClass]  # type: ignore
     _iloc_indexer_type: Type[_IlocIndexerClass]  # type: ignore
+    _index: cudf.core.index.BaseIndex
 
     def __init__(self, data=None, index=None):
         super().__init__(data=data, index=index)
@@ -763,6 +761,29 @@ class IndexedFrame(Frame):
             else cudf.core.resample.DataFrameResampler(self, by=by)
         )
 
+    def _first_or_last(
+        self, offset, idx: int, op: Callable, side: str, slice_func: Callable
+    ) -> "IndexedFrame":
+        """Shared code path for ``first`` and ``last``."""
+        if not isinstance(self._index, cudf.core.index.DatetimeIndex):
+            raise TypeError("'first' only supports a DatetimeIndex index.")
+        if not isinstance(offset, str):
+            raise NotImplementedError(
+                f"Unsupported offset type {type(offset)}."
+            )
+
+        if len(self) == 0:
+            return self.copy()
+
+        pd_offset = cudf.DateOffset._from_str(
+            offset
+        )._maybe_as_fast_pandas_offset()
+        to_search = op(pd.Timestamp(self._index._column[idx]), pd_offset)
+        end_point = int(
+            self._index._column.searchsorted(to_search, side=side)[0]
+        )
+        return slice_func(end_point)
+
     def first(self, offset):
         """Select initial periods of time series data based on a date offset.
 
@@ -801,24 +822,13 @@ class IndexedFrame(Frame):
         2018-04-09  1
         2018-04-11  2
         """
-        if not is_datetime_dtype(self._index.dtype):
-            raise TypeError("'first' only supports a DatetimeIndex index.")
-        if not isinstance(offset, str):
-            raise NotImplementedError(
-                f"Unsupported offset type {type(offset)}."
-            )
-
-        if len(self) == 0:
-            return self.copy()
-
-        pd_offset = cudf.DateOffset._from_str(
-            offset
-        )._maybe_as_fast_pandas_offset()
-        to_search = pd.Timestamp(self._index._column[0]) + pd_offset
-        slice_end = int(
-            self._index._column.searchsorted(to_search, side="left")[0]
+        return self._first_or_last(
+            offset,
+            idx=0,
+            op=operator.__add__,
+            side="left",
+            slice_func=lambda i: self.iloc[:i],
         )
-        return self.iloc[:slice_end]
 
     def last(self, offset):
         """Select final periods of time series data based on a date offset.
@@ -858,21 +868,10 @@ class IndexedFrame(Frame):
         2018-04-13  3
         2018-04-15  4
         """
-        if not is_datetime_dtype(self._index.dtype):
-            raise TypeError("'last' only supports a DatetimeIndex index.")
-        if not isinstance(offset, str):
-            raise NotImplementedError(
-                f"Unsupported offset type {type(offset)}."
-            )
-
-        if len(self) == 0:
-            return self.copy()
-
-        pd_offset = cudf.DateOffset._from_str(
-            offset
-        )._maybe_as_fast_pandas_offset()
-        to_search = pd.Timestamp(self._index._column[-1]) - pd_offset
-        slice_start = int(
-            self._index._column.searchsorted(to_search, side="right")[0]
+        return self._first_or_last(
+            offset,
+            idx=-1,
+            op=operator.__sub__,
+            side="right",
+            slice_func=lambda i: self.iloc[i:],
         )
-        return self.iloc[slice_start:]
