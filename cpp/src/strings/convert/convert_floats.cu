@@ -62,7 +62,7 @@ __device__ inline double stod(string_view const& d_str)
   }
 
   // special strings: NaN, Inf
-  if (*in_ptr > '9') {
+  if ((in_ptr < end) && *in_ptr > '9') {
     auto const inf_nan = string_view(in_ptr, static_cast<size_type>(thrust::distance(in_ptr, end)));
     if (string::is_nan_str(inf_nan)) return std::numeric_limits<double>::quiet_NaN();
     if (string::is_inf_str(inf_nan)) return sign * std::numeric_limits<double>::infinity();

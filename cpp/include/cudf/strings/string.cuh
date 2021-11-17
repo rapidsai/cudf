@@ -115,13 +115,13 @@ inline __device__ bool is_float(string_view const& d_str)
   // sign character allowed at the beginning of the string
   size_type ch_idx = (*data == '-' || *data == '+') ? 1 : 0;
 
+  bool result = ch_idx < bytes;
   // check for nan and infinity strings
-  if (data[ch_idx] > '9') {
+  if (result && data[ch_idx] > '9') {
     auto const inf_nan = string_view(data + ch_idx, bytes - ch_idx);
     if (is_nan_str(inf_nan) || is_inf_str(inf_nan)) return true;
   }
 
-  bool result = ch_idx < bytes;
   // check for float chars [0-9] and a single decimal '.'
   // and scientific notation [eE][+-][0-9]
   for (; ch_idx < bytes; ++ch_idx) {
