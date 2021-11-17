@@ -46,7 +46,7 @@ from cudf.core.column import (
     serialize_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.join import merge
+from cudf.core.join import Merge, MergeSemi
 from cudf.core.udf.pipeline import compile_or_get, supported_cols_from_frame
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
@@ -3755,6 +3755,7 @@ class Frame:
         suffixes=("_x", "_y"),
     ):
         lhs, rhs = self, right
+        merge_cls = Merge
         if how == "right":
             # Merge doesn't support right, so just swap
             how = "left"
@@ -3762,8 +3763,10 @@ class Frame:
             left_on, right_on = right_on, left_on
             left_index, right_index = right_index, left_index
             suffixes = (suffixes[1], suffixes[0])
+        elif how in {"leftsemi", "leftanti"}:
+            merge_cls = MergeSemi
 
-        return merge(
+        return merge_cls(
             lhs,
             rhs,
             on=on,
@@ -3775,7 +3778,7 @@ class Frame:
             sort=sort,
             indicator=indicator,
             suffixes=suffixes,
-        )
+        ).perform_merge()
 
     def _is_sorted(self, ascending=None, null_position=None):
         """
