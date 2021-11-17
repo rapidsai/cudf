@@ -40,7 +40,7 @@ from cudf.api.types import (
     is_string_dtype,
     is_struct_dtype,
 )
-from cudf.core import column, reshape
+from cudf.core import column, df_protocol, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     as_column,
@@ -6328,6 +6328,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             return self.__class__._from_data(data, index=idx)
 
         return super()._explode(column, ignore_index)
+
+    def __dataframe__(
+        self, nan_as_null: bool = False, allow_copy: bool = True
+    ):
+        return df_protocol.__dataframe__(
+            self, nan_as_null=nan_as_null, allow_copy=allow_copy
+        )
+
+
+def from_dataframe(df, allow_copy=False):
+    return df_protocol.from_dataframe(df, allow_copy=allow_copy)
 
 
 def make_binop_func(op, postprocess=None):
