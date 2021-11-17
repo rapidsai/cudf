@@ -72,16 +72,43 @@ def ceil_datetime(Column col, object field):
             c_result = move(libcudf_datetime.ceil_day(col_view))
         elif field == "H":
             c_result = move(libcudf_datetime.ceil_hour(col_view))
-        elif field == "T":
+        elif field == "T" or field == "min":
             c_result = move(libcudf_datetime.ceil_minute(col_view))
         elif field == "S":
             c_result = move(libcudf_datetime.ceil_second(col_view))
-        elif field == "L":
+        elif field == "L" or field == "ms":
             c_result = move(libcudf_datetime.ceil_millisecond(col_view))
-        elif field == "U":
+        elif field == "U" or field == "us":
             c_result = move(libcudf_datetime.ceil_microsecond(col_view))
         elif field == "N":
             c_result = move(libcudf_datetime.ceil_nanosecond(col_view))
+        else:
+            raise ValueError(f"Invalid resolution: '{field}'")
+
+    result = Column.from_unique_ptr(move(c_result))
+    return result
+
+
+def floor_datetime(Column col, object field):
+    cdef unique_ptr[column] c_result
+    cdef column_view col_view = col.view()
+
+    with nogil:
+        # https://pandas.pydata.org/docs/reference/api/pandas.Timedelta.resolution_string.html
+        if field == "D":
+            c_result = move(libcudf_datetime.floor_day(col_view))
+        elif field == "H":
+            c_result = move(libcudf_datetime.floor_hour(col_view))
+        elif field == "T" or field == "min":
+            c_result = move(libcudf_datetime.floor_minute(col_view))
+        elif field == "S":
+            c_result = move(libcudf_datetime.floor_second(col_view))
+        elif field == "L" or field == "ms":
+            c_result = move(libcudf_datetime.floor_millisecond(col_view))
+        elif field == "U" or field == "us":
+            c_result = move(libcudf_datetime.floor_microsecond(col_view))
+        elif field == "N":
+            c_result = move(libcudf_datetime.floor_nanosecond(col_view))
         else:
             raise ValueError(f"Invalid resolution: '{field}'")
 
