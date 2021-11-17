@@ -656,6 +656,8 @@ public final class Table implements AutoCloseable {
                                                                 boolean[] keysDescending,
                                                                 boolean[] keysNullSmallest);
 
+  private static native long[] sample(long tableHandle, long n, boolean replacement, long seed);
+
   /////////////////////////////////////////////////////////////////////////////
   // TABLE CREATION APIs
   /////////////////////////////////////////////////////////////////////////////
@@ -2741,6 +2743,19 @@ public final class Table implements AutoCloseable {
     }
 
     return result;
+  }
+
+  /**
+   * Gather `n` samples from table randomly
+   * The output is not same with CPU Sample exec, but this is faster.
+   *
+   * @param n
+   * @param replacement Allow or disallow sampling of the same row more than once.
+   * @param seed Seed value to initiate random number generator.
+   * @return
+   */
+  public Table sample(long n, boolean replacement, long seed) {
+    return new Table(sample(nativeHandle, n, replacement, seed));
   }
 
   /////////////////////////////////////////////////////////////////////////////
