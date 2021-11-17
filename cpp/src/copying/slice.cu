@@ -40,8 +40,11 @@ std::vector<column_view> slice(column_view const& input,
   // to count
   auto indices_iter = cudf::detail::make_counting_transform_iterator(
     0, [offset = input.offset(), &indices](size_type index) { return indices[index] + offset; });
-  auto null_counts = cudf::detail::segmented_count_set_bits(
-    input.null_mask(), indices_iter, indices_iter + indices.size(), true, stream);
+  auto null_counts = cudf::detail::segmented_count_bits(input.null_mask(),
+                                                        indices_iter,
+                                                        indices_iter + indices.size(),
+                                                        cudf::detail::count_bits_policy::UNSET_BITS,
+                                                        stream);
 
   auto const children = std::vector<column_view>(input.child_begin(), input.child_end());
 
