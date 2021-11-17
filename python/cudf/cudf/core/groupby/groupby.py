@@ -787,10 +787,8 @@ class GroupBy(Serializable):
 
         Parameters
         ----------
-        method: Method of correlation
-            Pearson: standard correlation coefficient.
-            Kendall, Spearman correlation and callable method
-            not yet supported.
+        method: {"pearson" (default), "kendall", "spearman"} or callable
+            Currently only the pearson correlation coefficient is supported.
 
         min_periods: int, optional
             Minimum number of observations required per pair of columns
@@ -846,12 +844,13 @@ class GroupBy(Serializable):
         _cols = self.grouping.values.columns.tolist()
 
         new_df_data = {}
-
-        for i in tuple(itertools.combinations_with_replacement(_cols, 2)):
-            new_df_data[i] = cudf.DataFrame._from_data(
-                {"x": self.obj._data[i[0]], "y": self.obj._data[i[1]]}
+        for x, y in itertools.combinations_with_replacement(_cols, 2):
+            new_df_data[(x, y)] = cudf.DataFrame._from_data(
+                {"x": self.obj._data[x], "y": self.obj._data[y]}
             ).to_struct()
-        new_gb = new_gb = cudf.DataFrame._from_data(new_df_data).groupby(by=self.grouping.keys)
+        new_gb = cudf.DataFrame._from_data(new_df_data).groupby(
+            by=self.grouping.keys
+        )
 
         try:
             gb_corr = new_gb.agg(lambda x: x.corr(method, min_periods))
@@ -859,9 +858,8 @@ class GroupBy(Serializable):
             if "Unsupported groupby reduction type-agg combination" in str(e):
                 raise TypeError(
                     "Correlation accepts only numerical column-pairs"
-                ) from e
-            else:
-                raise
+                )
+            raise
 
         # ensure that column-pair labels are arranged in ascending order
         cols_list = [
@@ -876,10 +874,12 @@ class GroupBy(Serializable):
 
         # interleave: combine the correlation results for each column-pair
         # into a single column
-        res = cudf.DataFrame()
-        for i, x in zip(cols_split, _cols):
-            ic = gb_corr.loc[:, i].interleave_columns()
-            res[x] = ic
+        res = cudf.DataFrame._from_data(
+            {
+                x: gb_corr.loc[:, i].interleave_columns()
+                for i, x in zip(cols_split, _cols)
+            }
+        )
 
         # create a multiindex for the groupby correlated dataframe,
         # to match pandas behavior
