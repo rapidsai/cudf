@@ -276,6 +276,13 @@ MurmurHash3_32<numeric::decimal64>::operator()(numeric::decimal64 const& key) co
 
 template <>
 hash_value_type CUDA_DEVICE_CALLABLE
+MurmurHash3_32<numeric::decimal128>::operator()(numeric::decimal128 const& key) const
+{
+  return this->compute(key.value());
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
 MurmurHash3_32<cudf::list_view>::operator()(cudf::list_view const& key) const
 {
   cudf_assert(false && "List column hashing is not supported");
@@ -417,6 +424,13 @@ hash_value_type CUDA_DEVICE_CALLABLE
 SparkMurmurHash3_32<numeric::decimal64>::operator()(numeric::decimal64 const& key) const
 {
   return this->compute<uint64_t>(key.value());
+}
+
+template <>
+hash_value_type CUDA_DEVICE_CALLABLE
+SparkMurmurHash3_32<numeric::decimal128>::operator()(numeric::decimal128 const& key) const
+{
+  return this->compute<__int128_t>(key.value());
 }
 
 template <>

@@ -196,6 +196,14 @@ __inline__ __device__ numeric::decimal64 decode_value(const char*,
   return numeric::decimal64{};
 }
 
+template <>
+__inline__ __device__ numeric::decimal128 decode_value(const char*,
+                                                       const char*,
+                                                       parse_options_view const&)
+{
+  return numeric::decimal128{};
+}
+
 /**
  * @brief Functor for converting plain text data to cuDF data type value.
  */
