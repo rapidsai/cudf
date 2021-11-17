@@ -127,7 +127,7 @@ Aggregations on groups is supported via the ``agg`` method:
     a
     1   4   1  2.0
     2   5   2  4.5
-   >>> df.groupby("a").corr(method="pearson")
+    >>> df.groupby("a").corr(method="pearson")
               b          c
     a                      
     1 b  1.000000  0.866025
