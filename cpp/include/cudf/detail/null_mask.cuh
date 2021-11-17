@@ -193,7 +193,7 @@ enum class count_bits_policy : bool {
  * in the boundary words (i.e. words that include either the first or last bit and
  * subtract the count from the range's null count.
  *
- * Expects `0 <= *(first_bit_indices + i) <= *(last_bit_indices + i)`.
+ * Expects `0 <= first_bit_indices[i] <= last_bit_indices[i]`.
  *
  * @param[in] bitmask The bitmask whose non-zero bits outside the range in the
  * boundary words will be counted.
