@@ -12,6 +12,7 @@ from pyarrow import dataset as ds, parquet as pq
 import cudf
 from cudf._lib import parquet as libparquet
 from cudf.api.types import is_list_like
+from cudf.core.column import as_column, build_categorical_column
 from cudf.utils import ioutils
 
 
@@ -164,12 +165,23 @@ def read_parquet_metadata(path):
 
 
 def _process_dataset(
-    paths, fs, filters=None, partitioning="hive", row_groups=None,
+    paths,
+    fs,
+    filters=None,
+    partitioning="hive",
+    row_groups=None,
+    categorical_partitioning=True,
 ):
+    # Returns:
+    #     file_list - Expanded/filtered list of paths
+    #     row_groups - Filtered list of row-group selections
+    #     partition_keys - list of partition keys for each file
+    #     partition_categories - Categories for each partition
 
     # The general purpose of this function is to (1) expand
     # directory input into a list of paths (using the pyarrow
-    # dataset API), and (2) to apply row-group filters.
+    # dataset API), (2) to apply row-group filters, and (3)
+    # to discover directory-partitioning information
 
     # Deal with case that the user passed in a directory name
     file_list = paths
@@ -196,12 +208,18 @@ def _process_dataset(
         for file_fragment in dataset.get_fragments():
             keys = ds._get_partition_keys(file_fragment.partition_expression)
             if not (keys or partition_categories):
-                break  # Bail - This is not a directory-partitioned dataset
+                # Bail - This is not a directory-partitioned dataset
+                break
             for k, v in keys.items():
                 if v not in partition_categories[k]:
                     partition_categories[k].append(v)
+            if not categorical_partitioning:
+                # Bail - We don't need to discover all categories.
+                # We only need to save the partition keys from this
+                # first `file_fragment`
+                break
 
-        if file_fragment is not None:
+        if partition_categories and file_fragment is not None:
             # Check/correct order of `categories` using last file_frag,
             # because `_get_partition_keys` does NOT preserve the
             # partition-hierarchy order of the keys.
@@ -220,7 +238,7 @@ def _process_dataset(
     # If we do not have partitioned data and
     # are not filtering, we can return here
     if not (filters or partition_categories):
-        return file_list, row_groups, None
+        return file_list, row_groups, [], {}
 
     # Record initial row_groups input
     row_groups_map = {}
@@ -236,7 +254,9 @@ def _process_dataset(
     # Apply filters and discover partition columns
     partition_keys = []
     if partition_categories or filters is not None:
-        row_groups, file_list = [], []
+        file_list = []
+        if filters is not None:
+            row_groups = []
         for file_fragment in dataset.get_fragments(filter=filters):
             path = file_fragment.path
 
@@ -264,23 +284,24 @@ def _process_dataset(
                     for rg_info in rg_fragment.row_groups
                 ]
             file_list.append(path)
-            if selection is None:
-                row_groups.append(
-                    None if filters is None else filtered_row_groups
-                )
-            else:
-                row_groups.append(
-                    [
-                        rg_id
-                        for rg_id in filtered_row_groups
-                        if rg_id in selection
-                    ]
-                )
+            if filters is not None:
+                if selection is None:
+                    row_groups.append(filtered_row_groups)
+                else:
+                    row_groups.append(
+                        [
+                            rg_id
+                            for rg_id in filtered_row_groups
+                            if rg_id in selection
+                        ]
+                    )
 
-    import pdb
-
-    pdb.set_trace()
-    return file_list, row_groups, partition_keys
+    return (
+        file_list,
+        row_groups,
+        partition_keys,
+        partition_categories if categorical_partitioning else {},
+    )
 
 
 def _get_byte_ranges(file_list, row_groups, columns, fs, **kwargs):
@@ -393,6 +414,7 @@ def read_parquet(
     use_pandas_metadata=True,
     use_python_file_object=False,
     partitioning="hive",
+    categorical_partitioning=True,
     *args,
     **kwargs,
 ):
@@ -424,15 +446,20 @@ def read_parquet(
     # data and apply filters. Note that we can only support partitioned
     # data and filtering if the input is a single directory or list of
     # paths.
-    partition_info = None
     if fs and paths:
         # TODO: Will this handle glob patters?
-        paths, row_groups, partition_info = _process_dataset(
+        (
+            paths,
+            row_groups,
+            partition_keys,
+            partition_categories,
+        ) = _process_dataset(
             paths,
             fs,
             filters=filters,
             partitioning=partitioning,
             row_groups=row_groups,
+            categorical_partitioning=categorical_partitioning,
         )
     elif filters is not None:
         raise ValueError("cudf cannot apply filters to open file objects.")
@@ -491,6 +518,105 @@ def read_parquet(
         else:
             filepaths_or_buffers.append(tmp_source)
 
+    return _parquet_to_frame(
+        filepaths_or_buffers,
+        engine,
+        *args,
+        columns=columns,
+        row_groups=row_groups,
+        skiprows=skiprows,
+        num_rows=num_rows,
+        strings_to_categorical=strings_to_categorical,
+        use_pandas_metadata=use_pandas_metadata,
+        partition_keys=partition_keys,
+        partition_categories=partition_categories,
+        **kwargs,
+    )
+
+
+def _parquet_to_frame(
+    paths_or_buffers,
+    engine,
+    *args,
+    row_groups=None,
+    partition_keys=None,
+    partition_categories=None,
+    **kwargs,
+):
+    # Warn user if they are not using cudf for IO
+    # (There is a good chance this was not the intention)
+    if engine != "cudf":
+        warnings.warn("Using CPU via PyArrow to read Parquet dataset.")
+
+    # If this is not a partitioned read, only need
+    # one call to `_read_parquet`
+    if not partition_keys:
+        return _read_parquet(
+            paths_or_buffers, engine, *args, row_groups=row_groups, **kwargs,
+        )
+
+    # For partitioned data, we need a distinct read for each
+    # unique set of partition keys. Therefore, we start by
+    # aggregating all paths with matching keys using a dict
+    plan = {}
+    for i, (keys, path) in enumerate(zip(partition_keys, paths_or_buffers)):
+        rgs = row_groups[i] if row_groups else None
+        tkeys = tuple(keys)
+        if tkeys in plan:
+            plan[tkeys][0].append(path)
+            if rgs is not None:
+                plan[tkeys][1].append(rgs)
+        else:
+            plan[tkeys] = ([path], None if rgs is None else [rgs])
+
+    dfs = []
+    for part_key, (key_paths, key_row_groups) in plan.items():
+        # Add new DataFrame to our list
+        dfs.append(
+            _read_parquet(
+                key_paths, engine, *args, row_groups=key_row_groups, **kwargs,
+            )
+        )
+        # Add partition columns to the last DataFrame
+        for (name, value) in part_key:
+            codes = (
+                as_column(partition_categories[name].index(value))
+                .as_frame()
+                .repeat(len(dfs[-1]))
+                ._data[None]
+            )
+            if partition_categories and name in partition_categories:
+                # Build the categorical column from `codes`
+                dfs[-1][name] = build_categorical_column(
+                    categories=partition_categories[name],
+                    codes=codes,
+                    size=codes.size,
+                    offset=codes.offset,
+                    ordered=False,
+                )
+            else:
+                # Not building categorical columns, so
+                # `codes` is already what we want
+                dfs[-1][name] = codes
+
+    # Concatenate dfs and return
+    return cudf.concat(dfs) if len(dfs) > 1 else dfs[0]
+
+
+def _read_parquet(
+    filepaths_or_buffers,
+    engine,
+    columns=None,
+    row_groups=None,
+    skiprows=None,
+    num_rows=None,
+    strings_to_categorical=None,
+    use_pandas_metadata=None,
+    *args,
+    **kwargs,
+):
+    # Simple helper function to dispatch between
+    # cudf and pyarrow to read parquet data
     if engine == "cudf":
         return libparquet.read_parquet(
             filepaths_or_buffers,
@@ -502,7 +628,7 @@ def read_parquet(
             use_pandas_metadata=use_pandas_metadata,
         )
     else:
-        warnings.warn("Using CPU via PyArrow to read Parquet dataset.")
+        # TODO: Fix this broken code (pre-existing "bug")
         return cudf.DataFrame.from_arrow(
             pq.ParquetDataset(filepaths_or_buffers).read_pandas(
                 columns=columns, *args, **kwargs
