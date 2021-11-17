@@ -42,6 +42,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/traits.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <hash/concurrent_unordered_map.cuh>
 
@@ -50,6 +51,8 @@
 #include <memory>
 #include <unordered_set>
 #include <utility>
+
+#include <cuda/std/atomic>
 
 namespace cudf {
 namespace groupby {
@@ -634,9 +637,10 @@ bool can_use_hash_groupby(table_view const& keys, host_span<aggregation_request 
 {
   auto const all_hash_aggregations =
     std::all_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
-      return std::all_of(r.aggregations.begin(), r.aggregations.end(), [](auto const& a) {
-        return is_hash_aggregation(a->kind);
-      });
+      return cudf::has_atomic_support(r.values.type()) and
+             std::all_of(r.aggregations.begin(), r.aggregations.end(), [](auto const& a) {
+               return is_hash_aggregation(a->kind);
+             });
     });
 
   // Currently, structs are not supported in any of hash-based aggregations.
