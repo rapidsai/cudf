@@ -247,20 +247,6 @@ __global__ void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bi
 }
 
 /**
- * @brief Functor that returns the number of set bits for a specified word
- * of a bitmask array.
- *
- */
-struct count_set_bits_in_word {
-  count_set_bits_in_word(bitmask_type const* bitmask) : bitmask(bitmask) {}
-  CUDA_DEVICE_CALLABLE size_type operator()(size_type i) const
-  {
-    return static_cast<size_type>(__popc(bitmask[i]));
-  }
-  bitmask_type const* const bitmask;
-};
-
-/**
  * @brief Functor that converts bit segment indices to word segment indices.
  *
  * Converts [first_bit_index, last_bit_index) to [first_word_index,
@@ -289,6 +275,20 @@ struct bit_to_word_index {
 
   bool const end_of_segment;
   OffsetIterator bit_indices;
+};
+
+/**
+ * @brief Functor that returns the number of set bits for a specified word
+ * of a bitmask array.
+ *
+ */
+struct count_set_bits_in_word {
+  count_set_bits_in_word(bitmask_type const* bitmask) : bitmask(bitmask) {}
+  CUDA_DEVICE_CALLABLE size_type operator()(size_type i) const
+  {
+    return static_cast<size_type>(__popc(bitmask[i]));
+  }
+  bitmask_type const* const bitmask;
 };
 
 // Count set/unset bits in a segmented null mask, using offset iterators accessible by the device.
