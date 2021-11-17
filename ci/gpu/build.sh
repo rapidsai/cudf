@@ -187,8 +187,11 @@ else
             mkdir -p "$WORKSPACE/test-results/"
             for gt in gtests/*; do
                 test_name=$(basename ${gt})
+                if [[ "$basename" == "ERROR_TEST" ]]; then
+                  continue
+                fi
                 echo "Running GoogleTest $test_name"
-                ${COMPUTE_SANITIZER_CMD} ${gt} --gtest_output=xml:"$WORKSPACE/test-results/" | tee "$WORKSPACE/test-results/${test_name}.cs.log"
+                ${COMPUTE_SANITIZER_CMD} ${gt} | tee "$WORKSPACE/test-results/${test_name}.cs.log"
             done
             unset GTEST_CUDF_RMM_MODE
             python ../scripts/compute-sanitizer-to-junit-xml.py -glob "$WORKSPACE/test-results/*.cs.log" -out "$WORKSPACE/test-results/cudamemcheck-junit.xml"
