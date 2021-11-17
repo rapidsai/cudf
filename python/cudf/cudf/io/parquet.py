@@ -237,7 +237,7 @@ def _process_dataset(
 
     # If we do not have partitioned data and
     # are not filtering, we can return here
-    if not (filters or partition_categories):
+    if filters is None and not partition_categories:
         return file_list, row_groups, [], {}
 
     # Record initial row_groups input
@@ -279,7 +279,7 @@ def _process_dataset(
                 filtered_row_groups = [
                     rg_info.id
                     for rg_fragment in file_fragment.split_by_row_group(
-                        filters
+                        filters, schema=dataset.schema,
                     )
                     for rg_info in rg_fragment.row_groups
                 ]
@@ -518,6 +518,20 @@ def read_parquet(
         else:
             filepaths_or_buffers.append(tmp_source)
 
+    # Warn user if they are not using cudf for IO
+    # (There is a good chance this was not the intention)
+    if engine != "cudf":
+        warnings.warn(
+            "Using CPU via PyArrow to read Parquet dataset."
+            "This option is both inefficient and unstable!"
+        )
+        if filters is not None:
+            raise ValueError(
+                "Parquet row-group filtering is only supported "
+                "with 'engine=cudf'. Use pandas or pyarrow API "
+                "directly for CPU-based filtering functionality."
+            )
+
     return _parquet_to_frame(
         filepaths_or_buffers,
         engine,
@@ -536,23 +550,18 @@ def read_parquet(
 
 def _parquet_to_frame(
     paths_or_buffers,
-    engine,
     *args,
     row_groups=None,
     partition_keys=None,
     partition_categories=None,
     **kwargs,
 ):
-    # Warn user if they are not using cudf for IO
-    # (There is a good chance this was not the intention)
-    if engine != "cudf":
-        warnings.warn("Using CPU via PyArrow to read Parquet dataset.")
 
     # If this is not a partitioned read, only need
     # one call to `_read_parquet`
     if not partition_keys:
         return _read_parquet(
-            paths_or_buffers, engine, *args, row_groups=row_groups, **kwargs,
+            paths_or_buffers, *args, row_groups=row_groups, **kwargs,
         )
 
     # For partitioned data, we need a distinct read for each
@@ -574,7 +583,7 @@ def _parquet_to_frame(
         # Add new DataFrame to our list
         dfs.append(
             _read_parquet(
-                key_paths, engine, *args, row_groups=key_row_groups, **kwargs,
+                key_paths, *args, row_groups=key_row_groups, **kwargs,
             )
         )
         # Add partition columns to the last DataFrame
