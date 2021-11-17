@@ -1152,6 +1152,12 @@ class ColumnBase(Column, Serializable):
     ) -> Union[ColumnBase, ScalarLike]:
         raise NotImplementedError
 
+    def _minmax(self, skipna: bool = None):
+        result_col = self._process_for_reduction(skipna=skipna)
+        if isinstance(result_col, ColumnBase):
+            return libcudf.reduce.minmax(result_col)
+        return result_col
+
     def min(self, skipna: bool = None, dtype: Dtype = None):
         result_col = self._process_for_reduction(skipna=skipna)
         if isinstance(result_col, ColumnBase):
@@ -2054,6 +2060,11 @@ def as_column(
                         return cudf.core.column.Decimal32Column.from_arrow(
                             data
                         )
+                    if is_bool_dtype(dtype):
+                        # Need this special case handling for bool dtypes,
+                        # since 'boolean' & 'pd.BooleanDtype' are not
+                        # understood by np.dtype below.
+                        dtype = "bool"
                     np_type = np.dtype(dtype).type
                     pa_type = np_to_pa_dtype(np.dtype(dtype))
                 data = as_column(

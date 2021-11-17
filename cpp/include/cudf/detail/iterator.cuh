@@ -102,9 +102,8 @@ struct null_replaced_value_accessor {
                                bool has_nulls = true)
     : col{col}, null_replacement{null_val}, has_nulls{has_nulls}
   {
-    CUDF_EXPECTS(type_to_id<Element>() == device_storage_type_id(col.type().id()),
+    CUDF_EXPECTS(type_id_matches_device_storage_type<Element>(col.type().id()),
                  "the data type mismatch");
-    // verify validity bitmask is non-null, otherwise, is_null_nocheck() will crash
     if (has_nulls) CUDF_EXPECTS(col.nullable(), "column with nulls must have a validity bitmask");
   }
 

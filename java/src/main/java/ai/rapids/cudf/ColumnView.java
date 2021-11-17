@@ -350,6 +350,34 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
 
   /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
+   * TRUE for any entry that is a fixed-point, and FALSE if its not a fixed-point.
+   * A null will be returned for null entries.
+   *
+   * The sign and the exponent is optional. The decimal point may only appear once.
+   * The integer component must fit within the size limits of the underlying fixed-point
+   * storage type. The value of the integer component is based on the scale of the target
+   * decimalType.
+   *
+   * Example:
+   * vec = ["A", "nan", "Inf", "-Inf", "Infinity", "infinity", "2.1474", "112.383", "-2.14748",
+   *        "NULL", "null", null, "1.2", "1.2e-4", "0.00012"]
+   * vec.isFixedPoint() = [false, false, false, false, false, false, true, true, true, false, false,
+   *                       null, true, true, true]
+   *
+   * @param decimalType the data type that should be used for bounds checking. Note that only
+   *                Decimal types (fixed-point) are allowed.
+   * @return Boolean vector
+   */
+  public final ColumnVector isFixedPoint(DType decimalType) {
+    assert type.equals(DType.STRING);
+    assert decimalType.isDecimalType();
+    return new ColumnVector(isFixedPoint(getNativeView(),
+        decimalType.getTypeId().getNativeId(), decimalType.getScale()));
+  }
+
+
+  /**
+   * Returns a Boolean vector with the same number of rows as this instance, that has
    * TRUE for any entry that is an integer, and FALSE if its not an integer. A null will be returned
    * for null entries.
    *
@@ -370,11 +398,13 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * for null entries.
    *
    * @param intType the data type that should be used for bounds checking. Note that only
-   *                integer types are allowed.
+   *                cudf integer types are allowed including signed/unsigned int8 through int64
    * @return Boolean vector
    */
   public final ColumnVector isInteger(DType intType) {
     assert type.equals(DType.STRING);
+    assert intType.isBackedByInt() || intType.isBackedByLong() || intType.isBackedByByte()
+        || intType.isBackedByShort();
     return new ColumnVector(isIntegerWithType(getNativeView(),
         intType.getTypeId().getNativeId(), intType.getScale()));
   }
@@ -3219,6 +3249,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    *         by the timestampToLong method.
    */
   private static native long stringTimestampToTimestamp(long viewHandle, int unit, String format);
+
+
+  private static native long isFixedPoint(long viewHandle, int nativeTypeId, int scale);
 
   /**
    * Native method to concatenate a list column of strings (each row is a list of strings),

@@ -164,7 +164,6 @@ TYPED_TEST(RowBitCountTyped, ListsWithNulls)
     ((4 + 0) * CHAR_BIT) + (type_size * 0),
     ((4 + 4) * CHAR_BIT) + (type_size * 1) + 2,
     ((4 + 8) * CHAR_BIT) + (type_size * 3) + 5};
-
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 

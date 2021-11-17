@@ -178,11 +178,17 @@ class Merge(object):
         gather_index = self.left_index or self.right_index
         if left_rows is not None:
             left_result = lhs._gather(
-                left_rows, nullify=True, keep_index=gather_index
+                left_rows,
+                nullify=True,
+                keep_index=gather_index,
+                check_bounds=False,
             )
         if right_rows is not None:
             right_result = rhs._gather(
-                right_rows, nullify=True, keep_index=gather_index
+                right_rows,
+                nullify=True,
+                keep_index=gather_index,
+                check_bounds=False,
             )
 
         result = self._merge_results(left_result, right_result)
@@ -310,8 +316,25 @@ class Merge(object):
             else:
                 del right_names[name]
 
-        # Assemble the data columns of the result:
-        data = left_result._data.__class__()
+        # determine if the result has multiindex columns.  The result
+        # of a join has a MultiIndex as its columns if:
+        # - both the `lhs` and `rhs` have a MultiIndex columns
+        # OR
+        # - either one of `lhs` or `rhs` have a MultiIndex columns,
+        #   and the other is empty (i.e., no columns)
+        if self.lhs._data and self.rhs._data:
+            multiindex_columns = (
+                self.lhs._data.multiindex and self.rhs._data.multiindex
+            )
+        elif self.lhs._data:
+            multiindex_columns = self.lhs._data.multiindex
+        elif self.rhs._data:
+            multiindex_columns = self.rhs._data.multiindex
+        else:
+            multiindex_columns = False
+
+        # Assemble the data columns of the result
+        data = left_result._data.__class__(multiindex=multiindex_columns)
 
         for lcol in left_names:
             data.set_by_label(
@@ -354,7 +377,9 @@ class Merge(object):
                 sort_order = result._get_sorted_inds(
                     list(_coerce_to_tuple(self.on))
                 )
-            return result._gather(sort_order, keep_index=False)
+            return result._gather(
+                sort_order, keep_index=False, check_bounds=False
+            )
         by = []
         if self.left_index and self.right_index:
             if result._index is not None:
@@ -370,7 +395,7 @@ class Merge(object):
         if by:
             to_sort = cudf.DataFrame._from_columns(by)
             sort_order = to_sort.argsort()
-            result = result._gather(sort_order)
+            result = result._gather(sort_order, check_bounds=False)
         return result
 
     @staticmethod
