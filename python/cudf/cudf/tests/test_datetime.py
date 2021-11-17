@@ -1786,3 +1786,41 @@ def test_ceil(data, time_type, resolution):
     expect = ps.dt.ceil(resolution)
     got = gs.dt.ceil(resolution)
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.DatetimeIndex([]),
+        pd.DatetimeIndex(["2010-05-31"]),
+        pd.date_range("2000-01-01", "2000-12-31", periods=21),
+    ],
+)
+@pytest.mark.parametrize("offset", ["0h", "1T", "6M", "10Y"])
+def test_first(idx, offset):
+    ps = pd.Series(range(len(idx)), index=idx)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.first(offset=offset)
+    got = gs.first(offset=offset)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        pd.DatetimeIndex([]),
+        pd.DatetimeIndex(["2010-05-31"]),
+        pd.date_range("2000-01-01", "2000-12-31", periods=21),
+    ],
+)
+@pytest.mark.parametrize("offset", ["0h", "1T", "6M", "10Y"])
+def test_last(idx, offset):
+    ps = pd.Series(range(len(idx)), index=idx)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.last(offset=offset)
+    got = gs.last(offset=offset)
+
+    assert_eq(expect, got)
