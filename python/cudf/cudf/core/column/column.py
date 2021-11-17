@@ -1239,6 +1239,13 @@ class ColumnBase(Column, Serializable):
             )
         return result_col
 
+    def _resolve_reduction_dtype(self, reduction_op, dtype):
+        """
+        Determine the correct dtype to pass to libcudf based on
+        the input dtype, data dtype, and specific reduction op
+        """
+        return self.dtype
+
     def _with_type_metadata(self: ColumnBase, dtype: Dtype) -> ColumnBase:
         """
         Copies type metadata from self onto other, returning a new column.
