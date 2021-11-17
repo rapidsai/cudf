@@ -446,8 +446,9 @@ def read_parquet(
     # data and apply filters. Note that we can only support partitioned
     # data and filtering if the input is a single directory or list of
     # paths.
+    partition_keys = []
+    partition_categories = {}
     if fs and paths:
-        # TODO: Will this handle glob patters?
         (
             paths,
             row_groups,
@@ -488,15 +489,6 @@ def read_parquet(
     filepaths_or_buffers = []
     for i, source in enumerate(filepath_or_buffer):
 
-        if ioutils.is_directory(source, **kwargs):
-            # Note: For now, we know `fs` is an fsspec filesystem
-            # object, but it may be an arrow object in the future
-            fsspec_fs = ioutils._ensure_filesystem(
-                passed_filesystem=fs, path=source
-            )
-            source = ioutils.stringify_pathlike(source)
-            source = fsspec_fs.sep.join([source, "*.parquet"])
-
         tmp_source, compression = ioutils.get_filepath_or_buffer(
             path_or_data=source,
             compression=None,
@@ -526,10 +518,10 @@ def read_parquet(
             "This option is both inefficient and unstable!"
         )
         if filters is not None:
-            raise ValueError(
-                "Parquet row-group filtering is only supported "
-                "with 'engine=cudf'. Use pandas or pyarrow API "
-                "directly for CPU-based filtering functionality."
+            warnings.warn(
+                "Parquet row-group filtering is only supported with "
+                "'engine=cudf'. Use pandas or pyarrow API directly "
+                "for full CPU-based filtering functionality."
             )
 
     return _parquet_to_frame(
@@ -608,8 +600,13 @@ def _parquet_to_frame(
                 # `codes` is already what we want
                 dfs[-1][name] = codes
 
-    # Concatenate dfs and return
-    return cudf.concat(dfs) if len(dfs) > 1 else dfs[0]
+    # Concatenate dfs and return.
+    # Assume we can ignore the index if it has no name.
+    return (
+        cudf.concat(dfs, ignore_index=dfs[-1].index.name is None)
+        if len(dfs) > 1
+        else dfs[0]
+    )
 
 
 def _read_parquet(
