@@ -398,7 +398,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * for null entries.
    *
    * @param intType the data type that should be used for bounds checking. Note that only
-   *                integer types are allowed including (int8, int16, int32, int64).
+   *                cudf integer types are allowed including signed/unsigned int8 through int64
    * @return Boolean vector
    */
   public final ColumnVector isInteger(DType intType) {
