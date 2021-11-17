@@ -361,13 +361,13 @@ rmm::device_uvector<size_type> segmented_count_bits_device(bitmask_type const* b
   return d_null_counts;
 }
 
-struct index_slicer {
+struct index_alternator {
   CUDA_DEVICE_CALLABLE size_type operator()(const size_type& i) const
   {
     return *(d_indices + 2 * i + (is_end ? 1 : 0));
   }
 
-  bool is_end = false;
+  bool const is_end = false;
   const size_type* d_indices;
 };
 
@@ -427,10 +427,10 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
   auto const d_indices = make_device_uvector_async(h_indices, stream);
 
   // Compute the null counts over each segment.
-  auto first_bit_indices     = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
-                                                           index_slicer{false, d_indices.data()});
+  auto first_bit_indices = thrust::make_transform_iterator(
+    thrust::make_counting_iterator(0), index_alternator{false, d_indices.data()});
   auto last_bit_indices      = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
-                                                          index_slicer{true, d_indices.data()});
+                                                          index_alternator{true, d_indices.data()});
   size_type const num_ranges = num_indices / 2;
   rmm::device_uvector<size_type> d_null_counts = cudf::detail::segmented_count_bits_device(
     bitmask, num_ranges, first_bit_indices, last_bit_indices, count_bits, stream);
