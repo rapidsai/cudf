@@ -3675,7 +3675,8 @@ class Frame:
         """
 
         warnings.warn(
-            "Series.ceil is deprecated and will be removed in the future",
+            "Series.ceil and DataFrame.ceil are deprecated and will be \
+                removed in the future",
             DeprecationWarning,
         )
 
@@ -3713,7 +3714,8 @@ class Frame:
         """
 
         warnings.warn(
-            "Series.floor is deprecated and will be removed in the future",
+            "Series.ceil and DataFrame.ceil are deprecated and will be \
+                removed in the future",
             DeprecationWarning,
         )
 
