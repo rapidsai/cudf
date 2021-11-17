@@ -77,13 +77,16 @@ inline __device__ bool is_inf_str(string_view const& d_str)
 {
   auto const ptr  = d_str.data();
   auto const size = d_str.size_bytes();
-  if ((size < 3) || (size > 8) || (ptr[0] != 'I' && ptr[0] != 'i') ||
-      (ptr[1] != 'N' && ptr[1] != 'n') || (ptr[2] != 'F' && ptr[2] != 'f')) {
-    return false;
-  }
-  return (size == 3) || (size == 8 && (ptr[3] == 'I' || ptr[3] == 'i') &&
-                         (ptr[4] == 'N' || ptr[4] == 'n') && (ptr[5] == 'I' || ptr[5] == 'i') &&
-                         (ptr[6] == 'T' || ptr[6] == 't') && (ptr[7] == 'Y' || ptr[7] == 'y'));
+
+  if (size != 3 && size != 8) return false;
+
+  auto const prefix_valid = (ptr[0] == 'I' || ptr[0] == 'i') && (ptr[1] == 'N' || ptr[1] == 'n') &&
+                            (ptr[2] == 'F' || ptr[2] == 'f');
+
+  return prefix_valid &&
+         ((size == 3) || ((ptr[3] == 'I' || ptr[3] == 'i') && (ptr[4] == 'N' || ptr[4] == 'n') &&
+                          (ptr[5] == 'I' || ptr[5] == 'i') && (ptr[6] == 'T' || ptr[6] == 't') &&
+                          (ptr[7] == 'Y' || ptr[7] == 'y')));
 }
 
 /**
