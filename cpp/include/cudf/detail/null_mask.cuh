@@ -253,7 +253,6 @@ __global__ void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bi
  * Converts [first_bit_index, last_bit_index) to [first_word_index,
  * last_word_index).
  */
-template <typename OffsetIterator>
 struct bit_to_word_index {
   /**
    * @brief Construct a `bit_to_word_index` functor.
@@ -263,19 +262,14 @@ struct bit_to_word_index {
    * a word.
    * @param bit_indices Pointer to an array of bit indices.
    */
-  bit_to_word_index(bool end_of_segment, OffsetIterator bit_indices)
-    : end_of_segment(end_of_segment), bit_indices(bit_indices)
-  {
-  }
+  bit_to_word_index(bool end_of_segment) : end_of_segment(end_of_segment) {}
 
-  CUDA_DEVICE_CALLABLE size_type operator()(const size_type& i) const
+  CUDA_DEVICE_CALLABLE size_type operator()(const size_type& bit_index) const
   {
-    auto const bit_index = *(bit_indices + i);
     return word_index(bit_index) + ((!end_of_segment || intra_word_index(bit_index) == 0) ? 0 : 1);
   }
 
   bool const end_of_segment;
-  OffsetIterator bit_indices;
 };
 
 /**
@@ -305,12 +299,10 @@ rmm::device_uvector<size_type> segmented_count_bits_device(bitmask_type const* b
 
   auto num_set_bits_in_word = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
                                                               count_set_bits_in_word{bitmask});
-  // TODO: Just use transform iterator with input bit indices iterator and functor. No counting
-  // iterator is necessary here.
-  auto first_word_indices = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0), bit_to_word_index{false, first_bit_indices});
-  auto last_word_indices = thrust::make_transform_iterator(
-    thrust::make_counting_iterator(0), bit_to_word_index{true, last_bit_indices});
+  auto first_word_indices =
+    thrust::make_transform_iterator(first_bit_indices, bit_to_word_index{false});
+  auto last_word_indices =
+    thrust::make_transform_iterator(last_bit_indices, bit_to_word_index{true});
 
   // Allocate temporary memory.
   size_t temp_storage_bytes{0};
