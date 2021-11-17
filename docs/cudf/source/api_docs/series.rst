@@ -300,6 +300,8 @@ Datetime methods
 
    strftime
    isocalendar
+   ceil
+   floor
 
 
 Timedelta properties
