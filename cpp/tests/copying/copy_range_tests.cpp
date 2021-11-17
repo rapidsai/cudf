@@ -60,7 +60,7 @@ class CopyRangeTypedTestFixture : public cudf::test::BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(CopyRangeTypedTestFixture, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(CopyRangeTypedTestFixture, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(CopyRangeTypedTestFixture, CopyWithNulls)
 {
@@ -471,7 +471,7 @@ template <typename T>
 struct FixedPointTypesCopyRange : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTypesCopyRange, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTypesCopyRange, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTypesCopyRange, FixedPointSimple)
 {

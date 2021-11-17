@@ -298,8 +298,7 @@ std::unique_ptr<cudf::column> gather(
   auto out_offsets_column = make_numeric_column(
     data_type{type_id::INT32}, output_count + 1, mask_state::UNALLOCATED, stream, mr);
   auto const d_out_offsets = out_offsets_column->mutable_view().template data<int32_t>();
-  auto const d_in_offsets =
-    (strings_count > 0) ? strings.offsets().data<int32_t>() + strings.offset() : nullptr;
+  auto const d_in_offsets  = (strings_count > 0) ? strings.offsets_begin() : nullptr;
   thrust::transform(rmm::exec_policy(stream),
                     begin,
                     end,

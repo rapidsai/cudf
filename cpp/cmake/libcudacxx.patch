@@ -1,0 +1,21 @@
+diff --git a/include/cuda/std/detail/__config b/include/cuda/std/detail/__config
+index d55a43688..654142d7e 100644
+--- a/include/cuda/std/detail/__config
++++ b/include/cuda/std/detail/__config
+@@ -23,7 +23,7 @@
+     #define _LIBCUDACXX_CUDACC_VER_MINOR __CUDACC_VER_MINOR__
+     #define _LIBCUDACXX_CUDACC_VER_BUILD __CUDACC_VER_BUILD__
+     #define _LIBCUDACXX_CUDACC_VER                                                  \
+-        _LIBCUDACXX_CUDACC_VER_MAJOR * 10000 + _LIBCUDACXX_CUDACC_VER_MINOR * 100 + \
++        _LIBCUDACXX_CUDACC_VER_MAJOR * 100000 + _LIBCUDACXX_CUDACC_VER_MINOR * 1000 + \
+         _LIBCUDACXX_CUDACC_VER_BUILD
+ 
+     #define _LIBCUDACXX_HAS_NO_LONG_DOUBLE
+@@ -64,7 +64,7 @@
+ #  endif
+ #endif
+ 
+-#if defined(_LIBCUDACXX_COMPILER_MSVC) || (defined(_LIBCUDACXX_CUDACC_VER) && (_LIBCUDACXX_CUDACC_VER < 110500))
++#if defined(_LIBCUDACXX_COMPILER_MSVC) || (defined(_LIBCUDACXX_CUDACC_VER) && (_LIBCUDACXX_CUDACC_VER < 1105000))
+ #  define _LIBCUDACXX_HAS_NO_INT128
+ #endif

@@ -230,7 +230,7 @@ def test_ngrams(n, separator, expected_values):
 
 
 @pytest.mark.parametrize(
-    "n, expected_values",
+    "n, expected_values, as_list",
     [
         (
             2,
@@ -247,16 +247,22 @@ def test_ngrams(n, separator, expected_values):
                 "er",
                 "re",
             ],
+            False,
         ),
-        (3, ["thi", "his", "boo", "ook", "her", "ere"]),
+        (3, ["thi", "his", "boo", "ook", "her", "ere"], False),
+        (
+            3,
+            [["thi", "his"], [], [], ["boo", "ook"], ["her", "ere"], []],
+            True,
+        ),
     ],
 )
-def test_character_ngrams(n, expected_values):
+def test_character_ngrams(n, expected_values, as_list):
     strings = cudf.Series(["this", "is", "my", "book", "here", ""])
 
     expected = cudf.Series(expected_values)
 
-    actual = strings.str.character_ngrams(n=n)
+    actual = strings.str.character_ngrams(n=n, as_list=as_list)
 
     assert type(expected) == type(actual)
     assert_eq(expected, actual)

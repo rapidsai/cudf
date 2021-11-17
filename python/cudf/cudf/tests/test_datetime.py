@@ -1433,6 +1433,161 @@ def test_is_month_start(data, dtype):
     assert_eq(expect, got)
 
 
+##################################################################
+#                       Date Range Tests                         #
+##################################################################
+
+date_range_test_dates_start = [
+    "2000-02-13 08:41:06",  # leap year
+    "1996-11-21 04:05:30",  # non leap year
+    "1970-01-01 00:00:00",  # unix epoch time 0
+    "1831-05-08 15:23:21",
+]
+date_range_test_dates_end = [
+    "2000-02-13 08:41:06",  # leap year
+    "1996-11-21 04:05:30",  # non leap year
+    "1970-01-01 00:00:00",  # unix epoch time 0
+    "1831-05-08 15:23:21",
+]
+date_range_test_periods = [1, 10, 100]
+date_range_test_freq = [
+    {"months": 3, "years": 1},
+    pytest.param(
+        {"hours": 10, "days": 57, "nanoseconds": 3},
+        marks=pytest.mark.xfail(
+            True,
+            reason="Pandas ignoring nanoseconds component. "
+            "https://github.com/pandas-dev/pandas/issues/44393",
+        ),
+    ),
+    "83D",
+    "17h",
+    "-680T",
+    "110546s",
+    pytest.param(
+        "110546789L",
+        marks=pytest.mark.xfail(
+            True,
+            reason="Pandas DateOffset ignores milliseconds. "
+            "https://github.com/pandas-dev/pandas/issues/43371",
+        ),
+    ),
+    "110546789248U",
+]
+
+
+@pytest.fixture(params=date_range_test_dates_start[:])
+def start(request):
+    return request.param
+
+
+@pytest.fixture(params=date_range_test_dates_end[:])
+def end(request):
+    return request.param
+
+
+@pytest.fixture(params=date_range_test_periods[:])
+def periods(request):
+    return request.param
+
+
+@pytest.fixture(params=date_range_test_freq[:])
+def freq(request):
+    return request.param
+
+
+def test_date_range_start_end_periods(start, end, periods):
+    expect = pd.date_range(start=start, end=end, periods=periods, name="a")
+    got = cudf.date_range(start=start, end=end, periods=periods, name="a")
+
+    np.testing.assert_allclose(
+        expect.to_numpy().astype("int64"),
+        got.to_pandas().to_numpy().astype("int64"),
+    )
+
+
+def test_date_range_start_end_freq(start, end, freq):
+    if isinstance(freq, str):
+        _gfreq = _pfreq = freq
+    else:
+        _gfreq = cudf.DateOffset(**freq)
+        _pfreq = pd.DateOffset(**freq)
+
+    expect = pd.date_range(start=start, end=end, freq=_pfreq, name="a")
+    got = cudf.date_range(start=start, end=end, freq=_gfreq, name="a")
+
+    np.testing.assert_allclose(
+        expect.to_numpy().astype("int64"),
+        got.to_pandas().to_numpy().astype("int64"),
+    )
+
+
+def test_date_range_start_freq_periods(start, freq, periods):
+    if isinstance(freq, str):
+        _gfreq = _pfreq = freq
+    else:
+        _gfreq = cudf.DateOffset(**freq)
+        _pfreq = pd.DateOffset(**freq)
+
+    expect = pd.date_range(start=start, periods=periods, freq=_pfreq, name="a")
+    got = cudf.date_range(start=start, periods=periods, freq=_gfreq, name="a")
+
+    np.testing.assert_allclose(
+        expect.to_numpy().astype("int64"),
+        got.to_pandas().to_numpy().astype("int64"),
+    )
+
+
+def test_date_range_end_freq_periods(end, freq, periods):
+    if isinstance(freq, str):
+        _gfreq = _pfreq = freq
+    else:
+        _gfreq = cudf.DateOffset(**freq)
+        _pfreq = pd.DateOffset(**freq)
+
+    expect = pd.date_range(end=end, periods=periods, freq=_pfreq, name="a")
+    got = cudf.date_range(end=end, periods=periods, freq=_gfreq, name="a")
+
+    np.testing.assert_allclose(
+        expect.to_numpy().astype("int64"),
+        got.to_pandas().to_numpy().astype("int64"),
+    )
+
+
+def test_date_range_freq_does_not_divide_range():
+    expect = pd.date_range(
+        "2001-01-01 00:00:00.000000", "2001-01-01 00:00:00.000010", freq="3us"
+    )
+    got = cudf.date_range(
+        "2001-01-01 00:00:00.000000", "2001-01-01 00:00:00.000010", freq="3us"
+    )
+    np.testing.assert_allclose(
+        expect.to_numpy().astype("int64"),
+        got.to_pandas().to_numpy().astype("int64"),
+    )
+
+
+def test_date_range_raise_overflow():
+    # Fixed offset
+    start = np.datetime64(np.iinfo("int64").max, "ns")
+    periods = 2
+    freq = cudf.DateOffset(nanoseconds=1)
+    with pytest.raises(pd._libs.tslibs.np_datetime.OutOfBoundsDatetime):
+        cudf.date_range(start=start, periods=periods, freq=freq)
+
+    # Non-fixed offset
+    start = np.datetime64(np.iinfo("int64").max, "ns")
+    periods = 2
+    freq = cudf.DateOffset(months=1)
+    with pytest.raises(pd._libs.tslibs.np_datetime.OutOfBoundsDatetime):
+        cudf.date_range(start=start, periods=periods, freq=freq)
+
+
+##################################################################
+#                    End of Date Range Test                      #
+##################################################################
+
+
 @pytest.mark.parametrize(
     "data",
     [

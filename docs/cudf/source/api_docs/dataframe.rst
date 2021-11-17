@@ -75,9 +75,12 @@ Binary operator functions
 
    DataFrame.add
    DataFrame.sub
+   DataFrame.subtract
    DataFrame.mul
-   DataFrame.div
+   DataFrame.multiply
    DataFrame.truediv
+   DataFrame.div
+   DataFrame.divide
    DataFrame.floordiv
    DataFrame.mod
    DataFrame.pow
@@ -89,6 +92,14 @@ Binary operator functions
    DataFrame.rfloordiv
    DataFrame.rmod
    DataFrame.rpow
+   DataFrame.round
+   DataFrame.lt
+   DataFrame.gt
+   DataFrame.le
+   DataFrame.ge
+   DataFrame.ne
+   DataFrame.eq
+   DataFrame.product
 
 Function application, GroupBy & window
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
