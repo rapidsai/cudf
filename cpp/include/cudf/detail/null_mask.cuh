@@ -240,7 +240,8 @@ __global__ void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bi
     }
 
     // Update the null count with the computed delta.
-    null_counts[range_id] += delta;
+    size_type updated_null_count = *(null_counts + range_id) + delta;
+    *(null_counts + range_id)    = updated_null_count;
     range_id += blockDim.x * gridDim.x;
   }
 }
