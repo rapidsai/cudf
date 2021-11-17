@@ -127,14 +127,6 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
         "$WORKSPACE/build.sh" clean libcudf cudf dask_cudf libcudf_kafka cudf_kafka benchmarks tests -l --ptds
     fi
 
-    ###
-    echo "Checking for build time log $WORKSPACE/cpp/build/ninja_log.csv"
-    gpuci_logger "Checking for build time logger $WORKSPACE/cpp/build/ninja_log.csv"
-    if [[ -f "$WORKSPACE/cpp/build/ninja_log.csv" ]]; then
-        echo "Copying build time results"
-        cp "$WORKSPACE/cpp/build/ninja_log.csv" "$WORKSPACE/test-results/."
-    fi
-
     ################################################################################
     # TEST - Run GoogleTest
     ################################################################################
@@ -185,7 +177,7 @@ else
         ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
     done
 
-    ###
+    # Copy libcudf build time results
     echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.csv"
     if [[ -f "$LIB_BUILD_DIR/ninja_log.csv" ]]; then
         gpuci_logger "Copying build time results"
