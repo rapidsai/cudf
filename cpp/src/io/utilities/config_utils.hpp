@@ -51,12 +51,12 @@ inline usage_policy get_env_policy()
 }  // namespace
 
 /**
- * @brief Returns true if cuFile and its compatiblity mode are enabled.
+ * @brief Returns true if cuFile and its compatibility mode is enabled.
  */
 inline bool is_always_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
 
 /**
- * @brief Returns true if only direct IO through cuFile are enabled (compatiblity mode is disabled).
+ * @brief Returns true if only direct IO through cuFile is enabled (compatibility mode is disabled).
  */
 inline bool is_gds_enabled()
 {
