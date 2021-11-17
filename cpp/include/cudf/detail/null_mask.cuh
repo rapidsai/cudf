@@ -251,24 +251,16 @@ __global__ void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bi
  * @brief Functor that converts bit segment indices to word segment indices.
  *
  * Converts [first_bit_index, last_bit_index) to [first_word_index,
- * last_word_index).
+ * last_word_index). The flag `end_of_segment` indicates whether the bit is at
+ * the end of a segment, in which case the word index should be incremented for
+ * bits at the start of a word.
  */
 struct bit_to_word_index {
-  /**
-   * @brief Construct a `bit_to_word_index` functor.
-   *
-   * @param end_of_segment Indicates whether the bit is at the end of a segment,
-   * in which case the word index should be incremented for bits at the start of
-   * a word.
-   * @param bit_indices Pointer to an array of bit indices.
-   */
   bit_to_word_index(bool end_of_segment) : end_of_segment(end_of_segment) {}
-
   CUDA_DEVICE_CALLABLE size_type operator()(const size_type& bit_index) const
   {
     return word_index(bit_index) + ((!end_of_segment || intra_word_index(bit_index) == 0) ? 0 : 1);
   }
-
   bool const end_of_segment;
 };
 
