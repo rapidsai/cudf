@@ -83,7 +83,7 @@ def cslog_to_junit_converter(cs_logs, outfile, args):
                     if line.startswith(preamble + "COMPUTE-SANITIZER"):
                         pass
                     elif line.startswith(preamble + "ERROR SUMMARY: "):
-                        error_count = int(line.split(" ")[-2])
+                        error_count = error_count + int(line.split(" ")[-2])
                     elif line.endswith(preamble + "\n"):
                         classname = (
                             args.classname
