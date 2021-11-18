@@ -1038,7 +1038,7 @@ partition : int,
     should consume messages from. Valid values are 0 - (N-1)
 start_offset : int, Kafka Topic/Partition offset that consumption
     should begin at. Inclusive.
-end_offset : int, Kafka Topic/Parition offset that consumption
+end_offset : int, Kafka Topic/Partition offset that consumption
     should end at. Inclusive.
 batch_timeout : int, default 10000
     Maximum number of milliseconds that will be spent trying to
@@ -1061,7 +1061,7 @@ filepath_or_buffer : str, path object, or file-like object
     or any object with a `read()` method (such as builtin `open()` file handler
     function or `StringIO`).
 delimiter : string, default None, The delimiter that should be used
-    for splitting text chunks into seperate cudf column rows. Currently
+    for splitting text chunks into separate cudf column rows. Currently
     only a single delimiter is supported.
 
 Returns

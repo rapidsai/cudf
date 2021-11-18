@@ -316,7 +316,7 @@ def compile_or_get(frame, func, args):
     Return a compiled kernel in terms of MaskedTypes that launches a
     kernel equivalent of `f` for the dtypes of `df`. The kernel uses
     a thread for each row and calls `f` using that rows data / mask
-    to produce an output value and output valdity for each row.
+    to produce an output value and output validity for each row.
 
     If the UDF has already been compiled for this requested dtypes,
     a cached version will be returned instead of running compilation.

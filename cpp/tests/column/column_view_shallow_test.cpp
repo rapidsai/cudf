@@ -84,7 +84,7 @@ TYPED_TEST_SUITE(ColumnViewShallowTests, AllTypes);
 // Test for fixed_width, dict, string, list, struct
 // column_view, column_view = same hash.
 // column_view, make a copy = same hash.
-// new column_view from colmn = same hash
+// new column_view from column = same hash
 // column_view, copy column = diff hash
 // column_view, diff column = diff hash.
 //

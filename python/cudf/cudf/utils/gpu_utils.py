@@ -143,7 +143,7 @@ def validate_setup():
             cuda_driver_supported_rt_version >= 11000
             and cuda_runtime_version >= 11000
         ):
-            # With cuda enhanced compatibitlity any code compiled
+            # With cuda enhanced compatibility any code compiled
             # with 11.x version of cuda can now run on any
             # driver >= 450.80.02. 11000 is the minimum cuda
             # version 450.80.02 supports.
