@@ -212,19 +212,11 @@ struct scan_functor<Op, cudf::struct_view> {
                                                  mr)
                               ->release();
 
-    // After gathering the children elements, we need to push down nulls from the root structs
-    // column to them.
-    if (input.has_nulls()) {
-      for (std::unique_ptr<column>& child : scanned_children) {
-        structs::detail::superimpose_parent_nulls(
-          input.null_mask(), input.null_count(), *child, stream, mr);
-      }
-    }
-
+    // Don't need to set a null mask because that will be handled at the caller.
     return make_structs_column(input.size(),
                                std::move(scanned_children),
-                               input.null_count(),
-                               cudf::detail::copy_bitmask(input, stream, mr));
+                               UNKNOWN_NULL_COUNT,
+                               rmm::device_buffer{0, stream, mr});
   }
 };
 
@@ -289,6 +281,15 @@ std::unique_ptr<column> scan_inclusive(
     output->set_null_mask(detail::copy_bitmask(input, stream, mr), input.null_count());
   } else if (input.nullable()) {
     output->set_null_mask(mask_scan(input, scan_type::INCLUSIVE, stream, mr), UNKNOWN_NULL_COUNT);
+  }
+
+  // If the input is a structs column, we also need to push down nulls from the parent output column
+  // into the children columns.
+  if (input.type().id() == type_id::STRUCT && output->has_nulls()) {
+    for (size_type idx = 0; idx < output->num_children(); ++idx) {
+      structs::detail::superimpose_parent_nulls(
+        output->view().null_mask(), output->null_count(), output->child(idx), stream, mr);
+    }
   }
 
   return output;
