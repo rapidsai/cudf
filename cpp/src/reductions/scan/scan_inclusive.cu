@@ -193,16 +193,24 @@ struct scan_functor<Op, cudf::struct_view> {
       do_scan(binop);
     }
 
+    // Gather the children columns of the input column. Must use `get_sliced_child` to properly
+    // handle input in case it is a sliced view.
+    auto const input_children = [&] {
+      auto const it = cudf::detail::make_counting_transform_iterator(
+        0, [structs_view = structs_column_view{input}, stream](auto const child_idx) {
+          return structs_view.get_sliced_child(child_idx);
+        });
+      return std::vector<column_view>(it, it + input.num_children());
+    }();
+
     // Gather the children elements of the prefix min/max struct elements first.
-    auto scanned_children =
-      cudf::detail::gather(
-        table_view(std::vector<column_view>{input.child_begin(), input.child_end()}),
-        gather_map,
-        out_of_bounds_policy::DONT_CHECK,
-        negative_index_policy::NOT_ALLOWED,
-        stream,
-        mr)
-        ->release();
+    auto scanned_children = cudf::detail::gather(table_view{input_children},
+                                                 gather_map,
+                                                 out_of_bounds_policy::DONT_CHECK,
+                                                 negative_index_policy::NOT_ALLOWED,
+                                                 stream,
+                                                 mr)
+                              ->release();
 
     // After gathering the children elements, we need to push down nulls from the root structs
     // column to them.
