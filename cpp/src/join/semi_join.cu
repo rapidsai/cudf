@@ -117,11 +117,8 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
     row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
     // insert valid rows
-    // TODO: Need to enable a stream argument in cuco, see
-    // https://github.com/NVIDIA/cuCollections/pull/113
-    hash_table.insert_if(iter, iter + right_num_rows, stencil, pred, hash_build, equality_build);
-    // hash_table.insert_if(iter, iter + right_num_rows, stencil, pred, hash_build, equality_build,
-    // stream.value());
+    hash_table.insert_if(
+      iter, iter + right_num_rows, stencil, pred, hash_build, equality_build, stream.value());
   }
 
   // Now we have a hash table, we need to iterate over the rows of the left table
