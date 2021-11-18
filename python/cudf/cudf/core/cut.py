@@ -115,7 +115,7 @@ def cut(
                 "Bin labels must either be False, None or passed in as a "
                 "list-like argument"
             )
-        elif ordered and labels is not None:
+        if ordered and labels is not None:
             if len(set(labels)) != len(labels):
                 raise ValueError(
                     "labels must be unique if ordered=True;"
@@ -207,22 +207,23 @@ def cut(
             )
         if ordered and len(set(labels)) != len(labels):
             raise ValueError(
-                "labels must be unique if ordered=True; pass ordered=False for"
+                "labels must be unique if ordered=True; "
+                "pass ordered=False for"
                 "duplicate labels"
             )
+
+        if len(labels) != len(bins) - 1:
+            raise ValueError(
+                "Bin labels must be one fewer than the number of bin edges"
+            )
+        if not ordered and len(set(labels)) != len(labels):
+            interval_labels = cudf.CategoricalIndex(
+                labels, categories=None, ordered=False
+            )
         else:
-            if len(labels) != len(bins) - 1:
-                raise ValueError(
-                    "Bin labels must be one fewer than the number of bin edges"
-                )
-            if not ordered and len(set(labels)) != len(labels):
-                interval_labels = cudf.CategoricalIndex(
-                    labels, categories=None, ordered=False
-                )
-            else:
-                interval_labels = (
-                    labels if len(set(labels)) == len(labels) else None
-                )
+            interval_labels = (
+                labels if len(set(labels)) == len(labels) else None
+            )
 
     if isinstance(bins, pd.IntervalIndex):
         # get the left and right edges of the bins as columns

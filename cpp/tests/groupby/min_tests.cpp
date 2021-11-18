@@ -252,12 +252,12 @@ TEST_F(groupby_dictionary_min_test, fixed_width)
 }
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_SUITE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, GroupBySortMinDecimalAsValue)
+TYPED_TEST(FixedPointTestAllReps, GroupBySortMinDecimalAsValue)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -280,7 +280,7 @@ TYPED_TEST(FixedPointTestBothReps, GroupBySortMinDecimalAsValue)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, GroupByHashMinDecimalAsValue)
+TYPED_TEST(FixedPointTestAllReps, GroupByHashMinDecimalAsValue)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;

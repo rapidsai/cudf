@@ -517,7 +517,9 @@ class Frame:
             data, columns=data.to_pandas_index(), index=self.index
         )
 
-    def _gather(self, gather_map, keep_index=True, nullify=False):
+    def _gather(
+        self, gather_map, keep_index=True, nullify=False, check_bounds=True
+    ):
         if not is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
         result = self.__class__._from_data(
@@ -526,6 +528,7 @@ class Frame:
                 as_column(gather_map),
                 keep_index=keep_index,
                 nullify=nullify,
+                check_bounds=check_bounds,
             )
         )
 
@@ -631,14 +634,18 @@ class Frame:
         # Early exit for an empty Frame.
         ncol = self._num_columns
         if ncol == 0:
-            return make_empty_matrix(shape=(0, 0), dtype=np.dtype("float64"))
+            return make_empty_matrix(
+                shape=(0, 0), dtype=np.dtype("float64"), order="F"
+            )
 
         if dtype is None:
             dtype = find_common_type(
                 [col.dtype for col in self._data.values()]
             )
 
-        matrix = make_empty_matrix(shape=(len(self), ncol), dtype=dtype)
+        matrix = make_empty_matrix(
+            shape=(len(self), ncol), dtype=dtype, order="F"
+        )
         for i, col in enumerate(self._data.values()):
             # TODO: col.values may fail if there is nullable data or an
             # unsupported dtype. We may want to catch and provide a more
@@ -1353,6 +1360,12 @@ class Frame:
         result = self._from_data(copy_data, self._index)
 
         return self._mimic_inplace(result, inplace=inplace)
+
+    def ffill(self):
+        return self.fillna(method="ffill")
+
+    def bfill(self):
+        return self.fillna(method="bfill")
 
     def _drop_na_rows(
         self, how="any", subset=None, thresh=None, drop_nan=False

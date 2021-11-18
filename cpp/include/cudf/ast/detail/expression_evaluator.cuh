@@ -431,10 +431,9 @@ struct expression_evaluator {
    * @param row_index Row index of all input and output data column(s).
    */
   template <typename ResultSubclass, typename T, bool result_has_nulls>
-  CUDA_DEVICE_CALLABLE void evaluate(
-    expression_result<ResultSubclass, T, result_has_nulls>& output_object,
-    cudf::size_type const row_index,
-    IntermediateDataType<has_nulls>* thread_intermediate_storage)
+  CUDF_DFI void evaluate(expression_result<ResultSubclass, T, result_has_nulls>& output_object,
+                         cudf::size_type const row_index,
+                         IntermediateDataType<has_nulls>* thread_intermediate_storage)
   {
     evaluate(output_object, row_index, row_index, row_index, thread_intermediate_storage);
   }
@@ -452,12 +451,11 @@ struct expression_evaluator {
    * @param output_row_index The row in the output to insert the result.
    */
   template <typename ResultSubclass, typename T, bool result_has_nulls>
-  CUDA_DEVICE_CALLABLE void evaluate(
-    expression_result<ResultSubclass, T, result_has_nulls>& output_object,
-    cudf::size_type const left_row_index,
-    cudf::size_type const right_row_index,
-    cudf::size_type const output_row_index,
-    IntermediateDataType<has_nulls>* thread_intermediate_storage)
+  CUDF_DFI void evaluate(expression_result<ResultSubclass, T, result_has_nulls>& output_object,
+                         cudf::size_type const left_row_index,
+                         cudf::size_type const right_row_index,
+                         cudf::size_type const output_row_index,
+                         IntermediateDataType<has_nulls>* thread_intermediate_storage)
   {
     cudf::size_type operator_source_index{0};
     for (cudf::size_type operator_index = 0; operator_index < plan.operators.size();
