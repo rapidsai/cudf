@@ -187,7 +187,7 @@ else
             mkdir -p "$WORKSPACE/test-results/"
             for gt in gtests/*; do
                 test_name=$(basename ${gt})
-                if [[ "$basename" == "ERROR_TEST" ]]; then
+                if [[ "$test_name" == "ERROR_TEST" ]]; then
                   continue
                 fi
                 echo "Running GoogleTest $test_name"

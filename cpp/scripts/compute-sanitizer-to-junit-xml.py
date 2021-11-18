@@ -36,29 +36,17 @@ def parse_args():
         help="Output compute-sanitizer junit xml file path",
     )
     argparser.add_argument(
-        "-classname",
-        type=str,
-        default="cudamemcheck",
-        help="class name for jenkins junit xml",
+        "-classname", type=str, default="cudamemcheck", help="class name for jenkins junit xml",
     )
     group = argparser.add_mutually_exclusive_group(required=True)
     group.add_argument(
-        "-log",
-        type=str,
-        default=None,
-        help="Single compute-sanitizer log file",
+        "-log", type=str, default=None, help="Single compute-sanitizer log file",
     )
     group.add_argument(
-        "-glob",
-        type=str,
-        default=None,
-        help="glob pattern of compute-sanitizer logs",
+        "-glob", type=str, default=None, help="glob pattern of compute-sanitizer logs",
     )
     argparser.add_argument(
-        "-v",
-        dest="verbose",
-        action="store_true",
-        help="Print verbose messages",
+        "-v", dest="verbose", action="store_true", help="Print verbose messages",
     )
     args = argparser.parse_args()
     if args.log and not args.out:
@@ -75,33 +63,27 @@ def cslog_to_junit_converter(cs_logs, outfile, args):
     error_number = 0
     test_cases = []
     error_count = 0
+    print("Log Path, CS errors, CS errors + AppCrash")
     for src in cs_logs:
-        basename = os.path.splitext(os.path.basename(src))[0]
+        basename = os.path.splitext(os.path.splitext(os.path.basename(src))[0])[0]
         with open(src) as log:
+            this_error_number = 0
             for line in log:
                 if line.startswith(preamble):
                     if line.startswith(preamble + "COMPUTE-SANITIZER"):
                         pass
                     elif line.startswith(preamble + "ERROR SUMMARY: "):
                         error_count = error_count + int(line.split(" ")[-2])
+                        if this_error_number != 0:
+                            print(src, int(line.split(" ")[-2]), this_error_number, sep=", ")
                     elif line.endswith(preamble + "\n"):
-                        classname = (
-                            args.classname
-                            + "."
-                            + basename
-                            + ("." + testcase_name if testcase_name else "")
-                        )
+                        classname = args.classname + "." + basename
+                        name = ".".join(filter(None, [testcase_name, str(error_number)]))
                         item = ET.Element(
-                            "testcase",
-                            attrib={
-                                "classname": classname,
-                                "name": str(error_number),
-                            },
+                            "testcase", attrib={"classname": classname, "name": name},
                         )
-                        message = testcase_error_text[0][len(preamble):].strip()
-                        failure = ET.SubElement(
-                            item, "failure", attrib={"message": message}
-                        )
+                        message = testcase_error_text[0][len(preamble) :].strip()
+                        failure = ET.SubElement(item, "failure", attrib={"message": message})
                         data = "".join(testcase_error_text)  # failure.text
                         failure.append(
                             ET.Comment(
@@ -113,6 +95,7 @@ def cslog_to_junit_converter(cs_logs, outfile, args):
                         test_cases.append(item)
                     elif line[len(preamble)] != " ":
                         error_number += 1
+                        this_error_number += 1
                         testcase_error_text = []
                         testcase_error_text.append(line)
                     elif line[len(preamble)] == " ":
@@ -128,9 +111,10 @@ def cslog_to_junit_converter(cs_logs, outfile, args):
                 else:
                     pass
                     # raise Exception('unexpected line in compute-sanitizer log: '+line)
-    if not (error_count == error_number):
-        print("error count mismatch: " + str(error_count) + " vs " + str(error_number))
-    
+
+    # compute sanitizer errors, compute sanitizer errors and application crash errors
+    print("Total Errors", error_count, error_number, sep=", ")
+
     root = ET.Element(
         "testsuites",
         attrib={
@@ -158,7 +142,6 @@ def main():
     else:
         cs_logs = glob.glob(args.glob)
     cslog_to_junit_converter(cs_logs, args.out, args)
-    print(args.out)
 
 
 if __name__ == "__main__":
