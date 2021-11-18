@@ -219,10 +219,14 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
   using namespace cudf::io::detail;
 
   auto sink = make_datasink(options.get_sink());
-  auto writer =
-    std::make_unique<csv::writer>(std::move(sink), options, rmm::cuda_stream_default, mr);
 
-  writer->write(options.get_table(), options.get_metadata());
+  return csv::write_csv(  //
+    sink.get(),
+    options.get_table(),
+    options.get_metadata(),
+    options,
+    rmm::cuda_stream_default,
+    mr);
 }
 
 namespace detail_orc = cudf::io::detail::orc;
