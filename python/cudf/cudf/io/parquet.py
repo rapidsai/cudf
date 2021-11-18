@@ -165,7 +165,7 @@ def read_parquet_metadata(path):
 
 
 def _process_dataset(
-    paths, fs, filters=None, row_groups=None, categorical_partitioning=True,
+    paths, fs, filters=None, row_groups=None, categorical_partitions=True,
 ):
     # Returns:
     #     file_list - Expanded/filtered list of paths
@@ -207,7 +207,7 @@ def _process_dataset(
         for k, v in keys.items():
             if v not in partition_categories[k]:
                 partition_categories[k].append(v)
-        if not categorical_partitioning:
+        if not categorical_partitions:
             # Bail - We don't need to discover all categories.
             # We only need to save the partition keys from this
             # first `file_fragment`
@@ -294,7 +294,7 @@ def _process_dataset(
         file_list,
         row_groups,
         partition_keys,
-        partition_categories if categorical_partitioning else {},
+        partition_categories if categorical_partitions else {},
     )
 
 
@@ -407,7 +407,7 @@ def read_parquet(
     strings_to_categorical=False,
     use_pandas_metadata=True,
     use_python_file_object=False,
-    categorical_partitioning=True,
+    categorical_partitions=True,
     *args,
     **kwargs,
 ):
@@ -452,7 +452,7 @@ def read_parquet(
             fs,
             filters=filters,
             row_groups=row_groups,
-            categorical_partitioning=categorical_partitioning,
+            categorical_partitions=categorical_partitions,
         )
     elif filters is not None:
         raise ValueError("cudf cannot apply filters to open file objects.")
@@ -631,7 +631,6 @@ def _read_parquet(
             use_pandas_metadata=use_pandas_metadata,
         )
     else:
-        # TODO: Fix this broken code (pre-existing "bug")
         return cudf.DataFrame.from_arrow(
             pq.ParquetDataset(filepaths_or_buffers).read_pandas(
                 columns=columns, *args, **kwargs
