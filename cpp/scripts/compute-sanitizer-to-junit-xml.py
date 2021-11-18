@@ -128,12 +128,9 @@ def cslog_to_junit_converter(cs_logs, outfile, args):
                 else:
                     pass
                     # raise Exception('unexpected line in compute-sanitizer log: '+line)
-    assert error_count == error_number, (
-        "error count mismatch: "
-        + str(error_count)
-        + " vs "
-        + str(error_number)
-    )
+    if not (error_count == error_number):
+        print("error count mismatch: " + str(error_count) + " vs " + str(error_number))
+    
     root = ET.Element(
         "testsuites",
         attrib={
