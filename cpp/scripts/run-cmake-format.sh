@@ -25,22 +25,24 @@
 
 status=0
 if [ -z ${CUDF_ROOT:+PLACEHOLDER} ]; then
-    CUDF_ROOT=$(git rev-parse --show-toplevel 2>&1)/cpp/build
+    CUDF_BUILD_DIR=$(git rev-parse --show-toplevel 2>&1)/cpp/build
     status=$?
+else
+    CUDF_BUILD_DIR=${CUDF_ROOT}
 fi
 
 if ! [ ${status} -eq 0 ]; then
-    if [[ ${CUDF_ROOT} == *"not a git repository"* ]]; then
+    if [[ ${CUDF_BUILD_DIR} == *"not a git repository"* ]]; then
         echo "This script must be run inside the rmm repository, or the CUDF_ROOT environment variable must be set."
     else
         echo "Script failed with unknown error attempting to determine project root:"
-        echo ${CUDF_ROOT}
+        echo ${CUDF_BUILD_DIR}
     fi
     exit 1
 fi
 
 DEFAULT_FORMAT_FILE_LOCATIONS=(
-  "${CUDF_ROOT:-${HOME}}/_deps/rapids-cmake-src/cmake-format-rapids-cmake.json"
+  "${CUDF_BUILD_DIR:-${HOME}}/_deps/rapids-cmake-src/cmake-format-rapids-cmake.json"
   "cpp/libcudf_kafka/build/_deps/rapids-cmake-src/cmake-format-rapids-cmake.json"
 )
 
