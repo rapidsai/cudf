@@ -33,7 +33,7 @@ fi
 
 if ! [ ${status} -eq 0 ]; then
     if [[ ${CUDF_BUILD_DIR} == *"not a git repository"* ]]; then
-        echo "This script must be run inside the rmm repository, or the CUDF_ROOT environment variable must be set."
+        echo "This script must be run inside the cudf repository, or the CUDF_ROOT environment variable must be set."
     else
         echo "Script failed with unknown error attempting to determine project root:"
         echo ${CUDF_BUILD_DIR}

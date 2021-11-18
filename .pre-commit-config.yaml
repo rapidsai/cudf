@@ -81,7 +81,7 @@ repos:
                   - cmake-format==0.6.11
               - id: cmake-lint
                 name: cmake-lint
-                entry: ./bash cpp/scripts/run-cmake-format.sh cmake-lint
+                entry: ./cpp/scripts/run-cmake-format.sh cmake-lint
                 language: python
                 types: [cmake]
                 # Note that pre-commit autoupdate does not update the versions
