@@ -46,7 +46,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.io.parquet cimport (
     chunked_parquet_writer_options,
     chunked_parquet_writer_options_builder,
-    merge_rowgroup_metadata as parquet_merge_metadata,
+    merge_row_group_metadata as parquet_merge_metadata,
     parquet_chunked_writer as cpp_parquet_chunked_writer,
     parquet_reader_options,
     parquet_writer_options,
@@ -282,7 +282,9 @@ cpdef write_parquet(
         object compression="snappy",
         object statistics="ROWGROUP",
         object metadata_file_path=None,
-        object int96_timestamps=False):
+        object int96_timestamps=False,
+        object row_group_size_bytes=None,
+        object row_group_size_rows=None):
     """
     Cython function to call into libcudf API, see `write_parquet`.
 
@@ -334,7 +336,6 @@ cpdef write_parquet(
     cdef cudf_io_types.compression_type comp_type = _get_comp_type(compression)
     cdef cudf_io_types.statistics_freq stat_freq = _get_stat_freq(statistics)
 
-    cdef parquet_writer_options args
     cdef unique_ptr[vector[uint8_t]] out_metadata_c
     cdef string c_column_chunks_file_path
     cdef bool _int96_timestamps = int96_timestamps
@@ -342,16 +343,21 @@ cpdef write_parquet(
         c_column_chunks_file_path = str.encode(metadata_file_path)
 
     # Perform write
+    cdef parquet_writer_options args = move(
+        parquet_writer_options.builder(sink, tv)
+        .metadata(tbl_meta.get())
+        .compression(comp_type)
+        .stats_level(stat_freq)
+        .column_chunks_file_path(c_column_chunks_file_path)
+        .int96_timestamps(_int96_timestamps)
+        .build()
+    )
+    if row_group_size_bytes is not None:
+        args.set_row_group_size_bytes(row_group_size_bytes)
+    if row_group_size_rows is not None:
+        args.set_row_group_size_rows(row_group_size_rows)
+
     with nogil:
-        args = move(
-            parquet_writer_options.builder(sink, tv)
-            .metadata(tbl_meta.get())
-            .compression(comp_type)
-            .stats_level(stat_freq)
-            .column_chunks_file_path(c_column_chunks_file_path)
-            .int96_timestamps(_int96_timestamps)
-            .build()
-        )
         out_metadata_c = move(parquet_writer(args))
 
     if metadata_file_path is not None:
@@ -483,11 +489,11 @@ cdef class ParquetWriter:
 
 cpdef merge_filemetadata(object filemetadata_list):
     """
-    Cython function to call into libcudf API, see `merge_rowgroup_metadata`.
+    Cython function to call into libcudf API, see `merge_row_group_metadata`.
 
     See Also
     --------
-    cudf.io.parquet.merge_rowgroup_metadata
+    cudf.io.parquet.merge_row_group_metadata
     """
     cdef vector[unique_ptr[vector[uint8_t]]] list_c
     cdef vector[uint8_t] blob_c

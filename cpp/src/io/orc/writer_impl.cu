@@ -1301,10 +1301,10 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
                    rmm::mr::device_memory_resource* mr)
   : _mr(mr),
     stream(stream),
-    max_stripe_size{options.stripe_size_bytes(), options.stripe_size_rows()},
-    row_index_stride{options.row_index_stride()},
+    max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
+    row_index_stride{options.get_row_index_stride()},
     compression_kind_(to_orc_compression(options.get_compression())),
-    enable_statistics_(options.enable_statistics()),
+    enable_statistics_(options.is_enabled_statistics()),
     single_write_mode(mode == SingleWriteMode::YES),
     out_sink_(std::move(sink))
 {
@@ -1321,10 +1321,10 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
                    rmm::mr::device_memory_resource* mr)
   : _mr(mr),
     stream(stream),
-    max_stripe_size{options.stripe_size_bytes(), options.stripe_size_rows()},
-    row_index_stride{options.row_index_stride()},
+    max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
+    row_index_stride{options.get_row_index_stride()},
     compression_kind_(to_orc_compression(options.get_compression())),
-    enable_statistics_(options.enable_statistics()),
+    enable_statistics_(options.is_enabled_statistics()),
     single_write_mode(mode == SingleWriteMode::YES),
     out_sink_(std::move(sink))
 {
