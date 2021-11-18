@@ -402,7 +402,7 @@ TYPED_TEST(ScanDurationTest, Sum)
 struct StructScanTest : public cudf::test::BaseFixture {
 };
 
-TEST_F(StructScanTest, StructReductionMinMaxNoNull)
+TEST_F(StructScanTest, StructScanMinMaxNoNull)
 {
   using INTS_CW    = cudf::test::fixed_width_column_wrapper<int32_t>;
   using STRINGS_CW = cudf::test::strings_column_wrapper;
@@ -435,7 +435,7 @@ TEST_F(StructScanTest, StructReductionMinMaxNoNull)
   }
 }
 
-TEST_F(StructScanTest, StructReductionMinMaxSlicedInput)
+TEST_F(StructScanTest, StructScanMinMaxSlicedInput)
 {
   using INTS_CW    = cudf::test::fixed_width_column_wrapper<int>;
   using STRINGS_CW = cudf::test::strings_column_wrapper;
@@ -483,7 +483,7 @@ TEST_F(StructScanTest, StructReductionMinMaxSlicedInput)
   }
 }
 
-TEST_F(StructScanTest, StructReductionMinMaxWithNulls)
+TEST_F(StructScanTest, StructScanMinMaxWithNulls)
 {
   using INTS_CW    = cudf::test::fixed_width_column_wrapper<int>;
   using STRINGS_CW = cudf::test::strings_column_wrapper;
