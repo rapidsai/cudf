@@ -155,18 +155,6 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
 }
 
 std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, ewmvar_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
-  data_type col_type, ewmstd_aggregation const& agg)
-{
-  return visit(col_type, static_cast<aggregation const&>(agg));
-}
-
-std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
   data_type col_type, rank_aggregation const& agg)
 {
   return visit(col_type, static_cast<aggregation const&>(agg));
@@ -342,16 +330,6 @@ void aggregation_finalizer::visit(row_number_aggregation const& agg)
 }
 
 void aggregation_finalizer::visit(ewma_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(ewmvar_aggregation const& agg)
-{
-  visit(static_cast<aggregation const&>(agg));
-}
-
-void aggregation_finalizer::visit(ewmstd_aggregation const& agg)
 {
   visit(static_cast<aggregation const&>(agg));
 }
@@ -637,21 +615,6 @@ std::unique_ptr<Base> make_ewma_aggregation(double com, bool adjust)
 }
 template std::unique_ptr<aggregation> make_ewma_aggregation<aggregation>(double com, bool adjust);
 
-/// Factory to create an EWMVAR aggregation
-template <typename Base>
-std::unique_ptr<Base> make_ewmvar_aggregation(double com, bool adjust, bool bias)
-{
-  return std::make_unique<detail::ewmvar_aggregation>(com, adjust, bias);
-}
-template std::unique_ptr<aggregation> make_ewmvar_aggregation<aggregation>(double com, bool adjust, bool bias);
-
-/// Factory to create an EWMSTD aggregation
-template <typename Base>
-std::unique_ptr<Base> make_ewmstd_aggregation(double com, bool adjust, bool bias)
-{
-  return std::make_unique<detail::ewmstd_aggregation>(com, adjust, bias);
-}
-template std::unique_ptr<aggregation> make_ewmstd_aggregation<aggregation>(double com, bool adjust, bool bias);
 
 /// Factory to create a RANK aggregation
 template <typename Base>

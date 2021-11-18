@@ -108,7 +108,3 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         data_type output_type) except +
 
     cdef unique_ptr[T] make_ewma_aggregation[T](double com, bint adjust) except +
-
-    cdef unique_ptr[T] make_ewmvar_aggregation[T](double com, bint adjust, bint bias) except +
-
-    cdef unique_ptr[T] make_ewmstd_aggregation[T](double com, bint adjust, bint bias) except +

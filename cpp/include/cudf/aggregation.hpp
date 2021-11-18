@@ -78,8 +78,6 @@ class aggregation {
     NTH_ELEMENT,     ///< get the nth element
     ROW_NUMBER,      ///< get row-number of current index (relative to rolling window)
     EWMA,            ///< get exponential weighted moving average at current index
-    EWMVAR,          ///< get exponential weighted moving variance at current index
-    EWMSTD,          ///< get exponential weighted moving standard deviation at current index
     RANK,            ///< get rank       of current index
     DENSE_RANK,      ///< get dense rank of current index
     COLLECT_LIST,    ///< collect values into a list
@@ -295,17 +293,6 @@ std::unique_ptr<Base> make_row_number_aggregation();
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_ewma_aggregation(double com, bool adjust);
 
-/**
- * @brief Factory to create a EWMVAR aggregation
- */
-template <typename Base = aggregation>
-std::unique_ptr<Base> make_ewmvar_aggregation(double com, bool adjust, bool bias);
-
-/**
- * @brief Factory to create a EWMSTD aggregation
- */
-template <typename Base = aggregation>
-std::unique_ptr<Base> make_ewmstd_aggregation(double com, bool adjust, bool bias);
 
 /**
  * @brief Factory to create a RANK aggregation

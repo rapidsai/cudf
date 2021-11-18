@@ -71,9 +71,7 @@ std::unique_ptr<column> scan_agg_dispatch(const column_view& input,
         input.type(), DispatchFn<DeviceProduct>(), input, null_handling, stream, mr);
     case aggregation::RANK: return inclusive_rank_scan(input, stream, mr);
     case aggregation::DENSE_RANK: return inclusive_dense_rank_scan(input, stream, mr);
-    case aggregation::EWMA:
-    case aggregation::EWMVAR:
-    case aggregation::EWMSTD: {
+    case aggregation::EWMA: {
       return ewm(input, agg, stream, mr);
     }
     default: CUDF_FAIL("Unsupported aggregation operator for scan");

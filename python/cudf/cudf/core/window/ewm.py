@@ -26,12 +26,10 @@ class ExponentialMovingWindow(_RollingBase):
         return self._apply_agg("ewma")
 
     def var(self, bias):
-        self.bias = bias
-        return self._apply_agg("ewmvar")
+        raise NotImplementedError("ewmvar not yet supported.")
 
     def std(self, bias):
-        self.bias = bias
-        return self._apply_agg("ewmstd")
+        raise NotImplementedError("ewmstd not yet supported.")
 
     def corr(self, other):
         raise NotImplementedError("corr not yet supported.")

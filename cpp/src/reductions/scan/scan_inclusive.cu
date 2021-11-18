@@ -478,190 +478,6 @@ void print_device_uvector(rmm::device_uvector<double> const& input, rmm::cuda_st
   std::cout << std::endl;
 }
 
-/**
- * @brief Compute exponentially weighted moving variance.
- * The simplest definition for EWMVAR is defined is
- * EWMVAR[i] = EWMA[xi**2] - EWMA[xi]**2. Those EWMA are
- * themselves calculated with adjust=true/false, leading
- * to two types of EWMVAR calculations. From there, EWMVAR
- * may be biased or unbiased, leading to four cases. Finally,
- * nulls can either be present or not, which requires special
- * handling in every case. This leads to eight possibilities.
- */
-std::unique_ptr<column> ewmvar(column_view const& input,
-                               double com,
-                               bool adjust,
-                               bool bias,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
-{
-
-  if (!adjust and bias and input.has_nulls()) {
-    // unadjusted, biased result with no nulls
-  }
-
-
-  // get xi**2
-  std::unique_ptr<column> xi_sqr = make_fixed_width_column(
-    cudf::data_type{cudf::type_id::FLOAT64}, input.size(), copy_bitmask(input));
-  mutable_column_view xi_sqr_d = xi_sqr->mutable_view();
-  thrust::transform(rmm::exec_policy(stream),
-                    input.begin<double>(),
-                    input.end<double>(),
-                    xi_sqr_d.begin<double>(),
-                    [=] __host__ __device__(double input) -> double { return input * input; });
-
-  // get EWMA[xi**2]
-  std::unique_ptr<column> ewma_xi_sqr = ewma((*xi_sqr).view(), com, adjust, stream, mr);
-
-  // get EWMA[xi]
-  std::unique_ptr<column> ewma_xi = ewma(input, com, adjust, stream, mr);
-
-  // reuse the memory from computing xi_sqr to write the output
-  thrust::transform(
-    rmm::exec_policy(stream),
-    ewma_xi.get()[0].view().begin<double>(),
-    ewma_xi.get()[0].view().end<double>(),
-    ewma_xi_sqr.get()[0].view().begin<double>(),
-    ewma_xi.get()[0].mutable_view().begin<double>(),
-    [=] __host__ __device__(double x, double xsqrd) -> double { return xsqrd - x * x; });
-
-
-  if (!bias) {
-    /*
-    We're going to need to compute SUM(w_i ** 2) for each index, this is another pair summation.
-    
-
-    
-    
-    */
-    double beta = 1.0 - (1.0 / (com + 1.0));
-
-    if (adjust) {
-      // allocate pairs
-
-      rmm::device_uvector<double> bias(input.size(), stream, mr);
-
-      rmm::device_uvector<thrust::pair<double, double>> pairs(input.size(), stream, mr);
-      thrust::fill(rmm::exec_policy(stream), pairs.begin(), pairs.end(), thrust::pair<double, double>(beta*beta, 1));
-      compute_recurrence(pairs, stream);
-      
-      thrust::transform(rmm::exec_policy(stream),
-                        pairs.begin(),
-                        pairs.end(),
-                        bias.begin(),
-                        [=] __host__ __device__ (thrust::pair<double, double> input) -> double {
-                          return thrust::get<1>(input);
-                        }
-      );
-      thrust::fill(rmm::exec_policy(stream), pairs.begin(), pairs.end(), thrust::pair<double, double>(beta, 1));
-      compute_recurrence(pairs, stream);
-
-      thrust::transform(rmm::exec_policy(stream),
-                        pairs.begin(),
-                        pairs.end(),
-                        bias.begin(),
-                        bias.begin(),
-                        [=] __host__ __device__ (thrust::pair<double, double> pair, double wisqr) -> double {
-                          double wi = thrust::get<1>(pair);
-                          
-                          return (wi*wi) / ((wi*wi) - wisqr);
-                        }
-      );
-      print_device_uvector(bias, stream);
-      thrust::transform(rmm::exec_policy(stream),
-                        bias.begin(),
-                        bias.end(),
-                        ewma_xi.get()[0].mutable_view().begin<double>(),
-                        ewma_xi.get()[0].mutable_view().begin<double>(),
-                        [=] __host__ __device__ (double bias, double input) -> double {
-                          return bias * input;
-                        }
-      
-      );
-
-    } else {
-      if (input.has_nulls()) {
-        double beta = 1.0 - (1.0 / (com + 1.0));
-        double alpha = 1.0 - beta;
-        auto d_input   = column_device_view::create(input, stream);
-        auto valid_itr = detail::make_validity_iterator(*d_input);
-
-        rmm::device_uvector<double> nullcnt = null_roll_up(input, stream);
-        thrust::transform(rmm::exec_policy(stream), 
-                          valid_itr, 
-                          valid_itr + input.size(), 
-                          nullcnt.begin(), 
-                          nullcnt.begin(),
-                          [=] __host__ __device__ (bool valid, double num_nulls) -> double {
-                            double other_weight;
-                            double wi;
-                            double wisqr;
-                            if (valid) {
-                              if (num_nulls != 0.0) {
-                                other_weight = beta;
-                              } else {
-                                other_weight = pow(beta, num_nulls + 1);
-                              }
-                              wi = alpha + other_weight;
-                              wisqr = alpha * alpha + other_weight*other_weight;
-                              return wi * wi / (wi * wi - wisqr);
-                            } else {
-                              return 1.0;
-                            }
-                          }
-                        );
-
-        thrust::transform(rmm::exec_policy(stream),
-                          nullcnt.begin(),
-                          nullcnt.end(),
-                          ewma_xi.get()[0].mutable_view().begin<double>(),
-                          ewma_xi.get()[0].mutable_view().begin<double>(),
-                          thrust::multiplies<double>()
-        );
-      } else {
-        // the weights will always be (beta, 1 - beta)
-        double wi = beta + (1.0 - beta);
-        double wisqr = beta * beta + (1.0 - beta) * (1.0 - beta);
-        double const bias = wi * wi / (wi * wi - wisqr);
-        auto mutable_view = ewma_xi.get()[0].mutable_view();
-
-        rmm::device_uvector<double> bias_vec(input.size(), stream, mr);
-        thrust::fill(rmm::exec_policy(stream), bias_vec.begin(), bias_vec.end(), bias);
-
-        thrust::transform(rmm::exec_policy(stream),
-                          mutable_view.begin<double>(),
-                          mutable_view.end<double>(),
-                          bias_vec.begin(),
-                          mutable_view.begin<double>(),
-                          thrust::multiplies<double>()
-        );
-      }
-    }
-  }
-  // return means;
-  return ewma_xi;
-}
-
-std::unique_ptr<column> ewmstd(column_view const& input,
-                               double com,
-                               bool adjust,
-                               bool bias,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
-{
-  std::unique_ptr<column> var = ewmvar(input, com, adjust, bias, stream, mr);
-  auto var_view               = var.get()[0].mutable_view();
-
-  // write into the same memory
-  thrust::transform(rmm::exec_policy(stream),
-                    var_view.begin<double>(),
-                    var_view.end<double>(),
-                    var_view.begin<double>(),
-                    [=] __host__ __device__(double input) -> double { return sqrt(input); });
-
-  return var;
-}
 
 std::unique_ptr<column> ewm(column_view const& input,
                             std::unique_ptr<aggregation> const& agg,
@@ -673,18 +489,6 @@ std::unique_ptr<column> ewm(column_view const& input,
       double com  = (dynamic_cast<ewma_aggregation*>(agg.get()))->com;
       bool adjust = (dynamic_cast<ewma_aggregation*>(agg.get()))->adjust;
       return ewma(input, com, adjust, stream, mr);
-    }
-    case aggregation::EWMVAR: {
-      double com  = (dynamic_cast<ewmvar_aggregation*>(agg.get()))->com;
-      bool adjust = (dynamic_cast<ewmvar_aggregation*>(agg.get()))->adjust;
-      bool bias = (dynamic_cast<ewmvar_aggregation*>(agg.get()))->bias;
-      return ewmvar(input, com, adjust, bias, stream, mr);
-    }
-    case aggregation::EWMSTD: {
-      double com  = (dynamic_cast<ewmstd_aggregation*>(agg.get()))->com;
-      bool adjust = (dynamic_cast<ewmstd_aggregation*>(agg.get()))->adjust;
-      bool bias = (dynamic_cast<ewmstd_aggregation*>(agg.get()))->bias;
-      return ewmstd(input, com, adjust, bias, stream, mr);
     }
     default: CUDF_FAIL("Unsupported aggregation operator for scan");
   }
@@ -700,8 +504,7 @@ std::unique_ptr<column> scan_inclusive(
   auto output = scan_agg_dispatch<scan_dispatcher>(input, agg, null_handling, stream, mr);
 
   if (agg->kind == aggregation::RANK || agg->kind == aggregation::DENSE_RANK ||
-      agg->kind == aggregation::EWMA || agg->kind == aggregation::EWMVAR ||
-      agg->kind == aggregation::EWMSTD) {
+      agg->kind == aggregation::EWMA) {
     return output;
   } else if (null_handling == null_policy::EXCLUDE) {
     output->set_null_mask(detail::copy_bitmask(input, stream, mr), input.null_count());
