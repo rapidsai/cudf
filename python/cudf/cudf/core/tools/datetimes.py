@@ -634,15 +634,35 @@ class DateOffset:
         """
         Parse a string and return a DateOffset object.
 
-        Expects strings of the form 3D, 25W, 10ms, 42ns, etc.
-        See `_offset_alias_to_code` and `_CODE_TO_UNITS` for
-        supported list of strings.
+        A string can be a pandas `offset alias`<https://pandas.pydata.org/\
+            pandas-docs/stable/user_guide/timeseries.html#offset-aliases>_ or a
+        numpy `date/time unit code`<https://numpy.org/doc/stable/reference/arr\
+            ays.datetime.html#datetime-units>_
+
+        Note that ``m`` (lower case) is ambiguous and is not accepted in this
+        function. Use ``T``/``min`` for minutely frequency and ``M`` (upper
+        case) for monthly frequency.
+
+        Expects strings of the form 3D, 25W, -10ms, 42ns, etc.
+
+        Not all offset aliases are supported. See `_offset_alias_to_code` and
+        `_CODE_TO_UNITS` for supported list of strings.
         """
         match = cls._FREQSTR_REGEX.fullmatch(freqstr)
         if match is None:
             raise ValueError(f"Invalid frequency string: {freqstr}")
 
+        # Decompose the string into separate components
         sign_part, numeric_part, freq_part = match.groups()
+
+        # Handle various offset strings and normalize as codes
+        if freq_part == "m":
+            raise ValueError(
+                "Lower cased `m` is ambiguous. Use 'T'/'min' to specify "
+                "minutely frequency or upper cased `M` to specify monthly "
+                "frequency."
+            )
+
         if freq_part in _offset_alias_to_code:
             code = _offset_alias_to_code[freq_part]
         elif freq_part in cls._CODES_TO_UNITS:
@@ -650,9 +670,11 @@ class DateOffset:
         else:
             raise ValueError(f"Cannot interpret frequency str: {freqstr}")
 
+        # Handle sign and numerics
         sign = -1 if sign_part else 1
         n = int(numeric_part) if numeric_part else 1
 
+        # Construct the kwds dictionary
         return cls(**{cls._CODES_TO_UNITS[code]: n * sign})
 
     def _maybe_as_fast_pandas_offset(self) -> pd.DateOffset:
@@ -820,11 +842,18 @@ def date_range(
     if isinstance(freq, DateOffset):
         offset = freq
     elif isinstance(freq, str):
-        offset = DateOffset._from_str(freq)
-        if "months" in offset.kwds or "years" in offset.kwds:
-            raise ValueError(
-                f"Unrecognized or unsupported offset alias {freq}."
+        if (
+            any(
+                x in freq.upper()
+                for x in {"Y", "A", "Q", "B", "SM", "SMS", "CBMS", "M"}
             )
+            or "MS" in freq
+        ):
+            raise ValueError(
+                "date_range does not yet support month, quarter, year-anchored"
+                "or business-date frequency."
+            )
+        offset = DateOffset._from_str(freq)
     else:
         raise TypeError("`freq` must be a `str` or cudf.DateOffset object.")
 
