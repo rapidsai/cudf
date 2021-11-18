@@ -1583,6 +1583,46 @@ def test_date_range_raise_overflow():
         cudf.date_range(start=start, periods=periods, freq=freq)
 
 
+@pytest.mark.parametrize(
+    "freqstr_unsupported",
+    [
+        "1M",
+        "2SM",
+        "3MS",
+        "4BM",
+        "5CBM",
+        "6SMS",
+        "7BMS",
+        "8CBMS",
+        "Q",
+        "2BQ",
+        "3BQS",
+        "10A",
+        "10Y",
+        "9BA",
+        "9BY",
+        "8AS",
+        "8YS",
+        "7BAS",
+        "7BYS",
+        "BH",
+        "B",
+    ],
+)
+def test_date_range_raise_unsupported(freqstr_unsupported):
+    s, e = "2001-01-01", "2008-01-31"
+    pd.date_range(start=s, end=e, freq=freqstr_unsupported)
+    with pytest.raises(ValueError, match="does not yet support"):
+        cudf.date_range(start=s, end=e, freq=freqstr_unsupported)
+
+    # 3ms would mean a millisecondly frequencies, not month start frequencies
+    if not freqstr_unsupported == "3MS":
+        freqstr_unsupported = freqstr_unsupported.lower()
+        pd.date_range(start=s, end=e, freq=freqstr_unsupported)
+        with pytest.raises(ValueError, match="does not yet support"):
+            cudf.date_range(start=s, end=e, freq=freqstr_unsupported)
+
+
 ##################################################################
 #                    End of Date Range Test                      #
 ##################################################################
