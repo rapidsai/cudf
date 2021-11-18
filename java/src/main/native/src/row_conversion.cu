@@ -375,8 +375,7 @@ struct row_batch {
  *
  */
 struct batch_data {
-  device_uvector<size_type>
-      batch_row_offsets; // offsets to each row in the JCUDF data from batch start
+  device_uvector<size_type> batch_row_offsets; // offset column of returned cudf column
   std::vector<size_type>
       batch_row_boundaries;           // row numbers for different batches like 0, 10000, 20000
   std::vector<row_batch> row_batches; // information about each batch such as byte count
@@ -607,23 +606,7 @@ __global__ void copy_validity_to_rows(const size_type num_rows, const size_type 
           auto const validity_write_offset =
               validity_data_row_length * (relative_row + i) + relative_col / 8;
           if (threadIdx.x % warp_size == 0) {
-            if (cols_left <= 8) {
-              // write byte
-              this_shared_block[validity_write_offset] = validity_data & 0xFF;
-            } else if (cols_left <= 16) {
-              // write int16
-              *reinterpret_cast<int16_t *>(&this_shared_block[validity_write_offset]) =
-                  validity_data & 0xFFFF;
-            } else if (cols_left <= 24) {
-              // write int16 and then int8
-              *reinterpret_cast<int16_t *>(&this_shared_block[validity_write_offset]) =
-                  validity_data & 0xFFFF;
-              shared_data[validity_write_offset + 2] = (validity_data >> 16) & 0xFF;
-            } else {
-              // write int32
-              *reinterpret_cast<int32_t *>(&this_shared_block[validity_write_offset]) =
-                  validity_data;
-            }
+            *reinterpret_cast<int32_t *>(&this_shared_block[validity_write_offset]) = validity_data;
           }
         }
       }
@@ -911,23 +894,7 @@ __global__ void copy_validity_from_rows(const size_type num_rows, const size_typ
             auto const validity_write_offset =
                 validity_data_col_length * (relative_col + i) + relative_row / 8;
 
-            if (rows_left <= 8) {
-              // write byte
-              this_shared_block[validity_write_offset] = validity_data & 0xFF;
-            } else if (rows_left <= 16) {
-              // write int16
-              *reinterpret_cast<int16_t *>(&this_shared_block[validity_write_offset]) =
-                  validity_data & 0xFFFF;
-            } else if (rows_left <= 24) {
-              // write int16 and then int8
-              *reinterpret_cast<int16_t *>(&this_shared_block[validity_write_offset]) =
-                  validity_data & 0xFFFF;
-              shared_data[validity_write_offset + 2] = (validity_data >> 16) & 0xFF;
-            } else {
-              // write int32
-              *reinterpret_cast<int32_t *>(&this_shared_block[validity_write_offset]) =
-                  validity_data;
-            }
+            *reinterpret_cast<int32_t *>(&this_shared_block[validity_write_offset]) = validity_data;
           }
         }
       }
