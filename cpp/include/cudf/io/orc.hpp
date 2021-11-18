@@ -475,24 +475,24 @@ class orc_writer_options {
   /**
    * @brief Whether writing column statistics is enabled/disabled.
    */
-  bool enable_statistics() const { return _enable_statistics; }
+  bool is_enabled_statistics() const { return _enable_statistics; }
 
   /**
    * @brief Returns maximum stripe size, in bytes.
    */
-  auto stripe_size_bytes() const { return _stripe_size_bytes; }
+  auto get_stripe_size_bytes() const { return _stripe_size_bytes; }
 
   /**
    * @brief Returns maximum stripe size, in rows.
    */
-  auto stripe_size_rows() const { return _stripe_size_rows; }
+  auto get_stripe_size_rows() const { return _stripe_size_rows; }
 
   /**
    * @brief Returns the row index stride.
    */
-  auto row_index_stride() const
+  auto get_row_index_stride() const
   {
-    auto const unaligned_stride = std::min(_row_index_stride, stripe_size_rows());
+    auto const unaligned_stride = std::min(_row_index_stride, get_stripe_size_rows());
     return unaligned_stride - unaligned_stride % 8;
   }
 
@@ -769,24 +769,24 @@ class chunked_orc_writer_options {
   /**
    * @brief Whether writing column statistics is enabled/disabled.
    */
-  bool enable_statistics() const { return _enable_statistics; }
+  bool is_enabled_statistics() const { return _enable_statistics; }
 
   /**
    * @brief Returns maximum stripe size, in bytes.
    */
-  auto stripe_size_bytes() const { return _stripe_size_bytes; }
+  auto get_stripe_size_bytes() const { return _stripe_size_bytes; }
 
   /**
    * @brief Returns maximum stripe size, in rows.
    */
-  auto stripe_size_rows() const { return _stripe_size_rows; }
+  auto get_stripe_size_rows() const { return _stripe_size_rows; }
 
   /**
    * @brief Returns the row index stride.
    */
-  auto row_index_stride() const
+  auto get_row_index_stride() const
   {
-    auto const unaligned_stride = std::min(_row_index_stride, stripe_size_rows());
+    auto const unaligned_stride = std::min(_row_index_stride, get_stripe_size_rows());
     return unaligned_stride - unaligned_stride % 8;
   }
 

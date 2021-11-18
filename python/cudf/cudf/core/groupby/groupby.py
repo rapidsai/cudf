@@ -1178,18 +1178,6 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
 
     _PROTECTED_KEYS = frozenset(("obj",))
 
-    def __init__(
-        self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
-    ):
-        super().__init__(
-            obj=obj,
-            by=by,
-            level=level,
-            sort=sort,
-            as_index=as_index,
-            dropna=dropna,
-        )
-
     def __getitem__(self, key):
         return self.obj[key].groupby(
             self.grouping, dropna=self._dropna, sort=self._sort
@@ -1261,18 +1249,6 @@ class SeriesGroupBy(GroupBy):
     True     370.0
     Name: Max Speed, dtype: float64
     """
-
-    def __init__(
-        self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
-    ):
-        super().__init__(
-            obj=obj,
-            by=by,
-            level=level,
-            sort=sort,
-            as_index=as_index,
-            dropna=dropna,
-        )
 
     def agg(self, func):
         result = super().agg(func)
