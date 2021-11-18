@@ -35,3 +35,19 @@
 #else
 #define cudf_assert(e) (static_cast<void>(0))
 #endif
+
+/**
+ * @brief Macro indicating that a location in the code is unreachable.
+ *
+ * This can be used in conjunction with dispatchers to indicate that a function
+ * does not need to return a default value because it has already exhausted all
+ * possible cases in a `switch` statement.
+ * ```
+ * CUDF_UNREACHABLE("All type_id values have been handled.");
+ * ```
+ */
+#define CUDF_UNREACHABLE(msg)             \
+  do {                                    \
+    assert(false && "Unreachable: " msg); \
+    __builtin_unreachable();              \
+  } while (0)
