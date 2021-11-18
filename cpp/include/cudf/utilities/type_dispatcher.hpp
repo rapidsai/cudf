@@ -507,22 +507,7 @@ CUDF_HDFI constexpr decltype(auto) type_dispatcher(cudf::data_type dtype, Functo
     case type_id::STRUCT:
       return f.template operator()<typename IdTypeMap<type_id::STRUCT>::type>(
         std::forward<Ts>(args)...);
-    default: {
-#ifndef __CUDA_ARCH__
-      CUDF_FAIL("Unsupported type_id.");
-#else
-      cudf_assert(false && "Unsupported type_id.");
-
-      // The following code will never be reached, but the compiler generates a
-      // warning if there isn't a return value.
-
-      // Need to find out what the return type is in order to have a default
-      // return value and solve the compiler warning for lack of a default
-      // return
-      using return_type = decltype(f.template operator()<int8_t>(std::forward<Ts>(args)...));
-      return return_type();
-#endif
-    }
+    default: CUDF_UNREACHABLE("Unsupported type_id.");
   }
 }
 
