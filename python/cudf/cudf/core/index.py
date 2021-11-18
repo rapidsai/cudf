@@ -623,7 +623,7 @@ class RangeIndex(BaseIndex):
                 else:
                     return result
 
-        # If all the above optimizations don't cater to the inpputs,
+        # If all the above optimizations don't cater to the inputs,
         # we materialize RangeIndex's into `Int64Index` and
         # then perform `union`.
         return Int64Index(self._values)._union(other, sort=sort)
