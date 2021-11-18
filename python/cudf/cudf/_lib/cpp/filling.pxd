@@ -42,3 +42,9 @@ cdef extern from "cudf/filling.hpp" namespace "cudf" nogil:
         const scalar & init,
         const scalar & step
     ) except +
+
+    cdef unique_ptr[column] calendrical_month_sequence(
+        size_type n,
+        const scalar& init,
+        size_type months,
+    ) except +

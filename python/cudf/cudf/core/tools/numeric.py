@@ -244,6 +244,8 @@ def _proc_inf_strings(col):
     """Convert "inf/infinity" strings into "Inf", the native string
     representing infinity in libcudf
     """
+    # TODO: This can be handled by libcudf in
+    # future see StringColumn.as_numerical_column
     col = libstrings.replace_multi(
         col, as_column(["+", "inf", "inity"]), as_column(["", "Inf", ""]),
     )

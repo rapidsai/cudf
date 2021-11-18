@@ -1323,15 +1323,8 @@ class CategoricalColumn(column.ColumnBase):
                 size=self.size,
             )
 
-    def __sizeof__(self) -> int:
-        return self.categories.__sizeof__() + self.codes.__sizeof__()
-
-    def _memory_usage(self, **kwargs) -> int:
-        deep = kwargs.get("deep", False)
-        if deep:
-            return self.__sizeof__()
-        else:
-            return self.categories._memory_usage() + self.codes._memory_usage()
+    def memory_usage(self) -> int:
+        return self.categories.memory_usage() + self.codes.memory_usage()
 
     def _mimic_inplace(
         self, other_col: ColumnBase, inplace: bool = False

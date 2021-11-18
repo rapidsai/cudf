@@ -28,7 +28,7 @@ class EncodeNumericTests : public cudf::test::BaseFixture {
 using NumericTypesNotBool =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
 
-TYPED_TEST_CASE(EncodeNumericTests, NumericTypesNotBool);
+TYPED_TEST_SUITE(EncodeNumericTests, NumericTypesNotBool);
 
 TYPED_TEST(EncodeNumericTests, SingleNullEncode)
 {

@@ -97,6 +97,69 @@ _timedelta_to_str_typecast_functions = {
     cudf.dtype("timedelta64[ns]"): str_cast.int2timedelta,
 }
 
+_NAN_INF_VARIATIONS = [
+    "nan",
+    "NAN",
+    "Nan",
+    "naN",
+    "nAN",
+    "NAn",
+    "nAn",
+    "-inf",
+    "-INF",
+    "-InF",
+    "-inF",
+    "-iNF",
+    "-INf",
+    "-iNf",
+    "+inf",
+    "+INF",
+    "+InF",
+    "+inF",
+    "+iNF",
+    "+INf",
+    "+Inf",
+    "+iNf",
+    "inf",
+    "INF",
+    "InF",
+    "inF",
+    "iNF",
+    "INf",
+    "iNf",
+]
+_LIBCUDF_SUPPORTED_NAN_INF_VARIATIONS = [
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "NaN",
+    "-Inf",
+    "-Inf",
+    "-Inf",
+    "-Inf",
+    "-Inf",
+    "-Inf",
+    "-Inf",
+    "Inf",
+    "Inf",
+    "Inf",
+    "Inf",
+    "Inf",
+    "Inf",
+    "Inf",
+    "Inf",
+    "Inf",
+    "Inf",
+    "Inf",
+    "Inf",
+    "Inf",
+    "Inf",
+    "Inf",
+]
+
 
 def _is_supported_regex_flags(flags):
     return flags == 0 or (
@@ -199,7 +262,9 @@ class StringMethods(ColumnMethods):
         """
         Computes the length of each element in the Series/Index.
 
-        Returns : Series or Index of int
+        Returns
+        -------
+        Series or Index of int
             A Series or Index of integer values
             indicating the length of each element in the Series or Index.
 
@@ -223,7 +288,9 @@ class StringMethods(ColumnMethods):
         """
         Computes the number of bytes of each string in the Series/Index.
 
-        Returns : Series or Index of int
+        Returns
+        -------
+        Series or Index of int
             A Series or Index of integer values
             indicating the number of bytes of each strings in the
             Series or Index.
@@ -1049,7 +1116,9 @@ class StringMethods(ColumnMethods):
         If a string has zero characters, False is returned for
         that check.
 
-        Returns : Series or Index of bool
+        Returns
+        -------
+        Series or Index of bool
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
@@ -1109,7 +1178,9 @@ class StringMethods(ColumnMethods):
         If a string has zero characters, False is returned for
         that check.
 
-        Returns : Series or Index of bool
+        Returns
+        -------
+        Series or Index of bool
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
@@ -1146,7 +1217,9 @@ class StringMethods(ColumnMethods):
         Check whether all characters in each string can be converted to
         a timestamp using the given format.
 
-        Returns : Series or Index of bool
+        Returns
+        -------
+        Series or Index of bool
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
@@ -1172,7 +1245,9 @@ class StringMethods(ColumnMethods):
         If a string has zero characters, False is returned for
         that check.
 
-        Returns : Series or Index of bool
+        Returns
+        -------
+        Series or Index of bool
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
@@ -1239,7 +1314,9 @@ class StringMethods(ColumnMethods):
         If a string has zero characters, False is returned for
         that check.
 
-        Returns : Series or Index of bool
+        Returns
+        -------
+        Series or Index of bool
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
@@ -1301,7 +1378,9 @@ class StringMethods(ColumnMethods):
 
         Equivalent to: ``isalpha() or isdigit() or isnumeric() or isdecimal()``
 
-        Returns : Series or Index of bool
+        Returns
+        -------
+        Series or Index of bool
             Series or Index of boolean values with the
             same length as the original Series/Index.
 
@@ -1368,7 +1447,9 @@ class StringMethods(ColumnMethods):
         for each element of the Series/Index.
         If a string has zero characters, False is returned for that check.
 
-        Returns : Series or Index of bool
+        Returns
+        -------
+        Series or Index of bool
             Series or Index of boolean values with the same length
             as the original Series/Index.
 
@@ -1425,7 +1506,9 @@ class StringMethods(ColumnMethods):
         If a string has zero characters, False is returned
         for that check.
 
-        Returns : Series or Index of bool
+        Returns
+        -------
+        Series or Index of bool
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
@@ -1486,7 +1569,9 @@ class StringMethods(ColumnMethods):
         for each element of the Series/Index. If a
         string has zero characters, False is returned for that check.
 
-        Returns : Series or Index of bool
+        Returns
+        -------
+        Series or Index of bool
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
@@ -1555,7 +1640,9 @@ class StringMethods(ColumnMethods):
         If a string has zero characters, False is returned
         for that check.
 
-        Returns : Series or Index of bool
+        Returns
+        -------
+        Series or Index of bool
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
@@ -1612,7 +1699,9 @@ class StringMethods(ColumnMethods):
         If a string has zero characters, False is returned
         for that check.
 
-        Returns : Series or Index of bool
+        Returns
+        -------
+        Series or Index of bool
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
@@ -1665,7 +1754,9 @@ class StringMethods(ColumnMethods):
         If a string has zero characters, False is returned for
         that check.
 
-        Returns : Series or Index of bool
+        Returns
+        -------
+        Series or Index of bool
             Series or Index of boolean values with the same
             length as the original Series/Index.
 
@@ -1689,7 +1780,9 @@ class StringMethods(ColumnMethods):
         Equivalent to `str.lower()
         <https://docs.python.org/3/library/stdtypes.html#str.lower>`_.
 
-        Returns : Series or Index of object
+        Returns
+        -------
+        Series or Index of object
             A copy of the object with all strings converted to lowercase.
 
         See also
@@ -1729,7 +1822,9 @@ class StringMethods(ColumnMethods):
         Equivalent to `str.upper()
         <https://docs.python.org/3/library/stdtypes.html#str.upper>`_.
 
-        Returns : Series or Index of object
+        Returns
+        -------
+        Series or Index of object
 
         See also
         --------
@@ -1806,7 +1901,9 @@ class StringMethods(ColumnMethods):
         Equivalent to `str.swapcase()
         <https://docs.python.org/3/library/stdtypes.html#str.swapcase>`_.
 
-        Returns : Series or Index of object
+        Returns
+        -------
+        Series or Index of object
 
         See also
         --------
@@ -1852,7 +1949,9 @@ class StringMethods(ColumnMethods):
         Equivalent to `str.title()
         <https://docs.python.org/3/library/stdtypes.html#str.title>`_.
 
-        Returns : Series or Index of object
+        Returns
+        -------
+        Series or Index of object
 
         See also
         --------
@@ -1896,7 +1995,9 @@ class StringMethods(ColumnMethods):
 
         Equivalent to :meth:`str.istitle`.
 
-        Returns : Series or Index of object
+        Returns
+        -------
+        Series or Index of object
 
         Examples
         --------
@@ -2438,10 +2539,10 @@ class StringMethods(ColumnMethods):
         The handling of the n keyword depends on the number of
         found splits:
 
-            - If found splits > n, make first n splits only
-            - If found splits <= n, make all splits
-            - If for a certain row the number of found splits < n,
-              append None for padding up to n if ``expand=True``.
+        - If found splits > n, make first n splits only
+        - If found splits <= n, make all splits
+        - If for a certain row the number of found splits < n,
+          append None for padding up to n if ``expand=True``.
 
         If using ``expand=True``, Series and Index callers return
         DataFrame and MultiIndex objects, respectively.
@@ -3436,7 +3537,9 @@ class StringMethods(ColumnMethods):
         """
         Check whether each string is an empty string.
 
-        Returns : Series or Index of bool
+        Returns
+        -------
+        Series or Index of bool
             Series or Index of boolean values with the same length as
             the original Series/Index.
 
@@ -3465,7 +3568,9 @@ class StringMethods(ColumnMethods):
         If a string has zero characters, False is returned
         for that check.
 
-        Returns : Series or Index of bool
+        Returns
+        -------
+        Series or Index of bool
             Series or Index of boolean values with the same length as
             the original Series/Index.
 
@@ -4125,7 +4230,7 @@ class StringMethods(ColumnMethods):
         )
 
     def normalize_spaces(self) -> SeriesOrIndex:
-        """
+        r"""
         Remove extra whitespace between tokens and trim whitespace
         from the beginning and the end of each string.
 
@@ -5109,26 +5214,21 @@ class StringColumn(column.ColumnBase):
 
         return self._end_offset
 
-    def __sizeof__(self) -> int:
-        if self._cached_sizeof is None:
-            n = 0
-            if len(self.base_children) == 2:
-                child0_size = (self.size + 1) * self.base_children[
-                    0
-                ].dtype.itemsize
+    def memory_usage(self) -> int:
+        n = 0
+        if len(self.base_children) == 2:
+            child0_size = (self.size + 1) * self.base_children[
+                0
+            ].dtype.itemsize
 
-                child1_size = (
-                    self.end_offset - self.start_offset
-                ) * self.base_children[1].dtype.itemsize
+            child1_size = (
+                self.end_offset - self.start_offset
+            ) * self.base_children[1].dtype.itemsize
 
-                n += child0_size + child1_size
-            if self.nullable:
-                n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
-                    self.size
-                )
-            self._cached_sizeof = n
-
-        return self._cached_sizeof
+            n += child0_size + child1_size
+        if self.nullable:
+            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
+        return n
 
     @property
     def base_size(self) -> int:
@@ -5201,21 +5301,31 @@ class StringColumn(column.ColumnBase):
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
         out_dtype = cudf.dtype(dtype)
-
+        string_col = self
         if out_dtype.kind in {"i", "u"}:
-            if not libstrings.is_integer(self).all():
+            if not libstrings.is_integer(string_col).all():
                 raise ValueError(
                     "Could not convert strings to integer "
                     "type due to presence of non-integer values."
                 )
         elif out_dtype.kind == "f":
-            if not libstrings.is_float(self).all():
+            # TODO: Replace this `replace` call with a
+            # case-insensitive method once following
+            # issue is fixed: https://github.com/rapidsai/cudf/issues/5217
+            old_values = cudf.core.column.as_column(_NAN_INF_VARIATIONS)
+            new_values = cudf.core.column.as_column(
+                _LIBCUDF_SUPPORTED_NAN_INF_VARIATIONS
+            )
+            string_col = libcudf.replace.replace(
+                string_col, old_values, new_values
+            )
+            if not libstrings.is_float(string_col).all():
                 raise ValueError(
                     "Could not convert strings to float "
                     "type due to presence of non-floating values."
                 )
 
-        result_col = _str_to_numeric_typecast_functions[out_dtype](self)
+        result_col = _str_to_numeric_typecast_functions[out_dtype](string_col)
         return result_col
 
     def _as_datetime_or_timedelta_column(self, dtype, format):

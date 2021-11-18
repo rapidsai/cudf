@@ -1,22 +1,81 @@
 import math
+from typing import Callable
 
 import cachetools
 import numpy as np
-from numba import cuda
+from numba import cuda, typeof
 from numba.np import numpy_support
-from numba.types import Record, Tuple, boolean, int64, void
+from numba.types import Poison, Record, Tuple, boolean, int64, void
 from nvtx import annotate
 
+from cudf.core.dtypes import CategoricalDtype
 from cudf.core.udf.api import Masked, pack_return
 from cudf.core.udf.typing import MaskedType
 from cudf.utils import cudautils
+from cudf.utils.dtypes import (
+    BOOL_TYPES,
+    DATETIME_TYPES,
+    NUMERIC_TYPES,
+    TIMEDELTA_TYPES,
+)
 
 libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 MASK_BITSIZE = np.dtype("int32").itemsize * 8
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
+JIT_SUPPORTED_TYPES = (
+    NUMERIC_TYPES | BOOL_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES
+)
 
-def get_frame_row_type(fr):
+
+def _is_jit_supported_type(dtype):
+    # category dtype isn't hashable
+    if isinstance(dtype, CategoricalDtype):
+        return False
+    return str(dtype) in JIT_SUPPORTED_TYPES
+
+
+def all_dtypes_from_frame(frame):
+    return {
+        colname: col.dtype
+        if _is_jit_supported_type(col.dtype)
+        else np.dtype("O")
+        for colname, col in frame._data.items()
+    }
+
+
+def supported_dtypes_from_frame(frame):
+    return {
+        colname: col.dtype
+        for colname, col in frame._data.items()
+        if _is_jit_supported_type(col.dtype)
+    }
+
+
+def supported_cols_from_frame(frame):
+    return {
+        colname: col
+        for colname, col in frame._data.items()
+        if _is_jit_supported_type(col.dtype)
+    }
+
+
+def generate_cache_key(frame, func: Callable):
+    """Create a cache key that uniquely identifies a compilation.
+
+    A new compilation is needed any time any of the following things change:
+    - The UDF itself as defined in python by the user
+    - The types of the columns utilized by the UDF
+    - The existence of the input columns masks
+    """
+    return (
+        *cudautils.make_cache_key(func, all_dtypes_from_frame(frame).values()),
+        *(col.mask is None for col in frame._data.values()),
+        *frame._data.keys(),
+    )
+
+
+def get_frame_row_type(dtype):
     """
     Get the numba `Record` type corresponding to a frame.
     Models each column and its mask as a MaskedType and
@@ -29,8 +88,7 @@ def get_frame_row_type(fr):
     struct.
     """
 
-    # Create the numpy structured type corresponding to the frame.
-    dtype = np.dtype([(name, col.dtype) for name, col in fr._data.items()])
+    # Create the numpy structured type corresponding to the numpy dtype.
 
     fields = []
     offset = 0
@@ -66,23 +124,40 @@ def get_frame_row_type(fr):
 
 
 @annotate("NUMBA JIT", color="green", domain="cudf_python")
-def get_udf_return_type(func, df):
+def get_udf_return_type(frame, func: Callable, args=()):
+
     """
     Get the return type of a masked UDF for a given set of argument dtypes. It
-    is assumed that a `MaskedType(dtype)` is passed to the function for each
-    input dtype.
+    is assumed that the function consumes a dictionary whose keys are strings
+    and whose values are of MaskedType. Initially assume that the UDF may be
+    written to utilize any field in the row - including those containing an
+    unsupported dtype. If an unsupported dtype is actually used in the function
+    the compilation should fail at `compile_udf`. If compilation succeeds, one
+    can infer that the function does not use any of the columns of unsupported
+    dtype - meaning we can drop them going forward and the UDF will still end
+    up getting fed rows containing all the fields it actually needs to use to
+    compute the answer for that row.
     """
-    row_type = get_frame_row_type(df)
+
+    # present a row containing all fields to the UDF and try and compile
+    row_type = get_frame_row_type(
+        np.dtype(list(all_dtypes_from_frame(frame).items()))
+    )
+    compile_sig = (row_type, *(typeof(arg) for arg in args))
 
     # Get the return type. The PTX is also returned by compile_udf, but is not
     # needed here.
-    ptx, output_type = cudautils.compile_udf(func, (row_type,))
+    ptx, output_type = cudautils.compile_udf(func, compile_sig)
     if not isinstance(output_type, MaskedType):
         numba_output_type = numpy_support.from_dtype(np.dtype(output_type))
     else:
         numba_output_type = output_type
 
-    return numba_output_type
+    return (
+        numba_output_type
+        if not isinstance(numba_output_type, MaskedType)
+        else numba_output_type.value_type
+    )
 
 
 def masked_array_type_from_col(col):
@@ -99,23 +174,23 @@ def masked_array_type_from_col(col):
         return Tuple((nb_scalar_ty[::1], libcudf_bitmask_type[::1]))
 
 
-def construct_signature(df, return_type):
+def construct_signature(frame, return_type, args):
     """
     Build the signature of numba types that will be used to
     actually JIT the kernel itself later, accounting for types
-    and offsets
+    and offsets. Skips columns with unsupported dtypes.
     """
 
     # Tuple of arrays, first the output data array, then the mask
     return_type = Tuple((return_type[::1], boolean[::1]))
     offsets = []
-    sig = [return_type]
-    for col in df._data.values():
+    sig = [return_type, int64]
+    for col in supported_cols_from_frame(frame).values():
         sig.append(masked_array_type_from_col(col))
         offsets.append(int64)
 
-    # return_type + data,masks + offsets + size
-    sig = void(*(sig + offsets + [int64]))
+    # return_type, size, data, masks, offsets, extra args
+    sig = void(*(sig + offsets + [typeof(arg) for arg in args]))
 
     return sig
 
@@ -126,7 +201,7 @@ def mask_get(mask, pos):
 
 
 kernel_template = """\
-def _kernel(retval, {input_columns}, {input_offsets}, size):
+def _kernel(retval, size, {input_columns}, {input_offsets}, {extra_args}):
     i = cuda.grid(1)
     ret_data_arr, ret_mask_arr = retval
     if i < size:
@@ -140,7 +215,7 @@ def _kernel(retval, {input_columns}, {input_offsets}, size):
 {row_initializers}
 
         # pass the assembled row into the udf
-        ret = f_(row)
+        ret = f_(row, {extra_args})
 
         # pack up the return values and set them
         ret_masked = pack_return(ret)
@@ -163,7 +238,7 @@ row_initializer_template = """\
 """
 
 
-def _define_function(fr, row_type, scalar_return=False):
+def _define_function(frame, row_type, args):
     """
     The kernel we want to JIT compile looks something like the following,
     which is an example for two columns that both have nulls present
@@ -194,16 +269,19 @@ def _define_function(fr, row_type, scalar_return=False):
     of `*args` - and then one function would work for any number of columns,
     currently numba does not support `*args` and treats functions it JITs as
     if `*args` is a singular argument. Thus we are forced to write the right
-    funtions dynamically at runtime and define them using `exec`.
+    functions dynamically at runtime and define them using `exec`.
     """
     # Create argument list for kernel
-    input_columns = ", ".join([f"input_col_{i}" for i in range(len(fr._data))])
-    input_offsets = ", ".join([f"offset_{i}" for i in range(len(fr._data))])
+    frame = supported_cols_from_frame(frame)
+
+    input_columns = ", ".join([f"input_col_{i}" for i in range(len(frame))])
+    input_offsets = ", ".join([f"offset_{i}" for i in range(len(frame))])
+    extra_args = ", ".join([f"extra_arg_{i}" for i in range(len(args))])
 
     # Generate the initializers for each device function argument
     initializers = []
     row_initializers = []
-    for i, (colname, col) in enumerate(fr._data.items()):
+    for i, (colname, col) in enumerate(frame.items()):
         idx = str(i)
         if col.mask is not None:
             template = masked_input_initializer_template
@@ -219,15 +297,13 @@ def _define_function(fr, row_type, scalar_return=False):
         )
         row_initializers.append(row_initializer)
 
-    masked_input_initializers = "\n".join(initializers)
-    row_initializers = "\n".join(row_initializers)
-
     # Incorporate all of the above into the kernel code template
     d = {
         "input_columns": input_columns,
         "input_offsets": input_offsets,
-        "masked_input_initializers": masked_input_initializers,
-        "row_initializers": row_initializers,
+        "extra_args": extra_args,
+        "masked_input_initializers": "\n".join(initializers),
+        "row_initializers": "\n".join(row_initializers),
         "numba_rectype": row_type,  # from global
     }
 
@@ -235,7 +311,7 @@ def _define_function(fr, row_type, scalar_return=False):
 
 
 @annotate("UDF COMPILATION", color="darkgreen", domain="cudf_python")
-def compile_or_get(df, f):
+def compile_or_get(frame, func, args):
     """
     Return a compiled kernel in terms of MaskedTypes that launches a
     kernel equivalent of `f` for the dtypes of `df`. The kernel uses
@@ -258,35 +334,36 @@ def compile_or_get(df, f):
     """
 
     # check to see if we already compiled this function
-    frame_dtypes = tuple(col.dtype for col in df._data.values())
-    cache_key = (
-        *cudautils.make_cache_key(f, frame_dtypes),
-        *(col.mask is None for col in df._data.values()),
-        *df._data.keys(),
-    )
+    cache_key = generate_cache_key(frame, func)
     if precompiled.get(cache_key) is not None:
-        kernel, scalar_return_type = precompiled[cache_key]
-        return kernel, scalar_return_type
+        kernel, masked_or_scalar = precompiled[cache_key]
+        return kernel, masked_or_scalar
 
     # precompile the user udf to get the right return type.
     # could be a MaskedType or a scalar type.
-    numba_return_type = get_udf_return_type(f, df)
+    scalar_return_type = get_udf_return_type(frame, func, args)
 
-    _is_scalar_return = not isinstance(numba_return_type, MaskedType)
-    scalar_return_type = (
-        numba_return_type
-        if _is_scalar_return
-        else numba_return_type.value_type
-    )
+    # get_udf_return_type will throw a TypingError if the user tries to use
+    # a field in the row containing an unsupported dtype, except in the
+    # edge case where all the function does is return that element:
+
+    # def f(row):
+    #    return row[<bad dtype key>]
+    # In this case numba is happy to return MaskedType(<bad dtype key>)
+    # because it relies on not finding overloaded operators for types to raise
+    # the exception, so we have to explicitly check for that case.
+    if isinstance(scalar_return_type, Poison):
+        raise TypeError(str(scalar_return_type))
 
     # this is the signature for the final full kernel compilation
-    sig = construct_signature(df, scalar_return_type)
+    sig = construct_signature(frame, scalar_return_type, args)
 
     # this row type is used within the kernel to pack up the column and
     # mask data into the dict like data structure the user udf expects
-    row_type = get_frame_row_type(df)
+    np_field_types = np.dtype(list(supported_dtypes_from_frame(frame).items()))
+    row_type = get_frame_row_type(np_field_types)
 
-    f_ = cuda.jit(device=True)(f)
+    f_ = cuda.jit(device=True)(func)
     # Dict of 'local' variables into which `_kernel` is defined
     local_exec_context = {}
     global_exec_context = {
@@ -298,14 +375,14 @@ def compile_or_get(df, f):
         "row_type": row_type,
     }
     exec(
-        _define_function(df, row_type, scalar_return=_is_scalar_return),
+        _define_function(frame, row_type, args),
         global_exec_context,
         local_exec_context,
     )
     # The python function definition representing the kernel
     _kernel = local_exec_context["_kernel"]
     kernel = cuda.jit(sig)(_kernel)
-    scalar_return_type = numpy_support.as_dtype(scalar_return_type)
-    precompiled[cache_key] = (kernel, scalar_return_type)
+    np_return_type = numpy_support.as_dtype(scalar_return_type)
+    precompiled[cache_key] = (kernel, np_return_type)
 
-    return kernel, scalar_return_type
+    return kernel, np_return_type

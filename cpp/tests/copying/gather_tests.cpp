@@ -32,7 +32,7 @@ template <typename T>
 class GatherTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(GatherTest, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(GatherTest, cudf::test::NumericTypes);
 
 TYPED_TEST(GatherTest, IdentityTest)
 {

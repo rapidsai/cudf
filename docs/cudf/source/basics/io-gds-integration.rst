@@ -7,10 +7,13 @@ GDS also has a compatibility mode that allows the library to fall back to copyin
 The SDK is available for download `here <https://developer.nvidia.com/gpudirect-storage>`_.
 
 Use of GPUDirect Storage in cuDF is disabled by default, and can be enabled through environment variable ``LIBCUDF_CUFILE_POLICY``. 
-This variable also controls the GDS compatibility mode. There are two special values for the environment variable:
+This variable also controls the GDS compatibility mode. 
 
-- "GDS": Use of GDS is enabled; GDS compatibility mode is *off*.
-- "ALWAYS": Use of GDS is enabled; GDS compatibility mode is *on*.
+There are three special values for the environment variable:
+
+- "GDS": Enable GDS use; GDS compatibility mode is *off*.
+- "ALWAYS": Enable GDS use; GDS compatibility mode is *on*.
+- "OFF": Compretely disable GDS use.
 
 Any other value (or no value set) will keep the GDS disabled for use in cuDF and IO will be done using cuDF's CPU bounce buffers.
 
