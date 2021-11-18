@@ -221,6 +221,12 @@ int96_timestamps : bool, default False
     timestamp[us] to the int96 format, which is the number of Julian
     days and the number of nanoseconds since midnight. If ``False``,
     timestamps will not be altered.
+row_group_size_bytes: integer or None, default None
+    Maximum size of each stripe of the output.
+    If None, 13369344 (128MB) will be used.
+row_group_size_rows: integer or None, default None
+    Maximum number of rows of each stripe of the output.
+    If None, 1000000 will be used.
 
 
 See Also
@@ -404,10 +410,10 @@ enable_statistics: boolean, default True
 stripe_size_bytes: integer or None, default None
     Maximum size of each stripe of the output.
     If None, 67108864 (64MB) will be used.
-stripe_size_rows: integer or None, default None 1000000
+stripe_size_rows: integer or None, default None
     Maximum number of rows of each stripe of the output.
     If None, 1000000 will be used.
-row_index_stride: integer or None, default None 10000
+row_index_stride: integer or None, default None
     Row index stride (maximum number of rows in each row group).
     If None, 10000 will be used.
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,23 +14,26 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/aggregation/aggregation.cuh>
+#pragma once
+
+#include <cudf/types.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/mr/device/per_device_resource.hpp>
+
+#include <memory>
 
 namespace cudf {
+namespace io {
 namespace detail {
-void initialize_with_identity(mutable_table_view& table,
-                              std::vector<aggregation::Kind> const& aggs,
-                              rmm::cuda_stream_view stream)
-{
-  // TODO: Initialize all the columns in a single kernel instead of invoking one
-  // kernel per column
-  for (size_type i = 0; i < table.num_columns(); ++i) {
-    auto col = table.column(i);
-    dispatch_type_and_aggregation(col.type(), aggs[i], identity_initializer{}, col, stream);
-  }
-}
+namespace csv {
 
+std::unique_ptr<column> pandas_format_durations(
+  column_view const& durations,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+}  // namespace csv
 }  // namespace detail
+}  // namespace io
 }  // namespace cudf

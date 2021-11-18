@@ -23,7 +23,22 @@ cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:
     cdef unique_ptr[column] ceil_microsecond(
         const column_view& column
     ) except +
-    cdef unique_ptr[column] ceil_nanosecond(const column_view& column) except +
+    cdef unique_ptr[column] ceil_nanosecond(
+        const column_view& column
+    ) except +
+    cdef unique_ptr[column] floor_day(const column_view& column) except +
+    cdef unique_ptr[column] floor_hour(const column_view& column) except +
+    cdef unique_ptr[column] floor_minute(const column_view& column) except +
+    cdef unique_ptr[column] floor_second(const column_view& column) except +
+    cdef unique_ptr[column] floor_millisecond(
+        const column_view& column
+    ) except +
+    cdef unique_ptr[column] floor_microsecond(
+        const column_view& column
+    ) except +
+    cdef unique_ptr[column] floor_nanosecond(
+        const column_view& column
+    ) except +
     cdef unique_ptr[column] add_calendrical_months(
         const column_view& timestamps,
         const column_view& months
