@@ -203,7 +203,7 @@ struct scan_functor<Op, cudf::struct_view> {
       return std::vector<column_view>(it, it + input.num_children());
     }();
 
-    // Gather the children elements of the prefix min/max struct elements first.
+    // Gather the children elements of the prefix min/max struct elements for the output.
     auto scanned_children = cudf::detail::gather(table_view{input_children},
                                                  gather_map,
                                                  out_of_bounds_policy::DONT_CHECK,
