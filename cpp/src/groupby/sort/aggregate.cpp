@@ -559,7 +559,7 @@ auto column_view_with_common_nulls(column_view const& column_0, column_view cons
 }
 
 /**
- * @brief Perform covariance betweeen two child columns of non-nullable struct column.
+ * @brief Perform covariance between two child columns of non-nullable struct column.
  *
  */
 template <>
@@ -602,7 +602,7 @@ void aggregate_result_functor::operator()<aggregation::COVARIANCE>(aggregation c
 };
 
 /**
- * @brief Perform correlation betweeen two child columns of non-nullable struct column.
+ * @brief Perform correlation between two child columns of non-nullable struct column.
  *
  */
 template <>
