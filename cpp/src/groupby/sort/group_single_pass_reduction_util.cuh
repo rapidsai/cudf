@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <groupby/sort/group_util.cuh>
+#include <reductions/arg_minmax_util.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -271,10 +271,11 @@ struct group_reduction_functor<
     auto const count_iter   = thrust::make_counting_iterator<ResultType>(0);
     auto const result_begin = result->mutable_view().template begin<ResultType>();
     if (values.has_nulls()) {
-      auto const binop = row_arg_minmax_fn<true>(values.size(),
-                                                 *d_flattened_values_ptr,
-                                                 flattened_null_precedences.data(),
-                                                 K == aggregation::ARGMIN);
+      auto const binop =
+        cudf::reduction::detail::row_arg_minmax_fn<true>(values.size(),
+                                                         *d_flattened_values_ptr,
+                                                         flattened_null_precedences.data(),
+                                                         K == aggregation::ARGMIN);
       do_reduction(count_iter, result_begin, binop);
 
       // Generate bitmask for the output by segmented reduction of the input bitmask.
@@ -288,10 +289,11 @@ struct group_reduction_functor<
         validity.begin(), validity.end(), thrust::identity<bool>{}, stream, mr);
       result->set_null_mask(std::move(null_mask), null_count);
     } else {
-      auto const binop = row_arg_minmax_fn<false>(values.size(),
-                                                  *d_flattened_values_ptr,
-                                                  flattened_null_precedences.data(),
-                                                  K == aggregation::ARGMIN);
+      auto const binop =
+        cudf::reduction::detail::row_arg_minmax_fn<false>(values.size(),
+                                                          *d_flattened_values_ptr,
+                                                          flattened_null_precedences.data(),
+                                                          K == aggregation::ARGMIN);
       do_reduction(count_iter, result_begin, binop);
     }
 
