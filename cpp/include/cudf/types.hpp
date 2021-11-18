@@ -358,10 +358,18 @@ static constexpr uint32_t DEFAULT_HASH_SEED = 0;
 enum class truthiness { TRUE, FALSE, DYNAMIC };
 
 template <truthiness T>
-struct indicator {
+struct indicator;
+
+template <>
+struct indicator<truthiness::TRUE> : std::bool_constant<true> {
   indicator() = default;
-  constexpr indicator(bool) noexcept {}
-  constexpr operator bool() const noexcept { return T == truthiness::TRUE; }
+  constexpr indicator(bool) noexcept {};
+};
+
+template <>
+struct indicator<truthiness::FALSE> : std::bool_constant<false> {
+  indicator() = default;
+  constexpr indicator(bool) noexcept {};
 };
 
 template <>
@@ -397,10 +405,15 @@ auto constexpr contains_nulls_to_truthiness(contains_nulls C)
  * If used at compile time, this indicator can tell the optimizer
  * to include or exclude any null-checking clauses.
  *
- * Example
+ * Examples
  * @code{.pseudo}
  *    nulls_exist<contains_nulls::NO> has_nulls;
  *    if( has_nulls ) do_null_processing(); // code is optimized out
+ *    regular_processing();
+ * @endcode
+ * @code{.pseudo}
+ *    nulls_exist<contains_nulls::DYNAMIC> has_nulls{false};
+ *    if( has_nulls ) do_null_processing(); // not executed at runtime
  *    regular_processing();
  * @endcode
  *
