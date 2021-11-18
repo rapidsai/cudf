@@ -180,7 +180,7 @@ std::enable_if_t<cudf::is_fixed_width<T>(), std::unique_ptr<cudf::column>> clamp
   };
 
   auto input_pair_iterator =
-    make_optional_iterator<T, contains_nulls::DYNAMIC>(*input_device_view, input.has_nulls());
+    make_optional_iterator<T, nullate::DYNAMIC>(*input_device_view, input.has_nulls());
   thrust::transform(rmm::exec_policy(stream),
                     input_pair_iterator,
                     input_pair_iterator + input.size(),
@@ -232,10 +232,10 @@ struct dispatch_clamp {
   {
     CUDF_EXPECTS(lo.type() == input.type(), "mismatching types of scalar and input");
 
-    auto lo_itr         = make_optional_iterator<T, contains_nulls::YES>(lo);
-    auto hi_itr         = make_optional_iterator<T, contains_nulls::YES>(hi);
-    auto lo_replace_itr = make_optional_iterator<T, contains_nulls::NO>(lo_replace);
-    auto hi_replace_itr = make_optional_iterator<T, contains_nulls::NO>(hi_replace);
+    auto lo_itr         = make_optional_iterator<T, nullate::YES>(lo);
+    auto hi_itr         = make_optional_iterator<T, nullate::YES>(hi);
+    auto lo_replace_itr = make_optional_iterator<T, nullate::NO>(lo_replace);
+    auto hi_replace_itr = make_optional_iterator<T, nullate::NO>(hi_replace);
 
     return clamp<T>(input, lo_itr, lo_replace_itr, hi_itr, hi_replace_itr, stream, mr);
   }

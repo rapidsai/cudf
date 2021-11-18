@@ -119,7 +119,7 @@ std::size_t compute_join_output_size(table_device_view build_table,
 
   pair_equality equality{probe_table, build_table, compare_nulls};
 
-  row_hash hash_probe{probe_table};
+  row_hash hash_probe{nullate::YES{}, probe_table};
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
 

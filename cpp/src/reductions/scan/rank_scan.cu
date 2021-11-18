@@ -54,8 +54,8 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
   auto const flattened = cudf::structs::detail::flatten_nested_columns(
     table_view{{order_by}}, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
   auto const d_flat_order = table_device_view::create(flattened, stream);
-  row_equality_comparator<contains_nulls::DYNAMIC> comparator(
-    *d_flat_order, *d_flat_order, has_nulls, null_equality::EQUAL);
+  row_equality_comparator comparator(
+    nullate::DYNAMIC{has_nulls}, *d_flat_order, *d_flat_order, null_equality::EQUAL);
   auto ranks         = make_fixed_width_column(data_type{type_to_id<size_type>()},
                                        flattened.flattened_columns().num_rows(),
                                        mask_state::UNALLOCATED,

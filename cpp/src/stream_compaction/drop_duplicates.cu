@@ -83,8 +83,8 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
   // extract unique indices
   auto device_input_table = cudf::table_device_view::create(keys, stream);
 
-  auto comp = row_equality_comparator<contains_nulls::DYNAMIC>(
-    *device_input_table, *device_input_table, cudf::has_nulls(keys), nulls_equal);
+  auto comp = row_equality_comparator(
+    nullate::DYNAMIC{cudf::has_nulls(keys)}, *device_input_table, *device_input_table, nulls_equal);
   auto result_end = unique_copy(sorted_indices->view().begin<cudf::size_type>(),
                                 sorted_indices->view().end<cudf::size_type>(),
                                 unique_indices.begin<cudf::size_type>(),

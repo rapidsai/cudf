@@ -30,7 +30,7 @@ namespace detail {
  */
 struct row_arg_minmax_fn {
   size_type const num_rows;
-  row_lexicographic_comparator<contains_nulls::DYNAMIC> const comp;
+  row_lexicographic_comparator<nullate::DYNAMIC> const comp;
   bool const arg_min;
 
   row_arg_minmax_fn(size_type const num_rows,
@@ -38,7 +38,9 @@ struct row_arg_minmax_fn {
                     bool has_nulls,
                     null_order const* null_precedence,
                     bool const arg_min)
-    : num_rows(num_rows), comp(table, table, has_nulls, nullptr, null_precedence), arg_min(arg_min)
+    : num_rows(num_rows),
+      comp(nullate::DYNAMIC{has_nulls}, table, table, nullptr, null_precedence),
+      arg_min(arg_min)
   {
   }
 

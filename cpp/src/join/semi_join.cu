@@ -77,13 +77,13 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
   // Create hash table containing all keys found in right table
   auto right_rows_d            = table_device_view::create(right_flattened_keys, stream);
   size_t const hash_table_size = compute_hash_table_size(right_num_rows);
-  row_hash hash_build{*right_rows_d};
-  row_equality equality_build{*right_rows_d, *right_rows_d, compare_nulls};
+  row_hash hash_build{cudf::nullate::YES{}, *right_rows_d};
+  row_equality equality_build{cudf::nullate::YES{}, *right_rows_d, *right_rows_d, compare_nulls};
 
   // Going to join it with left table
   auto left_rows_d = table_device_view::create(left_flattened_keys, stream);
-  row_hash hash_probe{*left_rows_d};
-  row_equality equality_probe{*left_rows_d, *right_rows_d, compare_nulls};
+  row_hash hash_probe{cudf::nullate::YES{}, *left_rows_d};
+  row_equality equality_probe{cudf::nullate::YES{}, *left_rows_d, *right_rows_d, compare_nulls};
 
   auto hash_table_ptr = hash_table_type::create(hash_table_size,
                                                 stream,

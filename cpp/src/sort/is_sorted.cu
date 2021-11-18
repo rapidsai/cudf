@@ -47,8 +47,11 @@ auto is_sorted(cudf::table_view const& in,
                                    ? make_device_uvector_async(flattened.null_orders(), stream)
                                    : rmm::device_uvector<null_order>(0, stream);
 
-  auto comparator = row_lexicographic_comparator<contains_nulls::DYNAMIC>(
-    *d_input, *d_input, has_nulls, d_column_order.data(), d_null_precedence.data());
+  auto comparator = row_lexicographic_comparator(nullate::DYNAMIC{has_nulls},
+                                                 *d_input,
+                                                 *d_input,
+                                                 d_column_order.data(),
+                                                 d_null_precedence.data());
 
   auto sorted = thrust::is_sorted(rmm::exec_policy(stream),
                                   thrust::make_counting_iterator(0),

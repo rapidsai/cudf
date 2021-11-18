@@ -353,73 +353,23 @@ enum class hash_id {
 static constexpr uint32_t DEFAULT_HASH_SEED = 0;
 
 /**
- * @brief A helpful utility class for a boolean whose value can be static or dynamic
- */
-enum class truthiness { TRUE, FALSE, DYNAMIC };
-
-template <truthiness T>
-struct indicator;
-
-template <>
-struct indicator<truthiness::TRUE> : std::bool_constant<true> {
-  indicator() = default;
-  constexpr indicator(bool) noexcept {};
-};
-
-template <>
-struct indicator<truthiness::FALSE> : std::bool_constant<false> {
-  indicator() = default;
-  constexpr indicator(bool) noexcept {};
-};
-
-template <>
-struct indicator<truthiness::DYNAMIC> {
-  indicator() = delete;
-  constexpr indicator(bool b) noexcept : b_{b} {}
-  constexpr operator bool() const noexcept { return b_; }
-  bool b_;
-};
-
-/**
- * @brief Used for identifying columns containing null rows.
- */
-enum class contains_nulls {
-  YES,     ///< Column supports nulls and has null values.
-  NO,      ///< Column has no null values.
-  DYNAMIC  ///< Defer column null checking to runtime.
-};
-
-auto constexpr contains_nulls_to_truthiness(contains_nulls C)
-{
-  switch (C) {
-    case contains_nulls::YES: return truthiness::TRUE;
-    case contains_nulls::NO: return truthiness::FALSE;
-    case contains_nulls::DYNAMIC: return truthiness::DYNAMIC;
-  }
-  __builtin_unreachable();
-}
-
-/**
- * @brief Indicates the presence of nulls at compile-time or run-time.
+ * @brief Indicates the presence of nulls at compile-time or runtime.
  *
  * If used at compile time, this indicator can tell the optimizer
  * to include or exclude any null-checking clauses.
  *
- * Examples
- * @code{.pseudo}
- *    nulls_exist<contains_nulls::NO> has_nulls;
- *    if( has_nulls ) do_null_processing(); // code is optimized out
- *    regular_processing();
- * @endcode
- * @code{.pseudo}
- *    nulls_exist<contains_nulls::DYNAMIC> has_nulls{false};
- *    if( has_nulls ) do_null_processing(); // not executed at runtime
- *    regular_processing();
- * @endcode
- *
  */
-template <contains_nulls C>
-struct nulls_exist : indicator<contains_nulls_to_truthiness(C)> {
+struct nullate {
+  struct YES : std::bool_constant<true> {
+  };
+  struct NO : std::bool_constant<false> {
+  };
+  struct DYNAMIC {
+    DYNAMIC() = delete;
+    constexpr explicit DYNAMIC(bool b) noexcept : value{b} {}
+    constexpr operator bool() const noexcept { return value; }
+    bool value;
+  };
 };
 
 /** @} */

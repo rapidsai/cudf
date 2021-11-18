@@ -260,7 +260,7 @@ class alignas(16) column_device_view_base {
 // Forward declaration
 template <typename T>
 struct value_accessor;
-template <typename T, contains_nulls CN>
+template <typename T, typename Nullate>
 struct optional_accessor;
 template <typename T, bool has_nulls>
 struct pair_accessor;
@@ -473,9 +473,9 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   /**
    * @brief Optional iterator for navigating this column
    */
-  template <typename T, contains_nulls CN>
+  template <typename T, typename Nullate>
   using const_optional_iterator =
-    thrust::transform_iterator<detail::optional_accessor<T, CN>, count_it>;
+    thrust::transform_iterator<detail::optional_accessor<T, Nullate>, count_it>;
 
   /**
    * @brief Pair iterator for navigating this column
@@ -501,12 +501,12 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * The element of this iterator contextually converts to bool. The conversion returns true
    * if the object contains a value and false if it does not contain a value.
    *
-   * Calling this method with `contains_nulls::DYNAMIC` defers the assumption of nullability to
-   * runtime with the caller indicating if the column has nulls. The `contains_nulls::DYNAMIC` is
+   * Calling this method with `nullate::DYNAMIC` defers the assumption of nullability to
+   * runtime with the caller indicating if the column has nulls. The `nullate::DYNAMIC` is
    * useful when an algorithm is going to execute on multiple iterators and all the combinations of
    * iterator types are not required at compile time.
    *
-   * Calling this method with `contains_nulls:NO` or `contains_nulls::YES` will ignore the
+   * Calling this method with `nullate:NO` or `nullate::YES` will ignore the
    * `has_nulls` parameter value. In this case, it is recommended to instead call the
    * `optional_begin` function that does not accept a `has_nulls` parameter.
    *
@@ -518,7 +518,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *    auto d_col = cudf::column_device_view::create(col_view);
    *    // Create a `DYNAMIC` optional iterator
    *    auto optional_iterator =
-   *       d_col->optional_begin<T, cudf::contains_nulls::DYNAMIC>(col_view.has_nulls());
+   *       d_col->optional_begin<T, cudf::nullate::DYNAMIC>(col_view.has_nulls());
    * }
    * @endcode
    *
@@ -529,12 +529,12 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @throws cudf::logic_error if column datatype and Element type mismatch.
    */
   template <typename T,
-            contains_nulls CN,
+            typename Nullate,
             CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
   auto optional_begin(bool has_nulls) const
   {
-    return const_optional_iterator<T, CN>{count_it{0},
-                                          detail::optional_accessor<T, CN>{*this, has_nulls}};
+    return const_optional_iterator<T, Nullate>{
+      count_it{0}, detail::optional_accessor<T, Nullate>{*this, has_nulls}};
   }
 
   /**
@@ -545,9 +545,9 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * The element of this iterator contextually converts to bool. The conversion returns true
    * if the object contains a value and false if it does not contain a value.
    *
-   * Calling this method with `contains_nulls::YES` means that the column supports nulls and
+   * Calling this method with `nullate::YES` means that the column supports nulls and
    * the optional returned might not contain a value.
-   * Calling this method with `contains_nulls::NO` means that the column has no null values
+   * Calling this method with `nullate::NO` means that the column has no null values
    * and the optional returned will always contain a value.
    *
    * Example:
@@ -557,10 +557,10 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * void some_function(cudf::column_view<T> const& col_view){
    *    auto d_col = cudf::column_device_view::create(col_view);
    *    if constexpr(has_nulls) {
-   *      auto optional_iterator = d_col->optional_begin<T, cudf::contains_nulls::YES>();
+   *      auto optional_iterator = d_col->optional_begin<T, cudf::nullate::YES>();
    *      //use optional_iterator
    *    } else {
-   *      auto optional_iterator = d_col->optional_begin<T, cudf::contains_nulls::NO>();
+   *      auto optional_iterator = d_col->optional_begin<T, cudf::nullate::NO>();
    *      //use optional_iterator
    *    }
    * }
@@ -569,15 +569,16 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * This function does not participate in overload resolution if
    * `column_device_view::has_element_accessor<T>()` is false.
    *
-   * @throws cudf::logic_error if the column is not nullable and `contains_nulls::YES` is specified
+   * @throws cudf::logic_error if the column is not nullable and `nullate::YES` is specified
    * @throws cudf::logic_error if column datatype and Element type mismatch.
    */
   template <typename T,
-            contains_nulls CN,
+            typename Nullate,
             CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
   auto optional_begin() const
   {
-    return const_optional_iterator<T, CN>{count_it{0}, detail::optional_accessor<T, CN>{*this}};
+    return const_optional_iterator<T, Nullate>{count_it{0},
+                                               detail::optional_accessor<T, Nullate>{*this}};
   }
 
   /**
@@ -651,12 +652,12 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @throws cudf::logic_error if column datatype and Element type mismatch.
    */
   template <typename T,
-            contains_nulls CN,
+            typename Nullate,
             CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
   auto optional_end(bool has_nulls) const
   {
-    return const_optional_iterator<T, CN>{count_it{size()},
-                                          detail::optional_accessor<T, CN>{*this, has_nulls}};
+    return const_optional_iterator<T, Nullate>{
+      count_it{size()}, detail::optional_accessor<T, Nullate>{*this, has_nulls}};
   }
 
   /**
@@ -668,16 +669,16 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * This function does not participate in overload resolution if
    * `column_device_view::has_element_accessor<T>()` is false.
    *
-   * @throws cudf::logic_error if the column is not nullable and `contains_nulls::YES` is used
+   * @throws cudf::logic_error if the column is not nullable and `nullate::YES` is used
    * @throws cudf::logic_error if column datatype and Element type mismatch.
    */
   template <typename T,
-            contains_nulls CN,
+            typename Nullate,
             CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
   auto optional_end() const
   {
-    return const_optional_iterator<T, CN>{count_it{size()},
-                                          detail::optional_accessor<T, CN>{*this}};
+    return const_optional_iterator<T, Nullate>{count_it{size()},
+                                               detail::optional_accessor<T, Nullate>{*this}};
   }
 
   /**
@@ -1134,7 +1135,7 @@ struct value_accessor {
  *
  *
  * The optional_accessor always returns a thrust::optional of column[i]. The validity
- * of the optional is determined by the `contains_nulls` template parameter
+ * of the optional is determined by the `nullate` template parameter
  * which has the following:
  *
  * - `YES` means that the column supports nulls and the optional returned
@@ -1157,7 +1158,7 @@ struct value_accessor {
  * @tparam T The type of elements in the column
  * @tparam CN Specifies if nulls are checked at runtime or compile time.
  */
-template <typename T, contains_nulls CN>
+template <typename T, typename Nullate>
 struct optional_accessor {
   column_device_view const col;  ///< column view of column in device
 
@@ -1189,7 +1190,7 @@ struct optional_accessor {
     return thrust::optional<T>{col.element<T>(i)};
   }
 
-  nulls_exist<CN> has_nulls{};
+  Nullate has_nulls{};
 };
 
 /**

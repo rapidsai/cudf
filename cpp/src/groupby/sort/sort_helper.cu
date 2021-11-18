@@ -51,7 +51,7 @@ namespace {
  * ordered according to a specified permutation map.
  */
 struct permuted_row_equality_comparator {
-  cudf::row_equality_comparator<cudf::contains_nulls::DYNAMIC> _comparator;
+  cudf::row_equality_comparator<cudf::nullate::DYNAMIC> _comparator;
   cudf::size_type const* _map;
 
   /**
@@ -64,7 +64,7 @@ struct permuted_row_equality_comparator {
   permuted_row_equality_comparator(cudf::table_device_view const& t,
                                    cudf::size_type const* map,
                                    bool nullable = true)
-    : _comparator(t, t, nullable, cudf::null_equality::EQUAL), _map{map}
+    : _comparator(cudf::nullate::DYNAMIC{nullable}, t, t, cudf::null_equality::EQUAL), _map{map}
   {
   }
 

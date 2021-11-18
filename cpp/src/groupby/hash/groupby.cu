@@ -426,17 +426,17 @@ auto create_hash_map(table_device_view const& d_keys,
 
   using map_type = concurrent_unordered_map<size_type,
                                             size_type,
-                                            row_hasher<default_hash, contains_nulls::DYNAMIC>,
-                                            row_equality_comparator<contains_nulls::DYNAMIC>>;
+                                            row_hasher<default_hash, nullate::DYNAMIC>,
+                                            row_equality_comparator<nullate::DYNAMIC>>;
 
   using allocator_type = typename map_type::allocator_type;
 
   auto const null_keys_are_equal =
     include_null_keys == null_policy::INCLUDE ? null_equality::EQUAL : null_equality::UNEQUAL;
 
-  row_hasher<default_hash, contains_nulls::DYNAMIC> hasher{d_keys, keys_have_nulls};
-  row_equality_comparator<contains_nulls::DYNAMIC> rows_equal{
-    d_keys, d_keys, keys_have_nulls, null_keys_are_equal};
+  row_hasher<default_hash, nullate::DYNAMIC> hasher{nullate::DYNAMIC{keys_have_nulls}, d_keys};
+  row_equality_comparator rows_equal{
+    nullate::DYNAMIC{keys_have_nulls}, d_keys, d_keys, null_keys_are_equal};
 
   return map_type::create(compute_hash_table_size(d_keys.num_rows()),
                           stream,

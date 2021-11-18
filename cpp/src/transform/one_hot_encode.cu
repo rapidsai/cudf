@@ -40,7 +40,8 @@ namespace {
 template <typename InputType>
 struct one_hot_encode_functor {
   one_hot_encode_functor(column_device_view input, column_device_view category, bool nulls)
-    : _equality_comparator{input, category, nulls, null_equality::EQUAL}, _input_size{input.size()}
+    : _equality_comparator{nullate::DYNAMIC{nulls}, input, category, null_equality::EQUAL},
+      _input_size{input.size()}
   {
   }
 
@@ -52,7 +53,7 @@ struct one_hot_encode_functor {
   }
 
  private:
-  element_equality_comparator<contains_nulls::DYNAMIC> const _equality_comparator;
+  element_equality_comparator<nullate::DYNAMIC> const _equality_comparator;
   size_type const _input_size;
 };
 
