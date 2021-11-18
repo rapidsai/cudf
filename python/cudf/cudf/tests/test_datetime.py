@@ -1828,16 +1828,44 @@ def test_ceil(data, time_type, resolution):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "idx",
-    [
+@pytest.fixture(
+    params=[
         pd.DatetimeIndex([]),
         pd.DatetimeIndex(["2010-05-31"]),
         pd.date_range("2000-01-01", "2000-12-31", periods=21),
-    ],
+    ]
 )
-@pytest.mark.parametrize("offset", ["0h", "1T", "6M", "10Y"])
-@pytest.mark.parametrize("klass", ["Series", "DataFrame"])
+def idx(request):
+    return request.param
+
+
+@pytest.fixture(
+    params=[
+        "10Y",
+        "6M",
+        "M",
+        "31D",
+        "0H",
+        "44640T",
+        "44640min",
+        "2678000S",
+        "2678000000L",
+        "2678000000ms",
+        "2678000000000U",
+        "2678000000000us",
+        "2678000000000000N",
+        "2678000000000000ns",
+    ]
+)
+def offset(request):
+    return request.param
+
+
+@pytest.fixture(params=["Series", "DataFrame"])
+def klass(request):
+    return request.param
+
+
 def test_first(idx, offset, klass):
     p = getattr(pd, klass)(range(len(idx)), index=idx)
     g = cudf.from_pandas(p)
@@ -1848,16 +1876,6 @@ def test_first(idx, offset, klass):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    "idx",
-    [
-        pd.DatetimeIndex([]),
-        pd.DatetimeIndex(["2010-05-31"]),
-        pd.date_range("2000-01-01", "2000-12-31", periods=21),
-    ],
-)
-@pytest.mark.parametrize("offset", ["0h", "1T", "6M", "10Y"])
-@pytest.mark.parametrize("klass", ["Series", "DataFrame"])
 def test_last(idx, offset, klass):
     p = getattr(pd, klass)(range(len(idx)), index=idx)
     g = cudf.from_pandas(p)
