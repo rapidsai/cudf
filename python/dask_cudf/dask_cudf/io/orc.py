@@ -221,15 +221,28 @@ def read_orc(
     if not filtering_columns_first:
         return res
     else:
+        reordering_columns_required = (
+            columns_in_predicate + columns != all_columns
+        )
+
         # Create a delayed function to horizontally concatenate filtered
         # filtering column partitions with partitions of the remaining
         # columns for which we only read in relevant stripes.
-        @delayed(pure=True)
-        def _hcat(a, b):
-            return cudf.concat([a, b], axis=1)[all_columns]
+        if reordering_columns_required:
+
+            @delayed(pure=True)
+            def _hcat(a, b):
+                return cudf.concat([a, b], axis=1)[all_columns]
+
+        else:
+
+            @delayed(pure=True)
+            def _hcat(a, b):
+                return cudf.concat([a, b], axis=1)
 
         # Return a data frame comprised of delayed horizontal concatenation.
         remaining_df_partitions = res.to_delayed()
+        concatenated_meta = cudf.concat([filtered_df._meta, res._meta], axis=1)
         return dd.from_delayed(
             [
                 _hcat(filtered, remaining)
@@ -237,7 +250,9 @@ def read_orc(
                     filtered_df_partitions, remaining_df_partitions
                 )
             ],
-            cudf.concat([filtered_df._meta, res._meta], axis=1)[all_columns],
+            concatenated_meta[all_columns]
+            if reordering_columns_required
+            else concatenated_meta,
         )
 
 
