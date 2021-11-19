@@ -101,7 +101,7 @@ void cufile_shim::modify_cufile_json()
   while (std::getline(user_config_file, line)) {
     std::string const tag = "\"allow_compat_mode\"";
     if (line.find(tag) != std::string::npos) {
-      // TODO: only replace the true/false value
+      // TODO: only replace the true/false value instead of replacing the whole line
       // Enable compatiblity mode when cuDF does not fall back to host path
       cudf_config_file << tag << ": "
                        << (cufile_integration::is_always_enabled() ? "true" : "false") << ",\n";
