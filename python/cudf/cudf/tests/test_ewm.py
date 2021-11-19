@@ -3,32 +3,6 @@ import pandas as pd
 import cudf
 import numpy as np
 from cudf.testing._utils import assert_eq
-from dataclasses import dataclass
-
-@dataclass
-class EWMParams:        
-    def __init__(self, data, nulls, adjust, bias=None, com=None, span=None, halflife=None, alpha=None):
-        self.nulls = nulls
-        if self.nulls:
-            data[1] = cudf.NA
-            data[3] = cudf.NA
-            data[4] = cudf.NA
-
-        initial_ewm_args = {
-            'adjust': adjust,
-            'com': com,
-            'span': span,
-            'halflife': halflife,
-            'alpha': alpha
-        }
-        self.ewm_args = {k: v for k, v in initial_ewm_args.items() if v is not None}
-        self.call_args = {'bias': bias} if bias is not None else {}
-
-    def __repr__(self):
-        return str({**{"nulls": self.nulls},**self.ewm_args, **self.call_args})
-
-
-
 
 @pytest.mark.parametrize('data', [
     [1.0, 2.0, 3.0, 4.0, 5.0],
