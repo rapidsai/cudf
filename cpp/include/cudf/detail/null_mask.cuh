@@ -435,6 +435,28 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
   return ret;
 }
 
+// Count non-zero bits in the specified ranges
+template <typename IndexIterator>
+std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
+                                                IndexIterator indices_begin,
+                                                IndexIterator indices_end,
+                                                rmm::cuda_stream_view stream)
+{
+  return detail::segmented_count_bits(
+    bitmask, indices_begin, indices_end, count_bits_policy::SET_BITS, stream);
+}
+
+// Count zero bits in the specified ranges
+template <typename IndexIterator>
+std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
+                                                  IndexIterator indices_begin,
+                                                  IndexIterator indices_end,
+                                                  rmm::cuda_stream_view stream)
+{
+  return detail::segmented_count_bits(
+    bitmask, indices_begin, indices_end, count_bits_policy::UNSET_BITS, stream);
+}
+
 }  // namespace detail
 
 }  // namespace cudf

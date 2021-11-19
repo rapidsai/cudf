@@ -437,21 +437,6 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(table_view const& view,
   return std::make_pair(std::move(null_mask), 0);
 }
 
-/**
- * @copydoc cudf::segmented_count_set_bits
- *
- * @param[in] count_bits Whether to count set or unset bits
- * @param[in] stream CUDA stream used for device memory operations and kernel launches.
- */
-std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
-                                            host_span<size_type const> indices,
-                                            count_bits_policy count_bits,
-                                            rmm::cuda_stream_view stream)
-{
-  CUDF_FUNC_RANGE();
-  return detail::segmented_count_bits(bitmask, indices.begin(), indices.end(), count_bits, stream);
-}
-
 }  // namespace detail
 
 // Count non-zero bits in the specified range
@@ -473,8 +458,8 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
                                                 host_span<size_type const> indices)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_count_bits(
-    bitmask, indices, detail::count_bits_policy::SET_BITS, rmm::cuda_stream_default);
+  return detail::segmented_count_set_bits(
+    bitmask, indices.begin(), indices.end(), rmm::cuda_stream_default);
 }
 
 // Count zero bits in the specified ranges
@@ -482,8 +467,8 @@ std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
                                                   host_span<size_type const> indices)
 {
   CUDF_FUNC_RANGE();
-  return detail::segmented_count_bits(
-    bitmask, indices, detail::count_bits_policy::UNSET_BITS, rmm::cuda_stream_default);
+  return detail::segmented_count_unset_bits(
+    bitmask, indices.begin(), indices.end(), rmm::cuda_stream_default);
 }
 
 // Create a bitmask from a specific range
