@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "cudf_kafka/kafka_callback.hpp"
+
 #include <librdkafka/rdkafkacpp.h>
 
 namespace cudf {
@@ -21,10 +22,11 @@ namespace io {
 namespace external {
 namespace kafka {
 
-PythonOAuthRefreshCb::PythonOAuthRefreshCb(kafka_oauth_callback_t cb) : oauth_callback_(cb){};
+python_oauth_refresh_callback::python_oauth_refresh_callback(kafka_oauth_callback_type cb)
+  : oauth_callback_(cb){};
 
-void PythonOAuthRefreshCb::oauthbearer_token_refresh_cb(RdKafka::Handle* handle,
-                                                        const std::string& oauthbearer_config)
+void python_oauth_refresh_callback::oauthbearer_token_refresh_cb(
+  RdKafka::Handle* handle, const std::string& oauthbearer_config)
 {
   // Make sure that we own the GIL
   PyGILState_STATE state = PyGILState_Ensure();

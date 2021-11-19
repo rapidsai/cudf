@@ -34,7 +34,7 @@ TEST_F(KafkaDatasourceTest, MissingGroupID)
   std::map<std::string, std::string> kafka_configs;
   kafka_configs["bootstrap.servers"] = "localhost:9092";
 
-  kafka::kafka_oauth_callback_t callback;
+  kafka::kafka_oauth_callback_type callback;
 
   EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, callback, "csv-topic", 0, 0, 3, 5000, "\n"),
                cudf::logic_error);
@@ -46,7 +46,7 @@ TEST_F(KafkaDatasourceTest, InvalidConfigValues)
   std::map<std::string, std::string> kafka_configs;
   kafka_configs["completely_made_up_config"] = "wrong";
 
-  kafka::kafka_oauth_callback_t callback;
+  kafka::kafka_oauth_callback_type callback;
 
   EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, callback, "csv-topic", 0, 0, 3, 5000, "\n"),
                cudf::logic_error);

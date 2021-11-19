@@ -18,14 +18,17 @@
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
 
+#include "kafka_callback.hpp"
+
+#include <cudf/io/datasource.hpp>
+
 #include <librdkafka/rdkafkacpp.h>
+
 #include <algorithm>
 #include <chrono>
-#include <cudf/io/datasource.hpp>
 #include <map>
 #include <memory>
 #include <string>
-#include "kafka_callback.hpp"
 
 namespace cudf {
 namespace io {
@@ -57,7 +60,8 @@ class kafka_consumer : public cudf::io::datasource {
    *                retrieving the initial OAuth token and refreshing the OAuth
    *                token when it expireskafka_oauth_callback_t
    */
-  kafka_consumer(std::map<std::string, std::string> configs, kafka_oauth_callback_t oauth_callback);
+  kafka_consumer(std::map<std::string, std::string> configs,
+                 kafka_oauth_callback_type oauth_callback);
 
   /**
    * @brief Instantiate a Kafka consumer object. Documentation for librdkafka configurations can be
@@ -79,7 +83,7 @@ class kafka_consumer : public cudf::io::datasource {
    * @param delimiter optional delimiter to insert into the output between kafka messages, Ex: "\n"
    */
   kafka_consumer(std::map<std::string, std::string> configs,
-                 kafka_oauth_callback_t oauth_callback,
+                 kafka_oauth_callback_type oauth_callback,
                  std::string const& topic_name,
                  int partition,
                  int64_t start_offset,
@@ -192,7 +196,7 @@ class kafka_consumer : public cudf::io::datasource {
   std::unique_ptr<RdKafka::KafkaConsumer> consumer;
 
   std::map<std::string, std::string> configs;
-  kafka_oauth_callback_t oauth_callback_;
+  kafka_oauth_callback_type oauth_callback_;
 
   std::string topic_name;
   int partition;
