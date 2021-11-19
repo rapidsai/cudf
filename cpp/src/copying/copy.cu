@@ -307,7 +307,7 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
 
   if (boolean_mask.is_empty()) { return cudf::empty_like(lhs); }
 
-  auto bool_mask_device_p             = column_device_view::create(boolean_mask);
+  auto bool_mask_device_p             = column_device_view::create(boolean_mask, stream);
   column_device_view bool_mask_device = *bool_mask_device_p;
 
   auto const has_nulls = boolean_mask.has_nulls();

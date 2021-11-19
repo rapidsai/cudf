@@ -199,7 +199,7 @@ std::unique_ptr<column> compute_approx_percentiles(tdigest_column_view const& in
                                 weight.begin<double>(),
                                 cumulative_weights->mutable_view().begin<double>());
 
-  auto percentiles_cdv = column_device_view::create(percentiles);
+  auto percentiles_cdv = column_device_view::create(percentiles, stream);
 
   // leaf is a column of size input.size() * percentiles.size()
   auto const num_output_values = input.size() * percentiles.size();
