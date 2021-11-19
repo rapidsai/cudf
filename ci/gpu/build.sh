@@ -179,8 +179,8 @@ else
     ################################################################################
     # MEMCHECK - Run compute-sanitizer on GoogleTest (only in nightly builds)
     ################################################################################
-    #if [[ "$BUILD_MODE" == "branch" && "$BUILD_TYPE" == "gpu" ]]; then
-    #    if [[ "$COMPUTE_SANITIZER_ENABLE" == "true" ]]; then
+    if [[ "$BUILD_MODE" == "branch" && "$BUILD_TYPE" == "gpu" ]]; then
+        if [[ "$COMPUTE_SANITIZER_ENABLE" == "true" ]]; then
             gpuci_logger "Memcheck on GoogleTests with rmm_mode=cuda"
             export GTEST_CUDF_RMM_MODE=cuda
             COMPUTE_SANITIZER_CMD="compute-sanitizer --tool memcheck"
@@ -195,8 +195,8 @@ else
             done
             unset GTEST_CUDF_RMM_MODE
             python ../scripts/compute-sanitizer-to-junit-xml.py -glob "$WORKSPACE/test-results/*.cs.log" -out "$WORKSPACE/test-results/cudamemcheck-junit.xml"
-    #    fi
-    #fi
+        fi
+    fi
 
     CUDF_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf-*.tar.bz2"`
     CUDF_CONDA_FILE=`basename "$CUDF_CONDA_FILE" .tar.bz2` #get filename without extension

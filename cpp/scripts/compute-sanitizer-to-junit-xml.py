@@ -78,7 +78,8 @@ def cslog_to_junit_converter(cs_logs, outfile, args):
                             print(src, int(line.split(" ")[-2]), this_error_number, sep=", ")
                     elif line.endswith(preamble + "\n"):
                         classname = args.classname + "." + basename
-                        name = ".".join(filter(None, [testcase_name, str(error_number)]))
+                        #name = ".".join(filter(None, [testcase_name, str(error_number)]))
+                        name = ".".join(filter(None, [testcase_name]))
                         item = ET.Element(
                             "testcase", attrib={"classname": classname, "name": name},
                         )
