@@ -759,9 +759,9 @@ struct target_type_functor {
   template <typename Source, aggregation::Kind k>
   constexpr data_type operator()() const noexcept
   {
-    auto const id = type_to_id<target_type_t<Source, k>>();
-    return id == type_id::DECIMAL32 || id == type_id::DECIMAL64 ? data_type{id, type.scale()}
-                                                                : data_type{id};
+    using Type    = target_type_t<Source, k>;
+    auto const id = type_to_id<Type>();
+    return cudf::is_fixed_point<Type>() ? data_type{id, type.scale()} : data_type{id};
   }
 };
 

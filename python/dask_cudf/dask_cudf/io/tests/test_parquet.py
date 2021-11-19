@@ -378,7 +378,7 @@ def test_chunksize(tmpdir, chunksize, metadata):
             # one output partition
             assert ddf3.npartitions == 1
         else:
-            # Files can be aggregateed together, but
+            # Files can be aggregated together, but
             # chunksize is not large enough to produce
             # a single output partition
             assert ddf3.npartitions < num_row_groups

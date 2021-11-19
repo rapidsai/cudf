@@ -623,7 +623,7 @@ class RangeIndex(BaseIndex):
                 else:
                     return result
 
-        # If all the above optimizations don't cater to the inpputs,
+        # If all the above optimizations don't cater to the inputs,
         # we materialize RangeIndex's into `Int64Index` and
         # then perform `union`.
         return Int64Index(self._values)._union(other, sort=sort)
@@ -1897,6 +1897,68 @@ class DatetimeIndex(GenericIndex):
 
     def is_boolean(self):
         return False
+
+    def ceil(self, field):
+        """
+        Perform ceil operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        field : str
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
+            for more details on these aliases.
+
+        Returns
+        -------
+        DatetimeIndex
+            Index of the same type for a DatetimeIndex
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gIndex = cudf.DatetimeIndex(["2020-05-31 08:00:00",
+        ... "1999-12-31 18:40:00"])
+        >>> gIndex.ceil("T")
+        DatetimeIndex(['2020-05-31 08:00:00', '1999-12-31 18:40:00'],
+        dtype='datetime64[ns]', freq=None)
+        """
+        out_column = self._values.ceil(field)
+
+        return self.__class__._from_data({self.name: out_column})
+
+    def floor(self, field):
+        """
+        Perform floor operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        field : str
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
+            for more details on these aliases.
+
+        Returns
+        -------
+        DatetimeIndex
+            Index of the same type for a DatetimeIndex
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gIndex = cudf.DatetimeIndex(["2020-05-31 08:59:59"
+        ... ,"1999-12-31 18:44:59"])
+        >>> gIndex.floor("T")
+        DatetimeIndex(['2020-05-31 08:59:00', '1999-12-31 18:44:00'],
+        dtype='datetime64[ns]', freq=None)
+        """
+        out_column = self._values.floor(field)
+
+        return self.__class__._from_data({self.name: out_column})
 
 
 class TimedeltaIndex(GenericIndex):

@@ -968,8 +968,13 @@ def test_dataframe_to_cupy():
         df[k] = np.random.random(nelem)
 
     # Check all columns
+    mat = df.to_cupy()
+    assert mat.shape == (nelem, 4)
+    assert mat.strides == (8, 984)
+
     mat = df.to_numpy()
     assert mat.shape == (nelem, 4)
+    assert mat.strides == (8, 984)
     for i, k in enumerate(df.columns):
         np.testing.assert_array_equal(df[k].to_numpy(), mat[:, i])
 
@@ -5401,9 +5406,8 @@ def test_memory_usage_list():
     assert expected == df.A.memory_usage()
 
 
-@pytest.mark.xfail
-def test_memory_usage_multi():
-    rows = int(100)
+@pytest.mark.parametrize("rows", [10, 100])
+def test_memory_usage_multi(rows):
     deep = True
     df = pd.DataFrame(
         {
@@ -5413,7 +5417,6 @@ def test_memory_usage_multi():
         }
     ).set_index(["B", "C"])
     gdf = cudf.from_pandas(df)
-
     # Assume MultiIndex memory footprint is just that
     # of the underlying columns, levels, and codes
     expect = rows * 16  # Source Columns

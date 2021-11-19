@@ -337,7 +337,7 @@ class ColumnBase(Column, Serializable):
         else:
             return self.dropna(drop_nan=False).data_array_view
 
-    # TODO: This method is decpreated and can be removed when the associated
+    # TODO: This method is deprecated and can be removed when the associated
     # Frame methods are removed.
     def to_array(self, fillna=None) -> np.ndarray:
         """Get a dense numpy array for the data.
@@ -1851,7 +1851,7 @@ def as_column(
 
         arbitrary = np.asarray(arbitrary)
 
-        # Handle case that `arbitary` elements are cupy arrays
+        # Handle case that `arbitrary` elements are cupy arrays
         if (
             shape
             and shape[0]
@@ -2060,6 +2060,11 @@ def as_column(
                         return cudf.core.column.Decimal32Column.from_arrow(
                             data
                         )
+                    if is_bool_dtype(dtype):
+                        # Need this special case handling for bool dtypes,
+                        # since 'boolean' & 'pd.BooleanDtype' are not
+                        # understood by np.dtype below.
+                        dtype = "bool"
                     np_type = np.dtype(dtype).type
                     pa_type = np_to_pa_dtype(np.dtype(dtype))
                 data = as_column(

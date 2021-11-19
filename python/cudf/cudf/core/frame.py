@@ -46,7 +46,7 @@ from cudf.core.column import (
     serialize_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.join import merge
+from cudf.core.join import Merge, MergeSemi
 from cudf.core.udf.pipeline import compile_or_get, supported_cols_from_frame
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
@@ -634,14 +634,18 @@ class Frame:
         # Early exit for an empty Frame.
         ncol = self._num_columns
         if ncol == 0:
-            return make_empty_matrix(shape=(0, 0), dtype=np.dtype("float64"))
+            return make_empty_matrix(
+                shape=(0, 0), dtype=np.dtype("float64"), order="F"
+            )
 
         if dtype is None:
             dtype = find_common_type(
                 [col.dtype for col in self._data.values()]
             )
 
-        matrix = make_empty_matrix(shape=(len(self), ncol), dtype=dtype)
+        matrix = make_empty_matrix(
+            shape=(len(self), ncol), dtype=dtype, order="F"
+        )
         for i, col in enumerate(self._data.values()):
             # TODO: col.values may fail if there is nullable data or an
             # unsupported dtype. We may want to catch and provide a more
@@ -3669,6 +3673,13 @@ class Frame:
         3    5.0
         dtype: float64
         """
+
+        warnings.warn(
+            "Series.ceil and DataFrame.ceil are deprecated and will be \
+                removed in the future",
+            DeprecationWarning,
+        )
+
         return self._unaryop("ceil")
 
     def floor(self):
@@ -3701,6 +3712,13 @@ class Frame:
         5    3.0
         dtype: float64
         """
+
+        warnings.warn(
+            "Series.ceil and DataFrame.ceil are deprecated and will be \
+                removed in the future",
+            DeprecationWarning,
+        )
+
         return self._unaryop("floor")
 
     def scale(self):
@@ -3751,6 +3769,7 @@ class Frame:
         suffixes=("_x", "_y"),
     ):
         lhs, rhs = self, right
+        merge_cls = Merge
         if how == "right":
             # Merge doesn't support right, so just swap
             how = "left"
@@ -3758,8 +3777,10 @@ class Frame:
             left_on, right_on = right_on, left_on
             left_index, right_index = right_index, left_index
             suffixes = (suffixes[1], suffixes[0])
+        elif how in {"leftsemi", "leftanti"}:
+            merge_cls = MergeSemi
 
-        return merge(
+        return merge_cls(
             lhs,
             rhs,
             on=on,
@@ -3771,7 +3792,7 @@ class Frame:
             sort=sort,
             indicator=indicator,
             suffixes=suffixes,
-        )
+        ).perform_merge()
 
     def _is_sorted(self, ascending=None, null_position=None):
         """
