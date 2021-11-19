@@ -49,6 +49,8 @@ class GroupBy(Serializable, Reducible):
         "nunique",
         "first",
         "last",
+        "var",
+        "std",
     }
 
     _MAX_GROUPS_BEFORE_WARN = 100
