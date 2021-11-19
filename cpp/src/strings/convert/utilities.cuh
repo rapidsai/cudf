@@ -67,8 +67,9 @@ __device__ inline size_type integer_to_string(IntegerType value, char* d_buffer)
   bool const is_negative = cuda::std::is_signed<IntegerType>() ? (value < 0) : false;
 
   constexpr IntegerType base = 10;
-  constexpr int MAX_DIGITS   = 20;  // largest 64-bit integer is 20 digits
-  char digits[MAX_DIGITS];          // place-holder for digit chars
+  // largest 64-bit integer is 20 digits; largest 128-bit integer is 39 digits
+  constexpr int MAX_DIGITS = sizeof(IntegerType) > 8 ? 39 : 20;
+  char digits[MAX_DIGITS];  // place-holder for digit chars
   int digits_idx = 0;
   while (value != 0) {
     assert(digits_idx < MAX_DIGITS);
