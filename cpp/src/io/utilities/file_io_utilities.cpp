@@ -57,7 +57,7 @@ file_wrapper::~file_wrapper() { close(fd); }
 class cufile_shim {
  private:
   cufile_shim();
-  void modify_cufile_json();
+  void modify_cufile_json() const;
   void load_cufile_lib();
 
   void* cf_lib                              = nullptr;
@@ -85,7 +85,7 @@ class cufile_shim {
   decltype(cuFileWrite)* write                        = nullptr;
 };
 
-void cufile_shim::modify_cufile_json()
+void cufile_shim::modify_cufile_json() const
 {
   std::string const json_path_env_var = "CUFILE_ENV_PATH_JSON";
   temp_directory tmp_config_dir{"cudf_cufile_config"};
