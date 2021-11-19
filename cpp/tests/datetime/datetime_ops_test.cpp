@@ -758,7 +758,7 @@ TEST_F(BasicDatetimeOpsTest, TestIsLeapYear)
         707904541L,     // 1992-06-07 08:09:01 GMT - leap year
         -2181005247L,   // 1900-11-20 09:12:33 GMT - non leap year
         0L,             // UNIX EPOCH 1970-01-01 00:00:00 GMT - non leap year
-        -12212553600L,  // First full year of Gregorian Calandar 1583-01-01 00:00:00 - non-leap-year
+        -12212553600L,  // First full year of Gregorian Calendar 1583-01-01 00:00:00 - non-leap-year
         0L,             // null
         13591632822L,   // 2400-09-13 13:33:42 GMT - leap year
         4539564243L,    // 2113-11-08 06:04:03 GMT - non leap year
@@ -827,7 +827,7 @@ TEST_F(BasicDatetimeOpsTest, TestQuarter)
         707904541L,     // 1992-06-07 08:09:01 GMT
         -2181005247L,   // 1900-11-20 09:12:33 GMT
         0L,             // UNIX EPOCH 1970-01-01 00:00:00 GMT
-        -12212553600L,  // First full year of Gregorian Calandar 1583-01-01 00:00:00
+        -12212553600L,  // First full year of Gregorian Calendar 1583-01-01 00:00:00
         0L,             // null
         13591632822L,   // 2400-09-13 13:33:42 GMT
         4539564243L,    // 2113-11-08 06:04:03 GMT

@@ -307,7 +307,7 @@ struct EncColumnChunk {
   statistics_chunk const* stats;  //!< Fragment statistics
   uint32_t bfr_size;              //!< Uncompressed buffer size
   uint32_t compressed_size;       //!< Compressed buffer size
-  uint32_t max_page_data_size;    //!< Max data size (excuding header) of any page in this chunk
+  uint32_t max_page_data_size;    //!< Max data size (excluding header) of any page in this chunk
   uint32_t page_headers_size;     //!< Sum of size of all page headers
   uint32_t start_row;             //!< First row of chunk
   uint32_t num_rows;              //!< Number of rows in chunk
@@ -489,7 +489,7 @@ void InitFragmentStatistics(cudf::detail::device_2dspan<statistics_group> groups
 /**
  * @brief Initialize per-chunk hash maps used for dictionary with sentinel values
  *
- * @param chunks Flat span of chunks to intialize hash maps for
+ * @param chunks Flat span of chunks to initialize hash maps for
  * @param stream CUDA stream to use
  */
 void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);
