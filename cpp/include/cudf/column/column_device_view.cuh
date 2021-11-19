@@ -421,39 +421,22 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   }
 
   /**
-   * @brief Returns a `numeric::decimal32` element at the specified index for a `fixed_point`
+   * @brief Returns a `numeric::fixed_point` element at the specified index for a `fixed_point`
    * column.
    *
    * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
    * then any attempt to use the result will lead to undefined behavior.
    *
    * @param element_index Position of the desired element
-   * @return numeric::decimal32 representing the element at this index
+   * @return numeric::fixed_point representing the element at this index
    */
-  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, numeric::decimal32>)>
+  template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_point<T>())>
   __device__ T element(size_type element_index) const noexcept
   {
     using namespace numeric;
+    using rep        = typename T::rep;
     auto const scale = scale_type{_type.scale()};
-    return decimal32{scaled_integer<int32_t>{data<int32_t>()[element_index], scale}};
-  }
-
-  /**
-   * @brief Returns a `numeric::decimal64` element at the specified index for a `fixed_point`
-   * column.
-   *
-   * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
-   * then any attempt to use the result will lead to undefined behavior.
-   *
-   * @param element_index Position of the desired element
-   * @return numeric::decimal64 representing the element at this index
-   */
-  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, numeric::decimal64>)>
-  __device__ T element(size_type element_index) const noexcept
-  {
-    using namespace numeric;
-    auto const scale = scale_type{_type.scale()};
-    return decimal64{scaled_integer<int64_t>{data<int64_t>()[element_index], scale}};
+    return T{scaled_integer<rep>{data<rep>()[element_index], scale}};
   }
 
   /**
