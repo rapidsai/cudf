@@ -61,6 +61,12 @@ class Reducible:
         "nth",
         "collect",
         "unique",
+        "prod",
+        "idxmin",
+        "idxmax",
+        "nunique",
+        "first",
+        "last",
     }
 
     def _reduce(self, op: str, *args, **kwargs):

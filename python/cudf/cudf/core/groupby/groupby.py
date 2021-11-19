@@ -16,6 +16,7 @@ from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import arange, as_column
 from cudf.core.multiindex import MultiIndex
+from cudf.core.reductions import Reducible
 from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
@@ -34,7 +35,21 @@ def _quantile_75(x):
     return x.quantile(0.75)
 
 
-class GroupBy(Serializable):
+class GroupBy(Serializable, Reducible):
+
+    _VALID_REDUCTIONS = {
+        "sum",
+        "prod",
+        "idxmin",
+        "idxmax",
+        "min",
+        "max",
+        "mean",
+        "median",
+        "nunique",
+        "first",
+        "last",
+    }
 
     _MAX_GROUPS_BEFORE_WARN = 100
 
@@ -295,6 +310,7 @@ class GroupBy(Serializable):
 
         return result
 
+    _reduce = agg
     aggregate = agg
 
     def nth(self, n):
@@ -811,38 +827,6 @@ class GroupBy(Serializable):
         )
         return res
 
-    def sum(self):
-        """Compute the column-wise sum of the values in each group."""
-        return self.agg("sum")
-
-    def prod(self):
-        """Compute the column-wise product of the values in each group."""
-        return self.agg("prod")
-
-    def idxmin(self):
-        """Get the column-wise index of the minimum value in each group."""
-        return self.agg("idxmin")
-
-    def idxmax(self):
-        """Get the column-wise index of the maximum value in each group."""
-        return self.agg("idxmax")
-
-    def min(self):
-        """Get the column-wise minimum value in each group."""
-        return self.agg("min")
-
-    def max(self):
-        """Get the column-wise maximum value in each group."""
-        return self.agg("max")
-
-    def mean(self):
-        """Compute the column-wise mean of the values in each group."""
-        return self.agg("mean")
-
-    def median(self):
-        """Get the column-wise median of the values in each group."""
-        return self.agg("median")
-
     def corr(self, method="pearson", min_periods=1):
         """
         Compute pairwise correlation of columns, excluding NA/null values.
@@ -1005,10 +989,6 @@ class GroupBy(Serializable):
 
         return self.agg(func)
 
-    def nunique(self):
-        """Compute the number of unique values in each column in each group."""
-        return self.agg("nunique")
-
     def collect(self):
         """Get a list of all the values for each column in each group."""
         return self.agg("collect")
@@ -1029,14 +1009,6 @@ class GroupBy(Serializable):
     def cummax(self):
         """Get the column-wise cumulative maximum value in each group."""
         return self.agg("cummax")
-
-    def first(self):
-        """Get the first non-null value in each group."""
-        return self.agg("first")
-
-    def last(self):
-        """Get the last non-null value in each group."""
-        return self.agg("last")
 
     def diff(self, periods=1, axis=0):
         """Get the difference between the values in each group.
@@ -1367,12 +1339,6 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
             by=self.grouping.keys, dropna=self._dropna, sort=self._sort
         )
 
-    def nunique(self):
-        """
-        Return the number of unique values per group
-        """
-        return self.agg("nunique")
-
 
 class SeriesGroupBy(GroupBy):
     """
@@ -1450,6 +1416,8 @@ class SeriesGroupBy(GroupBy):
             result.columns = result.columns.droplevel(0)
 
         return result
+
+    _reduce = agg
 
     def apply(self, func):
         result = super().apply(func)
