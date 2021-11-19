@@ -68,6 +68,7 @@ from cudf.core.dtypes import (
     ListDtype,
     StructDtype,
 )
+from cudf.core.reductions import Reducible
 from cudf.utils import utils
 from cudf.utils.dtypes import (
     cudf_dtype_from_pa_type,
@@ -82,7 +83,14 @@ from cudf.utils.utils import mask_dtype
 T = TypeVar("T", bound="ColumnBase")
 
 
-class ColumnBase(Column, Serializable):
+class ColumnBase(Column, Serializable, Reducible):
+    _VALID_REDUCTIONS = {
+        "any",
+        "all",
+        "max",
+        "min",
+    }
+
     def as_frame(self) -> "cudf.core.frame.Frame":
         """
         Converts a Column to Frame
@@ -1164,17 +1172,25 @@ class ColumnBase(Column, Serializable):
             return libcudf.reduce.minmax(result_col)
         return result_col
 
-    def min(self, skipna: bool = None, dtype: Dtype = None):
-        result_col = self._process_for_reduction(skipna=skipna)
-        if isinstance(result_col, ColumnBase):
-            return libcudf.reduce.reduce("min", result_col, dtype=dtype)
-        return result_col
+    def _reduce(
+        self, op: str, skipna: bool = None, min_count: int = 0, *args, **kwargs
+    ) -> ScalarLike:
+        """Perform a reduction operation.
 
-    def max(self, skipna: bool = None, dtype: Dtype = None):
-        result_col = self._process_for_reduction(skipna=skipna)
-        if isinstance(result_col, ColumnBase):
-            return libcudf.reduce.reduce("max", result_col, dtype=dtype)
-        return result_col
+        op : str
+            The operation to perform.
+        skipna : bool
+            Whether or not na values must be skipped.
+        min_count : int, default 0
+            The minimum number of entries for the reduction, otherwise the
+            reduction returns NaN.
+        """
+        preprocessed = self._process_for_reduction(
+            skipna=skipna, min_count=min_count
+        )
+        if isinstance(preprocessed, ColumnBase):
+            return libcudf.reduce.reduce(op, preprocessed, **kwargs)
+        return preprocessed
 
     def nans_to_nulls(self: T) -> T:
         # Only floats can contain nan.

@@ -15,7 +15,7 @@ from cudf.core.column import ColumnBase
 from cudf.core.reductions import Reducible
 
 
-class NumericalBaseColumn(Reducible, ColumnBase):
+class NumericalBaseColumn(ColumnBase, Reducible):
     """A column composed of numerical data.
 
     This class encodes a standard interface for different types of columns
@@ -32,27 +32,6 @@ class NumericalBaseColumn(Reducible, ColumnBase):
         "var",
         "std",
     }
-
-    def _reduce(
-        self, op: str, skipna: bool = None, min_count: int = 0, *args, **kwargs
-    ) -> ScalarLike:
-        """Perform a reduction operation.
-
-        op : str
-            The operation to perform.
-        skipna : bool
-            Whether or not na values must be skipped.
-        min_count : int, default 0
-            The minimum number of entries for the reduction, otherwise the
-            reduction returns NaN.
-        """
-        preprocessed = self._process_for_reduction(
-            skipna=skipna, min_count=min_count
-        )
-        if isinstance(preprocessed, ColumnBase):
-            return libcudf.reduce.reduce(op, preprocessed, **kwargs)
-        else:
-            return preprocessed
 
     def _can_return_nan(self, skipna: bool = None) -> bool:
         return not skipna and self.has_nulls()
