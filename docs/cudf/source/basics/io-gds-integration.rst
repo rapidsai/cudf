@@ -14,7 +14,7 @@ There are three valid values for the environment variable:
 
 - "GDS": Enable GDS use; GDS compatibility mode is *off*.
 - "ALWAYS": Enable GDS use; GDS compatibility mode is *on*.
-- "OFF": Compretely disable GDS use.
+- "OFF": Completely disable GDS use.
 
 If no value is set, behavior will be the same as the "GDS" option.
 
