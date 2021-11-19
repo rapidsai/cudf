@@ -1175,10 +1175,8 @@ class ColumnBase(Column, Serializable, Reducible):
     def _reduce(
         self, op: str, skipna: bool = None, min_count: int = 0, *args, **kwargs
     ) -> ScalarLike:
-        """Perform a reduction operation.
+        """Compute {op} of column values.
 
-        op : str
-            The operation to perform.
         skipna : bool
             Whether or not na values must be skipped.
         min_count : int, default 0

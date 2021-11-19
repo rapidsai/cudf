@@ -49,8 +49,6 @@ class _Resampler(GroupBy):
         else:
             return result.sort_index()
 
-    _reduce = agg
-
     def asfreq(self):
         return self.obj._align_to_index(
             self.grouping.bin_labels,

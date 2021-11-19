@@ -310,7 +310,46 @@ class GroupBy(Serializable, Reducible):
 
         return result
 
-    _reduce = agg
+    def _reduce(
+        self,
+        op: str,
+        numeric_only: bool = False,
+        min_count: int = 0,
+        *args,
+        **kwargs,
+    ):
+        """Compute {op} of group values.
+
+        Parameters
+        ----------
+        numeric_only : bool, default None
+            Include only float, int, boolean columns. If None, will attempt to
+            use everything, then use only numeric data.
+        min_count : int, default 0
+            The required number of valid values to perform the operation. If
+            fewer than ``min_count`` non-NA values are present the result will
+            be NA.
+
+        Returns
+        -------
+        Series or DataFrame
+            Computed {op} of values within each group.
+
+        Notes
+        -----
+        Difference from pandas:
+            * Not supporting: numeric_only, min_count
+        """
+        if numeric_only:
+            raise NotImplementedError(
+                "numeric_only parameter is not implemented yet"
+            )
+        if min_count != 0:
+            raise NotImplementedError(
+                "min_count parameter is not implemented yet"
+            )
+        return self.agg(op)
+
     aggregate = agg
 
     def nth(self, n):
@@ -1416,8 +1455,6 @@ class SeriesGroupBy(GroupBy):
             result.columns = result.columns.droplevel(0)
 
         return result
-
-    _reduce = agg
 
     def apply(self, func):
         result = super().apply(func)
