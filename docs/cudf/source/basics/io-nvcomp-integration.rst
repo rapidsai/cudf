@@ -3,7 +3,8 @@ nvCOMP Integration
 
 Some types of compression/decompression can be performed using either `nvCOMP library <https://github.com/NVIDIA/nvcomp>`_ or the internal implementation. 
 
-Which implementation is used by default depends on the data format and the compression type. Behavior can be influenced through environment variable ``LIBCUDF_NVCOMP_POLICY``.
+Which implementation is used by default depends on the data format and the compression type.
+Behavior can be influenced through environment variable ``LIBCUDF_NVCOMP_POLICY``.
 
 There are three valid values for the environment variable:
 
