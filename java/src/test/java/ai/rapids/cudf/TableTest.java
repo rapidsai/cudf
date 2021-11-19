@@ -7291,4 +7291,21 @@ public class TableTest extends CudfTestBase {
       }
     }
   }
+
+  @Test
+  void testSample() {
+    Table t = new Table.TestBuilder().column("s1", "s2", "s3", "s4", "s5").build();
+    Table ret = t.sample(3, false, 0);
+    assertTrue(ret.getRowCount() == 3L);
+
+    assertEquals("s3", ret.getColumn(0).getScalarElement(0).getJavaString());
+    assertEquals("s4", ret.getColumn(0).getScalarElement(1).getJavaString());
+    assertEquals("s5", ret.getColumn(0).getScalarElement(2).getJavaString());
+
+    ret = t.sample(100, true, 0);
+    assertTrue(ret.getRowCount() == 100L);
+
+    ret = t.sample(4, true, 0);
+    assertTrue(ret.getRowCount() == 4L);
+  }
 }
