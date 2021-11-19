@@ -16,6 +16,8 @@
 
 #include "config_utils.hpp"
 
+#include <cudf/utilities/error.hpp>
+
 #include <cstdlib>
 #include <string>
 
@@ -42,17 +44,15 @@ usage_policy get_env_policy()
 {
   static auto const env_val = getenv_or("LIBCUDF_CUFILE_POLICY", "GDS");
   if (env_val == "OFF") return usage_policy::OFF;
+  if (env_val == "GDS") return usage_policy::GDS;
   if (env_val == "ALWAYS") return usage_policy::ALWAYS;
-  return usage_policy::GDS;
+  CUDF_FAIL("Invalid LIBCUDF_CUFILE_POLICY value: " + env_val);
 }
 }  // namespace
 
 bool is_always_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
 
-bool is_gds_enabled()
-{
-  return is_always_enabled() or get_env_policy() == usage_policy::GDS;
-}
+bool is_gds_enabled() { return is_always_enabled() or get_env_policy() == usage_policy::GDS; }
 
 }  // namespace cufile_integration
 
@@ -71,18 +71,16 @@ usage_policy get_env_policy()
 {
   static auto const env_val = getenv_or("LIBCUDF_NVCOMP_POLICY", "STABLE");
   if (env_val == "OFF") return usage_policy::OFF;
+  if (env_val == "STABLE") return usage_policy::STABLE;
   if (env_val == "ALWAYS") return usage_policy::ALWAYS;
-  return usage_policy::STABLE;
+  CUDF_FAIL("Invalid LIBCUDF_NVCOMP_POLICY value: " + env_val);
 }
 }  // namespace
 
 bool is_all_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
 
-bool is_stable_enabled()
-{
-  return is_all_enabled() or get_env_policy() == usage_policy::STABLE;
-}
+bool is_stable_enabled() { return is_all_enabled() or get_env_policy() == usage_policy::STABLE; }
 
 }  // namespace nvcomp_integration
 
-} // namespace cudf::io::detail
+}  // namespace cudf::io::detail

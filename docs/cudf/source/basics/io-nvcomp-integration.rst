@@ -5,13 +5,13 @@ Some types of compression/decompression can be performed using either `nvCOMP li
 
 Which implementation is used by default depends on the data format and the compression type. Behavior can be influenced through environment variable ``LIBCUDF_NVCOMP_POLICY``.
 
-There are three special values for the environment variable:
+There are three valid values for the environment variable:
 
 - "STABLE": Only enable the nvCOMP in places where it has been deemed stable for production use. 
 - "ALWAYS": Enable all available uses of nvCOMP, including new, experimental combinations.
 - "OFF": Disable nvCOMP use whenever possible and use the internal implementations instead.
 
-Any other value (or no value set) will result in the same behavior as the "STABLE" option.
+If no value is set, behavior will be the same as the "STABLE" option.
 
 
 .. table:: Current policy for nvCOMP use for different types

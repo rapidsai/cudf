@@ -10,13 +10,13 @@ GDS is also included in CUDA Toolkit 11.4 and higher.
 Use of GPUDirect Storage in cuDF is enabled by default, but can be disabled through the environment variable ``LIBCUDF_CUFILE_POLICY``. 
 This variable also controls the GDS compatibility mode. 
 
-There are three special values for the environment variable:
+There are three valid values for the environment variable:
 
 - "GDS": Enable GDS use; GDS compatibility mode is *off*.
 - "ALWAYS": Enable GDS use; GDS compatibility mode is *on*.
 - "OFF": Compretely disable GDS use.
 
-Any other value (or no value set) will enable GDS use with compatibility mode turned *off*.
+If no value is set, behavior will be the same as the "GDS" option.
 
 This environment variable also affects how cuDF treats GDS errors.
 When ``LIBCUDF_CUFILE_POLICY`` is set to "GDS" and a GDS API call fails for any reason, cuDF falls back to the internal implementation with bounce buffers.
