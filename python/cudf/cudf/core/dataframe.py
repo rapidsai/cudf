@@ -6367,7 +6367,7 @@ def make_binop_func(op, postprocess=None):
     # __wrapped__ attributes to `wrapped_func`. Cpython looks up the signature
     # string of a function by recursively delving into __wrapped__ until
     # it hits the first function that has __signature__ attribute set. To make
-    # the signature stirng of `wrapper` matches with its actual parameter list,
+    # the signature string of `wrapper` matches with its actual parameter list,
     # we directly set the __signature__ attribute of `wrapper` below.
 
     new_sig = inspect.signature(

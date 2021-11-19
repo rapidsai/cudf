@@ -16,6 +16,7 @@
 
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
@@ -2055,7 +2056,7 @@ TEST_F(ListReductionTest, NonValidListReductionNthElement)
 struct StructReductionTest : public cudf::test::BaseFixture {
   using SCW = cudf::test::structs_column_wrapper;
 
-  void reduction_test(SCW const& struct_column,
+  void reduction_test(cudf::column_view const& struct_column,
                       cudf::table_view const& expected_value,
                       bool succeeded_condition,
                       bool is_valid,
@@ -2066,7 +2067,7 @@ struct StructReductionTest : public cudf::test::BaseFixture {
         cudf::reduce(struct_column, agg, cudf::data_type(cudf::type_id::STRUCT));
       auto struct_result = dynamic_cast<cudf::struct_scalar*>(result.get());
       EXPECT_EQ(is_valid, struct_result->is_valid());
-      if (is_valid) { CUDF_TEST_EXPECT_TABLES_EQUAL(expected_value, struct_result->view()); }
+      if (is_valid) { CUDF_TEST_EXPECT_TABLES_EQUIVALENT(expected_value, struct_result->view()); }
     };
 
     if (succeeded_condition) {
@@ -2208,6 +2209,132 @@ TEST_F(StructReductionTest, NonValidStructReductionNthElement)
                        false,
                        false,
                        cudf::make_nth_element_aggregation(0, cudf::null_policy::INCLUDE));
+}
+
+TEST_F(StructReductionTest, StructReductionMinMaxNoNull)
+{
+  using INTS_CW    = cudf::test::fixed_width_column_wrapper<int>;
+  using STRINGS_CW = cudf::test::strings_column_wrapper;
+  using STRUCTS_CW = cudf::test::structs_column_wrapper;
+
+  auto const input = [] {
+    auto child1 = STRINGS_CW{"año", "bit", "₹1", "aaa", "zit", "bat", "aab", "$1", "€1", "wut"};
+    auto child2 = INTS_CW{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    return STRUCTS_CW{{child1, child2}};
+  }();
+
+  {
+    auto const expected_child1 = STRINGS_CW{"$1"};
+    auto const expected_child2 = INTS_CW{8};
+    this->reduction_test(input,
+                         cudf::table_view{{expected_child1, expected_child2}},
+                         true,
+                         true,
+                         cudf::make_min_aggregation());
+  }
+
+  {
+    auto const expected_child1 = STRINGS_CW{"₹1"};
+    auto const expected_child2 = INTS_CW{3};
+    this->reduction_test(input,
+                         cudf::table_view{{expected_child1, expected_child2}},
+                         true,
+                         true,
+                         cudf::make_max_aggregation());
+  }
+}
+
+TEST_F(StructReductionTest, StructReductionMinMaxSlicedInput)
+{
+  using INTS_CW    = cudf::test::fixed_width_column_wrapper<int>;
+  using STRINGS_CW = cudf::test::strings_column_wrapper;
+  using STRUCTS_CW = cudf::test::structs_column_wrapper;
+  constexpr int32_t dont_care{1};
+
+  auto const input_original = [] {
+    auto child1 = STRINGS_CW{"$dont_care",
+                             "$dont_care",
+                             "año",
+                             "bit",
+                             "₹1",
+                             "aaa",
+                             "zit",
+                             "bat",
+                             "aab",
+                             "$1",
+                             "€1",
+                             "wut",
+                             "₹dont_care"};
+    auto child2 = INTS_CW{dont_care, dont_care, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, dont_care};
+    return STRUCTS_CW{{child1, child2}};
+  }();
+
+  auto const input = cudf::slice(input_original, {2, 12})[0];
+
+  {
+    auto const expected_child1 = STRINGS_CW{"$1"};
+    auto const expected_child2 = INTS_CW{8};
+    this->reduction_test(input,
+                         cudf::table_view{{expected_child1, expected_child2}},
+                         true,
+                         true,
+                         cudf::make_min_aggregation());
+  }
+
+  {
+    auto const expected_child1 = STRINGS_CW{"₹1"};
+    auto const expected_child2 = INTS_CW{3};
+    this->reduction_test(input,
+                         cudf::table_view{{expected_child1, expected_child2}},
+                         true,
+                         true,
+                         cudf::make_max_aggregation());
+  }
+}
+
+TEST_F(StructReductionTest, StructReductionMinMaxWithNulls)
+{
+  using INTS_CW    = cudf::test::fixed_width_column_wrapper<int>;
+  using STRINGS_CW = cudf::test::strings_column_wrapper;
+  using STRUCTS_CW = cudf::test::structs_column_wrapper;
+  using cudf::test::iterators::nulls_at;
+
+  auto const input = [] {
+    auto child1 = STRINGS_CW{{"año",
+                              "bit",
+                              "₹1" /*NULL*/,
+                              "aaa" /*NULL*/,
+                              "zit",
+                              "bat",
+                              "aab",
+                              "$1" /*NULL*/,
+                              "€1" /*NULL*/,
+                              "wut"},
+                             nulls_at({2, 7})};
+    auto child2 = INTS_CW{{1, 2, 3 /*NULL*/, 4 /*NULL*/, 5, 6, 7, 8 /*NULL*/, 9 /*NULL*/, 10},
+                          nulls_at({2, 7})};
+    return STRUCTS_CW{{child1, child2}, nulls_at({3, 8})};
+  }();
+
+  {
+    auto const expected_child1 = STRINGS_CW{"aab"};
+    auto const expected_child2 = INTS_CW{7};
+    this->reduction_test(input,
+                         cudf::table_view{{expected_child1, expected_child2}},
+                         true,
+                         true,
+                         cudf::make_min_aggregation());
+  }
+
+  {
+    auto const expected_child1 = STRINGS_CW{"zit"};
+    auto const expected_child2 = INTS_CW{5};
+    this->reduction_test(input,
+                         cudf::table_view{{expected_child1, expected_child2}},
+                         true,
+                         true,
+                         cudf::make_max_aggregation());
+  }
 }
 
 CUDF_TEST_PROGRAM_MAIN()

@@ -353,7 +353,7 @@ def get_appropriate_dispatched_func(
 
         elif hasattr(cupy_submodule, fname):
             cupy_func = getattr(cupy_submodule, fname)
-            # Handle case if cupy impliments it as a numpy function
+            # Handle case if cupy implements it as a numpy function
             # Unsure if needed
             if cupy_func is func:
                 return NotImplemented
@@ -374,7 +374,7 @@ def _cast_to_appropriate_cudf_type(val, index=None):
     elif (val.ndim == 1) or (val.ndim == 2 and val.shape[1] == 1):
         # if index is not None and is of a different length
         # than the index, cupy dispatching behaviour is undefined
-        # so we dont impliment it
+        # so we don't implement it
         if (index is None) or (len(index) == len(val)):
             return cudf.Series(val, index=index)
 

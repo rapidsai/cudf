@@ -3673,6 +3673,13 @@ class Frame:
         3    5.0
         dtype: float64
         """
+
+        warnings.warn(
+            "Series.ceil and DataFrame.ceil are deprecated and will be \
+                removed in the future",
+            DeprecationWarning,
+        )
+
         return self._unaryop("ceil")
 
     def floor(self):
@@ -3705,6 +3712,13 @@ class Frame:
         5    3.0
         dtype: float64
         """
+
+        warnings.warn(
+            "Series.ceil and DataFrame.ceil are deprecated and will be \
+                removed in the future",
+            DeprecationWarning,
+        )
+
         return self._unaryop("floor")
 
     def scale(self):

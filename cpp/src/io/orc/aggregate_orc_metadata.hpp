@@ -119,7 +119,7 @@ class aggregate_orc_metadata {
    * @brief Filters ORC file to a selection of columns, based on their paths in the file.
    *
    * Paths are in format "grandparent_col.parent_col.child_col", where the root ORC column is
-   * ommited to match the cuDF table hierarchy.
+   * omitted to match the cuDF table hierarchy.
    *
    * @param column_paths List of full column names (i.e. paths) to select from the ORC file
    * @return Columns hierarchy - lists of children columns and sorted columns in each nesting level
