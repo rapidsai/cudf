@@ -193,12 +193,12 @@ bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const&
   // first, find the value in the dictionary's key set
   auto index = cudf::dictionary::detail::get_index(dict_col, value, stream);
   // if found, check the index is actually in the indices column
-  return index->is_valid() ? cudf::type_dispatcher(dict_col.indices().type(),
-                                                   contains_scalar_dispatch{},
-                                                   dict_col.indices(),
-                                                   *index,
-                                                   stream)
-                           : false;
+  return index->is_valid(stream) ? cudf::type_dispatcher(dict_col.indices().type(),
+                                                         contains_scalar_dispatch{},
+                                                         dict_col.indices(),
+                                                         *index,
+                                                         stream)
+                                 : false;
 }
 
 }  // namespace
