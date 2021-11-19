@@ -150,6 +150,14 @@ def read_orc(
         all_columns = columns
         columns = [c for c in all_columns if c not in columns_in_predicate]
 
+        # Don't read in filtering columns first if we don't have any remaining
+        # columns
+        if len(columns_in_predicate) == 0:
+            filters = None
+            filtering_columns_first = False
+        elif len(columns) == 0:
+            filtering_columns_first = False
+    if filtering_columns_first:
         # Read in only the columns relevant to the filtering
         filtered_df = read_orc(
             paths,
@@ -159,15 +167,17 @@ def read_orc(
             **kwargs,
         )
 
-        # Since the call to `read_orc` results in a partition for each relevant
-        # stripe, we can simply check which partitions are empty. Then we can
-        # read in only those relevant stripes.
+        # Function that we use for emptying all partitions that would be empty
+        # after running the `filters` query
         def _empty(df):
             if len(df.query(query_string, local_dict=local_dict)) == 0:
                 return df.iloc[0:0, :].copy()
             else:
                 return df
 
+        # Since the call to `read_orc` results in a partition for each relevant
+        # stripe, we can simply check which partitions are empty. Then we can
+        # read in only those relevant stripes.
         filtered_df = filtered_df.map_partitions(_empty)
         filtered_partition_lens = filtered_df.map_partitions(len).compute()
         is_filtered_partition_empty = [
@@ -200,6 +210,8 @@ def read_orc(
             if filters is None
             else cudf.io.orc._filter_stripes(filters, path)
         ):
+            # If we are reading in filtering columns first, skip this partition
+            # if we have determined the need to skip it
             if (
                 not filtering_columns_first
                 or not is_filtered_partition_empty[partition_idx]
@@ -221,6 +233,8 @@ def read_orc(
     if not filtering_columns_first:
         return res
     else:
+        # We need to reorder the columns if a simple horizontal concatenation
+        # does not result in the expected `all_columns`
         reordering_columns_required = (
             columns_in_predicate + columns != all_columns
         )
