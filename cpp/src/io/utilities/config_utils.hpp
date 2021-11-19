@@ -51,7 +51,8 @@ inline usage_policy get_env_policy()
 }  // namespace
 
 /**
- * @brief Returns true if cuFile and its compatiblity mode are enabled. */
+ * @brief Returns true if cuFile and its compatiblity mode are enabled.
+ */
 inline bool is_always_enabled() { return get_env_policy() == usage_policy::ALWAYS; }
 
 /**
