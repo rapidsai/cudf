@@ -2749,7 +2749,7 @@ public final class Table implements AutoCloseable {
    * Gather `n` samples from table randomly
    * The output is not same with CPU Sample exec, but this is faster.
    *
-   * @param n
+   * @param n non-negative number of samples expected
    * @param replacement Allow or disallow sampling of the same row more than once.
    * @param seed Seed value to initiate random number generator.
    * @return
