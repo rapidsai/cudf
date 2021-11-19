@@ -33,7 +33,7 @@ namespace cufile_integration {
 bool is_always_enabled();
 
 /**
- * @brief Returns true if only direct IO through cuFile are enabled (compatiblity mode is disabled).
+ * @brief Returns true if only direct IO through cuFile are enabled (compatibility mode is disabled).
  */
 bool is_gds_enabled();
 
