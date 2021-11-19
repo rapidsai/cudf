@@ -5295,61 +5295,52 @@ def _drop_rows_by_labels(
     if isinstance(level, int) and level >= obj.index.nlevels:
         raise ValueError("Param level out of bounds.")
 
-    if not isinstance(labels, SingleColumnFrame):
-        labels = as_column(labels)
-
     if isinstance(obj._index, cudf.MultiIndex):
         if level is None:
-            level = 0
-
-        levels_index = obj.index.get_level_values(level)
-        if errors == "raise" and not labels.isin(levels_index).all():
-            raise KeyError("One or more values not found in axis")
-
-        if isinstance(level, int):
-            ilevel = level
+            if cudf.api.types.is_list_like(labels):
+                labels = cudf.MultiIndex.from_tuples(
+                    labels, names=obj._index.names
+                )
+                ids = ~obj.index.isin(labels)
+                final_idx = obj._index[ids]
+            elif not isinstance(labels, cudf.MultiIndex):
+                idx_slice = obj.index.get_loc(labels)
+                if isinstance(idx_slice, slice):
+                    ids = ~cupy.isin(
+                        cupy.arange(0, len(obj._index)),
+                        cupy.arange(
+                            idx_slice.start, idx_slice.stop, idx_slice.step
+                        ),
+                    )
+                else:
+                    ids = ~idx_slice
+                final_idx = obj.index[ids]
+            else:
+                levels_index = obj.index
+                ids = ~levels_index.isin(labels)
+                final_idx = obj._index[ids]
         else:
-            ilevel = obj._index.names.index(level)
-
-        # 1. Merge Index df and data df along column axis:
-        # | id | ._index df | data column(s) |
-        idx_nlv = obj._index.nlevels
-        working_df = obj._index.to_frame(index=False)
-        working_df.columns = [i for i in range(idx_nlv)]
-        for i, col in enumerate(obj._data):
-            working_df[idx_nlv + i] = obj._data[col]
-        # 2. Set `level` as common index:
-        # | level | ._index df w/o level | data column(s) |
-        working_df = working_df.set_index(level)
-
-        # 3. Use "leftanti" join to drop
-        # TODO: use internal API with "leftanti" and specify left and right
-        # join keys to bypass logic check
-        to_join = cudf.DataFrame(index=cudf.Index(labels, name=level))
-        join_res = working_df.join(to_join, how="leftanti")
-
-        # 4. Reconstruct original layout, and rename
-        join_res.insert(
-            ilevel, name=join_res._index.name, value=join_res._index
-        )
-        join_res = join_res.reset_index(drop=True)
-
-        midx = cudf.MultiIndex.from_frame(
-            join_res.iloc[:, 0:idx_nlv], names=obj._index.names
-        )
+            if not isinstance(labels, SingleColumnFrame):
+                labels = as_column(labels)
+            levels_index = obj.index.get_level_values(level)
+            ids = ~levels_index.isin(labels)
+            if errors == "raise" and ids.all():
+                raise KeyError("One or more values not found in axis")
+            final_idx = obj._index[ids]
 
         if isinstance(obj, cudf.Series):
             return obj.__class__._from_data(
-                join_res.iloc[:, idx_nlv:]._data, index=midx, name=obj.name
+                obj.iloc[ids]._data, index=final_idx, name=obj.name
             )
         else:
             return obj.__class__._from_data(
-                join_res.iloc[:, idx_nlv:]._data,
-                index=midx,
-                columns=obj.columns,
+                obj.iloc[ids]._data, index=final_idx, columns=obj.columns,
             )
 
     else:
+        if not isinstance(labels, SingleColumnFrame):
+            labels = as_column(labels)
+
         if errors == "raise" and not labels.isin(obj.index).all():
             raise KeyError("One or more values not found in axis")
 
