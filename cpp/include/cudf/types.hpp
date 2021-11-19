@@ -352,25 +352,5 @@ enum class hash_id {
  */
 static constexpr uint32_t DEFAULT_HASH_SEED = 0;
 
-/**
- * @brief Indicates the presence of nulls at compile-time or runtime.
- *
- * If used at compile time, this indicator can tell the optimizer
- * to include or exclude any null-checking clauses.
- *
- */
-struct nullate {
-  struct YES : std::bool_constant<true> {
-  };
-  struct NO : std::bool_constant<false> {
-  };
-  struct DYNAMIC {
-    DYNAMIC() = delete;
-    constexpr explicit DYNAMIC(bool b) noexcept : value{b} {}
-    constexpr operator bool() const noexcept { return value; }
-    bool value;
-  };
-};
-
 /** @} */
 }  // namespace cudf

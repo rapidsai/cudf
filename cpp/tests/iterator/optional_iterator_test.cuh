@@ -36,11 +36,11 @@ void nonull_optional_iterator(IteratorTest<T>& testFixture)
   // GPU test
   testFixture.iterator_test_thrust(
     replaced_array,
-    cudf::detail::make_optional_iterator<T, cudf::nullate::DYNAMIC>(*d_col, false),
+    cudf::detail::make_optional_iterator<T>(*d_col, cudf::nullate::DYNAMIC{false}),
     host_values.size());
   testFixture.iterator_test_thrust(
     replaced_array,
-    cudf::detail::make_optional_iterator<T, cudf::nullate::NO>(*d_col),
+    cudf::detail::make_optional_iterator<T>(*d_col, cudf::nullate::NO{}),
     host_values.size());
 }
 
@@ -73,19 +73,19 @@ void null_optional_iterator(IteratorTest<T>& testFixture)
 
   // GPU test for correct null mapping
   testFixture.iterator_test_thrust(
-    optional_values, d_col->optional_begin<T, cudf::nullate::DYNAMIC>(true), host_values.size());
+    optional_values, d_col->optional_begin<T>(cudf::nullate::DYNAMIC{true}), host_values.size());
 
   testFixture.iterator_test_thrust(
-    optional_values, d_col->optional_begin<T, cudf::nullate::YES>(), host_values.size());
+    optional_values, d_col->optional_begin<T>(cudf::nullate::YES{}), host_values.size());
   testFixture.iterator_test_thrust(
-    optional_values, d_col->optional_begin<T, cudf::nullate::YES>(), host_values.size());
+    optional_values, d_col->optional_begin<T>(cudf::nullate::YES{}), host_values.size());
 
   // GPU test for ignoring null mapping
   testFixture.iterator_test_thrust(
-    value_all_valid, d_col->optional_begin<T, cudf::nullate::DYNAMIC>(false), host_values.size());
+    value_all_valid, d_col->optional_begin<T>(cudf::nullate::DYNAMIC{false}), host_values.size());
 
   testFixture.iterator_test_thrust(
-    value_all_valid, d_col->optional_begin<T, cudf::nullate::NO>(), host_values.size());
+    value_all_valid, d_col->optional_begin<T>(cudf::nullate::NO{}), host_values.size());
   testFixture.iterator_test_thrust(
-    value_all_valid, d_col->optional_begin<T, cudf::nullate::NO>(), host_values.size());
+    value_all_valid, d_col->optional_begin<T>(cudf::nullate::NO{}), host_values.size());
 }

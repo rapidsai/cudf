@@ -317,19 +317,13 @@ struct same_element_type_dispatcher {
     };
 
     auto const minmax_idx = [&] {
-      if (input.has_nulls()) {
-        auto const binop = cudf::reduction::detail::row_arg_minmax_fn(
-          input.size(), *d_flattened_input_ptr, true, flattened_null_precedences.data(), is_min_op);
-        return do_reduction(binop);
-      } else {
-        auto const binop =
-          cudf::reduction::detail::row_arg_minmax_fn(input.size(),
-                                                     *d_flattened_input_ptr,
-                                                     false,
-                                                     flattened_null_precedences.data(),
-                                                     is_min_op);
-        return do_reduction(binop);
-      }
+      auto const binop =
+        cudf::reduction::detail::row_arg_minmax_fn(input.size(),
+                                                   *d_flattened_input_ptr,
+                                                   input.has_nulls(),
+                                                   flattened_null_precedences.data(),
+                                                   is_min_op);
+      return do_reduction(binop);
     }();
 
     return cudf::detail::get_element(input, minmax_idx, stream, mr);
