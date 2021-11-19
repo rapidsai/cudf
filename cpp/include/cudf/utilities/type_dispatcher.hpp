@@ -507,7 +507,13 @@ CUDF_HDFI constexpr decltype(auto) type_dispatcher(cudf::data_type dtype, Functo
     case type_id::STRUCT:
       return f.template operator()<typename IdTypeMap<type_id::STRUCT>::type>(
         std::forward<Ts>(args)...);
-    default: CUDF_UNREACHABLE("Unsupported type_id.");
+    default: {
+#ifndef __CUDA_ARCH__
+      CUDF_FAIL("Invalid type_id.");
+#else
+      CUDF_UNREACHABLE("Invalid type_id.");
+#endif
+    }
   }
 }
 
