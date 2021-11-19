@@ -397,7 +397,10 @@ class TimeDeltaColumn(column.ColumnBase):
         self, skipna: bool = None, dtype: Dtype = None, min_count=0
     ) -> pd.Timedelta:
         return pd.Timedelta(
-            self.as_numerical.sum(
+            # TODO: mypy doesn't fully support monkey-patching, so the
+            # monkey-patching of reductions creates some serious limitations.
+            # We'll have to see how bad the problem is.
+            self.as_numerical.sum(  # type: ignore
                 skipna=skipna, dtype=dtype, min_count=min_count
             ),
             unit=self.time_unit,

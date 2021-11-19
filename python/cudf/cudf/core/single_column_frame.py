@@ -45,7 +45,10 @@ class SingleColumnFrame(Frame):
             raise NotImplementedError(
                 "numeric_only parameter is not implemented yet"
             )
-        return getattr(self._column, op)(**kwargs)
+        try:
+            return getattr(self._column, op)(**kwargs)
+        except AttributeError:
+            raise TypeError(f"cannot perform {op} with type {self.dtype}")
 
     def _scan(self, op, axis=None, *args, **kwargs):
         if axis not in (None, 0):

@@ -24,8 +24,17 @@ class NumericalBaseColumn(Reducible, ColumnBase):
     point, should be encoded here.
     """
 
+    _VALID_REDUCTIONS = {
+        "sum",
+        "product",
+        "sum_of_squares",
+        "mean",
+        "var",
+        "std",
+    }
+
     def _reduce(
-        self, op: str, skipna: bool = None, min_count: int = 0, **kwargs
+        self, op: str, skipna: bool = None, min_count: int = 0, *args, **kwargs
     ) -> ScalarLike:
         """Perform a reduction operation.
 
@@ -117,13 +126,13 @@ class NumericalBaseColumn(Reducible, ColumnBase):
         return result
 
     def mean(self, dtype=np.float64, *args, **kwargs):
-        return super().mean(dtype=dtype, *args, **kwargs)
+        return self._reduce("mean", dtype=dtype, *args, **kwargs)
 
     def var(self, dtype=np.float64, *args, **kwargs):
-        return super().var(dtype=dtype, *args, **kwargs)
+        return self._reduce("var", dtype=dtype, *args, **kwargs)
 
     def std(self, dtype=np.float64, *args, **kwargs):
-        return super().std(dtype=dtype, *args, **kwargs)
+        return self._reduce("std", dtype=dtype, *args, **kwargs)
 
     def median(self, skipna: bool = None) -> NumericalBaseColumn:
         skipna = True if skipna is None else skipna
@@ -148,7 +157,7 @@ class NumericalBaseColumn(Reducible, ColumnBase):
             self, quant, interpolation, sorted_indices, exact
         )
 
-    def cov(self, other: ColumnBase) -> float:
+    def cov(self, other: NumericalBaseColumn) -> float:
         if (
             len(self) == 0
             or len(other) == 0
@@ -160,7 +169,7 @@ class NumericalBaseColumn(Reducible, ColumnBase):
         cov_sample = result.sum() / (len(self) - 1)
         return cov_sample
 
-    def corr(self, other: ColumnBase) -> float:
+    def corr(self, other: NumericalBaseColumn) -> float:
         if len(self) == 0 or len(other) == 0:
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 

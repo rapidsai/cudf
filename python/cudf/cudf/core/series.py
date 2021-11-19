@@ -2752,7 +2752,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         lhs, rhs = _align_indices([lhs, rhs], how="inner")
 
-        return lhs._column.cov(rhs._column)
+        try:
+            return lhs._column.cov(rhs._column)
+        except AttributeError:
+            raise TypeError(f"cannot perform cov with type {self.dtype}")
 
     def transpose(self):
         """Return the transpose, which is by definition self.
@@ -2788,7 +2791,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         rhs = other.nans_to_nulls().dropna()
         lhs, rhs = _align_indices([lhs, rhs], how="inner")
 
-        return lhs._column.corr(rhs._column)
+        try:
+            return lhs._column.corr(rhs._column)
+        except AttributeError:
+            raise TypeError(f"cannot perform corr with type {self.dtype}")
 
     def autocorr(self, lag=1):
         """Compute the lag-N autocorrelation. This method computes the Pearson

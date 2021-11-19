@@ -1176,42 +1176,6 @@ class ColumnBase(Column, Serializable):
             return libcudf.reduce.reduce("max", result_col, dtype=dtype)
         return result_col
 
-    def sum(
-        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
-    ):
-        raise TypeError(f"cannot perform sum with type {self.dtype}")
-
-    def product(
-        self, skipna: bool = None, dtype: Dtype = None, min_count: int = 0
-    ):
-        raise TypeError(f"cannot perform product with type {self.dtype}")
-
-    def mean(self, skipna: bool = None, dtype: Dtype = None):
-        raise TypeError(f"cannot perform mean with type {self.dtype}")
-
-    def std(self, skipna: bool = None, ddof=1, dtype: Dtype = np.float64):
-        raise TypeError(f"cannot perform std with type {self.dtype}")
-
-    def var(self, skipna: bool = None, ddof=1, dtype: Dtype = np.float64):
-        raise TypeError(f"cannot perform var with type {self.dtype}")
-
-    def kurtosis(self, skipna: bool = None):
-        raise TypeError(f"cannot perform kurtosis with type {self.dtype}")
-
-    def skew(self, skipna: bool = None):
-        raise TypeError(f"cannot perform skew with type {self.dtype}")
-
-    def cov(self, other: ColumnBase):
-        raise TypeError(
-            f"cannot perform covarience with types {self.dtype}, "
-            f"{other.dtype}"
-        )
-
-    def corr(self, other: ColumnBase):
-        raise TypeError(
-            f"cannot perform corr with types {self.dtype}, {other.dtype}"
-        )
-
     def nans_to_nulls(self: T) -> T:
         # Only floats can contain nan.
         if self.dtype.kind != "f":

@@ -1,6 +1,31 @@
 # Copyright (c) 2021, NVIDIA CORPORATION.
 
 
+# TODO: Implement a factory that generates classes encapsulating passthrough
+# operations like this. Then we can programmatically create suitable classes
+# for reductions, scans, and binops (and perhaps others).
+
+
+# TODO: The docstring for a class's reductions should be taken from formatting
+# the reduce method since it needs to support all the same things.
+
+
+# TODO: We have 3 options for how to handle unsupported operations:
+# 1. We only monkey-patch in the operations that are well-defined. This is what
+#    I'm currently doing, and it works, but it precludes mypy checking.
+# 2. We define _all_ aggregations in Reducible and then delete the ill-defined
+#    ones in __init_subclass__. This is basically the inverse of what I'm
+#    currently doing. Relative to option 1, it replaces mypy false positives
+#    for false negatives: instead of saying attributes don't exist when they
+#    do, it will never detect missing attributes that really shouldn't exist
+#    for certain column types.
+# 3. Define all aggregations like in 2 but don't delete them. mypy will treat
+#    this essentially identically to 2, so we don't get any more useful
+#    diagnostics, but we run into the additional problem that now all
+#    reduction functions are defined for all subclasses, even if they aren't
+#    well-defined operations.
+
+
 class Reducible:
     """Mixin encapsulating for reduction operations.
 
@@ -15,72 +40,53 @@ class Reducible:
     class encapsulates that paradigm.
     """
 
-    # TODO: We need a way to indicate supported/unsupported operations.
-    # Alternatively, we could just leave that up to the implementation of
-    # _reduce.
-    # TODO: If supported operations are indicated using a class member list
-    # (_SUPPORTED_OPERATIONS or so) we could use __init_subclass__ to combine
-    # all parent lists via walking the MRO.
+    _SUPPORTED_REDUCTIONS = {
+        "sum",
+        "product",
+        "min",
+        "max",
+        "count",
+        "size",
+        "any",
+        "all",
+        "sum_of_squares",
+        "mean",
+        "var",
+        "std",
+        "median",
+        "quantile",
+        "argmax",
+        "argmin",
+        "nunique",
+        "nth",
+        "collect",
+        "unique",
+    }
 
     def _reduce(self, op: str, *args, **kwargs):
         raise NotImplementedError
 
-    def sum(self, *args, **kwargs):
-        return self._reduce("sum", *args, **kwargs)
+    @classmethod
+    def _add_reduction(cls, reduction):
+        def op(self, *args, **kwargs):
+            return self._reduce(reduction, *args, **kwargs)
 
-    def product(self, *args, **kwargs):
-        return self._reduce("product", *args, **kwargs)
+        setattr(cls, reduction, op)
 
-    # def min(self, *args, **kwargs):
-    #     return self._reduce("min", *args, **kwargs)
-    #
-    # def max(self, *args, **kwargs):
-    #     return self._reduce("max", *args, **kwargs)
+    @classmethod
+    def __init_subclass__(cls):
+        # Only add the set of reductions that are valid for a particular class.
+        # Subclasses may override the methods directly if they need special
+        # behavior.
+        valid_reductions = set()
+        for base_cls in cls.__mro__:
+            valid_reductions |= getattr(base_cls, "_VALID_REDUCTIONS", set())
 
-    # def count(self, *args, **kwargs):
-    #     return self._reduce("count", *args, **kwargs)
-    #
-    # def size(self, *args, **kwargs):
-    #     return self._reduce("size", *args, **kwargs)
-    #
-    # def any(self, *args, **kwargs):
-    #     return self._reduce("any", *args, **kwargs)
-    #
-    # def all(self, *args, **kwargs):
-    #     return self._reduce("all", *args, **kwargs)
-
-    def sum_of_squares(self, *args, **kwargs):
-        return self._reduce("sum_of_squares", *args, **kwargs)
-
-    def mean(self, *args, **kwargs):
-        return self._reduce("mean", *args, **kwargs)
-
-    def var(self, *args, **kwargs):
-        return self._reduce("var", *args, **kwargs)
-
-    def std(self, *args, **kwargs):
-        return self._reduce("std", *args, **kwargs)
-
-    # def median(self, *args, **kwargs):
-    #     return self._reduce("median", *args, **kwargs)
-    #
-    # def quantile(self, *args, **kwargs):
-    #     return self._reduce("quantile", *args, **kwargs)
-    #
-    # def argmax(self, *args, **kwargs):
-    #     return self._reduce("argmax", *args, **kwargs)
-    #
-    # def argmin(self, *args, **kwargs):
-    #     return self._reduce("argmin", *args, **kwargs)
-    #
-    # def nunique(self, *args, **kwargs):
-    #     return self._reduce("nunique", *args, **kwargs)
-    #
-    # def nth(self, *args, **kwargs):
-    #     return self._reduce("nth", *args, **kwargs)
-
-    # def collect(self, *args, **kwargs):
-    #     return self._reduce("sum", *args, **kwargs)
-    #
-    # def unique(self, *args, **kwargs):
-    #     return self._reduce("sum", *args, **kwargs)
+        assert len(valid_reductions - cls._SUPPORTED_REDUCTIONS) == 0, (
+            "Invalid requested reductions "
+            f"{valid_reductions - cls._SUPPORTED_REDUCTIONS}"
+        )
+        for reduction in valid_reductions:
+            # Allow overriding the operation in the classes.
+            if not hasattr(cls, reduction):
+                cls._add_reduction(reduction)
