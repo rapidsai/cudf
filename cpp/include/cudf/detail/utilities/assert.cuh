@@ -39,11 +39,18 @@
 /**
  * @brief Macro indicating that a location in the code is unreachable.
  *
- * This can be used in conjunction with dispatchers to indicate that a function
- * does not need to return a default value because it has already exhausted all
- * possible cases in a `switch` statement.
+ * The CUDF_UNREACHABLE macro should only be used where CUDF_FAIL cannot be used
+ * due to performance or due to being used in device code. In the majority of
+ * host code situations, an exception should be thrown in "unreachable" code
+ * paths as those usually aren't tight inner loops like they are in device code.
+ *
+ * One example where this macro may be used is in conjunction with dispatchers
+ * to indicate that a function does not need to return a default value because
+ * it has already exhausted all possible cases in a `switch` statement.
+ *
+ * Example usage:
  * ```
- * CUDF_UNREACHABLE("All type_id values have been handled.");
+ * CUDF_UNREACHABLE("Invalid type_id.");
  * ```
  */
 #define CUDF_UNREACHABLE(msg)             \
