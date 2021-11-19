@@ -172,7 +172,6 @@ if buildAll || hasArg libcudf; then
         echo "Building for *ALL* supported GPU architectures..."
     fi
 
-    ccache -C
     FIC=$(ccache -s | grep "files in cache" | awk '{print $4;}')
 
     cmake -S $REPODIR/cpp -B ${LIB_BUILD_DIR} \
