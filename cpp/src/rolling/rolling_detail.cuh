@@ -722,7 +722,7 @@ class rolling_aggregation_preprocessor final : public cudf::detail::simple_aggre
   }
 
   // STD aggregations depends on VARIANCE aggregation. Each element is applied
-  // with sqaured-root in the finalize() step.
+  // with square-root in the finalize() step.
   std::vector<std::unique_ptr<aggregation>> visit(data_type,
                                                   cudf::detail::std_aggregation const& agg) override
   {

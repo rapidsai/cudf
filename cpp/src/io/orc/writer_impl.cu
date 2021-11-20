@@ -1301,10 +1301,10 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
                    rmm::mr::device_memory_resource* mr)
   : _mr(mr),
     stream(stream),
-    max_stripe_size{options.stripe_size_bytes(), options.stripe_size_rows()},
-    row_index_stride{options.row_index_stride()},
+    max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
+    row_index_stride{options.get_row_index_stride()},
     compression_kind_(to_orc_compression(options.get_compression())),
-    enable_statistics_(options.enable_statistics()),
+    enable_statistics_(options.is_enabled_statistics()),
     single_write_mode(mode == SingleWriteMode::YES),
     out_sink_(std::move(sink))
 {
@@ -1321,10 +1321,10 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
                    rmm::mr::device_memory_resource* mr)
   : _mr(mr),
     stream(stream),
-    max_stripe_size{options.stripe_size_bytes(), options.stripe_size_rows()},
-    row_index_stride{options.row_index_stride()},
+    max_stripe_size{options.get_stripe_size_bytes(), options.get_stripe_size_rows()},
+    row_index_stride{options.get_row_index_stride()},
     compression_kind_(to_orc_compression(options.get_compression())),
-    enable_statistics_(options.enable_statistics()),
+    enable_statistics_(options.is_enabled_statistics()),
     single_write_mode(mode == SingleWriteMode::YES),
     out_sink_(std::move(sink))
 {
@@ -1426,7 +1426,7 @@ pushdown_null_masks init_pushdown_null_masks(orc_table_view& orc_table,
       }
     }
     if (col.orc_kind() == LIST or col.orc_kind() == MAP) {
-      // Need a new pushdown mask unless both the parent and current colmn are not nullable
+      // Need a new pushdown mask unless both the parent and current column are not nullable
       auto const child_col = orc_table.column(col.child_begin()[0]);
       // pushdown mask applies to child column(s); use the child column size
       pd_masks.emplace_back(num_bitmask_words(child_col.size()), stream);

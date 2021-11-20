@@ -18,12 +18,7 @@
 
 package ai.rapids.cudf;
 
-import ai.rapids.cudf.HostColumnVector.BasicType;
-import ai.rapids.cudf.HostColumnVector.DataType;
-import ai.rapids.cudf.HostColumnVector.ListType;
-import ai.rapids.cudf.HostColumnVector.StructData;
-import ai.rapids.cudf.HostColumnVector.StructType;
-
+import ai.rapids.cudf.HostColumnVector.*;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
@@ -39,20 +34,9 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static ai.rapids.cudf.QuantileMethod.HIGHER;
-import static ai.rapids.cudf.QuantileMethod.LINEAR;
-import static ai.rapids.cudf.QuantileMethod.LOWER;
-import static ai.rapids.cudf.QuantileMethod.MIDPOINT;
-import static ai.rapids.cudf.QuantileMethod.NEAREST;
-import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
-import static ai.rapids.cudf.TableTest.assertStructColumnsAreEqual;
-import static ai.rapids.cudf.TableTest.assertTablesAreEqual;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static ai.rapids.cudf.QuantileMethod.*;
+import static ai.rapids.cudf.TableTest.*;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class ColumnVectorTest extends CudfTestBase {
@@ -4894,6 +4878,20 @@ public class ColumnVectorTest extends CudfTestBase {
       assertColumnsAreEqual(expected, isLong);
       assertColumnsAreEqual(expectedInts, ints);
       assertColumnsAreEqual(expectedLongs, longs);
+    }
+  }
+
+  @Test
+  void testIsFixedPoint() {
+    String[] decimalStrings = {"A", "nan", "Inf", "-Inf", "Infinity", "infinity",
+        "2.1474", "112.383", "-2.14748", "NULL", "null", null, "1.2", "1.2e-4", "0.00012"};
+
+    DType dt = DType.create(DType.DTypeEnum.DECIMAL32, -3);
+    try (ColumnVector decStringCV = ColumnVector.fromStrings(decimalStrings);
+         ColumnVector isFixedPoint = decStringCV.isFixedPoint(dt);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, false, false
+             , false, true, true, true, false, false, null, true, true, true)) {
+      assertColumnsAreEqual(expected, isFixedPoint);
     }
   }
 

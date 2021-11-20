@@ -111,7 +111,7 @@ class CudfEngine(ArrowDatasetEngine):
             frag = next(ds.get_fragments())
             if frag:
                 # Extract hive-partition keys, and make sure they
-                # are orderd the same as they are in `partitions`
+                # are ordered the same as they are in `partitions`
                 raw_keys = pa_ds._get_partition_keys(frag.partition_expression)
                 partition_keys = [
                     (hive_part.name, raw_keys[hive_part.name])
@@ -173,7 +173,7 @@ class CudfEngine(ArrowDatasetEngine):
 
         strings_to_cats = kwargs.get("strings_to_categorical", False)
 
-        # Assume multi-peice read
+        # Assume multi-piece read
         paths = []
         rgs = []
         last_partition_keys = None

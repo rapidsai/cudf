@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <groupby/sort/group_util.cuh>
+#include <reductions/arg_minmax_util.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -221,16 +221,18 @@ struct group_scan_functor<K,
     // Find the indices of the prefix min/max elements within each group.
     auto const count_iter = thrust::make_counting_iterator<size_type>(0);
     if (values.has_nulls()) {
-      auto const binop = row_arg_minmax_fn<true>(values.size(),
-                                                 *d_flattened_values_ptr,
-                                                 flattened_null_precedences.data(),
-                                                 K == aggregation::MIN);
+      auto const binop =
+        cudf::reduction::detail::row_arg_minmax_fn<true>(values.size(),
+                                                         *d_flattened_values_ptr,
+                                                         flattened_null_precedences.data(),
+                                                         K == aggregation::MIN);
       do_scan(count_iter, map_begin, binop);
     } else {
-      auto const binop = row_arg_minmax_fn<false>(values.size(),
-                                                  *d_flattened_values_ptr,
-                                                  flattened_null_precedences.data(),
-                                                  K == aggregation::MIN);
+      auto const binop =
+        cudf::reduction::detail::row_arg_minmax_fn<false>(values.size(),
+                                                          *d_flattened_values_ptr,
+                                                          flattened_null_precedences.data(),
+                                                          K == aggregation::MIN);
       do_scan(count_iter, map_begin, binop);
     }
 
