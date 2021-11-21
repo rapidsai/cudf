@@ -771,8 +771,10 @@ class IndexedFrame(Frame):
                 "col_fill parameter is not supported yet."
             )
 
-        if not isinstance(level, (tuple, list)):
+        if level is not None and not isinstance(level, (tuple, list)):
             level = (level,)
+        _check_duplicate_level_names(level, self._index.names)
+
         # Split the columns in the index into data and index columns
         (
             data_columns,
@@ -794,12 +796,31 @@ class IndexedFrame(Frame):
 
         new_column_data = {}
         for name, (i, col) in zip(column_names, data_columns.items()):
-            if name is None:
-                name = (
-                    f"level_{i}"
-                    if "index" in self._data.names or i > 0
-                    else "index"
-                )
+            if name == "index" and "index" in self._data:
+                name = "level_0"
             new_column_data[name] = col
         result_data = {**new_column_data, **self._data}
         return result_data, index
+
+
+def _check_duplicate_level_names(specified, level_names):
+    if specified is None:
+        return
+    # Size: specified M, level_names N
+    # Worst case: Nlog(N) + Mlog(N)
+    existing = set()
+    duplicates = set()
+
+    # Worst case: Nlog(N)
+    for x in level_names:
+        if x in existing:
+            duplicates.add(x)
+        else:
+            existing.add(x)
+
+    # Worst case: Mlog(N)
+    for x in specified:
+        if x in duplicates:
+            raise ValueError(
+                f"The name {x} occurs multiple times, use a level number"
+            )

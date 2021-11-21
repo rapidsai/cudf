@@ -2574,7 +2574,7 @@ def test_tail_for_string():
     assert_eq(gdf.tail(3), gdf.to_pandas().tail(3))
 
 
-@pytest.mark.parametrize("level", [0, "l0", 1, ["l0", 1]])
+@pytest.mark.parametrize("level", [None, 0, "l0", 1, ["l0", 1]])
 @pytest.mark.parametrize("drop", [True, False])
 @pytest.mark.parametrize("column_names", [["v0", "v1"], ["v0", "index"]])
 @pytest.mark.parametrize("inplace", [True, False])
@@ -2586,6 +2586,30 @@ def test_reset_index(level, drop, column_names, inplace):
         [[1, 2], [3, 4], [5, 6], [7, 8]], index=midx, columns=column_names
     )
     gdf = cudf.from_pandas(pdf)
+
+    expect = pdf.reset_index(level=level, drop=drop, inplace=inplace)
+    got = gdf.reset_index(level=level, drop=drop, inplace=inplace)
+    if inplace:
+        expect = pdf
+        got = gdf
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("level", [None, 0, 1, [None]])
+@pytest.mark.parametrize("drop", [False, True])
+@pytest.mark.parametrize("inplace", [False, True])
+def test_reset_index_dup_level_name(level, drop, inplace):
+    # midx levels are named [None, None]
+    midx = pd.MultiIndex.from_tuples([("a", 1), ("a", 2), ("b", 1), ("b", 2)])
+    pdf = pd.DataFrame([[1, 2], [3, 4], [5, 6], [7, 8]], index=midx)
+    gdf = cudf.from_pandas(pdf)
+    if level == [None]:
+        with pytest.raises(
+            ValueError, match="occurs multiple times, use a level number$"
+        ):
+            gdf.reset_index(level=level, drop=drop, inplace=inplace)
+        return
 
     expect = pdf.reset_index(level=level, drop=drop, inplace=inplace)
     got = gdf.reset_index(level=level, drop=drop, inplace=inplace)

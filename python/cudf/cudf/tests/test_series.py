@@ -1337,7 +1337,7 @@ def test_equals_names(lhs, rhs):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("level", [0, "l0", 1, ["l0", 1]])
+@pytest.mark.parametrize("level", [None, 0, "l0", 1, ["l0", 1]])
 @pytest.mark.parametrize("drop", [True, False])
 @pytest.mark.parametrize("name", [None, "ser"])
 @pytest.mark.parametrize("inplace", [True, False])

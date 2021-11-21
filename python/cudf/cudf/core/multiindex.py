@@ -1729,17 +1729,22 @@ class MultiIndex(Frame, BaseIndex):
         return midx
 
     def _split_columns_by_levels(self, levels):
-        level_indices = []
-        level_names = list(self._data.columns)
-        for lv in levels:
-            if isinstance(lv, int):
-                level_indices.append(lv)
-            else:
-                level_indices.append(level_names.index(lv))
+        if levels is not None:
+            level_indices = []
+            level_names = list(self.names)
+            for lv in levels:
+                if isinstance(lv, int):
+                    level_indices.append(lv)
+                else:
+                    level_indices.append(level_names.index(lv))
+        else:
+            level_indices = range(len(self._data))
+
         s0, s1 = {}, {}
         column_names, index_names = [], []
-        for i, (name, col) in enumerate(self._data.items()):
+        for i, (name, col) in enumerate(zip(self.names, self._data.columns)):
             if i in level_indices:
+                name = f"level_{i}" if name is None else name
                 s1[i] = col
                 column_names.append(name)
             else:
