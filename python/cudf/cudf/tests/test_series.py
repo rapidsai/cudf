@@ -1335,3 +1335,25 @@ def test_equals_names(lhs, rhs):
     expect = lhs.to_pandas().equals(rhs.to_pandas())
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("level", [0, "l0", 1, ["l0", 1]])
+@pytest.mark.parametrize("drop", [True, False])
+@pytest.mark.parametrize("name", [None, "ser"])
+@pytest.mark.parametrize("inplace", [True, False])
+def test_reset_index(level, drop, inplace, name):
+    if not drop and inplace:
+        pytest.skip()
+    midx = pd.MultiIndex.from_tuples(
+        [("a", 1), ("a", 2), ("b", 1), ("b", 2)], names=["l0", None]
+    )
+    ps = pd.Series(range(4), index=midx, name=name)
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.reset_index(level=level, drop=drop, inplace=inplace)
+    got = gs.reset_index(level=level, drop=drop, inplace=inplace)
+    if inplace:
+        expect = ps
+        got = gs
+
+    assert_eq(expect, got)

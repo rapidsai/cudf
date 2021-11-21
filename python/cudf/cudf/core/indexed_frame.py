@@ -16,7 +16,7 @@ from cudf._typing import ColumnLike
 from cudf.api.types import is_categorical_dtype, is_list_like
 from cudf.core.column import arange
 from cudf.core.frame import Frame
-from cudf.core.index import Index
+from cudf.core.index import Index, RangeIndex, _index_from_data
 from cudf.core.multiindex import MultiIndex
 from cudf.utils.utils import cached_property
 
@@ -758,3 +758,48 @@ class IndexedFrame(Frame):
             if isinstance(self, cudf.Series)
             else cudf.core.resample.DataFrameResampler(self, by=by)
         )
+
+    def _reset_index(self, level, drop, col_level=0, col_fill=""):
+        """Shared path for DataFrame.reset_index and Series.reset_index."""
+        if col_level != 0:
+            raise NotImplementedError(
+                "col_level parameter is not supported yet."
+            )
+
+        if col_fill != "":
+            raise NotImplementedError(
+                "col_fill parameter is not supported yet."
+            )
+
+        if not isinstance(level, (tuple, list)):
+            level = (level,)
+        # Split the columns in the index into data and index columns
+        (
+            data_columns,
+            index_columns,
+            column_names,
+            index_names,
+        ) = self._index._split_columns_by_levels(level)
+        if index_columns:
+            index = _index_from_data(index_columns, name=self._index.name)
+            if isinstance(index, MultiIndex):
+                index.names = index_names
+            else:
+                index.name = index_names[0]
+        else:
+            index = RangeIndex(len(self))
+
+        if drop:
+            return self._data, index
+
+        new_column_data = {}
+        for name, (i, col) in zip(column_names, data_columns.items()):
+            if name is None:
+                name = (
+                    f"level_{i}"
+                    if "index" in self._data.names or i > 0
+                    else "index"
+                )
+            new_column_data[name] = col
+        result_data = {**new_column_data, **self._data}
+        return result_data, index

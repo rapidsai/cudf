@@ -831,7 +831,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         series.name = self.name
         return series
 
-    def reset_index(self, drop=False, inplace=False):
+    def reset_index(self, level=None, drop=False, name=None, inplace=False):
         """
         Reset index to RangeIndex
 
@@ -875,18 +875,19 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3    d
         dtype: object
         """
+        data, index = self._reset_index(level=level, drop=drop)
         if not drop:
             if inplace is True:
                 raise TypeError(
                     "Cannot reset_index inplace on a Series "
                     "to create a DataFrame"
                 )
-            return self.to_frame().reset_index(drop=drop)
-        else:
-            if inplace is True:
-                self._index = RangeIndex(len(self))
-            else:
-                return self._from_data(self._data, index=RangeIndex(len(self)))
+            if None in data:
+                data[0] = data.pop(None)  # Should be handled in _from_data?
+            return cudf.core.dataframe.DataFrame._from_data(data, index)
+        return self._mimic_inplace(
+            Series._from_data(data, index), inplace=inplace
+        )
 
     def set_index(self, index):
         """Returns a new Series with a different index.

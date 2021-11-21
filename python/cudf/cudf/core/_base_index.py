@@ -1414,6 +1414,11 @@ class BaseIndex(Serializable):
     def _constructor_expanddim(self):
         return cudf.MultiIndex
 
+    def _split_columns_by_levels(self, levels):
+        if isinstance(levels, int) and levels > 0:
+            raise ValueError(f"Out of bound level: {levels}")
+        return {0: self._data[self.name]}, {}, [self.name], []
+
 
 def _get_result_name(left_name, right_name):
     if left_name == right_name:

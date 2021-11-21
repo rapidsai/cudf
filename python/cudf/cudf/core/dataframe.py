@@ -2531,44 +2531,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         2  mammal      80.5
         3  mammal      <NA>
         """
-        if level is not None:
-            raise NotImplementedError("level parameter is not supported yet.")
-
-        if col_level != 0:
-            raise NotImplementedError(
-                "col_level parameter is not supported yet."
-            )
-
-        if col_fill != "":
-            raise NotImplementedError(
-                "col_fill parameter is not supported yet."
-            )
-
-        result = self if inplace else self.copy()
-
-        if not drop:
-            if isinstance(self.index, cudf.MultiIndex):
-                names = tuple(
-                    name if name is not None else f"level_{i}"
-                    for i, name in enumerate(self.index.names)
-                )
-            else:
-                if self.index.name is None:
-                    if "index" in self._data.names:
-                        names = ("level_0",)
-                    else:
-                        names = ("index",)
-                else:
-                    names = (self.index.name,)
-
-            index_columns = self.index._data.columns
-            for name, index_column in zip(
-                reversed(names), reversed(index_columns)
-            ):
-                result.insert(0, name, index_column)
-        result.index = RangeIndex(len(self))
-        if not inplace:
-            return result
+        data, index = self._reset_index(
+            level=level, drop=drop, col_level=col_level, col_fill=col_fill
+        )
+        return self._mimic_inplace(
+            DataFrame._from_data(data, index), inplace=inplace
+        )
 
     def take(self, indices, axis=0, keep_index=None):
         axis = self._get_axis_from_axis_arg(axis)
