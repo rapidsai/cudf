@@ -4,7 +4,6 @@ import shutil
 import sysconfig
 from distutils.sysconfig import get_python_lib
 
-import numpy as np
 from Cython.Build import cythonize
 from setuptools import find_packages, setup
 from setuptools.extension import Extension
@@ -66,7 +65,6 @@ extensions = [
                 "rapids/libcudacxx",
             ),
             os.path.dirname(sysconfig.get_path("include")),
-            np.get_include(),
             cuda_include_dir,
         ],
         library_dirs=([get_python_lib(), os.path.join(os.sys.prefix, "lib")]),

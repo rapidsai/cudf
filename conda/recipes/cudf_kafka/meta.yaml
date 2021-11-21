@@ -28,7 +28,6 @@ requirements:
     - python
   host:
     - python
-    - numpy
     - cython >=0.29,<0.30
     - setuptools
     - cudf {{ version }}
