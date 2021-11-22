@@ -643,6 +643,8 @@ def to_parquet(
     statistics="ROWGROUP",
     metadata_file_path=None,
     int96_timestamps=False,
+    row_group_size_bytes=None,
+    row_group_size_rows=None,
     *args,
     **kwargs,
 ):
@@ -682,6 +684,8 @@ def to_parquet(
                     statistics=statistics,
                     metadata_file_path=metadata_file_path,
                     int96_timestamps=int96_timestamps,
+                    row_group_size_bytes=row_group_size_bytes,
+                    row_group_size_rows=row_group_size_rows,
                 )
         else:
             write_parquet_res = libparquet.write_parquet(
@@ -692,6 +696,8 @@ def to_parquet(
                 statistics=statistics,
                 metadata_file_path=metadata_file_path,
                 int96_timestamps=int96_timestamps,
+                row_group_size_bytes=row_group_size_bytes,
+                row_group_size_rows=row_group_size_rows,
             )
 
         return write_parquet_res

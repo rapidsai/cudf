@@ -137,9 +137,9 @@ class MultiIndex(Frame, BaseIndex):
             else:
                 level = cudf.DataFrame({column_name: levels[i]})
 
-            source_data[column_name] = libcudf.copying.gather(level, col)[0][
-                column_name
-            ]
+            source_data[column_name] = libcudf.copying.gather(
+                [level._data[column_name]], col
+            )[0]
 
         super().__init__(source_data)
         self._levels = levels
@@ -970,7 +970,7 @@ class MultiIndex(Frame, BaseIndex):
 
         source_data = [o.to_frame(index=False) for o in objs]
 
-        # TODO: Verify if this is really necesary or if we can rely on
+        # TODO: Verify if this is really necessary or if we can rely on
         # DataFrame._concat.
         if len(source_data) > 1:
             colnames = source_data[0].columns
@@ -1409,7 +1409,7 @@ class MultiIndex(Frame, BaseIndex):
         return super().fillna(value=value)
 
     def unique(self):
-        return self.drop_duplicates(ignore_index=True)
+        return self.drop_duplicates(keep="first")
 
     def _clean_nulls_from_index(self):
         """

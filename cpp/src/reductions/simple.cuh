@@ -16,9 +16,13 @@
 
 #pragma once
 
+#include <reductions/arg_minmax_util.cuh>
+
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/reduction.cuh>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
@@ -28,6 +32,9 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+
+#include <thrust/reduce.h>
 
 namespace cudf {
 namespace reduction {
@@ -252,8 +259,7 @@ struct same_element_type_dispatcher {
   template <typename ElementType>
   static constexpr bool is_supported()
   {
-    return !(cudf::is_dictionary<ElementType>() || std::is_same_v<ElementType, cudf::list_view> ||
-             std::is_same_v<ElementType, cudf::struct_view>);
+    return !(cudf::is_dictionary<ElementType>() || std::is_same_v<ElementType, cudf::list_view>);
   }
 
   template <typename IndexType,
@@ -279,8 +285,55 @@ struct same_element_type_dispatcher {
 
  public:
   template <typename ElementType,
-            std::enable_if_t<is_supported<ElementType>() &&
-                             not cudf::is_fixed_point<ElementType>()>* = nullptr>
+            std::enable_if_t<std::is_same_v<ElementType, cudf::struct_view> &&
+                             (std::is_same_v<Op, cudf::reduction::op::min> ||
+                              std::is_same_v<Op, cudf::reduction::op::max>)>* = nullptr>
+  std::unique_ptr<scalar> operator()(column_view const& input,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    if (input.is_empty()) { return cudf::make_empty_scalar_like(input, stream, mr); }
+
+    auto constexpr is_min_op = std::is_same_v<Op, cudf::reduction::op::min>;
+
+    // We will do reduction to find the ARGMIN/ARGMAX index, then return the element at that index.
+    // When finding ARGMIN, we need to consider nulls as larger than non-null elements, and the
+    // opposite for ARGMAX.
+    auto constexpr null_precedence = is_min_op ? cudf::null_order::AFTER : cudf::null_order::BEFORE;
+    auto const flattened_input     = cudf::structs::detail::flatten_nested_columns(
+      table_view{{input}}, {}, std::vector<null_order>{null_precedence});
+    auto const d_flattened_input_ptr = table_device_view::create(flattened_input, stream);
+    auto const flattened_null_precedences =
+      is_min_op ? cudf::detail::make_device_uvector_async(flattened_input.null_orders(), stream)
+                : rmm::device_uvector<cudf::null_order>(0, stream);
+
+    // Perform reduction to find ARGMIN/ARGMAX.
+    auto const do_reduction = [&](auto const& binop) {
+      return thrust::reduce(rmm::exec_policy(stream),
+                            thrust::make_counting_iterator(0),
+                            thrust::make_counting_iterator(input.size()),
+                            size_type{0},
+                            binop);
+    };
+
+    auto const minmax_idx = [&] {
+      if (input.has_nulls()) {
+        auto const binop = cudf::reduction::detail::row_arg_minmax_fn<true>(
+          input.size(), *d_flattened_input_ptr, flattened_null_precedences.data(), is_min_op);
+        return do_reduction(binop);
+      } else {
+        auto const binop = cudf::reduction::detail::row_arg_minmax_fn<false>(
+          input.size(), *d_flattened_input_ptr, flattened_null_precedences.data(), is_min_op);
+        return do_reduction(binop);
+      }
+    }();
+
+    return cudf::detail::get_element(input, minmax_idx, stream, mr);
+  }
+
+  template <typename ElementType,
+            std::enable_if_t<is_supported<ElementType>() && !cudf::is_fixed_point<ElementType>() &&
+                             !std::is_same_v<ElementType, cudf::struct_view>>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
