@@ -260,7 +260,7 @@ cudf::size_type multibyte_split_scan_full_source(cudf::io::text::data_chunk_sour
 
   // Seeding the tile state with an identity value allows the 0th tile to follow the same logic as
   // the Nth tile, assuming it can look up an inclusive prefix. Without this seed, the 0th block
-  // would have to follow seperate logic.
+  // would have to follow separate logic.
   multibyte_split_seed_kernel<<<1, 1, 0, stream.value()>>>(  //
     tile_multistates,
     tile_offsets,

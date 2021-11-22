@@ -310,6 +310,7 @@ add_library(
   src/io/statistics/parquet_column_statistics.cu
   src/io/text/multibyte_split.cu
   src/io/utilities/column_buffer.cpp
+  src/io/utilities/config_utils.cpp
   src/io/utilities/data_sink.cpp
   src/io/utilities/datasource.cpp
   src/io/utilities/file_io_utilities.cpp
