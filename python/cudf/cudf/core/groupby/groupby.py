@@ -863,7 +863,7 @@ class GroupBy(Serializable):
 
         # ensure that column-pair labels are arranged in ascending order
         cols_list = [
-            (_cols[j], _cols[i]) if i > j else (_cols[i], _cols[j])
+            (y, x) if i > j else (x, y)
             for j, y in enumerate(_cols)
             for i, x in enumerate(_cols)
         ]
