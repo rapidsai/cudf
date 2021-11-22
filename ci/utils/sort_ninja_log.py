@@ -39,21 +39,32 @@ else:
     root = ET.Element(
         "testsuites",
         attrib={
-            "tests": str(1),
-            "failures": str(1),
-            "errors": str(1),
+            "tests": str(0),
+            "failures": str(0),
+            "errors": str(0),
             "name": "build-time",
         },
     )
-    item = ET.Element(
-        "testcase", attrib={"classname": "file.cu.o", "name": "Build"}
-    )
-    message = "Build time of _ exceeded maximum build time of _"
-    failure = ET.SubElement(item, "failure", attrib={"message": message})
-    failure.append(
-        ET.Comment(" --><![CDATA[" + "Detailed message goes here" + "]]><!-- ")
-    )
-    root.append(item)
+    for key in sl:
+        entry = entries[key]
+        elapsed = float(entry) / 1000
+        item = ET.Element(
+            "testcase",
+            attrib={
+                "classname": "BuildTime",
+                "name": key,
+                "time": str(elapsed),
+            },
+        )
+        # message = "Build time of _ exceeded maximum build time of _"
+        # failure = ET.SubElement(item, "failure", attrib={"message": message})
+        # failure.append(
+        #     ET.Comment(" --><![CDATA[" +
+        #     "Detailed message goes here" +
+        #     "]]><!-- ")
+        # )
+        root.append(item)
+
     tree = ET.ElementTree(root)
     xmlstr = minidom.parseString(ET.tostring(root)).toprettyxml(indent="   ")
     print(xmlstr)
