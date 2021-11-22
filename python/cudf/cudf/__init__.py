@@ -42,7 +42,7 @@ from cudf.core.index import (
     UInt64Index,
     interval_range,
 )
-from cudf.core.dataframe import DataFrame, from_pandas, merge
+from cudf.core.dataframe import DataFrame, from_pandas, merge, from_dataframe
 from cudf.core.series import Series
 from cudf.core.multiindex import MultiIndex
 from cudf.core.cut import cut

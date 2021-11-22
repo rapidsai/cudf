@@ -17,11 +17,13 @@
 ###
 # Build the image for cudf development environment.
 #
-# Arguments: CUDA_VERSION=11.0, 11.1, 11.2.0 or 11.2.2
+# Arguments: CUDA_VERSION=11.5.0
 #
 ###
-ARG CUDA_VERSION
-FROM nvidia/cuda:$CUDA_VERSION-devel-centos7
+ARG CUDA_VERSION=11.5.0
+# use rapids gpuci/cuda images until nvidia/cuda cuda 11.5+ images are available in docker hub
+# FROM nvidia/cuda:$CUDA_VERSION-devel-centos7
+FROM gpuci/cuda:$CUDA_VERSION-devel-centos7
 
 ### Install basic requirements
 RUN yum install -y centos-release-scl

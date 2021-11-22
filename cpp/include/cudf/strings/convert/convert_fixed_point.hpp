@@ -93,18 +93,16 @@ std::unique_ptr<column> from_fixed_point(
  * @brief Returns a boolean column identifying strings in which all
  * characters are valid for conversion to fixed-point.
  *
- * The output row entry is set to `true` if the corresponding string element
- * has at least one character in [+-0123456789.]. The optional sign character
- * must only be in the first position. The decimal point may only appear once.
+ * The sign and the exponent is optional. The decimal point may only appear once.
  * Also, the integer component must fit within the size limits of the
  * underlying fixed-point storage type. The value of the integer component
  * is based on the scale of the `decimal_type` provided.
  *
  * @code{.pseudo}
  * Example:
- * s = ['123', '-456', '', '1.2.3', '+17E30', '12.34' '.789', '-0.005]
+ * s = ['123', '-456', '', '1.2.3', '+17E30', '12.34', '.789', '-0.005]
  * b = is_fixed_point(s)
- * b is [true, true, false, false, false, true, true, true]
+ * b is [true, true, false, false, true, true, true, true]
  * @endcode
  *
  * Any null entries result in corresponding null entries in the output column.

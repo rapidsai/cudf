@@ -117,6 +117,7 @@ test:
     - test -f $PREFIX/include/cudf/dictionary/update_keys.hpp
     - test -f $PREFIX/include/cudf/filling.hpp
     - test -f $PREFIX/include/cudf/fixed_point/fixed_point.hpp
+    - test -f $PREFIX/include/cudf/fixed_point/temporary.hpp
     - test -f $PREFIX/include/cudf/groupby.hpp
     - test -f $PREFIX/include/cudf/hashing.hpp
     - test -f $PREFIX/include/cudf/interop.hpp

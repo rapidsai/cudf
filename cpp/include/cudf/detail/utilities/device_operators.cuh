@@ -22,6 +22,7 @@
  */
 
 #include <cudf/fixed_point/fixed_point.hpp>
+#include <cudf/fixed_point/temporary.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/types.hpp>
@@ -119,7 +120,7 @@ struct DeviceMin {
   CUDA_HOST_DEVICE_CALLABLE auto operator()(const T& lhs, const T& rhs)
     -> decltype(cudf::detail::min(lhs, rhs))
   {
-    return cudf::detail::min(lhs, rhs);
+    return numeric::detail::min(lhs, rhs);
   }
 
   template <
@@ -128,14 +129,15 @@ struct DeviceMin {
                               !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
-    return std::numeric_limits<T>::max();
+    if constexpr (cudf::is_chrono<T>()) return T::max();
+    return cuda::std::numeric_limits<T>::max();
   }
 
   template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
     CUDF_FAIL("fixed_point does not yet support DeviceMin identity");
-    return std::numeric_limits<T>::max();
+    return cuda::std::numeric_limits<T>::max();
   }
 
   // @brief identity specialized for string_view
@@ -160,7 +162,7 @@ struct DeviceMax {
   CUDA_HOST_DEVICE_CALLABLE auto operator()(const T& lhs, const T& rhs)
     -> decltype(cudf::detail::max(lhs, rhs))
   {
-    return cudf::detail::max(lhs, rhs);
+    return numeric::detail::max(lhs, rhs);
   }
 
   template <
@@ -169,14 +171,15 @@ struct DeviceMax {
                               !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
-    return std::numeric_limits<T>::lowest();
+    if constexpr (cudf::is_chrono<T>()) return T::min();
+    return cuda::std::numeric_limits<T>::lowest();
   }
 
   template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
     CUDF_FAIL("fixed_point does not yet support DeviceMax identity");
-    return std::numeric_limits<T>::lowest();
+    return cuda::std::numeric_limits<T>::lowest();
   }
 
   template <typename T, typename std::enable_if_t<std::is_same_v<T, cudf::string_view>>* = nullptr>
