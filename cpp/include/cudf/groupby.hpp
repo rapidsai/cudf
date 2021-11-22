@@ -73,6 +73,7 @@ struct aggregation_request {
 struct scan_request {
   column_view values;  ///< The elements to aggregate
   std::vector<std::unique_ptr<groupby_scan_aggregation>> aggregations;  ///< Desired aggregations
+  sorted values_pre_sorted{sorted::NO};  ///< Whether or not the values are sorted
 };
 
 /**
