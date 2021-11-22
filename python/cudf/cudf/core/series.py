@@ -882,11 +882,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                     "Cannot reset_index inplace on a Series "
                     "to create a DataFrame"
                 )
-            if None in data:
-                data[0] = data.pop(None)  # Should be handled in _from_data?
+            if name is None:
+                name = 0 if self.name is None else self.name
+            data[name] = data.pop(self.name)
             return cudf.core.dataframe.DataFrame._from_data(data, index)
+        # For ``name`` behavior, see:
+        # https://github.com/pandas-dev/pandas/issues/44575
         return self._mimic_inplace(
-            Series._from_data(data, index), inplace=inplace
+            Series._from_data(data, index, name if inplace else None),
+            inplace=inplace,
         )
 
     def set_index(self, index):
