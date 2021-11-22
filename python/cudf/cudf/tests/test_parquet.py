@@ -1699,8 +1699,8 @@ def test_read_parquet_partitioned_filtered(
         # Check that we didn't get categorical
         # columns, but convert back to categorical
         # for comparison with pandas
-        assert got.dtypes["b"] != "category"
-        assert got.dtypes["c"] != "category"
+        assert got.dtypes["b"] == "object"
+        assert got.dtypes["c"] == "int"
         got["b"] = pd.Categorical(
             got["b"].to_pandas(), categories=list("abcd")
         )
