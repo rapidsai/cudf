@@ -183,10 +183,9 @@ TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedDatetimeComponents)
   using namespace cudf::datetime;
   using namespace cuda::std::chrono;
 
-  auto start = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
-  auto stop_ = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
-  auto timestamps =
-    generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop_));
+  auto start      = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
+  auto stop       = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
+  auto timestamps = generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop));
 
   auto expected_years =
     fixed_width_column_wrapper<int16_t>{1890, 1906, 1922, 1938, 1954, 1970, 1985, 2001, 2017, 2033};
@@ -221,9 +220,9 @@ TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedNullableDatetimeComponen
   using namespace cuda::std::chrono;
 
   auto start = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
-  auto stop_ = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
+  auto stop  = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
   auto timestamps =
-    generate_timestamps<T, true>(this->size(), time_point_ms(start), time_point_ms(stop_));
+    generate_timestamps<T, true>(this->size(), time_point_ms(start), time_point_ms(stop));
 
   auto expected_years = fixed_width_column_wrapper<int16_t>{
     {1890, 1906, 1922, 1938, 1954, 1970, 1985, 2001, 2017, 2033},

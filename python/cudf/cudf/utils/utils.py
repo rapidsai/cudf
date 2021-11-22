@@ -12,6 +12,7 @@ import pandas as pd
 import rmm
 
 import cudf
+from cudf._lib.reduce import minmax
 from cudf.core import column
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import to_cudf_compatible_scalar
@@ -506,3 +507,20 @@ def _maybe_indices_to_slice(indices: cp.ndarray) -> Union[slice, cp.ndarray]:
     if (indices == cp.arange(start, stop, step)).all():
         return slice(start, stop, step)
     return indices
+
+
+def _gather_map_is_valid(
+    gather_map: "cudf.core.column.ColumnBase",
+    nrows: int,
+    check_bounds: bool,
+    nullify: bool,
+) -> bool:
+    """Returns true if gather map is valid.
+
+    A gather map is valid if empty or all indices are within the range
+    ``[-nrows, nrows)``, except when ``nullify`` is specifed.
+    """
+    if not check_bounds or nullify or len(gather_map) == 0:
+        return True
+    gm_min, gm_max = minmax(gather_map)
+    return gm_min >= -nrows and gm_max < nrows
