@@ -2621,7 +2621,7 @@ def test_reset_index_dup_level_name(level, drop, inplace):
 
 
 @pytest.mark.parametrize("drop", [True, False])
-def test_reset_named_index(pdf, gdf, drop):
+def test_reset_index_named(pdf, gdf, drop):
     pdf.index.name = "cudf"
     gdf.index.name = "cudf"
     assert_eq(

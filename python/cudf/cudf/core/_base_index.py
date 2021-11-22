@@ -1418,8 +1418,8 @@ class BaseIndex(Serializable):
         if isinstance(levels, int) and levels > 0:
             raise ValueError(f"Out of bound level: {levels}")
         return (
-            {0: self._data[self.name]},
-            {},
+            [self._data[self.name]],
+            [],
             ["index" if self.name is None else self.name],
             [],
         )
