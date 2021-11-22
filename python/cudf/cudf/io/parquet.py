@@ -574,11 +574,9 @@ def _parquet_to_frame(
         for (name, value) in part_key:
             if partition_categories and name in partition_categories:
                 # Build the categorical column from `codes`
-                codes = (
-                    as_column(partition_categories[name].index(value))
-                    .as_frame()
-                    .repeat(len(dfs[-1]))
-                    ._data[None]
+                codes = as_column(
+                    partition_categories[name].index(value),
+                    length=len(dfs[-1]),
                 )
                 dfs[-1][name] = build_categorical_column(
                     categories=partition_categories[name],
@@ -590,12 +588,7 @@ def _parquet_to_frame(
             else:
                 # Not building categorical columns, so
                 # `value` is already what we want
-                dfs[-1][name] = (
-                    as_column(value)
-                    .as_frame()
-                    .repeat(len(dfs[-1]))
-                    ._data[None]
-                )
+                dfs[-1][name] = as_column(value, length=len(dfs[-1]))
 
     # Concatenate dfs and return.
     # Assume we can ignore the index if it has no name.

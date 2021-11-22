@@ -1685,7 +1685,7 @@ def test_read_parquet_partitioned_filtered(
         read_path,
         filters=pfilters,
         row_groups=row_groups,
-        categorical_partitioning=use_cat,
+        categorical_partitions=use_cat,
     )
     if use_cat:
         assert got.dtypes["b"] == "category"
