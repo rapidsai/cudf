@@ -92,8 +92,7 @@ def test_index_find_label_range_genericindex():
 
 
 def test_index_find_label_range_rangeindex():
-    """Cudf specific
-    """
+    """Cudf specific"""
     # step > 0
     # 3, 8, 13, 18
     ridx = RangeIndex(3, 20, 5)
@@ -344,8 +343,7 @@ def test_index_copy_string(name, dtype, deep=True):
     NUMERIC_TYPES + ["datetime64[ns]", "timedelta64[ns]"] + OTHER_TYPES,
 )
 def test_index_copy_integer(name, dtype, deep=True):
-    """Test for NumericIndex Copy Casts
-    """
+    """Test for NumericIndex Copy Casts"""
     cidx = cudf.Int64Index([1, 2, 3])
     pidx = cidx.to_pandas()
 
@@ -358,8 +356,7 @@ def test_index_copy_integer(name, dtype, deep=True):
 @pytest.mark.parametrize("name", ["x"])
 @pytest.mark.parametrize("dtype", SIGNED_TYPES)
 def test_index_copy_float(name, dtype, deep=True):
-    """Test for NumericIndex Copy Casts
-    """
+    """Test for NumericIndex Copy Casts"""
     cidx = cudf.Float64Index([1.0, 2.0, 3.0])
     pidx = cidx.to_pandas()
 
@@ -2473,3 +2470,29 @@ def test_index_type_methods(data, func):
         assert_eq(False, actual)
     else:
         assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
+)
+def test_index_datetime_ceil(resolution):
+    cuidx = cudf.DatetimeIndex([1000000, 2000000, 3000000, 4000000, 5000000])
+    pidx = cuidx.to_pandas()
+
+    pidx_ceil = pidx.ceil(resolution)
+    cuidx_ceil = cuidx.ceil(resolution)
+
+    assert_eq(pidx_ceil, cuidx_ceil)
+
+
+@pytest.mark.parametrize(
+    "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
+)
+def test_index_datetime_floor(resolution):
+    cuidx = cudf.DatetimeIndex([1000000, 2000000, 3000000, 4000000, 5000000])
+    pidx = cuidx.to_pandas()
+
+    pidx_floor = pidx.floor(resolution)
+    cuidx_floor = cuidx.floor(resolution)
+
+    assert_eq(pidx_floor, cuidx_floor)

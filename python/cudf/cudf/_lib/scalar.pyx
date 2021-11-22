@@ -45,7 +45,7 @@ from cudf._lib.cpp.scalar.scalar cimport (
     struct_scalar,
     timestamp_scalar,
 )
-from cudf._lib.cpp.wrappers.decimals cimport decimal64, scale_type
+from cudf._lib.cpp.wrappers.decimals cimport decimal32, decimal64, scale_type
 from cudf._lib.cpp.wrappers.durations cimport (
     duration_ms,
     duration_ns,
@@ -88,8 +88,8 @@ cdef class DeviceScalar:
         # IMPORTANT: this should only ever be called from __init__
         valid = not _is_null_host_scalar(value)
 
-        if isinstance(dtype, cudf.Decimal64Dtype):
-            _set_decimal64_from_scalar(
+        if isinstance(dtype, (cudf.Decimal64Dtype, cudf.Decimal32Dtype)):
+            _set_decimal_from_scalar(
                 self.c_value, value, dtype, valid)
         elif isinstance(dtype, cudf.ListDtype):
             _set_list_from_pylist(
@@ -118,7 +118,7 @@ cdef class DeviceScalar:
             )
 
     def _to_host_scalar(self):
-        if isinstance(self.dtype, cudf.Decimal64Dtype):
+        if isinstance(self.dtype, (cudf.Decimal64Dtype, cudf.Decimal32Dtype)):
             result = _get_py_decimal_from_fixed_point(self.c_value)
         elif cudf.api.types.is_struct_dtype(self.dtype):
             result = _get_py_dict_from_struct(self.c_value)
@@ -305,16 +305,25 @@ cdef _set_timedelta64_from_np_scalar(unique_ptr[scalar]& s,
     else:
         raise ValueError(f"dtype not supported: {dtype}")
 
-cdef _set_decimal64_from_scalar(unique_ptr[scalar]& s,
-                                object value,
-                                object dtype,
-                                bool valid=True):
+cdef _set_decimal_from_scalar(unique_ptr[scalar]& s,
+                              object value,
+                              object dtype,
+                              bool valid=True):
     value = cudf.utils.dtypes._decimal_to_int64(value) if valid else 0
-    s.reset(
-        new fixed_point_scalar[decimal64](
-            <int64_t>np.int64(value), scale_type(-dtype.scale), valid
+    if isinstance(dtype, cudf.Decimal64Dtype):
+        s.reset(
+            new fixed_point_scalar[decimal64](
+                <int64_t>np.int64(value), scale_type(-dtype.scale), valid
+            )
         )
-    )
+    elif isinstance(dtype, cudf.Decimal32Dtype):
+        s.reset(
+            new fixed_point_scalar[decimal32](
+                <int32_t>np.int32(value), scale_type(-dtype.scale), valid
+            )
+        )
+    else:
+        raise ValueError(f"dtype not supported: {dtype}")
 
 cdef _set_struct_from_pydict(unique_ptr[scalar]& s,
                              object value,
@@ -449,6 +458,10 @@ cdef _get_py_decimal_from_fixed_point(unique_ptr[scalar]& s):
     if cdtype.id() == libcudf_types.DECIMAL64:
         rep_val = int((<fixed_point_scalar[decimal64]*>s_ptr)[0].value())
         scale = int((<fixed_point_scalar[decimal64]*>s_ptr)[0].type().scale())
+        return decimal.Decimal(rep_val).scaleb(scale)
+    elif cdtype.id() == libcudf_types.DECIMAL32:
+        rep_val = int((<fixed_point_scalar[decimal32]*>s_ptr)[0].value())
+        scale = int((<fixed_point_scalar[decimal32]*>s_ptr)[0].type().scale())
         return decimal.Decimal(rep_val).scaleb(scale)
     else:
         raise ValueError("Could not convert cudf::scalar to numpy scalar")

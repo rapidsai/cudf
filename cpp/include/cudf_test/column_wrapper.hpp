@@ -509,11 +509,10 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
   {
     CUDF_EXPECTS(numeric::is_supported_representation_type<Rep>(), "not valid representation type");
 
-    auto const size         = cudf::distance(begin, end);
-    auto const elements     = thrust::host_vector<Rep>(begin, end);
-    auto const is_decimal32 = std::is_same_v<Rep, int32_t>;
-    auto const id           = is_decimal32 ? type_id::DECIMAL32 : type_id::DECIMAL64;
-    auto const data_type    = cudf::data_type{id, static_cast<int32_t>(scale)};
+    auto const size      = cudf::distance(begin, end);
+    auto const elements  = thrust::host_vector<Rep>(begin, end);
+    auto const id        = type_to_id<numeric::fixed_point<Rep, numeric::Radix::BASE_10>>();
+    auto const data_type = cudf::data_type{id, static_cast<int32_t>(scale)};
 
     wrapped.reset(new cudf::column{
       data_type,
@@ -574,11 +573,10 @@ class fixed_point_column_wrapper : public detail::column_wrapper {
   {
     CUDF_EXPECTS(numeric::is_supported_representation_type<Rep>(), "not valid representation type");
 
-    auto const size         = cudf::distance(begin, end);
-    auto const elements     = thrust::host_vector<Rep>(begin, end);
-    auto const is_decimal32 = std::is_same_v<Rep, int32_t>;
-    auto const id           = is_decimal32 ? type_id::DECIMAL32 : type_id::DECIMAL64;
-    auto const data_type    = cudf::data_type{id, static_cast<int32_t>(scale)};
+    auto const size      = cudf::distance(begin, end);
+    auto const elements  = thrust::host_vector<Rep>(begin, end);
+    auto const id        = type_to_id<numeric::fixed_point<Rep, numeric::Radix::BASE_10>>();
+    auto const data_type = cudf::data_type{id, static_cast<int32_t>(scale)};
 
     wrapped.reset(new cudf::column{
       data_type,
@@ -868,7 +866,7 @@ class dictionary_column_wrapper : public detail::column_wrapper {
    */
   dictionary_column_wrapper() : column_wrapper{}
   {
-    wrapped = cudf::make_empty_column(cudf::data_type{cudf::type_id::DICTIONARY32});
+    wrapped = cudf::make_empty_column(cudf::type_id::DICTIONARY32);
   }
 
   /**
@@ -1401,7 +1399,7 @@ class lists_column_wrapper : public detail::column_wrapper {
    */
   lists_column_wrapper() : column_wrapper{}
   {
-    build_from_non_nested(make_empty_column(cudf::data_type{cudf::type_to_id<T>()}));
+    build_from_non_nested(make_empty_column(cudf::type_to_id<T>()));
   }
 
   /**

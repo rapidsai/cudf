@@ -17,3 +17,4 @@ ctypedef bool underlying_type_t_null_policy
 cdef dtype_from_column_view(column_view cv)
 
 cdef libcudf_types.data_type dtype_to_data_type(dtype) except *
+cdef bool is_decimal_type_id(libcudf_types.type_id tid) except *

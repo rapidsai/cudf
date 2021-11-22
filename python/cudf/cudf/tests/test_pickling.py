@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf import DataFrame, GenericIndex, Series
+from cudf import DataFrame, GenericIndex, RangeIndex, Series
 from cudf.core.buffer import Buffer
 from cudf.testing._utils import assert_eq
 
@@ -28,7 +28,7 @@ def check_serialization(df):
     assert_frame_picklable(df[2:-2])
     # sorted
     sortvaldf = df.sort_values("vals")
-    assert isinstance(sortvaldf.index, GenericIndex)
+    assert isinstance(sortvaldf.index, (GenericIndex, RangeIndex))
     assert_frame_picklable(sortvaldf)
     # out-of-band
     if pickle.HIGHEST_PROTOCOL >= 5:
@@ -68,7 +68,7 @@ def test_pickle_dataframe_categorical():
     check_serialization(df)
 
 
-def test_sizeof_dataframe():
+def test_memory_usage_dataframe():
     np.random.seed(0)
     df = DataFrame()
     nelem = 1000
@@ -76,7 +76,7 @@ def test_sizeof_dataframe():
     df["vals"] = hvals = np.random.random(nelem)
 
     nbytes = hkeys.nbytes + hvals.nbytes
-    sizeof = sys.getsizeof(df)
+    sizeof = df.memory_usage().sum()
     assert sizeof >= nbytes
 
     serialized_nbytes = len(pickle.dumps(df, protocol=pickle.HIGHEST_PROTOCOL))

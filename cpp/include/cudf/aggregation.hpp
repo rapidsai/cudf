@@ -503,9 +503,12 @@ std::unique_ptr<Base> make_merge_m2_aggregation();
  *
  * Compute covariance between two columns.
  * The input columns are child columns of a non-nullable struct columns.
+ * @param min_periods Minimum number of non-null observations required to produce a result.
+ * @param ddof Delta Degrees of Freedom. The divisor used in calculations is N - ddof, where N is
+ *        the number of non-null observations.
  */
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_covariance_aggregation();
+std::unique_ptr<Base> make_covariance_aggregation(size_type min_periods = 1, size_type ddof = 1);
 
 /**
  * @brief Factory to create a CORRELATION aggregation
@@ -513,10 +516,12 @@ std::unique_ptr<Base> make_covariance_aggregation();
  * Compute correlation coefficient between two columns.
  * The input columns are child columns of a non-nullable struct columns.
  *
- * @param[in] type: correlation_type
+ * @param type correlation_type
+ * @param min_periods Minimum number of non-null observations required to produce a result.
  */
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_correlation_aggregation(correlation_type type);
+std::unique_ptr<Base> make_correlation_aggregation(correlation_type type,
+                                                   size_type min_periods = 1);
 
 /**
  * @brief Factory to create a TDIGEST aggregation

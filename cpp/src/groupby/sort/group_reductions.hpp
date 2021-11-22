@@ -451,6 +451,8 @@ std::unique_ptr<column> group_merge_m2(column_view const& values,
  * @param count The count of valid rows of the grouped values of both columns
  * @param mean_0 The mean of the first grouped values column
  * @param mean_1 The mean of the second grouped values column
+ * @param min_periods The minimum number of non-null rows required to consider the covariance
+ * @param ddof The delta degrees of freedom used in the calculation of the variance
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
@@ -461,6 +463,8 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
                                          column_view const& count,
                                          column_view const& mean_0,
                                          column_view const& mean_1,
+                                         size_type min_periods,
+                                         size_type ddof,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr);
 

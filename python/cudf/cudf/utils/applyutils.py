@@ -332,8 +332,7 @@ _cache = dict()  # type: Dict[Any, Any]
 
 @functools.wraps(_make_row_wise_kernel)
 def _load_cache_or_make_row_wise_kernel(cache_key, func, *args, **kwargs):
-    """Caching version of ``_make_row_wise_kernel``.
-    """
+    """Caching version of ``_make_row_wise_kernel``."""
     if cache_key is None:
         cache_key = func
     try:
@@ -349,8 +348,7 @@ def _load_cache_or_make_row_wise_kernel(cache_key, func, *args, **kwargs):
 
 @functools.wraps(_make_chunk_wise_kernel)
 def _load_cache_or_make_chunk_wise_kernel(func, *args, **kwargs):
-    """Caching version of ``_make_row_wise_kernel``.
-    """
+    """Caching version of ``_make_row_wise_kernel``."""
     try:
         return _cache[func]
     except KeyError:
@@ -360,6 +358,5 @@ def _load_cache_or_make_chunk_wise_kernel(func, *args, **kwargs):
 
 
 def _mangle_user(name):
-    """Mangle user variable name
-    """
+    """Mangle user variable name"""
     return "__user_{}".format(name)

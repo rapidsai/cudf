@@ -117,8 +117,7 @@ def test_series_sort_index(nelem, asc):
 @pytest.mark.parametrize("data", [[0, 1, 1, 2, 2, 2, 3, 3], [0], [1, 2, 3]])
 @pytest.mark.parametrize("n", [-100, -50, -12, -2, 0, 1, 2, 3, 4, 7])
 def test_series_nlargest(data, n):
-    """Indirectly tests Series.sort_values()
-    """
+    """Indirectly tests Series.sort_values()"""
     sr = Series(data)
     psr = pd.Series(data)
     assert_eq(sr.nlargest(n), psr.nlargest(n))
@@ -136,8 +135,7 @@ def test_series_nlargest(data, n):
 @pytest.mark.parametrize("data", [[0, 1, 1, 2, 2, 2, 3, 3], [0], [1, 2, 3]])
 @pytest.mark.parametrize("n", [-100, -50, -12, -2, 0, 1, 2, 3, 4, 9])
 def test_series_nsmallest(data, n):
-    """Indirectly tests Series.sort_values()
-    """
+    """Indirectly tests Series.sort_values()"""
     sr = Series(data)
     psr = pd.Series(data)
     assert_eq(sr.nsmallest(n), psr.nsmallest(n))
@@ -156,33 +154,16 @@ def test_series_nsmallest(data, n):
 
 
 @pytest.mark.parametrize("nelem,n", [(1, 1), (100, 100), (10, 5), (100, 10)])
-def test_dataframe_nlargest(nelem, n):
+@pytest.mark.parametrize("op", ["nsmallest", "nlargest"])
+@pytest.mark.parametrize("columns", ["a", ["b", "a"]])
+def test_dataframe_nlargest_nsmallest(nelem, n, op, columns):
     np.random.seed(0)
-    df = DataFrame()
-    df["a"] = aa = np.random.random(nelem)
-    df["b"] = bb = np.random.random(nelem)
-    res = df.nlargest(n, "a")
+    aa = np.random.random(nelem)
+    bb = np.random.random(nelem)
 
-    # Check
-    inds = np.argsort(aa)
-    assert_eq(res["a"].to_numpy(), aa[inds][-n:][::-1])
-    assert_eq(res["b"].to_numpy(), bb[inds][-n:][::-1])
-    assert_eq(res.index.values, inds[-n:][::-1])
-
-
-@pytest.mark.parametrize("nelem,n", [(10, 5), (100, 10)])
-def test_dataframe_nsmallest(nelem, n):
-    np.random.seed(0)
-    df = DataFrame()
-    df["a"] = aa = np.random.random(nelem)
-    df["b"] = bb = np.random.random(nelem)
-    res = df.nsmallest(n, "a")
-
-    # Check
-    inds = np.argsort(-aa)
-    assert_eq(res["a"].to_numpy(), aa[inds][-n:][::-1])
-    assert_eq(res["b"].to_numpy(), bb[inds][-n:][::-1])
-    assert_eq(res.index.values, inds[-n:][::-1])
+    df = DataFrame({"a": aa, "b": bb})
+    pdf = df.to_pandas()
+    assert_eq(getattr(df, op)(n, columns), getattr(pdf, op)(n, columns))
 
 
 @pytest.mark.parametrize(

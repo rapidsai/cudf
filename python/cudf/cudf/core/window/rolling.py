@@ -288,6 +288,10 @@ class Rolling(GetAttrGetItemMixin):
         ----------
         func : function
             A user defined function that takes an 1D array as input
+        args : tuple
+            unsupported.
+        kwargs
+            unsupported
 
         See also
         --------
@@ -298,6 +302,27 @@ class Rolling(GetAttrGetItemMixin):
         -----
         See notes of the :meth:`cudf.Series.applymap`
 
+        Example
+        -------
+
+        >>> import cudf
+        >>> def count_if_gt_3(window):
+        ...     count = 0
+        ...     for i in window:
+        ...             if i > 3:
+        ...                     count += 1
+        ...     return count
+        ...
+        >>> s = cudf.Series([0, 1.1, 5.8, 3.1, 6.2, 2.0, 1.5])
+        >>> s.rolling(3, min_periods=1).apply(count_if_gt_3)
+        0    0
+        1    0
+        2    1
+        3    2
+        4    3
+        5    2
+        6    1
+        dtype: int64
         """
         has_nulls = False
         if isinstance(self.obj, cudf.Series):
@@ -403,9 +428,9 @@ class RollingGroupby(Rolling):
         # of `groupby.grouping.keys` and `groupby.obj`.
         # As an optimization, avoid gathering those twice.
         self._group_keys = groupby.grouping.keys.take(sort_order)
-        obj = groupby.obj.drop(
-            columns=groupby.grouping._key_column_names_from_obj
-        ).take(sort_order)
+        obj = groupby.obj.drop(columns=groupby.grouping._named_columns).take(
+            sort_order
+        )
 
         gb_size = groupby.size().sort_index()
         self._group_starts = (

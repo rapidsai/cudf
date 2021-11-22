@@ -668,6 +668,8 @@ _operators_arithmetic = [
     "rmod",
     "pow",
     "rpow",
+    "div",
+    "divide",
     "floordiv",
     "rfloordiv",
     "truediv",
@@ -829,6 +831,42 @@ def test_operator_func_dataframe(func, nulls, fill_value, other):
 
     got = getattr(gdf1, func)(gdf2, fill_value=fill_value)
     expect = getattr(pdf1, func)(pdf2, fill_value=fill_value)[list(got._data)]
+
+    utils.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("func", _operators_comparison)
+@pytest.mark.parametrize("nulls", _nulls)
+@pytest.mark.parametrize("other", ["df", "scalar"])
+def test_logical_operator_func_dataframe(func, nulls, other):
+    np.random.seed(0)
+    num_rows = 100
+    num_cols = 3
+
+    def gen_df():
+        pdf = pd.DataFrame()
+        from string import ascii_lowercase
+
+        cols = np.random.choice(num_cols + 5, num_cols, replace=False)
+
+        for i in range(num_cols):
+            colname = ascii_lowercase[cols[i]]
+            data = utils.gen_rand("float64", num_rows) * 10000
+            if nulls == "some":
+                idx = np.random.choice(
+                    num_rows, size=int(num_rows / 2), replace=False
+                )
+                data[idx] = np.nan
+            pdf[colname] = data
+        return pdf
+
+    pdf1 = gen_df()
+    pdf2 = gen_df() if other == "df" else 59.0
+    gdf1 = cudf.DataFrame.from_pandas(pdf1)
+    gdf2 = cudf.DataFrame.from_pandas(pdf2) if other == "df" else 59.0
+
+    got = getattr(gdf1, func)(gdf2)
+    expect = getattr(pdf1, func)(pdf2)[list(got._data)]
 
     utils.assert_eq(expect, got)
 
@@ -1135,7 +1173,7 @@ def make_scalar_product_data():
         )
     )
 
-    # we can muliply any timedelta by any int, or bool
+    # we can multiply any timedelta by any int, or bool
     valid |= set(product(TIMEDELTA_TYPES, INTEGER_TYPES | BOOL_TYPES))
 
     # we can multiply a float by any int, float, or bool

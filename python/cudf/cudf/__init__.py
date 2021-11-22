@@ -42,7 +42,7 @@ from cudf.core.index import (
     UInt64Index,
     interval_range,
 )
-from cudf.core.dataframe import DataFrame, from_pandas, merge
+from cudf.core.dataframe import DataFrame, from_pandas, merge, from_dataframe
 from cudf.core.series import Series
 from cudf.core.multiindex import MultiIndex
 from cudf.core.cut import cut
@@ -98,6 +98,7 @@ from cudf.io import (
     read_parquet,
     read_text,
 )
+from cudf.core.tools.datetimes import date_range
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import set_allocator
 

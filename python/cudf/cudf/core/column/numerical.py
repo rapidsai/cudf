@@ -21,7 +21,7 @@ from cudf.core.column import (
     column,
     string,
 )
-from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype
+from cudf.core.dtypes import CategoricalDtype, Decimal32Dtype, Decimal64Dtype
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
     NUMERIC_TYPES,
@@ -147,6 +147,7 @@ class NumericalColumn(NumericalBaseColumn):
                         NumericalColumn,
                         cudf.Scalar,
                         cudf.core.column.Decimal64Column,
+                        cudf.core.column.Decimal32Column,
                     ),
                 )
                 or np.isscalar(rhs)
@@ -156,6 +157,11 @@ class NumericalColumn(NumericalBaseColumn):
             if isinstance(rhs, cudf.core.column.Decimal64Column):
                 lhs: Union[ScalarLike, ColumnBase] = self.as_decimal_column(
                     Decimal64Dtype(Decimal64Dtype.MAX_PRECISION, 0)
+                )
+                return lhs.binary_operator(binop, rhs)
+            elif isinstance(rhs, cudf.core.column.Decimal32Column):
+                lhs = self.as_decimal_column(
+                    Decimal32Dtype(Decimal32Dtype.MAX_PRECISION, 0)
                 )
                 return lhs.binary_operator(binop, rhs)
             out_dtype = np.result_type(self.dtype, rhs.dtype)
@@ -291,8 +297,7 @@ class NumericalColumn(NumericalBaseColumn):
         return lhs, rhs
 
     def _default_na_value(self) -> ScalarLike:
-        """Returns the default NA value for this column
-        """
+        """Returns the default NA value for this column"""
         dkind = self.dtype.kind
         if dkind == "f":
             return self.dtype.type(np.nan)

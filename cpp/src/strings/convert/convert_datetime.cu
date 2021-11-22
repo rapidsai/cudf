@@ -608,7 +608,7 @@ std::unique_ptr<cudf::column> is_timestamp(strings_column_view const& input,
                                            rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = input.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::BOOL8});
+  if (strings_count == 0) return make_empty_column(type_id::BOOL8);
 
   CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
 
@@ -1096,7 +1096,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
-  if (timestamps.is_empty()) return make_empty_column(data_type{type_id::STRING});
+  if (timestamps.is_empty()) return make_empty_column(type_id::STRING);
 
   CUDF_EXPECTS(!format.empty(), "Format parameter must not be empty.");
   CUDF_EXPECTS(names.is_empty() || names.size() == format_names_size,
@@ -1109,7 +1109,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
   format_compiler compiler(format, stream,
     specifier_map{{'w', 1}, {'W', 2}, {'u', 1}, {'U', 2}, {'V', 2}, {'G', 4},
                   {'a', 3}, {'A', 3}, {'b', 3}, {'B', 3}});
-  // clang-format on                                         
+  // clang-format on
   auto const d_format_items = compiler.format_items();
   auto const d_timestamps   = column_device_view::create(timestamps, stream);
 
@@ -1126,7 +1126,7 @@ std::unique_ptr<column> from_timestamps(column_view const& timestamps,
                              std::move(offsets_column),
                              std::move(chars_column),
                              timestamps.null_count(),
-                             cudf::detail::copy_bitmask(timestamps,stream,mr));
+                             cudf::detail::copy_bitmask(timestamps, stream, mr));
 }
 
 }  // namespace detail

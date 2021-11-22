@@ -16,6 +16,7 @@
 #pragma once
 
 #include <cudf/column/column.hpp>
+#include <cudf/strings/regex/flags.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 namespace cudf {
@@ -44,12 +45,14 @@ namespace strings {
  *
  * @param strings Strings instance for this operation.
  * @param pattern Regex pattern to match to each string.
+ * @param flags Regex flags for interpreting special characters in the pattern.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of boolean results for each string.
  */
 std::unique_ptr<column> contains_re(
   strings_column_view const& strings,
   std::string const& pattern,
+  regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -69,12 +72,14 @@ std::unique_ptr<column> contains_re(
  *
  * @param strings Strings instance for this operation.
  * @param pattern Regex pattern to match to each string.
+ * @param flags Regex flags for interpreting special characters in the pattern.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of boolean results for each string.
  */
 std::unique_ptr<column> matches_re(
   strings_column_view const& strings,
   std::string const& pattern,
+  regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -94,12 +99,14 @@ std::unique_ptr<column> matches_re(
  *
  * @param strings Strings instance for this operation.
  * @param pattern Regex pattern to match within each string.
+ * @param flags Regex flags for interpreting special characters in the pattern.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New INT32 column with counts for each string.
  */
 std::unique_ptr<column> count_re(
   strings_column_view const& strings,
   std::string const& pattern,
+  regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of doxygen group

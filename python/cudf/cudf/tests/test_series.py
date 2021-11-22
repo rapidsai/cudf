@@ -1316,3 +1316,33 @@ def test_series_hash_values(method, validation_data):
     validation_results = cudf.Series(validation_data)
     hash_values = inputs.hash_values(method=method)
     assert_eq(hash_values, validation_results)
+
+
+def test_set_index_unequal_length():
+    s = cudf.Series()
+    with pytest.raises(ValueError):
+        s.index = [1, 2, 3]
+
+
+@pytest.mark.parametrize(
+    "lhs, rhs", [("a", "a"), ("a", "b"), (1, 1.0), (None, None), (None, "a")]
+)
+def test_equals_names(lhs, rhs):
+    lhs = cudf.Series([1, 2], name=lhs)
+    rhs = cudf.Series([1, 2], name=rhs)
+
+    got = lhs.equals(rhs)
+    expect = lhs.to_pandas().equals(rhs.to_pandas())
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data", [[True, False, None, True, False], [None, None], []]
+)
+@pytest.mark.parametrize("bool_dtype", ["bool", "boolean", pd.BooleanDtype()])
+def test_nullable_bool_dtype_series(data, bool_dtype):
+    psr = pd.Series(data, dtype=pd.BooleanDtype())
+    gsr = cudf.Series(data, dtype=bool_dtype)
+
+    assert_eq(psr, gsr.to_pandas(nullable=True))

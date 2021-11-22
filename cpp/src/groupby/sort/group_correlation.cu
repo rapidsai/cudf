@@ -113,6 +113,8 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
                                          column_view const& count,
                                          column_view const& mean_0,
                                          column_view const& mean_1,
+                                         size_type min_periods,
+                                         size_type ddof,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
@@ -140,8 +142,13 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
 
   auto d_values_0 = column_device_view::create(values_0, stream);
   auto d_values_1 = column_device_view::create(values_1, stream);
-  covariance_transform<result_type> covariance_transform_op{
-    *d_values_0, *d_values_1, mean0_ptr, mean1_ptr, count.data<size_type>(), group_labels.begin()};
+  covariance_transform<result_type> covariance_transform_op{*d_values_0,
+                                                            *d_values_1,
+                                                            mean0_ptr,
+                                                            mean1_ptr,
+                                                            count.data<size_type>(),
+                                                            group_labels.begin(),
+                                                            ddof};
 
   auto result = make_numeric_column(
     data_type(type_to_id<result_type>()), num_groups, mask_state::UNALLOCATED, stream, mr);
@@ -157,8 +164,8 @@ std::unique_ptr<column> group_covariance(column_view const& values_0,
                         thrust::make_discard_iterator(),
                         d_result);
 
-  auto is_null = [ddof = covariance_transform_op.ddof] __device__(size_type group_size) {
-    return not(group_size == 0 or group_size - ddof <= 0);
+  auto is_null = [ddof, min_periods] __device__(size_type group_size) {
+    return not(group_size == 0 or group_size - ddof <= 0 or group_size < min_periods);
   };
   auto [new_nullmask, null_count] =
     cudf::detail::valid_if(count.begin<size_type>(), count.end<size_type>(), is_null, stream, mr);

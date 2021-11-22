@@ -183,8 +183,6 @@ compression_type infer_compression_type(compression_type compression, source_inf
 
 table_with_metadata read_json(json_reader_options options, rmm::mr::device_memory_resource* mr)
 {
-  namespace json = cudf::io::detail::json;
-
   CUDF_FUNC_RANGE();
 
   options.set_compression(infer_compression_type(options.get_compression(), options.get_source()));
@@ -193,16 +191,11 @@ table_with_metadata read_json(json_reader_options options, rmm::mr::device_memor
                                       options.get_byte_range_offset(),
                                       options.get_byte_range_size_with_padding());
 
-  auto reader =
-    std::make_unique<json::reader>(std::move(datasources), options, rmm::cuda_stream_default, mr);
-
-  return reader->read(options);
+  return detail::json::read_json(datasources, options, rmm::cuda_stream_default, mr);
 }
 
 table_with_metadata read_csv(csv_reader_options options, rmm::mr::device_memory_resource* mr)
 {
-  namespace csv = cudf::io::detail::csv;
-
   CUDF_FUNC_RANGE();
 
   options.set_compression(infer_compression_type(options.get_compression(), options.get_source()));
@@ -211,10 +204,13 @@ table_with_metadata read_csv(csv_reader_options options, rmm::mr::device_memory_
                                       options.get_byte_range_offset(),
                                       options.get_byte_range_size_with_padding());
 
-  auto reader =
-    std::make_unique<csv::reader>(std::move(datasources), options, rmm::cuda_stream_default, mr);
+  CUDF_EXPECTS(datasources.size() == 1, "Only a single source is currently supported.");
 
-  return reader->read();
+  return cudf::io::detail::csv::read_csv(  //
+    std::move(datasources[0]),
+    options,
+    rmm::cuda_stream_default,
+    mr);
 }
 
 // Freeform API wraps the detail writer class API
@@ -223,10 +219,14 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
   using namespace cudf::io::detail;
 
   auto sink = make_datasink(options.get_sink());
-  auto writer =
-    std::make_unique<csv::writer>(std::move(sink), options, rmm::cuda_stream_default, mr);
 
-  writer->write(options.get_table(), options.get_metadata());
+  return csv::write_csv(  //
+    sink.get(),
+    options.get_table(),
+    options.get_metadata(),
+    options,
+    rmm::cuda_stream_default,
+    mr);
 }
 
 namespace detail_orc = cudf::io::detail::orc;
@@ -255,7 +255,7 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 
   // Get column names
   for (auto i = 0; i < metadata.get_num_columns(); i++) {
-    result.column_names.push_back(metadata.get_column_name(i));
+    result.column_names.push_back(metadata.column_name(i));
   }
 
   // Get file-level statistics, statistics of each column of file
@@ -409,13 +409,13 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
 }
 
 /**
- * @copydoc cudf::io::merge_rowgroup_metadata
+ * @copydoc cudf::io::merge_row_group_metadata
  */
-std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
+std::unique_ptr<std::vector<uint8_t>> merge_row_group_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list)
 {
   CUDF_FUNC_RANGE();
-  return detail_parquet::writer::merge_rowgroup_metadata(metadata_list);
+  return detail_parquet::writer::merge_row_group_metadata(metadata_list);
 }
 
 table_input_metadata::table_input_metadata(table_view const& table,

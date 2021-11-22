@@ -11,7 +11,6 @@ from hashlib import sha256
 from numbers import Number
 from shutil import get_terminal_size
 from typing import Any, MutableMapping, Optional, Set, Union
-from uuid import uuid4
 
 import cupy
 import numpy as np
@@ -85,7 +84,7 @@ from cudf.utils.utils import (
 
 def _append_new_row_inplace(col: ColumnLike, value: ScalarLike):
     """Append a scalar `value` to the end of `col` inplace.
-       Cast to common type if possible
+    Cast to common type if possible
     """
     to_type = find_common_type([type(value), col.dtype])
     val_col = as_column(value, dtype=to_type)
@@ -111,8 +110,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
         ):
             return data
         return self._frame._from_data(
-            {self._frame.name: data},
-            index=cudf.Index(self._frame.index.take(arg)),
+            {self._frame.name: data}, index=cudf.Index(self._frame.index[arg]),
         )
 
     def __setitem__(self, key, value):
@@ -135,7 +133,11 @@ class _SeriesIlocIndexer(_FrameIndexer):
         if (
             not isinstance(
                 self._frame._column.dtype,
-                (cudf.Decimal64Dtype, cudf.CategoricalDtype),
+                (
+                    cudf.Decimal64Dtype,
+                    cudf.Decimal32Dtype,
+                    cudf.CategoricalDtype,
+                ),
             )
             and hasattr(value, "dtype")
             and _is_non_decimal_numeric_dtype(value.dtype)
@@ -918,6 +920,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         e    14
         dtype: int64
         """
+        warnings.warn(
+            "Series.set_index is deprecated and will be removed in the future",
+            FutureWarning,
+        )
         index = index if isinstance(index, BaseIndex) else as_index(index)
         return self._from_data(self._data, index, self.name)
 
@@ -972,9 +978,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             {self.name: self._column.set_mask(mask)}, self._index
         )
 
-    def __sizeof__(self):
-        return self._column.__sizeof__() + self._index.__sizeof__()
-
     def memory_usage(self, index=True, deep=False):
         """
         Return the memory usage of the Series.
@@ -1013,9 +1016,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> s.memory_usage(index=False)
         24
         """
-        n = self._column._memory_usage(deep=deep)
+        if deep:
+            warnings.warn(
+                "The deep parameter is ignored and is only included "
+                "for pandas compatibility."
+            )
+        n = self._column.memory_usage()
         if index:
-            n += self._index.memory_usage(deep=deep)
+            n += self._index.memory_usage()
         return n
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
@@ -1156,64 +1164,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     items = SingleColumnFrame.__iter__
 
-    def to_dict(self, into=dict):
-        raise TypeError(
-            "cuDF does not support conversion to host memory "
-            "via `to_dict()` method. Consider using "
-            "`.to_pandas().to_dict()` to construct a Python dictionary."
-        )
-
     def __setitem__(self, key, value):
         if isinstance(key, slice):
             self.iloc[key] = value
         else:
             self.loc[key] = value
 
-    def take(self, indices, keep_index=True):
-        """
-        Return Series by taking values from the corresponding *indices*.
-
-        Parameters
-        ----------
-        indices : array-like or scalar
-            An array/scalar like integers indicating which positions to take.
-        keep_index : bool, default True
-            Whethere to retain the index in result Series or not.
-
-        Returns
-        -------
-        Series
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([10, 11, 12, 13, 14])
-        >>> series
-        0    10
-        1    11
-        2    12
-        3    13
-        4    14
-        dtype: int64
-        >>> series.take([0, 4])
-        0    10
-        4    14
-        dtype: int64
-
-        If you want to drop the index, pass `keep_index=False`
-
-        >>> series.take([0, 4], keep_index=False)
-        0    10
-        1    14
-        dtype: int64
-        """
-        if keep_index is True or is_scalar(indices):
-            return self.iloc[indices]
-        else:
-            col_inds = as_column(indices)
-            return self._from_data(
-                {self.name: self._column.take(col_inds, keep_index=False)}
-            )
+    def take(self, indices, axis=0, keep_index=True):
+        # Validate but don't use the axis.
+        _ = self._get_axis_from_axis_arg(axis)
+        return super().take(indices, keep_index)
 
     def __repr__(self):
         _, height = get_terminal_size()
@@ -1354,7 +1314,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 )
             ):
                 raise ValueError(
-                    "Can only compare identically-labeled " "Series objects"
+                    "Can only compare identically-labeled Series objects"
                 )
             lhs, other = _align_indices([self, other], allow_non_unique=True)
         else:
@@ -1380,318 +1340,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     def logical_not(self):
         return self._unaryop("not")
-
-    def eq(self, other, fill_value=None, axis=0):
-        """Equal to of series and other, element-wise
-        (binary operator eq).
-
-        Parameters
-        ----------
-        other : Series or scalar value
-        fill_value : None or value
-            Value to fill nulls with before computation. If data in both
-            corresponding Series locations is null the result will be null
-
-        Returns
-        -------
-        Series
-            The result of the operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> a = cudf.Series([1, 2, 3, None, 10, 20], index=['a', 'c', 'd', 'e', 'f', 'g'])
-        >>> a
-        a       1
-        c       2
-        d       3
-        e    <NA>
-        f      10
-        g      20
-        dtype: int64
-        >>> b = cudf.Series([-10, 23, -1, None, None], index=['a', 'b', 'c', 'd', 'e'])
-        >>> b
-        a     -10
-        b      23
-        c      -1
-        d    <NA>
-        e    <NA>
-        dtype: int64
-        >>> a.eq(b, fill_value=2)
-        a    False
-        b    False
-        c    False
-        d    False
-        e     <NA>
-        f    False
-        g    False
-        dtype: bool
-        """  # noqa: E501
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(
-            other=other, fn="eq", fill_value=fill_value, can_reindex=True
-        )
-
-    def ne(self, other, fill_value=None, axis=0):
-        """Not equal to of series and other, element-wise
-        (binary operator ne).
-
-        Parameters
-        ----------
-        other : Series or scalar value
-        fill_value : None or value
-            Value to fill nulls with before computation. If data in both
-            corresponding Series locations is null the result will be null
-
-        Returns
-        -------
-        Series
-            The result of the operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> a = cudf.Series([1, 2, 3, None, 10, 20], index=['a', 'c', 'd', 'e', 'f', 'g'])
-        >>> a
-        a       1
-        c       2
-        d       3
-        e    <NA>
-        f      10
-        g      20
-        dtype: int64
-        >>> b = cudf.Series([-10, 23, -1, None, None], index=['a', 'b', 'c', 'd', 'e'])
-        >>> b
-        a     -10
-        b      23
-        c      -1
-        d    <NA>
-        e    <NA>
-        dtype: int64
-        >>> a.ne(b, fill_value=2)
-        a    True
-        b    True
-        c    True
-        d    True
-        e    <NA>
-        f    True
-        g    True
-        dtype: bool
-        """  # noqa: E501
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(
-            other=other, fn="ne", fill_value=fill_value, can_reindex=True
-        )
-
-    def lt(self, other, fill_value=None, axis=0):
-        """Less than of series and other, element-wise
-        (binary operator lt).
-
-        Parameters
-        ----------
-        other : Series or scalar value
-        fill_value : None or value
-            Value to fill nulls with before computation. If data in both
-            corresponding Series locations is null the result will be null
-
-        Returns
-        -------
-        Series
-            The result of the operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> a = cudf.Series([1, 2, 3, None, 10, 20], index=['a', 'c', 'd', 'e', 'f', 'g'])
-        >>> a
-        a       1
-        c       2
-        d       3
-        e    <NA>
-        f      10
-        g      20
-        dtype: int64
-        >>> b = cudf.Series([-10, 23, -1, None, None], index=['a', 'b', 'c', 'd', 'e'])
-        >>> b
-        a     -10
-        b      23
-        c      -1
-        d    <NA>
-        e    <NA>
-        dtype: int64
-        >>> a.lt(b, fill_value=-10)
-        a    False
-        b     True
-        c    False
-        d    False
-        e     <NA>
-        f    False
-        g    False
-        dtype: bool
-        """  # noqa: E501
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(
-            other=other, fn="lt", fill_value=fill_value, can_reindex=True
-        )
-
-    def le(self, other, fill_value=None, axis=0):
-        """Less than or equal to of series and other, element-wise
-        (binary operator le).
-
-        Parameters
-        ----------
-        other : Series or scalar value
-        fill_value : None or value
-            Value to fill nulls with before computation. If data in both
-            corresponding Series locations is null the result will be null
-
-        Returns
-        -------
-        Series
-            The result of the operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> a = cudf.Series([1, 2, 3, None, 10, 20], index=['a', 'c', 'd', 'e', 'f', 'g'])
-        >>> a
-        a       1
-        c       2
-        d       3
-        e    <NA>
-        f      10
-        g      20
-        dtype: int64
-        >>> b = cudf.Series([-10, 23, -1, None, None], index=['a', 'b', 'c', 'd', 'e'])
-        >>> b
-        a     -10
-        b      23
-        c      -1
-        d    <NA>
-        e    <NA>
-        dtype: int64
-        >>> a.le(b, fill_value=-10)
-        a    False
-        b     True
-        c    False
-        d    False
-        e     <NA>
-        f    False
-        g    False
-        dtype: bool
-        """  # noqa: E501
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(
-            other=other, fn="le", fill_value=fill_value, can_reindex=True
-        )
-
-    def gt(self, other, fill_value=None, axis=0):
-        """Greater than of series and other, element-wise
-        (binary operator gt).
-
-        Parameters
-        ----------
-        other : Series or scalar value
-        fill_value : None or value
-            Value to fill nulls with before computation. If data in both
-            corresponding Series locations is null the result will be null
-
-        Returns
-        -------
-        Series
-            The result of the operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> a = cudf.Series([1, 2, 3, None, 10, 20], index=['a', 'c', 'd', 'e', 'f', 'g'])
-        >>> a
-        a       1
-        c       2
-        d       3
-        e    <NA>
-        f      10
-        g      20
-        dtype: int64
-        >>> b = cudf.Series([-10, 23, -1, None, None], index=['a', 'b', 'c', 'd', 'e'])
-        >>> b
-        a     -10
-        b      23
-        c      -1
-        d    <NA>
-        e    <NA>
-        dtype: int64
-        >>> a.gt(b)
-        a     True
-        b    False
-        c     True
-        d    False
-        e    False
-        f    False
-        g    False
-        dtype: bool
-        """  # noqa: E501
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(
-            other=other, fn="gt", fill_value=fill_value, can_reindex=True
-        )
-
-    def ge(self, other, fill_value=None, axis=0):
-        """Greater than or equal to of series and other, element-wise
-        (binary operator ge).
-
-        Parameters
-        ----------
-        other : Series or scalar value
-        fill_value : None or value
-            Value to fill nulls with before computation. If data in both
-            corresponding Series locations is null the result will be null
-
-        Returns
-        -------
-        Series
-            The result of the operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> a = cudf.Series([1, 2, 3, None, 10, 20], index=['a', 'c', 'd', 'e', 'f', 'g'])
-        >>> a
-        a       1
-        c       2
-        d       3
-        e    <NA>
-        f      10
-        g      20
-        dtype: int64
-        >>> b = cudf.Series([-10, 23, -1, None, None], index=['a', 'b', 'c', 'd', 'e'])
-        >>> b
-        a     -10
-        b      23
-        c      -1
-        d    <NA>
-        e    <NA>
-        dtype: int64
-        >>> a.ge(b)
-        a     True
-        b    False
-        c     True
-        d    False
-        e    False
-        f    False
-        g    False
-        dtype: bool
-        """  # noqa: E501
-        if axis != 0:
-            raise NotImplementedError("Only axis=0 supported at this time.")
-        return self._binaryop(
-            other=other, fn="ge", fill_value=fill_value, can_reindex=True
-        )
 
     @copy_docstring(CategoricalAccessor)  # type: ignore
     @property
@@ -2119,19 +1767,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return self._column.data
 
     @property
-    def index(self):
-        """The index object
-        """
-        return self._index
-
-    @index.setter
-    def index(self, _index):
-        self._index = as_index(_index)
-
-    @property
     def nullmask(self):
-        """The gpu buffer for the null-mask
-        """
+        """The gpu buffer for the null-mask"""
         return cudf.Series(self._column.nullmask)
 
     def as_mask(self):
@@ -2271,37 +1908,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 pass
             return self
 
-    def argsort(self, ascending=True, na_position="last"):
-        """Returns a Series of int64 index that will sort the series.
-
-        Uses Thrust sort.
-
-        Returns
-        -------
-        result: Series
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([3, 1, 2])
-        >>> s
-        0    3
-        1    1
-        2    2
-        dtype: int64
-        >>> s.argsort()
-        0    1
-        1    2
-        2    0
-        dtype: int32
-        >>> s[s.argsort()]
-        1    1
-        2    2
-        0    3
-        dtype: int64
-        """
-        return self._sort(ascending=ascending, na_position=na_position)[1]
-
     def sort_index(self, axis=0, *args, **kwargs):
         if axis not in (0, "index"):
             raise ValueError("Only axis=0 is valid for Series.")
@@ -2316,28 +1922,28 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         na_position="last",
         ignore_index=False,
     ):
-        """
-        Sort by the values.
-
-        Sort a Series in ascending or descending order by some criterion.
+        """Sort by the values along either axis.
 
         Parameters
         ----------
-        ascending : bool, default True
-            If True, sort values in ascending order, otherwise descending.
+        ascending : bool or list of bool, default True
+            Sort ascending vs. descending. Specify list for multiple sort
+            orders. If this is a list of bools, must match the length of the
+            by.
         na_position : {‘first’, ‘last’}, default ‘last’
-            'first' puts nulls at the beginning, 'last' puts nulls at the end.
+            'first' puts nulls at the beginning, 'last' puts nulls at the end
         ignore_index : bool, default False
             If True, index will not be sorted.
 
         Returns
         -------
-        sorted_obj : cuDF Series
+        Series : Series with sorted values.
 
         Notes
         -----
         Difference from pandas:
-          * Not supporting: `inplace`, `kind`
+          * Support axis='index' only.
+          * Not supporting: inplace, kind
 
         Examples
         --------
@@ -2351,38 +1957,15 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         1    5
         dtype: int64
         """
-
-        if inplace:
-            raise NotImplementedError("`inplace` not currently implemented.")
-        if kind != "quicksort":
-            raise NotImplementedError("`kind` not currently implemented.")
-        if axis != 0:
-            raise NotImplementedError("`axis` not currently implemented.")
-
-        if len(self) == 0:
-            return self
-        vals, inds = self._sort(ascending=ascending, na_position=na_position)
-        if not ignore_index:
-            index = self.index.take(inds)
-        else:
-            index = self.index
-        return vals.set_index(index)
-
-    def _n_largest_or_smallest(self, largest, n, keep):
-        direction = largest
-        if keep == "first":
-            if n < 0:
-                n = 0
-            return self.sort_values(ascending=not direction).head(n)
-        elif keep == "last":
-            data = self.sort_values(ascending=direction)
-            if n <= 0:
-                data = data[-n:-n]
-            else:
-                data = data.tail(n)
-            return data.reverse()
-        else:
-            raise ValueError('keep must be either "first", "last"')
+        return super().sort_values(
+            by=self.name,
+            axis=axis,
+            ascending=ascending,
+            inplace=inplace,
+            kind=kind,
+            na_position=na_position,
+            ignore_index=ignore_index,
+        )
 
     def nlargest(self, n=5, keep="first"):
         """Returns a new Series of the *n* largest element.
@@ -2444,7 +2027,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Brunei      434000
         dtype: int64
         """
-        return self._n_largest_or_smallest(n=n, keep=keep, largest=True)
+        return self._n_largest_or_smallest(True, n, [self.name], keep)
 
     def nsmallest(self, n=5, keep="first"):
         """
@@ -2519,22 +2102,29 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         Tuvalu      11300
         dtype: int64
         """
-        return self._n_largest_or_smallest(n=n, keep=keep, largest=False)
+        return self._n_largest_or_smallest(False, n, [self.name], keep)
 
-    def _sort(self, ascending=True, na_position="last"):
-        """
-        Sort by values
-
-        Returns
-        -------
-        2-tuple of key and index
-        """
-        col_keys, col_inds = self._column.sort_by_values(
-            ascending=ascending, na_position=na_position
+    def argsort(
+        self,
+        axis=0,
+        kind="quicksort",
+        order=None,
+        ascending=True,
+        na_position="last",
+    ):
+        obj = self.__class__._from_data(
+            {
+                None: super().argsort(
+                    axis=axis,
+                    kind=kind,
+                    order=order,
+                    ascending=ascending,
+                    na_position=na_position,
+                )
+            }
         )
-        sr_keys = self._from_data({self.name: col_keys}, self._index)
-        sr_inds = self._from_data({self.name: col_inds}, self._index)
-        return sr_keys, sr_inds
+        obj.name = self.name
+        return obj
 
     def replace(self, to_replace=None, value=None, *args, **kwargs):
         if is_dict_like(to_replace) and value is not None:
@@ -2737,7 +2327,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             ]
 
     def label_encoding(self, cats, dtype=None, na_sentinel=-1):
-        """Perform label encoding
+        """Perform label encoding.
 
         Parameters
         ----------
@@ -2794,6 +2384,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             FutureWarning,
         )
 
+        return self._label_encoding(cats, dtype, na_sentinel)
+
+    def _label_encoding(self, cats, dtype=None, na_sentinel=-1):
+        # Private implementation of deprecated public label_encoding method
         def _return_sentinel_series():
             return Series(
                 cudf.core.column.full(
@@ -3322,7 +2916,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     def nunique(self, method="sort", dropna=True):
         """Returns the number of unique values of the Series: approximate version,
-        and exact version to be moved to libgdf
+        and exact version to be moved to libcudf
 
         Excludes NA values by default.
 
@@ -3391,7 +2985,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         Returns
         -------
-        result : Series contanining counts of unique values.
+        result : Series containing counts of unique values.
 
         See also
         --------
@@ -3939,6 +3533,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         observed=False,
         dropna=True,
     ):
+        import cudf.core.resample
+
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")
 
@@ -3962,8 +3558,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 "groupby() requires either by or level to be specified."
             )
 
-        return SeriesGroupBy(
-            self, by=by, level=level, dropna=dropna, sort=sort
+        return (
+            cudf.core.resample.SeriesResampler(self, by=by)
+            if isinstance(by, cudf.Grouper) and by.freq
+            else SeriesGroupBy(
+                self, by=by, level=level, dropna=dropna, sort=sort
+            )
         )
 
     def rename(self, index=None, copy=True):
@@ -4014,39 +3614,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             out.name = index
 
         return out.copy(deep=copy)
-
-    def _align_to_index(
-        self, index, how="outer", sort=True, allow_non_unique=False
-    ):
-        """
-        Align to the given Index. See _align_indices below.
-        """
-
-        index = as_index(index)
-        if self.index.equals(index):
-            return self
-        if not allow_non_unique:
-            if len(self) != len(self.index.unique()) or len(index) != len(
-                index.unique()
-            ):
-                raise ValueError("Cannot align indices with non-unique values")
-        lhs = self.to_frame(0)
-        rhs = cudf.DataFrame(index=as_index(index))
-        if how == "left":
-            tmp_col_id = str(uuid4())
-            lhs[tmp_col_id] = column.arange(len(lhs))
-        elif how == "right":
-            tmp_col_id = str(uuid4())
-            rhs[tmp_col_id] = column.arange(len(rhs))
-        result = lhs.join(rhs, how=how, sort=sort)
-        if how == "left" or how == "right":
-            result = result.sort_values(tmp_col_id)[0]
-        else:
-            result = result[0]
-
-        result.name = self.name
-        result.index.names = index.names
-        return result
 
     def merge(
         self,
@@ -4219,6 +3786,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
 
 def make_binop_func(op):
+    # This function is used to wrap binary operations in Frame with an
+    # appropriate API for Series as required for pandas compatibility. The
+    # main effect is reordering and error-checking parameters in
+    # Series-specific ways.
     wrapped_func = getattr(Frame, op)
 
     @functools.wraps(wrapped_func)
@@ -4231,7 +3802,7 @@ def make_binop_func(op):
     # __wrapped__ attributes to `wrapped_func`. Cpython looks up the signature
     # string of a function by recursively delving into __wrapped__ until
     # it hits the first function that has __signature__ attribute set. To make
-    # the signature stirng of `wrapper` matches with its actual parameter list,
+    # the signature string of `wrapper` matches with its actual parameter list,
     # we directly set the __signature__ attribute of `wrapper` below.
 
     new_sig = inspect.signature(
@@ -4241,6 +3812,7 @@ def make_binop_func(op):
     return wrapper
 
 
+# Wrap all Frame binop functions with the expected API for Series.
 for binop in (
     "add",
     "radd",
@@ -4258,8 +3830,15 @@ for binop in (
     "rfloordiv",
     "truediv",
     "div",
+    "divide",
     "rtruediv",
     "rdiv",
+    "eq",
+    "ne",
+    "lt",
+    "le",
+    "gt",
+    "ge",
 ):
     setattr(Series, binop, make_binop_func(binop))
 
@@ -5013,11 +4592,76 @@ class DatetimeProperties(object):
             data=out_column, index=self.series._index, name=self.series.name
         )
 
-    def ceil(self, field):
-        out_column = self.series._column.ceil(field)
+    def ceil(self, freq):
+        """
+        Perform ceil operation on the data to the specified freq.
 
-        return Series(
-            data=out_column, index=self.series._index, name=self.series.name
+        Parameters
+        ----------
+        freq : str
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
+            for more details on these aliases.
+
+        Returns
+        -------
+        Series
+            Series with all timestamps rounded up to the specified frequency.
+            The index is preserved.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> t = cudf.Series(["2001-01-01 00:04:45", "2001-01-01 00:04:58",
+        ... "2001-01-01 00:05:04"], dtype="datetime64[ns]")
+        >>> t.dt.ceil("T")
+        0   2001-01-01 00:05:00
+        1   2001-01-01 00:05:00
+        2   2001-01-01 00:06:00
+        dtype: datetime64[ns]
+        """
+        out_column = self.series._column.ceil(freq)
+
+        return Series._from_data(
+            data={self.series.name: out_column}, index=self.series._index
+        )
+
+    def floor(self, freq):
+        """
+        Perform floor operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        freq : str
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
+            for more details on these aliases.
+
+        Returns
+        -------
+        Series
+            Series with all timestamps rounded up to the specified frequency.
+            The index is preserved.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> t = cudf.Series(["2001-01-01 00:04:45", "2001-01-01 00:04:58",
+        ... "2001-01-01 00:05:04"], dtype="datetime64[ns]")
+        >>> t.dt.floor("T")
+        0   2001-01-01 00:04:00
+        1   2001-01-01 00:04:00
+        2   2001-01-01 00:05:00
+        dtype: datetime64[ns]
+        """
+        out_column = self.series._column.floor(freq)
+
+        return Series._from_data(
+            data={self.series.name: out_column}, index=self.series._index
         )
 
     def strftime(self, date_format, *args, **kwargs):
@@ -5410,7 +5054,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
 def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     """Returns a boolean array where two arrays are equal within a tolerance.
 
-    Two values in ``a`` and ``b`` are  considiered equal when the following
+    Two values in ``a`` and ``b`` are  considered equal when the following
     equation is satisfied.
 
     .. math::
