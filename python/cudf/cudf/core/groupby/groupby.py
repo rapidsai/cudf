@@ -18,7 +18,7 @@ from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
 # The three functions below return the quantiles [25%, 50%, 75%]
-# respectively, which are called in the describe() method to ouput
+# respectively, which are called in the describe() method to output
 # the summary stats of a GroupBy object
 def _quantile_25(x):
     return x.quantile(0.25)
@@ -1178,18 +1178,6 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
 
     _PROTECTED_KEYS = frozenset(("obj",))
 
-    def __init__(
-        self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
-    ):
-        super().__init__(
-            obj=obj,
-            by=by,
-            level=level,
-            sort=sort,
-            as_index=as_index,
-            dropna=dropna,
-        )
-
     def __getitem__(self, key):
         return self.obj[key].groupby(
             self.grouping, dropna=self._dropna, sort=self._sort
@@ -1261,18 +1249,6 @@ class SeriesGroupBy(GroupBy):
     True     370.0
     Name: Max Speed, dtype: float64
     """
-
-    def __init__(
-        self, obj, by=None, level=None, sort=False, as_index=True, dropna=True
-    ):
-        super().__init__(
-            obj=obj,
-            by=by,
-            level=level,
-            sort=sort,
-            as_index=as_index,
-            dropna=dropna,
-        )
 
     def agg(self, func):
         result = super().agg(func)

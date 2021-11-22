@@ -56,13 +56,6 @@ using cudf::detail::hostdevice_2dvector;
  * @brief Implementation for parquet writer
  */
 class writer::impl {
-  // Parquet datasets are divided into fixed-size, independent rowgroups
-  static constexpr uint32_t DEFAULT_ROWGROUP_MAXSIZE = 128 * 1024 * 1024;  // 128MB
-  static constexpr uint32_t DEFAULT_ROWGROUP_MAXROWS = 1000000;            // Or at most 1M rows
-
-  // rowgroups are divided into pages
-  static constexpr uint32_t DEFAULT_TARGET_PAGE_SIZE = 512 * 1024;
-
  public:
   /**
    * @brief Constructor with writer options.
@@ -209,9 +202,8 @@ class writer::impl {
   // Cuda stream to be used
   rmm::cuda_stream_view stream = rmm::cuda_stream_default;
 
-  size_t max_rowgroup_size_          = DEFAULT_ROWGROUP_MAXSIZE;
-  size_t max_rowgroup_rows_          = DEFAULT_ROWGROUP_MAXROWS;
-  size_t target_page_size_           = DEFAULT_TARGET_PAGE_SIZE;
+  size_t max_row_group_size          = default_row_group_size_bytes;
+  size_type max_row_group_rows       = default_row_group_size_rows;
   Compression compression_           = Compression::UNCOMPRESSED;
   statistics_freq stats_granularity_ = statistics_freq::STATISTICS_NONE;
   bool int96_timestamps              = false;

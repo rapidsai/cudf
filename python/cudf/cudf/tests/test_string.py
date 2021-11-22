@@ -1746,12 +1746,13 @@ def test_string_wrap(data, width):
         ["A B", "1.5", "3,000"],
         ["23", "³", "⅕", ""],
         [" ", "\t\r\n ", ""],
-        ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
+        ["$", "B", "Aab$", "$$ca", "C$B$", "cat", "cat\n"],
         ["line\nto be wrapped", "another\nline\nto be wrapped"],
     ],
 )
 @pytest.mark.parametrize(
-    "pat", ["a", " ", "\t", "another", "0", r"\$", "^line$", "line.*be"]
+    "pat",
+    ["a", " ", "\t", "another", "0", r"\$", "^line$", "line.*be", "cat$"],
 )
 @pytest.mark.parametrize("flags", [0, re.MULTILINE, re.DOTALL])
 def test_string_count(data, pat, flags):
