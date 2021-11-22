@@ -7294,18 +7294,22 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testSample() {
-    Table t = new Table.TestBuilder().column("s1", "s2", "s3", "s4", "s5").build();
-    Table ret = t.sample(3, false, 0);
-    assertTrue(ret.getRowCount() == 3L);
+    try (Table t = new Table.TestBuilder().column("s1", "s2", "s3", "s4", "s5").build()) {
+      try (Table ret = t.sample(3, false, 0);
+           Table expected = new Table.TestBuilder().column("s3", "s4", "s5").build()) {
+        assertTablesAreEqual(expected, ret);
+      }
 
-    assertEquals("s3", ret.getColumn(0).getScalarElement(0).getJavaString());
-    assertEquals("s4", ret.getColumn(0).getScalarElement(1).getJavaString());
-    assertEquals("s5", ret.getColumn(0).getScalarElement(2).getJavaString());
+      try (Table ret = t.sample(5, false, 0);
+           Table expected = new Table.TestBuilder().column("s3", "s4", "s5", "s2", "s1").build()) {
+        assertTablesAreEqual(expected, ret);
+      }
 
-    ret = t.sample(100, true, 0);
-    assertTrue(ret.getRowCount() == 100L);
-
-    ret = t.sample(4, true, 0);
-    assertTrue(ret.getRowCount() == 4L);
+      try (Table ret = t.sample(8, true, 0);
+           Table expected = new Table.TestBuilder()
+               .column("s1", "s1", "s4", "s5", "s5", "s1", "s3", "s2").build()) {
+        assertTablesAreEqual(expected, ret);
+      }
+    }
   }
 }

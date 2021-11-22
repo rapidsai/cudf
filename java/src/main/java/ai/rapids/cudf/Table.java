@@ -2745,14 +2745,30 @@ public final class Table implements AutoCloseable {
     return result;
   }
 
+
   /**
    * Gather `n` samples from table randomly
-   * The output is not the same as what CPU Sample Exec produces, but this is faster.
+   * Note: does not preserve the ordering
+   * Example:
+   * input: {col1: {1, 2, 3, 4, 5}, col2: {6, 7, 8, 9, 10}}
+   * n: 3
+   * replacement: false
    *
-   * @param n non-negative number of samples expected
+   * output:       {col1: {3, 1, 4}, col2: {8, 6, 9}}
+   *
+   * replacement: true
+   *
+   * output:       {col1: {3, 1, 1}, col2: {8, 6, 6}}
+   * @endcode
+   *
+   * @throws "logic_error" if `n` > `input.num_rows()` and `replacement` == FALSE.
+   * @throws "logic_error" if `n` < 0.
+   *
+   * @param n non-negative number of samples expected from table
    * @param replacement Allow or disallow sampling of the same row more than once.
    * @param seed Seed value to initiate random number generator.
-   * @return
+   *
+   * @return Table containing samples
    */
   public Table sample(long n, boolean replacement, long seed) {
     return new Table(sample(nativeHandle, n, replacement, seed));
