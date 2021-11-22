@@ -34,7 +34,11 @@ from cudf._lib.null_mask import (
     create_null_mask,
 )
 from cudf._lib.scalar import as_device_scalar
-from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
+from cudf._lib.stream_compaction import (
+    distinct_count as cpp_distinct_count,
+    drop_duplicates,
+    drop_nulls,
+)
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
@@ -71,7 +75,7 @@ from cudf.utils.dtypes import (
     pandas_dtypes_alias_to_cudf_alias,
     pandas_dtypes_to_np_dtypes,
 )
-from cudf.utils.utils import mask_dtype
+from cudf.utils.utils import _gather_map_is_valid, mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
 
@@ -200,11 +204,8 @@ class ColumnBase(Column, Serializable):
         return result_col
 
     def dropna(self, drop_nan: bool = False) -> ColumnBase:
-        if drop_nan:
-            col = self.nans_to_nulls()
-        else:
-            col = self
-        return col.as_frame()._drop_na_rows(drop_nan=drop_nan)._as_column()
+        col = self.nans_to_nulls() if drop_nan else self
+        return drop_nulls([col])[0]
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
@@ -686,28 +687,27 @@ class ColumnBase(Column, Serializable):
         raise TypeError(f"cannot perform median with type {self.dtype}")
 
     def take(
-        self: T,
-        indices: ColumnBase,
-        keep_index: bool = True,
-        nullify: bool = False,
+        self: T, indices: ColumnBase, nullify: bool = False, check_bounds=True
     ) -> T:
-        """Return Column by taking values from the corresponding *indices*."""
+        """Return Column by taking values from the corresponding *indices*.
+
+        Skip bounds checking if check_bounds is False.
+        Set rows to null for all out of bound indices if nullify is `True`.
+        """
         # Handle zero size
         if indices.size == 0:
             return cast(T, column_empty_like(self, newsize=0))
-        try:
-            return (
-                self.as_frame()
-                ._gather(indices, keep_index=keep_index, nullify=nullify)
-                ._as_column()
-                ._with_type_metadata(self.dtype)
-            )
-        except RuntimeError as e:
-            if "out of bounds" in str(e):
-                raise IndexError(
-                    f"index out of bounds for column of size {len(self)}"
-                ) from e
-            raise
+
+        # TODO: For performance, the check and conversion of gather map should
+        # be done by the caller. This check will be removed in future release.
+        if not is_integer_dtype(indices.dtype):
+            indices = indices.astype("int32")
+        if not _gather_map_is_valid(indices, len(self), check_bounds, nullify):
+            raise IndexError("Gather map index is out of bounds.")
+
+        return libcudf.copying.gather([self], indices, nullify=nullify)[
+            0
+        ]._with_type_metadata(self.dtype)
 
     def isin(self, values: Sequence) -> ColumnBase:
         """Check whether values are contained in the Column.
@@ -1098,11 +1098,7 @@ class ColumnBase(Column, Serializable):
         # the following issue resolved:
         # https://github.com/rapidsai/cudf/issues/5286
 
-        return (
-            self.as_frame()
-            .drop_duplicates(keep="first", ignore_index=True)
-            ._as_column()
-        )
+        return drop_duplicates([self], keep="first")[0]
 
     def serialize(self) -> Tuple[dict, list]:
         header: Dict[Any, Any] = {}
