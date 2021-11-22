@@ -6,12 +6,19 @@
 # for reductions, scans, and binops (and perhaps others).
 
 
-# TODO: The docstring for a class's reductions should be taken from formatting
-# the reduce method since it needs to support all the same things.
+# TODO: Figure out how to support examples in the docstrings.
 
 
 # TODO: Consider using a pyi file to trick mypy into seeing the monkey-patched
 # methods.
+
+# TODO: Add type annotations for the class variables.
+
+# TODO: Extract signature from _reduce
+
+# TODO: Take advantage of the new approach to also format the cls into the doc.
+
+import inspect
 
 
 class Reducible:
@@ -70,12 +77,52 @@ class Reducible:
 
     @classmethod
     def _add_reduction(cls, reduction):
-        def op(self, *args, **kwargs):
-            return self._reduce(reduction, *args, **kwargs)
+        # This function creates reduction operations on-the-fly and assigns
+        # them to the class.
 
-        # The default docstring is that
-        op.__doc__ = cls._reduce.__doc__.format(op=reduction)
-        setattr(cls, reduction, op)
+        # Generate a signature without the `op` parameter.
+        signature = inspect.signature(cls._reduce)
+        new_params = signature.parameters.copy()
+        new_params.pop("op")
+        signature = signature.replace(parameters=new_params.values())
+
+        # Generate the list of arguments forwarded to _reduce.
+        arglist = ", ".join(
+            [
+                f"{key}={key}"
+                for key in signature.parameters
+                if key not in ("self", "args", "kwargs")
+            ]
+        )
+        if arglist:
+            arglist += ", *args, **kwargs"
+        else:
+            arglist = "*args, **kwargs"
+
+        # The default docstring is that of the _reduce method. Additional
+        # formatting arguments may be provided in a class-level dictionary
+        # of the form _REDUCTION_DOCSTRINGS
+        docstring = cls._reduce.__doc__.format(
+            cls=cls.__name__,
+            op=reduction,
+            **getattr(cls, "_REDUCTION_DOCSTRINGS", {}).get(reduction, {}),
+        )
+
+        # Create the desired function.
+        namespace = {}
+        out = """
+def {reduction}{signature}:
+    \"\"\"{docstring}
+    \"\"\"
+    return self._reduce(op="{reduction}", {arglist})
+        """.format(
+            reduction=reduction,
+            signature=str(signature),
+            arglist=arglist,
+            docstring=docstring,
+        )
+        exec(out, namespace)
+        setattr(cls, reduction, namespace[reduction])
 
     @classmethod
     def __init_subclass__(cls):
