@@ -177,11 +177,14 @@ else
         ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
     done
 
+    ls -l "$WORKSPACE/test-results/"
+
     # Copy libcudf build time results
     echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.csv"
     if [[ -f "$LIB_BUILD_DIR/ninja_log.csv" ]]; then
         gpuci_logger "Copying build time results"
         cp "$LIB_BUILD_DIR/ninja_log.csv" "$WORKSPACE/test-results/."
+        cp "$LIB_BUILD_DIR/ninja_log.xml" "$WORKSPACE/test-results/buildtimes-junit.xml"
     fi
 
     CUDF_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf-*.tar.bz2"`

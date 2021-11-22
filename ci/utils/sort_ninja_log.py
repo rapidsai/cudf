@@ -3,10 +3,14 @@
 #
 import os
 import sys
+import xml.etree.ElementTree as ET
+from xml.dom import minidom
 
 log_file = ".ninja_log"
 if len(sys.argv) > 1:
     log_file = sys.argv[1]
+
+xml_output = len(sys.argv) > 2
 
 # build a map of the log entries
 entries = {}
@@ -26,8 +30,30 @@ if len(entries) == 0:
 keys = list(entries.keys())
 sl = sorted(keys, key=lambda k: entries[k], reverse=True)
 
-# output results in CSV format
-print("time,file")
-for key in sl:
-    print(entries[key], key, sep=",")
-
+if xml_output is False:
+    # output results in CSV format
+    print("time,file")
+    for key in sl:
+        print(entries[key], key, sep=",")
+else:
+    root = ET.Element(
+        "testsuites",
+        attrib={
+            "tests": str(1),
+            "failures": str(1),
+            "errors": str(1),
+            "name": "build-time",
+        },
+    )
+    item = ET.Element(
+        "testcase", attrib={"classname": "file.cu.o", "name": "Build"}
+    )
+    message = "Build time of _ exceeded maximum build time of _"
+    failure = ET.SubElement(item, "failure", attrib={"message": message})
+    failure.append(
+        ET.Comment(" --><![CDATA[" + "Detailed message goes here" + "]]><!-- ")
+    )
+    root.append(item)
+    tree = ET.ElementTree(root)
+    xmlstr = minidom.parseString(ET.tostring(root)).toprettyxml(indent="   ")
+    print(xmlstr)
