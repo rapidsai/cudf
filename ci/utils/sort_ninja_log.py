@@ -39,7 +39,7 @@ else:
     root = ET.Element(
         "testsuites",
         attrib={
-            "tests": str(0),
+            "tests": str(len(keys)),
             "failures": str(0),
             "errors": str(0),
             "name": "build-time",
@@ -56,13 +56,21 @@ else:
                 "time": str(elapsed),
             },
         )
-        # message = "Build time of _ exceeded maximum build time of _"
-        # failure = ET.SubElement(item, "failure", attrib={"message": message})
-        # failure.append(
-        #     ET.Comment(" --><![CDATA[" +
-        #     "Detailed message goes here" +
-        #     "]]><!-- ")
-        # )
+        if elapsed > 1.0:
+            message = (
+                "Build time of "
+                + str(elapsed)
+                + " exceeded maximum build time of 1.0"
+            )
+            failure = ET.SubElement(
+                item, "failure", attrib={"message": message}
+            )
+            # failure.append(
+            #     ET.Comment(
+            #         " --><![CDATA[" + "Detailed message goes here"
+            #       + "]]><!-- "
+            #     )
+            # )
         root.append(item)
 
     tree = ET.ElementTree(root)
