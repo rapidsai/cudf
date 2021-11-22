@@ -37,9 +37,9 @@ namespace detail {
  * linearization process but cannot be explicitly created by the user.
  */
 enum class device_data_reference_type {
-  COLUMN,       // A value in a table column
-  LITERAL,      // A literal value
-  INTERMEDIATE  // An internal temporary value
+  COLUMN,       ///< A value in a table column
+  LITERAL,      ///< A literal value
+  INTERMEDIATE  ///< An internal temporary value
 };
 
 /**

@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -1048,6 +1049,21 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void decimal128Cv() {
+    final int dec32Scale1 = -2;
+    BigInteger bigInteger1 = new BigInteger("-831457");
+    BigInteger bigInteger2 = new BigInteger("14");
+    BigInteger bigInteger3 = new BigInteger("152345742357340573405745");
+    final BigInteger[] bigInts = new BigInteger[] {bigInteger1, bigInteger2, bigInteger3};
+    try (ColumnVector v = ColumnVector.decimalFromBigInt(-dec32Scale1, bigInts)) {
+      HostColumnVector hostColumnVector = v.copyToHost();
+      assertEquals(bigInteger1, hostColumnVector.getBigDecimal(0).unscaledValue());
+      assertEquals(bigInteger2, hostColumnVector.getBigDecimal(1).unscaledValue());
+      assertEquals(bigInteger3, hostColumnVector.getBigDecimal(2).unscaledValue());
+    }
+  }
+
+  @Test
   void testGetDeviceMemorySizeNonStrings() {
     try (ColumnVector v0 = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 6);
          ColumnVector v1 = ColumnVector.fromBoxedInts(1, 2, 3, null, null, 4, 5, 6)) {
@@ -1243,6 +1259,9 @@ public class ColumnVectorTest extends CudfTestBase {
           break;
         case DECIMAL64:
           s = Scalar.fromDecimal(mockScale, 1234567890123456789L);
+          break;
+        case DECIMAL128:
+          s = Scalar.fromDecimal(mockScale, new BigInteger("1234567890123456789"));
           break;
         case TIMESTAMP_DAYS:
           s = Scalar.timestampDaysFromInt(12345);
@@ -3352,6 +3371,22 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testCastStringToBigDecimal() {
+    String[] bigValues = {"923121331938210123.321",
+        "9223372036854775808.191",
+       "9328323982309091029831.002"
+    };
+
+    try (ColumnVector cv = ColumnVector.fromStrings(bigValues);
+        ColumnVector values = cv.castTo(DType.create(DType.DTypeEnum.DECIMAL128, -3));
+        ColumnVector expected = ColumnVector.fromDecimals(new BigDecimal("923121331938210123.321"),
+            new BigDecimal("9223372036854775808.191"),
+            new BigDecimal("9328323982309091029831.002"))) {
+      assertColumnsAreEqual(expected, values);
+    }
+  }
+
+  @Test
   void testCastByteToString() {
 
     Byte[] byteValues = {1, 3, 45, -0, null, Byte.MIN_VALUE, Byte.MAX_VALUE};
@@ -3543,6 +3578,30 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testCastDecimal64ToDecimal128() {
+    testCastDecimal128(DType.DTypeEnum.DECIMAL64, DType.DTypeEnum.DECIMAL128, 0,
+        () -> ColumnVector.fromBoxedLongs(1L, -21L, 345L, null, 8008L, Long.MIN_VALUE, Long.MAX_VALUE),
+        () -> ColumnVector.fromDecimals(new BigDecimal(1), new BigDecimal(-21), new BigDecimal(345),
+            null, new BigDecimal(8008), new BigDecimal(Long.MIN_VALUE), new BigDecimal(Long.MAX_VALUE)),
+        new BigInteger[]{new BigInteger("1"), new BigInteger("-21"),
+            new BigInteger("345"), null, new BigInteger("8008"),
+            new BigInteger(String.valueOf(Long.MIN_VALUE)),
+            new BigInteger(String.valueOf(Long.MAX_VALUE))}
+    );
+    testCastDecimal128(DType.DTypeEnum.DECIMAL32, DType.DTypeEnum.DECIMAL128, 0,
+        () -> ColumnVector.fromBoxedInts(1, 21, 345, null, 8008, Integer.MIN_VALUE, Integer.MAX_VALUE),
+        () -> ColumnVector.decimalFromBigInt(0, new BigInteger("1"), new BigInteger("21"),
+            new BigInteger("345"), null, new BigInteger("8008"),
+            new BigInteger(String.valueOf(Integer.MIN_VALUE)),
+            new BigInteger(String.valueOf(Integer.MAX_VALUE))),
+        new BigInteger[]{new BigInteger("1"), new BigInteger("21"),
+            new BigInteger("345"), null, new BigInteger("8008"),
+            new BigInteger(String.valueOf(Integer.MIN_VALUE)),
+            new BigInteger(String.valueOf(Integer.MAX_VALUE))}
+    );
+  }
+
+  @Test
   void testCastFloatToDecimal() {
     testCastNumericToDecimalsAndBack(DType.FLOAT32, true, 0,
         () -> ColumnVector.fromBoxedFloats(1.0f, 2.1f, -3.23f, null, 2.41281f, 1378952.001f),
@@ -3629,6 +3688,26 @@ public class ColumnVectorTest extends CudfTestBase {
       for (int i = 0; i < sourceColumn.rows; i++) {
         Long actual = hostDecimalColumn.isNull(i) ? null :
             (isDec32 ? hostDecimalColumn.getInt(i) : hostDecimalColumn.getLong(i));
+        assertEquals(unscaledDecimal[i], actual);
+      }
+      assertColumnsAreEqual(expectedColumn, returnColumn);
+    }
+  }
+
+  private static void testCastDecimal128(DType.DTypeEnum sourceType, DType.DTypeEnum targetType, int scale,
+                                         Supplier<ColumnVector> sourceData,
+                                         Supplier<ColumnVector> returnData,
+                                         Object[] unscaledDecimal) {
+    DType decimalType = DType.create(targetType, scale);
+    try (ColumnVector sourceColumn = sourceData.get();
+         ColumnVector expectedColumn = returnData.get();
+         ColumnVector decimalColumn = sourceColumn.castTo(decimalType);
+         HostColumnVector hostDecimalColumn = decimalColumn.copyToHost();
+         ColumnVector returnColumn = decimalColumn.castTo(DType.create(decimalType.typeId, scale))) {
+      for (int i = 0; i < sourceColumn.rows; i++) {
+        Object actual = hostDecimalColumn.isNull(i) ? null :
+            (decimalType.typeId == DType.DTypeEnum.DECIMAL128 ? hostDecimalColumn.getBigDecimal(i).unscaledValue() :
+                ((decimalType.typeId == DType.DTypeEnum.DECIMAL64) ? hostDecimalColumn.getLong(i) : hostDecimalColumn.getInt(i)));
         assertEquals(unscaledDecimal[i], actual);
       }
       assertColumnsAreEqual(expectedColumn, returnColumn);

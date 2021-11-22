@@ -3056,4 +3056,26 @@ TEST_F(ParquetReaderTest, EmptyOutput)
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
+TEST_F(ParquetWriterTest, RowGroupSizeInvalid)
+{
+  const auto unused_table = std::make_unique<table>();
+  std::vector<char> out_buffer;
+
+  EXPECT_THROW(
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info(&out_buffer), unused_table->view())
+      .row_group_size_rows(4999),
+    cudf::logic_error);
+  EXPECT_THROW(
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info(&out_buffer), unused_table->view())
+      .row_group_size_bytes(511 << 10),
+    cudf::logic_error);
+
+  EXPECT_THROW(cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info(&out_buffer))
+                 .row_group_size_rows(4999),
+               cudf::logic_error);
+  EXPECT_THROW(cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info(&out_buffer))
+                 .row_group_size_bytes(511 << 10),
+               cudf::logic_error);
+}
+
 CUDF_TEST_PROGRAM_MAIN()
