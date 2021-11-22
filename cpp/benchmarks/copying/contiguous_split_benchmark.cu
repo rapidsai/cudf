@@ -33,9 +33,9 @@ void BM_contiguous_split_common(benchmark::State& state,
                                 int64_t num_splits,
                                 int64_t bytes_total)
 {
-  // generate splits  
-  std::vector<cudf::size_type> splits;  
-  if(num_splits > 0){
+  // generate splits
+  std::vector<cudf::size_type> splits;
+  if (num_splits > 0) {
     cudf::size_type split_stride = num_rows / num_splits;
     for (int idx = 0; idx < num_rows; idx += split_stride) {
       splits.push_back(std::min(idx + split_stride, static_cast<cudf::size_type>(num_rows)));
@@ -55,7 +55,7 @@ void BM_contiguous_split_common(benchmark::State& state,
     auto result = cudf::contiguous_split(src_table, splits);
   }
 
-  // it's 2x bytes_total because we're both reading and writing. 
+  // it's 2x bytes_total because we're both reading and writing.
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * bytes_total * 2);
 }
 
@@ -70,7 +70,7 @@ void BM_contiguous_split(benchmark::State& state)
   bool const include_validity       = state.range(3) == 0 ? false : true;
 
   cudf::size_type el_size = 4;  // ints and floats
-  int64_t const num_rows        = total_desired_bytes / (num_cols * el_size);  
+  int64_t const num_rows  = total_desired_bytes / (num_cols * el_size);
 
   // generate input table
   srand(31337);
@@ -87,9 +87,11 @@ void BM_contiguous_split(benchmark::State& state)
         cudf::test::fixed_width_column_wrapper<int>(rand_elements, rand_elements + num_rows);
     }
   }
-  
-  int64_t const total_bytes = total_desired_bytes + 
-                              (include_validity ? min(int64_t{1}, (num_rows / 32)) * 4 * num_cols : 0);
+
+  int64_t const total_bytes =
+    total_desired_bytes +
+    (include_validity ? (max(int64_t{1}, (num_rows / 32)) * sizeof(cudf::bitmask_type) * num_cols)
+                      : 0);
 
   BM_contiguous_split_common(state, src_cols, num_rows, num_splits, total_bytes);
 }
@@ -136,9 +138,10 @@ void BM_contiguous_split_strings(benchmark::State& state)
     }
   }
 
-  int64_t const total_bytes = total_desired_bytes + 
-                              ((num_rows + 1) * sizeof(cudf::size_type)) + 
-                              (include_validity ? min(int64_t{1}, (num_rows / 32)) * 4 * num_cols : 0);
+  int64_t const total_bytes =
+    total_desired_bytes + ((num_rows + 1) * sizeof(cudf::offset_type)) +
+    (include_validity ? (max(int64_t{1}, (num_rows / 32)) * sizeof(cudf::bitmask_type) * num_cols)
+                      : 0);
 
   BM_contiguous_split_common(state, src_cols, num_rows, num_splits, total_bytes);
 }
