@@ -14,7 +14,7 @@ from cudf._fuzz_testing.utils import (
     pyarrow_to_pandas,
 )
 from cudf.testing import dataset_generator as dg
-from cudf.utils.dtypes import pandas_dtypes_to_cudf_dtypes
+from cudf.utils.dtypes import pandas_dtypes_to_np_dtypes
 
 logging.basicConfig(
     format="%(asctime)s %(levelname)-8s %(message)s",
@@ -31,7 +31,7 @@ def _get_dtype_param_value(dtype_val):
                 processed_dtypes[col_name] = "category"
             else:
                 processed_dtypes[col_name] = str(
-                    pandas_dtypes_to_cudf_dtypes.get(dtype, dtype)
+                    pandas_dtypes_to_np_dtypes.get(dtype, dtype)
                 )
         return processed_dtypes
     return dtype_val

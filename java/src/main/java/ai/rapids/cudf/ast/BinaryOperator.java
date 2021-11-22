@@ -19,30 +19,33 @@ package ai.rapids.cudf.ast;
 import java.nio.ByteBuffer;
 
 /**
- * Enumeration of AST operations that can appear in a binary expression.
+ * Enumeration of AST operators that can appear in a binary operation.
  * NOTE: This must be kept in sync with `jni_to_binary_operator` in CompiledExpression.cpp!
  */
 public enum BinaryOperator {
-  ADD(0),            // operator +
-  SUB(1),            // operator -
-  MUL(2),            // operator *
-  DIV(3),            // operator / using common type of lhs and rhs
-  TRUE_DIV(4),       // operator / after promoting type to floating point
-  FLOOR_DIV(5),      // operator / after promoting to 64 bit floating point and then flooring the result
-  MOD(6),            // operator %
-  PYMOD(7),          // operator % but following python's sign rules for negatives
-  POW(8),            // lhs ^ rhs
-  EQUAL(9),          // operator ==
-  NOT_EQUAL(10),     // operator !=
-  LESS(11),          // operator <
-  GREATER(12),       // operator >
-  LESS_EQUAL(13),    // operator <=
-  GREATER_EQUAL(14), // operator >=
-  BITWISE_AND(15),   // operator &
-  BITWISE_OR(16),    // operator |
-  BITWISE_XOR(17),   // operator ^
-  LOGICAL_AND(18),   // operator &&
-  LOGICAL_OR(19);    // operator ||
+  ADD(0),                 // operator +
+  SUB(1),                 // operator -
+  MUL(2),                 // operator *
+  DIV(3),                 // operator / using common type of lhs and rhs
+  TRUE_DIV(4),            // operator / after promoting type to floating point
+  FLOOR_DIV(5),           // operator / after promoting to 64 bit floating point and then flooring the result
+  MOD(6),                 // operator %
+  PYMOD(7),               // operator % using Python's sign rules for negatives
+  POW(8),                 // lhs ^ rhs
+  EQUAL(9),               // operator ==
+  NULL_EQUAL(10),         // operator == using Spark rules for null inputs
+  NOT_EQUAL(11),          // operator !=
+  LESS(12),               // operator <
+  GREATER(13),            // operator >
+  LESS_EQUAL(14),         // operator <=
+  GREATER_EQUAL(15),      // operator >=
+  BITWISE_AND(16),        // operator &
+  BITWISE_OR(17),         // operator |
+  BITWISE_XOR(18),        // operator ^
+  LOGICAL_AND(19),        // operator &&
+  NULL_LOGICAL_AND(20),   // operator && using Spark rules for null inputs
+  LOGICAL_OR(21),         // operator ||
+  NULL_LOGICAL_OR(22);    // operator || using Spark rules for null inputs
 
   private final byte nativeId;
 

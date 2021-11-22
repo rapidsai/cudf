@@ -21,20 +21,67 @@ from cudf.core.abc import Serializable
 from cudf.core.buffer import Buffer
 
 
+def dtype(arbitrary):
+    """
+    Return the cuDF-supported dtype corresponding to `arbitrary`.
+
+    Parameters
+    ----------
+    arbitrary: dtype or scalar-like
+
+    Returns
+    -------
+    dtype: the cuDF-supported dtype that best matches `arbitrary`
+    """
+    # first, try interpreting arbitrary as a NumPy dtype that we support:
+    try:
+        np_dtype = np.dtype(arbitrary)
+        if np_dtype.kind in ("OU"):
+            return np.dtype("object")
+    except TypeError:
+        pass
+    else:
+        if np_dtype not in cudf._lib.types.SUPPORTED_NUMPY_TO_LIBCUDF_TYPES:
+            raise TypeError(f"Unsupported type {np_dtype}")
+        return np_dtype
+
+    #  next, check if `arbitrary` is one of our extension types:
+    if isinstance(arbitrary, cudf.core.dtypes._BaseDtype):
+        return arbitrary
+
+    # use `pandas_dtype` to try and interpret
+    # `arbitrary` as a Pandas extension type.
+    #  Return the corresponding NumPy/cuDF type.
+    pd_dtype = pd.api.types.pandas_dtype(arbitrary)
+    try:
+        return dtype(pd_dtype.numpy_dtype)
+    except AttributeError:
+        if isinstance(pd_dtype, pd.CategoricalDtype):
+            return cudf.CategoricalDtype.from_pandas(pd_dtype)
+        elif isinstance(pd_dtype, pd.StringDtype):
+            return np.dtype("object")
+        elif isinstance(pd_dtype, pd.IntervalDtype):
+            return cudf.IntervalDtype.from_pandas(pd_dtype)
+        else:
+            raise TypeError(
+                f"Cannot interpret {arbitrary} as a valid cuDF dtype"
+            )
+
+
 class _BaseDtype(ExtensionDtype, Serializable):
     # Base type for all cudf-specific dtypes
     pass
 
 
 class CategoricalDtype(_BaseDtype):
+    """
+    dtype similar to pd.CategoricalDtype with the categories
+    stored on the GPU.
+    """
 
     ordered: Optional[bool]
 
     def __init__(self, categories=None, ordered: bool = None) -> None:
-        """
-        dtype similar to pd.CategoricalDtype with the categories
-        stored on the GPU.
-        """
         self._categories = self._init_categories(categories)
         self.ordered = ordered
 
@@ -71,15 +118,15 @@ class CategoricalDtype(_BaseDtype):
         )
 
     def to_pandas(self) -> pd.CategoricalDtype:
-        if self.categories is None:
+        if self._categories is None:
             categories = None
         else:
             if isinstance(
-                self.categories, (cudf.Float32Index, cudf.Float64Index)
+                self._categories, (cudf.Float32Index, cudf.Float64Index)
             ):
-                categories = self.categories.dropna().to_pandas()
+                categories = self._categories.dropna().to_pandas()
             else:
-                categories = self.categories.to_pandas()
+                categories = self._categories.to_pandas()
         return pd.CategoricalDtype(categories=categories, ordered=self.ordered)
 
     def _init_categories(self, categories: Any):
@@ -164,7 +211,7 @@ class ListDtype(_BaseDtype):
         elif isinstance(self._typ.value_type, pa.DictionaryType):
             return CategoricalDtype.from_arrow(self._typ.value_type)
         else:
-            return np.dtype(self._typ.value_type.to_pandas_dtype()).name
+            return cudf.dtype(self._typ.value_type.to_pandas_dtype()).name
 
     @property
     def leaf_type(self):
@@ -230,14 +277,14 @@ class ListDtype(_BaseDtype):
 
 
 class StructDtype(_BaseDtype):
+    """
+    fields : dict
+        A mapping of field names to dtypes
+    """
 
     name = "struct"
 
     def __init__(self, fields):
-        """
-        fields : dict
-            A mapping of field names to dtypes
-        """
         pa_fields = {
             k: cudf.utils.dtypes.cudf_dtype_to_pa_type(v)
             for k, v in fields.items()
@@ -316,34 +363,34 @@ class StructDtype(_BaseDtype):
 
 
 class Decimal32Dtype(_BaseDtype):
+    """
+    Parameters
+    ----------
+    precision : int
+        The total number of digits in each value of this dtype
+    scale : int, optional
+        The scale of the Decimal32Dtype. See Notes below.
+
+    Notes
+    -----
+        When the scale is positive:
+            - numbers with fractional parts (e.g., 0.0042) can be represented
+            - the scale is the total number of digits to the right of the
+            decimal point
+        When the scale is negative:
+            - only multiples of powers of 10 (including 10**0) can be
+            represented (e.g., 1729, 4200, 1000000)
+            - the scale represents the number of trailing zeros in the value.
+        For example, 42 is representable with precision=2 and scale=0.
+        13.0051 is representable with precision=6 and scale=4,
+        and *not* representable with precision<6 or scale<4.
+    """
 
     name = "decimal32"
     _metadata = ("precision", "scale")
     MAX_PRECISION = np.floor(np.log10(np.iinfo("int32").max))
 
     def __init__(self, precision, scale=0):
-        """
-        Parameters
-        ----------
-        precision : int
-            The total number of digits in each value of this dtype
-        scale : int, optional
-            The scale of the Decimal32Dtype. See Notes below.
-
-        Notes
-        -----
-            When the scale is positive:
-              - numbers with fractional parts (e.g., 0.0042) can be represented
-              - the scale is the total number of digits to the right of the
-                decimal point
-            When the scale is negative:
-              - only multiples of powers of 10 (including 10**0) can be
-                represented (e.g., 1729, 4200, 1000000)
-              - the scale represents the number of trailing zeros in the value.
-            For example, 42 is representable with precision=2 and scale=0.
-            13.0051 is representable with precision=6 and scale=4,
-            and *not* representable with precision<6 or scale<4.
-        """
         self._validate(precision, scale)
         self._typ = pa.decimal128(precision, scale)
 
@@ -424,34 +471,34 @@ class Decimal32Dtype(_BaseDtype):
 
 
 class Decimal64Dtype(_BaseDtype):
+    """
+    Parameters
+    ----------
+    precision : int
+        The total number of digits in each value of this dtype
+    scale : int, optional
+        The scale of the Decimal64Dtype. See Notes below.
+
+    Notes
+    -----
+        When the scale is positive:
+          - numbers with fractional parts (e.g., 0.0042) can be represented
+          - the scale is the total number of digits to the right of the
+            decimal point
+        When the scale is negative:
+          - only multiples of powers of 10 (including 10**0) can be
+            represented (e.g., 1729, 4200, 1000000)
+          - the scale represents the number of trailing zeros in the value.
+        For example, 42 is representable with precision=2 and scale=0.
+        13.0051 is representable with precision=6 and scale=4,
+        and *not* representable with precision<6 or scale<4.
+    """
 
     name = "decimal64"
     _metadata = ("precision", "scale")
     MAX_PRECISION = np.floor(np.log10(np.iinfo("int64").max))
 
     def __init__(self, precision, scale=0):
-        """
-        Parameters
-        ----------
-        precision : int
-            The total number of digits in each value of this dtype
-        scale : int, optional
-            The scale of the Decimal64Dtype. See Notes below.
-
-        Notes
-        -----
-            When the scale is positive:
-              - numbers with fractional parts (e.g., 0.0042) can be represented
-              - the scale is the total number of digits to the right of the
-                decimal point
-            When the scale is negative:
-              - only multiples of powers of 10 (including 10**0) can be
-                represented (e.g., 1729, 4200, 1000000)
-              - the scale represents the number of trailing zeros in the value.
-            For example, 42 is representable with precision=2 and scale=0.
-            13.0051 is representable with precision=6 and scale=4,
-            and *not* representable with precision<6 or scale<4.
-        """
         self._validate(precision, scale)
         self._typ = pa.decimal128(precision, scale)
 
@@ -532,16 +579,17 @@ class Decimal64Dtype(_BaseDtype):
 
 
 class IntervalDtype(StructDtype):
+    """
+    subtype: str, np.dtype
+        The dtype of the Interval bounds.
+    closed: {‘right’, ‘left’, ‘both’, ‘neither’}, default ‘right’
+        Whether the interval is closed on the left-side, right-side,
+        both or neither. See the Notes for more detailed explanation.
+    """
+
     name = "interval"
 
     def __init__(self, subtype, closed="right"):
-        """
-        subtype: str, np.dtype
-            The dtype of the Interval bounds.
-        closed: {‘right’, ‘left’, ‘both’, ‘neither’}, default ‘right’
-            Whether the interval is closed on the left-side, right-side,
-            both or neither. See the Notes for more detailed explanation.
-        """
         super().__init__(fields={"left": subtype, "right": subtype})
 
         if closed in ["left", "right", "neither", "both"]:
@@ -565,6 +613,12 @@ class IntervalDtype(StructDtype):
         return ArrowIntervalType(
             pa.from_numpy_dtype(self.subtype), self.closed
         )
+
+    @classmethod
+    def from_pandas(cls, pd_dtype: pd.IntervalDtype) -> "IntervalDtype":
+        return cls(
+            subtype=pd_dtype.subtype
+        )  # TODO: needs `closed` when we upgrade Pandas
 
 
 def is_categorical_dtype(obj):

@@ -58,7 +58,7 @@ void BM_basic_sum(benchmark::State& state)
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
   requests[0].values = vals;
-  requests[0].aggregations.push_back(cudf::make_sum_aggregation());
+  requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
@@ -83,9 +83,11 @@ void BM_pre_sorted_sum(benchmark::State& state)
 
   auto data_it = cudf::detail::make_counting_transform_iterator(
     0, [=](cudf::size_type row) { return random_int(0, 100); });
+  auto valid_it = cudf::detail::make_counting_transform_iterator(
+    0, [=](cudf::size_type row) { return random_int(0, 100) < 90; });
 
   wrapper keys(data_it, data_it + column_size);
-  wrapper vals(data_it, data_it + column_size);
+  wrapper vals(data_it, data_it + column_size, valid_it);
 
   auto keys_table  = cudf::table_view({keys});
   auto sort_order  = cudf::sorted_order(keys_table);
@@ -97,7 +99,7 @@ void BM_pre_sorted_sum(benchmark::State& state)
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
   requests[0].values = vals;
-  requests[0].aggregations.push_back(cudf::make_sum_aggregation());
+  requests[0].aggregations.push_back(cudf::make_sum_aggregation<cudf::groupby_aggregation>());
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
@@ -111,4 +113,6 @@ BENCHMARK_DEFINE_F(Groupby, PreSorted)(::benchmark::State& state) { BM_pre_sorte
 BENCHMARK_REGISTER_F(Groupby, PreSorted)
   ->UseManualTime()
   ->Unit(benchmark::kMillisecond)
-  ->Arg(10000000);
+  ->Arg(1000000)
+  ->Arg(10000000)
+  ->Arg(100000000);

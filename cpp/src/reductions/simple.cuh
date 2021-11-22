@@ -16,9 +16,13 @@
 
 #pragma once
 
+#include <reductions/arg_minmax_util.cuh>
+
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/reduction.cuh>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/iterator.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
@@ -28,6 +32,9 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+
+#include <thrust/reduce.h>
 
 namespace cudf {
 namespace reduction {
@@ -41,8 +48,8 @@ namespace simple {
  * @tparam Op           the operator of cudf::reduction::op::
 
  * @param col Input column of data to reduce
- * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @param stream Used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Output scalar in device memory
  */
 template <typename ElementType, typename ResultType, typename Op>
@@ -74,12 +81,12 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
 /**
  * @brief Reduction for `sum`, `product`, `min` and `max` for decimal types
  *
- * @tparam DecimalXX  The `decimal32` or `decimal64` type
+ * @tparam DecimalXX  The `decimal32`, `decimal64` or `decimal128` type
  * @tparam Op         The operator of cudf::reduction::op::
+ *
  * @param col         Input column of data to reduce
-
- * @param mr          Device memory resource used to allocate the returned scalar's device memory
  * @param stream      Used for device memory operations and kernel launches.
+ * @param mr          Device memory resource used to allocate the returned scalar's device memory
  * @return            Output scalar in device memory
  */
 template <typename DecimalXX, typename Op>
@@ -115,7 +122,7 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
   }();
 
   auto const val = static_cast<cudf::scalar_type_t<Type>*>(result.get());
-  return cudf::make_fixed_point_scalar<DecimalXX>(val->value(), scale);
+  return cudf::make_fixed_point_scalar<DecimalXX>(val->value(stream), scale);
 }
 
 /**
@@ -124,10 +131,10 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
  * @tparam ElementType  The key type of the input dictionary column.
  * @tparam ResultType   The output data-type for the resulting scalar
  * @tparam Op           The operator of cudf::reduction::op::
-
+ *
  * @param col Input dictionary column of data to reduce
- * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @param stream Used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Output scalar in device memory
  */
 template <typename ElementType, typename ResultType, typename Op>
@@ -252,8 +259,7 @@ struct same_element_type_dispatcher {
   template <typename ElementType>
   static constexpr bool is_supported()
   {
-    return !(cudf::is_dictionary<ElementType>() || std::is_same_v<ElementType, cudf::list_view> ||
-             std::is_same_v<ElementType, cudf::struct_view>);
+    return !(cudf::is_dictionary<ElementType>() || std::is_same_v<ElementType, cudf::list_view>);
   }
 
   template <typename IndexType,
@@ -279,8 +285,55 @@ struct same_element_type_dispatcher {
 
  public:
   template <typename ElementType,
-            std::enable_if_t<is_supported<ElementType>() &&
-                             not cudf::is_fixed_point<ElementType>()>* = nullptr>
+            std::enable_if_t<std::is_same_v<ElementType, cudf::struct_view> &&
+                             (std::is_same_v<Op, cudf::reduction::op::min> ||
+                              std::is_same_v<Op, cudf::reduction::op::max>)>* = nullptr>
+  std::unique_ptr<scalar> operator()(column_view const& input,
+                                     rmm::cuda_stream_view stream,
+                                     rmm::mr::device_memory_resource* mr)
+  {
+    if (input.is_empty()) { return cudf::make_empty_scalar_like(input, stream, mr); }
+
+    auto constexpr is_min_op = std::is_same_v<Op, cudf::reduction::op::min>;
+
+    // We will do reduction to find the ARGMIN/ARGMAX index, then return the element at that index.
+    // When finding ARGMIN, we need to consider nulls as larger than non-null elements, and the
+    // opposite for ARGMAX.
+    auto constexpr null_precedence = is_min_op ? cudf::null_order::AFTER : cudf::null_order::BEFORE;
+    auto const flattened_input     = cudf::structs::detail::flatten_nested_columns(
+      table_view{{input}}, {}, std::vector<null_order>{null_precedence});
+    auto const d_flattened_input_ptr = table_device_view::create(flattened_input, stream);
+    auto const flattened_null_precedences =
+      is_min_op ? cudf::detail::make_device_uvector_async(flattened_input.null_orders(), stream)
+                : rmm::device_uvector<cudf::null_order>(0, stream);
+
+    // Perform reduction to find ARGMIN/ARGMAX.
+    auto const do_reduction = [&](auto const& binop) {
+      return thrust::reduce(rmm::exec_policy(stream),
+                            thrust::make_counting_iterator(0),
+                            thrust::make_counting_iterator(input.size()),
+                            size_type{0},
+                            binop);
+    };
+
+    auto const minmax_idx = [&] {
+      if (input.has_nulls()) {
+        auto const binop = cudf::reduction::detail::row_arg_minmax_fn<true>(
+          input.size(), *d_flattened_input_ptr, flattened_null_precedences.data(), is_min_op);
+        return do_reduction(binop);
+      } else {
+        auto const binop = cudf::reduction::detail::row_arg_minmax_fn<false>(
+          input.size(), *d_flattened_input_ptr, flattened_null_precedences.data(), is_min_op);
+        return do_reduction(binop);
+      }
+    }();
+
+    return cudf::detail::get_element(input, minmax_idx, stream, mr);
+  }
+
+  template <typename ElementType,
+            std::enable_if_t<is_supported<ElementType>() && !cudf::is_fixed_point<ElementType>() &&
+                             !std::is_same_v<ElementType, cudf::struct_view>>* = nullptr>
   std::unique_ptr<scalar> operator()(column_view const& col,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
@@ -376,8 +429,8 @@ struct element_type_dispatcher {
    * @tparam ElementType The input column type or key type.
    * @param col Input column (must be numeric)
    * @param output_type Requested type of the scalar result
-   * @param mr Device memory resource used to allocate the returned scalar's device memory
    * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param mr Device memory resource used to allocate the returned scalar's device memory
    */
   template <typename ElementType,
             typename std::enable_if_t<cudf::is_numeric<ElementType>()>* = nullptr>
@@ -395,7 +448,7 @@ struct element_type_dispatcher {
   }
 
   /**
-   * @brief Specialization for reducing integer column types to any output type.
+   * @brief Specialization for reducing fixed_point column types to fixed_point number
    */
   template <typename ElementType,
             typename std::enable_if_t<cudf::is_fixed_point<ElementType>()>* = nullptr>

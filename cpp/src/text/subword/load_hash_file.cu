@@ -26,6 +26,7 @@
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
 
 #include <stdint.h>
 #include <algorithm>
@@ -40,11 +41,11 @@ namespace {
 struct get_codepoint_metadata_init {
   rmm::cuda_stream_view stream;
 
-  codepoint_metadata_type* operator()() const
+  rmm::device_uvector<codepoint_metadata_type>* operator()() const
   {
-    codepoint_metadata_type* table =
-      static_cast<codepoint_metadata_type*>(rmm::mr::get_current_device_resource()->allocate(
-        codepoint_metadata_size * sizeof(codepoint_metadata_type), stream));
+    auto table_vector =
+      new rmm::device_uvector<codepoint_metadata_type>(codepoint_metadata_size, stream);
+    auto table = table_vector->data();
     thrust::fill(rmm::exec_policy(stream),
                  table + cp_section1_end,
                  table + codepoint_metadata_size,
@@ -60,18 +61,18 @@ struct get_codepoint_metadata_init {
       (cp_section2_end - cp_section2_begin + 1) * sizeof(codepoint_metadata[0]),  // 2nd section
       cudaMemcpyHostToDevice,
       stream.value()));
-    return table;
+    return table_vector;
   };
 };
 
 struct get_aux_codepoint_data_init {
   rmm::cuda_stream_view stream;
 
-  aux_codepoint_data_type* operator()() const
+  rmm::device_uvector<aux_codepoint_data_type>* operator()() const
   {
-    aux_codepoint_data_type* table =
-      static_cast<aux_codepoint_data_type*>(rmm::mr::get_current_device_resource()->allocate(
-        aux_codepoint_data_size * sizeof(aux_codepoint_data_type), stream));
+    auto table_vector =
+      new rmm::device_uvector<aux_codepoint_data_type>(aux_codepoint_data_size, stream);
+    auto table = table_vector->data();
     thrust::fill(rmm::exec_policy(stream),
                  table + aux_section1_end,
                  table + aux_codepoint_data_size,
@@ -99,7 +100,7 @@ struct get_aux_codepoint_data_init {
       (aux_section4_end - aux_section4_begin + 1) * sizeof(aux_codepoint_data[0]),  // 4th section
       cudaMemcpyHostToDevice,
       stream.value()));
-    return table;
+    return table_vector;
   }
 };
 }  // namespace
@@ -112,11 +113,11 @@ struct get_aux_codepoint_data_init {
  */
 const codepoint_metadata_type* get_codepoint_metadata(rmm::cuda_stream_view stream)
 {
-  static cudf::strings::detail::thread_safe_per_context_cache<codepoint_metadata_type>
+  static cudf::strings::detail::thread_safe_per_context_cache<
+    rmm::device_uvector<codepoint_metadata_type>>
     g_codepoint_metadata;
 
-  get_codepoint_metadata_init function = {stream};
-  return g_codepoint_metadata.find_or_initialize(function);
+  return g_codepoint_metadata.find_or_initialize(get_codepoint_metadata_init{stream})->data();
 }
 
 /**
@@ -127,10 +128,11 @@ const codepoint_metadata_type* get_codepoint_metadata(rmm::cuda_stream_view stre
  */
 const aux_codepoint_data_type* get_aux_codepoint_data(rmm::cuda_stream_view stream)
 {
-  static cudf::strings::detail::thread_safe_per_context_cache<aux_codepoint_data_type>
+  static cudf::strings::detail::thread_safe_per_context_cache<
+    rmm::device_uvector<aux_codepoint_data_type>>
     g_aux_codepoint_data;
-  get_aux_codepoint_data_init function = {stream};
-  return g_aux_codepoint_data.find_or_initialize(function);
+
+  return g_aux_codepoint_data.find_or_initialize(get_aux_codepoint_data_init{stream})->data();
 }
 
 namespace {

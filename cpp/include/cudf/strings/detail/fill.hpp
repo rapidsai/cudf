@@ -37,8 +37,8 @@ namespace detail {
  * @param begin First row index to include the new string.
  * @param end Last row index (exclusive).
  * @param value String to use when filling the range.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 std::unique_ptr<column> fill(

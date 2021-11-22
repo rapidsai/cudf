@@ -25,6 +25,7 @@
 #include <cudf/reduction.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 
+#include <cudf/structs/structs_column_view.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -66,26 +67,27 @@ struct reduce_dispatch_functor {
         return reduction::standard_deviation(col, output_dtype, var_agg->_ddof, stream, mr);
       } break;
       case aggregation::MEDIAN: {
-        auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream, mr);
-        auto valid_sorted_indices = split(*sorted_indices, {col.size() - col.null_count()})[0];
+        auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream);
+        auto valid_sorted_indices =
+          split(*sorted_indices, {col.size() - col.null_count()}, stream)[0];
         auto col_ptr =
-          quantile(col, {0.5}, interpolation::LINEAR, valid_sorted_indices, true, stream, mr);
+          quantile(col, {0.5}, interpolation::LINEAR, valid_sorted_indices, true, stream);
         return get_element(*col_ptr, 0, stream, mr);
       } break;
       case aggregation::QUANTILE: {
         auto quantile_agg = dynamic_cast<quantile_aggregation const*>(agg.get());
         CUDF_EXPECTS(quantile_agg->_quantiles.size() == 1,
                      "Reduction quantile accepts only one quantile value");
-        auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream, mr);
-        auto valid_sorted_indices = split(*sorted_indices, {col.size() - col.null_count()})[0];
+        auto sorted_indices = sorted_order(table_view{{col}}, {}, {null_order::AFTER}, stream);
+        auto valid_sorted_indices =
+          split(*sorted_indices, {col.size() - col.null_count()}, stream)[0];
 
         auto col_ptr = quantile(col,
                                 quantile_agg->_quantiles,
                                 quantile_agg->_interpolation,
                                 valid_sorted_indices,
                                 true,
-                                stream,
-                                mr);
+                                stream);
         return get_element(*col_ptr, 0, stream, mr);
       } break;
       case aggregation::NUNIQUE: {
@@ -112,15 +114,17 @@ std::unique_ptr<scalar> reduce(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  std::unique_ptr<scalar> result = make_default_constructed_scalar(output_dtype, stream, mr);
-  result->set_valid_async(false, stream);
+  // Returns default scalar if input column is non-valid. In terms of nested columns, we need to
+  // handcraft the default scalar with input column.
+  if (col.size() <= col.null_count()) {
+    if (col.type().id() == type_id::EMPTY || col.type() != output_dtype) {
+      return make_default_constructed_scalar(output_dtype, stream, mr);
+    }
+    return make_empty_scalar_like(col, stream, mr);
+  }
 
-  // check if input column is empty
-  if (col.size() <= col.null_count()) return result;
-
-  result =
-    aggregation_dispatcher(agg->kind, reduce_dispatch_functor{col, output_dtype, stream, mr}, agg);
-  return result;
+  return aggregation_dispatcher(
+    agg->kind, reduce_dispatch_functor{col, output_dtype, stream, mr}, agg);
 }
 }  // namespace detail
 

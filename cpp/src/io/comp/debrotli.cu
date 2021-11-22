@@ -193,7 +193,7 @@ struct debrotli_state_s {
   uint16_t* block_type_vlc[3];
   huff_scratch_s hs;
   uint32_t mtf[65];
-  uint64_t heap[local_heap_size / 8];
+  __align__(8) char heap[local_heap_size];
 };
 
 inline __device__ uint32_t Log2Floor(uint32_t value) { return 32 - __clz(value); }
@@ -307,11 +307,13 @@ static __device__ uint32_t getvlc(debrotli_state_s* s, const uint16_t* lut)
   return vlc;
 }
 
+static auto __device__ allocation_size(uint32_t bytes) { return (bytes + 7) & ~7; }
+
 /// Alloc bytes from the local (shared mem) heap
 static __device__ uint8_t* local_alloc(debrotli_state_s* s, uint32_t bytes)
 {
-  int heap_used = s->heap_used;
-  int len       = (bytes + 7) >> 3;
+  int heap_used  = s->heap_used;
+  auto const len = allocation_size(bytes);
   if (heap_used + len <= s->heap_limit) {
     uint8_t* ptr = reinterpret_cast<uint8_t*>(&s->heap[heap_used]);
     s->heap_used = (uint16_t)(heap_used + len);
@@ -327,7 +329,7 @@ static __device__ uint8_t* local_heap_shrink(debrotli_state_s* s, uint32_t bytes
 {
   int heap_used  = s->heap_used;
   int heap_limit = s->heap_limit;
-  int len        = (bytes + 7) >> 3;
+  auto const len = allocation_size(bytes);
   if (heap_limit - len >= heap_used) {
     heap_limit -= len;
     s->heap_limit = (uint16_t)heap_limit;
@@ -339,7 +341,7 @@ static __device__ uint8_t* local_heap_shrink(debrotli_state_s* s, uint32_t bytes
 
 static __device__ void local_heap_grow(debrotli_state_s* s, uint32_t bytes)
 {
-  int len        = (bytes + 7) >> 3;
+  auto const len = allocation_size(bytes);
   int heap_limit = s->heap_limit + len;
   s->heap_limit  = (uint16_t)heap_limit;
 }
@@ -1885,6 +1887,10 @@ static __device__ void ProcessCommands(debrotli_state_s* s, const brotli_diction
       pos += copy_length;
     }
   }
+
+  // Ensure all other threads have observed prior state of p1 & p2 before overwriting
+  __syncwarp();
+
   if (!t) {
     s->p1          = (uint8_t)p1;
     s->p2          = (uint8_t)p2;
@@ -1898,8 +1904,8 @@ static __device__ void ProcessCommands(debrotli_state_s* s, const brotli_diction
  *
  * blockDim = {block_size,1,1}
  *
- * @param inputs[in] Source/Destination buffer information per block
- * @param outputs[out] Decompressor status per block
+ * @param[in] inputs Source/Destination buffer information per block
+ * @param[out] outputs Decompressor status per block
  * @param scratch Intermediate device memory heap space (will be dynamically shared between blocks)
  * @param scratch_size Size of scratch heap space (smaller sizes may result in serialization between
  *blocks)

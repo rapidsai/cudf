@@ -2,6 +2,7 @@
 
 from __future__ import annotations, division
 
+import functools
 import inspect
 import itertools
 import numbers
@@ -10,7 +11,7 @@ import sys
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Sequence
-from typing import Any, Mapping, Optional, TypeVar
+from typing import Any, MutableMapping, Optional, Set, TypeVar
 
 import cupy
 import numpy as np
@@ -23,33 +24,51 @@ from pandas.io.formats import console
 from pandas.io.formats.printing import pprint_thing
 
 import cudf
+import cudf.core.common
 from cudf import _lib as libcudf
-from cudf.api.types import is_bool_dtype, is_dict_like
-from cudf.core import column, reshape
+from cudf.api.types import (
+    _is_scalar_or_zero_d_array,
+    is_bool_dtype,
+    is_categorical_dtype,
+    is_datetime_dtype,
+    is_dict_like,
+    is_dtype_equal,
+    is_list_dtype,
+    is_list_like,
+    is_numeric_dtype,
+    is_scalar,
+    is_string_dtype,
+    is_struct_dtype,
+)
+from cudf.core import column, df_protocol, reshape
 from cudf.core.abc import Serializable
-from cudf.core.column import as_column, column_empty
+from cudf.core.column import (
+    as_column,
+    build_categorical_column,
+    build_column,
+    column_empty,
+    concat_columns,
+)
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame, _drop_rows_by_labels
 from cudf.core.groupby.groupby import DataFrameGroupBy
 from cudf.core.index import BaseIndex, RangeIndex, as_index
-from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
+from cudf.core.indexed_frame import (
+    IndexedFrame,
+    _FrameIndexer,
+    _get_label_range_or_mask,
+    _indices_from_labels,
+)
+from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
-from cudf.core.window import Rolling
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
-    _is_scalar_or_zero_d_array,
     can_convert_to_column,
     cudf_dtype_from_pydata_dtype,
     find_common_type,
-    is_categorical_dtype,
     is_column_like,
-    is_datetime_dtype,
-    is_list_dtype,
-    is_list_like,
-    is_scalar,
-    is_string_dtype,
-    is_struct_dtype,
+    min_scalar_type,
     numeric_normalize_types,
 )
 from cudf.utils.utils import GetAttrGetItemMixin
@@ -62,107 +81,441 @@ _cupy_nan_methods_map = {
     "max": "nanmax",
     "sum": "nansum",
     "prod": "nanprod",
+    "product": "nanprod",
     "mean": "nanmean",
     "std": "nanstd",
     "var": "nanvar",
 }
 
 
-class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
+class _DataFrameIndexer(_FrameIndexer):
+    def __getitem__(self, arg):
+        from cudf import MultiIndex
+
+        if isinstance(self._frame.index, MultiIndex) or isinstance(
+            self._frame.columns, MultiIndex
+        ):
+            # This try/except block allows the use of pandas-like
+            # tuple arguments into MultiIndex dataframes.
+            try:
+                return self._getitem_tuple_arg(arg)
+            except (TypeError, KeyError, IndexError, ValueError):
+                return self._getitem_tuple_arg((arg, slice(None)))
+        else:
+            if not isinstance(arg, tuple):
+                arg = (arg, slice(None))
+            return self._getitem_tuple_arg(arg)
+
+    def __setitem__(self, key, value):
+        if not isinstance(key, tuple):
+            key = (key, slice(None))
+        return self._setitem_tuple_arg(key, value)
+
+    def _can_downcast_to_series(self, df, arg):
+        """
+        This method encapsulates the logic used
+        to determine whether or not the result of a loc/iloc
+        operation should be "downcasted" from a DataFrame to a
+        Series
+        """
+        from cudf.core.column import as_column
+
+        if isinstance(df, cudf.Series):
+            return False
+        nrows, ncols = df.shape
+        if nrows == 1:
+            if type(arg[0]) is slice:
+                if not is_scalar(arg[1]):
+                    return False
+            elif (is_list_like(arg[0]) or is_column_like(arg[0])) and (
+                is_list_like(arg[1])
+                or is_column_like(arg[0])
+                or type(arg[1]) is slice
+            ):
+                return False
+            else:
+                if is_bool_dtype(as_column(arg[0]).dtype) and not isinstance(
+                    arg[1], slice
+                ):
+                    return True
+            dtypes = df.dtypes.values.tolist()
+            all_numeric = all([is_numeric_dtype(t) for t in dtypes])
+            if all_numeric:
+                return True
+        if ncols == 1:
+            if type(arg[1]) is slice:
+                return False
+            if isinstance(arg[1], tuple):
+                # Multiindex indexing with a slice
+                if any(isinstance(v, slice) for v in arg):
+                    return False
+            if not (is_list_like(arg[1]) or is_column_like(arg[1])):
+                return True
+        return False
+
+    def _downcast_to_series(self, df, arg):
+        """
+        "Downcast" from a DataFrame to a Series
+        based on Pandas indexing rules
+        """
+        nrows, ncols = df.shape
+        # determine the axis along which the Series is taken:
+        if nrows == 1 and ncols == 1:
+            if is_scalar(arg[0]) and is_scalar(arg[1]):
+                return df[df.columns[0]].iloc[0]
+            elif not is_scalar(arg[0]):
+                axis = 1
+            else:
+                axis = 0
+
+        elif nrows == 1:
+            axis = 0
+        elif ncols == 1:
+            axis = 1
+        else:
+            raise ValueError("Cannot downcast DataFrame selection to Series")
+
+        # take series along the axis:
+        if axis == 1:
+            return df[df._data.names[0]]
+        else:
+            if df._num_columns > 0:
+                dtypes = df.dtypes.values.tolist()
+                normalized_dtype = np.result_type(*dtypes)
+                for name, col in df._data.items():
+                    df[name] = col.astype(normalized_dtype)
+
+            sr = df.T
+            return sr[sr._data.names[0]]
+
+
+class _DataFrameLocIndexer(_DataFrameIndexer):
+    """
+    For selection by label.
+    """
+
+    def _getitem_scalar(self, arg):
+        return self._frame[arg[1]].loc[arg[0]]
+
+    @annotate("LOC_GETITEM", color="blue", domain="cudf_python")
+    def _getitem_tuple_arg(self, arg):
+        from uuid import uuid4
+
+        from cudf import MultiIndex
+        from cudf.core.column import column
+        from cudf.core.dataframe import DataFrame
+        from cudf.core.index import as_index
+
+        # Step 1: Gather columns
+        if isinstance(arg, tuple):
+            columns_df = self._frame._get_columns_by_label(arg[1])
+            columns_df._index = self._frame._index
+        else:
+            columns_df = self._frame
+
+        # Step 2: Gather rows
+        if isinstance(columns_df.index, MultiIndex):
+            if isinstance(arg, (MultiIndex, pd.MultiIndex)):
+                if isinstance(arg, pd.MultiIndex):
+                    arg = MultiIndex.from_pandas(arg)
+
+                indices = _indices_from_labels(columns_df, arg)
+                return columns_df.take(indices)
+
+            else:
+                if isinstance(arg, tuple):
+                    return columns_df.index._get_row_major(columns_df, arg[0])
+                else:
+                    return columns_df.index._get_row_major(columns_df, arg)
+        else:
+            if isinstance(arg[0], slice):
+                out = _get_label_range_or_mask(
+                    columns_df.index, arg[0].start, arg[0].stop, arg[0].step
+                )
+                if isinstance(out, slice):
+                    df = columns_df._slice(out)
+                else:
+                    df = columns_df._apply_boolean_mask(out)
+            else:
+                tmp_arg = arg
+                if is_scalar(arg[0]):
+                    # If a scalar, there is possibility of having duplicates.
+                    # Join would get all the duplicates. So, coverting it to
+                    # an array kind.
+                    tmp_arg = ([tmp_arg[0]], tmp_arg[1])
+                if len(tmp_arg[0]) == 0:
+                    return columns_df._empty_like(keep_index=True)
+                tmp_arg = (column.as_column(tmp_arg[0]), tmp_arg[1])
+
+                if is_bool_dtype(tmp_arg[0]):
+                    df = columns_df._apply_boolean_mask(tmp_arg[0])
+                else:
+                    tmp_col_name = str(uuid4())
+                    other_df = DataFrame(
+                        {tmp_col_name: column.arange(len(tmp_arg[0]))},
+                        index=as_index(tmp_arg[0]),
+                    )
+                    df = other_df.join(columns_df, how="inner")
+                    # as join is not assigning any names to index,
+                    # update it over here
+                    df.index.name = columns_df.index.name
+                    df = df.sort_values(tmp_col_name)
+                    df.drop(columns=[tmp_col_name], inplace=True)
+                    # There were no indices found
+                    if len(df) == 0:
+                        raise KeyError(arg)
+
+        # Step 3: Gather index
+        if df.shape[0] == 1:  # we have a single row
+            if isinstance(arg[0], slice):
+                start = arg[0].start
+                if start is None:
+                    start = self._frame.index[0]
+                df.index = as_index(start)
+            else:
+                row_selection = column.as_column(arg[0])
+                if is_bool_dtype(row_selection.dtype):
+                    df.index = self._frame.index.take(row_selection)
+                else:
+                    df.index = as_index(row_selection)
+        # Step 4: Downcast
+        if self._can_downcast_to_series(df, arg):
+            return self._downcast_to_series(df, arg)
+        return df
+
+    @annotate("LOC_SETITEM", color="blue", domain="cudf_python")
+    def _setitem_tuple_arg(self, key, value):
+        if isinstance(self._frame.index, cudf.MultiIndex) or isinstance(
+            self._frame.columns, pd.MultiIndex
+        ):
+            raise NotImplementedError(
+                "Setting values using df.loc[] not supported on "
+                "DataFrames with a MultiIndex"
+            )
+
+        try:
+            columns_df = self._frame._get_columns_by_label(key[1])
+        except KeyError:
+            if not self._frame.empty and isinstance(key[0], slice):
+                pos_range = _get_label_range_or_mask(
+                    self._frame.index, key[0].start, key[0].stop, key[0].step
+                )
+                idx = self._frame.index[pos_range]
+            elif self._frame.empty and isinstance(key[0], slice):
+                idx = None
+            else:
+                idx = cudf.Index(key[0])
+            if is_scalar(value):
+                length = len(idx) if idx is not None else 1
+                value = as_column(value, length=length)
+
+            new_col = cudf.Series(value, index=idx)
+            if not self._frame.empty:
+                new_col = new_col._align_to_index(
+                    self._frame.index, how="right"
+                )
+
+            if self._frame.empty:
+                self._frame.index = (
+                    idx if idx is not None else cudf.RangeIndex(len(new_col))
+                )
+            self._frame._data.insert(key[1], new_col)
+        else:
+            if isinstance(value, (cupy.ndarray, np.ndarray)):
+                value_df = cudf.DataFrame(value)
+                if value_df.shape[1] != columns_df.shape[1]:
+                    if value_df.shape[1] == 1:
+                        value_cols = (
+                            value_df._data.columns * columns_df.shape[1]
+                        )
+                    else:
+                        raise ValueError(
+                            f"shape mismatch: value array of shape "
+                            f"{value_df.shape} could not be "
+                            f"broadcast to indexing result of shape "
+                            f"{columns_df.shape}"
+                        )
+                else:
+                    value_cols = value_df._data.columns
+                for i, col in enumerate(columns_df._column_names):
+                    self._frame[col].loc[key[0]] = value_cols[i]
+            else:
+                for col in columns_df._column_names:
+                    self._frame[col].loc[key[0]] = value
+
+
+class _DataFrameIlocIndexer(_DataFrameIndexer):
+    """
+    For selection by index.
+    """
+
+    @annotate("ILOC_GETITEM", color="blue", domain="cudf_python")
+    def _getitem_tuple_arg(self, arg):
+        from cudf import MultiIndex
+        from cudf.core.column import column
+        from cudf.core.index import as_index
+
+        # Iloc Step 1:
+        # Gather the columns specified by the second tuple arg
+        columns_df = cudf.DataFrame(self._frame._get_columns_by_index(arg[1]))
+
+        columns_df._index = self._frame._index
+
+        # Iloc Step 2:
+        # Gather the rows specified by the first tuple arg
+        if isinstance(columns_df.index, MultiIndex):
+            if isinstance(arg[0], slice):
+                df = columns_df[arg[0]]
+            else:
+                df = columns_df.index._get_row_major(columns_df, arg[0])
+            if (len(df) == 1 and len(columns_df) >= 1) and not (
+                isinstance(arg[0], slice) or isinstance(arg[1], slice)
+            ):
+                # Pandas returns a numpy scalar in this case
+                return df.iloc[0]
+            if self._can_downcast_to_series(df, arg):
+                return self._downcast_to_series(df, arg)
+            return df
+        else:
+            if isinstance(arg[0], slice):
+                df = columns_df._slice(arg[0])
+            elif is_scalar(arg[0]):
+                index = arg[0]
+                if index < 0:
+                    index += len(columns_df)
+                df = columns_df._slice(slice(index, index + 1, 1))
+            else:
+                arg = (column.as_column(arg[0]), arg[1])
+                if is_bool_dtype(arg[0]):
+                    df = columns_df._apply_boolean_mask(arg[0])
+                else:
+                    df = columns_df._gather(arg[0])
+
+        # Iloc Step 3:
+        # Reindex
+        if df.shape[0] == 1:  # we have a single row without an index
+            df.index = as_index(self._frame.index[arg[0]])
+
+        # Iloc Step 4:
+        # Downcast
+        if self._can_downcast_to_series(df, arg):
+            return self._downcast_to_series(df, arg)
+
+        if df.shape[0] == 0 and df.shape[1] == 0 and isinstance(arg[0], slice):
+            df._index = as_index(self._frame.index[arg[0]])
+        return df
+
+    @annotate("ILOC_SETITEM", color="blue", domain="cudf_python")
+    def _setitem_tuple_arg(self, key, value):
+        columns = cudf.DataFrame(self._frame._get_columns_by_index(key[1]))
+
+        for col in columns:
+            self._frame[col].iloc[key[0]] = value
+
+    def _getitem_scalar(self, arg):
+        col = self._frame.columns[arg[1]]
+        return self._frame[col].iloc[arg[0]]
+
+
+class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
+    """
+    A GPU Dataframe object.
+
+    Parameters
+    ----------
+    data : array-like, Iterable, dict, or DataFrame.
+        Dict can contain Series, arrays, constants, or list-like objects.
+
+    index : Index or array-like
+        Index to use for resulting frame. Will default to
+        RangeIndex if no indexing information part of input data and
+        no index provided.
+
+    columns : Index or array-like
+        Column labels to use for resulting frame.
+        Will default to RangeIndex (0, 1, 2, …, n) if no column
+        labels are provided.
+
+    dtype : dtype, default None
+        Data type to force. Only a single dtype is allowed.
+        If None, infer.
+
+    Examples
+    --------
+
+    Build dataframe with ``__setitem__``:
+
+    >>> import cudf
+    >>> df = cudf.DataFrame()
+    >>> df['key'] = [0, 1, 2, 3, 4]
+    >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
+    >>> df
+       key   val
+    0    0  10.0
+    1    1  11.0
+    2    2  12.0
+    3    3  13.0
+    4    4  14.0
+
+    Build DataFrame via dict of columns:
+
+    >>> import numpy as np
+    >>> from datetime import datetime, timedelta
+    >>> t0 = datetime.strptime('2018-10-07 12:00:00', '%Y-%m-%d %H:%M:%S')
+    >>> n = 5
+    >>> df = cudf.DataFrame({
+    ...     'id': np.arange(n),
+    ...     'datetimes': np.array(
+    ...     [(t0+ timedelta(seconds=x)) for x in range(n)])
+    ... })
+    >>> df
+        id                datetimes
+    0    0  2018-10-07T12:00:00.000
+    1    1  2018-10-07T12:00:01.000
+    2    2  2018-10-07T12:00:02.000
+    3    3  2018-10-07T12:00:03.000
+    4    4  2018-10-07T12:00:04.000
+
+    Build DataFrame via list of rows as tuples:
+
+    >>> df = cudf.DataFrame([
+    ...     (5, "cats", "jump", np.nan),
+    ...     (2, "dogs", "dig", 7.5),
+    ...     (3, "cows", "moo", -2.1, "occasionally"),
+    ... ])
+    >>> df
+       0     1     2     3             4
+    0  5  cats  jump  <NA>          <NA>
+    1  2  dogs   dig   7.5          <NA>
+    2  3  cows   moo  -2.1  occasionally
+
+    Convert from a Pandas DataFrame:
+
+    >>> import pandas as pd
+    >>> pdf = pd.DataFrame({'a': [0, 1, 2, 3],'b': [0.1, 0.2, None, 0.3]})
+    >>> pdf
+       a    b
+    0  0  0.1
+    1  1  0.2
+    2  2  NaN
+    3  3  0.3
+    >>> df = cudf.from_pandas(pdf)
+    >>> df
+       a     b
+    0  0   0.1
+    1  1   0.2
+    2  2  <NA>
+    3  3   0.3
+    """
 
     _PROTECTED_KEYS = frozenset(("_data", "_index"))
+    _accessors: Set[Any] = set()
+    _loc_indexer_type = _DataFrameLocIndexer
+    _iloc_indexer_type = _DataFrameIlocIndexer
 
     @annotate("DATAFRAME_INIT", color="blue", domain="cudf_python")
     def __init__(self, data=None, index=None, columns=None, dtype=None):
-        """
-        A GPU Dataframe object.
 
-        Parameters
-        ----------
-        data : array-like, Iterable, dict, or DataFrame.
-            Dict can contain Series, arrays, constants, or list-like objects.
-
-        index : Index or array-like
-            Index to use for resulting frame. Will default to
-            RangeIndex if no indexing information part of input data and
-            no index provided.
-
-        columns : Index or array-like
-            Column labels to use for resulting frame.
-            Will default to RangeIndex (0, 1, 2, …, n) if no column
-            labels are provided.
-
-        dtype : dtype, default None
-            Data type to force. Only a single dtype is allowed.
-            If None, infer.
-
-        Examples
-        --------
-
-        Build dataframe with ``__setitem__``:
-
-        >>> import cudf
-        >>> df = cudf.DataFrame()
-        >>> df['key'] = [0, 1, 2, 3, 4]
-        >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
-        >>> df
-           key   val
-        0    0  10.0
-        1    1  11.0
-        2    2  12.0
-        3    3  13.0
-        4    4  14.0
-
-        Build DataFrame via dict of columns:
-
-        >>> import numpy as np
-        >>> from datetime import datetime, timedelta
-        >>> t0 = datetime.strptime('2018-10-07 12:00:00', '%Y-%m-%d %H:%M:%S')
-        >>> n = 5
-        >>> df = cudf.DataFrame({
-        ...     'id': np.arange(n),
-        ...     'datetimes': np.array(
-        ...     [(t0+ timedelta(seconds=x)) for x in range(n)])
-        ... })
-        >>> df
-            id                datetimes
-        0    0  2018-10-07T12:00:00.000
-        1    1  2018-10-07T12:00:01.000
-        2    2  2018-10-07T12:00:02.000
-        3    3  2018-10-07T12:00:03.000
-        4    4  2018-10-07T12:00:04.000
-
-        Build DataFrame via list of rows as tuples:
-
-        >>> df = cudf.DataFrame([
-        ...     (5, "cats", "jump", np.nan),
-        ...     (2, "dogs", "dig", 7.5),
-        ...     (3, "cows", "moo", -2.1, "occasionally"),
-        ... ])
-        >>> df
-           0     1     2     3             4
-        0  5  cats  jump  <NA>          <NA>
-        1  2  dogs   dig   7.5          <NA>
-        2  3  cows   moo  -2.1  occasionally
-
-        Convert from a Pandas DataFrame:
-
-        >>> import pandas as pd
-        >>> pdf = pd.DataFrame({'a': [0, 1, 2, 3],'b': [0.1, 0.2, None, 0.3]})
-        >>> pdf
-           a    b
-        0  0  0.1
-        1  1  0.2
-        2  2  NaN
-        3  3  0.3
-        >>> df = cudf.from_pandas(pdf)
-        >>> df
-           a     b
-        0  0   0.1
-        1  1   0.2
-        2  2  <NA>
-        3  3   0.3
-        """
         super().__init__()
 
         if isinstance(columns, (Series, cudf.BaseIndex)):
@@ -245,9 +598,12 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         else:
             if is_list_like(data):
                 if len(data) > 0 and is_scalar(data[0]):
-                    new_df = self._from_columns(
-                        [data], index=index, columns=columns
-                    )
+                    if columns is not None:
+                        data = dict(zip(columns, [data]))
+                    else:
+                        data = dict(enumerate([data]))
+                    new_df = DataFrame(data=data, index=index)
+
                     self._data = new_df._data
                     self.index = new_df._index
                     self.columns = new_df.columns
@@ -341,7 +697,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             # Setting `final_columns` to self._index so
             # that the resulting `transpose` will be have
             # columns set to `final_columns`
-            self._index = final_columns
+            self._index = as_index(final_columns)
 
             transpose = self.T
         else:
@@ -458,7 +814,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
     @classmethod
     def _from_data(
         cls,
-        data: Mapping,
+        data: MutableMapping,
         index: Optional[BaseIndex] = None,
         columns: Any = None,
     ) -> DataFrame:
@@ -514,37 +870,28 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         )
 
     def serialize(self):
-        header = {}
-        frames = []
-        header["type-serialized"] = pickle.dumps(type(self))
+        header, frames = super().serialize()
+
         header["index"], index_frames = self._index.serialize()
         header["index_frame_count"] = len(index_frames)
-        frames.extend(index_frames)
-
-        # Use the column directly to avoid duplicating the index
-        # need to pickle column names to handle numpy integer columns
-        header["column_names"] = pickle.dumps(tuple(self._data.names))
-        column_header, column_frames = column.serialize_columns(self._columns)
-        header["columns"] = column_header
-        frames.extend(column_frames)
+        # For backwards compatibility with older versions of cuDF, index
+        # columns are placed before data columns.
+        frames = index_frames + frames
 
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
-        # Reconstruct the index
-        index_frames = frames[: header["index_frame_count"]]
+        index_nframes = header["index_frame_count"]
+        obj = super().deserialize(
+            header, frames[header["index_frame_count"] :]
+        )
 
         idx_typ = pickle.loads(header["index"]["type-serialized"])
-        index = idx_typ.deserialize(header["index"], index_frames)
+        index = idx_typ.deserialize(header["index"], frames[:index_nframes])
+        obj._index = index
 
-        # Reconstruct the columns
-        column_frames = frames[header["index_frame_count"] :]
-
-        column_names = pickle.loads(header["column_names"])
-        columns = column.deserialize_columns(header["columns"], column_frames)
-
-        return cls(dict(zip(column_names, columns)), index=index)
+        return obj
 
     @property
     def dtypes(self):
@@ -574,20 +921,17 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         string              object
         dtype: object
         """
-        return cudf.utils.utils._create_pandas_series(
-            data=[x.dtype for x in self._data.columns], index=self._data.names,
+        return pd.Series(self._dtypes)
+
+    @property
+    def _dtypes(self):
+        return dict(
+            zip(self._data.names, (col.dtype for col in self._data.columns))
         )
 
     @property
-    def shape(self):
-        """Returns a tuple representing the dimensionality of the DataFrame.
-        """
-        return self._num_rows, self._num_columns
-
-    @property
     def ndim(self):
-        """Dimension of the data. DataFrame ndim is always 2.
-        """
+        """Dimension of the data. DataFrame ndim is always 2."""
         return 2
 
     def __dir__(self):
@@ -642,7 +986,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         2  2  2  2
         3  3  3  3
         >>> df[-5:]  # get last 5 rows of all columns
-            a   b   c
+             a   b   c
         15  15  15  15
         16  16  16  16
         17  17  17  17
@@ -686,8 +1030,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
     @annotate("DATAFRAME_SETITEM", color="blue", domain="cudf_python")
     def __setitem__(self, arg, value):
-        """Add/set column by *arg or DataFrame*
-        """
+        """Add/set column by *arg or DataFrame*"""
         if isinstance(arg, DataFrame):
             # not handling set_item where arg = df & value = df
             if isinstance(value, DataFrame):
@@ -799,20 +1142,15 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         """
         self._drop_column(name)
 
-    def __sizeof__(self):
-        columns = sum(col.__sizeof__() for col in self._data.columns)
-        index = self._index.__sizeof__()
-        return columns + index
-
     def _slice(self: T, arg: slice) -> T:
         """
-       _slice : slice the frame as per the arg
+        _slice : slice the frame as per the arg
 
-       Parameters
-       ----------
-       arg : should always be of type slice
+        Parameters
+        ----------
+        arg : should always be of type slice
 
-       """
+        """
         from cudf.core.index import RangeIndex
 
         num_rows = len(self)
@@ -857,10 +1195,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 )
 
                 result._copy_type_metadata(self, include_index=keep_index)
-                # Adding index of type RangeIndex back to
-                # result
-                if keep_index is False and self.index is not None:
-                    result.index = self.index[start:stop]
+                if self.index is not None:
+                    if keep_index:
+                        result._index.names = self.index.names
+                    else:
+                        # Adding index of type RangeIndex back to
+                        # result
+                        result.index = self.index[start:stop]
                 result.columns = self.columns
                 return result
 
@@ -894,7 +1235,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         ...              for t in dtypes])
         >>> df = cudf.DataFrame(data)
         >>> df.head()
-            int64  float64  object  bool
+           int64  float64  object  bool
         0      1      1.0     1.0  True
         1      1      1.0     1.0  True
         2      1      1.0     1.0  True
@@ -911,19 +1252,18 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         >>> df['object'].astype('category').memory_usage(deep=True)
         5048
         """
+        if deep:
+            warnings.warn(
+                "The deep parameter is ignored and is only included "
+                "for pandas compatibility."
+            )
         ind = list(self.columns)
-        sizes = [col._memory_usage(deep=deep) for col in self._data.columns]
+        sizes = [col.memory_usage() for col in self._data.columns]
         if index:
             ind.append("Index")
             ind = cudf.Index(ind, dtype="str")
-            sizes.append(self.index.memory_usage(deep=deep))
+            sizes.append(self.index.memory_usage())
         return Series(sizes, index=ind)
-
-    def __len__(self):
-        """
-        Returns the number of rows
-        """
-        return len(self.index)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
         import cudf
@@ -959,43 +1299,20 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             # Handle case if cudf_func is same as numpy function
             if cudf_func is func:
                 return NotImplemented
+            # numpy returns an array from the dot product of two dataframes
+            elif (
+                func is np.dot
+                and isinstance(args[0], (DataFrame, pd.DataFrame))
+                and isinstance(args[1], (DataFrame, pd.DataFrame))
+            ):
+                return cudf_func(*args, **kwargs).values
             else:
                 return cudf_func(*args, **kwargs)
         else:
             return NotImplemented
 
-    @property
-    def values(self):
-        """
-        Return a CuPy representation of the DataFrame.
-
-        Only the values in the DataFrame will be returned, the axes labels will
-        be removed.
-
-        Returns
-        -------
-        out: cupy.ndarray
-            The values of the DataFrame.
-        """
-        return cupy.asarray(self.as_gpu_matrix())
-
-    def __array__(self, dtype=None):
-        raise TypeError(
-            "Implicit conversion to a host NumPy array via __array__ is not "
-            "allowed, To explicitly construct a GPU matrix, consider using "
-            ".as_gpu_matrix()\nTo explicitly construct a host "
-            "matrix, consider using .as_matrix()"
-        )
-
-    def __arrow_array__(self, type=None):
-        raise TypeError(
-            "Implicit conversion to a host PyArrow Table via __arrow_array__ "
-            "is not allowed, To explicitly construct a PyArrow Table, "
-            "consider using .to_arrow()"
-        )
-
     def _get_numeric_data(self):
-        """ Return a dataframe with only numeric data types """
+        """Return a dataframe with only numeric data types"""
         columns = [
             c
             for c, dt in self.dtypes.items()
@@ -1023,67 +1340,224 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             new[k] = v
         return new
 
-    def head(self, n=5):
-        """
-        Returns the first n rows as a new DataFrame
+    @classmethod
+    @annotate("CONCAT", color="orange", domain="cudf_python")
+    def _concat(
+        cls, objs, axis=0, join="outer", ignore_index=False, sort=False
+    ):
+        # flag to indicate at least one empty input frame also has an index
+        empty_has_index = False
+        # length of output frame's RangeIndex if all input frames are empty,
+        # and at least one has an index
+        result_index_length = 0
+        # the number of empty input frames
+        num_empty_input_frames = 0
 
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame()
-        >>> df['key'] = [0, 1, 2, 3, 4]
-        >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
-        >>> df.head(2)
-           key   val
-        0    0  10.0
-        1    1  11.0
-        """
-        return self.iloc[:n]
+        # flag to indicate if all DataFrame's have
+        # RangeIndex as their index
+        are_all_range_index = False
 
-    def tail(self, n=5):
-        """
-        Returns the last n rows as a new DataFrame
+        for i, obj in enumerate(objs):
+            # shallow-copy the input DFs in case the same DF instance
+            # is concatenated with itself
+            objs[i] = obj.copy(deep=False)
 
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame()
-        >>> df['key'] = [0, 1, 2, 3, 4]
-        >>> df['val'] = [float(i + 10) for i in range(5)]  # insert column
-        >>> df.tail(2)
-           key   val
-        3    3  13.0
-        4    4  14.0
-        """
-        if n == 0:
-            return self.iloc[0:0]
+            # If ignore_index is true, determine if
+            # all or some objs are empty(and have index).
+            # 1. If all objects are empty(and have index), we
+            # should set the index separately using RangeIndex.
+            # 2. If some objects are empty(and have index), we
+            # create empty columns later while populating `columns`
+            # variable. Detailed explanation of second case before
+            # allocation of `columns` variable below.
+            if ignore_index and obj.empty:
+                num_empty_input_frames += 1
+                result_index_length += len(obj)
+                empty_has_index = empty_has_index or len(obj) > 0
 
-        return self.iloc[-n:]
+            are_all_range_index = (
+                True if i == 0 else are_all_range_index
+            ) and isinstance(obj.index, cudf.RangeIndex)
 
-    def to_string(self):
-        """
-        Convert to string
+        if join == "inner":
+            sets_of_column_names = [set(obj._column_names) for obj in objs]
 
-        cuDF uses Pandas internals for efficient string formatting.
-        Set formatting options using pandas string formatting options and
-        cuDF objects will print identically to Pandas objects.
+            intersecting_columns = functools.reduce(
+                set.intersection, sets_of_column_names
+            )
+            union_of_columns = functools.reduce(
+                set.union, sets_of_column_names
+            )
+            non_intersecting_columns = union_of_columns.symmetric_difference(
+                intersecting_columns
+            )
 
-        cuDF supports `null/None` as a value in any column type, which
-        is transparently supported during this output process.
+            # Get an ordered list of the intersecting columns to preserve input
+            # order, which is promised by pandas for inner joins.
+            ordered_intersecting_columns = [
+                name
+                for obj in objs
+                for name in obj._column_names
+                if name in intersecting_columns
+            ]
 
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame()
-        >>> df['key'] = [0, 1, 2]
-        >>> df['val'] = [float(i + 10) for i in range(3)]
-        >>> df.to_string()
-        '   key   val\\n0    0  10.0\\n1    1  11.0\\n2    2  12.0'
-        """
-        return self.__repr__()
+            names = dict.fromkeys(ordered_intersecting_columns).keys()
 
-    def __str__(self):
-        return self.to_string()
+            if axis == 0:
+                if ignore_index and (
+                    num_empty_input_frames > 0
+                    or len(intersecting_columns) == 0
+                ):
+                    # When ignore_index is True and if there is
+                    # at least 1 empty dataframe and no
+                    # intersecting columns are present, an empty dataframe
+                    # needs to be returned just with an Index.
+                    empty_has_index = True
+                    num_empty_input_frames = len(objs)
+                    result_index_length = sum(len(obj) for obj in objs)
+
+                # remove columns not present in all objs
+                for obj in objs:
+                    obj.drop(
+                        columns=non_intersecting_columns,
+                        inplace=True,
+                        errors="ignore",
+                    )
+        elif join == "outer":
+            # Get a list of the unique table column names
+            names = [name for f in objs for name in f._column_names]
+            names = dict.fromkeys(names).keys()
+
+        else:
+            raise ValueError(
+                "Only can inner (intersect) or outer (union) when joining"
+                "the other axis"
+            )
+
+        if sort:
+            try:
+                # Sorted always returns a list, but will fail to sort if names
+                # include different types that are not comparable.
+                names = sorted(names)
+            except TypeError:
+                names = list(names)
+        else:
+            names = list(names)
+
+        # Combine the index and table columns for each Frame into a list of
+        # [...index_cols, ...table_cols].
+        #
+        # If any of the input frames have a non-empty index, include these
+        # columns in the list of columns to concatenate, even if the input
+        # frames are empty and `ignore_index=True`.
+        columns = [
+            (
+                []
+                if are_all_range_index
+                or (ignore_index and not empty_has_index)
+                else list(f._index._data.columns)
+            )
+            + [f._data[name] if name in f._data else None for name in names]
+            for f in objs
+        ]
+
+        # Get a list of the combined index and table column indices
+        indices = list(range(functools.reduce(max, map(len, columns))))
+        # The position of the first table colum in each
+        # combined index + table columns list
+        first_data_column_position = len(indices) - len(names)
+
+        # Get the non-null columns and their dtypes
+        non_null_cols, dtypes = _get_non_null_cols_and_dtypes(indices, columns)
+
+        # Infer common dtypes between numeric columns
+        # and combine CategoricalColumn categories
+        categories = _find_common_dtypes_and_categories(non_null_cols, dtypes)
+
+        # Cast all columns to a common dtype, assign combined categories,
+        # and back-fill missing columns with all-null columns
+        _cast_cols_to_common_dtypes(indices, columns, dtypes, categories)
+
+        # Construct input tables with the index and data columns in the same
+        # order. This strips the given index/column names and replaces the
+        # names with their integer positions in the `cols` list
+        tables = []
+        for cols in columns:
+            table_index = None
+            if 1 == first_data_column_position:
+                table_index = cudf.core.index.as_index(cols[0])
+            elif first_data_column_position > 1:
+                table_index = Frame(
+                    data=dict(
+                        zip(
+                            indices[:first_data_column_position],
+                            cols[:first_data_column_position],
+                        )
+                    )
+                )
+            tables.append(
+                Frame(
+                    data=dict(
+                        zip(
+                            indices[first_data_column_position:],
+                            cols[first_data_column_position:],
+                        )
+                    ),
+                    index=table_index,
+                )
+            )
+
+        # Concatenate the Tables
+        out = cls._from_data(
+            *libcudf.concat.concat_tables(
+                tables, ignore_index=ignore_index or are_all_range_index
+            )
+        )
+
+        # If ignore_index is True, all input frames are empty, and at
+        # least one input frame has an index, assign a new RangeIndex
+        # to the result frame.
+        if empty_has_index and num_empty_input_frames == len(objs):
+            out._index = cudf.RangeIndex(result_index_length)
+        elif are_all_range_index and not ignore_index:
+            out._index = cudf.core.index.GenericIndex._concat(
+                [o._index for o in objs]
+            )
+
+        # Reassign the categories for any categorical table cols
+        _reassign_categories(
+            categories, out._data, indices[first_data_column_position:]
+        )
+
+        # Reassign the categories for any categorical index cols
+        if not isinstance(out._index, cudf.RangeIndex):
+            _reassign_categories(
+                categories,
+                out._index._data,
+                indices[:first_data_column_position],
+            )
+            if not isinstance(
+                out._index, cudf.MultiIndex
+            ) and is_categorical_dtype(out._index._values.dtype):
+                out = out.set_index(
+                    cudf.core.index.as_index(out.index._values)
+                )
+
+        # Reassign precision for any decimal cols
+        for name, col in out._data.items():
+            if isinstance(col, cudf.core.column.Decimal64Column):
+                col = col._with_type_metadata(tables[0]._data[name].dtype)
+
+        # Reassign index and column names
+        if isinstance(objs[0].columns, pd.MultiIndex):
+            out.columns = objs[0].columns
+        else:
+            out.columns = names
+        if not ignore_index:
+            out._index.name = objs[0]._index.name
+            out._index.names = objs[0]._index.names
+
+        return out
 
     def astype(self, dtype, copy=False, errors="raise", **kwargs):
         """
@@ -1144,7 +1618,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         b      int64
         dtype: object
         >>> df.astype({'a': 'float32'})
-            a  b
+              a  b
         0  10.0  1
         1  20.0  2
         2  30.0  3
@@ -1412,6 +1886,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         fn: str,
         fill_value: Any = None,
         reflect: bool = False,
+        can_reindex: bool = False,
         *args,
         **kwargs,
     ):
@@ -1432,14 +1907,17 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 for right, (name, left) in zip(rhs, lhs._data.items())
             }
         elif isinstance(rhs, DataFrame):
-            if fn in cudf.utils.utils._EQUALITY_OPS:
-                if not lhs.columns.equals(rhs.columns) or not lhs.index.equals(
-                    rhs.index
-                ):
-                    raise ValueError(
-                        "Can only compare identically-labeled "
-                        "DataFrame objects"
-                    )
+            if (
+                not can_reindex
+                and fn in cudf.utils.utils._EQUALITY_OPS
+                and (
+                    not lhs.columns.equals(rhs.columns)
+                    or not lhs.index.equals(rhs.index)
+                )
+            ):
+                raise ValueError(
+                    "Can only compare identically-labeled " "DataFrame objects"
+                )
 
             lhs, rhs = _align_indices(lhs, rhs)
 
@@ -1491,59 +1969,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             ColumnAccessor(type(self)._colwise_binop(operands, fn)),
             index=lhs._index,
         )
-
-    def add(self, other, axis="columns", level=None, fill_value=None):
-        """
-        Get Addition of dataframe and other, element-wise (binary
-        operator `add`).
-
-        Equivalent to ``dataframe + other``, but with support to substitute a
-        fill_value for missing data in one of the inputs. With reverse
-        version, `radd`.
-
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
-
-        Parameters
-        ----------
-
-        other : scalar, sequence, Series, or DataFrame
-            Any single or multiple element data structure, or list-like object.
-        fill_value  : float or None, default None
-            Fill existing missing (NaN) values, and any new element needed
-            for successful DataFrame alignment, with this value before
-            computation. If data in both corresponding DataFrame locations
-            is missing the result will be missing.
-
-        Returns
-        -------
-        DataFrame
-            Result of the arithmetic operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
-        ...                    'degrees': [360, 180, 360]},
-        ...                   index=['circle', 'triangle', 'rectangle'])
-        >>> df + 1
-                angles  degrees
-        circle          1      361
-        triangle        4      181
-        rectangle       5      361
-        >>> df.add(1)
-                angles  degrees
-        circle          1      361
-        triangle        4      181
-        rectangle       5      361
-        """
-        if axis not in (1, "columns"):
-            raise NotImplementedError("Only axis=1 supported at this time.")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not supported yet.")
-
-        return self._binaryop(other, "add", fill_value)
 
     def update(
         self,
@@ -1638,907 +2063,25 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         self._mimic_inplace(source_df, inplace=True)
 
-    def __invert__(self):
-        # Defer logic to Series since pandas semantics dictate different
-        # behaviors for different types that requires too much special casing
-        # of the standard _unaryop.
-        return DataFrame(
-            data={col: ~self[col] for col in self}, index=self.index
-        )
-
-    def radd(self, other, axis=1, level=None, fill_value=None):
-        """
-        Get Addition of dataframe and other, element-wise (binary
-        operator `radd`).
-
-        Equivalent to ``other + dataframe``, but with support to substitute a
-        fill_value for missing data in one of the inputs. With reverse
-        version, `add`.
-
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
-
-        Parameters
-        ----------
-
-        other : scalar, sequence, Series, or DataFrame
-            Any single or multiple element data structure, or list-like object.
-        fill_value  : float or None, default None
-            Fill existing missing (NaN) values, and any new element needed
-            for successful DataFrame alignment, with this value before
-            computation. If data in both corresponding DataFrame locations
-            is missing the result will be missing.
-
-        Returns
-        -------
-        DataFrame
-            Result of the arithmetic operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
-        ...                    'degrees': [360, 180, 360]},
-        ...                   index=['circle', 'triangle', 'rectangle'])
-        >>> df + 1
-                angles  degrees
-        circle          1      361
-        triangle        4      181
-        rectangle       5      361
-        >>> df.radd(1)
-                angles  degrees
-        circle          1      361
-        triangle        4      181
-        rectangle       5      361
-        """
-        if axis not in (1, "columns"):
-            raise NotImplementedError("Only axis=1 supported at this time.")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not supported yet.")
-
-        return self._binaryop(other, "add", fill_value, reflect=True)
-
-    def sub(self, other, axis="columns", level=None, fill_value=None):
-        """
-        Get Subtraction of dataframe and other, element-wise (binary
-        operator `sub`).
-
-        Equivalent to ``dataframe - other``, but with support to substitute a
-        fill_value for missing data in one of the inputs. With reverse
-        version, `rsub`.
-
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
-
-        Parameters
-        ----------
-
-        other : scalar, sequence, Series, or DataFrame
-            Any single or multiple element data structure, or list-like object.
-        fill_value  : float or None, default None
-            Fill existing missing (NaN) values, and any new element needed
-            for successful DataFrame alignment, with this value before
-            computation. If data in both corresponding DataFrame locations
-            is missing the result will be missing.
-
-        Returns
-        -------
-        DataFrame
-            Result of the arithmetic operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
-        ...                    'degrees': [360, 180, 360]},
-        ...                   index=['circle', 'triangle', 'rectangle'])
-        >>> df.sub(1)
-                angles  degrees
-        circle         -1      359
-        triangle        2      179
-        rectangle       3      359
-        >>> df.sub([1, 2])
-                angles  degrees
-        circle         -1      358
-        triangle        2      178
-        rectangle       3      358
-        """
-        if axis not in (1, "columns"):
-            raise NotImplementedError("Only axis=1 supported at this time.")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not supported yet.")
-
-        return self._binaryop(other, "sub", fill_value)
-
-    def rsub(self, other, axis="columns", level=None, fill_value=None):
-        """
-        Get Subtraction of dataframe and other, element-wise (binary
-        operator `rsub`).
-
-        Equivalent to ``other - dataframe``, but with support to substitute a
-        fill_value for missing data in one of the inputs. With reverse
-        version, `sub`.
-
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
-
-        Parameters
-        ----------
-
-        other : scalar, sequence, Series, or DataFrame
-            Any single or multiple element data structure, or list-like object.
-        fill_value  : float or None, default None
-            Fill existing missing (NaN) values, and any new element needed
-            for successful DataFrame alignment, with this value before
-            computation. If data in both corresponding DataFrame locations
-            is missing the result will be missing.
-
-        Returns
-        -------
-        DataFrame
-            Result of the arithmetic operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
-        ...                    'degrees': [360, 180, 360]},
-        ...                   index=['circle', 'triangle', 'rectangle'])
-        >>> df
-                   angles  degrees
-        circle          0      360
-        triangle        3      180
-        rectangle       4      360
-        >>> df.rsub(1)
-                   angles  degrees
-        circle          1     -359
-        triangle       -2     -179
-        rectangle      -3     -359
-        >>> df.rsub([1, 2])
-                   angles  degrees
-        circle          1     -358
-        triangle       -2     -178
-        rectangle      -3     -358
-        """
-        if axis not in (1, "columns"):
-            raise NotImplementedError("Only axis=1 supported at this time.")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not supported yet.")
-
-        return self._binaryop(other, "sub", fill_value, reflect=True)
-
-    def mul(self, other, axis="columns", level=None, fill_value=None):
-        """
-        Get Multiplication of dataframe and other, element-wise (binary
-        operator `mul`).
-
-        Equivalent to ``dataframe * other``, but with support to substitute a
-        fill_value for missing data in one of the inputs. With reverse
-        version, `rmul`.
-
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
-
-        Parameters
-        ----------
-
-        other : scalar, sequence, Series, or DataFrame
-            Any single or multiple element data structure, or list-like object.
-        fill_value  : float or None, default None
-            Fill existing missing (NaN) values, and any new element needed
-            for successful DataFrame alignment, with this value before
-            computation. If data in both corresponding DataFrame locations
-            is missing the result will be missing.
-
-        Returns
-        -------
-        DataFrame
-            Result of the arithmetic operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
-        ...                    'degrees': [360, 180, 360]},
-        ...                   index=['circle', 'triangle', 'rectangle'])
-        >>> other = cudf.DataFrame({'angles': [0, 3, 4]},
-        ...                      index=['circle', 'triangle', 'rectangle'])
-        >>> df * other
-                   angles degrees
-        circle          0    <NA>
-        triangle        9    <NA>
-        rectangle      16    <NA>
-        >>> df.mul(other, fill_value=0)
-                angles  degrees
-        circle          0        0
-        triangle        9        0
-        rectangle      16        0
-        """
-        if axis not in (1, "columns"):
-            raise NotImplementedError("Only axis=1 supported at this time.")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not supported yet.")
-
-        return self._binaryop(other, "mul", fill_value)
-
-    def rmul(self, other, axis="columns", level=None, fill_value=None):
-        """
-        Get Multiplication of dataframe and other, element-wise (binary
-        operator `rmul`).
-
-        Equivalent to ``other * dataframe``, but with support to substitute a
-        fill_value for missing data in one of the inputs. With reverse
-        version, `mul`.
-
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
-
-        Parameters
-        ----------
-
-        other : scalar, sequence, Series, or DataFrame
-            Any single or multiple element data structure, or list-like object.
-        fill_value  : float or None, default None
-            Fill existing missing (NaN) values, and any new element needed
-            for successful DataFrame alignment, with this value before
-            computation. If data in both corresponding DataFrame locations
-            is missing the result will be missing.
-
-        Returns
-        -------
-        DataFrame
-            Result of the arithmetic operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
-        ...                    'degrees': [360, 180, 360]},
-        ...                   index=['circle', 'triangle', 'rectangle'])
-        >>> other = cudf.DataFrame({'angles': [0, 3, 4]},
-        ...                      index=['circle', 'triangle', 'rectangle'])
-        >>> other * df
-                   angles degrees
-        circle          0    <NA>
-        triangle        9    <NA>
-        rectangle      16    <NA>
-        >>> df.rmul(other, fill_value=0)
-                   angles  degrees
-        circle          0        0
-        triangle        9        0
-        rectangle      16        0
-        """
-        if axis not in (1, "columns"):
-            raise NotImplementedError("Only axis=1 supported at this time.")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not supported yet.")
-
-        return self._binaryop(other, "mul", fill_value, reflect=True)
-
-    def mod(self, other, axis="columns", level=None, fill_value=None):
-        """
-        Get Modulo division of dataframe and other, element-wise (binary
-        operator `mod`).
-
-        Equivalent to ``dataframe % other``, but with support to substitute a
-        fill_value for missing data in one of the inputs. With reverse
-        version, `rmod`.
-
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
-
-        Parameters
-        ----------
-
-        other : scalar, sequence, Series, or DataFrame
-            Any single or multiple element data structure, or list-like object.
-        fill_value  : float or None, default None
-            Fill existing missing (NaN) values, and any new element needed
-            for successful DataFrame alignment, with this value before
-            computation. If data in both corresponding DataFrame locations
-            is missing the result will be missing.
-
-        Returns
-        -------
-        DataFrame
-            Result of the arithmetic operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
-        ...                    'degrees': [360, 180, 360]},
-        ...                   index=['circle', 'triangle', 'rectangle'])
-        >>> df % 100
-                   angles  degrees
-        circle          0       60
-        triangle        3       80
-        rectangle       4       60
-        >>> df.mod(100)
-                   angles  degrees
-        circle          0       60
-        triangle        3       80
-        rectangle       4       60
-        """
-        if axis not in (1, "columns"):
-            raise NotImplementedError("Only axis=1 supported at this time.")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not supported yet.")
-
-        return self._binaryop(other, "mod", fill_value)
-
-    def rmod(self, other, axis="columns", level=None, fill_value=None):
-        """
-        Get Modulo division of dataframe and other, element-wise (binary
-        operator `rmod`).
-
-        Equivalent to ``other % dataframe``, but with support to substitute a
-        fill_value for missing data in one of the inputs. With reverse
-        version, `mod`.
-
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
-
-        Parameters
-        ----------
-
-        other : scalar, sequence, Series, or DataFrame
-            Any single or multiple element data structure, or list-like object.
-        fill_value  : float or None, default None
-            Fill existing missing (NaN) values, and any new element needed
-            for successful DataFrame alignment, with this value before
-            computation. If data in both corresponding DataFrame locations
-            is missing the result will be missing.
-
-        Returns
-        -------
-        DataFrame
-            Result of the arithmetic operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'angles': [1, 3, 4],
-        ...                    'degrees': [360, 180, 360]},
-        ...                   index=['circle', 'triangle', 'rectangle'])
-        >>> 100 % df
-                   angles  degrees
-        circle          0      100
-        triangle        1      100
-        rectangle       0      100
-        >>> df.rmod(100)
-                   angles  degrees
-        circle          0      100
-        triangle        1      100
-        rectangle       0      100
-        """
-        if axis not in (1, "columns"):
-            raise NotImplementedError("Only axis=1 supported at this time.")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not supported yet.")
-
-        return self._binaryop(other, "mod", fill_value, reflect=True)
-
-    def pow(self, other, axis="columns", level=None, fill_value=None):
-        """
-        Get Exponential power of dataframe and other, element-wise (binary
-        operator `pow`).
-
-        Equivalent to ``dataframe ** other``, but with support to substitute a
-        fill_value for missing data in one of the inputs. With reverse
-        version, `rpow`.
-
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
-
-        Parameters
-        ----------
-
-        other : scalar, sequence, Series, or DataFrame
-            Any single or multiple element data structure, or list-like object.
-        fill_value  : float or None, default None
-            Fill existing missing (NaN) values, and any new element needed
-            for successful DataFrame alignment, with this value before
-            computation. If data in both corresponding DataFrame locations
-            is missing the result will be missing.
-
-        Returns
-        -------
-        DataFrame
-            Result of the arithmetic operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'angles': [1, 3, 4],
-        ...                    'degrees': [360, 180, 360]},
-        ...                   index=['circle', 'triangle', 'rectangle'])
-        >>> df ** 2
-                   angles  degrees
-        circle          0   129600
-        triangle        9    32400
-        rectangle      16   129600
-        >>> df.pow(2)
-                   angles  degrees
-        circle          0   129600
-        triangle        9    32400
-        rectangle      16   129600
-        """
-        if axis not in (1, "columns"):
-            raise NotImplementedError("Only axis=1 supported at this time.")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not supported yet.")
-
-        return self._binaryop(other, "pow", fill_value)
-
-    def rpow(self, other, axis="columns", level=None, fill_value=None):
-        """
-        Get Exponential power of dataframe and other, element-wise (binary
-        operator `pow`).
-
-        Equivalent to ``other ** dataframe``, but with support to substitute a
-        fill_value for missing data in one of the inputs. With reverse
-        version, `pow`.
-
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
-
-        Parameters
-        ----------
-
-        other : scalar, sequence, Series, or DataFrame
-            Any single or multiple element data structure, or list-like object.
-        fill_value  : float or None, default None
-            Fill existing missing (NaN) values, and any new element needed
-            for successful DataFrame alignment, with this value before
-            computation. If data in both corresponding DataFrame locations
-            is missing the result will be missing.
-
-        Returns
-        -------
-        DataFrame
-            Result of the arithmetic operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'angles': [1, 3, 4],
-        ...                    'degrees': [360, 180, 360]},
-        ...                   index=['circle', 'triangle', 'rectangle'])
-        >>> 1 ** df
-                   angles  degrees
-        circle          1        1
-        triangle        1        1
-        rectangle       1        1
-        >>> df.rpow(1)
-                   angles  degrees
-        circle          1        1
-        triangle        1        1
-        rectangle       1        1
-        """
-        if axis not in (1, "columns"):
-            raise NotImplementedError("Only axis=1 supported at this time.")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not supported yet.")
-
-        return self._binaryop(other, "pow", fill_value, reflect=True)
-
-    def floordiv(self, other, axis="columns", level=None, fill_value=None):
-        """
-        Get Integer division of dataframe and other, element-wise (binary
-        operator `floordiv`).
-
-        Equivalent to ``dataframe // other``, but with support to substitute a
-        fill_value for missing data in one of the inputs. With reverse
-        version, `rfloordiv`.
-
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
-
-        Parameters
-        ----------
-
-        other : scalar, sequence, Series, or DataFrame
-            Any single or multiple element data structure, or list-like object.
-        fill_value  : float or None, default None
-            Fill existing missing (NaN) values, and any new element needed
-            for successful DataFrame alignment, with this value before
-            computation. If data in both corresponding DataFrame locations
-            is missing the result will be missing.
-
-        Returns
-        -------
-        DataFrame
-            Result of the arithmetic operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'angles': [1, 3, 4],
-        ...                    'degrees': [360, 180, 360]},
-        ...                   index=['circle', 'triangle', 'rectangle'])
-        >>> df.floordiv(2)
-                   angles  degrees
-        circle          0      180
-        triangle        1       90
-        rectangle       2      180
-        >>> df // 2
-                   angles  degrees
-        circle          0      180
-        triangle        1       90
-        rectangle       2      180
-        """
-        if axis not in (1, "columns"):
-            raise NotImplementedError("Only axis=1 supported at this time.")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not supported yet.")
-
-        return self._binaryop(other, "floordiv", fill_value)
-
-    def rfloordiv(self, other, axis="columns", level=None, fill_value=None):
-        """
-        Get Integer division of dataframe and other, element-wise (binary
-        operator `rfloordiv`).
-
-        Equivalent to ``other // dataframe``, but with support to substitute
-        a fill_value for missing data in one of the inputs. With reverse
-        version, `floordiv`.
-
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
-
-        Parameters
-        ----------
-
-        other : scalar, sequence, Series, or DataFrame
-            Any single or multiple element data structure, or list-like object.
-        fill_value  : float or None, default None
-            Fill existing missing (NaN) values, and any new element needed
-            for successful DataFrame alignment, with this value before
-            computation. If data in both corresponding DataFrame locations
-            is missing the result will be missing.
-
-        Returns
-        -------
-        DataFrame
-            Result of the arithmetic operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'col1': [10, 11, 23],
-        ... 'col2': [101, 122, 321]})
-        >>> df
-           col1  col2
-        0    10   101
-        1    11   122
-        2    23   321
-        >>> df.rfloordiv(df)
-           col1  col2
-        0     1     1
-        1     1     1
-        2     1     1
-        >>> df.rfloordiv(200)
-           col1  col2
-        0    20     1
-        1    18     1
-        2     8     0
-        >>> df.rfloordiv(100)
-           col1  col2
-        0    10     0
-        1     9     0
-        2     4     0
-        """
-
-        if axis not in (1, "columns"):
-            raise NotImplementedError("Only axis=1 supported at this time.")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not supported yet.")
-
-        return self._binaryop(other, "floordiv", fill_value, reflect=True)
-
-    def truediv(self, other, axis="columns", level=None, fill_value=None):
-        """
-        Get Floating division of dataframe and other, element-wise (binary
-        operator `truediv`).
-
-        Equivalent to ``dataframe / other``, but with support to substitute a
-        fill_value for missing data in one of the inputs. With reverse
-        version, `rtruediv`.
-
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
-
-        Parameters
-        ----------
-
-        other : scalar, sequence, Series, or DataFrame
-            Any single or multiple element data structure, or list-like object.
-        fill_value  : float or None, default None
-            Fill existing missing (NaN) values, and any new element needed
-            for successful DataFrame alignment, with this value before
-            computation. If data in both corresponding DataFrame locations
-            is missing the result will be missing.
-
-        Returns
-        -------
-        DataFrame
-            Result of the arithmetic operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
-        ...                    'degrees': [360, 180, 360]},
-        ...                   index=['circle', 'triangle', 'rectangle'])
-        >>> df.truediv(10)
-                   angles  degrees
-        circle        0.0     36.0
-        triangle      0.3     18.0
-        rectangle     0.4     36.0
-        >>> df.div(10)
-                   angles  degrees
-        circle        0.0     36.0
-        triangle      0.3     18.0
-        rectangle     0.4     36.0
-        >>> df / 10
-                   angles  degrees
-        circle        0.0     36.0
-        triangle      0.3     18.0
-        rectangle     0.4     36.0
-        """
-        if axis not in (1, "columns"):
-            raise NotImplementedError("Only axis=1 supported at this time.")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not supported yet.")
-
-        return self._binaryop(other, "truediv", fill_value)
-
-    # Alias for truediv
-    div = truediv
-
-    def rtruediv(self, other, axis="columns", level=None, fill_value=None):
-        """
-        Get Floating division of dataframe and other, element-wise (binary
-        operator `rtruediv`).
-
-        Equivalent to ``other / dataframe``, but with support to substitute a
-        fill_value for missing data in one of the inputs. With reverse
-        version, `truediv`.
-
-        Among flexible wrappers (`add`, `sub`, `mul`, `div`, `mod`, `pow`) to
-        arithmetic operators: `+`, `-`, `*`, `/`, `//`, `%`, `**`.
-
-        Parameters
-        ----------
-
-        other : scalar, sequence, Series, or DataFrame
-            Any single or multiple element data structure, or list-like object.
-        fill_value  : float or None, default None
-            Fill existing missing (NaN) values, and any new element needed
-            for successful DataFrame alignment, with this value before
-            computation. If data in both corresponding DataFrame locations
-            is missing the result will be missing.
-
-        Returns
-        -------
-        DataFrame
-            Result of the arithmetic operation.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'angles': [0, 3, 4],
-        ...                    'degrees': [360, 180, 360]},
-        ...                   index=['circle', 'triangle', 'rectangle'])
-        >>> df
-                   angles  degrees
-        circle          0      360
-        triangle        3      180
-        rectangle       4      360
-        >>> df.rtruediv(10)
-                     angles   degrees
-        circle          inf  0.027778
-        triangle   3.333333  0.055556
-        rectangle  2.500000  0.027778
-        >>> df.rdiv(10)
-                     angles   degrees
-        circle          inf  0.027778
-        triangle   3.333333  0.055556
-        rectangle  2.500000  0.027778
-        >>> 10 / df
-                     angles   degrees
-        circle          inf  0.027778
-        triangle   3.333333  0.055556
-        rectangle  2.500000  0.027778
-        """
-        if axis not in (1, "columns"):
-            raise NotImplementedError("Only axis=1 supported at this time.")
-
-        if level is not None:
-            raise NotImplementedError("level parameter is not supported yet.")
-
-        return self._binaryop(other, "truediv", fill_value, reflect=True)
-
-    # Alias for rtruediv
-    rdiv = rtruediv
-
     def __iter__(self):
         return iter(self.columns)
 
     def iteritems(self):
-        """ Iterate over column names and series pairs """
+        """Iterate over column names and series pairs"""
         for k in self:
             yield (k, self[k])
 
-    @property  # type: ignore
-    @annotate("DATAFRAME_LOC", color="blue", domain="cudf_python")
-    def loc(self):
-        """
-        Selecting rows and columns by label or boolean mask.
-
-        Examples
-        --------
-
-        DataFrame with string index.
-
-        >>> df
-           a  b
-        a  0  5
-        b  1  6
-        c  2  7
-        d  3  8
-        e  4  9
-
-        Select a single row by label.
-
-        >>> df.loc['a']
-        a    0
-        b    5
-        Name: a, dtype: int64
-
-        Select multiple rows and a single column.
-
-        >>> df.loc[['a', 'c', 'e'], 'b']
-        a    5
-        c    7
-        e    9
-        Name: b, dtype: int64
-
-        Selection by boolean mask.
-
-        >>> df.loc[df.a > 2]
-           a  b
-        d  3  8
-        e  4  9
-
-        Setting values using loc.
-
-        >>> df.loc[['a', 'c', 'e'], 'a'] = 0
-        >>> df
-           a  b
-        a  0  5
-        b  1  6
-        c  0  7
-        d  3  8
-        e  0  9
-
-        See also
-        --------
-        DataFrame.iloc
-
-        Notes
-        -----
-        One notable difference from Pandas is when DataFrame is of
-        mixed types and result is expected to be a Series in case of Pandas.
-        cuDF will return a DataFrame as it doesn't support mixed types
-        under Series yet.
-
-        Mixed dtype single row output as a dataframe (pandas results in Series)
-
-        >>> import cudf
-        >>> df = cudf.DataFrame({"a":[1, 2, 3], "b":["a", "b", "c"]})
-        >>> df.loc[0]
-           a  b
-        0  1  a
-        """
-        return _DataFrameLocIndexer(self)
-
-    @property
-    def iloc(self):
-        """
-        Selecting rows and column by position.
-
-        Examples
-        --------
-        >>> df = cudf.DataFrame({'a': range(20),
-        ...                      'b': range(20),
-        ...                      'c': range(20)})
-
-        Select a single row using an integer index.
-
-        >>> df.iloc[1]
-        a    1
-        b    1
-        c    1
-        Name: 1, dtype: int64
-
-        Select multiple rows using a list of integers.
-
-        >>> df.iloc[[0, 2, 9, 18]]
-              a    b    c
-         0    0    0    0
-         2    2    2    2
-         9    9    9    9
-        18   18   18   18
-
-        Select rows using a slice.
-
-        >>> df.iloc[3:10:2]
-             a    b    c
-        3    3    3    3
-        5    5    5    5
-        7    7    7    7
-        9    9    9    9
-
-        Select both rows and columns.
-
-        >>> df.iloc[[1, 3, 5, 7], 2]
-        1    1
-        3    3
-        5    5
-        7    7
-        Name: c, dtype: int64
-
-        Setting values in a column using iloc.
-
-        >>> df.iloc[:4] = 0
-        >>> df
-           a  b  c
-        0  0  0  0
-        1  0  0  0
-        2  0  0  0
-        3  0  0  0
-        4  4  4  4
-        5  5  5  5
-        6  6  6  6
-        7  7  7  7
-        8  8  8  8
-        9  9  9  9
-        [10 more rows]
-
-        See also
-        --------
-        DataFrame.loc
-
-        Notes
-        -----
-        One notable difference from Pandas is when DataFrame is of
-        mixed types and result is expected to be a Series in case of Pandas.
-        cuDF will return a DataFrame as it doesn't support mixed types
-        under Series yet.
-
-        Mixed dtype single row output as a dataframe (pandas results in Series)
-
-        >>> import cudf
-        >>> df = cudf.DataFrame({"a":[1, 2, 3], "b":["a", "b", "c"]})
-        >>> df.iloc[0]
-           a  b
-        0  1  a
-        """
-        return _DataFrameIlocIndexer(self)
+    def equals(self, other, **kwargs):
+        ret = super().equals(other)
+        # If all other checks matched, validate names.
+        if ret:
+            for self_name, other_name in zip(
+                self._data.names, other._data.names
+            ):
+                if self_name != other_name:
+                    ret = False
+                    break
+        return ret
 
     @property
     def iat(self):
@@ -2557,8 +2100,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
     @property  # type: ignore
     @annotate("DATAFRAME_COLUMNS_GETTER", color="yellow", domain="cudf_python")
     def columns(self):
-        """Returns a tuple of columns
-        """
+        """Returns a tuple of columns"""
         return self._data.to_pandas_index()
 
     @columns.setter  # type: ignore
@@ -2573,13 +2115,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if isinstance(
             columns, (Series, cudf.Index, cudf.core.column.ColumnBase)
         ):
-            columns = pd.Index(columns.to_array(), tupleize_cols=is_multiindex)
+            columns = pd.Index(columns.to_numpy(), tupleize_cols=is_multiindex)
         elif not isinstance(columns, pd.Index):
             columns = pd.Index(columns, tupleize_cols=is_multiindex)
 
         if not len(columns) == len(self._data.names):
             raise ValueError(
-                f"Length mismatch: expected {len(self._data.names)} elements ,"
+                f"Length mismatch: expected {len(self._data.names)} elements, "
                 f"got {len(columns)} elements"
             )
 
@@ -2605,42 +2147,86 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         mapper = dict(zip(old_cols, new_names))
         self.rename(mapper=mapper, inplace=True, axis=1)
 
-    @property
-    def index(self):
-        """Returns the index of the DataFrame
+    def _reindex(
+        self, columns, dtypes=None, deep=False, index=None, inplace=False
+    ):
         """
-        return self._index
+        Helper for `.reindex`
 
-    @index.setter
-    def index(self, value):
-        old_length = (
-            self._num_rows if self._index is None else len(self._index)
-        )
-        if isinstance(value, cudf.core.multiindex.MultiIndex):
-            if len(self._data) > 0 and len(value) != old_length:
-                msg = (
-                    f"Length mismatch: Expected axis has {old_length} "
-                    f"elements, new values have {len(value)} elements"
+        Parameters
+        ----------
+        columns : array-like
+            The list of columns to select from the Frame,
+            if ``columns`` is a superset of ``Frame.columns`` new
+            columns are created.
+        dtypes : dict
+            Mapping of dtypes for the empty columns being created.
+        deep : boolean, optional, default False
+            Whether to make deep copy or shallow copy of the columns.
+        index : Index or array-like, default None
+            The ``index`` to be used to reindex the Frame with.
+        inplace : bool, default False
+            Whether to perform the operation in place on the data.
+
+        Returns
+        -------
+        DataFrame
+        """
+        if dtypes is None:
+            dtypes = {}
+
+        df = self
+        if index is not None:
+            index = cudf.core.index.as_index(index)
+
+            idx_dtype_match = (df.index.nlevels == index.nlevels) and all(
+                left_dtype == right_dtype
+                for left_dtype, right_dtype in zip(
+                    (col.dtype for col in df.index._data.columns),
+                    (col.dtype for col in index._data.columns),
                 )
-                raise ValueError(msg)
-            self._index = value
-            return
-
-        new_length = len(value)
-
-        if len(self._data) > 0 and new_length != old_length:
-            msg = (
-                f"Length mismatch: Expected axis has {old_length} elements, "
-                f"new values have {new_length} elements"
             )
-            raise ValueError(msg)
 
-        # try to build an index from generic _index
-        idx = as_index(value)
-        self._index = idx
+            if not idx_dtype_match:
+                columns = (
+                    columns if columns is not None else list(df._column_names)
+                )
+                df = cudf.DataFrame()
+            else:
+                df = cudf.DataFrame(None, index).join(
+                    df, how="left", sort=True
+                )
+                # double-argsort to map back from sorted to unsorted positions
+                df = df.take(index.argsort(ascending=True).argsort())
+
+        index = index if index is not None else df.index
+        names = columns if columns is not None else list(df._data.names)
+        cols = {
+            name: (
+                df._data[name].copy(deep=deep)
+                if name in df._data
+                else column_empty(
+                    dtype=dtypes.get(name, np.float64),
+                    masked=True,
+                    row_count=len(index),
+                )
+            )
+            for name in names
+        }
+
+        result = self.__class__._from_data(
+            data=cudf.core.column_accessor.ColumnAccessor(
+                cols,
+                multiindex=self._data.multiindex,
+                level_names=self._data.level_names,
+            ),
+            index=index,
+        )
+
+        return self._mimic_inplace(result, inplace=inplace)
 
     def reindex(
-        self, labels=None, axis=0, index=None, columns=None, copy=True
+        self, labels=None, axis=None, index=None, columns=None, copy=True
     ):
         """
         Return a new DataFrame whose axes conform to a new index
@@ -2689,48 +2275,33 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if labels is None and index is None and columns is None:
             return self.copy(deep=copy)
 
-        df = self
-        cols = columns
-        dtypes = dict(df.dtypes)
-        idx = labels if index is None and axis in (0, "index") else index
-        cols = labels if cols is None and axis in (1, "columns") else cols
-        df = df if cols is None else df[list(set(df.columns) & set(cols))]
+        # pandas simply ignores the labels keyword if it is provided in
+        # addition to index and columns, but it prohibits the axis arg.
+        if (index is not None or columns is not None) and axis is not None:
+            raise TypeError(
+                "Cannot specify both 'axis' and any of 'index' or 'columns'."
+            )
 
-        result = df._reindex(
-            columns=cols, dtypes=dtypes, deep=copy, index=idx, inplace=False
+        axis = self._get_axis_from_axis_arg(axis)
+        if axis == 0:
+            if index is None:
+                index = labels
+        else:
+            if columns is None:
+                columns = labels
+        df = (
+            self
+            if columns is None
+            else self[list(set(self._column_names) & set(columns))]
         )
 
-        return result
-
-    def _set_index(
-        self, index, to_drop=None, inplace=False, verify_integrity=False,
-    ):
-        """Helper for `.set_index`
-
-        Parameters
-        ----------
-        index : Index
-            The new index to set.
-        to_drop : list optional, default None
-            A list of labels indicating columns to drop.
-        inplace : boolean, default False
-            Modify the DataFrame in place (do not create a new object).
-        verify_integrity : boolean, default False
-            Check for duplicates in the new index.
-        """
-        if not isinstance(index, BaseIndex):
-            raise ValueError("Parameter index should be type `Index`.")
-
-        df = self if inplace else self.copy(deep=True)
-
-        if verify_integrity and not index.is_unique:
-            raise ValueError(f"Values in Index are not unique: {index}")
-
-        if to_drop:
-            df.drop(columns=to_drop, inplace=True)
-
-        df.index = index
-        return df if not inplace else None
+        return df._reindex(
+            columns=columns,
+            dtypes=self._dtypes,
+            deep=copy,
+            index=index,
+            inplace=False,
+        )
 
     def set_index(
         self,
@@ -2838,7 +2409,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         columns_to_add = []
         names = []
         to_drop = []
-        for i, col in enumerate(keys):
+        for col in keys:
             # Is column label
             if is_scalar(col) or isinstance(col, tuple):
                 if col in self.columns:
@@ -2896,17 +2467,24 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         elif len(columns_to_add) == 1:
             idx = cudf.Index(columns_to_add[0], name=names[0])
         else:
-            idf = cudf.DataFrame()
-            for i, col in enumerate(columns_to_add):
-                idf[i] = col
-            idx = cudf.MultiIndex.from_frame(idf, names=names)
+            idx = cudf.MultiIndex._from_data(
+                {i: col for i, col in enumerate(columns_to_add)}
+            )
+            idx.names = names
 
-        return self._set_index(
-            index=idx,
-            to_drop=to_drop,
-            inplace=inplace,
-            verify_integrity=verify_integrity,
-        )
+        if not isinstance(idx, BaseIndex):
+            raise ValueError("Parameter index should be type `Index`.")
+
+        df = self if inplace else self.copy(deep=True)
+
+        if verify_integrity and not idx.is_unique:
+            raise ValueError(f"Values in Index are not unique: {idx}")
+
+        if to_drop:
+            df.drop(columns=to_drop, inplace=True)
+
+        df.index = idx
+        return df if not inplace else None
 
     def reset_index(
         self, level=None, drop=False, inplace=False, col_level=0, col_fill=""
@@ -2969,10 +2547,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 "col_fill parameter is not supported yet."
             )
 
-        if inplace:
-            result = self
-        else:
-            result = self.copy()
+        result = self if inplace else self.copy()
 
         if not drop:
             if isinstance(self.index, cudf.MultiIndex):
@@ -2995,52 +2570,20 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             ):
                 result.insert(0, name, index_column)
         result.index = RangeIndex(len(self))
-        if inplace:
-            return
-        else:
+        if not inplace:
             return result
 
-    def take(self, positions, keep_index=True):
-        """
-        Return a new DataFrame containing the rows specified by *positions*
-
-        Parameters
-        ----------
-        positions : array-like
-            Integer or boolean array-like specifying the rows of the output.
-            If integer, each element represents the integer index of a row.
-            If boolean, *positions* must be of the same length as *self*,
-            and represents a boolean mask.
-
-        Returns
-        -------
-        out : DataFrame
-            New DataFrame
-
-        Examples
-        --------
-        >>> a = cudf.DataFrame({'a': [1.0, 2.0, 3.0],
-        ...                    'b': cudf.Series(['a', 'b', 'c'])})
-        >>> a.take([0, 2, 2])
-             a  b
-        0  1.0  a
-        2  3.0  c
-        2  3.0  c
-        >>> a.take([True, False, True])
-             a  b
-        0  1.0  a
-        2  3.0  c
-        """
-        positions = as_column(positions)
-        if is_bool_dtype(positions):
-            return self._apply_boolean_mask(positions)
-        out = self._gather(positions, keep_index=keep_index)
+    def take(self, indices, axis=0, keep_index=None):
+        axis = self._get_axis_from_axis_arg(axis)
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 is supported.")
+        out = super().take(indices, keep_index)
         out.columns = self.columns
         return out
 
     @annotate("INSERT", color="green", domain="cudf_python")
     def insert(self, loc, name, value):
-        """ Add a column to DataFrame at the index specified by loc.
+        """Add a column to DataFrame at the index specified by loc.
 
         Parameters
         ----------
@@ -3050,12 +2593,12 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             name or label of column to be inserted
         value : Series or array-like
         """
-        num_cols = len(self._data)
         if name in self._data:
             raise NameError(f"duplicated column name {name}")
 
+        num_cols = len(self._data)
         if loc < 0:
-            loc = num_cols + loc + 1
+            loc += num_cols + 1
 
         if not (0 <= loc <= num_cols):
             raise ValueError(
@@ -3264,8 +2807,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             return out
 
     def _drop_column(self, name):
-        """Drop a column by *name*
-        """
+        """Drop a column by *name*"""
         if name not in self._data:
             raise KeyError(f"column '{name}' does not exist")
         del self._data[name]
@@ -3348,8 +2890,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         return self._mimic_inplace(outdf, inplace=inplace)
 
     def pop(self, item):
-        """Return a column and drop it from the DataFrame.
-        """
+        """Return a column and drop it from the DataFrame."""
         popped = self[item]
         del self[item]
         return popped
@@ -3462,7 +3003,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if index:
             if (
                 any(type(item) == str for item in index.values())
-                and type(self.index) != cudf.core.index.StringIndex
+                and type(self.index) != cudf.StringIndex
             ):
                 raise NotImplementedError(
                     "Implicit conversion of index to "
@@ -3483,7 +3024,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 out = DataFrame(
                     index=self.index.replace(
                         to_replace=list(index.keys()),
-                        replacement=list(index.values()),
+                        value=list(index.values()),
                     )
                 )
         else:
@@ -3499,31 +3040,12 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         else:
             return out.copy(deep=copy)
 
-    def nans_to_nulls(self):
-        """
-        Convert nans (if any) to nulls.
-        """
-        df = self.copy()
-        for col in df.columns:
-            df[col] = df[col].nans_to_nulls()
-        return df
-
     def as_gpu_matrix(self, columns=None, order="F"):
-        """Convert to a matrix in device memory.
-
-        Parameters
-        ----------
-        columns : sequence of str
-            List of a column names to be extracted.  The order is preserved.
-            If None is specified, all columns are used.
-        order : 'F' or 'C'
-            Optional argument to determine whether to return a column major
-            (Fortran) matrix or a row major (C) matrix.
-
-        Returns
-        -------
-        A (nrow x ncol) numba device ndarray
-        """
+        warnings.warn(
+            "The as_gpu_matrix method will be removed in a future cuDF "
+            "release. Consider using `to_cupy` instead.",
+            FutureWarning,
+        )
         if columns is None:
             columns = self._data.names
 
@@ -3533,12 +3055,12 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if ncol < 1:
             # This is the case for empty dataframe - construct empty cupy array
             matrix = cupy.empty(
-                shape=(0, 0), dtype=np.dtype("float64"), order=order
+                shape=(0, 0), dtype=cudf.dtype("float64"), order=order
             )
             return cuda.as_cuda_array(matrix)
 
         if any(
-            (is_categorical_dtype(c) or np.issubdtype(c, np.dtype("object")))
+            (is_categorical_dtype(c) or np.issubdtype(c, cudf.dtype("object")))
             for c in cols
         ):
             raise TypeError("non-numeric data not yet supported")
@@ -3552,7 +3074,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 )
         cupy_dtype = dtype
         if np.issubdtype(cupy_dtype, np.datetime64):
-            cupy_dtype = np.dtype("int64")
+            cupy_dtype = cudf.dtype("int64")
 
         if order not in ("F", "C"):
             raise ValueError(
@@ -3567,18 +3089,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         return cuda.as_cuda_array(matrix).view(dtype)
 
     def as_matrix(self, columns=None):
-        """Convert to a matrix in host memory.
-
-        Parameters
-        ----------
-        columns : sequence of str
-            List of a column names to be extracted.  The order is preserved.
-            If None is specified, all columns are used.
-
-        Returns
-        -------
-        A (nrow x ncol) numpy ndarray in "F" order.
-        """
+        warnings.warn(
+            "The as_matrix method will be removed in a future cuDF "
+            "release. Consider using `to_numpy` instead.",
+            FutureWarning,
+        )
         return self.as_gpu_matrix(columns=columns).copy_to_host()
 
     def one_hot_encoding(
@@ -3631,6 +3146,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         3         4      bird          0          1.0          0.0          0.0
         4         5      fish          2          0.0          0.0          1.0
         """
+
+        warnings.warn(
+            "DataFrame.one_hot_encoding is deprecated and will be removed in "
+            "future, use `get_dummies` instead.",
+            FutureWarning,
+        )
+
         if hasattr(cats, "to_arrow"):
             cats = cats.to_arrow().to_pylist()
         else:
@@ -3668,7 +3190,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         Returns
         -------
-        a new dataframe with a new column append for the coded values.
+        A new DataFrame with a new column appended for the coded values.
 
         Examples
         --------
@@ -3686,229 +3208,27 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         2  3  20             1
         """
 
+        warnings.warn(
+            "DataFrame.label_encoding is deprecated and will be removed in "
+            "the future. Consider using cuML's LabelEncoder instead.",
+            FutureWarning,
+        )
+
+        return self._label_encoding(
+            column, prefix, cats, prefix_sep, dtype, na_sentinel
+        )
+
+    def _label_encoding(
+        self, column, prefix, cats, prefix_sep="_", dtype=None, na_sentinel=-1
+    ):
+        # Private implementation of deprecated public label_encoding method
         newname = prefix_sep.join([prefix, "labels"])
-        newcol = self[column].label_encoding(
+        newcol = self[column]._label_encoding(
             cats=cats, dtype=dtype, na_sentinel=na_sentinel
         )
         outdf = self.copy()
         outdf.insert(len(outdf._data), newname, newcol)
-
         return outdf
-
-    @annotate("ARGSORT", color="yellow", domain="cudf_python")
-    def argsort(self, ascending=True, na_position="last"):
-        """
-        Sort by the values.
-
-        Parameters
-        ----------
-        ascending : bool or list of bool, default True
-            If True, sort values in ascending order, otherwise descending.
-        na_position : {‘first’ or ‘last’}, default ‘last’
-            Argument ‘first’ puts NaNs at the beginning, ‘last’ puts NaNs
-            at the end.
-
-        Returns
-        -------
-        out_column_inds : cuDF Column of indices sorted based on input
-
-        Notes
-        -----
-        Difference from pandas:
-
-        - Support axis='index' only.
-        - Not supporting: inplace, kind
-        - Ascending can be a list of bools to control per column
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a':[10, 0, 2], 'b':[-10, 10, 1]})
-        >>> df
-            a   b
-        0  10 -10
-        1   0  10
-        2   2   1
-        >>> inds = df.argsort()
-        >>> inds
-        0    1
-        1    2
-        2    0
-        dtype: int32
-        >>> df.take(inds)
-            a   b
-        1   0  10
-        2   2   1
-        0  10 -10
-        """
-        inds_col = self._get_sorted_inds(
-            ascending=ascending, na_position=na_position
-        )
-        return cudf.Series(inds_col)
-
-    @annotate("SORT_INDEX", color="red", domain="cudf_python")
-    def sort_index(
-        self,
-        axis=0,
-        level=None,
-        ascending=True,
-        inplace=False,
-        kind=None,
-        na_position="last",
-        sort_remaining=True,
-        ignore_index=False,
-    ):
-        """Sort object by labels (along an axis).
-
-        Parameters
-        ----------
-        axis : {0 or ‘index’, 1 or ‘columns’}, default 0
-            The axis along which to sort. The value 0 identifies the rows,
-            and 1 identifies the columns.
-        level : int or level name or list of ints or list of level names
-            If not None, sort on values in specified index level(s).
-            This is only useful in the case of MultiIndex.
-        ascending : bool, default True
-            Sort ascending vs. descending.
-        inplace : bool, default False
-            If True, perform operation in-place.
-        kind : sorting method such as `quick sort` and others.
-            Not yet supported.
-        na_position : {‘first’, ‘last’}, default ‘last’
-            Puts NaNs at the beginning if first; last puts NaNs at the end.
-        sort_remaining : bool, default True
-            Not yet supported
-        ignore_index : bool, default False
-            if True, index will be replaced with RangeIndex.
-
-        Returns
-        -------
-        DataFrame or None
-
-        Examples
-        --------
-        >>> df = cudf.DataFrame(
-        ... {"b":[3, 2, 1], "a":[2, 1, 3]}, index=[1, 3, 2])
-        >>> df.sort_index(axis=0)
-           b  a
-        1  3  2
-        2  1  3
-        3  2  1
-        >>> df.sort_index(axis=1)
-           a  b
-        1  2  3
-        3  1  2
-        2  3  1
-        """
-        if kind is not None:
-            raise NotImplementedError("kind is not yet supported")
-
-        if not sort_remaining:
-            raise NotImplementedError(
-                "sort_remaining == False is not yet supported"
-            )
-
-        if axis in (0, "index"):
-            if level is not None and isinstance(self.index, cudf.MultiIndex):
-                # Pandas currently don't handle na_position
-                # in case of MultiIndex
-                if ascending is True:
-                    na_position = "first"
-                else:
-                    na_position = "last"
-
-                if is_list_like(level):
-                    labels = [
-                        self.index._get_level_label(lvl) for lvl in level
-                    ]
-                else:
-                    labels = [self.index._get_level_label(level)]
-                inds = self.index._source_data[labels].argsort(
-                    ascending=ascending, na_position=na_position
-                )
-            else:
-                inds = self.index.argsort(
-                    ascending=ascending, na_position=na_position
-                )
-            outdf = self.take(inds)
-        else:
-            labels = sorted(self._data.names, reverse=not ascending)
-            outdf = self[labels]
-
-        if ignore_index is True:
-            outdf = outdf.reset_index(drop=True)
-        return self._mimic_inplace(outdf, inplace=inplace)
-
-    def sort_values(
-        self,
-        by,
-        axis=0,
-        ascending=True,
-        inplace=False,
-        kind="quicksort",
-        na_position="last",
-        ignore_index=False,
-    ):
-        """
-
-        Sort by the values row-wise.
-
-        Parameters
-        ----------
-        by : str or list of str
-            Name or list of names to sort by.
-        ascending : bool or list of bool, default True
-            Sort ascending vs. descending. Specify list for multiple sort
-            orders. If this is a list of bools, must match the length of the
-            by.
-        na_position : {‘first’, ‘last’}, default ‘last’
-            'first' puts nulls at the beginning, 'last' puts nulls at the end
-        ignore_index : bool, default False
-            If True, index will not be sorted.
-
-        Returns
-        -------
-        sorted_obj : cuDF DataFrame
-
-        Notes
-        -----
-        Difference from pandas:
-          * Support axis='index' only.
-          * Not supporting: inplace, kind
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame()
-        >>> df['a'] = [0, 1, 2]
-        >>> df['b'] = [-3, 2, 0]
-        >>> df.sort_values('b')
-           a  b
-        0  0 -3
-        2  2  0
-        1  1  2
-        """
-        if inplace:
-            raise NotImplementedError("`inplace` not currently implemented.")
-        if kind not in {"quicksort", "mergesort", "heapsort", "stable"}:
-            raise AttributeError(
-                f"{kind} is not a valid sorting algorithm for "
-                f"'DataFrame' object"
-            )
-        elif kind != "quicksort":
-            msg = (
-                f"GPU-accelerated {kind} is currently not supported, "
-                f"now defaulting to GPU-accelerated quicksort."
-            )
-            warnings.warn(msg)
-        if axis != 0:
-            raise NotImplementedError("`axis` not currently implemented.")
-
-        # argsort the `by` column
-        return self.take(
-            self[by].argsort(ascending=ascending, na_position=na_position),
-            keep_index=not ignore_index,
-        )
 
     def agg(self, aggs, axis=None):
         """
@@ -3942,7 +3262,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         # TODO: Remove the typecasting below once issue #6846 is fixed
         # link <https://github.com/rapidsai/cudf/issues/6846>
         dtypes = [self[col].dtype for col in self._column_names]
-        common_dtype = cudf.utils.dtypes.find_common_type(dtypes)
+        common_dtype = find_common_type(dtypes)
         df_normalized = self.astype(common_dtype)
 
         if any(is_string_dtype(dt) for dt in dtypes):
@@ -4102,7 +3422,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         Italy     59000000  1937894      IT
         Brunei      434000    12128      BN
         """
-        return self._n_largest_or_smallest("nlargest", n, columns, keep)
+        return self._n_largest_or_smallest(True, n, columns, keep)
 
     def nsmallest(self, n, columns, keep="first"):
         """Get the rows of the DataFrame sorted by the n smallest value of *columns*
@@ -4170,26 +3490,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         Tuvalu         11300   38      TV
         Nauru         337000  182      NR
         """
-        return self._n_largest_or_smallest("nsmallest", n, columns, keep)
-
-    def _n_largest_or_smallest(self, method, n, columns, keep):
-        # Get column to operate on
-        if not isinstance(columns, str):
-            [column] = columns
-        else:
-            column = columns
-
-        col = self[column].reset_index(drop=True)
-        # Operate
-        sorted_series = getattr(col, method)(n=n, keep=keep)
-        df = DataFrame()
-        new_positions = sorted_series.index.gpu_values
-        for k in self._data.names:
-            if k == column:
-                df[k] = sorted_series
-            else:
-                df[k] = self[k].reset_index(drop=True).take(new_positions)
-        return df.set_index(self.index.take(new_positions))
+        return self._n_largest_or_smallest(False, n, columns, keep)
 
     def transpose(self):
         """Transpose index and columns.
@@ -4278,7 +3579,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         sort=False,
         lsuffix=None,
         rsuffix=None,
-        method="hash",
+        method=None,
         indicator=False,
         suffixes=("_x", "_y"),
     ):
@@ -4295,7 +3596,8 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             If on is None and not merging on indexes then
             this defaults to the intersection of the columns
             in both DataFrames.
-        how : {‘left’, ‘outer’, ‘inner’}, default ‘inner’
+        how : {‘left’, ‘outer’, ‘inner’, 'leftsemi', 'leftanti'}, \
+            default ‘inner’
             Type of merge to be performed.
 
             - left : use only keys from left frame, similar to a SQL left
@@ -4303,8 +3605,14 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             - right : not supported.
             - outer : use union of keys from both frames, similar to a SQL
               full outer join.
-            - inner: use intersection of keys from both frames, similar to
+            - inner : use intersection of keys from both frames, similar to
               a SQL inner join.
+            - leftsemi : similar to ``inner`` join, but only returns columns
+               from the left dataframe and ignores all columns from the
+               right dataframe.
+            - leftanti : returns only rows columns from the left dataframe
+              for non-matched records. This is exact opposite to ``leftsemi``
+              join.
         left_on : label or list, or array-like
             Column or index level names to join on in the left DataFrame.
             Can also be an array or list of arrays of the length of the
@@ -4323,8 +3631,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         suffixes: Tuple[str, str], defaults to ('_x', '_y')
             Suffixes applied to overlapping column names on the left and right
             sides
-        method : {‘hash’, ‘sort’}, default ‘hash’
-            The implementation method to be used for the operation.
+        method :
+            This parameter is unused. It is deprecated and will be removed in a
+            future version.
 
         Returns
         -------
@@ -4386,6 +3695,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         else:
             lsuffix, rsuffix = suffixes
 
+        if method is not None:
+            warnings.warn(
+                "The 'method' argument is deprecated and will be removed "
+                "in a future version of cudf.",
+                FutureWarning,
+            )
+
         # Compute merge
         gdf_result = super()._merge(
             right,
@@ -4396,7 +3712,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             right_index=right_index,
             how=how,
             sort=sort,
-            method=method,
             indicator=indicator,
             suffixes=suffixes,
         )
@@ -4411,7 +3726,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         lsuffix="",
         rsuffix="",
         sort=False,
-        method="hash",
+        method=None,
     ):
         """Join columns with other DataFrame on index or on a key column.
 
@@ -4425,6 +3740,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             column names when avoiding conflicts.
         sort : bool
             Set to True to ensure sorted ordering.
+        method :
+            This parameter is unused. It is deprecated and will be removed in a
+            future version.
 
         Returns
         -------
@@ -4438,23 +3756,27 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         - *on* is not supported yet due to lack of multi-index support.
         """
 
-        lhs = self
-        rhs = other
+        if method is not None:
+            warnings.warn(
+                "The 'method' argument is deprecated and will be removed "
+                "in a future version of cudf.",
+                FutureWarning,
+            )
 
-        df = lhs.merge(
-            rhs,
+        df = self.merge(
+            other,
             left_index=True,
             right_index=True,
             how=how,
             suffixes=(lsuffix, rsuffix),
-            method=method,
             sort=sort,
         )
         df.index.name = (
-            None if lhs.index.name != rhs.index.name else lhs.index.name
+            None if self.index.name != other.index.name else self.index.name
         )
         return df
 
+    @copy_docstring(DataFrameGroupBy)
     def groupby(
         self,
         by=None,
@@ -4490,25 +3812,17 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 "groupby() requires either by or level to be specified."
             )
 
-        return DataFrameGroupBy(
-            self,
-            by=by,
-            level=level,
-            as_index=as_index,
-            dropna=dropna,
-            sort=sort,
-        )
-
-    def rolling(
-        self, window, min_periods=None, center=False, axis=0, win_type=None
-    ):
-        return Rolling(
-            self,
-            window,
-            min_periods=min_periods,
-            center=center,
-            axis=axis,
-            win_type=win_type,
+        return (
+            DataFrameResampler(self, by=by)
+            if isinstance(by, cudf.Grouper) and by.freq
+            else DataFrameGroupBy(
+                self,
+                by=by,
+                level=level,
+                as_index=as_index,
+                dropna=dropna,
+                sort=sort,
+            )
         )
 
     def query(self, expr, local_dict=None):
@@ -4601,7 +3915,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             boolmask = queryutils.query_execute(self, expr, callenv)
             return self._apply_boolean_mask(boolmask)
 
-    def apply(self, func, axis=1):
+    def apply(
+        self, func, axis=1, raw=False, result_type=None, args=(), **kwargs
+    ):
         """
         Apply a function along an axis of the DataFrame.
 
@@ -4615,28 +3931,31 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         ----------
         func : function
             Function to apply to each row.
-
         axis : {0 or 'index', 1 or 'columns'}, default 0
             Axis along which the function is applied:
             * 0 or 'index': apply function to each column.
               Note: axis=0 is not yet supported.
             * 1 or 'columns': apply function to each row.
+        raw: bool, default False
+            Not yet supported
+        result_type: {'expand', 'reduce', 'broadcast', None}, default None
+            Not yet supported
+        args: tuple
+            Positional arguments to pass to func in addition to the dataframe.
 
         Examples
         --------
 
         Simple function of a single variable which could be NA
 
-        >>> from cudf.core.udf.pipeline import nulludf
-        >>> @nulludf
-        ... def f(x):
-        ...     if x is cudf.NA:
+        >>> def f(row):
+        ...     if row['a'] is cudf.NA:
         ...             return 0
         ...     else:
-        ...             return x + 1
+        ...             return row['a'] + 1
         ...
         >>> df = cudf.DataFrame({'a': [1, cudf.NA, 3]})
-        >>> df.apply(lambda row: f(row['a']))
+        >>> df.apply(f, axis=1)
         0    2
         1    0
         2    4
@@ -4645,15 +3964,14 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         Function of multiple variables will operate in
         a null aware manner
 
-        >>> @nulludf
-        ... def f(x, y):
-        ...     return x - y
+        >>> def f(row):
+        ...     return row['a'] - row['b']
         ...
         >>> df = cudf.DataFrame({
         ...     'a': [1, cudf.NA, 3, cudf.NA],
         ...     'b': [5, 6, cudf.NA, cudf.NA]
         ... })
-        >>> df.apply(lambda row: f(row['a'], row['b']))
+        >>> df.apply(f)
         0      -4
         1    <NA>
         2    <NA>
@@ -4662,18 +3980,17 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         Functions may conditionally return NA as in pandas
 
-        >>> @nulludf
-        ... def f(x, y):
-        ...     if x + y > 3:
+        >>> def f(row):
+        ...     if row['a'] + row['b'] > 3:
         ...             return cudf.NA
         ...     else:
-        ...             return x + y
+        ...             return row['a'] + row['b']
         ...
         >>> df = cudf.DataFrame({
         ...     'a': [1, 2, 3],
         ...     'b': [2, 1, 1]
         ... })
-        >>> df.apply(lambda row: f(row['a'], row['b']))
+        >>> df.apply(f, axis=1)
         0       3
         1       3
         2    <NA>
@@ -4682,15 +3999,14 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         Mixed types are allowed, but will return the common
         type, rather than object as in pandas
 
-        >>> @nulludf
-        ... def f(x, y):
-        ...     return x + y
+        >>> def f(row):
+        ...     return row['a'] + row['b']
         ...
         >>> df = cudf.DataFrame({
         ...     'a': [1, 2, 3],
         ...     'b': [0.5, cudf.NA, 3.14]
         ... })
-        >>> df.apply(lambda row: f(row['a'], row['b']))
+        >>> df.apply(f, axis=1)
         0     1.5
         1    <NA>
         2    6.14
@@ -4700,17 +4016,16 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         result will be promoted to a safe type regardless of
         the data
 
-        >>> @nulludf
-        ... def f(x):
-        ...     if x > 3:
-        ...             return x
+        >>> def f(row):
+        ...     if row['a'] > 3:
+        ...             return row['a']
         ...     else:
         ...             return 1.5
         ...
         >>> df = cudf.DataFrame({
         ...     'a': [1, 3, 5]
         ... })
-        >>> df.apply(lambda row: f(row['a']))
+        >>> df.apply(f, axis=1)
         0    1.5
         1    1.5
         2    5.0
@@ -4718,8 +4033,10 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         Ops against N columns are supported generally
 
-        >>> @nulludf
-        ... def f(v, w, x, y, z):
+        >>> def f(row):
+        ...     v, w, x, y, z = (
+        ...         row['a'], row['b'], row['c'], row['d'], row['e']
+        ...     )
         ...     return x + (y - (z / w)) % v
         ...
         >>> df = cudf.DataFrame({
@@ -4729,48 +4046,24 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         ...     'd': [8, 7, 8],
         ...     'e': [7, 1, 6]
         ... })
-        >>> df.apply(
-        ...     lambda row: f(
-        ...             row['a'],
-        ...             row['b'],
-        ...             row['c'],
-        ...             row['d'],
-        ...             row['e']
-        ...     )
-        ... )
+        >>> df.apply(f, axis=1)
         0    <NA>
         1     4.8
         2     5.0
         dtype: float64
-
-        Notes
-        -----
-        Available only using cuda 11.1+ due to particular required
-        runtime compilation features
         """
-
-        # libcudacxx tuples are not compatible with nvrtc 11.0
-        runtime = cuda.cudadrv.runtime.Runtime()
-        mjr, mnr = runtime.get_version()
-        if mjr < 11 or (mjr == 11 and mnr < 1):
-            raise RuntimeError("DataFrame.apply requires CUDA 11.1+")
-
-        for dtype in self.dtypes:
-            if (
-                isinstance(dtype, cudf.core.dtypes._BaseDtype)
-                or dtype == "object"
-            ):
-                raise TypeError(
-                    "DataFrame.apply currently only "
-                    "supports non decimal numeric types"
-                )
-
         if axis != 1:
             raise ValueError(
                 "DataFrame.apply currently only supports row wise ops"
             )
+        if raw:
+            raise ValueError("The `raw` kwarg is not yet supported.")
+        if result_type is not None:
+            raise ValueError("The `result_type` kwarg is not yet supported.")
+        if kwargs:
+            raise ValueError("UDFs using **kwargs are not yet supported.")
 
-        return cudf.Series(func(self))
+        return self._apply(func, *args)
 
     @applyutils.doc_apply()
     def apply_rows(
@@ -4917,22 +4210,76 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             tpb=tpb,
         )
 
-    def hash_columns(self, columns=None):
+    def hash_columns(self, columns=None, method="murmur3"):
         """Hash the given *columns* and return a new device array
+
+        This method is deprecated. Replace ``df.hash_columns(columns, method)``
+        with ``df[columns].hash_values(method)``.
 
         Parameters
         ----------
         columns : sequence of str; optional
             Sequence of column names. If columns is *None* (unspecified),
             all columns in the frame are used.
-        """
-        if columns is None:
-            table_to_hash = self
-        else:
-            cols = [self[k]._column for k in columns]
-            table_to_hash = Frame(data=dict(zip(columns, cols)))
+        method : {'murmur3', 'md5'}, default 'murmur3'
+            Hash function to use:
+            * murmur3: MurmurHash3 hash function.
+            * md5: MD5 hash function.
 
-        return Series(table_to_hash._hash()).values
+        Returns
+        -------
+        Series
+            Hash values for each row.
+        """
+        warnings.warn(
+            "The `hash_columns` method will be removed in a future cuDF "
+            "release. Replace `df.hash_columns(columns, method)` with "
+            "`df[columns].hash_values(method)`.",
+            FutureWarning,
+        )
+        if columns is None:
+            # Slice by [:] to keep all columns.
+            columns = slice(None, None, None)
+        return self[columns].hash_values(method=method)
+
+    def hash_values(self, method="murmur3"):
+        """Compute the hash of values in each row.
+
+        Parameters
+        ----------
+        method : {'murmur3', 'md5'}, default 'murmur3'
+            Hash function to use:
+            * murmur3: MurmurHash3 hash function.
+            * md5: MD5 hash function.
+
+        Returns
+        -------
+        Series
+            A Series with hash values.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"a": [10, 120, 30], "b": [0.0, 0.25, 0.50]})
+        >>> df
+             a     b
+        0   10  0.00
+        1  120  0.25
+        2   30  0.50
+        >>> df.hash_values(method="murmur3")
+        0    -330519225
+        1    -397962448
+        2   -1345834934
+        dtype: int32
+        >>> df.hash_values(method="md5")
+        0    57ce879751b5169c525907d5c563fae1
+        1    948d6221a7c4963d4be411bcead7e32b
+        2    fe061786ea286a515b772d91b0dfcd70
+        dtype: object
+        """
+        return Series._from_data(
+            {None: self._hash(method=method)}, index=self.index
+        )
 
     def partition_by_hash(self, columns, nparts, keep_index=True):
         """Partition the dataframe by the hashed value of data in *columns*.
@@ -4960,140 +4307,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         outdf, offsets = self._hash_partition(key_indices, nparts, keep_index)
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
-
-    def replace(
-        self,
-        to_replace=None,
-        value=None,
-        inplace=False,
-        limit=None,
-        regex=False,
-        method=None,
-    ):
-        """
-        Replace values given in *to_replace* with *replacement*.
-
-        Parameters
-        ----------
-        to_replace : numeric, str, list-like or dict
-            Value(s) that will be replaced.
-
-            * numeric or str:
-                - values equal to *to_replace* will be replaced
-                  with *replacement*
-            * list of numeric or str:
-                - If *replacement* is also list-like,
-                  *to_replace* and *replacement* must be of same length.
-            * dict:
-                - Dicts can be used to replace different values in different
-                  columns. For example, `{'a': 1, 'z': 2}` specifies that the
-                  value 1 in column `a` and the value 2 in column `z` should be
-                  replaced with replacement*.
-                - Dicts can be used to specify different replacement values for
-                  different existing values. For example, {'a': 'b', 'y': 'z'}
-                  replaces the value ‘a’ with ‘b’ and ‘y’ with ‘z’.
-                  To use a dict in this way the value parameter should be None.
-
-        value : numeric, str, list-like, or dict
-            Value(s) to replace `to_replace` with. If a dict is provided, then
-            its keys must match the keys in *to_replace*, and corresponding
-            values must be compatible (e.g., if they are lists, then they must
-            match in length).
-        inplace : bool, default False
-            If True, in place.
-
-        Raises
-        ------
-        TypeError
-            - If ``to_replace`` is not a scalar, array-like, dict, or None
-            - If ``to_replace`` is a dict and value is not a list, dict,
-              or Series
-        ValueError
-            - If a list is passed to ``to_replace`` and ``value`` but they
-              are not the same length.
-
-        Returns
-        -------
-        result : DataFrame
-            DataFrame after replacement.
-
-        Examples
-        --------
-
-        Scalar ``to_replace`` and ``value``
-
-        >>> import cudf
-        >>> df = cudf.DataFrame({'A': [0, 1, 2, 3, 4],
-        ...                    'B': [5, 6, 7, 8, 9],
-        ...                    'C': ['a', 'b', 'c', 'd', 'e']})
-        >>> df
-           A  B  C
-        0  0  5  a
-        1  1  6  b
-        2  2  7  c
-        3  3  8  d
-        4  4  9  e
-        >>> df.replace(0, 5)
-           A  B  C
-        0  5  5  a
-        1  1  6  b
-        2  2  7  c
-        3  3  8  d
-        4  4  9  e
-
-        List-like ``to_replace``
-
-        >>> df.replace([0, 1, 2, 3], 4)
-           A  B  C
-        0  4  5  a
-        1  4  6  b
-        2  4  7  c
-        3  4  8  d
-        4  4  9  e
-        >>> df.replace([0, 1, 2, 3], [4, 3, 2, 1])
-           A  B  C
-        0  4  5  a
-        1  3  6  b
-        2  2  7  c
-        3  1  8  d
-        4  4  9  e
-
-        dict-like ``to_replace``
-
-        >>> df.replace({0: 10, 1: 100})
-             A  B  C
-        0   10  5  a
-        1  100  6  b
-        2    2  7  c
-        3    3  8  d
-        4    4  9  e
-        >>> df.replace({'A': 0, 'B': 5}, 100)
-             A    B  C
-        0  100  100  a
-        1    1    6  b
-        2    2    7  c
-        3    3    8  d
-        4    4    9  e
-
-        Notes
-        -----
-        Parameters that are currently not supported are: `limit`, `regex`,
-        `method`
-        """
-        if limit is not None:
-            raise NotImplementedError("limit parameter is not implemented yet")
-
-        if regex:
-            raise NotImplementedError("regex parameter is not implemented yet")
-
-        if method not in ("pad", None):
-            raise NotImplementedError(
-                "method parameter is not implemented yet"
-            )
-
-        outdf = super().replace(to_replace=to_replace, replacement=value)
-
-        return self._mimic_inplace(outdf, inplace=inplace)
 
     def info(
         self,
@@ -5504,7 +4717,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         dtype: object
         >>> pdf = df.to_pandas(nullable=False)
         >>> pdf
-            a      b
+             a      b
         0  0.0   True
         1  NaN  False
         2  2.0   None
@@ -5513,7 +4726,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         b     object
         dtype: object
         """
-
         out_data = {}
         out_index = self.index.to_pandas()
 
@@ -5755,9 +4967,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         dtype = np.dtype(members)
         ret = np.recarray(len(self), dtype=dtype)
         if index:
-            ret["index"] = self.index.to_array()
+            ret["index"] = self.index.to_numpy()
         for col in self._data.names:
-            ret[col] = self[col].to_array()
+            ret[col] = self[col].to_numpy()
         return ret
 
     @classmethod
@@ -5848,7 +5060,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             )
 
         if data.ndim == 2:
-            num_cols = len(data[0])
+            num_cols = data.shape[1]
         else:
             # Since we validate ndim to be either 1 or 2 above,
             # this case can be assumed to be ndim == 1.
@@ -5881,17 +5093,35 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             df._index = as_index(index)
         return df
 
-    @classmethod
-    def _from_columns(cls, cols, index=None, columns=None):
-        """
-        Construct a DataFrame from a list of Columns
-        """
-        if columns is not None:
-            data = dict(zip(columns, cols))
-        else:
-            data = dict(enumerate(cols))
+    def interpolate(
+        self,
+        method="linear",
+        axis=0,
+        limit=None,
+        inplace=False,
+        limit_direction=None,
+        limit_area=None,
+        downcast=None,
+        **kwargs,
+    ):
 
-        return cls(data=data, index=index,)
+        if all(dt == np.dtype("object") for dt in self.dtypes):
+            raise TypeError(
+                "Cannot interpolate with all object-dtype "
+                "columns in the DataFrame. Try setting at "
+                "least one column to a numeric dtype."
+            )
+
+        return super().interpolate(
+            method=method,
+            axis=axis,
+            limit=limit,
+            inplace=inplace,
+            limit_direction=limit_direction,
+            limit_area=limit_area,
+            downcast=downcast,
+            **kwargs,
+        )
 
     def quantile(
         self,
@@ -5958,7 +5188,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         b    3.7
         Name: 0.1, dtype: float64
         >>> df.quantile([.1, .5])
-            a     b
+               a     b
         0.1  1.3   3.7
         0.5  2.5  55.0
         """  # noqa: E501
@@ -6137,12 +5367,12 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                     isinstance(
                         self[col]._column, cudf.core.column.CategoricalColumn
                     )
-                    or np.issubdtype(self[col].dtype, np.dtype("object"))
+                    or np.issubdtype(self[col].dtype, cudf.dtype("object"))
                 ) or (
                     isinstance(
                         values._column, cudf.core.column.CategoricalColumn
                     )
-                    or np.issubdtype(values.dtype, np.dtype("object"))
+                    or np.issubdtype(values.dtype, cudf.dtype("object"))
                 ):
                     result[col] = utils.scalar_broadcast_to(False, len(self))
                 else:
@@ -6185,14 +5415,13 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
     # Stats
     #
     def _prepare_for_rowwise_op(self, method, skipna):
-        """Prepare a DataFrame for CuPy-based row-wise operations.
-        """
+        """Prepare a DataFrame for CuPy-based row-wise operations."""
 
         if method not in _cupy_nan_methods_map and any(
             col.nullable for col in self._columns
         ):
             msg = (
-                f"Row-wise operations to calculate '{method}' is not "
+                f"Row-wise operations to calculate '{method}' do not "
                 f"currently support columns with null values. "
                 f"Consider removing them with .dropna() "
                 f"or using .fillna()."
@@ -6267,12 +5496,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         if axis != 0:
             raise NotImplementedError("Only axis=0 is currently supported.")
 
-        return self._apply_support_method(
-            "count",
-            axis=axis,
-            level=level,
-            numeric_only=numeric_only,
-            **kwargs,
+        return Series._from_data(
+            {None: [self._data[col].valid_count for col in self._data.names]},
+            as_index(self._data.names),
         )
 
     _SUPPORT_AXIS_LOOKUP = {
@@ -6305,156 +5531,17 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                 {None: result}, as_index(self._data.names)
             )
         elif axis == 1:
-            return self._apply_support_method_axis_1(op, **kwargs)
+            return self._apply_cupy_method_axis_1(op, **kwargs)
 
-    def cummin(self, axis=None, skipna=True, *args, **kwargs):
-        """
-        Return cumulative minimum of the DataFrame.
+    def _scan(
+        self, op, axis=None, *args, **kwargs,
+    ):
+        axis = self._get_axis_from_axis_arg(axis)
 
-        Parameters
-        ----------
-
-        skipna: bool, default True
-            Exclude NA/null values. If an entire row/column is NA,
-            the result will be NA.
-
-        Returns
-        -------
-        DataFrame
-
-        Notes
-        -----
-        Parameters currently not supported is `axis`
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
-        >>> df.cummin()
-           a  b
-        0  1  7
-        1  1  7
-        2  1  7
-        3  1  7
-        """
-        if axis not in (0, "index", None):
-            raise NotImplementedError("Only axis=0 is currently supported.")
-
-        return self._apply_support_method(
-            "cummin", axis=axis, skipna=skipna, *args, **kwargs
-        )
-
-    def cummax(self, axis=None, skipna=True, *args, **kwargs):
-        """
-        Return cumulative maximum of the DataFrame.
-
-        Parameters
-        ----------
-
-        skipna: bool, default True
-            Exclude NA/null values. If an entire row/column is NA,
-            the result will be NA.
-
-        Returns
-        -------
-        DataFrame
-
-        Notes
-        -----
-        Parameters currently not supported is `axis`
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
-        >>> df.cummax()
-           a   b
-        0  1   7
-        1  2   8
-        2  3   9
-        3  4  10
-        """
-        if axis not in (0, "index", None):
-            raise NotImplementedError("Only axis=0 is currently supported.")
-
-        return self._apply_support_method(
-            "cummax", axis=axis, skipna=skipna, *args, **kwargs
-        )
-
-    def cumsum(self, axis=None, skipna=True, *args, **kwargs):
-        """
-        Return cumulative sum of the DataFrame.
-
-        Parameters
-        ----------
-
-        skipna: bool, default True
-            Exclude NA/null values. If an entire row/column is NA,
-            the result will be NA.
-
-
-        Returns
-        -------
-        DataFrame
-
-        Notes
-        -----
-        Parameters currently not supported is `axis`
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
-        >>> s.cumsum()
-            a   b
-        0   1   7
-        1   3  15
-        2   6  24
-        3  10  34
-        """
-        if axis not in (0, "index", None):
-            raise NotImplementedError("Only axis=0 is currently supported.")
-
-        return self._apply_support_method(
-            "cumsum", axis=axis, skipna=skipna, *args, **kwargs
-        )
-
-    def cumprod(self, axis=None, skipna=True, *args, **kwargs):
-        """
-        Return cumulative product of the DataFrame.
-
-        Parameters
-        ----------
-
-        skipna: bool, default True
-            Exclude NA/null values. If an entire row/column is NA,
-            the result will be NA.
-
-        Returns
-        -------
-        DataFrame
-
-        Notes
-        -----
-        Parameters currently not supported is `axis`
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
-        >>> s.cumprod()
-            a     b
-        0   1     7
-        1   2    56
-        2   6   504
-        3  24  5040
-        """
-        if axis not in (0, "index", None):
-            raise NotImplementedError("Only axis=0 is currently supported.")
-
-        return self._apply_support_method(
-            "cumprod", axis=axis, skipna=skipna, *args, **kwargs
-        )
+        if axis == 0:
+            return super()._scan(op, axis=axis, *args, **kwargs)
+        elif axis == 1:
+            return self._apply_cupy_method_axis_1(f"cum{op}", **kwargs)
 
     def mode(self, axis=0, numeric_only=False, dropna=True):
         """
@@ -6482,9 +5569,9 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         See Also
         --------
-        cudf.core.series.Series.mode : Return the highest frequency value
+        cudf.Series.mode : Return the highest frequency value
             in a Series.
-        cudf.core.series.Series.value_counts : Return the counts of values
+        cudf.Series.value_counts : Return the counts of values
             in a Series.
 
         Notes
@@ -6545,8 +5632,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         ]
 
         if len(mode_results) == 0:
-            df = DataFrame(index=self.index)
-            return df
+            return DataFrame()
 
         df = cudf.concat(mode_results, axis=1)
         if isinstance(df, Series):
@@ -6559,100 +5645,17 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
     def kurtosis(
         self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
     ):
-        """
-        Return Fisher's unbiased kurtosis of a sample.
-
-        Kurtosis obtained using Fisher’s definition of
-        kurtosis (kurtosis of normal == 0.0). Normalized by N-1.
-
-        Parameters
-        ----------
-
-        skipna: bool, default True
-            Exclude NA/null values when computing the result.
-
-        Returns
-        -------
-        Series
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `level` and
-        `numeric_only`
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [1, 2, 3, 4], 'b': [7, 8, 9, 10]})
-        >>> df.kurt()
-        a   -1.2
-        b   -1.2
-        dtype: float64
-        """
-        if axis not in (0, "index", None):
-            raise NotImplementedError("Only axis=0 is currently supported.")
-
-        if numeric_only not in (None, True):
-            msg = "Kurtosis only supports int, float, and bool dtypes."
-            raise NotImplementedError(msg)
-
-        filtered = self.select_dtypes(include=[np.number, np.bool_])
-        return filtered._apply_support_method(
-            "kurtosis",
-            axis=axis,
-            skipna=skipna,
-            level=level,
-            numeric_only=numeric_only,
-            **kwargs,
+        obj = self.select_dtypes(include=[np.number, np.bool_])
+        return super(DataFrame, obj).kurtosis(
+            axis, skipna, level, numeric_only, **kwargs
         )
-
-    # Alias for kurtosis.
-    kurt = kurtosis
 
     def skew(
         self, axis=None, skipna=None, level=None, numeric_only=None, **kwargs
     ):
-        """
-        Return unbiased Fisher-Pearson skew of a sample.
-
-        Parameters
-        ----------
-        skipna: bool, default True
-            Exclude NA/null values when computing the result.
-
-        Returns
-        -------
-        Series
-
-        Notes
-        -----
-        Parameters currently not supported are `axis`, `level` and
-        `numeric_only`
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({'a': [3, 2, 3, 4], 'b': [7, 8, 10, 10]})
-        >>> df.skew()
-        a    0.00000
-        b   -0.37037
-        dtype: float64
-        """
-        if axis not in (0, "index", None):
-            raise NotImplementedError("Only axis=0 is currently supported.")
-
-        if numeric_only not in (None, True):
-            msg = "Skew only supports int, float, and bool dtypes."
-            raise NotImplementedError(msg)
-
-        filtered = self.select_dtypes(include=[np.number, np.bool_])
-        return filtered._apply_support_method(
-            "skew",
-            axis=axis,
-            skipna=skipna,
-            level=level,
-            numeric_only=numeric_only,
-            **kwargs,
+        obj = self.select_dtypes(include=[np.number, np.bool_])
+        return super(DataFrame, obj).skew(
+            axis, skipna, level, numeric_only, **kwargs
         )
 
     def all(self, axis=0, bool_only=None, skipna=True, level=None, **kwargs):
@@ -6663,32 +5666,21 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         obj = self.select_dtypes(include="bool") if bool_only else self
         return super(DataFrame, obj).any(axis, skipna, level, **kwargs)
 
-    def _apply_support_method_axis_0(self, method, *args, **kwargs):
-        result = [
-            getattr(self[col], method)(*args, **kwargs)
-            for col in self._data.names
-        ]
+    def _apply_cupy_method_axis_1(self, method, *args, **kwargs):
+        # This method uses cupy to perform scans and reductions along rows of a
+        # DataFrame. Since cuDF is designed around columnar storage and
+        # operations, we convert DataFrames to 2D cupy arrays for these ops.
 
-        if isinstance(result[0], Series):
-            support_result = result
-            result = DataFrame(index=support_result[0].index)
-            for idx, col in enumerate(self._data.names):
-                result[col] = support_result[idx]
-        else:
-            result = Series(result)
-            result = result.set_index(self._data.names)
-        return result
-
-    def _apply_support_method_axis_1(self, method, *args, **kwargs):
         # for dask metadata compatibility
         skipna = kwargs.pop("skipna", None)
+        skipna = True if skipna is None else skipna
         if method not in _cupy_nan_methods_map and skipna not in (
             None,
             True,
             1,
         ):
             raise NotImplementedError(
-                f"Row-wise operation to calculate '{method}'"
+                f"Row-wise operations to calculate '{method}'"
                 f" currently do not support `skipna=False`."
             )
 
@@ -6708,14 +5700,19 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         min_count = kwargs.pop("min_count", None)
         if min_count not in (None, 0):
             raise NotImplementedError(
-                "Row-wise operations currently do not " "support `min_count`."
+                "Row-wise operations currently do not support `min_count`."
             )
 
         bool_only = kwargs.pop("bool_only", None)
         if bool_only not in (None, True):
             raise NotImplementedError(
-                "Row-wise operations currently do not " "support `bool_only`."
+                "Row-wise operations currently do not support `bool_only`."
             )
+
+        # This parameter is only necessary for axis 0 reductions that cuDF
+        # performs internally. cupy already upcasts smaller integer/bool types
+        # to int64 when accumulating.
+        kwargs.pop("cast_to_int", None)
 
         prepared, mask, common_dtype = self._prepare_for_rowwise_op(
             method, skipna
@@ -6729,7 +5726,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
                             prepared._data[col]
                         )
                         if not is_datetime_dtype(common_dtype)
-                        else np.dtype("float64")
+                        else cudf.dtype("float64")
                     )
                     .fillna(np.nan)
                 )
@@ -6768,14 +5765,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             result_df = DataFrame(result).set_index(self.index)
             result_df.columns = prepared.columns
             return result_df
-
-    def _apply_support_method(self, method, axis=0, *args, **kwargs):
-        axis = self._get_axis_from_axis_arg(axis)
-
-        if axis == 0:
-            return self._apply_support_method_axis_0(method, *args, **kwargs)
-        elif axis == 1:
-            return self._apply_support_method_axis_1(method, *args, **kwargs)
 
     def _columns_view(self, columns):
         """
@@ -6933,27 +5922,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         feather.to_feather(self, path, *args, **kwargs)
 
-    @ioutils.doc_to_json()
-    def to_json(self, path_or_buf=None, *args, **kwargs):
-        """{docstring}"""
-        from cudf.io import json as json
-
-        return json.to_json(self, path_or_buf=path_or_buf, *args, **kwargs)
-
-    @ioutils.doc_to_hdf()
-    def to_hdf(self, path_or_buf, key, *args, **kwargs):
-        """{docstring}"""
-        from cudf.io import hdf as hdf
-
-        hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
-
-    @ioutils.doc_to_dlpack()
-    def to_dlpack(self):
-        """{docstring}"""
-        from cudf.io import dlpack as dlpack
-
-        return dlpack.to_dlpack(self)
-
     @ioutils.doc_dataframe_to_csv()
     def to_csv(
         self,
@@ -7073,19 +6041,11 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
         return df
 
     def corr(self):
-        """Compute the correlation matrix of a DataFrame.
-        """
+        """Compute the correlation matrix of a DataFrame."""
         corr = cupy.corrcoef(self.values, rowvar=False)
         df = DataFrame(cupy.asfortranarray(corr)).set_index(self.columns)
         df.columns = self.columns
         return df
-
-    def to_dict(self, orient="dict", into=dict):
-        raise TypeError(
-            "cuDF does not support conversion to host memory "
-            "via `to_dict()` method. Consider using "
-            "`.to_pandas().to_dict()` to construct a Python dictionary."
-        )
 
     def to_struct(self, name=None):
         """
@@ -7183,7 +6143,7 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
 
         See Also
         --------
-        cudf.core.reshape.concat : General function to concatenate DataFrame or
+        cudf.concat : General function to concatenate DataFrame or
             objects.
 
         Notes
@@ -7323,14 +6283,6 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             self, level=level, fill_value=fill_value
         )
 
-    def equals(self, other):
-        if not isinstance(other, DataFrame):
-            return False
-        for self_name, other_name in zip(self._data.names, other._data.names):
-            if self_name != other_name:
-                return False
-        return super().equals(other)
-
     def explode(self, column, ignore_index=False):
         """
         Transform each element of a list-like to a row, replicating index
@@ -7376,6 +6328,130 @@ class DataFrame(Frame, Serializable, GetAttrGetItemMixin):
             return self.__class__._from_data(data, index=idx)
 
         return super()._explode(column, ignore_index)
+
+    def __dataframe__(
+        self, nan_as_null: bool = False, allow_copy: bool = True
+    ):
+        return df_protocol.__dataframe__(
+            self, nan_as_null=nan_as_null, allow_copy=allow_copy
+        )
+
+
+def from_dataframe(df, allow_copy=False):
+    return df_protocol.from_dataframe(df, allow_copy=allow_copy)
+
+
+def make_binop_func(op, postprocess=None):
+    # This function is used to wrap binary operations in Frame with an
+    # appropriate API for DataFrame as required for pandas compatibility. The
+    # main effect is reordering and error-checking parameters in
+    # DataFrame-specific ways. The postprocess argument is a callable that may
+    # optionally be provided to modify the result of the binop if additional
+    # processing is needed for pandas compatibility. The callable must have the
+    # signature
+    # def postprocess(left, right, output)
+    # where left and right are the inputs to the binop and output is the result
+    # of calling the wrapped Frame binop.
+    wrapped_func = getattr(Frame, op)
+
+    @functools.wraps(wrapped_func)
+    def wrapper(self, other, axis="columns", level=None, fill_value=None):
+        if axis not in (1, "columns"):
+            raise NotImplementedError("Only axis=1 supported at this time.")
+        output = wrapped_func(self, other, axis, level, fill_value)
+        if postprocess is None:
+            return output
+        return postprocess(self, other, output)
+
+    # functools.wraps copies module level attributes to `wrapper` and sets
+    # __wrapped__ attributes to `wrapped_func`. Cpython looks up the signature
+    # string of a function by recursively delving into __wrapped__ until
+    # it hits the first function that has __signature__ attribute set. To make
+    # the signature string of `wrapper` matches with its actual parameter list,
+    # we directly set the __signature__ attribute of `wrapper` below.
+
+    new_sig = inspect.signature(
+        lambda self, other, axis="columns", level=None, fill_value=None: None
+    )
+
+    wrapper.__signature__ = new_sig
+    return wrapper
+
+
+# Wrap arithmetic Frame binop functions with the expected API for Series.
+for binop in [
+    "add",
+    "radd",
+    "subtract",
+    "sub",
+    "rsub",
+    "multiply",
+    "mul",
+    "rmul",
+    "mod",
+    "rmod",
+    "pow",
+    "rpow",
+    "floordiv",
+    "rfloordiv",
+    "truediv",
+    "div",
+    "divide",
+    "rtruediv",
+    "rdiv",
+]:
+    setattr(DataFrame, binop, make_binop_func(binop))
+
+
+def _make_replacement_func(value):
+    # This function generates a postprocessing function suitable for use with
+    # make_binop_func that fills null columns with the desired fill value.
+
+    def func(left, right, output):
+        # This function may be passed as the postprocess argument to
+        # make_binop_func. Columns that are only present in one of the inputs
+        # will be null in the output. This function postprocesses the output to
+        # replace those nulls with some desired output.
+        if isinstance(right, Series):
+            uncommon_columns = set(left._column_names) ^ set(right.index)
+        elif isinstance(right, DataFrame):
+            uncommon_columns = set(left._column_names) ^ set(
+                right._column_names
+            )
+        elif _is_scalar_or_zero_d_array(right):
+            for name, col in output._data.items():
+                output._data[name] = col.fillna(value)
+            return output
+        else:
+            return output
+
+        for name in uncommon_columns:
+            output._data[name] = column.full(
+                size=len(output), fill_value=value, dtype="bool"
+            )
+        return output
+
+    return func
+
+
+# The ne comparator needs special postprocessing because elements that missing
+# in one operand should be treated as null and result in True in the output
+# rather than simply propagating nulls.
+DataFrame.ne = make_binop_func("ne", _make_replacement_func(True))
+
+
+# All other comparison operators needs return False when one of the operands is
+# missing in the input.
+for binop in [
+    "eq",
+    "lt",
+    "le",
+    "gt",
+    "ge",
+]:
+    setattr(
+        DataFrame, binop, make_binop_func(binop, _make_replacement_func(False))
+    )
 
 
 def from_pandas(obj, nan_as_null=None):
@@ -7553,11 +6629,11 @@ def _setitem_with_dataframe(
     mask: Optional[cudf.core.column.ColumnBase] = None,
 ):
     """
-        This function sets item dataframes relevant columns with replacement df
-        :param input_df: Dataframe to be modified inplace
-        :param replace_df: Replacement DataFrame to replace values with
-        :param input_cols: columns to replace in the input dataframe
-        :param mask: boolean mask in case of masked replacing
+    This function sets item dataframes relevant columns with replacement df
+    :param input_df: Dataframe to be modified inplace
+    :param replace_df: Replacement DataFrame to replace values with
+    :param input_cols: columns to replace in the input dataframe
+    :param mask: boolean mask in case of masked replacing
     """
 
     if input_cols is None:
@@ -7609,7 +6685,7 @@ def _get_union_of_indices(indexes):
     if len(indexes) == 1:
         return indexes[0]
     else:
-        merged_index = cudf.core.Index._concat(indexes)
+        merged_index = cudf.core.index.GenericIndex._concat(indexes)
         merged_index = merged_index.drop_duplicates()
         _, inds = merged_index._values.sort_by_values()
         return merged_index.take(inds)
@@ -7650,3 +6726,97 @@ def _drop_columns(df: DataFrame, columns: Iterable, errors: str):
                 pass
             else:
                 raise e
+
+
+# Create a dictionary of the common, non-null columns
+def _get_non_null_cols_and_dtypes(col_idxs, list_of_columns):
+    # A mapping of {idx: np.dtype}
+    dtypes = dict()
+    # A mapping of {idx: [...columns]}, where `[...columns]`
+    # is a list of columns with at least one valid value for each
+    # column name across all input frames
+    non_null_columns = dict()
+    for idx in col_idxs:
+        for cols in list_of_columns:
+            # Skip columns not in this frame
+            if idx >= len(cols) or cols[idx] is None:
+                continue
+            # Store the first dtype we find for a column, even if it's
+            # all-null. This ensures we always have at least one dtype
+            # for each name. This dtype will be overwritten later if a
+            # non-null Column with the same name is found.
+            if idx not in dtypes:
+                dtypes[idx] = cols[idx].dtype
+            if cols[idx].valid_count > 0:
+                if idx not in non_null_columns:
+                    non_null_columns[idx] = [cols[idx]]
+                else:
+                    non_null_columns[idx].append(cols[idx])
+    return non_null_columns, dtypes
+
+
+def _find_common_dtypes_and_categories(non_null_columns, dtypes):
+    # A mapping of {idx: categories}, where `categories` is a
+    # column of all the unique categorical values from each
+    # categorical column across all input frames
+    categories = dict()
+    for idx, cols in non_null_columns.items():
+        # default to the first non-null dtype
+        dtypes[idx] = cols[0].dtype
+        # If all the non-null dtypes are int/float, find a common dtype
+        if all(is_numeric_dtype(col.dtype) for col in cols):
+            dtypes[idx] = find_common_type([col.dtype for col in cols])
+        # If all categorical dtypes, combine the categories
+        elif all(
+            isinstance(col, cudf.core.column.CategoricalColumn) for col in cols
+        ):
+            # Combine and de-dupe the categories
+            categories[idx] = (
+                cudf.Series(concat_columns([col.categories for col in cols]))
+                .drop_duplicates(ignore_index=True)
+                ._column
+            )
+            # Set the column dtype to the codes' dtype. The categories
+            # will be re-assigned at the end
+            dtypes[idx] = min_scalar_type(len(categories[idx]))
+        # Otherwise raise an error if columns have different dtypes
+        elif not all(is_dtype_equal(c.dtype, dtypes[idx]) for c in cols):
+            raise ValueError("All columns must be the same type")
+    return categories
+
+
+def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes, categories):
+    # Cast all columns to a common dtype, assign combined categories,
+    # and back-fill missing columns with all-null columns
+    for idx in col_idxs:
+        dtype = dtypes[idx]
+        for cols in list_of_columns:
+            # If column not in this df, fill with an all-null column
+            if idx >= len(cols) or cols[idx] is None:
+                n = len(next(x for x in cols if x is not None))
+                cols[idx] = column_empty(row_count=n, dtype=dtype, masked=True)
+            else:
+                # If column is categorical, rebase the codes with the
+                # combined categories, and cast the new codes to the
+                # min-scalar-sized dtype
+                if idx in categories:
+                    cols[idx] = (
+                        cols[idx]
+                        ._set_categories(categories[idx], is_unique=True,)
+                        .codes
+                    )
+                cols[idx] = cols[idx].astype(dtype)
+
+
+def _reassign_categories(categories, cols, col_idxs):
+    for name, idx in zip(cols, col_idxs):
+        if idx in categories:
+            cols[name] = build_categorical_column(
+                categories=categories[idx],
+                codes=build_column(
+                    cols[name].base_data, dtype=cols[name].dtype
+                ),
+                mask=cols[name].base_mask,
+                offset=cols[name].offset,
+                size=cols[name].size,
+            )

@@ -538,8 +538,11 @@ class concurrent_unordered_map {
       }
     }
 
-    init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size, 0, stream.value()>>>(
-      m_hashtbl_values, m_capacity, m_unused_key, m_unused_element);
+    if (m_capacity > 0) {
+      init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size, 0, stream.value()>>>(
+        m_hashtbl_values, m_capacity, m_unused_key, m_unused_element);
+    }
+
     CUDA_TRY(cudaGetLastError());
   }
 };

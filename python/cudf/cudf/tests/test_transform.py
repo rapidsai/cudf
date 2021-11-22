@@ -5,7 +5,7 @@ from __future__ import division
 import numpy as np
 import pytest
 
-from cudf.core import Series
+from cudf import Series
 from cudf.testing._utils import NUMERIC_TYPES
 
 supported_types = NUMERIC_TYPES
@@ -32,4 +32,4 @@ def test_applymap_python_lambda(dtype, udf, testfunc):
 
     out_ser = lhs_ser.applymap(udf)
     result = testfunc(lhs_arr)
-    np.testing.assert_almost_equal(result, out_ser.to_array())
+    np.testing.assert_almost_equal(result, out_ser.to_numpy())

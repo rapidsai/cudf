@@ -20,7 +20,7 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
@@ -270,9 +270,7 @@ std::unique_ptr<cudf::column> replace_nulls_column_kernel_forwarder::operator()<
                                    std::move(offsets),
                                    std::move(output_chars),
                                    input.size() - valid_counter.value(stream),
-                                   std::move(valid_bits),
-                                   stream,
-                                   mr);
+                                   std::move(valid_bits));
 }
 
 template <>
@@ -389,9 +387,9 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
   }
 
   auto output = cudf::detail::gather(cudf::table_view({input}),
-                                     gather_map.begin(),
-                                     gather_map.end(),
+                                     gather_map,
                                      cudf::out_of_bounds_policy::DONT_CHECK,
+                                     cudf::detail::negative_index_policy::NOT_ALLOWED,
                                      stream,
                                      mr);
 
@@ -424,7 +422,7 @@ std::unique_ptr<cudf::column> replace_nulls(cudf::column_view const& input,
                                             rmm::mr::device_memory_resource* mr)
 {
   if (input.is_empty()) { return cudf::empty_like(input); }
-  if (!input.has_nulls() || !replacement.is_valid()) {
+  if (!input.has_nulls() || !replacement.is_valid(stream)) {
     return std::make_unique<cudf::column>(input, stream, mr);
   }
 

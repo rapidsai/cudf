@@ -8,6 +8,11 @@ import cudf
 from cudf.testing._utils import assert_eq
 
 
+@pytest.fixture(scope="module")
+def datadir(datadir):
+    return datadir / "text"
+
+
 def test_tokenize():
     strings = cudf.Series(
         [
@@ -225,7 +230,7 @@ def test_ngrams(n, separator, expected_values):
 
 
 @pytest.mark.parametrize(
-    "n, expected_values",
+    "n, expected_values, as_list",
     [
         (
             2,
@@ -242,16 +247,22 @@ def test_ngrams(n, separator, expected_values):
                 "er",
                 "re",
             ],
+            False,
         ),
-        (3, ["thi", "his", "boo", "ook", "her", "ere"]),
+        (3, ["thi", "his", "boo", "ook", "her", "ere"], False),
+        (
+            3,
+            [["thi", "his"], [], [], ["boo", "ook"], ["her", "ere"], []],
+            True,
+        ),
     ],
 )
-def test_character_ngrams(n, expected_values):
+def test_character_ngrams(n, expected_values, as_list):
     strings = cudf.Series(["this", "is", "my", "book", "here", ""])
 
     expected = cudf.Series(expected_values)
 
-    actual = strings.str.character_ngrams(n=n)
+    actual = strings.str.character_ngrams(n=n, as_list=as_list)
 
     assert type(expected) == type(actual)
     assert_eq(expected, actual)
@@ -507,8 +518,8 @@ def test_character_tokenize_index():
     actual = sr.str.character_tokenize()
     assert_eq(expected, actual)
 
-    sr = cudf.core.index.as_index([""])
-    expected = cudf.core.index.StringIndex([], dtype="object")
+    sr = cudf.Index([""])
+    expected = cudf.StringIndex([], dtype="object")
 
     actual = sr.str.character_tokenize()
     assert_eq(expected, actual)
@@ -876,4 +887,25 @@ def test_is_vowel_consonant():
     )
     actual = strings.str.is_consonant(indices)
     assert type(expected) == type(actual)
+    assert_eq(expected, actual)
+
+
+def test_read_text(datadir):
+    chess_file = str(datadir) + "/chess.pgn"
+    delimiter = "1."
+
+    with open(chess_file, "r") as f:
+        content = f.read().split(delimiter)
+
+    # Since Python split removes the delimiter and read_text does
+    # not we need to add it back to the 'content'
+    expected = cudf.Series(
+        [
+            c + delimiter if i < (len(content) - 1) else c
+            for i, c in enumerate(content)
+        ]
+    )
+
+    actual = cudf.read_text(chess_file, delimiter=delimiter)
+
     assert_eq(expected, actual)

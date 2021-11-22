@@ -34,7 +34,7 @@ struct groupby_median_test : public cudf::test::BaseFixture {
 using K               = int32_t;
 using supported_types = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
-TYPED_TEST_CASE(groupby_median_test, supported_types);
+TYPED_TEST_SUITE(groupby_median_test, supported_types);
 
 TYPED_TEST(groupby_median_test, basic)
 {
@@ -51,7 +51,7 @@ TYPED_TEST(groupby_median_test, basic)
   fixed_width_column_wrapper<R> expect_vals({3.,     4.5,        7.}, no_nulls());
   // clang-format on
 
-  auto agg = cudf::make_median_aggregation();
+  auto agg = cudf::make_median_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -66,7 +66,7 @@ TYPED_TEST(groupby_median_test, empty_cols)
   fixed_width_column_wrapper<K> expect_keys{};
   fixed_width_column_wrapper<R> expect_vals{};
 
-  auto agg = cudf::make_median_aggregation();
+  auto agg = cudf::make_median_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -81,7 +81,7 @@ TYPED_TEST(groupby_median_test, zero_valid_keys)
   fixed_width_column_wrapper<K> expect_keys{};
   fixed_width_column_wrapper<R> expect_vals{};
 
-  auto agg = cudf::make_median_aggregation();
+  auto agg = cudf::make_median_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -96,7 +96,7 @@ TYPED_TEST(groupby_median_test, zero_valid_values)
   fixed_width_column_wrapper<K> expect_keys{1};
   fixed_width_column_wrapper<R> expect_vals({0}, all_nulls());
 
-  auto agg = cudf::make_median_aggregation();
+  auto agg = cudf::make_median_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -115,7 +115,7 @@ TYPED_TEST(groupby_median_test, null_keys_and_values)
   //  { 3, 6,     1, 4, 9,   2, 8,    -}
   fixed_width_column_wrapper<R> expect_vals({4.5, 4., 5., 0.}, {1, 1, 1, 0});
 
-  auto agg = cudf::make_median_aggregation();
+  auto agg = cudf::make_median_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -134,7 +134,8 @@ TYPED_TEST(groupby_median_test, dictionary)
   fixed_width_column_wrapper<R> expect_vals({3.,       4.5,       7.     }, no_nulls());
   // clang-format on
 
-  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_median_aggregation());
+  test_single_agg(
+    keys, vals, expect_keys, expect_vals, cudf::make_median_aggregation<groupby_aggregation>());
 }
 
 }  // namespace test

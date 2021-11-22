@@ -389,11 +389,11 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   auto sizes_view   = sizes->mutable_view();
   auto indices_view = indices->mutable_view();
 
-  auto device_in                = cudf::column_device_view::create(input_col);
-  auto device_values_to_replace = cudf::column_device_view::create(values_to_replace);
-  auto device_replacement       = cudf::column_device_view::create(replacement_values);
-  auto device_sizes             = cudf::mutable_column_device_view::create(sizes_view);
-  auto device_indices           = cudf::mutable_column_device_view::create(indices_view);
+  auto device_in                = cudf::column_device_view::create(input_col, stream);
+  auto device_values_to_replace = cudf::column_device_view::create(values_to_replace, stream);
+  auto device_replacement       = cudf::column_device_view::create(replacement_values, stream);
+  auto device_sizes             = cudf::mutable_column_device_view::create(sizes_view, stream);
+  auto device_indices           = cudf::mutable_column_device_view::create(indices_view, stream);
 
   rmm::device_buffer valid_bits =
     cudf::detail::create_null_mask(input_col.size(), cudf::mask_state::UNINITIALIZED, stream, mr);
@@ -431,9 +431,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
                                    std::move(offsets),
                                    std::move(output_chars),
                                    null_count,
-                                   std::move(valid_bits),
-                                   stream,
-                                   mr);
+                                   std::move(valid_bits));
 }
 
 template <>
@@ -516,7 +514,7 @@ std::unique_ptr<cudf::column> find_and_replace_all(cudf::column_view const& inpu
  *        `replacement_values`, that is, replace all `values_to_replace[i]` present in `input_col`
  *        with `replacement_values[i]`.
  *
- * @param[in] col column_view of the data to be modified
+ * @param[in] input_col column_view of the data to be modified
  * @param[in] values_to_replace column_view of the old values to be replaced
  * @param[in] replacement_values column_view of the new values
  *

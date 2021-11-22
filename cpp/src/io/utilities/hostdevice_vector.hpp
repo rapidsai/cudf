@@ -86,6 +86,10 @@ class hostdevice_vector {
 
   T& operator[](size_t i) const { return h_data[i]; }
   T* host_ptr(size_t offset = 0) const { return h_data + offset; }
+  T* begin() { return h_data; }
+  T* end() { return h_data + num_elements; }
+  T* d_begin() { return static_cast<T*>(d_data.data()); }
+  T* d_end() { return static_cast<T*>(d_data.data()) + num_elements; }
   T* device_ptr(size_t offset = 0) { return reinterpret_cast<T*>(d_data.data()) + offset; }
   T const* device_ptr(size_t offset = 0) const
   {

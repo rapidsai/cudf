@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/detail/utilities/assert.cuh>
+#include <cudf/fixed_point/temporary.hpp>
 #include <cudf/types.hpp>
 
 // Note: The <cuda/std/*> versions are used in order for Jitify to work with our fixed_point type.
@@ -48,13 +49,15 @@ enum class Radix : int32_t { BASE_2 = 2, BASE_10 = 10 };
 template <typename T>
 constexpr inline auto is_supported_representation_type()
 {
-  return cuda::std::is_same_v<T, int32_t> || cuda::std::is_same_v<T, int64_t>;
+  return cuda::std::is_same_v<T, int32_t> ||  //
+         cuda::std::is_same_v<T, int64_t> ||  //
+         cuda::std::is_same_v<T, __int128_t>;
 }
 
 template <typename T>
 constexpr inline auto is_supported_construction_value_type()
 {
-  return cuda::std::is_integral<T>::value || cuda::std::is_floating_point<T>::value;
+  return cuda::std::is_integral<T>() || cuda::std::is_floating_point<T>::value;
 }
 
 // Helper functions for `fixed_point` type
@@ -279,9 +282,11 @@ class fixed_point {
             typename cuda::std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
   explicit constexpr operator U() const
   {
-    // Don't cast to U until converting to Rep because in certain cases casting to U before shifting
-    // will result in integer overflow (i.e. if U = int32_t, Rep = int64_t and _value > 2 billion)
-    return static_cast<U>(detail::shift<Rep, Rad>(_value, scale_type{-_scale}));
+    // Cast to the larger of the two types (of U and Rep) before converting to Rep because in
+    // certain cases casting to U before shifting will result in integer overflow (i.e. if U =
+    // int32_t, Rep = int64_t and _value > 2 billion)
+    auto const value = std::common_type_t<U, Rep>(_value);
+    return static_cast<U>(detail::shift<Rep, Rad>(value, scale_type{-_scale}));
   }
 
   CUDA_HOST_DEVICE_CALLABLE operator scaled_integer<Rep>() const
@@ -549,17 +554,18 @@ class fixed_point {
   explicit operator std::string() const
   {
     if (_scale < 0) {
-      auto const av   = std::abs(_value);
-      int64_t const n = std::pow(10, -_scale);
-      int64_t const f = av % n;
+      auto const av = detail::abs(_value);
+      Rep const n   = detail::exp10<Rep>(-_scale);
+      Rep const f   = av % n;
       auto const num_zeros =
-        std::max(0, (-_scale - static_cast<int32_t>(std::to_string(f).size())));
+        std::max(0, (-_scale - static_cast<int32_t>(detail::to_string(f).size())));
       auto const zeros = std::string(num_zeros, '0');
       auto const sign  = _value < 0 ? std::string("-") : std::string();
-      return sign + std::to_string(av / n) + std::string(".") + zeros + std::to_string(av % n);
+      return sign + detail::to_string(av / n) + std::string(".") + zeros +
+             detail::to_string(av % n);
     } else {
       auto const zeros = std::string(_scale, '0');
-      return std::to_string(_value) + zeros;
+      return detail::to_string(_value) + zeros;
     }
   }
 };
@@ -750,8 +756,9 @@ CUDA_HOST_DEVICE_CALLABLE bool operator>(fixed_point<Rep1, Rad1> const& lhs,
   return lhs.rescaled(scale)._value > rhs.rescaled(scale)._value;
 }
 
-using decimal32 = fixed_point<int32_t, Radix::BASE_10>;
-using decimal64 = fixed_point<int64_t, Radix::BASE_10>;
+using decimal32  = fixed_point<int32_t, Radix::BASE_10>;
+using decimal64  = fixed_point<int64_t, Radix::BASE_10>;
+using decimal128 = fixed_point<__int128_t, Radix::BASE_10>;
 
 /** @} */  // end of group
 }  // namespace numeric

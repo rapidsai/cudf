@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/ast/nodes.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/types.hpp>
 
 #include <memory>
@@ -81,13 +81,15 @@ std::pair<std::unique_ptr<rmm::device_buffer>, size_type> nans_to_nulls(
  * This evaluates an expression over a table to produce a new column. Also called an n-ary
  * transform.
  *
+ * @throws cudf::logic_error if passed an expression operating on table_reference::RIGHT.
+ *
  * @param table The table used for expression evaluation.
  * @param expr The root of the expression tree.
  * @param mr Device memory resource.
  * @return std::unique_ptr<column> Output column.
  */
 std::unique_ptr<column> compute_column(
-  table_view const table,
+  table_view const& table,
   ast::expression const& expr,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -136,6 +138,38 @@ std::pair<std::unique_ptr<rmm::device_buffer>, cudf::size_type> bools_to_mask(
  */
 std::pair<std::unique_ptr<cudf::table>, std::unique_ptr<cudf::column>> encode(
   cudf::table_view const& input,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Encodes `input` by generating a new column for each value in `categories` indicating the
+ * presence of that value in `input`.
+ *
+ * The resulting per-category columns are returned concatenated as a single column viewed by a
+ * `table_view`.
+ *
+ * The `i`th row of the `j`th column in the output table equals 1
+ * if `input[i] == categories[j]`, and 0 otherwise.
+ *
+ * The `i`th row of the `j`th column in the output table equals 1
+ * if input[i] == categories[j], and 0 otherwise.
+ *
+ * Examples:
+ * @code{.pseudo}
+ * input: [{'a', 'c', null, 'c', 'b'}]
+ * categories: ['c', null]
+ * output: [{0, 1, 0, 1, 0}, {0, 0, 1, 0, 0}]
+ * @endcode
+ *
+ * @throws cudf::logic_error if input and categories are of different types.
+ *
+ * @param input Column containing values to be encoded
+ * @param categories Column containing categories
+ * @param mr Device memory resource used to allocate the returned table's device memory
+ * @return A pair containing the owner to all encoded data and a table view into the data
+ */
+std::pair<std::unique_ptr<column>, table_view> one_hot_encode(
+  column_view const& input,
+  column_view const& categories,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**

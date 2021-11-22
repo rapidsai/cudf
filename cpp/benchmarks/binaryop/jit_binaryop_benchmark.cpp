@@ -41,11 +41,11 @@ void BM_binaryop(benchmark::State& state, cudf::binary_operator binop)
   auto output_dtype = cudf::data_type(cudf::type_to_id<TypeOut>());
 
   // Call once for hot cache.
-  cudf::binary_operation(lhs, rhs, binop, output_dtype);
+  cudf::jit::binary_operation(lhs, rhs, binop, output_dtype);
 
   for (auto _ : state) {
     cuda_event_timer timer(state, true);
-    cudf::binary_operation(lhs, rhs, binop, output_dtype);
+    cudf::jit::binary_operation(lhs, rhs, binop, output_dtype);
   }
 }
 

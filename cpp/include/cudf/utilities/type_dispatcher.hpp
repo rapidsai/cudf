@@ -85,8 +85,9 @@ using id_to_type = typename id_to_type_impl<Id>::type;
 /**
  * @brief "Returns" the corresponding type that is stored on the device when using `cudf::column`
  *
- * For `decimal32`, the storage type is an `int32_t`.
- * For `decimal64`, the storage type is an `int64_t`.
+ * For `decimal32`,  the storage type is an `int32_t`.
+ * For `decimal64`,  the storage type is an `int64_t`.
+ * For `decimal128`, the storage type is an `__int128_t`.
  *
  * Use this "type function" with the `using` type alias:
  * @code
@@ -98,24 +99,10 @@ using id_to_type = typename id_to_type_impl<Id>::type;
 // clang-format off
 template <typename T>
 using device_storage_type_t =
-  std::conditional_t<std::is_same_v<numeric::decimal32, T>, int32_t,
-  std::conditional_t<std::is_same_v<numeric::decimal64, T>, int64_t, T>>;
+  std::conditional_t<std::is_same_v<numeric::decimal32,  T>, int32_t,
+  std::conditional_t<std::is_same_v<numeric::decimal64,  T>, int64_t,
+  std::conditional_t<std::is_same_v<numeric::decimal128, T>, __int128_t, T>>>;
 // clang-format on
-
-/**
- * @brief Returns the corresponding `type_id` of type stored on device for a given `type_id`
- *
- * @param id   The given `type_id`
- * @return     Corresponding `type_id` of type stored on device
- */
-inline type_id device_storage_type_id(type_id id)
-{
-  switch (id) {
-    case type_id::DECIMAL32: return type_id::INT32;
-    case type_id::DECIMAL64: return type_id::INT64;
-    default: return id;
-  }
-}
 
 /**
  * @brief Checks if `fixed_point`-like types have template type `T` matching the column's
@@ -127,10 +114,24 @@ inline type_id device_storage_type_id(type_id id)
  * @return     `false` If T does not match the stored column `type_id`
  */
 template <typename T>
-bool type_id_matches_device_storage_type(type_id id)
+constexpr bool type_id_matches_device_storage_type(type_id id)
 {
   return (id == type_id::DECIMAL32 && std::is_same_v<T, int32_t>) ||
-         (id == type_id::DECIMAL64 && std::is_same_v<T, int64_t>) || id == type_to_id<T>();
+         (id == type_id::DECIMAL64 && std::is_same_v<T, int64_t>) ||
+         (id == type_id::DECIMAL128 && std::is_same_v<T, __int128_t>) || id == type_to_id<T>();
+}
+
+/**
+ * @brief Checks if `id` is fixed_point (DECIMAL32/64/128)
+ *
+ * @return    `true` if `id` is `DECIMAL32`, `DECIMAL64` or `DECIMAL128`
+ * @return    `false` otherwise
+ */
+constexpr bool is_fixed_point(cudf::type_id id)
+{
+  return id == type_id::DECIMAL32 or  //
+         id == type_id::DECIMAL64 or  //
+         id == type_id::DECIMAL128;
 }
 
 /**
@@ -188,6 +189,7 @@ CUDF_TYPE_MAPPING(dictionary32, type_id::DICTIONARY32);
 CUDF_TYPE_MAPPING(cudf::list_view, type_id::LIST);
 CUDF_TYPE_MAPPING(numeric::decimal32, type_id::DECIMAL32);
 CUDF_TYPE_MAPPING(numeric::decimal64, type_id::DECIMAL64);
+CUDF_TYPE_MAPPING(numeric::decimal128, type_id::DECIMAL128);
 CUDF_TYPE_MAPPING(cudf::struct_view, type_id::STRUCT);
 
 /**
@@ -221,6 +223,7 @@ MAP_NUMERIC_SCALAR(int8_t)
 MAP_NUMERIC_SCALAR(int16_t)
 MAP_NUMERIC_SCALAR(int32_t)
 MAP_NUMERIC_SCALAR(int64_t)
+MAP_NUMERIC_SCALAR(__int128_t)
 MAP_NUMERIC_SCALAR(uint8_t)
 MAP_NUMERIC_SCALAR(uint16_t)
 MAP_NUMERIC_SCALAR(uint32_t)
@@ -251,6 +254,12 @@ template <>
 struct type_to_scalar_type_impl<numeric::decimal64> {
   using ScalarType       = cudf::fixed_point_scalar<numeric::decimal64>;
   using ScalarDeviceType = cudf::fixed_point_scalar_device_view<numeric::decimal64>;
+};
+
+template <>
+struct type_to_scalar_type_impl<numeric::decimal128> {
+  using ScalarType       = cudf::fixed_point_scalar<numeric::decimal128>;
+  using ScalarDeviceType = cudf::fixed_point_scalar_device_view<numeric::decimal128>;
 };
 
 template <>  // TODO: this is a temporary solution for make_pair_iterator
@@ -411,9 +420,7 @@ using scalar_device_type_t = typename type_to_scalar_type_impl<T>::ScalarDeviceT
 template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl,
           typename Functor,
           typename... Ts>
-CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_type dtype,
-                                                                   Functor f,
-                                                                   Ts&&... args)
+CUDF_HDFI constexpr decltype(auto) type_dispatcher(cudf::data_type dtype, Functor f, Ts&&... args)
 {
   switch (dtype.id()) {
     case type_id::BOOL8:
@@ -494,6 +501,9 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(cudf::data_ty
     case type_id::DECIMAL64:
       return f.template operator()<typename IdTypeMap<type_id::DECIMAL64>::type>(
         std::forward<Ts>(args)...);
+    case type_id::DECIMAL128:
+      return f.template operator()<typename IdTypeMap<type_id::DECIMAL128>::type>(
+        std::forward<Ts>(args)...);
     case type_id::STRUCT:
       return f.template operator()<typename IdTypeMap<type_id::STRUCT>::type>(
         std::forward<Ts>(args)...);
@@ -553,6 +563,7 @@ struct double_type_dispatcher_first_type {
  * parameter of the callable `F`
  * @param type2 The `data_type` used to dispatch a type for the second template
  * parameter of the callable `F`
+ * @param f The callable whose `operator()` template is invoked
  * @param args Parameter pack forwarded to the `operator()` invocation `F`.
  */
 #pragma nv_exec_check_disable

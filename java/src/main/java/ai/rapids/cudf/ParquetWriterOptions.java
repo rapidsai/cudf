@@ -18,56 +18,16 @@
 
 package ai.rapids.cudf;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
-
 /**
  * This class represents settings for writing Parquet files. It includes meta data information
  * that will be used by the Parquet writer to write the file
  */
-public final class ParquetWriterOptions extends ParquetColumnWriterOptions.ParquetStructColumnWriterOptions {
-  private final CompressionType compressionType;
-  private final Map<String, String> metadata;
+public final class ParquetWriterOptions extends CompressionMetadataWriterOptions {
   private final StatisticsFrequency statsGranularity;
 
   private ParquetWriterOptions(Builder builder) {
     super(builder);
     this.statsGranularity = builder.statsGranularity;
-    this.compressionType = builder.compressionType;
-    this.metadata = builder.metadata;
-  }
-
-  @Override
-  boolean[] getFlatIsTimeTypeInt96() {
-    return super.getFlatBooleans(new boolean[]{}, (opt) -> opt.getFlatIsTimeTypeInt96());
-  }
-
-  @Override
-  int[] getFlatPrecision() {
-    return super.getFlatInts(new int[]{}, (opt) -> opt.getFlatPrecision());
-  }
-
-  @Override
-  int[] getFlatNumChildren() {
-    return super.getFlatInts(new int[]{}, (opt) -> opt.getFlatNumChildren());
-  }
-
-  @Override
-  boolean[] getFlatIsNullable() {
-    return super.getFlatBooleans(new boolean[]{}, (opt) -> opt.getFlatIsNullable());
-  }
-
-  @Override
-  String[] getFlatColumnNames() {
-    return super.getFlatColumnNames(new String[]{});
-  }
-
-  String[] getMetadataKeys() {
-    return metadata.keySet().toArray(new String[metadata.size()]);
-  }
-
-  String[] getMetadataValues() {
-    return metadata.values().toArray(new String[metadata.size()]);
   }
 
   public enum StatisticsFrequency {
@@ -95,50 +55,12 @@ public final class ParquetWriterOptions extends ParquetColumnWriterOptions.Parqu
     return statsGranularity;
   }
 
-  public CompressionType getCompressionType() {
-    return compressionType;
-  }
-
-  public Map<String, String> getMetadata() {
-    return metadata;
-  }
-
-  public int getTopLevelChildren() {
-    return childColumnOptions.length;
-  }
-
-  public static class Builder extends ParquetColumnWriterOptions.AbstractStructBuilder<Builder,
-      ParquetWriterOptions> {
+  public static class Builder extends CompressionMetadataWriterOptions.Builder
+        <Builder, ParquetWriterOptions> {
     private StatisticsFrequency statsGranularity = StatisticsFrequency.ROWGROUP;
-    final Map<String, String> metadata = new LinkedHashMap<>();
-    CompressionType compressionType = CompressionType.AUTO;
 
     public Builder() {
       super();
-    }
-
-    /**
-     * Add a metadata key and a value
-     */
-    public Builder withMetadata(String key, String value) {
-      this.metadata.put(key, value);
-      return this;
-    }
-
-    /**
-     * Add a map of metadata keys and values
-     */
-    public Builder withMetadata(Map<String, String> metadata) {
-      this.metadata.putAll(metadata);
-      return this;
-    }
-
-    /**
-     * Set the compression type to use for writing
-     */
-    public Builder withCompressionType(CompressionType compression) {
-      this.compressionType = compression;
-      return this;
     }
 
     public Builder withStatisticsFrequency(StatisticsFrequency statsGranularity) {

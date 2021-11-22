@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import builtins
 import datetime as dt
+import locale
 import re
+from locale import nl_langinfo
 from numbers import Number
 from types import SimpleNamespace
 from typing import Any, Mapping, Sequence, Union, cast
@@ -15,6 +17,7 @@ import pandas as pd
 import cudf
 from cudf import _lib as libcudf
 from cudf._typing import DatetimeLikeScalar, Dtype, DtypeObj, ScalarLike
+from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.buffer import Buffer
 from cudf.core.column import (
@@ -24,7 +27,6 @@ from cudf.core.column import (
     column_empty_like,
     string,
 )
-from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import _fillna_natwise
 
 if PANDAS_GE_120:
@@ -50,8 +52,71 @@ _dtype_to_format_conversion = {
     "datetime64[s]": "%Y-%m-%d %H:%M:%S",
 }
 
+_DATETIME_SPECIAL_FORMATS = {
+    "%b",
+    "%B",
+    "%A",
+    "%a",
+}
+
+_DATETIME_NAMES = [
+    nl_langinfo(locale.AM_STR),  # type: ignore
+    nl_langinfo(locale.PM_STR),  # type: ignore
+    nl_langinfo(locale.DAY_1),
+    nl_langinfo(locale.DAY_2),
+    nl_langinfo(locale.DAY_3),
+    nl_langinfo(locale.DAY_4),
+    nl_langinfo(locale.DAY_5),
+    nl_langinfo(locale.DAY_6),
+    nl_langinfo(locale.DAY_7),
+    nl_langinfo(locale.ABDAY_1),
+    nl_langinfo(locale.ABDAY_2),
+    nl_langinfo(locale.ABDAY_3),
+    nl_langinfo(locale.ABDAY_4),
+    nl_langinfo(locale.ABDAY_5),
+    nl_langinfo(locale.ABDAY_6),
+    nl_langinfo(locale.ABDAY_7),
+    nl_langinfo(locale.MON_1),
+    nl_langinfo(locale.MON_2),
+    nl_langinfo(locale.MON_3),
+    nl_langinfo(locale.MON_4),
+    nl_langinfo(locale.MON_5),
+    nl_langinfo(locale.MON_6),
+    nl_langinfo(locale.MON_7),
+    nl_langinfo(locale.MON_8),
+    nl_langinfo(locale.MON_9),
+    nl_langinfo(locale.MON_10),
+    nl_langinfo(locale.MON_11),
+    nl_langinfo(locale.MON_12),
+    nl_langinfo(locale.ABMON_1),
+    nl_langinfo(locale.ABMON_2),
+    nl_langinfo(locale.ABMON_3),
+    nl_langinfo(locale.ABMON_4),
+    nl_langinfo(locale.ABMON_5),
+    nl_langinfo(locale.ABMON_6),
+    nl_langinfo(locale.ABMON_7),
+    nl_langinfo(locale.ABMON_8),
+    nl_langinfo(locale.ABMON_9),
+    nl_langinfo(locale.ABMON_10),
+    nl_langinfo(locale.ABMON_11),
+    nl_langinfo(locale.ABMON_12),
+]
+
 
 class DatetimeColumn(column.ColumnBase):
+    """
+    A Column implementation for Date-time types.
+
+    Parameters
+    ----------
+    data : Buffer
+        The datetime values
+    dtype : np.dtype
+        The data type
+    mask : Buffer; optional
+        The validity mask
+    """
+
     def __init__(
         self,
         data: Buffer,
@@ -61,17 +126,8 @@ class DatetimeColumn(column.ColumnBase):
         offset: int = 0,
         null_count: int = None,
     ):
-        """
-        Parameters
-        ----------
-        data : Buffer
-            The datetime values
-        dtype : np.dtype
-            The data type
-        mask : Buffer; optional
-            The validity mask
-        """
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
+
         if data.size % dtype.itemsize:
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
@@ -154,8 +210,23 @@ class DatetimeColumn(column.ColumnBase):
             index=index,
         )
 
+    @property
+    def values(self):
+        """
+        Return a CuPy representation of the DateTimeColumn.
+        """
+        raise NotImplementedError(
+            "DateTime Arrays is not yet implemented in cudf"
+        )
+
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(self, field)
+
+    def ceil(self, freq: str) -> ColumnBase:
+        return libcudf.datetime.ceil_datetime(self, freq)
+
+    def floor(self, freq: str) -> ColumnBase:
+        return libcudf.datetime.floor_datetime(self, freq)
 
     def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarLike:
         if isinstance(other, cudf.Scalar):
@@ -236,7 +307,7 @@ class DatetimeColumn(column.ColumnBase):
         return output
 
     def as_datetime_column(self, dtype: Dtype, **kwargs) -> DatetimeColumn:
-        dtype = np.dtype(dtype)
+        dtype = cudf.dtype(dtype)
         if dtype == self.dtype:
             return self
         return libcudf.unary.cast(self, dtype=dtype)
@@ -245,7 +316,7 @@ class DatetimeColumn(column.ColumnBase):
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.TimeDeltaColumn":
         raise TypeError(
-            f"cannot astype a datetimelike from [{self.dtype}] to [{dtype}]"
+            f"cannot astype a datetimelike from {self.dtype} to {dtype}"
         )
 
     def as_numerical_column(
@@ -262,19 +333,24 @@ class DatetimeColumn(column.ColumnBase):
             format = _dtype_to_format_conversion.get(
                 self.dtype.name, "%Y-%m-%d %H:%M:%S"
             )
+        if format in _DATETIME_SPECIAL_FORMATS:
+            names = as_column(_DATETIME_NAMES)
+        else:
+            names = cudf.core.column.column_empty(
+                0, dtype="object", masked=False
+            )
         if len(self) > 0:
             return string._datetime_to_str_typecast_functions[
-                np.dtype(self.dtype)
-            ](self, format)
+                cudf.dtype(self.dtype)
+            ](self, format, names)
         else:
             return cast(
                 "cudf.core.column.StringColumn",
                 column.column_empty(0, dtype="object", masked=False),
             )
 
-    def default_na_value(self) -> DatetimeLikeScalar:
-        """Returns the default NA value for this column
-        """
+    def _default_na_value(self) -> DatetimeLikeScalar:
+        """Returns the default NA value for this column"""
         return np.datetime64("nat", self.time_unit)
 
     def mean(self, skipna=None, dtype=np.float64) -> ScalarLike:
@@ -316,7 +392,7 @@ class DatetimeColumn(column.ColumnBase):
             return rhs._datetime_binop(self, op, reflect=reflect)
         lhs: Union[ScalarLike, ColumnBase] = self
         if op in ("eq", "ne", "lt", "gt", "le", "ge", "NULL_EQUALS"):
-            out_dtype = np.dtype(np.bool_)  # type: Dtype
+            out_dtype = cudf.dtype(np.bool_)  # type: Dtype
         elif op == "add" and pd.api.types.is_timedelta64_dtype(rhs.dtype):
             out_dtype = cudf.core.column.timedelta._timedelta_add_result_dtype(
                 rhs, lhs
@@ -389,13 +465,13 @@ class DatetimeColumn(column.ColumnBase):
             to_res, _ = np.datetime_data(to_dtype)
             self_res, _ = np.datetime_data(self.dtype)
 
-            max_int = np.iinfo(np.dtype("int64")).max
+            max_int = np.iinfo(cudf.dtype("int64")).max
 
             max_dist = np.timedelta64(
-                self.max().astype(np.dtype("int64"), copy=False), self_res
+                self.max().astype(cudf.dtype("int64"), copy=False), self_res
             )
             min_dist = np.timedelta64(
-                self.min().astype(np.dtype("int64"), copy=False), self_res
+                self.min().astype(cudf.dtype("int64"), copy=False), self_res
             )
 
             self_delta_dtype = np.timedelta64(0, self_res).dtype
@@ -408,7 +484,7 @@ class DatetimeColumn(column.ColumnBase):
                 return True
             else:
                 return False
-        elif to_dtype == np.dtype("int64") or to_dtype == np.dtype("O"):
+        elif to_dtype == cudf.dtype("int64") or to_dtype == cudf.dtype("O"):
             # can safely cast to representation, or string
             return True
         else:
@@ -417,14 +493,11 @@ class DatetimeColumn(column.ColumnBase):
     def _make_copy_with_na_as_null(self):
         """Return a copy with NaN values replaced with nulls."""
         null = column_empty_like(self, masked=True, newsize=1)
+        na_value = np.datetime64("nat", self.time_unit)
         out_col = cudf._lib.replace.replace(
             self,
-            as_column(
-                Buffer(
-                    np.array([self.default_na_value()], dtype=self.dtype).view(
-                        "|u1"
-                    )
-                ),
+            column.build_column(
+                Buffer(np.array([na_value], dtype=self.dtype).view("|u1")),
                 dtype=self.dtype,
             ),
             null,
@@ -470,7 +543,7 @@ def infer_format(element: str, **kwargs) -> str:
     if len(second_parts) > 1:
         # "Z" indicates Zulu time(widely used in aviation) - Which is
         # UTC timezone that currently cudf only supports. Having any other
-        # unsuppported timezone will let the code fail below
+        # unsupported timezone will let the code fail below
         # with a ValueError.
         second_parts.remove("Z")
         second_part = "".join(second_parts[1:])

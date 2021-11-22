@@ -43,7 +43,7 @@ struct scalar_as_column_device_view {
   template <typename T, std::enable_if_t<(is_fixed_width<T>())>* = nullptr>
   return_type operator()(scalar const& s,
                          rmm::cuda_stream_view stream,
-                         rmm::mr::device_memory_resource* mr)
+                         rmm::mr::device_memory_resource*)
   {
     auto& h_scalar_type_view = static_cast<cudf::scalar_type_t<T>&>(const_cast<scalar&>(s));
     auto col_v =
@@ -201,7 +201,6 @@ struct null_considering_binop {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr) const
   {
-    std::unique_ptr<column> out;
     // Create device views for inputs
     auto const lhs_dev_view = get_device_view(lhs);
     auto const rhs_dev_view = get_device_view(rhs);

@@ -59,9 +59,9 @@ auto compute_partial_results(cudf::column_view const& keys, cudf::column_view co
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
   requests[0].values = values;
-  requests[0].aggregations.emplace_back(cudf::make_count_aggregation());
-  requests[0].aggregations.emplace_back(cudf::make_mean_aggregation());
-  requests[0].aggregations.emplace_back(cudf::make_m2_aggregation());
+  requests[0].aggregations.emplace_back(cudf::make_count_aggregation<cudf::groupby_aggregation>());
+  requests[0].aggregations.emplace_back(cudf::make_mean_aggregation<cudf::groupby_aggregation>());
+  requests[0].aggregations.emplace_back(cudf::make_m2_aggregation<cudf::groupby_aggregation>());
 
   auto gb_obj                  = cudf::groupby::groupby(cudf::table_view({keys}));
   auto [out_keys, out_results] = gb_obj.aggregate(requests);
@@ -88,7 +88,8 @@ auto merge_M2(vcol_views const& keys_cols, vcol_views const& values_cols)
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
   requests[0].values = *values;
-  requests[0].aggregations.emplace_back(cudf::make_merge_m2_aggregation());
+  requests[0].aggregations.emplace_back(
+    cudf::make_merge_m2_aggregation<cudf::groupby_aggregation>());
 
   auto gb_obj = cudf::groupby::groupby(cudf::table_view({*keys}));
   auto result = gb_obj.aggregate(requests);

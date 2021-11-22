@@ -115,8 +115,7 @@ class csv_reader_options {
   // Conversion settings
 
   // Per-column types; disables type inference on those columns
-  std::variant<std::vector<std::string>, std::vector<data_type>, std::map<std::string, data_type>>
-    _dtypes;
+  std::variant<std::vector<data_type>, std::map<std::string, data_type>> _dtypes;
   // Additional values to recognize as boolean true values
   std::vector<std::string> _true_values{"True", "TRUE", "true"};
   // Additional values to recognize as boolean false values
@@ -176,6 +175,40 @@ class csv_reader_options {
    * @brief Returns number of bytes to read.
    */
   std::size_t get_byte_range_size() const { return _byte_range_size; }
+
+  /**
+   * @brief Returns number of bytes to read with padding.
+   */
+  std::size_t get_byte_range_size_with_padding() const
+  {
+    if (_byte_range_size == 0) {
+      return 0;
+    } else {
+      return _byte_range_size + get_byte_range_padding();
+    }
+  }
+
+  /**
+   * @brief Returns number of bytes to pad when reading.
+   */
+  std::size_t get_byte_range_padding() const
+  {
+    auto const num_names   = _names.size();
+    auto const num_dtypes  = std::visit([](const auto& dtypes) { return dtypes.size(); }, _dtypes);
+    auto const num_columns = std::max(num_dtypes, num_names);
+
+    auto const max_row_bytes = 16 * 1024;  // 16KB
+    auto const column_bytes  = 64;
+    auto const base_padding  = 1024;  // 1KB
+
+    if (num_columns == 0) {
+      // Use flat size if the number of columns is not known
+      return max_row_bytes;
+    }
+
+    // Expand the size based on the number of columns, if available
+    return base_padding + num_columns * column_bytes;
+  }
 
   /**
    * @brief Returns names of the columns.
@@ -305,10 +338,7 @@ class csv_reader_options {
   /**
    * @brief Returns per-column types.
    */
-  std::variant<std::vector<std::string>,
-               std::vector<data_type>,
-               std::map<std::string, data_type>> const&
-  get_dtypes() const
+  std::variant<std::vector<data_type>, std::map<std::string, data_type>> const& get_dtypes() const
   {
     return _dtypes;
   }
@@ -395,7 +425,7 @@ class csv_reader_options {
   /**
    * @brief Sets prefix to be used for column ID.
    *
-   * @param String used as prefix in for each column name.
+   * @param pfx String used as prefix in for each column name.
    */
   void set_prefix(std::string pfx) { _prefix = pfx; }
 
@@ -419,14 +449,17 @@ class csv_reader_options {
   /**
    * @brief Sets indexes of columns to read.
    *
-   * @param col_ind Vector of column indices that are needed.
+   * @param col_indices Vector of column indices that are needed.
    */
-  void set_use_cols_indexes(std::vector<int> col_ind) { _use_cols_indexes = std::move(col_ind); }
+  void set_use_cols_indexes(std::vector<int> col_indices)
+  {
+    _use_cols_indexes = std::move(col_indices);
+  }
 
   /**
    * @brief Sets number of rows to read.
    *
-   * @param val Number of rows to read.
+   * @param nrows Number of rows to read.
    */
   void set_nrows(size_type nrows)
   {
@@ -442,7 +475,7 @@ class csv_reader_options {
   /**
    * @brief Sets number of rows to skip from start.
    *
-   * @param val Number of rows to skip.
+   * @param skip Number of rows to skip.
    */
   void set_skiprows(size_type skip)
   {
@@ -573,9 +606,12 @@ class csv_reader_options {
   /**
    * @brief Sets indexes of columns to read as datetime.
    *
-   * @param col_names Vector of column indices to infer as datetime.
+   * @param col_indices Vector of column indices to infer as datetime.
    */
-  void set_parse_dates(std::vector<int> col_ind) { _parse_dates_indexes = std::move(col_ind); }
+  void set_parse_dates(std::vector<int> col_indices)
+  {
+    _parse_dates_indexes = std::move(col_indices);
+  }
 
   /**
    * @brief Sets names of columns to parse as hexadecimal
@@ -590,9 +626,9 @@ class csv_reader_options {
   /**
    * @brief Sets indexes of columns to parse as hexadecimal
    *
-   * @param col_names Vector of column indices to parse as hexadecimal
+   * @param col_indices Vector of column indices to parse as hexadecimal
    */
-  void set_parse_hex(std::vector<int> col_ind) { _parse_hex_indexes = std::move(col_ind); }
+  void set_parse_hex(std::vector<int> col_indices) { _parse_hex_indexes = std::move(col_indices); }
 
   /**
    * @brief Sets per-column types
@@ -607,20 +643,6 @@ class csv_reader_options {
    * @param types Vector specifying the columns' target data types.
    */
   void set_dtypes(std::vector<data_type> types) { _dtypes = std::move(types); }
-
-  /**
-   * @brief Sets per-column types, specified by the type's respective string representation.
-   *
-   * @param types Vector of dtypes in which the column needs to be read.
-   */
-  [[deprecated(
-    "The string-based interface will be deprecated."
-    "Use dtypes(std::vector<data_type>) or "
-    "dtypes(std::map<std::string, data_type>) instead.")]] void
-  set_dtypes(std::vector<std::string> types)
-  {
-    _dtypes = std::move(types);
-  }
 
   /**
    * @brief Sets additional values to recognize as boolean true values.
@@ -758,7 +780,7 @@ class csv_reader_options_builder {
   /**
    * @brief Sets prefix to be used for column ID.
    *
-   * @param String used as prefix in for each column name.
+   * @param pfx String used as prefix in for each column name.
    * @return this for chaining.
    */
   csv_reader_options_builder& prefix(std::string pfx)
@@ -794,19 +816,19 @@ class csv_reader_options_builder {
   /**
    * @brief Sets indexes of columns to read.
    *
-   * @param col_ind Vector of column indices that are needed.
+   * @param col_indices Vector of column indices that are needed.
    * @return this for chaining.
    */
-  csv_reader_options_builder& use_cols_indexes(std::vector<int> col_ind)
+  csv_reader_options_builder& use_cols_indexes(std::vector<int> col_indices)
   {
-    options._use_cols_indexes = std::move(col_ind);
+    options._use_cols_indexes = std::move(col_indices);
     return *this;
   }
 
   /**
    * @brief Sets number of rows to read.
    *
-   * @param val Number of rows to read.
+   * @param rows Number of rows to read.
    * @return this for chaining.
    */
   csv_reader_options_builder& nrows(size_type rows)
@@ -818,7 +840,7 @@ class csv_reader_options_builder {
   /**
    * @brief Sets number of rows to skip from start.
    *
-   * @param val Number of rows to skip.
+   * @param skip Number of rows to skip.
    * @return this for chaining.
    */
   csv_reader_options_builder& skiprows(size_type skip)
@@ -1010,12 +1032,12 @@ class csv_reader_options_builder {
   /**
    * @brief Sets indexes of columns to read as datetime.
    *
-   * @param col_ind Vector of column indices to read as datetime
+   * @param col_indices Vector of column indices to read as datetime
    * @return this for chaining.
    */
-  csv_reader_options_builder& parse_dates(std::vector<int> col_ind)
+  csv_reader_options_builder& parse_dates(std::vector<int> col_indices)
   {
-    options._parse_dates_indexes = std::move(col_ind);
+    options._parse_dates_indexes = std::move(col_indices);
     return *this;
   }
 
@@ -1034,12 +1056,12 @@ class csv_reader_options_builder {
   /**
    * @brief Sets indexes of columns to parse as hexadecimal.
    *
-   * @param col_ind Vector of column indices to parse as hexadecimal
+   * @param col_indices Vector of column indices to parse as hexadecimal
    * @return this for chaining.
    */
-  csv_reader_options_builder& parse_hex(std::vector<int> col_ind)
+  csv_reader_options_builder& parse_hex(std::vector<int> col_indices)
   {
-    options._parse_hex_indexes = std::move(col_ind);
+    options._parse_hex_indexes = std::move(col_indices);
     return *this;
   }
 
@@ -1062,22 +1084,6 @@ class csv_reader_options_builder {
    * @return this for chaining.
    */
   csv_reader_options_builder& dtypes(std::vector<data_type> types)
-  {
-    options._dtypes = std::move(types);
-    return *this;
-  }
-
-  /**
-   * @brief Sets per-column types, specified by the type's respective string representation.
-   *
-   * @param types Vector of dtypes in which the column needs to be read.
-   * @return this for chaining.
-   */
-  [[deprecated(
-    "The string-based interface will be deprecated."
-    "Use dtypes(std::vector<data_type>) or "
-    "dtypes(std::map<std::string, data_type>) instead.")]] csv_reader_options_builder&
-  dtypes(std::vector<std::string> types)
   {
     options._dtypes = std::move(types);
     return *this;
@@ -1185,11 +1191,9 @@ class csv_reader_options_builder {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  std::string filepath = "dataset.csv";
- *  cudf::io::csv_reader_options options =
- * cudf::io::csv_reader_options::builder(cudf::source_info(filepath));
- *  ...
- *  auto result = cudf::read_csv(options);
+ *  auto source  = cudf::io::source_info("dataset.csv");
+ *  auto options = cudf::io::csv_reader_options::builder(source);
+ *  auto result  = cudf::io::read_csv(options);
  * @endcode
  *
  * @param options Settings for controlling reading behavior.
@@ -1199,7 +1203,7 @@ class csv_reader_options_builder {
  * @return The set of columns along with metadata.
  */
 table_with_metadata read_csv(
-  csv_reader_options const& options,
+  csv_reader_options options,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
@@ -1514,12 +1518,12 @@ class csv_writer_options_builder {
  *
  * The following code snippet demonstrates how to write columns to a file:
  * @code
- *  std::string filepath = "dataset.csv";
- *  cudf::io::sink_info sink_info(filepath);
+ *  auto destination = cudf::io::sink_info("dataset.csv");
+ *  auto options     = cudf::io::csv_writer_options(destination, table->view())
+ *    .na_rep(na)
+ *    .include_header(include_header)
+ *    .rows_per_chunk(rows_per_chunk);
  *
- *  cudf::io::csv_writer_options options = cudf::io::csv_writer_options(sink_info,
- * table->view()).na_rep(na).include_header(include_header).rows_per_chunk(rows_per_chunk);
- *  ...
  *  cudf::io::write_csv(options);
  * @endcode
  *

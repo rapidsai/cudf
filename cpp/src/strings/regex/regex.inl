@@ -198,10 +198,10 @@ __device__ inline int32_t reprog_device::regexec(
 {
   int32_t match                   = 0;
   auto checkstart                 = jnk.starttype;
-  auto txtlen                     = dstr.length();
   auto pos                        = begin;
   auto eos                        = end;
   char32_t c                      = 0;
+  auto last_character             = false;
   string_view::const_iterator itr = string_view::const_iterator(dstr, pos);
 
   jnk.list1->reset();
@@ -235,7 +235,9 @@ __device__ inline int32_t reprog_device::regexec(
         jnk.list1->activate(ids[i++], (group_id == 0 ? pos : -1), -1);
     }
 
-    c = static_cast<char32_t>(pos >= txtlen ? 0 : *itr);
+    last_character = (pos >= dstr.length());
+
+    c = static_cast<char32_t>(last_character ? 0 : *itr);
 
     // expand LBRA, RBRA, BOL, EOL, BOW, NBOW, and OR
     bool expanded = false;
@@ -274,7 +276,10 @@ __device__ inline int32_t reprog_device::regexec(
             }
             break;
           case EOL:
-            if ((c == 0) || (inst->u1.c == '$' && c == '\n')) {
+            if (last_character ||
+                (c == '\n' && (inst->u1.c == '$' ||
+                               // edge case where \n appears at the end of the string
+                               pos + 1 == dstr.length()))) {
               id_activate = inst->u2.next_id;
               expanded    = true;
             }
@@ -360,7 +365,7 @@ __device__ inline int32_t reprog_device::regexec(
     ++itr;
     swaplist(jnk.list1, jnk.list2);
     checkstart = jnk.list1->size > 0 ? 0 : 1;
-  } while (c && (jnk.list1->size > 0 || match == 0));
+  } while (!last_character && (jnk.list1->size > 0 || match == 0));
 
   return match;
 }

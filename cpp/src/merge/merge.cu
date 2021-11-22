@@ -113,8 +113,8 @@ void materialize_bitmask(column_view const& left_col,
   constexpr size_type BLOCK_SIZE{256};
   detail::grid_1d grid_config{num_elements, BLOCK_SIZE};
 
-  auto p_left_dcol  = column_device_view::create(left_col);
-  auto p_right_dcol = column_device_view::create(right_col);
+  auto p_left_dcol  = column_device_view::create(left_col, stream);
+  auto p_right_dcol = column_device_view::create(right_col, stream);
 
   auto left_valid  = *p_left_dcol;
   auto right_valid = *p_right_dcol;
@@ -225,11 +225,10 @@ struct column_merger {
   explicit column_merger(index_vector const& row_order) : row_order_(row_order) {}
 
   template <typename Element, CUDF_ENABLE_IF(not is_rep_layout_compatible<Element>())>
-  std::unique_ptr<column> operator()(
-    column_view const& lcol,
-    column_view const& rcol,
-    rmm::cuda_stream_view stream,
-    rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource()) const
+  std::unique_ptr<column> operator()(column_view const&,
+                                     column_view const&,
+                                     rmm::cuda_stream_view,
+                                     rmm::mr::device_memory_resource*) const
   {
     CUDF_FAIL("Unsupported type for merge.");
   }

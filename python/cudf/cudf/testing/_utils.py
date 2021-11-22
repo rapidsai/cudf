@@ -68,7 +68,7 @@ def count_zero(arr):
 
 
 def assert_eq(left, right, **kwargs):
-    """ Assert that two cudf-like things are equivalent
+    """Assert that two cudf-like things are equivalent
 
     This equality test works for pandas/cudf dataframes/series/indexes/scalars
     in the same way, and so makes it easier to perform parametrized testing
@@ -245,7 +245,7 @@ def _get_args_kwars_for_assert_exceptions(func_args_and_kwargs):
 
 
 def gen_rand(dtype, size, **kwargs):
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
     if dtype.kind == "f":
         res = np.random.random(size=size).astype(dtype)
         if kwargs.get("positive_only", False):
@@ -284,7 +284,7 @@ def gen_rand(dtype, size, **kwargs):
         return pd.to_datetime(
             np.random.randint(low=low, high=high, size=size), unit=time_unit
         )
-    elif dtype.kind == "U":
+    elif dtype.kind in ("O", "U"):
         return pd.util.testing.rands_array(10, size)
     raise NotImplementedError(f"dtype.kind={dtype.kind}")
 

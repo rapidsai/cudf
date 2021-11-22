@@ -114,14 +114,6 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
   //
   // result = [6, 1, 11, 1, 1]
   //
-  auto validity_iter = cudf::detail::make_counting_transform_iterator(
-    0,
-    [row_indices = row_indices.begin<size_type>(),
-     validity    = c.null_mask(),
-     offset      = c.offset()] __device__(int index) {
-      auto const true_index = row_indices[index] + offset;
-      return !validity || cudf::bit_is_set(validity, true_index) ? 1 : 0;
-    });
   auto output_row_iter = cudf::detail::make_counting_transform_iterator(
     0,
     [row_indices  = row_indices.begin<size_type>(),
@@ -136,8 +128,9 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
                      output_row_iter,
                      output_row_iter + row_indices.size(),
                      output_row_start->view().begin<size_type>(),
-                     validity_iter,
-                     result->mutable_view().begin<size_type>());
+                     row_size_iter,
+                     result->mutable_view().begin<size_type>(),
+                     [] __device__(auto row_size) { return row_size != 0; });
 
   // generate keys for each output row
   //
@@ -150,11 +143,12 @@ std::unique_ptr<column> generate_child_row_indices(lists_column_view const& c,
                    keys->mutable_view().end<size_type>(),
                    [] __device__() { return 0; });
   thrust::scatter_if(rmm::exec_policy(),
-                     validity_iter,
-                     validity_iter + row_indices.size(),
+                     row_size_iter,
+                     row_size_iter + row_indices.size(),
                      output_row_start->view().begin<size_type>(),
-                     validity_iter,
-                     keys->mutable_view().begin<size_type>());
+                     row_size_iter,
+                     keys->mutable_view().begin<size_type>(),
+                     [] __device__(auto row_size) { return row_size != 0; });
   thrust::inclusive_scan(rmm::exec_policy(),
                          keys->view().begin<size_type>(),
                          keys->view().end<size_type>(),
@@ -329,7 +323,8 @@ class corresponding_rows_unequal {
   corresponding_rows_unequal(table_device_view d_lhs,
                              table_device_view d_rhs,
                              column_device_view lhs_row_indices_,
-                             column_device_view rhs_row_indices_)
+                             column_device_view rhs_row_indices_,
+                             size_type /*fp_ulps*/)
     : comp(d_lhs, d_rhs), lhs_row_indices(lhs_row_indices_), rhs_row_indices(rhs_row_indices_)
   {
   }
@@ -353,16 +348,20 @@ class corresponding_rows_not_equivalent {
   column_device_view lhs_row_indices;
   column_device_view rhs_row_indices;
 
+  size_type const fp_ulps;
+
  public:
   corresponding_rows_not_equivalent(table_device_view d_lhs,
                                     table_device_view d_rhs,
                                     column_device_view lhs_row_indices_,
-                                    column_device_view rhs_row_indices_)
+                                    column_device_view rhs_row_indices_,
+                                    size_type fp_ulps_)
     : d_lhs(d_lhs),
       d_rhs(d_rhs),
       comp(d_lhs, d_rhs),
       lhs_row_indices(lhs_row_indices_),
-      rhs_row_indices(rhs_row_indices_)
+      rhs_row_indices(rhs_row_indices_),
+      fp_ulps(fp_ulps_)
   {
     CUDF_EXPECTS(d_lhs.num_columns() == 1 and d_rhs.num_columns() == 1,
                  "Unsupported number of columns");
@@ -374,7 +373,8 @@ class corresponding_rows_not_equivalent {
       column_device_view const& lhs,
       column_device_view const& rhs,
       size_type lhs_index,
-      size_type rhs_index)
+      size_type rhs_index,
+      size_type fp_ulps)
     {
       if (lhs.is_valid(lhs_index) and rhs.is_valid(rhs_index)) {
         T const x = lhs.element<T>(lhs_index);
@@ -386,10 +386,9 @@ class corresponding_rows_not_equivalent {
         } else if (std::isnan(x) || std::isnan(y)) {
           return std::isnan(x) != std::isnan(y);  // comparison of (nan==nan) returns false
         } else {
-          constexpr int ulp     = 4;  // ulp = unit of least precision, value taken from google test
           T const abs_x_minus_y = std::abs(x - y);
           return abs_x_minus_y >= std::numeric_limits<T>::min() &&
-                 abs_x_minus_y > std::numeric_limits<T>::epsilon() * std::abs(x + y) * ulp;
+                 abs_x_minus_y > std::numeric_limits<T>::epsilon() * std::abs(x + y) * fp_ulps;
         }
       } else {
         // if either is null, then the inequality was checked already
@@ -415,8 +414,13 @@ class corresponding_rows_not_equivalent {
     if (not comp(lhs_index, rhs_index)) {
       auto lhs_col = this->d_lhs.column(0);
       auto rhs_col = this->d_rhs.column(0);
-      return type_dispatcher(
-        lhs_col.type(), typed_element_not_equivalent{}, lhs_col, rhs_col, lhs_index, rhs_index);
+      return type_dispatcher(lhs_col.type(),
+                             typed_element_not_equivalent{},
+                             lhs_col,
+                             rhs_col,
+                             lhs_index,
+                             rhs_index,
+                             fp_ulps);
     }
     return false;
   }
@@ -474,6 +478,7 @@ struct column_comparator_impl {
                   column_view const& lhs_row_indices,
                   column_view const& rhs_row_indices,
                   debug_output_level verbosity,
+                  size_type fp_ulps,
                   int depth)
   {
     auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
@@ -489,12 +494,12 @@ struct column_comparator_impl {
     auto differences = rmm::device_uvector<int>(
       lhs.size(), rmm::cuda_stream_default);  // worst case: everything different
     auto input_iter = thrust::make_counting_iterator(0);
-    auto diff_iter =
-      thrust::copy_if(rmm::exec_policy(),
-                      input_iter,
-                      input_iter + lhs_row_indices.size(),
-                      differences.begin(),
-                      ComparatorType(*d_lhs, *d_rhs, *d_lhs_row_indices, *d_rhs_row_indices));
+    auto diff_iter  = thrust::copy_if(
+      rmm::exec_policy(),
+      input_iter,
+      input_iter + lhs_row_indices.size(),
+      differences.begin(),
+      ComparatorType(*d_lhs, *d_rhs, *d_lhs_row_indices, *d_rhs_row_indices, fp_ulps));
 
     differences.resize(thrust::distance(differences.begin(), diff_iter),
                        rmm::cuda_stream_default);  // shrink back down
@@ -525,6 +530,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
                   column_view const& lhs_row_indices,
                   column_view const& rhs_row_indices,
                   debug_output_level verbosity,
+                  size_type fp_ulps,
                   int depth)
   {
     lists_column_view lhs_l(lhs);
@@ -644,6 +650,7 @@ struct column_comparator_impl<list_view, check_exact_equality> {
                                    *lhs_child_indices,
                                    *rhs_child_indices,
                                    verbosity,
+                                   fp_ulps,
                                    depth + 1);
     }
 
@@ -658,6 +665,7 @@ struct column_comparator_impl<struct_view, check_exact_equality> {
                   column_view const& lhs_row_indices,
                   column_view const& rhs_row_indices,
                   debug_output_level verbosity,
+                  size_type fp_ulps,
                   int depth)
   {
     structs_column_view l_scv(lhs);
@@ -673,6 +681,7 @@ struct column_comparator_impl<struct_view, check_exact_equality> {
                                  lhs_row_indices,
                                  rhs_row_indices,
                                  verbosity,
+                                 fp_ulps,
                                  depth + 1)) {
         return false;
       }
@@ -689,6 +698,7 @@ struct column_comparator {
                   column_view const& lhs_row_indices,
                   column_view const& rhs_row_indices,
                   debug_output_level verbosity,
+                  size_type fp_ulps,
                   int depth = 0)
   {
     CUDF_EXPECTS(lhs_row_indices.size() == rhs_row_indices.size(),
@@ -707,7 +717,7 @@ struct column_comparator {
 
     // compare values
     column_comparator_impl<T, check_exact_equality> comparator{};
-    return comparator(lhs, rhs, lhs_row_indices, rhs_row_indices, verbosity, depth);
+    return comparator(lhs, rhs, lhs_row_indices, rhs_row_indices, verbosity, fp_ulps, depth);
   }
 };
 
@@ -756,8 +766,14 @@ bool expect_columns_equal(cudf::column_view const& lhs,
                           debug_output_level verbosity)
 {
   auto indices = generate_all_row_indices(lhs.size());
-  return cudf::type_dispatcher(
-    lhs.type(), column_comparator<true>{}, lhs, rhs, *indices, *indices, verbosity);
+  return cudf::type_dispatcher(lhs.type(),
+                               column_comparator<true>{},
+                               lhs,
+                               rhs,
+                               *indices,
+                               *indices,
+                               verbosity,
+                               cudf::test::default_ulp);
 }
 
 /**
@@ -765,11 +781,12 @@ bool expect_columns_equal(cudf::column_view const& lhs,
  */
 bool expect_columns_equivalent(cudf::column_view const& lhs,
                                cudf::column_view const& rhs,
-                               debug_output_level verbosity)
+                               debug_output_level verbosity,
+                               size_type fp_ulps)
 {
   auto indices = generate_all_row_indices(lhs.size());
   return cudf::type_dispatcher(
-    lhs.type(), column_comparator<false>{}, lhs, rhs, *indices, *indices, verbosity);
+    lhs.type(), column_comparator<false>{}, lhs, rhs, *indices, *indices, verbosity, fp_ulps);
 }
 
 /**
@@ -792,7 +809,7 @@ void expect_equal_buffers(void const* lhs, void const* rhs, std::size_t size_byt
 std::vector<bitmask_type> bitmask_to_host(cudf::column_view const& c)
 {
   if (c.nullable()) {
-    auto num_bitmasks = bitmask_allocation_size_bytes(c.size()) / sizeof(bitmask_type);
+    auto num_bitmasks = num_bitmask_words(c.size());
     std::vector<bitmask_type> host_bitmask(num_bitmasks);
     if (c.offset() == 0) {
       CUDA_TRY(cudaMemcpy(host_bitmask.data(),
@@ -923,11 +940,22 @@ struct column_view_printer {
                   std::vector<std::string>& out,
                   std::string const& indent)
   {
-    //
     //  For timestamps, convert timestamp column to column of strings, then
     //  call string version
-    //
-    auto col_as_strings = cudf::strings::from_timestamps(col);
+    std::string format = [&]() {
+      if constexpr (std::is_same_v<cudf::timestamp_s, Element>) {
+        return std::string{"%Y-%m-%dT%H:%M:%SZ"};
+      } else if constexpr (std::is_same_v<cudf::timestamp_ms, Element>) {
+        return std::string{"%Y-%m-%dT%H:%M:%S.%3fZ"};
+      } else if constexpr (std::is_same_v<cudf::timestamp_us, Element>) {
+        return std::string{"%Y-%m-%dT%H:%M:%S.%6fZ"};
+      } else if constexpr (std::is_same_v<cudf::timestamp_ns, Element>) {
+        return std::string{"%Y-%m-%dT%H:%M:%S.%9fZ"};
+      }
+      return std::string{"%Y-%m-%d"};
+    }();
+
+    auto col_as_strings = cudf::strings::from_timestamps(col, format);
     if (col_as_strings->size() == 0) { return; }
 
     this->template operator()<cudf::string_view>(*col_as_strings, out, indent);

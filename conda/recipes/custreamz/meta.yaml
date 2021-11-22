@@ -31,16 +31,16 @@ requirements:
     - python
     - streamz 
     - cudf {{ version }}
-    - dask>=2021.6.0
-    - distributed>=2021.6.0
+    - dask>=2021.09.1
+    - distributed>=2021.09.1
     - python-confluent-kafka
     - cudf_kafka {{ version }}
 
-test:
-  requires:
-    - cudatoolkit {{ cuda_version }}.*
-  imports:
-    - custreamz
+test:                                   # [linux64]
+  requires:                             # [linux64]
+    - cudatoolkit {{ cuda_version }}.*  # [linux64]
+  imports:                              # [linux64]
+    - custreamz                         # [linux64]
 
 about:
   home: http://rapids.ai/

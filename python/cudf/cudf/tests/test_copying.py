@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.core import Series
+from cudf import Series
 from cudf.testing._utils import NUMERIC_TYPES, OTHER_TYPES, assert_eq
 
 

@@ -18,6 +18,7 @@ from mimesis import Generic
 from pyarrow import parquet as pq
 
 import cudf
+from cudf.utils.dtypes import np_to_pa_dtype
 
 
 class ColumnParameters:
@@ -94,6 +95,7 @@ def _write(tbl, path, format):
 def _generate_column(column_params, num_rows):
     # If cardinality is specified, we create a set to sample from.
     # Otherwise, we simply use the given generator to generate each value.
+
     if column_params.cardinality is not None:
         # Construct set of values to sample from where
         # set size = cardinality
@@ -127,7 +129,7 @@ def _generate_column(column_params, num_rows):
         if hasattr(column_params.dtype, "to_arrow"):
             arrow_type = column_params.dtype.to_arrow()
         elif column_params.dtype is not None:
-            arrow_type = pa.from_numpy_dtype(column_params.dtype)
+            arrow_type = np_to_pa_dtype(cudf.dtype(column_params.dtype))
         else:
             arrow_type = None
 
@@ -227,15 +229,15 @@ def get_dataframe(parameters, use_threads):
         ):
             arrow_type = pa.dictionary(
                 index_type=pa.int64(),
-                value_type=pa.from_numpy_dtype(
-                    type(next(iter(column_params.generator)))
+                value_type=np_to_pa_dtype(
+                    cudf.dtype(type(next(iter(column_params.generator))))
                 ),
             )
         elif hasattr(column_params.dtype, "to_arrow"):
             arrow_type = column_params.dtype.to_arrow()
         else:
-            arrow_type = pa.from_numpy_dtype(
-                type(next(iter(column_params.generator)))
+            arrow_type = np_to_pa_dtype(
+                cudf.dtype(type(next(iter(column_params.generator))))
                 if column_params.dtype is None
                 else column_params.dtype
             )
@@ -366,6 +368,22 @@ def rand_dataframe(
                     dtype=dtype,
                 )
             )
+        elif dtype == "decimal32":
+            max_precision = meta.get(
+                "max_precision", cudf.Decimal32Dtype.MAX_PRECISION
+            )
+            precision = np.random.randint(1, max_precision)
+            scale = np.random.randint(0, precision)
+            dtype = cudf.Decimal32Dtype(precision=precision, scale=scale)
+            column_params.append(
+                ColumnParameters(
+                    cardinality=cardinality,
+                    null_frequency=null_frequency,
+                    generator=decimal_generator(dtype=dtype, size=cardinality),
+                    is_sorted=False,
+                    dtype=dtype,
+                )
+            )
         elif dtype == "category":
             column_params.append(
                 ColumnParameters(
@@ -380,13 +398,18 @@ def rand_dataframe(
                 )
             )
         else:
-            dtype = np.dtype(dtype)
+            dtype = cudf.dtype(dtype)
             if dtype.kind in ("i", "u"):
                 column_params.append(
                     ColumnParameters(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
-                        generator=int_generator(dtype=dtype, size=cardinality),
+                        generator=int_generator(
+                            dtype=dtype,
+                            size=cardinality,
+                            min_bound=meta.get("min_bound", None),
+                            max_bound=meta.get("max_bound", None),
+                        ),
                         is_sorted=False,
                         dtype=dtype,
                     )
@@ -397,7 +420,10 @@ def rand_dataframe(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
                         generator=float_generator(
-                            dtype=dtype, size=cardinality
+                            dtype=dtype,
+                            size=cardinality,
+                            min_bound=meta.get("min_bound", None),
+                            max_bound=meta.get("max_bound", None),
                         ),
                         is_sorted=False,
                         dtype=dtype,
@@ -425,10 +451,13 @@ def rand_dataframe(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
                         generator=datetime_generator(
-                            dtype=dtype, size=cardinality
+                            dtype=dtype,
+                            size=cardinality,
+                            min_bound=meta.get("min_bound", None),
+                            max_bound=meta.get("max_bound", None),
                         ),
                         is_sorted=False,
-                        dtype=np.dtype(dtype),
+                        dtype=cudf.dtype(dtype),
                     )
                 )
             elif dtype.kind == "m":
@@ -437,10 +466,13 @@ def rand_dataframe(
                         cardinality=cardinality,
                         null_frequency=null_frequency,
                         generator=timedelta_generator(
-                            dtype=dtype, size=cardinality
+                            dtype=dtype,
+                            size=cardinality,
+                            min_bound=meta.get("min_bound", None),
+                            max_bound=meta.get("max_bound", None),
                         ),
                         is_sorted=False,
-                        dtype=np.dtype(dtype),
+                        dtype=cudf.dtype(dtype),
                     )
                 )
             elif dtype.kind == "b":
@@ -450,7 +482,7 @@ def rand_dataframe(
                         null_frequency=null_frequency,
                         generator=boolean_generator(cardinality),
                         is_sorted=False,
-                        dtype=np.dtype(dtype),
+                        dtype=cudf.dtype(dtype),
                     )
                 )
             else:
@@ -467,49 +499,68 @@ def rand_dataframe(
     return df
 
 
-def int_generator(dtype, size):
+def int_generator(dtype, size, min_bound=None, max_bound=None):
     """
     Generator for int data
     """
-    iinfo = np.iinfo(dtype)
+    if min_bound is not None and max_bound is not None:
+        low, high = min_bound, max_bound
+    else:
+        iinfo = np.iinfo(dtype)
+        low, high = iinfo.min, iinfo.max
+
     return lambda: np.random.randint(
-        low=iinfo.min, high=iinfo.max, size=size, dtype=dtype,
+        low=low, high=high, size=size, dtype=dtype,
     )
 
 
-def float_generator(dtype, size):
+def float_generator(dtype, size, min_bound=None, max_bound=None):
     """
     Generator for float data
     """
-    finfo = np.finfo(dtype)
-    return (
-        lambda: np.random.uniform(
-            low=finfo.min / 2, high=finfo.max / 2, size=size,
+    if min_bound is not None and max_bound is not None:
+        low, high = min_bound, max_bound
+        return lambda: np.random.uniform(low=low, high=high, size=size,)
+    else:
+        finfo = np.finfo(dtype)
+        return (
+            lambda: np.random.uniform(
+                low=finfo.min / 2, high=finfo.max / 2, size=size,
+            )
+            * 2
         )
-        * 2
-    )
 
 
-def datetime_generator(dtype, size):
+def datetime_generator(dtype, size, min_bound=None, max_bound=None):
     """
     Generator for datetime data
     """
-    iinfo = np.iinfo("int64")
+    if min_bound is not None and max_bound is not None:
+        low, high = min_bound, max_bound
+    else:
+        iinfo = np.iinfo("int64")
+        low, high = iinfo.min + 1, iinfo.max
+
     return lambda: np.random.randint(
-        low=np.datetime64(iinfo.min + 1, "ns").astype(dtype).astype("int"),
-        high=np.datetime64(iinfo.max, "ns").astype(dtype).astype("int"),
+        low=np.datetime64(low, "ns").astype(dtype).astype("int"),
+        high=np.datetime64(high, "ns").astype(dtype).astype("int"),
         size=size,
     )
 
 
-def timedelta_generator(dtype, size):
+def timedelta_generator(dtype, size, min_bound=None, max_bound=None):
     """
     Generator for timedelta data
     """
-    iinfo = np.iinfo("int64")
+    if min_bound is not None and max_bound is not None:
+        low, high = min_bound, max_bound
+    else:
+        iinfo = np.iinfo("int64")
+        low, high = iinfo.min + 1, iinfo.max
+
     return lambda: np.random.randint(
-        low=np.timedelta64(iinfo.min + 1, "ns").astype(dtype).astype("int"),
-        high=np.timedelta64(iinfo.max, "ns").astype(dtype).astype("int"),
+        low=np.timedelta64(low, "ns").astype(dtype).astype("int"),
+        high=np.timedelta64(high, "ns").astype(dtype).astype("int"),
         size=size,
     )
 
@@ -538,7 +589,7 @@ def get_values_for_nested_data(dtype, lists_max_length):
     Returns list of values based on dtype.
     """
     cardinality = np.random.randint(0, lists_max_length)
-    dtype = np.dtype(dtype)
+    dtype = cudf.dtype(dtype)
     if dtype.kind in ("i", "u"):
         values = int_generator(dtype=dtype, size=cardinality)()
     elif dtype.kind == "f":

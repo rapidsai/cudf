@@ -40,20 +40,21 @@ namespace detail {
  *
  * @param[in] left_table The left table
  * @param[in] right_table The right table
- * @param[in] JoinKind The type of join to be performed
- * @param[in] compare_nulls Controls whether null join-key values should match or not.
+ * @param[in] join_type The type of join to be performed
  * @param[in] device_expression_data Container of device data required to evaluate the desired
  * expression.
+ * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
+ * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
  * @param[out] output_size The resulting output size
  */
 template <int block_size, bool has_nulls>
 __global__ void compute_conditional_join_output_size(
   table_device_view left_table,
   table_device_view right_table,
-  join_kind JoinKind,
-  null_equality compare_nulls,
+  join_kind join_type,
   ast::detail::expression_device_view device_expression_data,
-  cudf::size_type* output_size)
+  bool const swap_tables,
+  std::size_t* output_size)
 {
   // The (required) extern storage of the shared memory array leads to
   // conflicting declarations between different templates. The easiest
@@ -65,31 +66,36 @@ __global__ void compute_conditional_join_output_size(
   auto thread_intermediate_storage =
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
 
-  cudf::size_type thread_counter(0);
-  cudf::size_type const left_start_idx = threadIdx.x + blockIdx.x * blockDim.x;
-  cudf::size_type const left_stride    = blockDim.x * gridDim.x;
+  std::size_t thread_counter{0};
+  cudf::size_type const start_idx      = threadIdx.x + blockIdx.x * blockDim.x;
+  cudf::size_type const stride         = blockDim.x * gridDim.x;
   cudf::size_type const left_num_rows  = left_table.num_rows();
   cudf::size_type const right_num_rows = right_table.num_rows();
+  auto const outer_num_rows            = (swap_tables ? right_num_rows : left_num_rows);
+  auto const inner_num_rows            = (swap_tables ? left_num_rows : right_num_rows);
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
-    left_table, right_table, device_expression_data, thread_intermediate_storage, compare_nulls);
+    left_table, right_table, device_expression_data);
 
-  for (cudf::size_type left_row_index = left_start_idx; left_row_index < left_num_rows;
-       left_row_index += left_stride) {
+  for (cudf::size_type outer_row_index = start_idx; outer_row_index < outer_num_rows;
+       outer_row_index += stride) {
     bool found_match = false;
-    for (cudf::size_type right_row_index = 0; right_row_index < right_num_rows; right_row_index++) {
-      auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
-      evaluator.evaluate(output_dest, left_row_index, right_row_index, 0);
+    for (cudf::size_type inner_row_index = 0; inner_row_index < inner_num_rows; inner_row_index++) {
+      auto output_dest           = cudf::ast::detail::value_expression_result<bool, has_nulls>();
+      auto const left_row_index  = swap_tables ? inner_row_index : outer_row_index;
+      auto const right_row_index = swap_tables ? outer_row_index : inner_row_index;
+      evaluator.evaluate(
+        output_dest, left_row_index, right_row_index, 0, thread_intermediate_storage);
       if (output_dest.is_valid() && output_dest.value()) {
-        if ((JoinKind != join_kind::LEFT_ANTI_JOIN) &&
-            !(JoinKind == join_kind::LEFT_SEMI_JOIN && found_match)) {
+        if ((join_type != join_kind::LEFT_ANTI_JOIN) &&
+            !(join_type == join_kind::LEFT_SEMI_JOIN && found_match)) {
           ++thread_counter;
         }
         found_match = true;
       }
     }
-    if ((JoinKind == join_kind::LEFT_JOIN || JoinKind == join_kind::LEFT_ANTI_JOIN ||
-         JoinKind == join_kind::FULL_JOIN) &&
+    if ((join_type == join_kind::LEFT_JOIN || join_type == join_kind::LEFT_ANTI_JOIN ||
+         join_type == join_kind::FULL_JOIN) &&
         (!found_match)) {
       ++thread_counter;
     }
@@ -97,7 +103,7 @@ __global__ void compute_conditional_join_output_size(
 
   using BlockReduce = cub::BlockReduce<cudf::size_type, block_size>;
   __shared__ typename BlockReduce::TempStorage temp_storage;
-  cudf::size_type block_counter = BlockReduce(temp_storage).Sum(thread_counter);
+  std::size_t block_counter = BlockReduce(temp_storage).Sum(thread_counter);
 
   // Add block counter to global counter
   if (threadIdx.x == 0) atomicAdd(output_size, block_counter);
@@ -115,8 +121,7 @@ __global__ void compute_conditional_join_output_size(
  *
  * @param[in] left_table The left table
  * @param[in] right_table The right table
- * @param[in] JoinKind The type of join to be performed
- * @param compare_nulls Controls whether null join-key values should match or not.
+ * @param[in] join_type The type of join to be performed
  * @param[out] join_output_l The left result of the join operation
  * @param[out] join_output_r The right result of the join operation
  * @param[in,out] current_idx A global counter used by threads to coordinate
@@ -124,17 +129,19 @@ __global__ void compute_conditional_join_output_size(
  * @param device_expression_data Container of device data required to evaluate the desired
  * expression.
  * @param[in] max_size The maximum size of the output
+ * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
+ * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
  */
 template <cudf::size_type block_size, cudf::size_type output_cache_size, bool has_nulls>
 __global__ void conditional_join(table_device_view left_table,
                                  table_device_view right_table,
-                                 join_kind JoinKind,
-                                 null_equality compare_nulls,
+                                 join_kind join_type,
                                  cudf::size_type* join_output_l,
                                  cudf::size_type* join_output_r,
                                  cudf::size_type* current_idx,
                                  cudf::ast::detail::expression_device_view device_expression_data,
-                                 cudf::size_type const max_size)
+                                 cudf::size_type const max_size,
+                                 bool const swap_tables)
 {
   constexpr int num_warps = block_size / detail::warp_size;
   __shared__ cudf::size_type current_idx_shared[num_warps];
@@ -155,23 +162,28 @@ __global__ void conditional_join(table_device_view left_table,
   int const lane_id                    = threadIdx.x % detail::warp_size;
   cudf::size_type const left_num_rows  = left_table.num_rows();
   cudf::size_type const right_num_rows = right_table.num_rows();
+  auto const outer_num_rows            = (swap_tables ? right_num_rows : left_num_rows);
+  auto const inner_num_rows            = (swap_tables ? left_num_rows : right_num_rows);
 
   if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
 
   __syncwarp();
 
-  cudf::size_type left_row_index = threadIdx.x + blockIdx.x * blockDim.x;
+  cudf::size_type outer_row_index = threadIdx.x + blockIdx.x * blockDim.x;
 
-  unsigned int const activemask = __ballot_sync(0xffffffff, left_row_index < left_num_rows);
+  unsigned int const activemask = __ballot_sync(0xffffffff, outer_row_index < outer_num_rows);
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
-    left_table, right_table, device_expression_data, thread_intermediate_storage, compare_nulls);
+    left_table, right_table, device_expression_data);
 
-  if (left_row_index < left_num_rows) {
+  if (outer_row_index < outer_num_rows) {
     bool found_match = false;
-    for (size_type right_row_index(0); right_row_index < right_num_rows; ++right_row_index) {
-      auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
-      evaluator.evaluate(output_dest, left_row_index, right_row_index, 0);
+    for (size_type inner_row_index(0); inner_row_index < inner_num_rows; ++inner_row_index) {
+      auto output_dest           = cudf::ast::detail::value_expression_result<bool, has_nulls>();
+      auto const left_row_index  = swap_tables ? inner_row_index : outer_row_index;
+      auto const right_row_index = swap_tables ? outer_row_index : inner_row_index;
+      evaluator.evaluate(
+        output_dest, left_row_index, right_row_index, 0, thread_intermediate_storage);
 
       if (output_dest.is_valid() && output_dest.value()) {
         // If the rows are equal, then we have found a true match
@@ -181,8 +193,8 @@ __global__ void conditional_join(table_device_view left_table,
         // that the current logic relies on the fact that we process all right
         // table rows for a single left table row on a single thread so that no
         // synchronization of found_match is required).
-        if ((JoinKind != join_kind::LEFT_ANTI_JOIN) &&
-            !(JoinKind == join_kind::LEFT_SEMI_JOIN && found_match)) {
+        if ((join_type != join_kind::LEFT_ANTI_JOIN) &&
+            !(join_type == join_kind::LEFT_SEMI_JOIN && found_match)) {
           add_pair_to_cache(left_row_index,
                             right_row_index,
                             current_idx_shared,
@@ -214,10 +226,15 @@ __global__ void conditional_join(table_device_view left_table,
 
     // Left, left anti, and full joins all require saving left columns that
     // aren't present in the right.
-    if ((JoinKind == join_kind::LEFT_JOIN || JoinKind == join_kind::LEFT_ANTI_JOIN ||
-         JoinKind == join_kind::FULL_JOIN) &&
+    if ((join_type == join_kind::LEFT_JOIN || join_type == join_kind::LEFT_ANTI_JOIN ||
+         join_type == join_kind::FULL_JOIN) &&
         (!found_match)) {
-      add_pair_to_cache(left_row_index,
+      // TODO: This code assumes that swap_tables is false for all join
+      // kinds aside from inner joins. Once the code is generalized to handle
+      // other joins we'll want to switch the variable in the line below back
+      // to the left_row_index, but for now we can assume that they are
+      // equivalent inside this conditional.
+      add_pair_to_cache(outer_row_index,
                         static_cast<cudf::size_type>(JoinNoneValue),
                         current_idx_shared,
                         warp_id,

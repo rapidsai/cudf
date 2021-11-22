@@ -6,10 +6,11 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+from cudf import Series
 from cudf._lib.gpuarrow import (
     CudaRecordBatchStreamReader as _CudaRecordBatchStreamReader,
 )
-from cudf.core import Series, column
+from cudf.core import column
 from cudf.utils.utils import mask_bitsize, mask_dtype
 
 
@@ -128,13 +129,11 @@ class GpuArrowNodeReader(object):
         return self._series._column.mask_array_view
 
     def make_series(self):
-        """Make a Series object out of this node
-        """
+        """Make a Series object out of this node"""
         return self._series.copy(deep=False)
 
     def _make_dictionary_series(self):
-        """Make a dictionary-encoded series from this node
-        """
+        """Make a dictionary-encoded series from this node"""
         assert self.is_dictionary
         return self._series.copy(deep=False)
 

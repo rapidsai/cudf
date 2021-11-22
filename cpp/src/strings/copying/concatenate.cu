@@ -214,7 +214,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
   auto const total_bytes          = std::get<5>(device_views);
   auto const offsets_count        = strings_count + 1;
 
-  if (strings_count == 0) { return make_empty_column(data_type{type_id::STRING}); }
+  if (strings_count == 0) { return make_empty_column(type_id::STRING); }
 
   CUDF_EXPECTS(offsets_count <= static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "total number of strings is too large for cudf column");
@@ -307,9 +307,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns,
                              std::move(offsets_column),
                              std::move(chars_column),
                              null_count,
-                             std::move(null_mask),
-                             stream,
-                             mr);
+                             std::move(null_mask));
 }
 
 }  // namespace detail

@@ -1,5 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
+from libc.stdint cimport uint8_t
 from libcpp cimport bool
 from libcpp.map cimport map
 from libcpp.memory cimport shared_ptr, unique_ptr
@@ -8,7 +9,9 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 from pyarrow.includes.libarrow cimport CRandomAccessFile
 
+cimport cudf._lib.cpp.table.table_view as cudf_table_view
 from cudf._lib.cpp.table.table cimport table
+from cudf._lib.cpp.types cimport size_type
 
 
 cdef extern from "cudf/io/types.hpp" \
@@ -52,14 +55,28 @@ cdef extern from "cudf/io/types.hpp" \
         map[string, string] user_data
         vector[column_name_info] schema_info
 
-    cdef cppclass table_metadata_with_nullability(table_metadata):
-        table_metadata_with_nullability() except +
-
-        vector[bool] nullability
-
     cdef cppclass table_with_metadata:
         unique_ptr[table] tbl
         table_metadata metadata
+
+    cdef cppclass column_in_metadata:
+        column_in_metadata& set_name(const string& name)
+        column_in_metadata& set_nullability(bool nullable)
+        column_in_metadata& set_list_column_as_map()
+        column_in_metadata& set_int96_timestamps(bool req)
+        column_in_metadata& set_decimal_precision(uint8_t precision)
+        column_in_metadata& child(size_type i)
+
+    cdef cppclass table_input_metadata:
+        table_input_metadata() except +
+        table_input_metadata(const cudf_table_view.table_view& table) except +
+        table_input_metadata(
+            const cudf_table_view.table_view& table,
+            map[string, string] user_data
+        ) except +
+
+        vector[column_in_metadata] column_metadata
+        map[string, string] user_data
 
     cdef cppclass host_buffer:
         const char* data
@@ -102,3 +119,7 @@ cdef extern from "cudf/io/datasource.hpp" \
 
     cdef cppclass datasource:
         pass
+
+    cdef cppclass arrow_io_source(datasource):
+        arrow_io_source(string arrow_uri) except +
+        arrow_io_source(shared_ptr[CRandomAccessFile]) except +

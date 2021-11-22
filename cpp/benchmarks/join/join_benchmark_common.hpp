@@ -21,6 +21,7 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
+#include <cudf/ast/expressions.hpp>
 #include <cudf/join.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/utilities/error.hpp>
@@ -59,14 +60,13 @@ static void BM_join(state_type& state, Join JoinFunc)
     }
   }();
 
-  const cudf::size_type rand_max_val{build_table_size * 2};
-  const double selectivity             = 0.3;
-  const bool is_build_table_key_unique = true;
+  const double selectivity = 0.3;
+  const int multiplicity   = 1;
 
   // Generate build and probe tables
   cudf::test::UniformRandomGenerator<cudf::size_type> rand_gen(0, build_table_size);
   auto build_random_null_mask = [&rand_gen](int size) {
-    // roughly 25% nulls
+    // roughly 75% nulls
     auto validity = thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
       [&rand_gen](auto i) { return (rand_gen.generate() & 3) == 0; });
@@ -94,8 +94,7 @@ static void BM_join(state_type& state, Join JoinFunc)
     probe_key_column->mutable_view().data<key_type>(),
     probe_table_size,
     selectivity,
-    rand_max_val,
-    is_build_table_key_unique);
+    multiplicity);
 
   auto payload_data_it = thrust::make_counting_iterator(0);
   cudf::test::fixed_width_column_wrapper<payload_type> build_payload_column(
@@ -124,12 +123,12 @@ static void BM_join(state_type& state, Join JoinFunc)
   if constexpr (std::is_same_v<state_type, nvbench::state> and (not is_conditional)) {
     state.exec(nvbench::exec_tag::sync, [&](nvbench::launch& launch) {
       rmm::cuda_stream_view stream_view{launch.get_stream()};
-      JoinFunc(probe_table,
-               build_table,
-               columns_to_join,
-               columns_to_join,
-               cudf::null_equality::UNEQUAL,
-               stream_view);
+      auto result = JoinFunc(probe_table,
+                             build_table,
+                             columns_to_join,
+                             columns_to_join,
+                             cudf::null_equality::UNEQUAL,
+                             stream_view);
     });
   }
 
@@ -139,7 +138,7 @@ static void BM_join(state_type& state, Join JoinFunc)
     const auto col_ref_left_0  = cudf::ast::column_reference(0);
     const auto col_ref_right_0 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
     auto left_zero_eq_right_zero =
-      cudf::ast::expression(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
+      cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_0, col_ref_right_0);
 
     for (auto _ : state) {
       cuda_event_timer raii(state, true, rmm::cuda_stream_default);

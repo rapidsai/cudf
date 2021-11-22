@@ -441,9 +441,7 @@ struct dispatch_from_durations_fn {
                                std::move(offsets_column),
                                std::move(chars_column),
                                durations.null_count(),
-                               std::move(null_mask),
-                               stream,
-                               mr);
+                               std::move(null_mask));
   }
 
   // non-duration types throw an exception
@@ -535,7 +533,7 @@ struct parse_duration {
     auto ptr    = d_string.data();
     auto length = d_string.size_bytes();
     int8_t hour_shift{0};
-    for (size_t idx = 0; idx < items_count; ++idx) {
+    for (size_type idx = 0; idx < items_count; ++idx) {
       auto item = d_format_items[idx];
       if (length < item.length) return 1;
       if (item.item_type == format_char_type::literal) {  // static character we'll just skip;
@@ -567,7 +565,7 @@ struct parse_duration {
           break;
         case 'S':  // [-]SS[.mmm][uuu][nnn]
           timeparts->second = parse_second(ptr, item_length);
-          if (*(ptr + item_length) == '.') {
+          if ((item_length < length) && *(ptr + item_length) == '.') {
             item_length++;
             int64_t nanoseconds = str2int_fixed(
               ptr + item_length, 9, length - item_length, item_length);  // normalize to nanoseconds
@@ -703,7 +701,7 @@ std::unique_ptr<column> from_durations(column_view const& durations,
                                        rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = durations.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
 
   return type_dispatcher(
     durations.type(), dispatch_from_durations_fn{}, durations, format, stream, mr);

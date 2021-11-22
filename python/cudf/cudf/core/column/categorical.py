@@ -23,7 +23,6 @@ from numba import cuda
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.scalar import as_device_scalar
 from cudf._lib.transform import bools_to_mask
 from cudf._lib.categories import (
     set_categories as cpp_set_categories,
@@ -37,21 +36,19 @@ from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf._lib.search import contains
 from cudf._lib.copying import gather, scatter
 from cudf._lib.sort import order_by
+from cudf.api.types import is_categorical_dtype, is_interval_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils.dtypes import (
-    find_common_type,
-    is_categorical_dtype,
-    is_interval_dtype,
     is_mixed_with_object_dtype,
     min_signed_type,
     min_unsigned_type,
 )
 
 if TYPE_CHECKING:
-    from cudf._typing import SeriesOrIndex
+    from cudf._typing import SeriesOrIndex, SeriesOrSingleColumnIndex
     from cudf.core.column import (
         ColumnBase,
         DatetimeColumn,
@@ -62,62 +59,63 @@ if TYPE_CHECKING:
 
 
 class CategoricalAccessor(ColumnMethods):
+    """
+    Accessor object for categorical properties of the Series values.
+    Be aware that assigning to `categories` is a inplace operation,
+    while all methods return new categorical data per default.
+
+    Parameters
+    ----------
+    column : Column
+    parent : Series or CategoricalIndex
+
+    Examples
+    --------
+    >>> s = cudf.Series([1,2,3], dtype='category')
+    >>> s
+    >>> s
+    0    1
+    1    2
+    2    3
+    dtype: category
+    Categories (3, int64): [1, 2, 3]
+    >>> s.cat.categories
+    Int64Index([1, 2, 3], dtype='int64')
+    >>> s.cat.reorder_categories([3,2,1])
+    0    1
+    1    2
+    2    3
+    dtype: category
+    Categories (3, int64): [3, 2, 1]
+    >>> s.cat.remove_categories([1])
+    0    <NA>
+    1       2
+    2       3
+    dtype: category
+    Categories (2, int64): [2, 3]
+    >>> s.cat.set_categories(list('abcde'))
+    0    <NA>
+    1    <NA>
+    2    <NA>
+    dtype: category
+    Categories (5, object): ['a', 'b', 'c', 'd', 'e']
+    >>> s.cat.as_ordered()
+    0    1
+    1    2
+    2    3
+    dtype: category
+    Categories (3, int64): [1 < 2 < 3]
+    >>> s.cat.as_unordered()
+    0    1
+    1    2
+    2    3
+    dtype: category
+    Categories (3, int64): [1, 2, 3]
+    """
+
     _column: CategoricalColumn
 
-    def __init__(self, parent: SeriesOrIndex):
-        """
-        Accessor object for categorical properties of the Series values.
-        Be aware that assigning to `categories` is a inplace operation,
-        while all methods return new categorical data per default.
-
-        Parameters
-        ----------
-        column : Column
-        parent : Series or CategoricalIndex
-
-        Examples
-        --------
-        >>> s = cudf.Series([1,2,3], dtype='category')
-        >>> s
-        >>> s
-        0    1
-        1    2
-        2    3
-        dtype: category
-        Categories (3, int64): [1, 2, 3]
-        >>> s.cat.categories
-        Int64Index([1, 2, 3], dtype='int64')
-        >>> s.cat.reorder_categories([3,2,1])
-        0    1
-        1    2
-        2    3
-        dtype: category
-        Categories (3, int64): [3, 2, 1]
-        >>> s.cat.remove_categories([1])
-        0    <NA>
-        1       2
-        2       3
-        dtype: category
-        Categories (2, int64): [2, 3]
-        >>> s.cat.set_categories(list('abcde'))
-        0    <NA>
-        1    <NA>
-        2    <NA>
-        dtype: category
-        Categories (5, object): ['a', 'b', 'c', 'd', 'e']
-        >>> s.cat.as_ordered()
-        0    1
-        1    2
-        2    3
-        dtype: category
-        Categories (3, int64): [1 < 2 < 3]
-        >>> s.cat.as_unordered()
-        0    1
-        1    2
-        2    3
-        dtype: category
-        Categories (3, int64): [1, 2, 3]
-        """
+    def __init__(self, parent: SeriesOrSingleColumnIndex):
         if not is_categorical_dtype(parent.dtype):
             raise AttributeError(
                 "Can only use .cat accessor with a 'category' dtype"
@@ -621,7 +619,19 @@ class CategoricalAccessor(ColumnMethods):
 
 
 class CategoricalColumn(column.ColumnBase):
-    """Implements operations for Columns of Categorical type
+    """
+    Implements operations for Columns of Categorical type
+
+    Parameters
+    ----------
+    dtype : CategoricalDtype
+    mask : Buffer
+        The validity mask
+    offset : int
+        Data offset
+    children : Tuple[ColumnBase]
+        Two non-null columns containing the categories and codes
+        respectively
     """
 
     dtype: cudf.core.dtypes.CategoricalDtype
@@ -637,18 +647,7 @@ class CategoricalColumn(column.ColumnBase):
         null_count: int = None,
         children: Tuple["column.ColumnBase", ...] = (),
     ):
-        """
-        Parameters
-        ----------
-        dtype : CategoricalDtype
-        mask : Buffer
-            The validity mask
-        offset : int
-            Data offset
-        children : Tuple[ColumnBase]
-            Two non-null columns containing the categories and codes
-            respectively
-        """
+
         if size is None:
             for child in children:
                 assert child.offset == 0
@@ -836,7 +835,7 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def __setitem__(self, key, value):
-        if cudf.utils.dtypes.is_scalar(
+        if cudf.api.types.is_scalar(
             value
         ) and cudf._lib.scalar._is_null_host_scalar(value):
             to_add_categories = 0
@@ -851,7 +850,7 @@ class CategoricalColumn(column.ColumnBase):
                 "category, set the categories first"
             )
 
-        if cudf.utils.dtypes.is_scalar(value):
+        if cudf.api.types.is_scalar(value):
             value = self._encode(value) if value is not None else value
         else:
             value = cudf.core.column.as_column(value).astype(self.dtype)
@@ -910,7 +909,7 @@ class CategoricalColumn(column.ColumnBase):
         codes, inds = self.as_numerical.sort_by_values(ascending, na_position)
         col = column.build_categorical_column(
             categories=self.dtype.categories._values,
-            codes=column.as_column(codes.base_data, dtype=codes.dtype),
+            codes=column.build_column(codes.base_data, dtype=codes.dtype),
             mask=codes.base_mask,
             size=codes.size,
             ordered=self.dtype.ordered,
@@ -993,11 +992,11 @@ class CategoricalColumn(column.ColumnBase):
         return self.dtype.categories._values.find_first_value(value)
 
     def _decode(self, value: int) -> ScalarLike:
-        if value == self.default_na_value():
+        if value == self._default_na_value():
             return None
         return self.dtype.categories._values.element_indexing(value)
 
-    def default_na_value(self) -> ScalarLike:
+    def _default_na_value(self) -> ScalarLike:
         return -1
 
     def find_and_replace(
@@ -1025,7 +1024,7 @@ class CategoricalColumn(column.ColumnBase):
         df = cudf.DataFrame({"old": to_replace_col, "new": replacement_col})
         df = df.drop_duplicates(subset=["old"], keep="last", ignore_index=True)
         if df._data["old"].null_count == 1:
-            fill_value = df._data["new"][df._data["old"].isna()][0]
+            fill_value = df._data["new"][df._data["old"].isnull()][0]
             if fill_value in self.categories:
                 replaced = self.fillna(fill_value)
             else:
@@ -1041,7 +1040,7 @@ class CategoricalColumn(column.ColumnBase):
         else:
             replaced = self
         if df._data["new"].null_count > 0:
-            drop_values = df._data["old"][df._data["new"].isna()]
+            drop_values = df._data["old"][df._data["new"].isnull()]
             cur_categories = replaced.categories
             new_categories = cur_categories[
                 ~cudf.Series(cur_categories.isin(drop_values))
@@ -1077,7 +1076,7 @@ class CategoricalColumn(column.ColumnBase):
         # those categories don't exist anymore
         # Resetting the index creates a column 'index' that associates
         # the original integers to the new labels
-        bmask = new_cats._data["cats"].notna()
+        bmask = new_cats._data["cats"].notnull()
         new_cats = cudf.DataFrame(
             {"cats": new_cats._data["cats"].apply_boolean_mask(bmask)}
         ).reset_index()
@@ -1103,8 +1102,8 @@ class CategoricalColumn(column.ColumnBase):
         )
 
         return column.build_categorical_column(
-            categories=new_cats["cats"]._column,
-            codes=column.as_column(output.base_data, dtype=output.dtype),
+            categories=new_cats["cats"],
+            codes=column.build_column(output.base_data, dtype=output.dtype),
             mask=output.base_mask,
             offset=output.offset,
             size=output.size,
@@ -1274,12 +1273,8 @@ class CategoricalColumn(column.ColumnBase):
     def __sizeof__(self) -> int:
         return self.categories.__sizeof__() + self.codes.__sizeof__()
 
-    def _memory_usage(self, **kwargs) -> int:
-        deep = kwargs.get("deep", False)
-        if deep:
-            return self.__sizeof__()
-        else:
-            return self.categories._memory_usage() + self.codes._memory_usage()
+    def memory_usage(self) -> int:
+        return self.categories.memory_usage() + self.codes.memory_usage()
 
     def _mimic_inplace(
         self, other_col: ColumnBase, inplace: bool = False
@@ -1496,7 +1491,7 @@ def _create_empty_categorical_column(
         categories=column.as_column(dtype.categories),
         codes=column.as_column(
             cudf.utils.utils.scalar_broadcast_to(
-                categorical_column.default_na_value(),
+                categorical_column._default_na_value(),
                 categorical_column.size,
                 categorical_column.codes.dtype,
             )

@@ -145,5 +145,22 @@ struct row_lexicographic_tagged_comparator {
   order const* _column_order{};
 };
 
+/**
+ * @copydoc std::unique_ptr<cudf::table> merge(
+ *            std::vector<table_view> const& tables_to_merge,
+ *            std::vector<cudf::size_type> const& key_cols,
+ *            std::vector<cudf::order> const& column_order,
+ *            std::vector<cudf::null_order> const& null_precedence,
+ *            rmm::mr::device_memory_resource* mr)
+ *
+ * @param stream CUDA stream used for device memory operations and kernel launches
+ */
+std::unique_ptr<cudf::table> merge(std::vector<table_view> const& tables_to_merge,
+                                   std::vector<cudf::size_type> const& key_cols,
+                                   std::vector<cudf::order> const& column_order,
+                                   std::vector<cudf::null_order> const& null_precedence,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr);
+
 }  // namespace detail
 }  // namespace cudf

@@ -15,9 +15,9 @@ import pyarrow as pa
 from pandas.api import types as pd_types
 
 import cudf
-from cudf._lib.scalar import DeviceScalar
 from cudf.core.dtypes import (  # noqa: F401
     _BaseDtype,
+    dtype,
     is_categorical_dtype,
     is_decimal32_dtype,
     is_decimal64_dtype,
@@ -125,7 +125,7 @@ def is_scalar(val):
         Return True if given object is scalar.
     """
     return (
-        isinstance(val, DeviceScalar)
+        isinstance(val, cudf._lib.scalar.DeviceScalar)
         or isinstance(val, (cudf.Scalar, pa.Scalar))
         or isinstance(val, cudf.core.tools.datetimes.DateOffset)
         or pd_types.is_scalar(val)
@@ -195,7 +195,7 @@ def _wrap_pandas_is_dtype_api(func):
 
 
 def _union_categoricals(
-    to_union: List[Union[cudf.Series, cudf.Index]],
+    to_union: List[Union[cudf.Series, cudf.CategoricalIndex]],
     sort_categories: bool = False,
     ignore_order: bool = False,
 ):

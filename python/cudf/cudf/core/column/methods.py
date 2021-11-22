@@ -8,7 +8,7 @@ from typing_extensions import Literal
 
 import cudf
 
-ParentType = Union["cudf.Series", "cudf.BaseIndex"]
+ParentType = Union["cudf.Series", "cudf.core.index.GenericIndex"]
 
 
 class ColumnMethods:

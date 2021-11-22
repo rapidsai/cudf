@@ -15,17 +15,38 @@ from cudf._lib.strings.convert.convert_fixed_point import (
     from_decimal as cpp_from_decimal,
 )
 from cudf._typing import Dtype
-from cudf.api.types import is_integer_dtype
+from cudf.api.types import is_integer_dtype, is_scalar
 from cudf.core.buffer import Buffer
 from cudf.core.column import ColumnBase, as_column
 from cudf.core.dtypes import Decimal32Dtype, Decimal64Dtype
-from cudf.utils.dtypes import is_scalar
 from cudf.utils.utils import pa_mask_buffer_to_mask
 
 from .numerical_base import NumericalBaseColumn
 
 
-class Decimal32Column(NumericalBaseColumn):
+class DecimalBaseColumn(NumericalBaseColumn):
+    """Base column for decimal64 and decimal32 columns"""
+
+    dtype: Union[Decimal32Dtype, Decimal64Dtype]
+
+    def as_decimal_column(
+        self, dtype: Dtype, **kwargs
+    ) -> Union["DecimalBaseColumn"]:
+        if (
+            isinstance(dtype, (Decimal64Dtype, Decimal32Dtype))
+            and dtype.scale < self.dtype.scale
+        ):
+            warn(
+                "cuDF truncates when downcasting decimals to a lower scale. "
+                "To round, use Series.round() or DataFrame.round()."
+            )
+
+        if dtype == self.dtype:
+            return self
+        return libcudf.unary.cast(self, dtype)
+
+
+class Decimal32Column(DecimalBaseColumn):
     dtype: Decimal32Dtype
 
     @classmethod
@@ -78,7 +99,7 @@ class Decimal32Column(NumericalBaseColumn):
         )
 
 
-class Decimal64Column(NumericalBaseColumn):
+class Decimal64Column(DecimalBaseColumn):
     dtype: Decimal64Dtype
 
     def __truediv__(self, other):
@@ -139,7 +160,7 @@ class Decimal64Column(NumericalBaseColumn):
         if reflect:
             self, other = other, self
 
-        # Binary Arithmatics between decimal columns. `Scale` and `precision`
+        # Binary Arithmetics between decimal columns. `Scale` and `precision`
         # are computed outside of libcudf
         if op in ("add", "sub", "mul", "div"):
             scale = _binop_scale(self.dtype, other.dtype, op)
@@ -201,24 +222,6 @@ class Decimal64Column(NumericalBaseColumn):
         )
 
         return result._with_type_metadata(self.dtype)
-
-    def as_decimal_column(
-        self, dtype: Dtype, **kwargs
-    ) -> Union[
-        "cudf.core.column.Decimal32Column", "cudf.core.column.Decimal64Column"
-    ]:
-        if (
-            isinstance(dtype, Decimal64Dtype)
-            and dtype.scale < self.dtype.scale
-        ):
-            warn(
-                "cuDF truncates when downcasting decimals to a lower scale. "
-                "To round, use Series.round() or DataFrame.round()."
-            )
-
-        if dtype == self.dtype:
-            return self
-        return libcudf.unary.cast(self, dtype)
 
     def as_numerical_column(
         self, dtype: Dtype, **kwargs
@@ -317,5 +320,5 @@ def _binop_precision(l_dtype, r_dtype, op):
         result = p1 + p2 + 1
     else:
         raise NotImplementedError()
-
+    # TODO
     return min(result, cudf.Decimal64Dtype.MAX_PRECISION)

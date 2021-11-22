@@ -33,16 +33,20 @@ namespace test {
 #define VALIDITY std::initializer_list<bool>
 
 struct CollectSetTest : public cudf::test::BaseFixture {
-  static auto collect_set() { return cudf::make_collect_set_aggregation(); }
+  static auto collect_set()
+  {
+    return cudf::make_collect_set_aggregation<cudf::groupby_aggregation>();
+  }
 
   static auto collect_set_null_unequal()
   {
-    return cudf::make_collect_set_aggregation(null_policy::INCLUDE, null_equality::UNEQUAL);
+    return cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(null_policy::INCLUDE,
+                                                                         null_equality::UNEQUAL);
   }
 
   static auto collect_set_null_exclude()
   {
-    return cudf::make_collect_set_aggregation(null_policy::EXCLUDE);
+    return cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(null_policy::EXCLUDE);
   }
 };
 
@@ -53,7 +57,7 @@ struct CollectSetTypedTest : public cudf::test::BaseFixture {
 using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                                   cudf::test::FloatingPointTypes,
                                                   cudf::test::TimestampTypes>;
-TYPED_TEST_CASE(CollectSetTypedTest, FixedWidthTypesNotBool);
+TYPED_TEST_SUITE(CollectSetTypedTest, FixedWidthTypesNotBool);
 
 TYPED_TEST(CollectSetTypedTest, TrivialInput)
 {
@@ -174,7 +178,7 @@ TEST_F(CollectSetTest, FloatsWithNaN)
                   vals,
                   keys_expected,
                   vals_expected,
-                  cudf::make_collect_set_aggregation(
+                  cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(
                     null_policy::INCLUDE, null_equality::EQUAL, nan_equality::ALL_EQUAL));
   // null unequal with nan equal
   vals_expected = {
@@ -183,7 +187,7 @@ TEST_F(CollectSetTest, FloatsWithNaN)
                   vals,
                   keys_expected,
                   vals_expected,
-                  cudf::make_collect_set_aggregation(
+                  cudf::make_collect_set_aggregation<cudf::groupby_aggregation>(
                     null_policy::INCLUDE, null_equality::UNEQUAL, nan_equality::ALL_EQUAL));
 }
 

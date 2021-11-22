@@ -36,7 +36,7 @@ using K = int32_t;
 
 using supported_types = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
-TYPED_TEST_CASE(groupby_var_test, supported_types);
+TYPED_TEST_SUITE(groupby_var_test, supported_types);
 
 TYPED_TEST(groupby_var_test, basic)
 {
@@ -53,7 +53,7 @@ TYPED_TEST(groupby_var_test, basic)
   fixed_width_column_wrapper<R> expect_vals({9.,      131. / 12,   31. / 3}, no_nulls());
   // clang-format on
 
-  auto agg = cudf::make_variance_aggregation();
+  auto agg = cudf::make_variance_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -68,7 +68,7 @@ TYPED_TEST(groupby_var_test, empty_cols)
   fixed_width_column_wrapper<K> expect_keys{};
   fixed_width_column_wrapper<R> expect_vals{};
 
-  auto agg = cudf::make_variance_aggregation();
+  auto agg = cudf::make_variance_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -83,7 +83,7 @@ TYPED_TEST(groupby_var_test, zero_valid_keys)
   fixed_width_column_wrapper<K> expect_keys{};
   fixed_width_column_wrapper<R> expect_vals{};
 
-  auto agg = cudf::make_variance_aggregation();
+  auto agg = cudf::make_variance_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -98,7 +98,7 @@ TYPED_TEST(groupby_var_test, zero_valid_values)
   fixed_width_column_wrapper<K> expect_keys{1};
   fixed_width_column_wrapper<R> expect_vals({0}, all_nulls());
 
-  auto agg = cudf::make_variance_aggregation();
+  auto agg = cudf::make_variance_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -119,7 +119,7 @@ TYPED_TEST(groupby_var_test, null_keys_and_values)
   fixed_width_column_wrapper<R> expect_vals({4.5,      49. / 3,   18.,     0.}, {1, 1, 1, 0});
   // clang-format on
 
-  auto agg = cudf::make_variance_aggregation();
+  auto agg = cudf::make_variance_aggregation<cudf::groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -141,7 +141,7 @@ TYPED_TEST(groupby_var_test, ddof_non_default)
                                             {0,         1,         0,       0});
   // clang-format on
 
-  auto agg = cudf::make_variance_aggregation(2);
+  auto agg = cudf::make_variance_aggregation<cudf::groupby_aggregation>(2);
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -160,7 +160,11 @@ TYPED_TEST(groupby_var_test, dictionary)
   fixed_width_column_wrapper<R> expect_vals({9.,      131./12,      31./3  }, no_nulls());
   // clang-format on
 
-  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_variance_aggregation());
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals,
+                  cudf::make_variance_aggregation<cudf::groupby_aggregation>());
 }
 
 }  // namespace test

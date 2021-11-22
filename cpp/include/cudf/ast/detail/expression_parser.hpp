@@ -15,15 +15,16 @@
  */
 #pragma once
 
-#include <cudf/ast/nodes.hpp>
-#include <cudf/ast/operators.hpp>
+#include <cudf/ast/expressions.hpp>
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
 
 #include <thrust/optional.h>
 
+#include <functional>
 #include <numeric>
+#include <optional>
 
 namespace cudf {
 namespace ast {
@@ -36,13 +37,13 @@ namespace detail {
  * linearization process but cannot be explicitly created by the user.
  */
 enum class device_data_reference_type {
-  COLUMN,       // A value in a table column
-  LITERAL,      // A literal value
-  INTERMEDIATE  // An internal temporary value
+  COLUMN,       ///< A value in a table column
+  LITERAL,      ///< A literal value
+  INTERMEDIATE  ///< An internal temporary value
 };
 
 /**
- * @brief A device data reference describes a source of data used by a node.
+ * @brief A device data reference describes a source of data used by a expression.
  *
  * This is a POD class used to create references describing data type and locations for consumption
  * by the `row_evaluator`.
@@ -106,18 +107,17 @@ struct expression_device_view {
   device_span<ast_operator const> operators;
   device_span<cudf::size_type const> operator_source_indices;
   cudf::size_type num_intermediates;
-  int shmem_per_thread;
 };
 
 /**
  * @brief The expression_parser traverses an expression and converts it into a form suitable for
  * execution on the device.
  *
- * This class is part of a "visitor" pattern with the `node` class.
+ * This class is part of a "visitor" pattern with the `expression` class.
  *
  * This class does pre-processing work on the host, validating operators and operand data types. It
- * traverses downward from a root node in a depth-first fashion, capturing information about
- * the nodes and constructing vectors of information that are later used by the device for
+ * traverses downward from a root expression in a depth-first fashion, capturing information about
+ * the expressions and constructing vectors of information that are later used by the device for
  * evaluating the abstract syntax tree as a "linear" list of operators whose input dependencies are
  * resolved into intermediate data storage in shared memory.
  */
@@ -130,13 +130,17 @@ class expression_parser {
    * @param left The left table used for evaluating the abstract syntax tree.
    * @param right The right table used for evaluating the abstract syntax tree.
    */
-  expression_parser(node const& expr,
-                    cudf::table_view left,
-                    cudf::table_view right,
+  expression_parser(expression const& expr,
+                    cudf::table_view const& left,
+                    std::optional<std::reference_wrapper<cudf::table_view const>> right,
                     bool has_nulls,
                     rmm::cuda_stream_view stream,
                     rmm::mr::device_memory_resource* mr)
-    : _left{left}, _right{right}, _node_count{0}, _intermediate_counter{}, _has_nulls(has_nulls)
+    : _left{left},
+      _right{right},
+      _expression_count{0},
+      _intermediate_counter{},
+      _has_nulls(has_nulls)
   {
     expr.accept(*this);
     move_to_device(stream, mr);
@@ -148,12 +152,12 @@ class expression_parser {
    * @param expr The expression to create an evaluable expression_parser for.
    * @param table The table used for evaluating the abstract syntax tree.
    */
-  expression_parser(node const& expr,
-                    cudf::table_view table,
+  expression_parser(expression const& expr,
+                    cudf::table_view const& table,
                     bool has_nulls,
                     rmm::cuda_stream_view stream,
                     rmm::mr::device_memory_resource* mr)
-    : expression_parser(expr, table, table, has_nulls, stream, mr)
+    : expression_parser(expr, table, {}, has_nulls, stream, mr)
   {
   }
 
@@ -165,33 +169,33 @@ class expression_parser {
   cudf::data_type output_type() const;
 
   /**
-   * @brief Visit a literal node.
+   * @brief Visit a literal expression.
    *
-   * @param expr Literal node.
-   * @return cudf::size_type Index of device data reference for the node.
+   * @param expr Literal expression.
+   * @return cudf::size_type Index of device data reference for the expression.
    */
   cudf::size_type visit(literal const& expr);
 
   /**
-   * @brief Visit a column reference node.
+   * @brief Visit a column reference expression.
    *
-   * @param expr Column reference node.
-   * @return cudf::size_type Index of device data reference for the node.
+   * @param expr Column reference expression.
+   * @return cudf::size_type Index of device data reference for the expression.
    */
   cudf::size_type visit(column_reference const& expr);
 
   /**
-   * @brief Visit an expression node.
+   * @brief Visit an expression expression.
    *
-   * @param expr Expression node.
-   * @return cudf::size_type Index of device data reference for the node.
+   * @param expr Expression expression.
+   * @return cudf::size_type Index of device data reference for the expression.
    */
-  cudf::size_type visit(expression const& expr);
+  cudf::size_type visit(operation const& expr);
 
   /**
    * @brief Internal class used to track the utilization of intermediate storage locations.
    *
-   * As nodes are being evaluated, they may generate "intermediate" data that is immediately
+   * As expressions are being evaluated, they may generate "intermediate" data that is immediately
    * consumed. Rather than manifesting this data in global memory, we can store intermediates of any
    * fixed width type (up to 8 bytes) by placing them in shared memory. This class helps to track
    * the number and indices of intermediate data in shared memory using a give-take model. Locations
@@ -225,6 +229,7 @@ class expression_parser {
 
   expression_device_view device_expression_data;  ///< The collection of data required to evaluate
                                                   ///< the expression on the device.
+  int shmem_per_thread;
 
  private:
   /**
@@ -287,7 +292,7 @@ class expression_parser {
       reinterpret_cast<cudf::size_type const*>(device_data_buffer_ptr + buffer_offsets[3]),
       _operator_source_indices.size());
     device_expression_data.num_intermediates = _intermediate_counter.get_max_used();
-    device_expression_data.shmem_per_thread  = static_cast<int>(
+    shmem_per_thread                         = static_cast<int>(
       (_has_nulls ? sizeof(IntermediateDataType<true>) : sizeof(IntermediateDataType<false>)) *
       device_expression_data.num_intermediates);
   }
@@ -306,7 +311,7 @@ class expression_parser {
    * @return The indices of the operands stored in the data references.
    */
   std::vector<cudf::size_type> visit_operands(
-    std::vector<std::reference_wrapper<node const>> operands);
+    std::vector<std::reference_wrapper<expression const>> operands);
 
   /**
    * @brief Add a data reference to the internal list.
@@ -322,8 +327,8 @@ class expression_parser {
                           ///< owned by this class and persists until it is destroyed.
 
   cudf::table_view const& _left;
-  cudf::table_view const& _right;
-  cudf::size_type _node_count;
+  std::optional<std::reference_wrapper<cudf::table_view const>> _right;
+  cudf::size_type _expression_count;
   intermediate_counter _intermediate_counter;
   bool _has_nulls;
   std::vector<detail::device_data_reference> _data_references;

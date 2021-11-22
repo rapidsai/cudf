@@ -374,11 +374,18 @@ void traverse_children::operator()<cudf::string_view>(host_span<column_view cons
   size_t const total_char_count = std::accumulate(
     cols.begin(), cols.end(), std::size_t{}, [stream](size_t a, auto const& b) -> size_t {
       strings_column_view scv(b);
-      return a + (b.is_empty()
-                    ? 0
-                    : cudf::detail::get_value<offset_type>(
-                        scv.offsets(), scv.offset() + b.size(), stream) -
-                        cudf::detail::get_value<offset_type>(scv.offsets(), scv.offset(), stream));
+      return a + (scv.is_empty() ? 0
+                  // if the column is unsliced, skip the offset retrieval.
+                  : scv.offset() > 0
+                    ? cudf::detail::get_value<offset_type>(
+                        scv.offsets(), scv.offset() + scv.size(), stream) -
+                        cudf::detail::get_value<offset_type>(scv.offsets(), scv.offset(), stream)
+                  // if the offset() is 0, it can still be sliced to a shorter length. in this case
+                  // we only need to read a single offset. otherwise just return the full length
+                  // (chars_size())
+                  : scv.size() + 1 == scv.offsets().size()
+                    ? scv.chars_size()
+                    : cudf::detail::get_value<offset_type>(scv.offsets(), scv.size(), stream));
     });
   // note:  output text must include "exceeds size_type range" for python error handling
   CUDF_EXPECTS(total_char_count <= static_cast<size_t>(std::numeric_limits<size_type>::max()),

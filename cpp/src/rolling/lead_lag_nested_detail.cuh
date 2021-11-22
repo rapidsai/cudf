@@ -18,11 +18,18 @@
 
 #include <cudf/aggregation.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/detail/gather.cuh>
-#include <cudf/detail/scatter.cuh>
+#include <cudf/detail/gather.hpp>
+#include <cudf/detail/scatter.hpp>
 #include <cudf/utilities/traits.hpp>
+
+#include <rmm/exec_policy.hpp>
+
+#include <thrust/binary_search.h>
+#include <thrust/copy.h>
+
 #include <vector>
 
 namespace cudf::detail {
@@ -151,13 +158,12 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                       });
   }
 
-  auto output_with_nulls =
-    cudf::detail::gather(table_view{std::vector<column_view>{input}},
-                         gather_map_column->view().template begin<size_type>(),
-                         gather_map_column->view().end<size_type>(),
-                         out_of_bounds_policy::NULLIFY,
-                         stream,
-                         mr);
+  auto output_with_nulls = cudf::detail::gather(table_view{std::vector<column_view>{input}},
+                                                gather_map_column->view(),
+                                                out_of_bounds_policy::NULLIFY,
+                                                cudf::detail::negative_index_policy::NOT_ALLOWED,
+                                                stream,
+                                                mr);
 
   if (default_outputs.is_empty()) { return std::move(output_with_nulls->release()[0]); }
 
@@ -172,22 +178,22 @@ std::unique_ptr<column> compute_lead_lag_for_nested(aggregation::Kind op,
                     scatter_map.begin(),
                     is_null_index_predicate(input.size(), gather_map.begin<size_type>()));
 
+  scatter_map.resize(thrust::distance(scatter_map.begin(), scatter_map_end), stream);
   // Bail early, if all LEAD/LAG computations succeeded. No defaults need be substituted.
   if (scatter_map.is_empty()) { return std::move(output_with_nulls->release()[0]); }
 
   // Gather only those default values that are to be substituted.
   auto gathered_defaults =
     cudf::detail::gather(table_view{std::vector<column_view>{default_outputs}},
-                         scatter_map.begin(),
-                         scatter_map_end,
+                         scatter_map,
                          out_of_bounds_policy::DONT_CHECK,
+                         cudf::detail::negative_index_policy::NOT_ALLOWED,
                          stream);
 
   // Scatter defaults into locations where LEAD/LAG computed nulls.
   auto scattered_results = cudf::detail::scatter(
     table_view{std::vector<column_view>{gathered_defaults->release()[0]->view()}},
-    scatter_map.begin(),
-    scatter_map_end,
+    scatter_map,
     table_view{std::vector<column_view>{output_with_nulls->release()[0]->view()}},
     false,
     stream,

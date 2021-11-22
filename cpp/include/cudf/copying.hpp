@@ -41,8 +41,8 @@ namespace cudf {
  */
 
 enum class out_of_bounds_policy : bool {
-  NULLIFY,    /// Output values corresponding to out-of-bounds indices are null
-  DONT_CHECK  /// No bounds checking is performed, better performance
+  NULLIFY,    ///< Output values corresponding to out-of-bounds indices are null
+  DONT_CHECK  ///< No bounds checking is performed, better performance
 };
 
 /**
@@ -91,6 +91,7 @@ std::unique_ptr<table> gather(
  * ```
  *
  * @param source_table Table that will be reversed
+ * @param mr Device memory resource used to allocate the returned table's device memory
  */
 std::unique_ptr<table> reverse(
   table_view const& source_table,
@@ -106,6 +107,7 @@ std::unique_ptr<table> reverse(
  * ```
  *
  * @param source_column Column that will be reversed
+ * @param mr Device memory resource used to allocate the returned table's device memory
  */
 std::unique_ptr<column> reverse(
   column_view const& source_column,
@@ -405,10 +407,15 @@ std::unique_ptr<column> shift(
  * the range [0, input.size()).
  *
  * @param input View of column to slice
- * @param indices A vector of indices used to take slices of `input`.
+ * @param indices Indices used to take slices of `input`.
  * @return Vector of views of `input` indicated by the ranges in `indices`.
  */
-std::vector<column_view> slice(column_view const& input, std::vector<size_type> const& indices);
+std::vector<column_view> slice(column_view const& input, host_span<size_type const> indices);
+/**
+ * @ingroup copy_slice
+ * @copydoc cudf::slice(column_view const&, host_span<size_type const>)
+ */
+std::vector<column_view> slice(column_view const& input, std::initializer_list<size_type> indices);
 
 /**
  * @brief Slices a `table_view` into a set of `table_view`s according to a set of indices.
@@ -439,10 +446,15 @@ std::vector<column_view> slice(column_view const& input, std::vector<size_type> 
  * the range [0, input.size()).
  *
  * @param input View of table to slice
- * @param indices A vector of indices used to take slices of `input`.
+ * @param indices Indices used to take slices of `input`.
  * @return Vector of views of `input` indicated by the ranges in `indices`.
  */
-std::vector<table_view> slice(table_view const& input, std::vector<size_type> const& indices);
+std::vector<table_view> slice(table_view const& input, host_span<size_type const> indices);
+/**
+ * @ingroup copy_slice
+ * @copydoc cudf::slice(table_view const&, host_span<size_type const>)
+ */
+std::vector<table_view> slice(table_view const& input, std::initializer_list<size_type> indices);
 
 /**
  * @brief Splits a `column_view` into a set of `column_view`s according to a set of indices
@@ -473,10 +485,15 @@ std::vector<table_view> slice(table_view const& input, std::vector<size_type> co
  * @throws cudf::logic_error When the values in the `splits` are 'strictly decreasing'.
  *
  * @param input View of column to split
- * @param splits A vector of indices where the view will be split
+ * @param splits Indices where the view will be split
  * @return The set of requested views of `input` indicated by the `splits`.
  */
-std::vector<column_view> split(column_view const& input, std::vector<size_type> const& splits);
+std::vector<column_view> split(column_view const& input, host_span<size_type const> splits);
+/**
+ * @ingroup copy_split
+ * @copydoc cudf::split(column_view const&, host_span<size_type const>)
+ */
+std::vector<column_view> split(column_view const& input, std::initializer_list<size_type> splits);
 
 /**
  * @brief Splits a `table_view` into a set of `table_view`s according to a set of indices
@@ -509,10 +526,15 @@ std::vector<column_view> split(column_view const& input, std::vector<size_type> 
  * @throws cudf::logic_error When the values in the `splits` are 'strictly decreasing'.
  *
  * @param input View of a table to split
- * @param splits A vector of indices where the view will be split
+ * @param splits Indices where the view will be split
  * @return The set of requested views of `input` indicated by the `splits`.
  */
-std::vector<table_view> split(table_view const& input, std::vector<size_type> const& splits);
+std::vector<table_view> split(table_view const& input, host_span<size_type const> splits);
+/**
+ * @ingroup copy_split
+ * @copydoc cudf::split(table_view const&, host_span<size_type const>)
+ */
+std::vector<table_view> split(table_view const& input, std::initializer_list<size_type> splits);
 
 /**
  * @brief Column data in a serialized format
@@ -638,7 +660,7 @@ packed_columns pack(cudf::table_view const& input,
  * construct a `packed_columns` or `packed_table` structure.  The caller is responsible for
  * guaranteeing that that all of the columns in the table point into `contiguous_buffer`.
  *
- * @param input View of the table to pack
+ * @param table View of the table to pack
  * @param contiguous_buffer A contiguous buffer of device memory which contains the data referenced
  * by the columns in `table`
  * @param buffer_size The size of `contiguous_buffer`.
@@ -879,8 +901,8 @@ std::unique_ptr<scalar> get_element(
  * @brief Indicates whether a row can be sampled more than once.
  */
 enum class sample_with_replacement : bool {
-  FALSE,  // A row can be sampled only once
-  TRUE    // A row can be sampled more than once
+  FALSE,  ///< A row can be sampled only once
+  TRUE    ///< A row can be sampled more than once
 };
 
 /**

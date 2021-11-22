@@ -23,6 +23,7 @@
 #include "writer_impl.hpp"
 
 #include <io/utilities/column_utils.cuh>
+#include <io/utilities/config_utils.hpp>
 #include "compact_protocol_writer.hpp"
 
 #include <cudf/column/column_device_view.cuh>
@@ -36,6 +37,8 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
+
+#include <nvcomp/snappy.h>
 
 #include <algorithm>
 #include <cstring>
@@ -339,6 +342,8 @@ struct leaf_schema_fn {
     } else if (std::is_same_v<T, numeric::decimal64>) {
       col_schema.type        = Type::INT64;
       col_schema.stats_dtype = statistics_dtype::dtype_decimal64;
+    } else if (std::is_same_v<T, numeric::decimal128>) {
+      CUDF_FAIL("decimal128 currently not supported for parquet writer");
     } else {
       CUDF_FAIL("Unsupported fixed point type for parquet writer");
     }
@@ -364,6 +369,26 @@ struct leaf_schema_fn {
   }
 };
 
+inline bool is_col_nullable(LinkedColPtr const& col,
+                            column_in_metadata const& col_meta,
+                            bool single_write_mode)
+{
+  if (single_write_mode) {
+    return col->nullable();
+  } else {
+    if (col_meta.is_nullability_defined()) {
+      CUDF_EXPECTS(col_meta.nullable() || !col->nullable(),
+                   "Mismatch in metadata prescribed nullability and input column nullability. "
+                   "Metadata for nullable input column cannot prescribe nullability = false");
+      return col_meta.nullable();
+    } else {
+      // For chunked write, when not provided nullability, we assume the worst case scenario
+      // that all columns are nullable.
+      return true;
+    }
+  }
+}
+
 /**
  * @brief Construct schema from input columns and per-column input options
  *
@@ -371,7 +396,7 @@ struct leaf_schema_fn {
  * The resulting schema tree is stored in a vector in pre-order traversal order.
  */
 std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linked_columns,
-                                                    table_input_metadata const& metadata,
+                                                    table_input_metadata& metadata,
                                                     bool single_write_mode,
                                                     bool int96_timestamps)
 {
@@ -384,27 +409,9 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
   root.parent_idx      = -1;  // root schema has no parent
   schema.push_back(std::move(root));
 
-  std::function<void(LinkedColPtr const&, column_in_metadata const&, size_t)> add_schema =
-    [&](LinkedColPtr const& col, column_in_metadata const& col_meta, size_t parent_idx) {
-      bool col_nullable = [&]() {
-        if (single_write_mode) {
-          return col->nullable();
-        } else {
-          if (col_meta.is_nullability_defined()) {
-            if (col_meta.nullable() == false) {
-              CUDF_EXPECTS(
-                col->nullable() == false,
-                "Mismatch in metadata prescribed nullability and input column nullability. "
-                "Metadata for nullable input column cannot prescribe nullability = false");
-            }
-            return col_meta.nullable();
-          } else {
-            // For chunked write, when not provided nullability, we assume the worst case scenario
-            // that all columns are nullable.
-            return true;
-          }
-        }
-      }();
+  std::function<void(LinkedColPtr const&, column_in_metadata&, size_t)> add_schema =
+    [&](LinkedColPtr const& col, column_in_metadata& col_meta, size_t parent_idx) {
+      bool col_nullable = is_col_nullable(col, col_meta, single_write_mode);
 
       if (col->type().id() == type_id::STRUCT) {
         // if struct, add current and recursively call for all children
@@ -426,7 +433,7 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
         for (size_t i = 0; i < col->children.size(); ++i) {
           add_schema(col->children[i], col_meta.child(i), struct_node_index);
         }
-      } else if (col->type().id() == type_id::LIST) {
+      } else if (col->type().id() == type_id::LIST && !col_meta.is_map()) {
         // List schema is denoted by two levels for each nesting level and one final level for leaf.
         // The top level is the same name as the column name.
         // So e.g. List<List<int>> is denoted in the schema by
@@ -454,6 +461,58 @@ std::vector<schema_tree_node> construct_schema_tree(LinkedColVector const& linke
         add_schema(col->children[lists_column_view::child_column_index],
                    col_meta.child(lists_column_view::child_column_index),
                    schema.size() - 1);
+      } else if (col->type().id() == type_id::LIST && col_meta.is_map()) {
+        // Map schema is denoted by a list of struct
+        // e.g. List<Struct<String,String>> will be
+        // "col_name" : { "key_value" : { "key", "value" } }
+
+        // verify the List child structure is a struct<left_child, right_child>
+        auto const& struct_col = col->child(lists_column_view::child_column_index);
+        CUDF_EXPECTS(struct_col.type().id() == type_id::STRUCT, "Map should be a List of struct");
+        CUDF_EXPECTS(struct_col.num_children() == 2,
+                     "Map should be a List of struct with two children only but found " +
+                       std::to_string(struct_col.num_children()));
+
+        schema_tree_node map_schema{};
+        map_schema.converted_type = ConvertedType::MAP;
+        map_schema.repetition_type =
+          col_nullable ? FieldRepetitionType::OPTIONAL : FieldRepetitionType::REQUIRED;
+        map_schema.name         = col_meta.get_name();
+        map_schema.num_children = 1;
+        map_schema.parent_idx   = parent_idx;
+        schema.push_back(std::move(map_schema));
+
+        schema_tree_node repeat_group{};
+        repeat_group.repetition_type = FieldRepetitionType::REPEATED;
+        repeat_group.name            = "key_value";
+        repeat_group.num_children    = 2;
+        repeat_group.parent_idx      = schema.size() - 1;  // Parent is map_schema, last added.
+        schema.push_back(std::move(repeat_group));
+
+        CUDF_EXPECTS(col_meta.num_children() == 2,
+                     "List column's metadata should have exactly two children");
+        CUDF_EXPECTS(col_meta.child(lists_column_view::child_column_index).num_children() == 2,
+                     "Map struct column should have exactly two children");
+        // verify the col meta of children of the struct have name key and value
+        auto& left_child_meta = col_meta.child(lists_column_view::child_column_index).child(0);
+        left_child_meta.set_name("key");
+        left_child_meta.set_nullability(false);
+
+        auto& right_child_meta = col_meta.child(lists_column_view::child_column_index).child(1);
+        right_child_meta.set_name("value");
+        // check the repetition type of key is required i.e. the col should be non-nullable
+        auto key_col = col->children[lists_column_view::child_column_index]->children[0];
+        CUDF_EXPECTS(!is_col_nullable(key_col, left_child_meta, single_write_mode),
+                     "key column cannot be nullable. For chunked writing, explicitly set the "
+                     "nullability to false in metadata");
+        // process key
+        size_type struct_col_index = schema.size() - 1;
+        add_schema(key_col, left_child_meta, struct_col_index);
+        // process value
+        add_schema(col->children[lists_column_view::child_column_index]->children[1],
+                   right_child_meta,
+                   struct_col_index);
+
       } else {
         // if leaf, add current
         if (col->type().id() == type_id::STRING) {
@@ -505,7 +564,7 @@ struct parquet_column_view {
                       rmm::cuda_stream_view stream);
 
   column_view leaf_column_view() const;
-  gpu::parquet_column_device_view get_device_view(rmm::cuda_stream_view stream);
+  gpu::parquet_column_device_view get_device_view(rmm::cuda_stream_view stream) const;
 
   column_view cudf_column_view() const { return cudf_col; }
   parquet::Type physical_type() const { return schema_node.type; }
@@ -516,26 +575,6 @@ struct parquet_column_view {
   uint8_t max_def_level() const noexcept { return _max_def_level; }
   uint8_t max_rep_level() const noexcept { return _max_rep_level; }
   bool is_list() const noexcept { return _is_list; }
-
-  // Dictionary related member functions
-  uint32_t* get_dict_data() { return (_dict_data.size()) ? _dict_data.data() : nullptr; }
-  uint32_t* get_dict_index() { return (_dict_index.size()) ? _dict_index.data() : nullptr; }
-  void use_dictionary(bool use_dict) { _dictionary_used = use_dict; }
-  void alloc_dictionary(size_t max_num_rows, rmm::cuda_stream_view stream)
-  {
-    _dict_data.resize(max_num_rows, stream);
-    _dict_index.resize(max_num_rows, stream);
-  }
-  bool check_dictionary_used(rmm::cuda_stream_view stream)
-  {
-    if (!_dictionary_used) {
-      _dict_data.resize(0, stream);
-      _dict_data.shrink_to_fit(stream);
-      _dict_index.resize(0, stream);
-      _dict_index.shrink_to_fit(stream);
-    }
-    return _dictionary_used;
-  }
 
  private:
   // Schema related members
@@ -556,11 +595,6 @@ struct parquet_column_view {
   rmm::device_uvector<uint8_t> _def_level;
   std::vector<uint8_t> _nullability;
   size_type _data_count = 0;
-
-  // Dictionary related members
-  bool _dictionary_used = false;
-  rmm::device_uvector<uint32_t> _dict_data;
-  rmm::device_uvector<uint32_t> _dict_index;
 };
 
 parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
@@ -570,9 +604,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
     _d_nullability(0, stream),
     _dremel_offsets(0, stream),
     _rep_level(0, stream),
-    _def_level(0, stream),
-    _dict_data(0, stream),
-    _dict_index(0, stream)
+    _def_level(0, stream)
 {
   // Construct single inheritance column_view from linked_column_view
   auto curr_col                           = schema_node.leaf_column.get();
@@ -683,20 +715,13 @@ column_view parquet_column_view::leaf_column_view() const
   return col;
 }
 
-gpu::parquet_column_device_view parquet_column_view::get_device_view(rmm::cuda_stream_view stream)
+gpu::parquet_column_device_view parquet_column_view::get_device_view(
+  rmm::cuda_stream_view stream) const
 {
   column_view col  = leaf_column_view();
   auto desc        = gpu::parquet_column_device_view{};  // Zero out all fields
   desc.stats_dtype = schema_node.stats_dtype;
   desc.ts_scale    = schema_node.ts_scale;
-
-  // TODO (dm): Enable dictionary for list and struct after refactor
-  if (physical_type() != BOOLEAN && physical_type() != UNDEFINED_TYPE &&
-      !is_nested(cudf_col.type())) {
-    alloc_dictionary(_data_count, stream);
-    desc.dict_index = get_dict_index();
-    desc.dict_data  = get_dict_data();
-  }
 
   if (is_list()) {
     desc.level_offsets = _dremel_offsets.data();
@@ -705,15 +730,9 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(rmm::cuda_s
   }
   desc.num_rows      = cudf_col.size();
   desc.physical_type = static_cast<uint8_t>(physical_type());
-  auto count_bits    = [](uint16_t number) {
-    int16_t nbits = 0;
-    while (number > 0) {
-      nbits++;
-      number >>= 1;
-    }
-    return nbits;
-  };
-  desc.level_bits  = count_bits(max_rep_level()) << 4 | count_bits(max_def_level());
+
+  desc.level_bits = CompactProtocolReader::NumRequiredBits(max_rep_level()) << 4 |
+                    CompactProtocolReader::NumRequiredBits(max_def_level());
   desc.nullability = _d_nullability.data();
   return desc;
 }
@@ -744,22 +763,99 @@ void writer::impl::gather_fragment_statistics(
   stream.synchronize();
 }
 
-void writer::impl::build_chunk_dictionaries(
-  hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
-  device_span<gpu::parquet_column_device_view const> col_desc,
-  uint32_t num_columns,
-  uint32_t num_dictionaries)
+void writer::impl::init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
+                                   device_span<gpu::parquet_column_device_view const> col_desc,
+                                   uint32_t num_columns)
 {
   chunks.host_to_device(stream);
-  if (num_dictionaries > 0) {
-    size_t dict_scratch_size = (size_t)num_dictionaries * gpu::kDictScratchSize;
-    auto dict_scratch        = cudf::detail::make_zeroed_device_uvector_async<uint32_t>(
-      dict_scratch_size / sizeof(uint32_t), stream);
-
-    gpu::BuildChunkDictionaries(chunks.device_view().flat_view(), dict_scratch.data(), stream);
-  }
-  gpu::InitEncoderPages(chunks, {}, col_desc, num_columns, nullptr, nullptr, stream);
+  gpu::InitEncoderPages(chunks, {}, col_desc, num_columns, nullptr, nullptr, 0, stream);
   chunks.device_to_host(stream, true);
+}
+
+auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
+                              host_span<gpu::parquet_column_device_view const> col_desc,
+                              uint32_t num_rows,
+                              rmm::cuda_stream_view stream)
+{
+  // At this point, we know all chunks and their sizes. We want to allocate dictionaries for each
+  // chunk that can have dictionary
+
+  auto h_chunks = chunks.host_view().flat_view();
+
+  std::vector<rmm::device_uvector<size_type>> dict_data;
+  std::vector<rmm::device_uvector<uint16_t>> dict_index;
+
+  if (h_chunks.size() == 0) { return std::make_pair(std::move(dict_data), std::move(dict_index)); }
+
+  // Allocate slots for each chunk
+  std::vector<rmm::device_uvector<gpu::slot_type>> hash_maps_storage;
+  hash_maps_storage.reserve(h_chunks.size());
+  for (auto& chunk : h_chunks) {
+    if (col_desc[chunk.col_desc_id].physical_type == Type::BOOLEAN) {
+      chunk.use_dictionary = false;
+    } else {
+      chunk.use_dictionary = true;
+      auto& inserted_map   = hash_maps_storage.emplace_back(chunk.num_values, stream);
+      chunk.dict_map_slots = inserted_map.data();
+      chunk.dict_map_size  = inserted_map.size();
+    }
+  }
+
+  chunks.host_to_device(stream);
+
+  gpu::initialize_chunk_hash_maps(chunks.device_view().flat_view(), stream);
+  gpu::populate_chunk_hash_maps(chunks, num_rows, stream);
+
+  chunks.device_to_host(stream, true);
+
+  // Make decision about which chunks have dictionary
+  for (auto& ck : h_chunks) {
+    if (not ck.use_dictionary) { continue; }
+    std::tie(ck.use_dictionary, ck.dict_rle_bits) = [&]() {
+      // calculate size of chunk if dictionary is used
+
+      // If we have N unique values then the idx for the last value is N - 1 and nbits is the number
+      // of bits required to encode indices into the dictionary
+      auto max_dict_index = (ck.num_dict_entries > 0) ? ck.num_dict_entries - 1 : 0;
+      auto nbits          = CompactProtocolReader::NumRequiredBits(max_dict_index);
+
+      // We don't use dictionary if the indices are > 16 bits because that's the maximum bitpacking
+      // bitsize we efficiently support
+      if (nbits > 16) { return std::make_pair(false, 0); }
+
+      // Only these bit sizes are allowed for RLE encoding because it's compute optimized
+      constexpr auto allowed_bitsizes = std::array<size_type, 6>{1, 2, 4, 8, 12, 16};
+
+      // ceil to (1/2/4/8/12/16)
+      auto rle_bits = *std::lower_bound(allowed_bitsizes.begin(), allowed_bitsizes.end(), nbits);
+      auto rle_byte_size = util::div_rounding_up_safe(ck.num_values * rle_bits, 8);
+
+      auto dict_enc_size = ck.uniq_data_size + rle_byte_size;
+
+      bool use_dict = (ck.plain_data_size > dict_enc_size);
+      if (not use_dict) { rle_bits = 0; }
+      return std::make_pair(use_dict, rle_bits);
+    }();
+  }
+
+  // TODO: (enh) Deallocate hash map storage for chunks that don't use dict and clear pointers.
+
+  dict_data.reserve(h_chunks.size());
+  dict_index.reserve(h_chunks.size());
+  for (auto& chunk : h_chunks) {
+    if (not chunk.use_dictionary) { continue; }
+
+    size_t dict_data_size     = std::min(MAX_DICT_SIZE, chunk.dict_map_size);
+    auto& inserted_dict_data  = dict_data.emplace_back(dict_data_size, stream);
+    auto& inserted_dict_index = dict_index.emplace_back(chunk.num_values, stream);
+    chunk.dict_data           = inserted_dict_data.data();
+    chunk.dict_index          = inserted_dict_index.data();
+  }
+  chunks.host_to_device(stream);
+  gpu::collect_map_entries(chunks.device_view().flat_view(), stream);
+  gpu::get_dictionary_indices(chunks.device_view(), num_rows, stream);
+
+  return std::make_pair(std::move(dict_data), std::move(dict_index));
 }
 
 void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
@@ -767,6 +863,7 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& 
                                       device_span<gpu::EncPage> pages,
                                       statistics_chunk* page_stats,
                                       statistics_chunk* frag_stats,
+                                      size_t max_page_comp_data_size,
                                       uint32_t num_columns,
                                       uint32_t num_pages,
                                       uint32_t num_stats_bfr)
@@ -779,6 +876,7 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& 
                    num_columns,
                    (num_stats_bfr) ? page_stats_mrg.data() : nullptr,
                    (num_stats_bfr > num_pages) ? page_stats_mrg.data() + num_pages : nullptr,
+                   max_page_comp_data_size,
                    stream);
   if (num_stats_bfr > 0) {
     detail::merge_group_statistics<detail::io_file_format::PARQUET>(
@@ -795,8 +893,82 @@ void writer::impl::init_encoder_pages(hostdevice_2dvector<gpu::EncColumnChunk>& 
   stream.synchronize();
 }
 
+void snappy_compress(device_span<gpu_inflate_input_s const> comp_in,
+                     device_span<gpu_inflate_status_s> comp_stat,
+                     size_t max_page_uncomp_data_size,
+                     rmm::cuda_stream_view stream)
+{
+  size_t num_comp_pages = comp_in.size();
+  try {
+    size_t temp_size;
+    nvcompStatus_t nvcomp_status = nvcompBatchedSnappyCompressGetTempSize(
+      num_comp_pages, max_page_uncomp_data_size, nvcompBatchedSnappyDefaultOpts, &temp_size);
+
+    CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
+                 "Error in getting snappy compression scratch size");
+
+    // Not needed now but nvcomp API makes no promises about future
+    rmm::device_buffer scratch(temp_size, stream);
+    // Analogous to comp_in.srcDevice
+    rmm::device_uvector<void const*> uncompressed_data_ptrs(num_comp_pages, stream);
+    // Analogous to comp_in.srcSize
+    rmm::device_uvector<size_t> uncompressed_data_sizes(num_comp_pages, stream);
+    // Analogous to comp_in.dstDevice
+    rmm::device_uvector<void*> compressed_data_ptrs(num_comp_pages, stream);
+    // Analogous to comp_stat.bytes_written
+    rmm::device_uvector<size_t> compressed_bytes_written(num_comp_pages, stream);
+    // nvcomp does not currently use comp_in.dstSize. Cannot assume that the output will fit in
+    // the space allocated unless one uses the API nvcompBatchedSnappyCompressGetOutputSize()
+
+    // Prepare the vectors
+    auto comp_it = thrust::make_zip_iterator(uncompressed_data_ptrs.begin(),
+                                             uncompressed_data_sizes.begin(),
+                                             compressed_data_ptrs.begin());
+    thrust::transform(rmm::exec_policy(stream),
+                      comp_in.begin(),
+                      comp_in.end(),
+                      comp_it,
+                      [] __device__(gpu_inflate_input_s in) {
+                        return thrust::make_tuple(in.srcDevice, in.srcSize, in.dstDevice);
+                      });
+    nvcomp_status = nvcompBatchedSnappyCompressAsync(uncompressed_data_ptrs.data(),
+                                                     uncompressed_data_sizes.data(),
+                                                     max_page_uncomp_data_size,
+                                                     num_comp_pages,
+                                                     scratch.data(),  // Not needed rn but future
+                                                     scratch.size(),
+                                                     compressed_data_ptrs.data(),
+                                                     compressed_bytes_written.data(),
+                                                     nvcompBatchedSnappyDefaultOpts,
+                                                     stream.value());
+
+    CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess, "Error in snappy compression");
+
+    // nvcomp also doesn't use comp_out.status . It guarantees that given enough output space,
+    // compression will succeed.
+    // The other `comp_out` field is `reserved` which is for internal cuIO debugging and can be 0.
+    thrust::transform(rmm::exec_policy(stream),
+                      compressed_bytes_written.begin(),
+                      compressed_bytes_written.end(),
+                      comp_stat.begin(),
+                      [] __device__(size_t size) {
+                        gpu_inflate_status_s status{};
+                        status.bytes_written = size;
+                        return status;
+                      });
+    return;
+  } catch (...) {
+    // If we reach this then there was an error in compressing so set an error status for each page
+    thrust::for_each(rmm::exec_policy(stream),
+                     comp_stat.begin(),
+                     comp_stat.end(),
+                     [] __device__(gpu_inflate_status_s & stat) { stat.status = 1; });
+  };
+}
+
 void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                                 device_span<gpu::EncPage> pages,
+                                size_t max_page_uncomp_data_size,
                                 uint32_t pages_in_batch,
                                 uint32_t first_page_in_batch,
                                 uint32_t rowgroups_in_batch,
@@ -823,7 +995,11 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   gpu::EncodePages(batch_pages, comp_in, comp_stat, stream);
   switch (compression_) {
     case parquet::Compression::SNAPPY:
-      CUDA_TRY(gpu_snap(comp_in.data(), comp_stat.data(), pages_in_batch, stream));
+      if (nvcomp_integration::is_stable_enabled()) {
+        snappy_compress(comp_in, comp_stat, max_page_uncomp_data_size, stream);
+      } else {
+        CUDA_TRY(gpu_snap(comp_in.data(), comp_stat.data(), pages_in_batch, stream));
+      }
       break;
     default: break;
   }
@@ -850,6 +1026,8 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
                    rmm::mr::device_memory_resource* mr)
   : _mr(mr),
     stream(stream),
+    max_row_group_size{options.get_row_group_size_bytes()},
+    max_row_group_rows{options.get_row_group_size_rows()},
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
@@ -869,6 +1047,8 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
                    rmm::mr::device_memory_resource* mr)
   : _mr(mr),
     stream(stream),
+    max_row_group_size{options.get_row_group_size_bytes()},
+    max_row_group_rows{options.get_row_group_size_rows()},
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
@@ -959,10 +1139,8 @@ void writer::impl::write(table_view const& table)
 
   // Initialize column description
   hostdevice_vector<gpu::parquet_column_device_view> col_desc(parquet_columns.size(), stream);
-  // This should've been `auto const&` but isn't since dictionary space is allocated when calling
-  // get_device_view(). Fix during dictionary refactor.
   std::transform(
-    parquet_columns.begin(), parquet_columns.end(), col_desc.host_ptr(), [&](auto& pcol) {
+    parquet_columns.begin(), parquet_columns.end(), col_desc.host_ptr(), [&](auto const& pcol) {
       return pcol.get_device_view(stream);
     });
 
@@ -973,11 +1151,8 @@ void writer::impl::write(table_view const& table)
   // ideally want the page size to be below 1MB so as to have enough pages to get good
   // compression/decompression performance).
   using cudf::io::parquet::gpu::max_page_fragment_size;
-  constexpr uint32_t fragment_size = 5000;
-  static_assert(fragment_size <= max_page_fragment_size,
-                "fragment size cannot be greater than max_page_fragment_size");
 
-  uint32_t num_fragments = (uint32_t)((num_rows + fragment_size - 1) / fragment_size);
+  size_type const num_fragments = (num_rows + max_page_fragment_size - 1) / max_page_fragment_size;
   cudf::detail::hostdevice_2dvector<gpu::PageFragment> fragments(
     num_columns, num_fragments, stream);
 
@@ -987,26 +1162,26 @@ void writer::impl::write(table_view const& table)
     leaf_column_views = create_leaf_column_device_views<gpu::parquet_column_device_view>(
       col_desc, *parent_column_table_device_view, stream);
 
-    init_page_fragments(fragments, col_desc, num_rows, fragment_size);
+    init_page_fragments(fragments, col_desc, num_rows, max_page_fragment_size);
   }
 
-  size_t global_rowgroup_base = md.row_groups.size();
+  auto const global_rowgroup_base = static_cast<size_type>(md.row_groups.size());
 
   // Decide row group boundaries based on uncompressed data size
-  size_t rowgroup_size   = 0;
-  uint32_t num_rowgroups = 0;
-  for (uint32_t f = 0, global_r = global_rowgroup_base, rowgroup_start = 0; f < num_fragments;
-       f++) {
-    size_t fragment_data_size = 0;
+  auto rowgroup_size = 0ul;
+  auto num_rowgroups = 0;
+  for (auto f = 0, global_r = global_rowgroup_base, rowgroup_start = 0; f < num_fragments; f++) {
+    auto fragment_data_size = 0ul;
     // Replace with STL algorithm to transform and sum
     for (auto i = 0; i < num_columns; i++) {
       fragment_data_size += fragments[i][f].fragment_data_size;
     }
-    if (f > rowgroup_start && (rowgroup_size + fragment_data_size > max_rowgroup_size_ ||
-                               (f + 1 - rowgroup_start) * fragment_size > max_rowgroup_rows_)) {
+    if (f > rowgroup_start &&
+        (rowgroup_size + fragment_data_size > max_row_group_size ||
+         (f + 1 - rowgroup_start) * max_page_fragment_size > max_row_group_rows)) {
       // update schema
       md.row_groups.resize(md.row_groups.size() + 1);
-      md.row_groups[global_r++].num_rows = (f - rowgroup_start) * fragment_size;
+      md.row_groups[global_r++].num_rows = (f - rowgroup_start) * max_page_fragment_size;
       num_rowgroups++;
       rowgroup_start = f;
       rowgroup_size  = 0;
@@ -1015,7 +1190,7 @@ void writer::impl::write(table_view const& table)
     if (f + 1 == num_fragments) {
       // update schema
       md.row_groups.resize(md.row_groups.size() + 1);
-      md.row_groups[global_r++].num_rows = num_rows - rowgroup_start * fragment_size;
+      md.row_groups[global_r++].num_rows = num_rows - rowgroup_start * max_page_fragment_size;
       num_rowgroups++;
     }
   }
@@ -1031,22 +1206,21 @@ void writer::impl::write(table_view const& table)
     }
   }
   // Initialize row groups and column chunks
-  uint32_t num_chunks = num_rowgroups * num_columns;
+  auto const num_chunks = num_rowgroups * num_columns;
   hostdevice_2dvector<gpu::EncColumnChunk> chunks(num_rowgroups, num_columns, stream);
-  uint32_t num_dictionaries = 0;
-  for (uint32_t r = 0, global_r = global_rowgroup_base, f = 0, start_row = 0; r < num_rowgroups;
+  for (auto r = 0, global_r = global_rowgroup_base, f = 0, start_row = 0; r < num_rowgroups;
        r++, global_r++) {
-    uint32_t fragments_in_chunk =
-      (uint32_t)((md.row_groups[global_r].num_rows + fragment_size - 1) / fragment_size);
+    size_type const fragments_in_chunk =
+      (md.row_groups[global_r].num_rows + max_page_fragment_size - 1) / max_page_fragment_size;
     md.row_groups[global_r].total_byte_size = 0;
     md.row_groups[global_r].columns.resize(num_columns);
-    for (int i = 0; i < num_columns; i++) {
+    for (auto i = 0; i < num_columns; i++) {
       gpu::EncColumnChunk* ck = &chunks[r][i];
-      bool dict_enable        = false;
 
-      *ck           = {};
-      ck->col_desc  = col_desc.device_ptr() + i;
-      ck->fragments = &fragments.device_view()[i][f];
+      *ck             = {};
+      ck->col_desc    = col_desc.device_ptr() + i;
+      ck->col_desc_id = i;
+      ck->fragments   = &fragments.device_view()[i][f];
       ck->stats = (frag_stats.size() != 0) ? frag_stats.data() + i * num_fragments + f : nullptr;
       ck->start_row        = start_row;
       ck->num_rows         = (uint32_t)md.row_groups[global_r].num_rows;
@@ -1056,30 +1230,12 @@ void writer::impl::write(table_view const& table)
         std::accumulate(chunk_fragments.begin(), chunk_fragments.end(), 0, [](uint32_t l, auto r) {
           return l + r.num_values;
         });
-      ck->dictionary_id = num_dictionaries;
-      if (col_desc[i].dict_data) {
-        size_t plain_size      = 0;
-        size_t dict_size       = 1;
-        uint32_t num_dict_vals = 0;
-        for (uint32_t j = 0; j < fragments_in_chunk && num_dict_vals < 65536; j++) {
-          plain_size += chunk_fragments[j].fragment_data_size;
-          dict_size += chunk_fragments[j].dict_data_size +
-                       ((num_dict_vals > 256) ? 2 : 1) * chunk_fragments[j].non_nulls;
-          num_dict_vals += chunk_fragments[j].num_dict_vals;
-        }
-        if (dict_size < plain_size) {
-          parquet_columns[i].use_dictionary(true);
-          dict_enable = true;
-          num_dictionaries++;
-        }
-      }
-      ck->has_dictionary                                     = dict_enable;
+      ck->plain_data_size = std::accumulate(
+        chunk_fragments.begin(), chunk_fragments.end(), 0, [](int sum, gpu::PageFragment frag) {
+          return sum + frag.fragment_data_size;
+        });
       md.row_groups[global_r].columns[i].meta_data.type      = parquet_columns[i].physical_type();
       md.row_groups[global_r].columns[i].meta_data.encodings = {Encoding::PLAIN, Encoding::RLE};
-      if (dict_enable) {
-        md.row_groups[global_r].columns[i].meta_data.encodings.push_back(
-          Encoding::PLAIN_DICTIONARY);
-      }
       md.row_groups[global_r].columns[i].meta_data.path_in_schema =
         parquet_columns[i].get_path_in_schema();
       md.row_groups[global_r].columns[i].meta_data.codec      = UNCOMPRESSED;
@@ -1089,26 +1245,49 @@ void writer::impl::write(table_view const& table)
     start_row += (uint32_t)md.row_groups[global_r].num_rows;
   }
 
-  // Free unused dictionaries
-  for (auto& col : parquet_columns) {
-    col.check_dictionary_used(stream);
+  auto dict_info_owner = build_chunk_dictionaries(chunks, col_desc, num_rows, stream);
+  for (auto rg = 0, global_rg = global_rowgroup_base; rg < num_rowgroups; rg++, global_rg++) {
+    for (auto col = 0; col < num_columns; col++) {
+      if (chunks.host_view()[rg][col].use_dictionary) {
+        md.row_groups[global_rg].columns[col].meta_data.encodings.push_back(
+          Encoding::PLAIN_DICTIONARY);
+      }
+    }
   }
 
   // Build chunk dictionaries and count pages
-  if (num_chunks != 0) {
-    build_chunk_dictionaries(chunks, col_desc, num_columns, num_dictionaries);
+  if (num_chunks != 0) { init_page_sizes(chunks, col_desc, num_columns); }
+
+  // Get the maximum page size across all chunks
+  size_type max_page_uncomp_data_size =
+    std::accumulate(chunks.host_view().flat_view().begin(),
+                    chunks.host_view().flat_view().end(),
+                    0,
+                    [](uint32_t max_page_size, gpu::EncColumnChunk const& chunk) {
+                      return std::max(max_page_size, chunk.max_page_data_size);
+                    });
+
+  size_t max_page_comp_data_size = 0;
+  if (compression_ != parquet::Compression::UNCOMPRESSED) {
+    auto status = nvcompBatchedSnappyCompressGetMaxOutputChunkSize(
+      max_page_uncomp_data_size, nvcompBatchedSnappyDefaultOpts, &max_page_comp_data_size);
+    CUDF_EXPECTS(status == nvcompStatus_t::nvcompSuccess,
+                 "Error in getting compressed size from nvcomp");
   }
 
   // Initialize batches of rowgroups to encode (mainly to limit peak memory usage)
-  std::vector<uint32_t> batch_list;
-  uint32_t num_pages          = 0;
-  size_t max_bytes_in_batch   = 1024 * 1024 * 1024;  // 1GB - TBD: Tune this
-  size_t max_uncomp_bfr_size  = 0;
-  size_t max_chunk_bfr_size   = 0;
-  uint32_t max_pages_in_batch = 0;
-  size_t bytes_in_batch       = 0;
-  for (uint32_t r = 0, groups_in_batch = 0, pages_in_batch = 0; r <= num_rowgroups; r++) {
-    size_t rowgroup_size = 0;
+  std::vector<size_type> batch_list;
+  size_type num_pages          = 0;
+  size_t max_bytes_in_batch    = 1024 * 1024 * 1024;  // 1GB - TODO: Tune this
+  size_t max_uncomp_bfr_size   = 0;
+  size_t max_comp_bfr_size     = 0;
+  size_t max_chunk_bfr_size    = 0;
+  size_type max_pages_in_batch = 0;
+  size_t bytes_in_batch        = 0;
+  size_t comp_bytes_in_batch   = 0;
+  for (size_type r = 0, groups_in_batch = 0, pages_in_batch = 0; r <= num_rowgroups; r++) {
+    size_t rowgroup_size      = 0;
+    size_t comp_rowgroup_size = 0;
     if (r < num_rowgroups) {
       for (int i = 0; i < num_columns; i++) {
         gpu::EncColumnChunk* ck = &chunks[r][i];
@@ -1116,6 +1295,9 @@ void writer::impl::write(table_view const& table)
         num_pages += ck->num_pages;
         pages_in_batch += ck->num_pages;
         rowgroup_size += ck->bfr_size;
+        ck->compressed_size =
+          ck->ck_stat_size + ck->page_headers_size + max_page_comp_data_size * ck->num_pages;
+        comp_rowgroup_size += ck->compressed_size;
         max_chunk_bfr_size =
           std::max(max_chunk_bfr_size, (size_t)std::max(ck->bfr_size, ck->compressed_size));
       }
@@ -1124,23 +1306,25 @@ void writer::impl::write(table_view const& table)
     if ((r == num_rowgroups) ||
         (groups_in_batch != 0 && bytes_in_batch + rowgroup_size > max_bytes_in_batch)) {
       max_uncomp_bfr_size = std::max(max_uncomp_bfr_size, bytes_in_batch);
+      max_comp_bfr_size   = std::max(max_comp_bfr_size, comp_bytes_in_batch);
       max_pages_in_batch  = std::max(max_pages_in_batch, pages_in_batch);
       if (groups_in_batch != 0) {
         batch_list.push_back(groups_in_batch);
         groups_in_batch = 0;
       }
-      bytes_in_batch = 0;
-      pages_in_batch = 0;
+      bytes_in_batch      = 0;
+      comp_bytes_in_batch = 0;
+      pages_in_batch      = 0;
     }
     bytes_in_batch += rowgroup_size;
+    comp_bytes_in_batch += comp_rowgroup_size;
     groups_in_batch++;
   }
 
+  // Clear compressed buffer size if compression has been turned off
+  if (compression_ == parquet::Compression::UNCOMPRESSED) { max_comp_bfr_size = 0; }
+
   // Initialize data pointers in batch
-  size_t max_comp_bfr_size =
-    (compression_ != parquet::Compression::UNCOMPRESSED)
-      ? gpu::GetMaxCompressedBfrSize(max_uncomp_bfr_size, max_pages_in_batch)
-      : 0;
   uint32_t num_stats_bfr =
     (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_pages + num_chunks : 0;
   rmm::device_buffer uncomp_bfr(max_uncomp_bfr_size, stream);
@@ -1149,11 +1333,11 @@ void writer::impl::write(table_view const& table)
 
   // This contains stats for both the pages and the rowgroups. TODO: make them separate.
   rmm::device_uvector<statistics_chunk> page_stats(num_stats_bfr, stream);
-  for (uint32_t b = 0, r = 0; b < (uint32_t)batch_list.size(); b++) {
-    uint8_t* bfr   = static_cast<uint8_t*>(uncomp_bfr.data());
-    uint8_t* bfr_c = static_cast<uint8_t*>(comp_bfr.data());
-    for (uint32_t j = 0; j < batch_list[b]; j++, r++) {
-      for (int i = 0; i < num_columns; i++) {
+  for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
+    auto bfr   = static_cast<uint8_t*>(uncomp_bfr.data());
+    auto bfr_c = static_cast<uint8_t*>(comp_bfr.data());
+    for (auto j = 0; j < batch_list[b]; j++, r++) {
+      for (auto i = 0; i < num_columns; i++) {
         gpu::EncColumnChunk* ck = &chunks[r][i];
         ck->uncompressed_bfr    = bfr;
         ck->compressed_bfr      = bfr_c;
@@ -1169,6 +1353,7 @@ void writer::impl::write(table_view const& table)
                        {pages.data(), pages.size()},
                        (num_stats_bfr) ? page_stats.data() : nullptr,
                        (num_stats_bfr) ? frag_stats.data() : nullptr,
+                       max_page_comp_data_size,
                        num_columns,
                        num_pages,
                        num_stats_bfr);
@@ -1177,18 +1362,20 @@ void writer::impl::write(table_view const& table)
   pinned_buffer<uint8_t> host_bfr{nullptr, cudaFreeHost};
 
   // Encode row groups in batches
-  for (uint32_t b = 0, r = 0, global_r = global_rowgroup_base; b < (uint32_t)batch_list.size();
+  for (auto b = 0, r = 0, global_r = global_rowgroup_base;
+       b < static_cast<size_type>(batch_list.size());
        b++) {
     // Count pages in this batch
-    uint32_t rnext               = r + batch_list[b];
-    uint32_t first_page_in_batch = chunks[r][0].first_page;
-    uint32_t first_page_in_next_batch =
+    auto const rnext               = r + batch_list[b];
+    auto const first_page_in_batch = chunks[r][0].first_page;
+    auto const first_page_in_next_batch =
       (rnext < num_rowgroups) ? chunks[rnext][0].first_page : num_pages;
-    uint32_t pages_in_batch = first_page_in_next_batch - first_page_in_batch;
+    auto const pages_in_batch = first_page_in_next_batch - first_page_in_batch;
     // device_span<gpu::EncPage> batch_pages{pages.data() + first_page_in_batch, }
     encode_pages(
       chunks,
       {pages.data(), pages.size()},
+      max_page_uncomp_data_size,
       pages_in_batch,
       first_page_in_batch,
       batch_list[b],
@@ -1196,6 +1383,7 @@ void writer::impl::write(table_view const& table)
       (stats_granularity_ == statistics_freq::STATISTICS_PAGE) ? page_stats.data() : nullptr,
       (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? page_stats.data() + num_pages
                                                                : nullptr);
+    std::vector<std::future<void>> write_tasks;
     for (; r < rnext; r++, global_r++) {
       for (auto i = 0; i < num_columns; i++) {
         gpu::EncColumnChunk* ck = &chunks[r][i];
@@ -1209,7 +1397,8 @@ void writer::impl::write(table_view const& table)
 
         if (out_sink_->is_device_write_preferred(ck->compressed_size)) {
           // let the writer do what it wants to retrieve the data from the gpu.
-          out_sink_->device_write(dev_bfr + ck->ck_stat_size, ck->compressed_size, stream);
+          write_tasks.push_back(
+            out_sink_->device_write_async(dev_bfr + ck->ck_stat_size, ck->compressed_size, stream));
           // we still need to do a (much smaller) memcpy for the statistics.
           if (ck->ck_stat_size != 0) {
             md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
@@ -1247,13 +1436,16 @@ void writer::impl::write(table_view const& table)
         }
         md.row_groups[global_r].total_byte_size += ck->compressed_size;
         md.row_groups[global_r].columns[i].meta_data.data_page_offset =
-          current_chunk_offset + ((ck->has_dictionary) ? ck->dictionary_size : 0);
+          current_chunk_offset + ((ck->use_dictionary) ? ck->dictionary_size : 0);
         md.row_groups[global_r].columns[i].meta_data.dictionary_page_offset =
-          (ck->has_dictionary) ? current_chunk_offset : 0;
+          (ck->use_dictionary) ? current_chunk_offset : 0;
         md.row_groups[global_r].columns[i].meta_data.total_uncompressed_size = ck->bfr_size;
         md.row_groups[global_r].columns[i].meta_data.total_compressed_size   = ck->compressed_size;
         current_chunk_offset += ck->compressed_size;
       }
+    }
+    for (auto const& task : write_tasks) {
+      task.wait();
     }
   }
 }
@@ -1325,7 +1517,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::close(std::string const& column_ch
   return _impl->close(column_chunks_file_path);
 }
 
-std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
+std::unique_ptr<std::vector<uint8_t>> writer::merge_row_group_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list)
 {
   std::vector<uint8_t> output;

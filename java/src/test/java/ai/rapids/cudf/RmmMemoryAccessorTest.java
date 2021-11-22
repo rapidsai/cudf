@@ -63,7 +63,7 @@ class RmmMemoryAccessorTest extends CudfTestBase {
       Rmm.shutdown();
     }
     assertFalse(Rmm.isInitialized());
-    Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, true, -1);
+    Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, Rmm.logToStderr(), -1);
     assertTrue(Rmm.isInitialized());
     Rmm.shutdown();
     assertFalse(Rmm.isInitialized());
@@ -74,7 +74,7 @@ class RmmMemoryAccessorTest extends CudfTestBase {
     if (Rmm.isInitialized()) {
       Rmm.shutdown();
     }
-    Rmm.initialize(RmmAllocationMode.POOL, false, 2048);
+    Rmm.initialize(RmmAllocationMode.POOL, Rmm.logToStderr(), 2048);
     try (DeviceMemoryBuffer buffer = DeviceMemoryBuffer.allocate(1024)) {
       assertThrows(RmmException.class, () -> Rmm.shutdown(500, 2000, TimeUnit.MILLISECONDS));
     }
@@ -91,9 +91,9 @@ class RmmMemoryAccessorTest extends CudfTestBase {
   @Test
   public void doubleInitFails() {
     if (!Rmm.isInitialized()) {
-      Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, false, 0);
+      Rmm.initialize(RmmAllocationMode.CUDA_DEFAULT, Rmm.logToStderr(), 0);
     }
     assertThrows(IllegalStateException.class,
-        () -> Rmm.initialize(RmmAllocationMode.POOL, false, 1024 * 1024));
+        () -> Rmm.initialize(RmmAllocationMode.POOL, Rmm.logToStderr(), 1024 * 1024));
   }
 }

@@ -68,7 +68,9 @@ struct typed_casted_writer {
     if constexpr (mutable_column_device_view::has_element_accessor<Element>() and
                   std::is_constructible_v<Element, FromType>) {
       col.element<Element>(i) = static_cast<Element>(val);
-    } else if constexpr (is_fixed_point<Element>() and std::is_constructible_v<Element, FromType>) {
+    } else if constexpr (is_fixed_point<Element>() and
+                         (is_fixed_point<FromType>() or
+                          std::is_constructible_v<Element, FromType>)) {
       if constexpr (is_fixed_point<FromType>())
         col.data<Element::rep>()[i] = val.rescaled(numeric::scale_type{col.type().scale()}).value();
       else
@@ -115,7 +117,7 @@ struct ops_wrapper {
         } else {
           return BinaryOperator{}.template operator()<TypeCommon, TypeCommon>(x, y);
         }
-        // To supress nvcc warning
+        // To suppress nvcc warning
         return std::invoke_result_t<BinaryOperator, TypeCommon, TypeCommon>{};
       }();
       if constexpr (is_bool_result<BinaryOperator, TypeCommon, TypeCommon>())
@@ -162,7 +164,7 @@ struct ops2_wrapper {
         } else {
           return BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(x, y);
         }
-        // To supress nvcc warning
+        // To suppress nvcc warning
         return std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>{};
       }();
       if constexpr (is_bool_result<BinaryOperator, TypeLhs, TypeRhs>())

@@ -5,7 +5,7 @@ from numba import cuda, types
 from numba.cuda import compile_ptx
 
 from cudf import NA
-from cudf.core.udf.classes import Masked
+from cudf.core.udf.api import Masked
 from cudf.core.udf.typing import MaskedType
 
 arith_ops = (

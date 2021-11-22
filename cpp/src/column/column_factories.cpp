@@ -68,6 +68,9 @@ std::unique_ptr<column> make_empty_column(data_type type)
   return std::make_unique<column>(type, 0, rmm::device_buffer{});
 }
 
+// Empty column of specified type id
+std::unique_ptr<column> make_empty_column(type_id id) { return make_empty_column(data_type{id}); }
+
 // Allocate storage for a specified number of numeric elements
 std::unique_ptr<column> make_numeric_column(data_type type,
                                             size_type size,
@@ -163,8 +166,8 @@ std::unique_ptr<column> make_dictionary_from_scalar(scalar const& s,
                                                     rmm::cuda_stream_view stream,
                                                     rmm::mr::device_memory_resource* mr)
 {
-  if (size == 0) return make_empty_column(data_type{type_id::DICTIONARY32});
-  CUDF_EXPECTS(s.is_valid(), "cannot create a dictionary with a null key");
+  if (size == 0) return make_empty_column(type_id::DICTIONARY32);
+  CUDF_EXPECTS(s.is_valid(stream), "cannot create a dictionary with a null key");
   return make_dictionary_column(
     make_column_from_scalar(s, 1, stream, mr),
     make_column_from_scalar(numeric_scalar<uint32_t>(0), size, stream, mr),

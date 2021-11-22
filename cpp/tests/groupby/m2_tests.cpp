@@ -44,7 +44,7 @@ auto compute_M2(cudf::column_view const& keys, cudf::column_view const& values)
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
   requests[0].values = values;
-  requests[0].aggregations.emplace_back(cudf::make_m2_aggregation());
+  requests[0].aggregations.emplace_back(cudf::make_m2_aggregation<cudf::groupby_aggregation>());
 
   auto gb_obj = cudf::groupby::groupby(cudf::table_view({keys}));
   auto result = gb_obj.aggregate(requests);

@@ -68,7 +68,7 @@ struct parse_options {
   cudf::detail::optional_trie trie_na;
   bool multi_delimiter;
 
-  parse_options_view view()
+  parse_options_view view() const
   {
     return {delimiter,
             terminator,
@@ -159,6 +159,7 @@ constexpr bool is_infinity(char const* begin, char const* end)
  * @param begin Pointer to the first element of the string
  * @param end Pointer to the first element after the string
  * @param opts The global parsing behavior options
+ * @param error_result Value to return on parse error
  * @tparam base Base (radix) to use for conversion
  *
  * @return The parsed and converted value
@@ -252,7 +253,7 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
   bool quotation   = false;
   auto current     = begin;
   bool escape_next = false;
-  while (true) {
+  while (current < end) {
     // Use simple logic to ignore control chars between any quote seq
     // Handles nominal cases including doublequotes within quotes, but
     // may not output exact failures as PANDAS for malformed fields.
@@ -262,7 +263,7 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
       quotation = !quotation;
     } else if (!quotation) {
       if (*current == opts.delimiter) {
-        while (opts.multi_delimiter && current < end && *(current + 1) == opts.delimiter) {
+        while (opts.multi_delimiter && (current + 1 < end) && *(current + 1) == opts.delimiter) {
           ++current;
         }
         break;
@@ -283,8 +284,7 @@ __device__ __inline__ char const* seek_field_end(char const* begin,
       }
     }
 
-    if (current >= end) break;
-    current++;
+    if (current < end) { current++; }
   }
   return current;
 }
@@ -391,8 +391,8 @@ __device__ __inline__ cudf::size_type* infer_integral_field_counter(char const* 
  * @return cudf::size_type total number of occurrences
  */
 template <class T>
-cudf::size_type find_all_from_set(const rmm::device_buffer& d_data,
-                                  const std::vector<char>& keys,
+cudf::size_type find_all_from_set(device_span<char const> data,
+                                  std::vector<char> const& keys,
                                   uint64_t result_offset,
                                   T* positions,
                                   rmm::cuda_stream_view stream);
@@ -415,8 +415,7 @@ cudf::size_type find_all_from_set(const rmm::device_buffer& d_data,
  * @return cudf::size_type total number of occurrences
  */
 template <class T>
-cudf::size_type find_all_from_set(const char* h_data,
-                                  size_t h_size,
+cudf::size_type find_all_from_set(host_span<char const> data,
                                   const std::vector<char>& keys,
                                   uint64_t result_offset,
                                   T* positions,
@@ -432,8 +431,8 @@ cudf::size_type find_all_from_set(const char* h_data,
  *
  * @return cudf::size_type total number of occurrences
  */
-cudf::size_type count_all_from_set(const rmm::device_buffer& d_data,
-                                   const std::vector<char>& keys,
+cudf::size_type count_all_from_set(device_span<char const> data,
+                                   std::vector<char> const& keys,
                                    rmm::cuda_stream_view stream);
 
 /**
@@ -450,28 +449,9 @@ cudf::size_type count_all_from_set(const rmm::device_buffer& d_data,
  *
  * @return cudf::size_type total number of occurrences
  */
-cudf::size_type count_all_from_set(const char* h_data,
-                                   size_t h_size,
+cudf::size_type count_all_from_set(host_span<char const> data,
                                    const std::vector<char>& keys,
                                    rmm::cuda_stream_view stream);
-
-/**
- * @brief Infer file compression type based on user supplied arguments.
- *
- * If the user specifies a valid compression_type for compression arg,
- * compression type will be computed based on that.  Otherwise the filename
- * and ext_to_comp_map will be used.
- *
- * @param[in] compression_arg User specified compression type (if any)
- * @param[in] filename Filename to base compression type (by extension) on
- * @param[in] ext_to_comp_map User supplied mapping of file extension to compression type
- *
- * @return string representing compression type ("gzip, "bz2", etc)
- */
-std::string infer_compression_type(
-  const compression_type& compression_arg,
-  const std::string& filename,
-  const std::vector<std::pair<std::string, std::string>>& ext_to_comp_map);
 
 /**
  * @brief Checks whether the given character is a whitespace character.
@@ -518,7 +498,7 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quote
  * @brief Excludes the prefix from the input range if the string starts with the prefix.
  *
  * @tparam N length on the prefix, plus one
- * @param begin[in, out] Pointer to the first element of the string
+ * @param[in, out] begin Pointer to the first element of the string
  * @param end Pointer to the first element after the string
  * @param prefix String we're searching for at the start of the input range
  */

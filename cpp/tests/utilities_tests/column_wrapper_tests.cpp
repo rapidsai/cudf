@@ -32,7 +32,7 @@ struct FixedWidthColumnWrapperTest : public cudf::test::BaseFixture,
   auto data_type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
-TYPED_TEST_CASE(FixedWidthColumnWrapperTest, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(FixedWidthColumnWrapperTest, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(FixedWidthColumnWrapperTest, EmptyIterator)
 {
@@ -229,7 +229,7 @@ struct StringsColumnWrapperTest : public cudf::test::BaseFixture,
   auto data_type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
-TYPED_TEST_CASE(StringsColumnWrapperTest, cudf::test::StringTypes);
+TYPED_TEST_SUITE(StringsColumnWrapperTest, cudf::test::StringTypes);
 
 TYPED_TEST(StringsColumnWrapperTest, EmptyList)
 {

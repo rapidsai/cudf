@@ -60,7 +60,7 @@ using FixedWidthTypesNotBool = cudf::test::Concat<cudf::test::IntegralTypesNotBo
                                                   cudf::test::DurationTypes,
                                                   cudf::test::TimestampTypes>;
 
-TYPED_TEST_CASE(TypedStructColumnWrapperTest, FixedWidthTypesNotBool);
+TYPED_TEST_SUITE(TypedStructColumnWrapperTest, FixedWidthTypesNotBool);
 
 // Test simple struct construction without nullmask, through column factory.
 // Columns must retain their originally set values.
@@ -433,11 +433,6 @@ TYPED_TEST(TypedStructColumnWrapperTest, TestListsOfStructs)
 
   cudf::test::expect_columns_equivalent(expected_unchanged_struct_col,
                                         cudf::lists_column_view(*list_col).child());
-
-#ifndef NDEBUG
-  std::cout << "Printing list col: \n";
-  cudf::test::print(*list_col);
-#endif
 }
 
 TYPED_TEST(TypedStructColumnWrapperTest, ListOfStructOfList)

@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -341,6 +343,13 @@ public class HostColumnVectorCore implements AutoCloseable {
     } else if (type.typeId == DType.DTypeEnum.DECIMAL64) {
       long unscaledValue = offHeap.data.getLong(index * type.getSizeInBytes());
       return BigDecimal.valueOf(unscaledValue, -type.getScale());
+    } else if (type.typeId == DType.DTypeEnum.DECIMAL128) {
+      int sizeInBytes = DType.DTypeEnum.DECIMAL128.sizeInBytes;
+      byte[] dst = new byte[sizeInBytes];
+      // We need to switch the endianness for decimal128 byte arrays between java and native code.
+      offHeap.data.getBytes(dst, 0, (index * sizeInBytes), sizeInBytes);
+      convertInPlaceToBigEndian(dst);
+      return new BigDecimal(new BigInteger(dst), -type.getScale());
     } else {
       throw new IllegalStateException(type + " is not a supported decimal type.");
     }
@@ -534,6 +543,34 @@ public class HostColumnVectorCore implements AutoCloseable {
         '}';
   }
 
+  protected static byte[] convertDecimal128FromJavaToCudf(byte[] bytes) {
+    byte[] finalBytes = new byte[DType.DTypeEnum.DECIMAL128.sizeInBytes];
+    byte lastByte = bytes[0];
+    //Convert to 2's complement representation and make sure the sign bit is extended correctly
+    byte setByte = (lastByte & 0x80) > 0 ? (byte)0xff : (byte)0x00;
+    for(int i = bytes.length; i < finalBytes.length; i++) {
+      finalBytes[i] = setByte;
+    }
+    // After setting the sign bits, reverse the rest of the bytes for endianness
+    for(int k = 0; k < bytes.length; k++) {
+      finalBytes[k] = bytes[bytes.length - k - 1];
+    }
+    return finalBytes;
+  }
+
+  private void convertInPlaceToBigEndian(byte[] dst) {
+    assert ByteOrder.nativeOrder().equals(ByteOrder.LITTLE_ENDIAN);
+    int i =0;
+    int j = dst.length -1;
+    while (j > i) {
+      byte tmp;
+      tmp = dst[j];
+      dst[j] = dst[i];
+      dst[i] = tmp;
+      j--;
+      i++;
+    }
+  }
   /////////////////////////////////////////////////////////////////////////////
   // HELPER CLASSES
   /////////////////////////////////////////////////////////////////////////////

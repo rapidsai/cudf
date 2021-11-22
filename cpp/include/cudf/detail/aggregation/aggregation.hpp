@@ -91,6 +91,14 @@ class simple_aggregations_collector {  // Declares the interface for the simple 
                                                           class merge_sets_aggregation const& agg);
   virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
                                                           class merge_m2_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class covariance_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class correlation_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(data_type col_type,
+                                                          class tdigest_aggregation const& agg);
+  virtual std::vector<std::unique_ptr<aggregation>> visit(
+    data_type col_type, class merge_tdigest_aggregation const& agg);
 };
 
 class aggregation_finalizer {  // Declares the interface for the finalizer
@@ -125,12 +133,18 @@ class aggregation_finalizer {  // Declares the interface for the finalizer
   virtual void visit(class merge_lists_aggregation const& agg);
   virtual void visit(class merge_sets_aggregation const& agg);
   virtual void visit(class merge_m2_aggregation const& agg);
+  virtual void visit(class covariance_aggregation const& agg);
+  virtual void visit(class correlation_aggregation const& agg);
+  virtual void visit(class tdigest_aggregation const& agg);
+  virtual void visit(class merge_tdigest_aggregation const& agg);
 };
 
 /**
  * @brief Derived class for specifying a sum aggregation
  */
-class sum_aggregation final : public rolling_aggregation {
+class sum_aggregation final : public rolling_aggregation,
+                              public groupby_aggregation,
+                              public groupby_scan_aggregation {
  public:
   sum_aggregation() : aggregation(SUM) {}
 
@@ -149,7 +163,7 @@ class sum_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying a product aggregation
  */
-class product_aggregation final : public aggregation {
+class product_aggregation final : public groupby_aggregation {
  public:
   product_aggregation() : aggregation(PRODUCT) {}
 
@@ -168,7 +182,9 @@ class product_aggregation final : public aggregation {
 /**
  * @brief Derived class for specifying a min aggregation
  */
-class min_aggregation final : public rolling_aggregation {
+class min_aggregation final : public rolling_aggregation,
+                              public groupby_aggregation,
+                              public groupby_scan_aggregation {
  public:
   min_aggregation() : aggregation(MIN) {}
 
@@ -187,7 +203,9 @@ class min_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying a max aggregation
  */
-class max_aggregation final : public rolling_aggregation {
+class max_aggregation final : public rolling_aggregation,
+                              public groupby_aggregation,
+                              public groupby_scan_aggregation {
  public:
   max_aggregation() : aggregation(MAX) {}
 
@@ -206,7 +224,9 @@ class max_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying a count aggregation
  */
-class count_aggregation final : public rolling_aggregation {
+class count_aggregation final : public rolling_aggregation,
+                                public groupby_aggregation,
+                                public groupby_scan_aggregation {
  public:
   count_aggregation(aggregation::Kind kind) : aggregation(kind) {}
 
@@ -263,7 +283,7 @@ class all_aggregation final : public aggregation {
 /**
  * @brief Derived class for specifying a sum_of_squares aggregation
  */
-class sum_of_squares_aggregation final : public aggregation {
+class sum_of_squares_aggregation final : public groupby_aggregation {
  public:
   sum_of_squares_aggregation() : aggregation(SUM_OF_SQUARES) {}
 
@@ -282,7 +302,7 @@ class sum_of_squares_aggregation final : public aggregation {
 /**
  * @brief Derived class for specifying a mean aggregation
  */
-class mean_aggregation final : public rolling_aggregation {
+class mean_aggregation final : public rolling_aggregation, public groupby_aggregation {
  public:
   mean_aggregation() : aggregation(MEAN) {}
 
@@ -301,7 +321,7 @@ class mean_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying a m2 aggregation
  */
-class m2_aggregation : public aggregation {
+class m2_aggregation : public groupby_aggregation {
  public:
   m2_aggregation() : aggregation{M2} {}
 
@@ -320,7 +340,7 @@ class m2_aggregation : public aggregation {
 /**
  * @brief Derived class for specifying a standard deviation/variance aggregation
  */
-class std_var_aggregation : public aggregation {
+class std_var_aggregation : public rolling_aggregation, public groupby_aggregation {
  public:
   size_type _ddof;  ///< Delta degrees of freedom
 
@@ -334,12 +354,11 @@ class std_var_aggregation : public aggregation {
   size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
 
  protected:
-  std_var_aggregation(aggregation::Kind k, size_type ddof) : aggregation(k), _ddof{ddof}
+  std_var_aggregation(aggregation::Kind k, size_type ddof) : rolling_aggregation(k), _ddof{ddof}
   {
     CUDF_EXPECTS(k == aggregation::STD or k == aggregation::VARIANCE,
                  "std_var_aggregation can accept only STD, VARIANCE");
   }
-
   size_type hash_impl() const { return std::hash<size_type>{}(_ddof); }
 };
 
@@ -348,7 +367,10 @@ class std_var_aggregation : public aggregation {
  */
 class var_aggregation final : public std_var_aggregation {
  public:
-  var_aggregation(size_type ddof) : std_var_aggregation{aggregation::VARIANCE, ddof} {}
+  var_aggregation(size_type ddof)
+    : aggregation{aggregation::VARIANCE}, std_var_aggregation{aggregation::VARIANCE, ddof}
+  {
+  }
 
   std::unique_ptr<aggregation> clone() const override
   {
@@ -367,7 +389,10 @@ class var_aggregation final : public std_var_aggregation {
  */
 class std_aggregation final : public std_var_aggregation {
  public:
-  std_aggregation(size_type ddof) : std_var_aggregation{aggregation::STD, ddof} {}
+  std_aggregation(size_type ddof)
+    : aggregation{aggregation::STD}, std_var_aggregation{aggregation::STD, ddof}
+  {
+  }
 
   std::unique_ptr<aggregation> clone() const override
   {
@@ -384,7 +409,7 @@ class std_aggregation final : public std_var_aggregation {
 /**
  * @brief Derived class for specifying a median aggregation
  */
-class median_aggregation final : public aggregation {
+class median_aggregation final : public groupby_aggregation {
  public:
   median_aggregation() : aggregation(MEDIAN) {}
 
@@ -403,7 +428,7 @@ class median_aggregation final : public aggregation {
 /**
  * @brief Derived class for specifying a quantile aggregation
  */
-class quantile_aggregation final : public aggregation {
+class quantile_aggregation final : public groupby_aggregation {
  public:
   quantile_aggregation(std::vector<double> const& q, interpolation i)
     : aggregation{QUANTILE}, _quantiles{q}, _interpolation{i}
@@ -449,7 +474,7 @@ class quantile_aggregation final : public aggregation {
 /**
  * @brief Derived class for specifying an argmax aggregation
  */
-class argmax_aggregation final : public rolling_aggregation {
+class argmax_aggregation final : public rolling_aggregation, public groupby_aggregation {
  public:
   argmax_aggregation() : aggregation(ARGMAX) {}
 
@@ -468,7 +493,7 @@ class argmax_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying an argmin aggregation
  */
-class argmin_aggregation final : public rolling_aggregation {
+class argmin_aggregation final : public rolling_aggregation, public groupby_aggregation {
  public:
   argmin_aggregation() : aggregation(ARGMIN) {}
 
@@ -487,7 +512,7 @@ class argmin_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying a nunique aggregation
  */
-class nunique_aggregation final : public aggregation {
+class nunique_aggregation final : public groupby_aggregation {
  public:
   nunique_aggregation(null_policy null_handling)
     : aggregation{NUNIQUE}, _null_handling{null_handling}
@@ -523,7 +548,7 @@ class nunique_aggregation final : public aggregation {
 /**
  * @brief Derived class for specifying a nth element aggregation
  */
-class nth_element_aggregation final : public aggregation {
+class nth_element_aggregation final : public groupby_aggregation {
  public:
   nth_element_aggregation(size_type n, null_policy null_handling)
     : aggregation{NTH_ELEMENT}, _n{n}, _null_handling{null_handling}
@@ -582,7 +607,7 @@ class row_number_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying a rank aggregation
  */
-class rank_aggregation final : public rolling_aggregation {
+class rank_aggregation final : public rolling_aggregation, public groupby_scan_aggregation {
  public:
   rank_aggregation() : aggregation{RANK} {}
 
@@ -601,7 +626,7 @@ class rank_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived class for specifying a dense rank aggregation
  */
-class dense_rank_aggregation final : public rolling_aggregation {
+class dense_rank_aggregation final : public rolling_aggregation, public groupby_scan_aggregation {
  public:
   dense_rank_aggregation() : aggregation{DENSE_RANK} {}
 
@@ -620,7 +645,7 @@ class dense_rank_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived aggregation class for specifying COLLECT_LIST aggregation
  */
-class collect_list_aggregation final : public rolling_aggregation {
+class collect_list_aggregation final : public rolling_aggregation, public groupby_aggregation {
  public:
   explicit collect_list_aggregation(null_policy null_handling = null_policy::INCLUDE)
     : aggregation{COLLECT_LIST}, _null_handling{null_handling}
@@ -656,7 +681,7 @@ class collect_list_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived aggregation class for specifying COLLECT_SET aggregation
  */
-class collect_set_aggregation final : public rolling_aggregation {
+class collect_set_aggregation final : public rolling_aggregation, public groupby_aggregation {
  public:
   explicit collect_set_aggregation(null_policy null_handling = null_policy::INCLUDE,
                                    null_equality nulls_equal = null_equality::EQUAL,
@@ -795,7 +820,7 @@ class udf_aggregation final : public rolling_aggregation {
 /**
  * @brief Derived aggregation class for specifying MERGE_LISTS aggregation
  */
-class merge_lists_aggregation final : public aggregation {
+class merge_lists_aggregation final : public groupby_aggregation {
  public:
   explicit merge_lists_aggregation() : aggregation{MERGE_LISTS} {}
 
@@ -814,7 +839,7 @@ class merge_lists_aggregation final : public aggregation {
 /**
  * @brief Derived aggregation class for specifying MERGE_SETS aggregation
  */
-class merge_sets_aggregation final : public aggregation {
+class merge_sets_aggregation final : public groupby_aggregation {
  public:
   explicit merge_sets_aggregation(null_equality nulls_equal, nan_equality nans_equal)
     : aggregation{MERGE_SETS}, _nulls_equal(nulls_equal), _nans_equal(nans_equal)
@@ -855,13 +880,132 @@ class merge_sets_aggregation final : public aggregation {
 /**
  * @brief Derived aggregation class for specifying MERGE_M2 aggregation
  */
-class merge_m2_aggregation final : public aggregation {
+class merge_m2_aggregation final : public groupby_aggregation {
  public:
   explicit merge_m2_aggregation() : aggregation{MERGE_M2} {}
 
   std::unique_ptr<aggregation> clone() const override
   {
     return std::make_unique<merge_m2_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
+ * @brief Derived aggregation class for specifying COVARIANCE aggregation
+ */
+class covariance_aggregation final : public groupby_aggregation {
+ public:
+  explicit covariance_aggregation(size_type min_periods, size_type ddof)
+    : aggregation{COVARIANCE}, _min_periods{min_periods}, _ddof(ddof)
+  {
+  }
+  size_type _min_periods;
+  size_type _ddof;
+
+  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
+
+  std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<covariance_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+
+ protected:
+  size_t hash_impl() const
+  {
+    return std::hash<size_type>{}(_min_periods) ^ std::hash<size_type>{}(_ddof);
+  }
+};
+
+/**
+ * @brief Derived aggregation class for specifying CORRELATION aggregation
+ */
+class correlation_aggregation final : public groupby_aggregation {
+ public:
+  explicit correlation_aggregation(correlation_type type, size_type min_periods)
+    : aggregation{CORRELATION}, _type{type}, _min_periods{min_periods}
+  {
+  }
+  correlation_type _type;
+  size_type _min_periods;
+
+  bool is_equal(aggregation const& _other) const override
+  {
+    if (!this->aggregation::is_equal(_other)) { return false; }
+    auto const& other = dynamic_cast<correlation_aggregation const&>(_other);
+    return (_type == other._type);
+  }
+
+  size_t do_hash() const override { return this->aggregation::do_hash() ^ hash_impl(); }
+
+  std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<correlation_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+
+ protected:
+  size_t hash_impl() const
+  {
+    return std::hash<int>{}(static_cast<int>(_type)) ^ std::hash<size_type>{}(_min_periods);
+  }
+};
+
+/**
+ * @brief Derived aggregation class for specifying TDIGEST aggregation
+ */
+class tdigest_aggregation final : public groupby_aggregation {
+ public:
+  explicit tdigest_aggregation(int max_centroids_)
+    : aggregation{TDIGEST}, max_centroids{max_centroids_}
+  {
+  }
+
+  int const max_centroids;
+
+  std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<tdigest_aggregation>(*this);
+  }
+  std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
+    data_type col_type, simple_aggregations_collector& collector) const override
+  {
+    return collector.visit(col_type, *this);
+  }
+  void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
+};
+
+/**
+ * @brief Derived aggregation class for specifying MERGE_TDIGEST aggregation
+ */
+class merge_tdigest_aggregation final : public groupby_aggregation {
+ public:
+  explicit merge_tdigest_aggregation(int max_centroids_)
+    : aggregation{MERGE_TDIGEST}, max_centroids{max_centroids_}
+  {
+  }
+
+  int const max_centroids;
+
+  std::unique_ptr<aggregation> clone() const override
+  {
+    return std::make_unique<merge_tdigest_aggregation>(*this);
   }
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
@@ -941,14 +1085,16 @@ template <typename Source, aggregation::Kind k>
 struct target_type_impl<
   Source,
   k,
-  std::enable_if_t<is_fixed_width<Source>() && !is_chrono<Source>() && (k == aggregation::MEAN)>> {
+  std::enable_if_t<is_fixed_width<Source>() and not is_chrono<Source>() and
+                   not is_fixed_point<Source>() and (k == aggregation::MEAN)>> {
   using type = double;
 };
 
 template <typename Source, aggregation::Kind k>
-struct target_type_impl<Source,
-                        k,
-                        std::enable_if_t<is_chrono<Source>() && (k == aggregation::MEAN)>> {
+struct target_type_impl<
+  Source,
+  k,
+  std::enable_if_t<(is_chrono<Source>() or is_fixed_point<Source>()) && (k == aggregation::MEAN)>> {
   using type = Source;
 };
 
@@ -967,12 +1113,13 @@ struct target_type_impl<
   using type = int64_t;
 };
 
-// Summing fixed_point numbers, always use the decimal64 accumulator
+// Summing fixed_point numbers
 template <typename Source, aggregation::Kind k>
-struct target_type_impl<Source,
-                        k,
-                        std::enable_if_t<is_fixed_point<Source>() && (k == aggregation::SUM)>> {
-  using type = numeric::decimal64;
+struct target_type_impl<
+  Source,
+  k,
+  std::enable_if_t<cudf::is_fixed_point<Source>() && (k == aggregation::SUM)>> {
+  using type = Source;
 };
 
 // Summing/Multiplying float/doubles, use same type accumulator
@@ -1105,6 +1252,36 @@ struct target_type_impl<SourceType, aggregation::MERGE_M2> {
   using type = struct_view;
 };
 
+// Always use double for COVARIANCE
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::COVARIANCE> {
+  using type = double;
+};
+
+// Always use double for CORRELATION
+template <typename SourceType>
+struct target_type_impl<SourceType, aggregation::CORRELATION> {
+  using type = double;
+};
+
+// Always use numeric types for TDIGEST
+template <typename Source>
+struct target_type_impl<Source,
+                        aggregation::TDIGEST,
+                        std::enable_if_t<(is_numeric<Source>() || is_fixed_point<Source>())>> {
+  using type = struct_view;
+};
+
+// TDIGEST_MERGE. The root column type for a tdigest column is a list_view. Strictly
+// speaking, this check is not sufficient to guarantee we are actually being given a
+// real tdigest column, but we will do further verification inside the aggregation code.
+template <typename Source>
+struct target_type_impl<Source,
+                        aggregation::MERGE_TDIGEST,
+                        std::enable_if_t<std::is_same_v<Source, cudf::struct_view>>> {
+  using type = struct_view;
+};
+
 /**
  * @brief Helper alias to get the accumulator type for performing aggregation
  * `k` on elements of type `Source`
@@ -1209,6 +1386,14 @@ CUDA_HOST_DEVICE_CALLABLE decltype(auto) aggregation_dispatcher(aggregation::Kin
       return f.template operator()<aggregation::MERGE_SETS>(std::forward<Ts>(args)...);
     case aggregation::MERGE_M2:
       return f.template operator()<aggregation::MERGE_M2>(std::forward<Ts>(args)...);
+    case aggregation::COVARIANCE:
+      return f.template operator()<aggregation::COVARIANCE>(std::forward<Ts>(args)...);
+    case aggregation::CORRELATION:
+      return f.template operator()<aggregation::CORRELATION>(std::forward<Ts>(args)...);
+    case aggregation::TDIGEST:
+      return f.template operator()<aggregation::TDIGEST>(std::forward<Ts>(args)...);
+    case aggregation::MERGE_TDIGEST:
+      return f.template operator()<aggregation::MERGE_TDIGEST>(std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
       CUDF_FAIL("Unsupported aggregation.");

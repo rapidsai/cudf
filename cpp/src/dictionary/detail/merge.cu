@@ -17,6 +17,7 @@
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/indexalator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/dictionary/detail/encode.hpp>
 #include <cudf/dictionary/detail/merge.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
@@ -62,8 +63,11 @@ std::unique_ptr<column> merge(dictionary_column_view const& lcol,
   return make_dictionary_column(
     std::make_unique<column>(lcol.keys(), stream, mr),
     std::move(indices_column),
-    rmm::device_buffer{
-      lcol.has_nulls() || rcol.has_nulls() ? static_cast<size_t>(merged_size) : 0, stream, mr},
+    cudf::detail::create_null_mask(
+      lcol.has_nulls() || rcol.has_nulls() ? static_cast<size_t>(merged_size) : 0,
+      mask_state::UNINITIALIZED,
+      stream,
+      mr),
     lcol.null_count() + rcol.null_count());
 }
 

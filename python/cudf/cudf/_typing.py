@@ -29,3 +29,6 @@ BinaryOperand = Union["cudf.Scalar", "cudf.core.column.ColumnBase"]
 
 DataFrameOrSeries = Union["cudf.Series", "cudf.DataFrame"]
 SeriesOrIndex = Union["cudf.Series", "cudf.core.index.BaseIndex"]
+SeriesOrSingleColumnIndex = Union[
+    "cudf.Series", "cudf.core.index.GenericIndex"
+]

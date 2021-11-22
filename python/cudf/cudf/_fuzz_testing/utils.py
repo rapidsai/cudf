@@ -11,51 +11,51 @@ import pyorc
 import cudf
 from cudf.testing._utils import assert_eq
 from cudf.utils.dtypes import (
-    pandas_dtypes_to_cudf_dtypes,
+    pandas_dtypes_to_np_dtypes,
     pyarrow_dtypes_to_pandas_dtypes,
 )
 
 ALL_POSSIBLE_VALUES = "ALL_POSSIBLE_VALUES"
 
 _PANDAS_TO_AVRO_SCHEMA_MAP = {
-    np.dtype("int8"): "int",
+    cudf.dtype("int8"): "int",
     pd.Int8Dtype(): ["int", "null"],
     pd.Int16Dtype(): ["int", "null"],
     pd.Int32Dtype(): ["int", "null"],
     pd.Int64Dtype(): ["long", "null"],
     pd.BooleanDtype(): ["boolean", "null"],
     pd.StringDtype(): ["string", "null"],
-    np.dtype("bool_"): "boolean",
-    np.dtype("int16"): "int",
-    np.dtype("int32"): "int",
-    np.dtype("int64"): "long",
-    np.dtype("O"): "string",
-    np.dtype("str"): "string",
-    np.dtype("float32"): "float",
-    np.dtype("float64"): "double",
-    np.dtype("<M8[ns]"): {"type": "long", "logicalType": "timestamp-millis"},
-    np.dtype("<M8[ms]"): {"type": "long", "logicalType": "timestamp-millis"},
-    np.dtype("<M8[us]"): {"type": "long", "logicalType": "timestamp-micros"},
+    cudf.dtype("bool_"): "boolean",
+    cudf.dtype("int16"): "int",
+    cudf.dtype("int32"): "int",
+    cudf.dtype("int64"): "long",
+    cudf.dtype("O"): "string",
+    cudf.dtype("str"): "string",
+    cudf.dtype("float32"): "float",
+    cudf.dtype("float64"): "double",
+    cudf.dtype("<M8[ns]"): {"type": "long", "logicalType": "timestamp-millis"},
+    cudf.dtype("<M8[ms]"): {"type": "long", "logicalType": "timestamp-millis"},
+    cudf.dtype("<M8[us]"): {"type": "long", "logicalType": "timestamp-micros"},
 }
 
 PANDAS_TO_ORC_TYPES = {
-    np.dtype("int8"): pyorc.TinyInt(),
+    cudf.dtype("int8"): pyorc.TinyInt(),
     pd.Int8Dtype(): pyorc.TinyInt(),
     pd.Int16Dtype(): pyorc.SmallInt(),
     pd.Int32Dtype(): pyorc.Int(),
     pd.Int64Dtype(): pyorc.BigInt(),
     pd.BooleanDtype(): pyorc.Boolean(),
-    np.dtype("bool_"): pyorc.Boolean(),
-    np.dtype("int16"): pyorc.SmallInt(),
-    np.dtype("int32"): pyorc.Int(),
-    np.dtype("int64"): pyorc.BigInt(),
-    np.dtype("O"): pyorc.String(),
+    cudf.dtype("bool_"): pyorc.Boolean(),
+    cudf.dtype("int16"): pyorc.SmallInt(),
+    cudf.dtype("int32"): pyorc.Int(),
+    cudf.dtype("int64"): pyorc.BigInt(),
+    cudf.dtype("O"): pyorc.String(),
     pd.StringDtype(): pyorc.String(),
-    np.dtype("float32"): pyorc.Float(),
-    np.dtype("float64"): pyorc.Double(),
-    np.dtype("<M8[ns]"): pyorc.Timestamp(),
-    np.dtype("<M8[ms]"): pyorc.Timestamp(),
-    np.dtype("<M8[us]"): pyorc.Timestamp(),
+    cudf.dtype("float32"): pyorc.Float(),
+    cudf.dtype("float64"): pyorc.Double(),
+    cudf.dtype("<M8[ns]"): pyorc.Timestamp(),
+    cudf.dtype("<M8[ms]"): pyorc.Timestamp(),
+    cudf.dtype("<M8[us]"): pyorc.Timestamp(),
 }
 
 ORC_TO_PANDAS_TYPES = {
@@ -64,10 +64,10 @@ ORC_TO_PANDAS_TYPES = {
     pyorc.Boolean().name: pd.BooleanDtype(),
     pyorc.SmallInt().name: pd.Int16Dtype(),
     pyorc.BigInt().name: pd.Int64Dtype(),
-    pyorc.String().name: np.dtype("O"),
-    pyorc.Float().name: np.dtype("float32"),
-    pyorc.Double().name: np.dtype("float64"),
-    pyorc.Timestamp().name: np.dtype("<M8[ns]"),
+    pyorc.String().name: cudf.dtype("O"),
+    pyorc.Float().name: cudf.dtype("float32"),
+    pyorc.Double().name: cudf.dtype("float64"),
+    pyorc.Timestamp().name: cudf.dtype("<M8[ns]"),
 }
 
 
@@ -116,6 +116,8 @@ def _generate_rand_meta(obj, dtypes_list, null_frequency_override=None):
             )
         elif dtype == "decimal64":
             meta["max_precision"] = cudf.Decimal64Dtype.MAX_PRECISION
+        elif dtype == "decimal32":
+            meta["max_precision"] = cudf.Decimal32Dtype.MAX_PRECISION
 
         meta["dtype"] = dtype
         meta["null_frequency"] = null_frequency
@@ -218,7 +220,7 @@ def convert_nulls_to_none(records, df):
     scalar_columns_convert = [
         col
         for col in df.columns
-        if df[col].dtype in pandas_dtypes_to_cudf_dtypes
+        if df[col].dtype in pandas_dtypes_to_np_dtypes
         or pd.api.types.is_datetime64_dtype(df[col].dtype)
         or pd.api.types.is_timedelta64_dtype(df[col].dtype)
     ]
@@ -263,7 +265,7 @@ def _preprocess_to_orc_tuple(df):
     has_nulls_or_nullable_dtype = any(
         [
             True
-            if df[col].dtype in pandas_dtypes_to_cudf_dtypes
+            if df[col].dtype in pandas_dtypes_to_np_dtypes
             or df[col].isnull().any()
             else False
             for col in df.columns

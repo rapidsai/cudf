@@ -48,8 +48,6 @@ using Table       = cudf::table;
 
 template <typename T>
 struct TypedColumnTest : public cudf::test::BaseFixture {
-  static std::size_t data_size() { return 1000; }
-  static std::size_t mask_size() { return 100; }
   cudf::data_type type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 
   TypedColumnTest(rmm::cuda_stream_view stream = rmm::cuda_stream_default)
@@ -58,14 +56,14 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
   {
     auto typed_data = static_cast<char*>(data.data());
     auto typed_mask = static_cast<char*>(mask.data());
-    std::vector<char> h_data(data_size());
+    std::vector<char> h_data(data.size());
     std::iota(h_data.begin(), h_data.end(), char{0});
-    std::vector<char> h_mask(mask_size());
+    std::vector<char> h_mask(mask.size());
     std::iota(h_mask.begin(), h_mask.end(), char{0});
     CUDA_TRY(cudaMemcpyAsync(
-      typed_data, h_data.data(), data_size(), cudaMemcpyHostToDevice, stream.value()));
+      typed_data, h_data.data(), data.size(), cudaMemcpyHostToDevice, stream.value()));
     CUDA_TRY(cudaMemcpyAsync(
-      typed_mask, h_mask.data(), mask_size(), cudaMemcpyHostToDevice, stream.value()));
+      typed_mask, h_mask.data(), mask.size(), cudaMemcpyHostToDevice, stream.value()));
     stream.synchronize();
   }
 
@@ -81,7 +79,7 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
   rmm::device_buffer all_null_mask{create_null_mask(num_elements(), cudf::mask_state::ALL_NULL)};
 };
 
-TYPED_TEST_CASE(TypedColumnTest, cudf::test::Types<int32_t>);
+TYPED_TEST_SUITE(TypedColumnTest, cudf::test::Types<int32_t>);
 
 TYPED_TEST(TypedColumnTest, ConcatenateEmptyColumns)
 {
@@ -484,7 +482,7 @@ TEST_F(OverflowTest, Presliced)
     auto offset_gen = cudf::detail::make_counting_transform_iterator(
       0, [string_size](size_type index) { return index * string_size; });
     cudf::test::fixed_width_column_wrapper<int> offsets(offset_gen, offset_gen + num_rows + 1);
-    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, num_rows);
+    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, total_chars_size);
     auto col        = cudf::make_strings_column(
       num_rows, offsets.release(), std::move(many_chars), 0, rmm::device_buffer{});
 
@@ -515,7 +513,7 @@ TEST_F(OverflowTest, Presliced)
                            offsets->view().begin<offset_type>(),
                            offsets->view().end<offset_type>(),
                            offsets->mutable_view().begin<offset_type>());
-    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, num_rows);
+    auto many_chars = cudf::make_fixed_width_column(data_type{type_id::INT8}, total_chars_size);
     auto col        = cudf::make_strings_column(
       num_rows, std::move(offsets), std::move(many_chars), 0, rmm::device_buffer{});
 
@@ -1551,15 +1549,15 @@ TEST_F(ListsColumnTest, ListOfStructs)
 }
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
 struct FixedPointTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointConcatentate)
+TYPED_TEST(FixedPointTestAllReps, FixedPointConcatentate)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -1634,7 +1632,7 @@ template <typename T>
 struct DictionaryConcatTestFW : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(DictionaryConcatTestFW, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(DictionaryConcatTestFW, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(DictionaryConcatTestFW, FixedWidthKeys)
 {

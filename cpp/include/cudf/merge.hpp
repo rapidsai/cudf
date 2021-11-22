@@ -90,6 +90,7 @@ namespace cudf {
  * @param[in] column_order Sort order types of columns indexed by key_cols
  * @param[in] null_precedence Array indicating the order of nulls with respect
  * to non-nulls for the indexing columns (key_cols)
+ * @param mr Device memory resource used to allocate the returned table's device memory
  *
  * @returns A table containing sorted data from all input tables
  */

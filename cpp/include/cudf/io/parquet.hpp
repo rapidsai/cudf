@@ -24,8 +24,6 @@
 
 #include <rmm/mr/device/per_device_resource.hpp>
 
-#include <thrust/optional.h>
-
 #include <iostream>
 #include <memory>
 #include <string>
@@ -39,6 +37,9 @@ namespace io {
  * @file
  */
 
+constexpr size_t default_row_group_size_bytes   = 128 * 1024 * 1024;  // 128MB
+constexpr size_type default_row_group_size_rows = 1000000;
+
 /**
  * @brief Builds parquet_reader_options to use for `read_parquet()`.
  */
@@ -50,7 +51,7 @@ class parquet_reader_options_builder;
 class parquet_reader_options {
   source_info _source;
 
-  // Names of column to read; empty is all
+  // Path in schema of column to read; empty is all
   std::vector<std::string> _columns;
 
   // List of individual row groups to read (ignored if empty)
@@ -354,12 +355,9 @@ class parquet_reader_options_builder {
  *
  * The following code snippet demonstrates how to read a dataset from a file:
  * @code
- *  ...
- *  std::string filepath = "dataset.parquet";
- *  cudf::io::parquet_reader_options options =
- *  cudf::io::parquet_reader_options::builder(cudf::source_info(filepath));
- *  ...
- *  auto result = cudf::read_parquet(options);
+ *  auto source  = cudf::io::source_info("dataset.parquet");
+ *  auto options = cudf::io::parquet_reader_options::builder(source);
+ *  auto result  = cudf::io::read_parquet(options);
  * @endcode
  *
  * @param options Settings for controlling reading behavior
@@ -378,173 +376,6 @@ table_with_metadata read_parquet(
  * @{
  * @file
  */
-class table_input_metadata;
-
-class column_in_metadata {
-  friend table_input_metadata;
-  std::string _name = "";
-  thrust::optional<bool> _nullable;
-  // TODO: This isn't implemented yet
-  bool _list_column_is_map  = false;
-  bool _use_int96_timestamp = false;
-  // bool _output_as_binary = false;
-  thrust::optional<uint8_t> _decimal_precision;
-  std::vector<column_in_metadata> children;
-
- public:
-  /**
-   * @brief Get the children of this column metadata
-   *
-   * @return this for chaining
-   */
-  column_in_metadata& add_child(column_in_metadata const& child)
-  {
-    children.push_back(child);
-    return *this;
-  }
-
-  /**
-   * @brief Set the name of this column
-   *
-   * @return this for chaining
-   */
-  column_in_metadata& set_name(std::string const& name)
-  {
-    _name = name;
-    return *this;
-  }
-
-  /**
-   * @brief Set the nullability of this column
-   *
-   * Only valid in case of chunked writes. In single writes, this option is ignored.
-   *
-   * @return column_in_metadata&
-   */
-  column_in_metadata& set_nullability(bool nullable)
-  {
-    _nullable = nullable;
-    return *this;
-  }
-
-  /**
-   * @brief Specify that this list column should be encoded as a map in the written parquet file
-   *
-   * The column must have the structure list<struct<key, value>>. This option is invalid otherwise
-   *
-   * @return this for chaining
-   */
-  column_in_metadata& set_list_column_as_map()
-  {
-    _list_column_is_map = true;
-    return *this;
-  }
-
-  /**
-   * @brief Specifies whether this timestamp column should be encoded using the deprecated int96
-   * physical type. Only valid for the following column types:
-   * timestamp_s, timestamp_ms, timestamp_us, timestamp_ns
-   *
-   * @param req True = use int96 physical type. False = use int64 physical type
-   * @return this for chaining
-   */
-  column_in_metadata& set_int96_timestamps(bool req)
-  {
-    _use_int96_timestamp = req;
-    return *this;
-  }
-
-  /**
-   * @brief Set the decimal precision of this column. Only valid if this column is a decimal
-   * (fixed-point) type
-   *
-   * @param precision The integer precision to set for this decimal column
-   * @return this for chaining
-   */
-  column_in_metadata& set_decimal_precision(uint8_t precision)
-  {
-    _decimal_precision = precision;
-    return *this;
-  }
-
-  /**
-   * @brief Get reference to a child of this column
-   *
-   * @param i Index of the child to get
-   * @return this for chaining
-   */
-  column_in_metadata& child(size_type i) { return children[i]; }
-
-  /**
-   * @brief Get const reference to a child of this column
-   *
-   * @param i Index of the child to get
-   * @return this for chaining
-   */
-  column_in_metadata const& child(size_type i) const { return children[i]; }
-
-  /**
-   * @brief Get the name of this column
-   */
-  std::string get_name() const { return _name; }
-
-  /**
-   * @brief Get whether nullability has been explicitly set for this column.
-   */
-  bool is_nullability_defined() const { return _nullable.has_value(); }
-
-  /**
-   * @brief Gets the explicitly set nullability for this column.
-   * @throws If nullability is not explicitly defined for this column.
-   *         Check using `is_nullability_defined()` first.
-   */
-  bool nullable() const { return _nullable.value(); }
-
-  /**
-   * @brief If this is the metadata of a list column, returns whether it is to be encoded as a map.
-   */
-  bool is_map() const { return _list_column_is_map; }
-
-  /**
-   * @brief Get whether to encode this timestamp column using deprecated int96 physical type
-   */
-  bool is_enabled_int96_timestamps() const { return _use_int96_timestamp; }
-
-  /**
-   * @brief Get whether precision has been set for this decimal column
-   */
-  bool is_decimal_precision_set() const { return _decimal_precision.has_value(); }
-
-  /**
-   * @brief Get the decimal precision that was set for this column.
-   * @throws If decimal precision was not set for this column.
-   *         Check using `is_decimal_precision_set()` first.
-   */
-  uint8_t get_decimal_precision() const { return _decimal_precision.value(); }
-
-  /**
-   * @brief Get the number of children of this column
-   */
-  size_type num_children() const { return children.size(); }
-};
-
-class table_input_metadata {
- public:
-  table_input_metadata() = default;  // Required by cython
-
-  /**
-   * @brief Construct a new table_input_metadata from a table_view.
-   *
-   * The constructed table_input_metadata has the same structure as the passed table_view
-   *
-   * @param table The table_view to construct metadata for
-   * @param user_data Optional Additional metadata to encode, as key-value pairs
-   */
-  table_input_metadata(table_view const& table, std::map<std::string, std::string> user_data = {});
-
-  std::vector<column_in_metadata> column_metadata;
-  std::map<std::string, std::string> user_data;  //!< Format-dependent metadata as key-values pairs
-};
 
 /**
  * @brief Class to build `parquet_writer_options`.
@@ -570,6 +401,10 @@ class parquet_writer_options {
   bool _write_timestamps_as_int96 = false;
   // Column chunks file path to be set in the raw output metadata
   std::string _column_chunks_file_path;
+  // Maximum size of each row group (unless smaller than a single page)
+  size_t _row_group_size_bytes = default_row_group_size_bytes;
+  // Maximum number of rows in row group (unless smaller than a single page)
+  size_type _row_group_size_rows = default_row_group_size_rows;
 
   /**
    * @brief Constructor from sink and table.
@@ -645,6 +480,16 @@ class parquet_writer_options {
   std::string get_column_chunks_file_path() const { return _column_chunks_file_path; }
 
   /**
+   * @brief Returns maximum row group size, in bytes.
+   */
+  auto get_row_group_size_bytes() const { return _row_group_size_bytes; }
+
+  /**
+   * @brief Returns maximum row group size, in rows.
+   */
+  auto get_row_group_size_rows() const { return _row_group_size_rows; }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata.
@@ -681,6 +526,28 @@ class parquet_writer_options {
   void set_column_chunks_file_path(std::string file_path)
   {
     _column_chunks_file_path.assign(file_path);
+  }
+
+  /**
+   * @brief Sets the maximum row group size, in bytes.
+   */
+  void set_row_group_size_bytes(size_t size_bytes)
+  {
+    CUDF_EXPECTS(
+      size_bytes >= 512 * 1024,
+      "The maximum row group size cannot be smaller than the page size, which is 512KB.");
+    _row_group_size_bytes = size_bytes;
+  }
+
+  /**
+   * @brief Sets the maximum row group size, in rows.
+   */
+  void set_row_group_size_rows(size_type size_rows)
+  {
+    CUDF_EXPECTS(
+      size_rows >= 5000,
+      "The maximum row group size cannot be smaller than the page size, which is 5000 rows.");
+    _row_group_size_rows = size_rows;
   }
 };
 
@@ -755,6 +622,30 @@ class parquet_writer_options_builder {
   }
 
   /**
+   * @brief Sets the maximum row group size, in bytes.
+   *
+   * @param val maximum row group size
+   * @return this for chaining.
+   */
+  parquet_writer_options_builder& row_group_size_bytes(size_t val)
+  {
+    options.set_row_group_size_bytes(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the maximum number of rows in output row groups.
+   *
+   * @param val maximum number or rows
+   * @return this for chaining.
+   */
+  parquet_writer_options_builder& row_group_size_rows(size_type val)
+  {
+    options.set_row_group_size_rows(val);
+    return *this;
+  }
+
+  /**
    * @brief Sets whether int96 timestamps are written or not in parquet_writer_options.
    *
    * @param enabled Boolean value to enable/disable int96 timestamps.
@@ -784,12 +675,9 @@ class parquet_writer_options_builder {
  *
  * The following code snippet demonstrates how to write columns to a file:
  * @code
- *  ...
- *  std::string filepath = "dataset.parquet";
- *  cudf::io::parquet_writer_options options =
- *  cudf::io::parquet_writer_options::builder(cudf::sink_info(filepath), table->view());
- *  ...
- *  cudf::write_parquet(options);
+ *  auto destination = cudf::io::sink_info("dataset.parquet");
+ *  auto options     = cudf::io::parquet_writer_options::builder(destination, table->view());
+ *  cudf::io::write_parquet(options);
  * @endcode
  *
  * @param options Settings for controlling writing behavior.
@@ -807,10 +695,12 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(
  * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
  * into a single metadata blob.
  *
+ * @ingroup io_writers
+ *
  * @param[in] metadata_list List of input file metadata.
  * @return A parquet-compatible blob that contains the data for all row groups in the list.
  */
-std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
+std::unique_ptr<std::vector<uint8_t>> merge_row_group_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
 
 /**
@@ -833,6 +723,10 @@ class chunked_parquet_writer_options {
   // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
   // If true then overrides any per-column setting in _metadata.
   bool _write_timestamps_as_int96 = false;
+  // Maximum size of each row group (unless smaller than a single page)
+  size_t _row_group_size_bytes = default_row_group_size_bytes;
+  // Maximum number of rows in row group (unless smaller than a single page)
+  size_type _row_group_size_rows = default_row_group_size_rows;
 
   /**
    * @brief Constructor from sink.
@@ -877,6 +771,16 @@ class chunked_parquet_writer_options {
   bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
 
   /**
+   * @brief Returns maximum row group size, in bytes.
+   */
+  auto get_row_group_size_bytes() const { return _row_group_size_bytes; }
+
+  /**
+   * @brief Returns maximum row group size, in rows.
+   */
+  auto get_row_group_size_rows() const { return _row_group_size_rows; }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata.
@@ -904,6 +808,28 @@ class chunked_parquet_writer_options {
    * @param req Boolean value to enable/disable writing of INT96 timestamps
    */
   void enable_int96_timestamps(bool req) { _write_timestamps_as_int96 = req; }
+
+  /**
+   * @brief Sets the maximum row group size, in bytes.
+   */
+  void set_row_group_size_bytes(size_t size_bytes)
+  {
+    CUDF_EXPECTS(
+      size_bytes >= 512 * 1024,
+      "The maximum row group size cannot be smaller than the page size, which is 512KB.");
+    _row_group_size_bytes = size_bytes;
+  }
+
+  /**
+   * @brief Sets the maximum row group size, in rows.
+   */
+  void set_row_group_size_rows(size_type size_rows)
+  {
+    CUDF_EXPECTS(
+      size_rows >= 5000,
+      "The maximum row group size cannot be smaller than the page size, which is 5000 rows.");
+    _row_group_size_rows = size_rows;
+  }
 
   /**
    * @brief creates builder to build chunked_parquet_writer_options.
@@ -985,6 +911,30 @@ class chunked_parquet_writer_options_builder {
   }
 
   /**
+   * @brief Sets the maximum row group size, in bytes.
+   *
+   * @param val maximum row group size
+   * @return this for chaining.
+   */
+  chunked_parquet_writer_options_builder& row_group_size_bytes(size_t val)
+  {
+    options.set_row_group_size_bytes(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the maximum number of rows in output row groups.
+   *
+   * @param val maximum number or rows
+   * @return this for chaining.
+   */
+  chunked_parquet_writer_options_builder& row_group_size_rows(size_type val)
+  {
+    options.set_row_group_size_rows(val);
+    return *this;
+  }
+
+  /**
    * @brief move chunked_parquet_writer_options member once it's built.
    */
   operator chunked_parquet_writer_options&&() { return std::move(options); }
@@ -998,18 +948,6 @@ class chunked_parquet_writer_options_builder {
 };
 
 /**
- * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
- * into a single metadata blob
- *
- * @ingroup io_writers
- *
- * @param[in] metadata_list List of input file metadata
- * @return A parquet-compatible blob that contains the data for all rowgroups in the list
- */
-std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
-  const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
-
-/**
  * @brief chunked parquet writer class to handle options and write tables in chunks.
  *
  * The intent of the parquet_chunked_writer is to allow writing of an
@@ -1019,15 +957,12 @@ std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
  * one logical table by writing a series of individual cudf::tables.
  *
  * @code
- *  ...
- *  std::string filepath = "dataset.parquet";
- *  cudf::io::chunked_parquet_writer_options options =
- *  cudf::io::chunked_parquet_writer_options::builder(cudf::sink_info(filepath), table->view());
- *  ...
- *  cudf::io::parquet_chunked_writer writer(options)
+ *  auto destination = cudf::io::sink_info("dataset.parquet");
+ *  auto options = cudf::io::chunked_parquet_writer_options::builder(destination, table->view());
+ *  auto writer  = cudf::io::parquet_chunked_writer(options);
+ *
  *  writer.write(table0)
  *  writer.write(table1)
- *  ...
  *  writer.close()
  *  @endcode
  */
@@ -1042,11 +977,11 @@ class parquet_chunked_writer {
   /**
    * @brief Constructor with chunked writer options
    *
-   * @param[in] op options used to write table
+   * @param[in] options options used to write table
    * @param[in] mr Device memory resource to use for device memory allocation
    */
   parquet_chunked_writer(
-    chunked_parquet_writer_options const& op,
+    chunked_parquet_writer_options const& options,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**

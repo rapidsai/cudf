@@ -19,8 +19,6 @@
 package ai.rapids.cudf;
 
 import ai.rapids.cudf.ast.CompiledExpression;
-import ai.rapids.cudf.nvcomp.BatchedLZ4Decompressor;
-import ai.rapids.cudf.nvcomp.Decompressor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -248,16 +246,6 @@ public final class MemoryCleaner {
     all.add(new CleanerWeakReference(event, cleaner, collected, false));
   }
 
-  public static void register(Decompressor.Metadata metadata, Cleaner cleaner) {
-    // It is now registered...
-    all.add(new CleanerWeakReference(metadata, cleaner, collected, false));
-  }
-
-  public static void register(BatchedLZ4Decompressor.BatchedMetadata metadata, Cleaner cleaner) {
-    // It is now registered...
-    all.add(new CleanerWeakReference(metadata, cleaner, collected, false));
-  }
-
   static void register(CuFileDriver driver, Cleaner cleaner) {
     // It is now registered...
     all.add(new CleanerWeakReference(driver, cleaner, collected, false));
@@ -275,6 +263,10 @@ public final class MemoryCleaner {
 
   public static void register(CompiledExpression expr, Cleaner cleaner) {
     all.add(new CleanerWeakReference(expr, cleaner, collected, false));
+  }
+
+  static void register(HashJoin hashJoin, Cleaner cleaner) {
+    all.add(new CleanerWeakReference(hashJoin, cleaner, collected, true));
   }
 
   /**

@@ -6,13 +6,24 @@ import shutil
 import subprocess
 import sys
 import sysconfig
+
+# Must import in this order:
+#   setuptools -> Cython.Distutils.build_ext -> setuptools.command.build_ext
+# Otherwise, setuptools.command.build_ext ends up inheriting from
+# Cython.Distutils.old_build_ext which we do not want
+import setuptools
+
+try:
+    from Cython.Distutils.build_ext import new_build_ext as _build_ext
+except ImportError:
+    from setuptools.command.build_ext import build_ext as _build_ext
+
 from distutils.spawn import find_executable
 from distutils.sysconfig import get_python_lib
 
 import numpy as np
 import pyarrow as pa
-from Cython.Build import cythonize
-from Cython.Distutils import build_ext
+import setuptools.command.build_ext
 from setuptools import find_packages, setup
 from setuptools.extension import Extension
 
@@ -21,10 +32,9 @@ import versioneer
 install_requires = [
     "numba>=0.53.1",
     "Cython>=0.29,<0.30",
-    "fastavro>=0.22.9",
     "fsspec>=0.6.0",
     "numpy",
-    "pandas>=1.0,<1.3.0dev0",
+    "pandas>=1.0,<1.4.0dev0",
     "typing_extensions",
     "protobuf",
     "nvtx>=0.2.1",
@@ -38,9 +48,11 @@ extras_require = {
         "pytest-benchmark",
         "pytest-xdist",
         "hypothesis" "mimesis",
+        "fastavro>=0.22.9",
+        "python-snappy>=0.6.0",
         "pyorc",
         "msgpack",
-        "transformers",
+        "transformers<=4.10.3",
     ]
 }
 
@@ -105,22 +117,46 @@ CUDF_ROOT = os.environ.get(
     ),
 )
 
-try:
-    nthreads = int(os.environ.get("PARALLEL_LEVEL", "0") or "0")
-except Exception:
-    nthreads = 0
 
-cmdclass = versioneer.get_cmdclass()
-
-
-class build_ext_and_proto(build_ext):
+class build_ext_and_proto_no_debug(_build_ext):
     def build_extensions(self):
-        try:
-            # Silence the '-Wstrict-prototypes' warning
-            self.compiler.compiler_so.remove("-Wstrict-prototypes")
-        except Exception:
-            pass
-        build_ext.build_extensions(self)
+        def remove_flags(compiler, *flags):
+            for flag in flags:
+                try:
+                    compiler.compiler_so = list(
+                        filter((flag).__ne__, compiler.compiler_so)
+                    )
+                except Exception:
+                    pass
+
+        # Full optimization
+        self.compiler.compiler_so.append("-O3")
+        # Silence '-Wunknown-pragmas' warning
+        self.compiler.compiler_so.append("-Wno-unknown-pragmas")
+        # No debug symbols, full optimization, no '-Wstrict-prototypes' warning
+        remove_flags(
+            self.compiler, "-g", "-G", "-O1", "-O2", "-Wstrict-prototypes"
+        )
+        super().build_extensions()
+
+    def finalize_options(self):
+        if self.distribution.ext_modules:
+            # Delay import this to allow for Cython-less installs
+            from Cython.Build.Dependencies import cythonize
+
+            nthreads = getattr(self, "parallel", None)  # -j option in Py3.5+
+            nthreads = int(nthreads) if nthreads else None
+            self.distribution.ext_modules = cythonize(
+                self.distribution.ext_modules,
+                nthreads=nthreads,
+                force=self.force,
+                gdb_debug=False,
+                compiler_directives=dict(
+                    profile=False, language_level=3, embedsignature=True
+                ),
+            )
+        # Skip calling super() and jump straight to setuptools
+        setuptools.command.build_ext.build_ext.finalize_options(self)
 
     def run(self):
         # Get protoc
@@ -158,10 +194,8 @@ class build_ext_and_proto(build_ext):
                     src.write(new_src_content)
 
         # Run original Cython build_ext command
-        build_ext.run(self)
+        _build_ext.run(self)
 
-
-cmdclass["build_ext"] = build_ext_and_proto
 
 extensions = [
     Extension(
@@ -175,7 +209,7 @@ extensions = [
             os.path.join(CUDF_ROOT, "_deps/dlpack-src/include"),
             os.path.join(
                 os.path.dirname(sysconfig.get_path("include")),
-                "libcudf/libcudacxx",
+                "rapids/libcudacxx",
             ),
             os.path.dirname(sysconfig.get_path("include")),
             np.get_include(),
@@ -196,6 +230,10 @@ extensions = [
     )
 ]
 
+cmdclass = versioneer.get_cmdclass()
+cmdclass["build_ext"] = build_ext_and_proto_no_debug
+
+
 setup(
     name="cudf",
     version=versioneer.get_version(),
@@ -214,13 +252,7 @@ setup(
     ],
     # Include the separately-compiled shared library
     setup_requires=["cython", "protobuf"],
-    ext_modules=cythonize(
-        extensions,
-        nthreads=nthreads,
-        compiler_directives=dict(
-            profile=False, language_level=3, embedsignature=True
-        ),
-    ),
+    ext_modules=extensions,
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data=dict.fromkeys(
         find_packages(include=["cudf._lib*"]), ["*.pxd"],

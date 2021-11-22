@@ -89,7 +89,8 @@ struct is_binary_operation_supported {
         using common_t = std::common_type_t<TypeLhs, TypeRhs>;
         if constexpr (std::is_invocable_v<BinaryOperator, common_t, common_t>) {
           using ReturnType = std::invoke_result_t<BinaryOperator, common_t, common_t>;
-          return std::is_constructible_v<TypeOut, ReturnType>;
+          return std::is_constructible_v<TypeOut, ReturnType> or
+                 (is_fixed_point<ReturnType>() and is_fixed_point<TypeOut>());
         }
       } else {
         if constexpr (std::is_invocable_v<BinaryOperator, TypeLhs, TypeRhs>) {

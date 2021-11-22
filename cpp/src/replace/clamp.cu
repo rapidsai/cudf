@@ -20,6 +20,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/dictionary/detail/search.hpp>
 #include <cudf/dictionary/detail/update_keys.hpp>
@@ -83,7 +84,7 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
 {
   auto input_device_column = column_device_view::create(input.parent(), stream);
   auto d_input             = *input_device_column;
-  size_type null_count     = input.parent().null_count();
+  size_type null_count     = input.null_count();
 
   // build offset column
   auto offsets_transformer = [lo_itr, hi_itr, lo_replace_itr, hi_replace_itr] __device__(
@@ -140,9 +141,7 @@ std::unique_ptr<cudf::column> clamp_string_column(strings_column_view const& inp
                              std::move(offsets_column),
                              std::move(chars_column),
                              input.null_count(),
-                             std::move(copy_bitmask(input.parent())),
-                             stream,
-                             mr);
+                             std::move(cudf::detail::copy_bitmask(input.parent(), stream, mr)));
 }
 
 template <typename T, typename OptionalScalarIterator, typename ReplaceScalarIterator>
@@ -282,7 +281,7 @@ std::unique_ptr<column> dispatch_clamp::operator()<cudf::dictionary32>(
     auto matched_view              = dictionary_column_view(input);
     std::unique_ptr<column> result = nullptr;
     auto add_scalar_key            = [&](scalar const& key, scalar const& key_replace) {
-      if (key.is_valid()) {
+      if (key.is_valid(stream)) {
         result = dictionary::detail::add_keys(
           matched_view, make_column_from_scalar(key_replace, 1, stream)->view(), stream, mr);
         matched_view = dictionary_column_view(result->view());

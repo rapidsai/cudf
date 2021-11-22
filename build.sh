@@ -18,26 +18,27 @@ ARGS=$*
 REPODIR=$(cd $(dirname $0); pwd)
 
 VALIDARGS="clean libcudf cudf dask_cudf benchmarks tests libcudf_kafka cudf_kafka custreamz -v -g -n -l --allgpuarch --disable_nvtx --show_depr_warn --ptds -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [-l]
-   clean                - remove all existing build artifacts and configuration (start
-                          over)
-   libcudf              - build the cudf C++ code only
-   cudf                 - build the cudf Python package
-   dask_cudf            - build the dask_cudf Python package
-   benchmarks           - build benchmarks
-   tests                - build tests
-   libcudf_kafka        - build the libcudf_kafka C++ code only
-   cudf_kafka           - build the cudf_kafka Python package
-   custreamz            - build the custreamz Python package
-   -v                   - verbose build mode
-   -g                   - build for debug
-   -n                   - no install step
-   -l                   - build legacy tests
-   --allgpuarch         - build for all supported GPU architectures
-   --disable_nvtx       - disable inserting NVTX profiling ranges
-   --show_depr_warn     - show cmake deprecation warnings
-   --ptds               - enable per-thread default stream
-   -h | --h[elp]        - print this text
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafka] [cudf_kafka] [custreamz] [-v] [-g] [-n] [-h] [-l] [--cmake-args=\\\"<args>\\\"]
+   clean                         - remove all existing build artifacts and configuration (start
+                                   over)
+   libcudf                       - build the cudf C++ code only
+   cudf                          - build the cudf Python package
+   dask_cudf                     - build the dask_cudf Python package
+   benchmarks                    - build benchmarks
+   tests                         - build tests
+   libcudf_kafka                 - build the libcudf_kafka C++ code only
+   cudf_kafka                    - build the cudf_kafka Python package
+   custreamz                     - build the custreamz Python package
+   -v                            - verbose build mode
+   -g                            - build for debug
+   -n                            - no install step
+   -l                            - build legacy tests
+   --allgpuarch                  - build for all supported GPU architectures
+   --disable_nvtx                - disable inserting NVTX profiling ranges
+   --show_depr_warn              - show cmake deprecation warnings
+   --ptds                        - enable per-thread default stream
+   --cmake-args=\\\"<args>\\\"   - pass arbitrary list of CMake configuration options (escape all quotes in argument)
+   -h | --h[elp]                 - print this text
 
    default action (no args) is to build and install 'libcudf' then 'cudf'
    then 'dask_cudf' targets
@@ -71,6 +72,28 @@ function hasArg {
     (( ${NUMARGS} != 0 )) && (echo " ${ARGS} " | grep -q " $1 ")
 }
 
+function cmakeArgs {
+    # Check for multiple cmake args options
+    if [[ $(echo $ARGS | { grep -Eo "\-\-cmake\-args" || true; } | wc -l ) -gt 1 ]]; then
+        echo "Multiple --cmake-args options were provided, please provide only one: ${ARGS}"
+        exit 1
+    fi
+
+    # Check for cmake args option
+    if [[ -n $(echo $ARGS | { grep -E "\-\-cmake\-args" || true; } ) ]]; then
+        # There are possible weird edge cases that may cause this regex filter to output nothing and fail silently
+        # the true pipe will catch any weird edge cases that may happen and will cause the program to fall back
+        # on the invalid option error
+        CMAKE_ARGS=$(echo $ARGS | { grep -Eo "\-\-cmake\-args=\".+\"" || true; })
+        if [[ -n ${CMAKE_ARGS} ]]; then
+            # Remove the full  CMAKE_ARGS argument from list of args so that it passes validArgs function
+            ARGS=${ARGS//$CMAKE_ARGS/}
+            # Filter the full argument down to just the extra string that will be added to cmake call
+            CMAKE_ARGS=$(echo $CMAKE_ARGS | grep -Eo "\".+\"" | sed -e 's/^"//' -e 's/"$//')
+        fi
+    fi
+}
+
 function buildAll {
     ((${NUMARGS} == 0 )) || !(echo " ${ARGS} " | grep -q " [^-]\+ ")
 }
@@ -82,9 +105,11 @@ fi
 
 # Check for valid usage
 if (( ${NUMARGS} != 0 )); then
+    # Check for cmake args
+    cmakeArgs
     for a in ${ARGS}; do
     if ! (echo " ${VALIDARGS} " | grep -q " ${a} "); then
-        echo "Invalid option: ${a}"
+        echo "Invalid option or formatting, check --help: ${a}"
         exit 1
     fi
     done
@@ -139,12 +164,11 @@ fi
 # Configure, build, and install libcudf
 
 if buildAll || hasArg libcudf; then
-
     if (( ${BUILD_ALL_GPU_ARCH} == 0 )); then
-        CUDF_CMAKE_CUDA_ARCHITECTURES="-DCMAKE_CUDA_ARCHITECTURES="
+        CUDF_CMAKE_CUDA_ARCHITECTURES="-DCMAKE_CUDA_ARCHITECTURES=NATIVE"
         echo "Building for the architecture of the GPU in the system..."
     else
-        CUDF_CMAKE_CUDA_ARCHITECTURES=""
+        CUDF_CMAKE_CUDA_ARCHITECTURES="-DCMAKE_CUDA_ARCHITECTURES=ALL"
         echo "Building for *ALL* supported GPU architectures..."
     fi
 
@@ -156,7 +180,8 @@ if buildAll || hasArg libcudf; then
           -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
           -DDISABLE_DEPRECATION_WARNING=${BUILD_DISABLE_DEPRECATION_WARNING} \
           -DPER_THREAD_DEFAULT_STREAM=${BUILD_PER_THREAD_DEFAULT_STREAM} \
-          -DCMAKE_BUILD_TYPE=${BUILD_TYPE}
+          -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
+          ${CMAKE_ARGS}
 
     cd ${LIB_BUILD_DIR}
 
@@ -172,8 +197,7 @@ if buildAll || hasArg cudf; then
 
     cd ${REPODIR}/python/cudf
     if [[ ${INSTALL_TARGET} != "" ]]; then
-        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL}
-        python setup.py install --single-version-externally-managed --record=record.txt
+        PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext -j${PARALLEL_LEVEL} install --single-version-externally-managed --record=record.txt
     else
         PARALLEL_LEVEL=${PARALLEL_LEVEL} python setup.py build_ext --inplace -j${PARALLEL_LEVEL} --library-dir=${LIBCUDF_BUILD_DIR}
     fi
@@ -196,7 +220,8 @@ if hasArg libcudf_kafka; then
     cmake -S $REPODIR/cpp/libcudf_kafka -B ${KAFKA_LIB_BUILD_DIR} \
           -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DBUILD_TESTS=${BUILD_TESTS} \
-          -DCMAKE_BUILD_TYPE=${BUILD_TYPE}
+          -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
+          ${CMAKE_ARGS}
 
 
     cd ${KAFKA_LIB_BUILD_DIR}

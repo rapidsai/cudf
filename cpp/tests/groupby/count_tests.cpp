@@ -32,7 +32,7 @@ struct groupby_count_test : public cudf::test::BaseFixture {
 };
 using K = int32_t;
 
-TYPED_TEST_CASE(groupby_count_test, cudf::test::AllTypes);
+TYPED_TEST_SUITE(groupby_count_test, cudf::test::AllTypes);
 
 TYPED_TEST(groupby_count_test, basic)
 {
@@ -45,13 +45,13 @@ TYPED_TEST(groupby_count_test, basic)
   fixed_width_column_wrapper<K> expect_keys{1, 2, 3};
   fixed_width_column_wrapper<R> expect_vals{3, 4, 3};
 
-  auto agg = cudf::make_count_aggregation();
+  auto agg = cudf::make_count_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg1 = cudf::make_count_aggregation();
+  auto agg1 = cudf::make_count_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg1), force_use_sort_impl::YES);
 
-  auto agg2 = cudf::make_count_aggregation(null_policy::INCLUDE);
+  auto agg2 = cudf::make_count_aggregation<groupby_aggregation>(null_policy::INCLUDE);
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
@@ -66,10 +66,10 @@ TYPED_TEST(groupby_count_test, empty_cols)
   fixed_width_column_wrapper<K> expect_keys{};
   fixed_width_column_wrapper<R> expect_vals;
 
-  auto agg = cudf::make_count_aggregation();
+  auto agg = cudf::make_count_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg1 = cudf::make_count_aggregation();
+  auto agg1 = cudf::make_count_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg1), force_use_sort_impl::YES);
 }
 
@@ -84,13 +84,13 @@ TYPED_TEST(groupby_count_test, zero_valid_keys)
   fixed_width_column_wrapper<K> expect_keys{};
   fixed_width_column_wrapper<R> expect_vals{};
 
-  auto agg = cudf::make_count_aggregation();
+  auto agg = cudf::make_count_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg1 = cudf::make_count_aggregation();
+  auto agg1 = cudf::make_count_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg1), force_use_sort_impl::YES);
 
-  auto agg2 = cudf::make_count_aggregation(null_policy::INCLUDE);
+  auto agg2 = cudf::make_count_aggregation<groupby_aggregation>(null_policy::INCLUDE);
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
@@ -105,14 +105,14 @@ TYPED_TEST(groupby_count_test, zero_valid_values)
   fixed_width_column_wrapper<K> expect_keys{1};
   fixed_width_column_wrapper<R> expect_vals{0};
 
-  auto agg = cudf::make_count_aggregation();
+  auto agg = cudf::make_count_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg1 = cudf::make_count_aggregation();
+  auto agg1 = cudf::make_count_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg1), force_use_sort_impl::YES);
 
   fixed_width_column_wrapper<R> expect_vals2{3};
-  auto agg2 = cudf::make_count_aggregation(null_policy::INCLUDE);
+  auto agg2 = cudf::make_count_aggregation<groupby_aggregation>(null_policy::INCLUDE);
   test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg2));
 }
 
@@ -133,14 +133,14 @@ TYPED_TEST(groupby_count_test, null_keys_and_values)
   fixed_width_column_wrapper<R> expect_vals({2,        3,         2,       0});
   // clang-format on
 
-  auto agg = cudf::make_count_aggregation();
+  auto agg = cudf::make_count_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg1 = cudf::make_count_aggregation();
+  auto agg1 = cudf::make_count_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg1), force_use_sort_impl::YES);
 
   fixed_width_column_wrapper<R> expect_vals2{3, 4, 2, 1};
-  auto agg2 = cudf::make_count_aggregation(null_policy::INCLUDE);
+  auto agg2 = cudf::make_count_aggregation<groupby_aggregation>(null_policy::INCLUDE);
   test_single_agg(keys, vals, expect_keys, expect_vals2, std::move(agg2));
 }
 
@@ -160,21 +160,21 @@ TEST_F(groupby_count_string_test, basic)
   fixed_width_column_wrapper<K> expect_keys{0, 1, 3, 5};
   fixed_width_column_wrapper<R> expect_vals{1, 1, 2, 2};
 
-  auto agg = cudf::make_count_aggregation();
+  auto agg = cudf::make_count_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg1 = cudf::make_count_aggregation();
+  auto agg1 = cudf::make_count_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg1), force_use_sort_impl::YES);
 }
 // clang-format on
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, GroupByCount)
+TYPED_TEST(FixedPointTestAllReps, GroupByCount)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -191,13 +191,13 @@ TYPED_TEST(FixedPointTestBothReps, GroupByCount)
   auto const expect_keys = fixed_width_column_wrapper<K>{1, 2, 3};
   auto const expect_vals = fixed_width_column_wrapper<R>{3, 4, 3};
 
-  auto agg = cudf::make_count_aggregation();
+  auto agg = cudf::make_count_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 
-  auto agg1 = cudf::make_count_aggregation();
+  auto agg1 = cudf::make_count_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg1), force_use_sort_impl::YES);
 
-  auto agg2 = cudf::make_count_aggregation(null_policy::INCLUDE);
+  auto agg2 = cudf::make_count_aggregation<groupby_aggregation>(null_policy::INCLUDE);
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg2));
 }
 
@@ -216,9 +216,14 @@ TEST_F(groupby_dictionary_count_test, basic)
   fixed_width_column_wrapper<R> expect_vals{1, 1, 2, 2};
   // clang-format on
 
-  test_single_agg(keys, vals, expect_keys, expect_vals, cudf::make_count_aggregation());
   test_single_agg(
-    keys, vals, expect_keys, expect_vals, cudf::make_count_aggregation(), force_use_sort_impl::YES);
+    keys, vals, expect_keys, expect_vals, cudf::make_count_aggregation<groupby_aggregation>());
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals,
+                  cudf::make_count_aggregation<groupby_aggregation>(),
+                  force_use_sort_impl::YES);
 }
 
 }  // namespace test

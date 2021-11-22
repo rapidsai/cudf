@@ -142,37 +142,25 @@ class cufile_output : public cufile_io_base {
    * @param size Number of bytes to write
    */
   virtual void write(void const* data, size_t offset, size_t size) = 0;
+
+  /**
+   * @brief Asynchronously writes the data from a device buffer into a file.
+   *
+   * It is the caller's responsibility to not invalidate `data` until the result from this function
+   * is synchronized.
+   *
+   * @throws cudf::logic_error on cuFile error
+   *
+   * @param data Pointer to the buffer to be written into the output file
+   * @param offset Number of bytes from the start
+   * @param size Number of bytes to write
+   */
+  virtual std::future<void> write_async(void const* data, size_t offset, size_t size) = 0;
 };
 
 #ifdef CUFILE_FOUND
 
 class cufile_shim;
-
-/**
- * @brief Class that manages cuFile configuration.
- */
-class cufile_config {
-  std::string const default_policy    = "OFF";
-  std::string const json_path_env_var = "CUFILE_ENV_PATH_JSON";
-
-  std::string const policy = default_policy;
-  temp_directory tmp_config_dir{"cudf_cufile_config"};
-
-  cufile_config();
-
- public:
-  /**
-   * @brief Returns true when cuFile use is enabled.
-   */
-  bool is_enabled() const { return policy == "ALWAYS" or policy == "GDS"; }
-
-  /**
-   * @brief Returns true when cuDF should not fall back to host IO.
-   */
-  bool is_required() const { return policy == "ALWAYS"; }
-
-  static cufile_config const* instance();
-};
 
 /**
  * @brief Class that provides RAII for cuFile file registration.
@@ -242,10 +230,12 @@ class cufile_output_impl final : public cufile_output {
   cufile_output_impl(std::string const& filepath);
 
   void write(void const* data, size_t offset, size_t size) override;
+  std::future<void> write_async(void const* data, size_t offset, size_t size) override;
 
  private:
   cufile_shim const* shim = nullptr;
   cufile_registered_file const cf_file;
+  cudf::detail::thread_pool pool;
 };
 #else
 
@@ -262,11 +252,23 @@ class cufile_input_impl final : public cufile_input {
   {
     CUDF_FAIL("Only used to compile without cufile library, should not be called");
   }
+
+  std::future<size_t> read_async(size_t offset,
+                                 size_t size,
+                                 uint8_t* dst,
+                                 rmm::cuda_stream_view stream) override
+  {
+    CUDF_FAIL("Only used to compile without cufile library, should not be called");
+  }
 };
 
 class cufile_output_impl final : public cufile_output {
  public:
   void write(void const* data, size_t offset, size_t size) override
+  {
+    CUDF_FAIL("Only used to compile without cufile library, should not be called");
+  }
+  std::future<void> write_async(void const* data, size_t offset, size_t size) override
   {
     CUDF_FAIL("Only used to compile without cufile library, should not be called");
   }

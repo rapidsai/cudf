@@ -25,11 +25,19 @@ import ai.rapids.cudf.HostColumnVector.ListType;
 import ai.rapids.cudf.HostColumnVector.StructData;
 import ai.rapids.cudf.HostColumnVector.StructType;
 
-import ai.rapids.cudf.ast.BinaryExpression;
+import ai.rapids.cudf.ast.BinaryOperation;
 import ai.rapids.cudf.ast.BinaryOperator;
 import ai.rapids.cudf.ast.ColumnReference;
 import ai.rapids.cudf.ast.CompiledExpression;
 import ai.rapids.cudf.ast.TableReference;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.parquet.hadoop.ParquetFileReader;
+import org.apache.parquet.hadoop.util.HadoopInputFile;
+import org.apache.parquet.schema.MessageType;
+import org.apache.parquet.schema.OriginalType;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -39,22 +47,20 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static ai.rapids.cudf.ColumnWriterOptions.mapColumn;
 import static ai.rapids.cudf.ParquetWriterOptions.listBuilder;
 import static ai.rapids.cudf.ParquetWriterOptions.structBuilder;
 import static ai.rapids.cudf.Table.TestBuilder;
+import static ai.rapids.cudf.Table.removeNullMasksIfNeeded;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -104,7 +110,7 @@ public class TableTest extends CudfTestBase {
    * @param colName The name of the column
    */
   public static void assertColumnsAreEqual(ColumnView expected, ColumnView cv, String colName) {
-    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true);
+    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true, false);
   }
 
   /**
@@ -114,7 +120,7 @@ public class TableTest extends CudfTestBase {
    * @param colName The name of the host column
    */
   public static void assertColumnsAreEqual(HostColumnVector expected, HostColumnVector cv, String colName) {
-    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true);
+    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName, true, false);
   }
 
   /**
@@ -123,7 +129,7 @@ public class TableTest extends CudfTestBase {
    * @param cv The input Struct column
    */
   public static void assertStructColumnsAreEqual(ColumnView expected, ColumnView cv) {
-    assertPartialStructColumnsAreEqual(expected, 0, expected.getRowCount(), cv, "unnamed", true);
+    assertPartialStructColumnsAreEqual(expected, 0, expected.getRowCount(), cv, "unnamed", true, false);
   }
 
   /**
@@ -133,13 +139,14 @@ public class TableTest extends CudfTestBase {
    * @param length The number of rows to consider
    * @param cv The input Struct column
    * @param colName The name of the column
-   * @param enableNullCheck Whether to check for nulls in the Struct column
+   * @param enableNullCountCheck Whether to check for nulls in the Struct column
+   * @param enableNullabilityCheck Whether the table have a validity mask
    */
   public static void assertPartialStructColumnsAreEqual(ColumnView expected, long rowOffset, long length,
-      ColumnView cv, String colName, boolean enableNullCheck) {
+      ColumnView cv, String colName, boolean enableNullCountCheck, boolean enableNullabilityCheck) {
     try (HostColumnVector hostExpected = expected.copyToHost();
          HostColumnVector hostcv = cv.copyToHost()) {
-      assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck);
+      assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCountCheck, enableNullabilityCheck);
     }
   }
 
@@ -149,12 +156,13 @@ public class TableTest extends CudfTestBase {
    * @param cv The input column
    * @param colName The name of the column
    * @param enableNullCheck Whether to check for nulls in the column
+   * @param enableNullabilityCheck Whether the table have a validity mask
    */
   public static void assertPartialColumnsAreEqual(ColumnView expected, long rowOffset, long length,
-      ColumnView cv, String colName, boolean enableNullCheck) {
+      ColumnView cv, String colName, boolean enableNullCheck, boolean enableNullabilityCheck) {
     try (HostColumnVector hostExpected = expected.copyToHost();
          HostColumnVector hostcv = cv.copyToHost()) {
-      assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck);
+      assertPartialColumnsAreEqual(hostExpected, rowOffset, length, hostcv, colName, enableNullCheck, enableNullabilityCheck);
     }
   }
 
@@ -165,17 +173,20 @@ public class TableTest extends CudfTestBase {
    * @param length  number of rows from starting offset
    * @param cv The input host column
    * @param colName The name of the host column
-   * @param enableNullCheck Whether to check for nulls in the host column
+   * @param enableNullCountCheck Whether to check for nulls in the host column
    */
   public static void assertPartialColumnsAreEqual(HostColumnVectorCore expected, long rowOffset, long length,
-                                                  HostColumnVectorCore cv, String colName, boolean enableNullCheck) {
+                                                  HostColumnVectorCore cv, String colName, boolean enableNullCountCheck, boolean enableNullabilityCheck) {
     assertEquals(expected.getType(), cv.getType(), "Type For Column " + colName);
     assertEquals(length, cv.getRowCount(), "Row Count For Column " + colName);
     assertEquals(expected.getNumChildren(), cv.getNumChildren(), "Child Count for Column " + colName);
-    if (enableNullCheck) {
+    if (enableNullCountCheck) {
       assertEquals(expected.getNullCount(), cv.getNullCount(), "Null Count For Column " + colName);
     } else {
       // TODO add in a proper check when null counts are supported by serializing a partitioned column
+    }
+    if (enableNullabilityCheck) {
+      assertEquals(expected.hasValidityVector(), cv.hasValidityVector(), "Column nullability is different than expected");
     }
     DType type = expected.getType();
     for (long expectedRow = rowOffset; expectedRow < (rowOffset + length); expectedRow++) {
@@ -215,6 +226,10 @@ public class TableTest extends CudfTestBase {
           case TIMESTAMP_SECONDS:
           case DECIMAL64:
             assertEquals(expected.getLong(expectedRow), cv.getLong(tableRow),
+                "Column " + colName + " Row " + tableRow);
+            break;
+          case DECIMAL128:
+            assertEquals(expected.getBigDecimal(expectedRow), cv.getBigDecimal(tableRow),
                 "Column " + colName + " Row " + tableRow);
             break;
           case FLOAT32:
@@ -262,7 +277,7 @@ public class TableTest extends CudfTestBase {
           }
           assertPartialColumnsAreEqual(expected.getNestedChildren().get(0), expectedChildRowOffset,
               numChildRows, cv.getNestedChildren().get(0), colName + " list child",
-              enableNullCheck);
+              enableNullCountCheck, enableNullabilityCheck);
           break;
         case STRUCT:
           List<HostColumnVectorCore> expectedChildren = expected.getNestedChildren();
@@ -273,7 +288,7 @@ public class TableTest extends CudfTestBase {
             String childName = colName + " child " + i;
             assertEquals(length, cvChild.getRowCount(), "Row Count for Column " + colName);
             assertPartialColumnsAreEqual(expectedChild, rowOffset, length, cvChild,
-                colName, enableNullCheck);
+                colName, enableNullCountCheck, enableNullabilityCheck);
           }
           break;
         default:
@@ -289,9 +304,10 @@ public class TableTest extends CudfTestBase {
    * @param length the number of rows to check
    * @param table the input table to compare against expected
    * @param enableNullCheck whether to check for nulls or not
+   * @param enableNullabilityCheck whether the table have a validity mask
    */
   public static void assertPartialTablesAreEqual(Table expected, long rowOffset, long length, Table table,
-                                                 boolean enableNullCheck) {
+                                                 boolean enableNullCheck, boolean enableNullabilityCheck) {
     assertEquals(expected.getNumberOfColumns(), table.getNumberOfColumns());
     assertEquals(length, table.getRowCount(), "ROW COUNT");
     for (int col = 0; col < expected.getNumberOfColumns(); col++) {
@@ -301,7 +317,7 @@ public class TableTest extends CudfTestBase {
       if (rowOffset != 0 || length != expected.getRowCount()) {
         name = name + " PART " + rowOffset + "-" + (rowOffset + length - 1);
       }
-      assertPartialColumnsAreEqual(expect, rowOffset, length, cv, name, enableNullCheck);
+      assertPartialColumnsAreEqual(expect, rowOffset, length, cv, name, enableNullCheck, enableNullabilityCheck);
     }
   }
 
@@ -311,7 +327,7 @@ public class TableTest extends CudfTestBase {
    * @param table the input table to compare against expected
    */
   public static void assertTablesAreEqual(Table expected, Table table) {
-    assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), table, true);
+    assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), table, true, false);
   }
 
   void assertTablesHaveSameValues(HashMap<Object, Integer>[] expectedTable, Table table) {
@@ -1490,9 +1506,105 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testLeftHashJoinGatherMaps() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
+         Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
+         HashJoin rightHash = new HashJoin(rightKeys, false);
+         Table expected = new Table.TestBuilder()
+             .column(  0,   1, 2,   3,   4,   5,   6, 7, 8, 9)
+             .column(inv, inv, 2, inv, inv, inv, inv, 0, 1, 3)
+             .build()) {
+      GatherMap[] maps = leftKeys.leftJoinGatherMaps(rightHash);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testLeftHashJoinGatherMapsWithCount() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
+         Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
+         HashJoin rightHash = new HashJoin(rightKeys, false);
+         Table expected = new Table.TestBuilder()
+             .column(  0,   1, 2,   3,   4,   5,   6, 7, 8, 9)
+             .column(inv, inv, 2, inv, inv, inv, inv, 0, 1, 3)
+             .build()) {
+      long rowCount = leftKeys.leftJoinRowCount(rightHash);
+      assertEquals(expected.getRowCount(), rowCount);
+      GatherMap[] maps = leftKeys.leftJoinGatherMaps(rightHash, rowCount);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testLeftHashJoinGatherMapsNulls() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table rightKeys = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         HashJoin rightHash = new HashJoin(rightKeys, true);
+         Table expected = new Table.TestBuilder()
+             .column(  0,   1, 2,   3,   4,   5,   6, 7, 7, 8, 8, 9) // left
+             .column(inv, inv, 2, inv, inv, inv, inv, 0, 1, 0, 1, 3) // right
+             .build()) {
+      GatherMap[] maps = leftKeys.leftJoinGatherMaps(rightHash);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testLeftHashJoinGatherMapsNullsWithCount() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table rightKeys = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         HashJoin rightHash = new HashJoin(rightKeys,true);
+         Table expected = new Table.TestBuilder()
+             .column(  0,   1, 2,   3,   4,   5,   6, 7, 7, 8, 8, 9) // left
+             .column(inv, inv, 2, inv, inv, inv, inv, 0, 1, 0, 1, 3) // right
+             .build()) {
+      long rowCount = leftKeys.leftJoinRowCount(rightHash);
+      assertEquals(expected.getRowCount(), rowCount);
+      GatherMap[] maps = leftKeys.leftJoinGatherMaps(rightHash, rowCount);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
   void testConditionalLeftJoinGatherMaps() {
     final int inv = Integer.MIN_VALUE;
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.GREATER,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
@@ -1504,7 +1616,7 @@ public class TableTest extends CudfTestBase {
              .column(inv, inv, 0, 1, 3, inv, inv, 0, 1, inv, 1, inv, 0, 1)
              .build();
          CompiledExpression condition = expr.compile()) {
-      GatherMap[] maps = left.leftJoinGatherMaps(right, condition, false);
+      GatherMap[] maps = left.conditionalLeftJoinGatherMaps(right, condition);
       try {
         verifyJoinGatherMaps(maps, expected);
       } finally {
@@ -1518,7 +1630,7 @@ public class TableTest extends CudfTestBase {
   @Test
   void testConditionalLeftJoinGatherMapsNulls() {
     final int inv = Integer.MIN_VALUE;
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.EQUAL,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.NULL_EQUAL,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder()
@@ -1532,7 +1644,65 @@ public class TableTest extends CudfTestBase {
              .column(inv, inv, 2, inv, inv, inv, inv, 0, 1, 0, 1, 3) // right
              .build();
          CompiledExpression condition = expr.compile()) {
-      GatherMap[] maps = left.leftJoinGatherMaps(right, condition, true);
+      GatherMap[] maps = left.conditionalLeftJoinGatherMaps(right, condition);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testConditionalLeftJoinGatherMapsWithCount() {
+    final int inv = Integer.MIN_VALUE;
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(0, TableReference.LEFT),
+        new ColumnReference(0, TableReference.RIGHT));
+    try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5).build();
+         Table expected = new Table.TestBuilder()
+             .column(  0,   1, 2, 2, 2,   3,   4, 5, 5,   6, 7,   8, 9, 9)
+             .column(inv, inv, 0, 1, 3, inv, inv, 0, 1, inv, 1, inv, 0, 1)
+             .build();
+         CompiledExpression condition = expr.compile()) {
+      long rowCount = left.conditionalLeftJoinRowCount(right, condition);
+      assertEquals(expected.getRowCount(), rowCount);
+      GatherMap[] maps = left.conditionalLeftJoinGatherMaps(right, condition, rowCount);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testConditionalLeftJoinGatherMapsNullsWithCount() {
+    final int inv = Integer.MIN_VALUE;
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.NULL_EQUAL,
+        new ColumnReference(0, TableReference.LEFT),
+        new ColumnReference(0, TableReference.RIGHT));
+    try (Table left = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table right = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(  0,   1, 2,   3,   4,   5,   6, 7, 7, 8, 8, 9) // left
+             .column(inv, inv, 2, inv, inv, inv, inv, 0, 1, 0, 1, 3) // right
+             .build();
+         CompiledExpression condition = expr.compile()) {
+      long rowCount = left.conditionalLeftJoinRowCount(right, condition);
+      assertEquals(expected.getRowCount(), rowCount);
+      GatherMap[] maps = left.conditionalLeftJoinGatherMaps(right, condition, rowCount);
       try {
         verifyJoinGatherMaps(maps, expected);
       } finally {
@@ -1586,8 +1756,100 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testInnerHashJoinGatherMaps() {
+    try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
+         Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
+         HashJoin rightHash = new HashJoin(rightKeys, false);
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 8, 9) // left
+             .column(2, 0, 1, 3) // right
+             .build()) {
+      GatherMap[] maps = leftKeys.innerJoinGatherMaps(rightHash);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testInnerHashJoinGatherMapsWithCount() {
+    try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
+         Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
+         HashJoin rightHash = new HashJoin(rightKeys, false);
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 8, 9) // left
+             .column(2, 0, 1, 3) // right
+             .build()) {
+      long rowCount = leftKeys.innerJoinRowCount(rightHash);
+      assertEquals(expected.getRowCount(), rowCount);
+      GatherMap[] maps = leftKeys.innerJoinGatherMaps(rightHash, rowCount);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testInnerHashJoinGatherMapsNulls() {
+    try (Table leftKeys = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table rightKeys = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         HashJoin rightHash = new HashJoin(rightKeys, true);
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 7, 8, 8, 9) // left
+             .column(2, 0, 1, 0, 1, 3) // right
+             .build()) {
+      GatherMap[] maps = leftKeys.innerJoinGatherMaps(rightHash);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testInnerHashJoinGatherMapsNullsWithCount() {
+    try (Table leftKeys = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table rightKeys = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         HashJoin rightHash = new HashJoin(rightKeys, true);
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 7, 8, 8, 9) // left
+             .column(2, 0, 1, 0, 1, 3) // right
+             .build()) {
+      long rowCount = leftKeys.innerJoinRowCount(rightHash);
+      assertEquals(expected.getRowCount(), rowCount);
+      GatherMap[] maps = leftKeys.innerJoinGatherMaps(rightHash, rowCount);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
   void testConditionalInnerJoinGatherMaps() {
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.GREATER,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
@@ -1599,7 +1861,35 @@ public class TableTest extends CudfTestBase {
              .column(0, 1, 3, 0, 1, 1, 0, 1)
              .build();
          CompiledExpression condition = expr.compile()) {
-      GatherMap[] maps = left.innerJoinGatherMaps(right, condition, false);
+      GatherMap[] maps = left.conditionalInnerJoinGatherMaps(right, condition);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  // Test non-null-supporting equality at least once.
+  @Test
+  void testConditionalInnerJoinGatherMapsEqual() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.EQUAL,
+        new ColumnReference(0, TableReference.LEFT),
+        new ColumnReference(0, TableReference.RIGHT));
+    try (Table left = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table right = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(2, 9) // left
+             .column(2, 3) // right
+             .build();
+         CompiledExpression condition = expr.compile()) {
+      GatherMap[] maps = left.conditionalInnerJoinGatherMaps(right, condition);
       try {
         verifyJoinGatherMaps(maps, expected);
       } finally {
@@ -1612,7 +1902,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testConditionalInnerJoinGatherMapsNulls() {
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.EQUAL,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.NULL_EQUAL,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder()
@@ -1626,7 +1916,63 @@ public class TableTest extends CudfTestBase {
              .column(2, 0, 1, 0, 1, 3) // right
              .build();
          CompiledExpression condition = expr.compile()) {
-      GatherMap[] maps = left.innerJoinGatherMaps(right, condition, true);
+      GatherMap[] maps = left.conditionalInnerJoinGatherMaps(right, condition);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testConditionalInnerJoinGatherMapsWithCount() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(0, TableReference.LEFT),
+        new ColumnReference(0, TableReference.RIGHT));
+    try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5).build();
+         Table expected = new Table.TestBuilder()
+             .column(2, 2, 2, 5, 5, 7, 9, 9)
+             .column(0, 1, 3, 0, 1, 1, 0, 1)
+             .build();
+         CompiledExpression condition = expr.compile()) {
+      long rowCount = left.conditionalInnerJoinRowCount(right, condition);
+      assertEquals(expected.getRowCount(), rowCount);
+      GatherMap[] maps = left.conditionalInnerJoinGatherMaps(right, condition, rowCount);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testConditionalInnerJoinGatherMapsNullsWithCount() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.NULL_EQUAL,
+        new ColumnReference(0, TableReference.LEFT),
+        new ColumnReference(0, TableReference.RIGHT));
+    try (Table left = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table right = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 7, 8, 8, 9) // left
+             .column(2, 0, 1, 0, 1, 3) // right
+             .build();
+         CompiledExpression condition = expr.compile()) {
+      long rowCount = left.conditionalInnerJoinRowCount(right, condition);
+      assertEquals(expected.getRowCount(), rowCount);
+      GatherMap[] maps = left.conditionalInnerJoinGatherMaps(right, condition, rowCount);
       try {
         verifyJoinGatherMaps(maps, expected);
       } finally {
@@ -1682,9 +2028,105 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testFullHashJoinGatherMaps() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, null, 1, 7, 4, 6, 5, 8).build();
+         Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, null).build();
+         HashJoin rightHash = new HashJoin(rightKeys, false);
+         Table expected = new Table.TestBuilder()
+             .column(inv, inv,   0,   1, 2,   3,   4,   5,   6, 7, 8, 9) // left
+             .column(  4,   5, inv, inv, 2, inv, inv, inv, inv, 0, 1, 3) // right
+             .build()) {
+      GatherMap[] maps = leftKeys.fullJoinGatherMaps(rightHash);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testFullHashJoinGatherMapsWithCount() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, null, 1, 7, 4, 6, 5, 8).build();
+         Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, null).build();
+         HashJoin rightHash = new HashJoin(rightKeys, false);
+         Table expected = new Table.TestBuilder()
+             .column(inv, inv,   0,   1, 2,   3,   4,   5,   6, 7, 8, 9) // left
+             .column(  4,   5, inv, inv, 2, inv, inv, inv, inv, 0, 1, 3) // right
+             .build()) {
+      long rowCount = leftKeys.fullJoinRowCount(rightHash);
+      assertEquals(expected.getRowCount(), rowCount);
+      GatherMap[] maps = leftKeys.fullJoinGatherMaps(rightHash, rowCount);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testFullHashJoinGatherMapsNulls() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table rightKeys = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         HashJoin rightHash = new HashJoin(rightKeys, true);
+         Table expected = new Table.TestBuilder()
+             .column(inv, inv,   0,   1, 2,   3,   4,   5,   6, 7, 7, 8, 8, 9) // left
+             .column(  4,   5, inv, inv, 2, inv, inv, inv, inv, 0, 1, 0, 1, 3) // right
+             .build()) {
+      GatherMap[] maps = leftKeys.fullJoinGatherMaps(rightHash);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testFullHashJoinGatherMapsNullsWithCount() {
+    final int inv = Integer.MIN_VALUE;
+    try (Table leftKeys = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table rightKeys = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         HashJoin rightHash = new HashJoin(rightKeys, true);
+         Table expected = new Table.TestBuilder()
+             .column(inv, inv,   0,   1, 2,   3,   4,   5,   6, 7, 7, 8, 8, 9) // left
+             .column(  4,   5, inv, inv, 2, inv, inv, inv, inv, 0, 1, 0, 1, 3) // right
+             .build()) {
+      long rowCount = leftKeys.fullJoinRowCount(rightHash);
+      assertEquals(expected.getRowCount(), rowCount);
+      GatherMap[] maps = leftKeys.fullJoinGatherMaps(rightHash, rowCount);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
   void testConditionalFullJoinGatherMaps() {
     final int inv = Integer.MIN_VALUE;
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.GREATER,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
@@ -1696,7 +2138,7 @@ public class TableTest extends CudfTestBase {
              .column(  2,   4,   5, inv, inv, 0, 1, 3, inv, inv, 0, 1, inv, 1, inv, 0, 1)
              .build();
          CompiledExpression condition = expr.compile()) {
-      GatherMap[] maps = left.fullJoinGatherMaps(right, condition, false);
+      GatherMap[] maps = left.conditionalFullJoinGatherMaps(right, condition);
       try {
         verifyJoinGatherMaps(maps, expected);
       } finally {
@@ -1710,7 +2152,7 @@ public class TableTest extends CudfTestBase {
   @Test
   void testConditionalFullJoinGatherMapsNulls() {
     final int inv = Integer.MIN_VALUE;
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.EQUAL,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.NULL_EQUAL,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder()
@@ -1724,7 +2166,7 @@ public class TableTest extends CudfTestBase {
              .column(  4,   5, inv, inv, 2, inv, inv, inv, inv, 0, 1, 0, 1, 3) // right
              .build();
          CompiledExpression condition = expr.compile()) {
-      GatherMap[] maps = left.fullJoinGatherMaps(right, condition, true);
+      GatherMap[] maps = left.conditionalFullJoinGatherMaps(right, condition);
       try {
         verifyJoinGatherMaps(maps, expected);
       } finally {
@@ -1765,7 +2207,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testConditionalLeftSemiJoinGatherMap() {
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.GREATER,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
@@ -1776,14 +2218,14 @@ public class TableTest extends CudfTestBase {
              .column(2, 5, 7, 9) // left
              .build();
          CompiledExpression condition = expr.compile();
-         GatherMap map = left.leftSemiJoinGatherMap(right, condition, false)) {
+         GatherMap map = left.conditionalLeftSemiJoinGatherMap(right, condition)) {
       verifySemiJoinGatherMap(map, expected);
     }
   }
 
   @Test
   void testConditionalLeftSemiJoinGatherMapNulls() {
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.EQUAL,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.NULL_EQUAL,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder()
@@ -1796,8 +2238,54 @@ public class TableTest extends CudfTestBase {
              .column(2, 7, 8, 9) // left
              .build();
          CompiledExpression condition = expr.compile();
-         GatherMap map = left.leftSemiJoinGatherMap(right, condition, true)) {
+         GatherMap map = left.conditionalLeftSemiJoinGatherMap(right, condition)) {
       verifySemiJoinGatherMap(map, expected);
+    }
+  }
+
+  @Test
+  void testConditionalLeftSemiJoinGatherMapWithCount() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(0, TableReference.LEFT),
+        new ColumnReference(0, TableReference.RIGHT));
+    try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5).build();
+         Table expected = new Table.TestBuilder()
+             .column(2, 5, 7, 9) // left
+             .build();
+         CompiledExpression condition = expr.compile()) {
+      long rowCount = left.conditionalLeftSemiJoinRowCount(right, condition);
+      assertEquals(expected.getRowCount(), rowCount);
+      try (GatherMap map =
+               left.conditionalLeftSemiJoinGatherMap(right, condition, rowCount)) {
+        verifySemiJoinGatherMap(map, expected);
+      }
+    }
+  }
+
+  @Test
+  void testConditionalLeftSemiJoinGatherMapNullsWithCount() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.NULL_EQUAL,
+        new ColumnReference(0, TableReference.LEFT),
+        new ColumnReference(0, TableReference.RIGHT));
+    try (Table left = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table right = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 8, 9) // left
+             .build();
+         CompiledExpression condition = expr.compile()) {
+      long rowCount = left.conditionalLeftSemiJoinRowCount(right, condition);
+      assertEquals(expected.getRowCount(), rowCount);
+      try (GatherMap map =
+               left.conditionalLeftSemiJoinGatherMap(right, condition, rowCount)) {
+        verifySemiJoinGatherMap(map, expected);
+      }
     }
   }
 
@@ -1831,7 +2319,7 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testConditionalLeftAntiJoinGatherMap() {
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.GREATER,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
@@ -1842,14 +2330,14 @@ public class TableTest extends CudfTestBase {
              .column(0, 1, 3, 4, 6, 8) // left
              .build();
          CompiledExpression condition = expr.compile();
-         GatherMap map = left.leftAntiJoinGatherMap(right, condition, false)) {
+         GatherMap map = left.conditionalLeftAntiJoinGatherMap(right, condition)) {
       verifySemiJoinGatherMap(map, expected);
     }
   }
 
   @Test
   void testConditionalAntiSemiJoinGatherMapNulls() {
-    BinaryExpression expr = new BinaryExpression(BinaryOperator.EQUAL,
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.NULL_EQUAL,
         new ColumnReference(0, TableReference.LEFT),
         new ColumnReference(0, TableReference.RIGHT));
     try (Table left = new Table.TestBuilder()
@@ -1862,8 +2350,54 @@ public class TableTest extends CudfTestBase {
              .column(0, 1, 3, 4, 5, 6) // left
              .build();
          CompiledExpression condition = expr.compile();
-         GatherMap map = left.leftAntiJoinGatherMap(right, condition, true)) {
+         GatherMap map = left.conditionalLeftAntiJoinGatherMap(right, condition)) {
       verifySemiJoinGatherMap(map, expected);
+    }
+  }
+
+  @Test
+  void testConditionalLeftAntiJoinGatherMapWithCount() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(0, TableReference.LEFT),
+        new ColumnReference(0, TableReference.RIGHT));
+    try (Table left = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5).build();
+         Table expected = new Table.TestBuilder()
+             .column(0, 1, 3, 4, 6, 8) // left
+             .build();
+         CompiledExpression condition = expr.compile()) {
+      long rowCount = left.conditionalLeftAntiJoinRowCount(right, condition);
+      assertEquals(expected.getRowCount(), rowCount);
+      try (GatherMap map =
+               left.conditionalLeftAntiJoinGatherMap(right, condition, rowCount)) {
+        verifySemiJoinGatherMap(map, expected);
+      }
+    }
+  }
+
+  @Test
+  void testConditionalAntiSemiJoinGatherMapNullsWithCount() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.NULL_EQUAL,
+        new ColumnReference(0, TableReference.LEFT),
+        new ColumnReference(0, TableReference.RIGHT));
+    try (Table left = new Table.TestBuilder()
+        .column(2, 3, 9, 0, 1, 7, 4, null, null, 8)
+        .build();
+         Table right = new Table.TestBuilder()
+             .column(null, null, 9, 8, 10, 32)
+             .build();
+         Table expected = new Table.TestBuilder()
+             .column(0, 1, 3, 4, 5, 6) // left
+             .build();
+         CompiledExpression condition = expr.compile()) {
+      long rowCount = left.conditionalLeftAntiJoinRowCount(right, condition);
+      assertEquals(expected.getRowCount(), rowCount);
+      try (GatherMap map =
+               left.conditionalLeftAntiJoinGatherMap(right, condition, rowCount)) {
+        verifySemiJoinGatherMap(map, expected);
+      }
     }
   }
 
@@ -2392,13 +2926,23 @@ public class TableTest extends CudfTestBase {
         .build();
          ColumnVector parts = ColumnVector
              .fromInts(1, 2, 1, 2, 1, 2, 1, 2, 1, 2);
-         PartitionedTable pt = t.partition(parts, 3);
-         Table expected = new Table.TestBuilder()
-             .column(1, 3, 5, 7, 9, 2, 4, 6, 8, 10)
-             .build()) {
-      int[] partCutoffs = pt.getPartitions();
-      assertArrayEquals(new int[]{0, 0, 5}, partCutoffs);
-      assertTablesAreEqual(expected, pt.getTable());
+         PartitionedTable pt = t.partition(parts, 3)) {
+      assertArrayEquals(new int[]{0, 0, 5}, pt.getPartitions());
+      // order within partitions is not guaranteed, so sort each partition to compare
+      ColumnVector[] slicedColumns = pt.getTable().getColumn(0).slice(0, 5, 5, 10);
+      try (Table part1 = new Table(slicedColumns[0]);
+           Table part1Sorted = part1.orderBy(OrderByArg.asc(0));
+           Table part1Expected = new Table.TestBuilder().column(1, 3, 5, 7, 9).build();
+           Table part2 = new Table(slicedColumns[1]);
+           Table part2Sorted = part2.orderBy(OrderByArg.asc(0));
+           Table part2Expected = new Table.TestBuilder().column(2, 4, 6, 8, 10).build()) {
+        assertTablesAreEqual(part1Expected, part1Sorted);
+        assertTablesAreEqual(part2Expected, part2Sorted);
+      } finally {
+        for (ColumnVector c : slicedColumns) {
+          c.close();
+        }
+      }
     }
   }
 
@@ -2612,6 +3156,28 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testSerializationRoundTripToHostEmpty() throws IOException {
+    DataType listStringsType = new ListType(true, new BasicType(true, DType.STRING));
+    DataType mapType = new ListType(true,
+            new StructType(true,
+                    new BasicType(false, DType.STRING),
+                    new BasicType(false, DType.STRING)));
+    DataType structType = new StructType(true,
+            new BasicType(true, DType.INT8),
+            new BasicType(false, DType.FLOAT32));
+    try (ColumnVector emptyInt = ColumnVector.fromInts();
+         ColumnVector emptyDouble = ColumnVector.fromDoubles();
+         ColumnVector emptyString = ColumnVector.fromStrings();
+         ColumnVector emptyListString = ColumnVector.fromLists(listStringsType);
+         ColumnVector emptyMap = ColumnVector.fromLists(mapType);
+         ColumnVector emptyStruct = ColumnVector.fromStructs(structType);
+         Table t = new Table(emptyInt, emptyInt, emptyDouble, emptyString,
+                 emptyListString, emptyMap, emptyStruct)) {
+      testSerializationRoundTripToHost(t);
+    }
+  }
+
+  @Test
   void testRoundRobinPartition() {
     try (Table t = new Table.TestBuilder()
         .column(     100,      202,      3003,    40004,        5,      -60,       1,      null,        3,  null,        5,     null,        7, null,        9,      null,       11,      null,        13,      null,       15)
@@ -2738,12 +3304,55 @@ public class TableTest extends CudfTestBase {
           try (Table found = JCudfSerialization.readAndConcat(
               headers.toArray(new JCudfSerialization.SerializedTableHeader[headers.size()]),
               buffers.toArray(new HostMemoryBuffer[buffers.size()]))) {
-            assertPartialTablesAreEqual(t, 0, t.getRowCount(), found, false);
+            assertPartialTablesAreEqual(t, 0, t.getRowCount(), found, false, false);
           }
         } finally {
           for (HostMemoryBuffer buff: buffers) {
             buff.close();
           }
+        }
+      }
+    }
+  }
+
+  @Test
+  void testSerializationRoundTripToHost() throws IOException {
+    try (Table t = buildTestTable()) {
+      testSerializationRoundTripToHost(t);
+    }
+  }
+
+  private void testSerializationRoundTripToHost(Table t) throws IOException {
+    long rowCount = t.getRowCount();
+    ByteArrayOutputStream bout = new ByteArrayOutputStream();
+    JCudfSerialization.writeToStream(t, bout, 0, rowCount);
+    ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
+    DataInputStream din = new DataInputStream(bin);
+
+    JCudfSerialization.SerializedTableHeader header =
+            new JCudfSerialization.SerializedTableHeader(din);
+    assertTrue(header.wasInitialized());
+    try (HostMemoryBuffer buffer = HostMemoryBuffer.allocate(header.getDataLen())) {
+      JCudfSerialization.readTableIntoBuffer(din, header, buffer);
+      assertTrue(header.wasDataRead());
+      HostColumnVector[] hostColumns =
+              JCudfSerialization.unpackHostColumnVectors(header, buffer);
+      try {
+        assertEquals(t.getNumberOfColumns(), hostColumns.length);
+        for (int i = 0; i < hostColumns.length; i++) {
+          HostColumnVector actual = hostColumns[i];
+          assertEquals(rowCount, actual.getRowCount());
+          try (HostColumnVector expected = t.getColumn(i).copyToHost()) {
+            assertPartialColumnsAreEqual(expected, 0, rowCount, actual, "COLUMN " + i, true, false);
+          }
+        }
+      } finally {
+        for (HostColumnVector c: hostColumns) {
+          // close child columns for multiple times should NOT throw exceptions
+          for (int i = 0; i < c.getNumChildren(); i++) {
+            c.getChildColumnView(i).close();
+          }
+          c.close();
         }
       }
     }
@@ -2791,7 +3400,7 @@ public class TableTest extends CudfTestBase {
         try (Table result = JCudfSerialization.readAndConcat(
             new JCudfSerialization.SerializedTableHeader[] {header, header},
             new HostMemoryBuffer[] {buff, buff})) {
-          assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), result, false);
+          assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), result, false, false);
         }
       }
     }
@@ -2832,7 +3441,7 @@ public class TableTest extends CudfTestBase {
               buffers.toArray(new HostMemoryBuffer[buffers.size()]), bout2);
           ByteArrayInputStream bin2 = new ByteArrayInputStream(bout2.toByteArray());
           try (JCudfSerialization.TableAndRowCountPair found = JCudfSerialization.readTableFrom(bin2)) {
-            assertPartialTablesAreEqual(t, 0, t.getRowCount(), found.getTable(), false);
+            assertPartialTablesAreEqual(t, 0, t.getRowCount(), found.getTable(), false, false);
             assertEquals(found.getTable(), found.getContiguousTable().getTable());
             assertNotNull(found.getContiguousTable().getBuffer());
           }
@@ -2858,7 +3467,7 @@ public class TableTest extends CudfTestBase {
           JCudfSerialization.writeToStream(t, bout, i, len);
           ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
           try (JCudfSerialization.TableAndRowCountPair found = JCudfSerialization.readTableFrom(bin)) {
-            assertPartialTablesAreEqual(t, i, len, found.getTable(), i == 0 && len == t.getRowCount());
+            assertPartialTablesAreEqual(t, i, len, found.getTable(), i == 0 && len == t.getRowCount(), false);
             assertEquals(found.getTable(), found.getContiguousTable().getTable());
             assertNotNull(found.getContiguousTable().getBuffer());
           }
@@ -2959,6 +3568,197 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupByApproxPercentileReproCase() {
+    double[] percentiles = {0.25, 0.50, 0.75};
+    try (Table t1 = new Table.TestBuilder()
+            .column("a", "a", "b", "c", "d")
+            .column(1084.0, 1719.0, 15948.0, 148029.0, 1269761.0)
+            .build();
+         Table t2 = t1
+            .groupBy(0)
+            .aggregate(GroupByAggregation.createTDigest(100).onColumn(1));
+         Table sorted = t2.orderBy(OrderByArg.asc(0));
+         ColumnVector actual = sorted.getColumn(1).approxPercentile(percentiles);
+         ColumnVector expected = ColumnVector.fromLists(
+             new ListType(false, new BasicType(false, DType.FLOAT64)),
+             Arrays.asList(1084.0, 1084.0, 1719.0),
+             Arrays.asList(15948.0, 15948.0, 15948.0),
+             Arrays.asList(148029.0, 148029.0, 148029.0),
+             Arrays.asList(1269761.0, 1269761.0, 1269761.0)
+         )) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testGroupByApproxPercentile() {
+    double[] percentiles = {0.25, 0.50, 0.75};
+    try (Table t1 = new Table.TestBuilder()
+            .column("a", "a", "a", "b", "b", "b")
+            .column(100, 150, 160, 70, 110, 160)
+            .build();
+      Table t2 = t1
+          .groupBy(0)
+          .aggregate(GroupByAggregation.createTDigest(1000).onColumn(1));
+      Table sorted = t2.orderBy(OrderByArg.asc(0));
+      ColumnVector actual = sorted.getColumn(1).approxPercentile(percentiles);
+      ColumnVector expected = ColumnVector.fromLists(
+        new ListType(false, new BasicType(false, DType.FLOAT64)),
+          Arrays.asList(100d, 150d, 160d),
+          Arrays.asList(70d, 110d, 160d)
+      )) {
+        assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testMergeApproxPercentile() {
+    double[] percentiles = {0.25, 0.50, 0.75};
+    try (Table t1 = new Table.TestBuilder()
+            .column("a", "a", "a", "b", "b", "b")
+            .column(100, 150, 160, 70, 110, 160)
+            .build();
+         Table t2 = t1
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.createTDigest(1000).onColumn(1));
+         Table t3 = t1
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.createTDigest(1000).onColumn(1));
+         Table t4 = Table.concatenate(t2, t3);
+         Table t5 = t4
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.mergeTDigest(1000).onColumn(1));
+         Table sorted = t5.orderBy(OrderByArg.asc(0));
+         ColumnVector actual = sorted.getColumn(1).approxPercentile(percentiles);
+         ColumnVector expected = ColumnVector.fromLists(
+                 new ListType(false, new BasicType(false, DType.FLOAT64)),
+                 Arrays.asList(100d, 150d, 160d),
+                 Arrays.asList(70d, 110d, 160d)
+         )) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testMergeApproxPercentile2() {
+    double[] percentiles = {0.25, 0.50, 0.75};
+    try (Table t1 = new Table.TestBuilder()
+            .column("a", "a", "a", "b", "b", "b")
+            .column(70, 110, 160, 100, 150, 160)
+            .build();
+         Table t2 = t1
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.createTDigest(1000).onColumn(1));
+         Table t3 = t1
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.createTDigest(1000).onColumn(1));
+         Table t4 = Table.concatenate(t2, t3);
+         Table t5 = t4
+                 .groupBy(0)
+                 .aggregate(GroupByAggregation.mergeTDigest(1000).onColumn(1));
+         Table sorted = t5.orderBy(OrderByArg.asc(0));
+         ColumnVector actual = sorted.getColumn(1).approxPercentile(percentiles);
+         ColumnVector expected = ColumnVector.fromLists(
+                 new ListType(false, new BasicType(false, DType.FLOAT64)),
+                 Arrays.asList(70d, 110d, 160d),
+                 Arrays.asList(100d, 150d, 160d)
+         )) {
+      assertColumnsAreEqual(expected, actual);
+    }
+  }
+
+  @Test
+  void testGroupByMinMaxDecimal() {
+    try (Table t1 = new Table.TestBuilder()
+        .column( "1",  "1", "1", "1", "2")
+        .column(0, 1, 3 , 3, 4)
+        .decimal128Column(-4, RoundingMode.HALF_UP,
+            new BigInteger("123456789123456789"),
+            new BigInteger("7979879879879798"),
+            new BigInteger("17979879879879798"),
+            new BigInteger("2234563472398472398"),
+            null)
+        .build()) {
+      try (Table result = t1
+          .groupBy(GroupByOptions.builder()
+              .withKeysSorted(true)
+              .withKeysDescending(false, false)
+              .build(), 0, 1)
+          .scan(GroupByScanAggregation.min().onColumn(2),
+              GroupByScanAggregation.max().onColumn(2));
+           Table expected = new Table.TestBuilder()
+               .column( "1",  "1", "1", "1", "2")
+               .column(0, 1, 3, 3, 4)
+               .decimal128Column(-4, RoundingMode.HALF_UP,
+                   new BigInteger("123456789123456789"),
+                   new BigInteger("7979879879879798"),
+                   new BigInteger("17979879879879798"),
+                   new BigInteger("17979879879879798"),
+                   null)
+               .decimal128Column(-4, RoundingMode.HALF_UP,
+                   new BigInteger("123456789123456789"),
+                   new BigInteger("7979879879879798"),
+                   new BigInteger("17979879879879798"),
+                   new BigInteger("2234563472398472398"),
+                   null)
+               .build()) {
+        assertTablesAreEqual(expected, result);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByMinMaxDecimalAgg() {
+    try (Table t1 = new Table.TestBuilder()
+        .column(-341142443, 48424546)
+        .decimal128Column(-2, RoundingMode.HALF_DOWN,
+            new BigInteger("2978603952268112009"),
+            new BigInteger("571526248386900094"))
+        .build()) {
+      try (Table result = t1
+          .groupBy(GroupByOptions.builder()
+              .build(), 0)
+          .aggregate(GroupByAggregation.max().onColumn(1));
+           Table expected = new Table.TestBuilder()
+               .column(-341142443, 48424546)
+               .decimal128Column(-2, RoundingMode.HALF_DOWN,
+                   new BigInteger("2978603952268112009"),
+                   new BigInteger("571526248386900094"))
+               .build()) {
+        assertTablesAreEqual(expected, result);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByCountDecimal() {
+    try (Table t1 = new Table.TestBuilder()
+        .column( "1",  "1", "1", "1", "2")
+        .column(0, 1, 3 , 3, 4)
+        .decimal128Column(-4, RoundingMode.HALF_UP,
+            new BigInteger("123456789123456789"),
+            new BigInteger("7979879879879798"),
+            new BigInteger("17979879879879798"),
+            new BigInteger("2234563472398472398"),
+            null)
+        .build()) {
+      try (Table result = t1
+          .groupBy(GroupByOptions.builder()
+              .withKeysSorted(true)
+              .withKeysDescending(false, false)
+              .build(), 0, 1)
+          .aggregate(GroupByAggregation.count().onColumn(2));
+           Table expected = new Table.TestBuilder()
+               .column( "1",  "1", "1", "2")
+               .column(0, 1, 3, 4)
+               .column(1, 1, 2, 0)
+               .build()) {
+        assertTablesAreEqual(expected, result);
+      }
+    }
+  }
+
+  @Test
   void testGroupByUniqueCount() {
     try (Table t1 = new Table.TestBuilder()
             .column( "1",  "1",  "1",  "1",  "1",  "1")
@@ -2975,6 +3775,33 @@ public class TableTest extends CudfTestBase {
                    .column(   1,    1,    1,    1)
                    .build()) {
         assertTablesAreEqual(expected, sorted);
+      }
+    }
+  }
+
+  @Test
+  void testOrderByDecimal() {
+    try (Table t1 = new Table.TestBuilder()
+        .column( "1",  "1", "1", "1")
+        .column(0, 1, 3 , 3)
+        .decimal64Column(4,
+            123456L,
+            124567L,
+            125678L,
+            126789L)
+        .build()) {
+      try (Table sorted = t1.orderBy(OrderByArg.asc(0), OrderByArg.asc(1), OrderByArg.asc(2));
+           Table expected = new Table.TestBuilder()
+               .column( "1",  "1", "1", "1")
+               .column(   0,    1, 3, 3)
+               .decimal64Column(4,
+                   123456L,
+                   124567L,
+                   125678L,
+                   126789L)
+               .build()) {
+        assertTablesAreEqual(expected, sorted);
+
       }
     }
   }
@@ -5863,6 +6690,121 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  ColumnView replaceValidity(ColumnView cv, DeviceMemoryBuffer validity, long nullCount) {
+    assert (validity.length >= BitVectorHelper.getValidityAllocationSizeInBytes(cv.rows));
+    if (cv.type.isNestedType()) {
+      ColumnView[] children = cv.getChildColumnViews();
+      try {
+        return new ColumnView(cv.type,
+            cv.rows,
+            Optional.of(nullCount),
+            validity,
+            cv.getOffsets(),
+            children);
+      } finally {
+        for (ColumnView v : children) {
+          if (v != null) {
+            v.close();
+          }
+        }
+      }
+    } else {
+      return new ColumnView(cv.type, cv.rows, Optional.of(nullCount), cv.getData(), validity, cv.getOffsets());
+    }
+  }
+
+  @Test
+  void testRemoveNullMasksIfNeeded() {
+    ListType nestedType = new ListType(true, new StructType(false,
+        new BasicType(true, DType.INT32),
+        new BasicType(true, DType.INT64)));
+
+    List data1 = Arrays.asList(10, 20L);
+    List data2 = Arrays.asList(50, 60L);
+    HostColumnVector.StructData structData1 = new HostColumnVector.StructData(data1);
+    HostColumnVector.StructData structData2 = new HostColumnVector.StructData(data2);
+
+    //First we create ColumnVectors
+    try (ColumnVector nonNullVector0 = ColumnVector.fromBoxedInts(1, 2, 3);
+         ColumnVector nonNullVector2 = ColumnVector.fromStrings("1", "2", "3");
+         ColumnVector nonNullVector1 = ColumnVector.fromLists(nestedType,
+             Arrays.asList(structData1, structData2),
+             Arrays.asList(structData1, structData2),
+             Arrays.asList(structData1, structData2))) {
+      //Then we take the created ColumnVectors and add validity masks even though the nullCount = 0
+      long allocSize = BitVectorHelper.getValidityAllocationSizeInBytes(nonNullVector0.rows);
+      try (DeviceMemoryBuffer dm0 = DeviceMemoryBuffer.allocate(allocSize);
+           DeviceMemoryBuffer dm1 = DeviceMemoryBuffer.allocate(allocSize);
+           DeviceMemoryBuffer dm2 = DeviceMemoryBuffer.allocate(allocSize);
+           DeviceMemoryBuffer dm3_child =
+               DeviceMemoryBuffer.allocate(BitVectorHelper.getValidityAllocationSizeInBytes(2))) {
+        Cuda.memset(dm0.address, (byte) 0xFF, allocSize);
+        Cuda.memset(dm1.address, (byte) 0xFF, allocSize);
+        Cuda.memset(dm2.address, (byte) 0xFF, allocSize);
+        Cuda.memset(dm3_child.address, (byte) 0xFF,
+            BitVectorHelper.getValidityAllocationSizeInBytes(2));
+
+        try (ColumnView cv0View = replaceValidity(nonNullVector0, dm0, 0);
+             ColumnVector cv0 = cv0View.copyToColumnVector();
+             ColumnView struct = nonNullVector1.getChildColumnView(0);
+             ColumnView structChild0 = struct.getChildColumnView(0);
+             ColumnView newStructChild0 = replaceValidity(structChild0, dm3_child, 0);
+             ColumnView newStruct = struct.replaceChildrenWithViews(new int[]{0}, new ColumnView[]{newStructChild0});
+             ColumnView list = nonNullVector1.replaceChildrenWithViews(new int[]{0}, new ColumnView[]{newStruct});
+             ColumnView cv1View = replaceValidity(list, dm1, 0);
+             ColumnVector cv1 = cv1View.copyToColumnVector();
+             ColumnView cv2View = replaceValidity(nonNullVector2, dm2, 0);
+             ColumnVector cv2 = cv2View.copyToColumnVector()) {
+
+          try (Table t = new Table(new ColumnVector[]{cv0, cv1, cv2});
+               Table tableWithoutNullMask = removeNullMasksIfNeeded(t);
+               ColumnView tableStructChild0 = t.getColumn(1).getChildColumnView(0).getChildColumnView(0);
+               ColumnVector tableStructChild0Cv = tableStructChild0.copyToColumnVector();
+               Table expected = new Table(new ColumnVector[]{nonNullVector0, nonNullVector1,
+                nonNullVector2})) {
+            assertTrue(t.getColumn(0).hasValidityVector());
+            assertTrue(t.getColumn(1).hasValidityVector());
+            assertTrue(t.getColumn(2).hasValidityVector());
+            assertTrue(tableStructChild0Cv.hasValidityVector());
+
+            assertPartialTablesAreEqual(expected,
+                0,
+                expected.getRowCount(),
+                tableWithoutNullMask,
+                true,
+                true);
+          }
+        }
+      }
+    }
+  }
+
+  @Test
+  void testRemoveNullMasksIfNeededWithNulls() {
+    ListType nestedType = new ListType(true, new StructType(true,
+        new BasicType(true, DType.INT32),
+        new BasicType(true, DType.INT64)));
+
+    List data1 = Arrays.asList(0, 10L);
+    List data2 = Arrays.asList(50, null);
+    HostColumnVector.StructData structData1 = new HostColumnVector.StructData(data1);
+    HostColumnVector.StructData structData2 = new HostColumnVector.StructData(data2);
+
+    //First we create ColumnVectors
+    try (ColumnVector nonNullVector0 = ColumnVector.fromBoxedInts(1, null, 2, 3);
+         ColumnVector nonNullVector1 = ColumnVector.fromStrings("1", "2", null, "3");
+         ColumnVector nonNullVector2 = ColumnVector.fromLists(nestedType,
+             Arrays.asList(structData1, structData2),
+             null,
+             Arrays.asList(structData1, structData2),
+             Arrays.asList(structData1, structData2))) {
+      try (Table expected = new Table(new ColumnVector[]{nonNullVector0, nonNullVector1, nonNullVector2});
+           Table unchangedTable = removeNullMasksIfNeeded(expected)) {
+        assertTablesAreEqual(expected, unchangedTable);
+      }
+    }
+  }
+
   @Test
   void testMismatchedSizesForFilter() {
     Boolean[] maskVals = new Boolean[3];
@@ -5891,43 +6833,202 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-  private Table getExpectedFileTable() {
-    return getExpectedFileTable(false, false);
-  }
+  private enum Columns {
+    BOOL("BOOL"),
+    INT("INT"),
+    BYTE("BYTE"),
+    LONG("LONG"),
+    STRING("STRING"),
+    FLOAT("FLOAT"),
+    DOUBLE("DOUBLE"),
+    DECIMAL64("DECIMAL64"),
+    DECIMAL128("DECIMAL128"),
+    STRUCT("STRUCT"),
+    STRUCT_DEC128("STRUCT_DEC128"),
+    LIST("LIST"),
+    LIST_STRUCT("LIST_STRUCT"),
+    LIST_DEC128("LIST_DEC128");
 
-  private Table getExpectedFileTable(boolean withNestedColumns) {
-    return getExpectedFileTable(true, true);
-  }
+    final String name;
 
-  private Table getExpectedFileTable(boolean withStructColumns, boolean withListColumn) {
-    TestBuilder tb = new TestBuilder()
-        .column(true, false, false, true, false)
-        .column(5, 1, 0, 2, 7)
-        .column(new Byte[]{2, 3, 4, 5, 9})
-        .column(3l, 9l, 4l, 2l, 20l)
-        .column("this", "is", "a", "test", "string")
-        .column(1.0f, 3.5f, 5.9f, 7.1f, 9.8f)
-        .column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d);
-    StructType nestedType = new StructType(true,
-        new BasicType(false, DType.INT32), new BasicType(false, DType.STRING));
-    if (withStructColumns) {
-      tb.column(nestedType,
-          struct(1, "k1"), struct(2, "k2"), struct(3, "k3"),
-          struct(4, "k4"), new HostColumnVector.StructData((List) null));
+    Columns(String columnName) {
+      this.name = columnName;
     }
-    if (withListColumn) {
-      tb.column(new ListType(false, new BasicType(false, DType.INT32)),
-          Arrays.asList(1, 2),
-          Arrays.asList(3, 4),
-          Arrays.asList(5),
-          Arrays.asList(6, 7),
-          Arrays.asList(8, 9, 10))
-          .column(new ListType(false, nestedType),
-              Arrays.asList(struct(1, "k1"), struct(2, "k2"), struct(3, "k3")),
-              Arrays.asList(struct(4, "k4"), struct(5, "k5")),
-              Arrays.asList(struct(6, "k6")),
+  }
+
+  private static class WriteUtils {
+
+    private static final Map<Columns, Function<TestBuilder, TestBuilder>> addColumnFn = Maps.newHashMap();
+
+    static {
+      addColumnFn.put(Columns.BOOL, (t) -> t.column(true, false, false, true, false));
+      addColumnFn.put(Columns.INT, (t) -> t.column(5, 1, 0, 2, 7));
+      addColumnFn.put(Columns.LONG, (t) -> t.column(3l, 9l, 4l, 2l, 20l));
+      addColumnFn.put(Columns.BYTE, (t) -> t.column(new Byte[]{2, 3, 4, 5, 9}));
+      addColumnFn.put(Columns.STRING, (t) -> t.column("this", "is", "a", "test", "string"));
+      addColumnFn.put(Columns.FLOAT, (t) -> t.column(1.0f, 3.5f, 5.9f, 7.1f, 9.8f));
+      addColumnFn.put(Columns.DOUBLE, (t) -> t.column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d));
+      addColumnFn.put(Columns.DECIMAL64, (t) ->
+          t.decimal64Column(-5, 1L, 323L, 12398423L, -231312412L, 239893414231L));
+      addColumnFn.put(Columns.DECIMAL128, (t) ->
+          t.decimal128Column(-10, RoundingMode.UNNECESSARY, BigInteger.ONE, BigInteger.ZERO,
+              BigInteger.TEN, new BigInteger("100000000000000000000000000000"),
+              new BigInteger("-1234567890123456789012345678")));
+
+      BasicType dec64Type = new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL64, 0));
+      StructType structType = new StructType(true,
+          new BasicType(true, DType.INT32), new BasicType(true, DType.STRING), dec64Type);
+      addColumnFn.put(Columns.STRUCT, (t) -> t.column(structType,
+          struct(1, "k1", BigDecimal.ONE),
+          struct(2, "k2", BigDecimal.ZERO),
+          struct(3, "k3", BigDecimal.TEN),
+          struct(4, "k4", BigDecimal.valueOf(Long.MAX_VALUE)),
+          new HostColumnVector.StructData((List) null)));
+      BasicType dec128Type = new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL128, -5));
+      addColumnFn.put(Columns.STRUCT_DEC128, (t) ->
+          t.column(new StructType(false, dec128Type),
+              struct(BigDecimal.valueOf(Integer.MAX_VALUE, 5)),
+              struct(BigDecimal.valueOf(Long.MAX_VALUE, 5)),
+              struct(new BigDecimal("111111111122222222223333333333").setScale(5)),
+              struct(new BigDecimal("123456789123456789123456789").setScale(5)),
+              struct((BigDecimal) null)));
+
+      addColumnFn.put(Columns.LIST, (t) ->
+          t.column(new ListType(false, new BasicType(false, DType.INT32)),
+              Arrays.asList(1, 2),
+              Arrays.asList(3, 4),
+              Arrays.asList(5),
+              Arrays.asList(6, 7),
+              Arrays.asList(8, 9, 10)));
+      addColumnFn.put(Columns.LIST_STRUCT, (t) ->
+          t.column(new ListType(true, structType),
+              Arrays.asList(struct(1, "k1", BigDecimal.ONE), struct(2, "k2", BigDecimal.ONE),
+                  struct(3, "k3", BigDecimal.ONE)),
+              Arrays.asList(struct(4, "k4", BigDecimal.ONE), struct(5, "k5", BigDecimal.ONE)),
+              Arrays.asList(struct(6, "k6", BigDecimal.ONE)),
               Arrays.asList(new HostColumnVector.StructData((List) null)),
-              Arrays.asList());
+              (List) null));
+      addColumnFn.put(Columns.LIST_DEC128, (t) ->
+          t.column(new ListType(true, new StructType(false, dec128Type)),
+              Arrays.asList(struct(BigDecimal.valueOf(Integer.MAX_VALUE, 5)),
+                  struct(BigDecimal.valueOf(Integer.MIN_VALUE, 5))),
+              Arrays.asList(struct(BigDecimal.valueOf(Long.MAX_VALUE, 5)),
+                  struct(BigDecimal.valueOf(0, 5)), struct(BigDecimal.valueOf(-1, 5))),
+              Arrays.asList(struct(new BigDecimal("111111111122222222223333333333").setScale(5))),
+              Arrays.asList(struct(new BigDecimal("123456789123456789123456789").setScale(5))),
+              Arrays.asList(struct((BigDecimal) null))));
+    }
+
+    static TestBuilder addColumn(TestBuilder tb, String colName) {
+      if (!addColumnFn.containsKey(Columns.valueOf(colName))) {
+        throw new IllegalArgumentException("Unknown column name: " + colName);
+      }
+      return addColumnFn.get(Columns.valueOf(colName)).apply(tb);
+    }
+
+    static String[] getAllColumns(boolean withDecimal128) {
+      List<String> columns = Lists.newArrayList(
+          Columns.BOOL.name, Columns.INT.name, Columns.BYTE.name, Columns.LONG.name,
+          Columns.STRING.name, Columns.FLOAT.name, Columns.DOUBLE.name, Columns.DECIMAL64.name,
+          Columns.STRUCT.name, Columns.LIST.name, Columns.LIST_STRUCT.name);
+      if (withDecimal128) {
+        columns.add(Columns.DECIMAL128.name);
+        columns.add(Columns.STRUCT_DEC128.name);
+        columns.add(Columns.LIST_DEC128.name);
+      }
+      String[] ret = new String[columns.size()];
+      columns.toArray(ret);
+      return ret;
+    }
+
+    static String[] getNonNestedColumns(boolean withDecimal128) {
+      List<String> columns = Lists.newArrayList(
+          Columns.BOOL.name, Columns.INT.name, Columns.BYTE.name, Columns.LONG.name,
+          Columns.STRING.name, Columns.FLOAT.name, Columns.DOUBLE.name, Columns.DECIMAL64.name);
+      if (withDecimal128) {
+        columns.add(Columns.DECIMAL128.name);
+      }
+      String[] ret = new String[columns.size()];
+      columns.toArray(ret);
+      return ret;
+    }
+
+    static void buildWriterOptions(ColumnWriterOptions.NestedBuilder builder, List<String> columns) {
+      for (String colName : columns) {
+        buildWriterOptions(builder, colName);
+      }
+    }
+
+    static void buildWriterOptions(ColumnWriterOptions.NestedBuilder builder, String... columns) {
+      for (String colName : columns) {
+        buildWriterOptions(builder, colName);
+      }
+    }
+
+    static void buildWriterOptions(ColumnWriterOptions.NestedBuilder builder, String colName) {
+      switch (Columns.valueOf(colName)) {
+      case BOOL:
+      case INT:
+      case LONG:
+      case FLOAT:
+      case DOUBLE:
+      case BYTE:
+      case STRING:
+        builder.withColumns(false, colName);
+        break;
+      case DECIMAL64:
+        builder.withDecimalColumn(colName, DType.DECIMAL64_MAX_PRECISION);
+        break;
+      case DECIMAL128:
+        builder.withDecimalColumn(colName, DType.DECIMAL128_MAX_PRECISION);
+        break;
+      case STRUCT:
+        builder.withStructColumn(structBuilder(colName)
+            .withNullableColumns("ch_int")
+            .withNullableColumns("ch_str")
+            .withDecimalColumn("ch_dec64", DType.DECIMAL64_MAX_PRECISION, true)
+            .build());
+        break;
+      case LIST:
+        builder.withListColumn(listBuilder(colName, false)
+            .withNonNullableColumns("ch_int")
+            .build());
+        break;
+      case LIST_STRUCT:
+        builder.withListColumn(listBuilder(colName)
+            .withStructColumn(structBuilder(colName)
+                .withNullableColumns("ch_int")
+                .withNullableColumns("ch_str")
+                .withDecimalColumn("ch_dec64", DType.DECIMAL64_MAX_PRECISION, true)
+                .build())
+            .build());
+        break;
+      case STRUCT_DEC128:
+        builder.withStructColumn(structBuilder(colName, false)
+            .withDecimalColumn("ch_dec128", DType.DECIMAL128_MAX_PRECISION, true)
+            .build());
+        break;
+      case LIST_DEC128:
+        builder.withListColumn(listBuilder(colName)
+            .withStructColumn(structBuilder(colName, false)
+                .withDecimalColumn("ch_dec128", DType.DECIMAL128_MAX_PRECISION, true)
+                .build())
+            .build());
+        break;
+      default:
+        throw new IllegalArgumentException("should NOT reach here");
+      }
+    }
+  }
+
+  private Table getExpectedFileTable(String... selectColumns) {
+    return getExpectedFileTable(Lists.newArrayList(selectColumns));
+  }
+
+  private Table getExpectedFileTable(List<String> selectColumns) {
+    TestBuilder tb = new TestBuilder();
+    for (String c : selectColumns) {
+      WriteUtils.addColumn(tb, c);
     }
     return tb.build();
   }
@@ -6013,22 +7114,46 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testParquetWriteToBufferChunkedWithNested() {
+  void testParquetWriteMap() throws IOException {
     ParquetWriterOptions options = ParquetWriterOptions.builder()
-        .withNullableColumns("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
-        .withStructColumn(structBuilder("_c7")
-            .withNullableColumns("_c7-1")
-            .withNullableColumns("_c7-2")
-            .build())
-      .withListColumn(listBuilder("_c8")
-            .withNullableColumns("c8-1").build())
-        .withListColumn(listBuilder("c9")
-            .withStructColumn(structBuilder("c9-1")
-                .withNullableColumns("c9-1-1")
-                .withNullableColumns("c9-1-2").build())
-            .build())
-        .build();
-    try (Table table0 = getExpectedFileTable(true);
+        .withMapColumn(mapColumn("my_map",
+            new ColumnWriterOptions("key0", false),
+            new ColumnWriterOptions("value0"))).build();
+    File f = File.createTempFile("test-map", ".parquet");
+    List<HostColumnVector.StructData> list1 =
+        Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
+    List<HostColumnVector.StructData> list2 =
+        Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "c")));
+    List<HostColumnVector.StructData> list3 =
+     Arrays.asList(new HostColumnVector.StructData(Arrays.asList("e", "d")));
+    HostColumnVector.StructType structType = new HostColumnVector.StructType(true,
+     Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
+        new HostColumnVector.BasicType(true, DType.STRING)));
+    try (ColumnVector listColumn = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+            structType), list1, list2, list3);
+         Table t0 = new Table(listColumn)) {
+      try (TableWriter writer = Table.writeParquetChunked(options, f)) {
+        writer.write(t0);
+      }
+      ParquetFileReader reader =
+       ParquetFileReader.open(HadoopInputFile.fromPath(new Path(f.getAbsolutePath()),
+           new Configuration()));
+      MessageType schema = reader.getFooter().getFileMetaData().getSchema();
+      assertEquals(OriginalType.MAP, schema.getType("my_map").getOriginalType());
+    }
+    try (ColumnVector cv = Table.readParquet(f).getColumn(0);
+         ColumnVector res = cv.getMapValue(Scalar.fromString("a"));
+         ColumnVector expected = ColumnVector.fromStrings("b", "c", null)) {
+      assertColumnsAreEqual(expected, res);
+    }
+  }
+
+  @Test
+  void testParquetWriteToBufferChunkedWithNested() {
+    ParquetWriterOptions.Builder optBuilder = ParquetWriterOptions.builder();
+    WriteUtils.buildWriterOptions(optBuilder, WriteUtils.getAllColumns(false));
+    ParquetWriterOptions options = optBuilder.build();
+    try (Table table0 = getExpectedFileTable(WriteUtils.getAllColumns(false));
          MyBufferConsumer consumer = new MyBufferConsumer()) {
       try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
         writer.write(table0);
@@ -6045,20 +7170,18 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testParquetWriteToBufferChunked() {
-    ParquetWriterOptions options = ParquetWriterOptions.builder()
-        .withNullableColumns("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
-        .withStructColumn(structBuilder("_c7")
-            .withNullableColumns("_c7-1")
-            .withNullableColumns("_c7-2")
-            .build())
-        .build();
-    try (Table table0 = getExpectedFileTable(true, false);
+    ParquetWriterOptions.Builder optBuilder = ParquetWriterOptions.builder();
+    List<String> columns = Lists.newArrayList(WriteUtils.getNonNestedColumns(false));
+    columns.add(Columns.STRUCT.name);
+    WriteUtils.buildWriterOptions(optBuilder, columns);
+    ParquetWriterOptions options = optBuilder.build();
+    try (Table table0 = getExpectedFileTable(columns);
          MyBufferConsumer consumer = new MyBufferConsumer()) {
-         try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
-           writer.write(table0);
-           writer.write(table0);
-           writer.write(table0);
-         }
+      try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
+        writer.write(table0);
+        writer.write(table0);
+        writer.write(table0);
+      }
       try (Table table1 = Table.readParquet(ParquetOptions.DEFAULT, consumer.buffer, 0, consumer.offset);
            Table concat = Table.concatenate(table0, table0, table0)) {
         assertTablesAreEqual(concat, table1);
@@ -6136,9 +7259,10 @@ public class TableTest extends CudfTestBase {
   @Test
   void testArrowIPCWriteToFileWithNamesAndMetadata() throws IOException {
     File tempFile = File.createTempFile("test-names-metadata", ".arrow");
-    try (Table table0 = getExpectedFileTable()) {
+    String[] columnNames = WriteUtils.getNonNestedColumns(false);
+    try (Table table0 = getExpectedFileTable(columnNames)) {
       ArrowIPCWriterOptions options = ArrowIPCWriterOptions.builder()
-              .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
+              .withColumnNames(columnNames)
               .build();
       try (TableWriter writer = Table.writeArrowIPCChunked(options, tempFile.getAbsoluteFile())) {
         writer.write(table0);
@@ -6165,13 +7289,18 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testArrowIPCWriteToBufferChunked() {
-    try (Table table0 = getExpectedFileTable(true);
+    String[] nonNestedCols = WriteUtils.getNonNestedColumns(false);
+    List<String> columns = Lists.newArrayList(nonNestedCols);
+    columns.add(Columns.STRUCT.name);
+    columns.add(Columns.LIST.name);
+    columns.add(Columns.LIST_STRUCT.name);
+    try (Table table0 = getExpectedFileTable(columns);
          MyBufferConsumer consumer = new MyBufferConsumer()) {
       ArrowIPCWriterOptions options = ArrowIPCWriterOptions.builder()
-              .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
-              .withColumnNames("eighth", "eighth_id", "eighth_name")
-              .withColumnNames("ninth")
-              .withColumnNames("tenth", "child_id", "child_name")
+              .withColumnNames(nonNestedCols)
+              .withColumnNames(Columns.STRUCT.name, "int", "str", "dec64")
+              .withColumnNames(Columns.LIST.name)
+              .withColumnNames(Columns.LIST_STRUCT.name, "int", "str", "dec64")
               .build();
       try (TableWriter writer = Table.writeArrowIPCChunked(options, consumer)) {
         writer.write(table0);
@@ -6198,9 +7327,13 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testORCWriteToBufferChunked() {
-    try (Table table0 = getExpectedFileTable();
+    String[] selectedColumns = WriteUtils.getAllColumns(false);
+    try (Table table0 = getExpectedFileTable(selectedColumns);
          MyBufferConsumer consumer = new MyBufferConsumer()) {
-      try (TableWriter writer = Table.writeORCChunked(ORCWriterOptions.DEFAULT, consumer)) {
+      ORCWriterOptions.Builder builder = ORCWriterOptions.builder();
+      WriteUtils.buildWriterOptions(builder, selectedColumns);
+      ORCWriterOptions opts = builder.build();
+      try (TableWriter writer = Table.writeORCChunked(opts, consumer)) {
         writer.write(table0);
         writer.write(table0);
         writer.write(table0);
@@ -6213,9 +7346,56 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testORCWriteToFileChunked() throws IOException {
+    File tempFile = File.createTempFile("test", ".orc");
+    String[] selectedColumns = WriteUtils.getAllColumns(false);
+    try (Table table0 = getExpectedFileTable(selectedColumns)) {
+      ORCWriterOptions.Builder builder = ORCWriterOptions.builder();
+      WriteUtils.buildWriterOptions(builder, selectedColumns);
+      ORCWriterOptions opts = builder.build();
+      try (TableWriter writer = Table.writeORCChunked(opts, tempFile.getAbsoluteFile())) {
+        writer.write(table0);
+      }
+      try (Table table1 = Table.readORC(tempFile.getAbsoluteFile())) {
+        assertTablesAreEqual(table0, table1);
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  @Test
+  void testORCWriteMapChunked() throws IOException {
+    ORCWriterOptions options = ORCWriterOptions.builder()
+            .withMapColumn(mapColumn("my_map",
+                    new ColumnWriterOptions("key0", false),
+                    new ColumnWriterOptions("value0"))).build();
+    File f = File.createTempFile("test-map", ".parquet");
+    List<HostColumnVector.StructData> list1 =
+            Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "b")));
+    List<HostColumnVector.StructData> list2 =
+            Arrays.asList(new HostColumnVector.StructData(Arrays.asList("a", "c")));
+    List<HostColumnVector.StructData> list3 =
+            Arrays.asList(new HostColumnVector.StructData(Arrays.asList("e", "d")));
+    HostColumnVector.StructType structType = new HostColumnVector.StructType(true,
+            Arrays.asList(new HostColumnVector.BasicType(true, DType.STRING),
+                    new HostColumnVector.BasicType(true, DType.STRING)));
+    try (ColumnVector listColumn = ColumnVector.fromLists(new HostColumnVector.ListType(true,
+            structType), list1, list2, list3);
+         Table t0 = new Table(listColumn)) {
+      try (TableWriter writer = Table.writeORCChunked(options, f)) {
+        writer.write(t0);
+      }
+      try (Table res = Table.readORC(f)) {
+        assertTablesAreEqual(t0, res);
+      }
+    }
+  }
+
+  @Test
   void testORCWriteToFile() throws IOException {
     File tempFile = File.createTempFile("test", ".orc");
-    try (Table table0 = getExpectedFileTable()) {
+    try (Table table0 = getExpectedFileTable(WriteUtils.getNonNestedColumns(false))) {
       table0.writeORC(tempFile.getAbsoluteFile());
       try (Table table1 = Table.readORC(tempFile.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table1);
@@ -6228,12 +7408,11 @@ public class TableTest extends CudfTestBase {
   @Test
   void testORCWriteToFileWithColNames() throws IOException {
     File tempFile = File.createTempFile("test", ".orc");
-    final String[] colNames = new String[]{"bool", "int", "byte","long","str","float","double"};
-    try (Table table0 = getExpectedFileTable()) {
-      ORCWriterOptions options = ORCWriterOptions.builder()
-          .withColumnNames(colNames)
-          .withMetadata("somekey", "somevalue")
-          .build();
+    String[] colNames = WriteUtils.getNonNestedColumns(false);
+    try (Table table0 = getExpectedFileTable(colNames)) {
+      ORCWriterOptions.Builder optBuilder = ORCWriterOptions.builder();
+      WriteUtils.buildWriterOptions(optBuilder, colNames);
+      ORCWriterOptions options = optBuilder.build();
       table0.writeORC(options, tempFile.getAbsoluteFile());
       ORCOptions opts = ORCOptions.builder().includeColumn(colNames).build();
       try (Table table1 = Table.readORC(opts, tempFile.getAbsoluteFile())) {
@@ -6245,10 +7424,40 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testORCReadAndWriteForDecimal128() throws IOException {
+    File tempFile = File.createTempFile("test", ".orc");
+    String[] colNames = new String[]{Columns.DECIMAL64.name,
+        Columns.DECIMAL128.name, Columns.STRUCT_DEC128.name, Columns.LIST_DEC128.name};
+    try (Table table0 = getExpectedFileTable(colNames)) {
+      ORCWriterOptions.Builder optBuilder = ORCWriterOptions.builder();
+      WriteUtils.buildWriterOptions(optBuilder, colNames);
+      ORCWriterOptions options = optBuilder.build();
+      table0.writeORC(options, tempFile.getAbsoluteFile());
+      ORCOptions opts = ORCOptions.builder()
+          .includeColumn(colNames)
+          .decimal128Column(Columns.DECIMAL128.name,
+              String.format("%s.%s", Columns.STRUCT_DEC128.name, "ch_dec128"),
+              String.format("%s.1.%s", Columns.LIST_DEC128.name, "ch_dec128"))
+          .build();
+      try (Table table1 = Table.readORC(opts, tempFile.getAbsoluteFile())) {
+        assertTablesAreEqual(table0, table1);
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  @Test
   void testORCWriteToFileUncompressed() throws IOException {
     File tempFileUncompressed = File.createTempFile("test-uncompressed", ".orc");
-    try (Table table0 = getExpectedFileTable()) {
-      table0.writeORC(ORCWriterOptions.builder().withCompressionType(CompressionType.NONE).build(), tempFileUncompressed.getAbsoluteFile());
+    try (Table table0 = getExpectedFileTable(WriteUtils.getNonNestedColumns(false))) {
+      String[] colNames = new String[table0.getNumberOfColumns()];
+      Arrays.fill(colNames, "");
+      ORCWriterOptions opts = ORCWriterOptions.builder()
+              .withColumns(true, colNames)
+              .withCompressionType(CompressionType.NONE)
+              .build();
+      table0.writeORC(opts, tempFileUncompressed.getAbsoluteFile());
       try (Table table2 = Table.readORC(tempFileUncompressed.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table2);
       }
@@ -6347,7 +7556,7 @@ public class TableTest extends CudfTestBase {
 
   // utility methods to reduce typing
 
-  private StructData struct(Object... values) {
+  private static StructData struct(Object... values) {
     return new StructData(values);
   }
 

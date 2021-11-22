@@ -48,7 +48,7 @@ using TypesForTest = cudf::test::Concat<cudf::test::IntegralTypes,
                                         cudf::test::DurationTypes,
                                         cudf::test::FixedPointTypes>;
 
-TYPED_TEST_CASE(TypedCollectListTest, TypesForTest);
+TYPED_TEST_SUITE(TypedCollectListTest, TypesForTest);
 
 TYPED_TEST(TypedCollectListTest, BasicRollingWindow)
 {
@@ -1296,7 +1296,7 @@ using TypesForSetTest = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
                                            cudf::test::DurationTypes,
                                            cudf::test::FixedPointTypes>;
 
-TYPED_TEST_CASE(TypedCollectSetTest, TypesForSetTest);
+TYPED_TEST_SUITE(TypedCollectSetTest, TypesForSetTest);
 
 TYPED_TEST(TypedCollectSetTest, BasicRollingWindow)
 {
@@ -2168,24 +2168,6 @@ TEST_F(CollectSetTest, BasicRollingWindowWithNaNs)
                                       result_with_nan_equal->view());
 }
 
-TEST_F(CollectSetTest, ListTypeRollingWindow)
-{
-  using namespace cudf;
-  using namespace cudf::test;
-
-  auto const input_column = lists_column_wrapper<int32_t>{{1, 2, 3}, {4, 5}, {6}, {7, 8, 9}, {10}};
-
-  auto const prev_column = fixed_width_column_wrapper<size_type>{1, 2, 2, 2, 2};
-  auto const foll_column = fixed_width_column_wrapper<size_type>{1, 1, 1, 1, 0};
-
-  EXPECT_THROW(rolling_window(input_column,
-                              prev_column,
-                              foll_column,
-                              1,
-                              *make_collect_set_aggregation<rolling_aggregation>()),
-               cudf::logic_error);
-}
-
 TEST_F(CollectSetTest, StructTypeRollingWindow)
 {
   using namespace cudf;
@@ -2196,6 +2178,35 @@ TEST_F(CollectSetTest, StructTypeRollingWindow)
   auto const input_column = cudf::test::structs_column_wrapper{{col1, col2}};
   auto const prev_column  = fixed_width_column_wrapper<size_type>{1, 2, 2, 2, 2};
   auto const foll_column  = fixed_width_column_wrapper<size_type>{1, 1, 1, 1, 0};
+
+  auto const expected = [] {
+    auto child1 = fixed_width_column_wrapper<int32_t>{1, 2, 1, 2, 3, 2, 3, 4, 3, 4, 5, 4, 5};
+    auto child2 =
+      strings_column_wrapper{"a", "b", "a", "b", "c", "b", "c", "d", "c", "d", "e", "d", "e"};
+    return cudf::make_lists_column(
+      5,
+      fixed_width_column_wrapper<size_type>{0, 2, 5, 8, 11, 13}.release(),
+      structs_column_wrapper{{child1, child2}}.release(),
+      0,
+      {});
+  }();
+  auto const result = rolling_window(input_column,
+                                     prev_column,
+                                     foll_column,
+                                     1,
+                                     *make_collect_set_aggregation<rolling_aggregation>());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected->view(), result->view());
+}
+
+TEST_F(CollectSetTest, ListTypeRollingWindow)
+{
+  using namespace cudf;
+  using namespace cudf::test;
+
+  auto const input_column = lists_column_wrapper<int32_t>{{1, 2, 3}, {4, 5}, {6}, {7, 8, 9}, {10}};
+
+  auto const prev_column = fixed_width_column_wrapper<size_type>{1, 2, 2, 2, 2};
+  auto const foll_column = fixed_width_column_wrapper<size_type>{1, 1, 1, 1, 0};
 
   EXPECT_THROW(rolling_window(input_column,
                               prev_column,

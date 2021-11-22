@@ -22,6 +22,12 @@
 #include <memory>
 
 namespace cudf {
+/**
+ * @addtogroup column_reshape
+ * @{
+ * @file
+ * @brief Column APIs for explore list columns
+ */
 
 /**
  * @brief Explodes a list column's elements.

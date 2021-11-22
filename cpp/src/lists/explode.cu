@@ -283,7 +283,7 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
 }  // namespace detail
 
 /**
- * @copydoc cudf::explode(input_table,explode_column_idx,rmm::mr::device_memory_resource)
+ * @copydoc cudf::explode(table_view const&, size_type, rmm::mr::device_memory_resource*)
  */
 std::unique_ptr<table> explode(table_view const& input_table,
                                size_type explode_column_idx,
@@ -296,7 +296,7 @@ std::unique_ptr<table> explode(table_view const& input_table,
 }
 
 /**
- * @copydoc cudf::explode_position(input_table,explode_column_idx,rmm::mr::device_memory_resource)
+ * @copydoc cudf::explode_position(table_view const&, size_type, rmm::mr::device_memory_resource*)
  */
 std::unique_ptr<table> explode_position(table_view const& input_table,
                                         size_type explode_column_idx,
@@ -309,7 +309,7 @@ std::unique_ptr<table> explode_position(table_view const& input_table,
 }
 
 /**
- * @copydoc cudf::explode_outer(input_table,explode_column_idx,rmm::mr::device_memory_resource)
+ * @copydoc cudf::explode_outer(table_view const&, size_type, rmm::mr::device_memory_resource*)
  */
 std::unique_ptr<table> explode_outer(table_view const& input_table,
                                      size_type explode_column_idx,
@@ -323,8 +323,8 @@ std::unique_ptr<table> explode_outer(table_view const& input_table,
 }
 
 /**
- * @copydoc
- * cudf::explode_outer_position(input_table,explode_column_idx,rmm::mr::device_memory_resource)
+ * @copydoc cudf::explode_outer_position(table_view const&, size_type,
+ * rmm::mr::device_memory_resource*)
  */
 std::unique_ptr<table> explode_outer_position(table_view const& input_table,
                                               size_type explode_column_idx,

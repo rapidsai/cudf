@@ -11,10 +11,28 @@ import numpy as np
 import rmm
 from rmm import DeviceBuffer
 
+import cudf
 from cudf.core.abc import Serializable
 
 
 class Buffer(Serializable):
+    """
+    A Buffer represents a device memory allocation.
+
+    Parameters
+    ----------
+    data : Buffer, array_like, int
+        An array-like object or integer representing a
+        device or host pointer to pre-allocated memory.
+    size : int, optional
+        Size of memory allocation. Required if a pointer
+        is passed for `data`.
+    owner : object, optional
+        Python object to which the lifetime of the memory
+        allocation is tied. If provided, a reference to this
+        object is kept in this Buffer.
+    """
+
     ptr: int
     size: int
     _owner: Any
@@ -22,22 +40,7 @@ class Buffer(Serializable):
     def __init__(
         self, data: Any = None, size: Optional[int] = None, owner: Any = None
     ):
-        """
-        A Buffer represents a device memory allocation.
 
-        Parameters
-        ----------
-        data : Buffer, array_like, int
-            An array-like object or integer representing a
-            device or host pointer to pre-allocated memory.
-        size : int, optional
-            Size of memory allocation. Required if a pointer
-            is passed for `data`.
-        owner : object, optional
-            Python object to which the lifetime of the memory
-            allocation is tied. If provided, a reference to this
-            object is kept in this Buffer.
-        """
         if isinstance(data, Buffer):
             self.ptr = data.ptr
             self.size = data.size
@@ -157,7 +160,7 @@ def _buffer_data_from_array_interface(array_interface):
     ptr = array_interface["data"][0]
     if ptr is None:
         ptr = 0
-    itemsize = np.dtype(array_interface["typestr"]).itemsize
+    itemsize = cudf.dtype(array_interface["typestr"]).itemsize
     shape = (
         array_interface["shape"] if len(array_interface["shape"]) > 0 else (1,)
     )
@@ -168,7 +171,7 @@ def _buffer_data_from_array_interface(array_interface):
 def confirm_1d_contiguous(array_interface):
     strides = array_interface["strides"]
     shape = array_interface["shape"]
-    itemsize = np.dtype(array_interface["typestr"]).itemsize
+    itemsize = cudf.dtype(array_interface["typestr"]).itemsize
     typestr = array_interface["typestr"]
     if typestr not in ("|i1", "|u1"):
         raise TypeError("Buffer data must be of uint8 type")

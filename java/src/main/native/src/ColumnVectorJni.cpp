@@ -248,6 +248,25 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeList(JNIEnv *env, j
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_makeListFromOffsets(
+    JNIEnv *env, jobject j_object, jlong child_handle, jlong offsets_handle, jlong row_count) {
+  JNI_NULL_CHECK(env, child_handle, "child_handle is null", 0)
+  JNI_NULL_CHECK(env, offsets_handle, "offsets_handle is null", 0)
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const *child_cv = reinterpret_cast<cudf::column_view const *>(child_handle);
+    auto const *offsets_cv = reinterpret_cast<cudf::column_view const *>(offsets_handle);
+    CUDF_EXPECTS(offsets_cv->type().id() == cudf::type_id::INT32,
+                 "Input offsets does not have type INT32.");
+
+    auto result = cudf::make_lists_column(static_cast<cudf::size_type>(row_count),
+                                          std::make_unique<cudf::column>(*offsets_cv),
+                                          std::make_unique<cudf::column>(*child_cv), 0, {});
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_fromScalar(JNIEnv *env, jclass,
                                                                     jlong j_scalar,
                                                                     jint row_count) {

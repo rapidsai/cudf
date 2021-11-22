@@ -172,8 +172,10 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
     thrust::make_counting_iterator<cudf::size_type>(0),
     thrust::make_counting_iterator<cudf::size_type>(strings_count + 1),
     offsets_per_tensor.begin(),
-    [device_offsets, do_truncate, max_sequence_length, stride] __device__(cudf::size_type idx) {
-      uint32_t num_tokens = device_offsets[idx + 1] - device_offsets[idx];
+    [device_offsets, do_truncate, max_sequence_length, stride, strings_count] __device__(
+      cudf::size_type idx) {
+      uint32_t const num_tokens =
+        idx < strings_count ? device_offsets[idx + 1] - device_offsets[idx] : 0;
       if (do_truncate || num_tokens <= max_sequence_length) return uint32_t{1};
       return 1 + ((num_tokens - max_sequence_length + stride - 1) / stride);
     },

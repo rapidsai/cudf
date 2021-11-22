@@ -6,8 +6,8 @@ import pandas as pd
 
 import cudf
 from cudf._lib import json as libjson
+from cudf.api.types import is_list_like
 from cudf.utils import ioutils
-from cudf.utils.dtypes import is_list_like
 
 
 @ioutils.doc_read_json()

@@ -32,7 +32,7 @@ struct groupby_nunique_test : public cudf::test::BaseFixture {
 };
 
 using K = int32_t;
-TYPED_TEST_CASE(groupby_nunique_test, cudf::test::AllTypes);
+TYPED_TEST_SUITE(groupby_nunique_test, cudf::test::AllTypes);
 
 TYPED_TEST(groupby_nunique_test, basic)
 {
@@ -49,7 +49,7 @@ TYPED_TEST(groupby_nunique_test, basic)
   fixed_width_column_wrapper<R> expect_bool_vals{2,   1,          1};
   // clang-format on
 
-  auto agg = cudf::make_nunique_aggregation();
+  auto agg = cudf::make_nunique_aggregation<groupby_aggregation>();
   if (std::is_same<V, bool>())
     test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
   else
@@ -67,7 +67,7 @@ TYPED_TEST(groupby_nunique_test, empty_cols)
   fixed_width_column_wrapper<K> expect_keys{};
   fixed_width_column_wrapper<R> expect_vals{};
 
-  auto agg = cudf::make_nunique_aggregation();
+  auto agg = cudf::make_nunique_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -83,7 +83,7 @@ TYPED_TEST(groupby_nunique_test, basic_duplicates)
   fixed_width_column_wrapper<R> expect_vals{2, 4, 1};
   fixed_width_column_wrapper<R> expect_bool_vals{2, 1, 1};
 
-  auto agg = cudf::make_nunique_aggregation();
+  auto agg = cudf::make_nunique_aggregation<groupby_aggregation>();
   if (std::is_same<V, bool>())
     test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
   else
@@ -101,7 +101,7 @@ TYPED_TEST(groupby_nunique_test, zero_valid_keys)
   fixed_width_column_wrapper<K> expect_keys{};
   fixed_width_column_wrapper<R> expect_vals{};
 
-  auto agg = cudf::make_nunique_aggregation();
+  auto agg = cudf::make_nunique_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -116,7 +116,7 @@ TYPED_TEST(groupby_nunique_test, zero_valid_values)
   fixed_width_column_wrapper<K> expect_keys{1};
   fixed_width_column_wrapper<R> expect_vals{0};
 
-  auto agg = cudf::make_nunique_aggregation();
+  auto agg = cudf::make_nunique_aggregation<groupby_aggregation>();
   test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
@@ -136,7 +136,7 @@ TYPED_TEST(groupby_nunique_test, null_keys_and_values)
   fixed_width_column_wrapper<R> expect_vals{2, 3, 2, 0};
   fixed_width_column_wrapper<R> expect_bool_vals{1, 1, 1, 0};
 
-  auto agg = cudf::make_nunique_aggregation();
+  auto agg = cudf::make_nunique_aggregation<groupby_aggregation>();
   if (std::is_same<V, bool>())
     test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
   else
@@ -160,7 +160,7 @@ TYPED_TEST(groupby_nunique_test, null_keys_and_values_with_duplicates)
   fixed_width_column_wrapper<R> expect_vals{2, 3, 2, 0};
   fixed_width_column_wrapper<R> expect_bool_vals{1, 1, 1, 0};
 
-  auto agg = cudf::make_nunique_aggregation();
+  auto agg = cudf::make_nunique_aggregation<groupby_aggregation>();
   if (std::is_same<V, bool>())
     test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
   else
@@ -184,7 +184,7 @@ TYPED_TEST(groupby_nunique_test, include_nulls)
   fixed_width_column_wrapper<R> expect_vals{3, 4, 2, 1};
   fixed_width_column_wrapper<R> expect_bool_vals{2, 2, 1, 1};
 
-  auto agg = cudf::make_nunique_aggregation(null_policy::INCLUDE);
+  auto agg = cudf::make_nunique_aggregation<groupby_aggregation>(null_policy::INCLUDE);
   if (std::is_same<V, bool>())
     test_single_agg(keys, vals, expect_keys, expect_bool_vals, std::move(agg));
   else
@@ -213,8 +213,11 @@ TYPED_TEST(groupby_nunique_test, dictionary)
   cudf::column_view expect_vals = (std::is_same<V, bool>()) ? cudf::column_view{expect_bool_vals}
                                                             : cudf::column_view{expect_fixed_vals};
 
-  test_single_agg(
-    keys, vals, expect_keys, expect_vals, cudf::make_nunique_aggregation(null_policy::INCLUDE));
+  test_single_agg(keys,
+                  vals,
+                  expect_keys,
+                  expect_vals,
+                  cudf::make_nunique_aggregation<groupby_aggregation>(null_policy::INCLUDE));
 }
 
 }  // namespace test
