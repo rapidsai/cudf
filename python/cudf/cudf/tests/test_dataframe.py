@@ -2621,17 +2621,17 @@ def test_reset_index_dup_level_name(level, drop, inplace):
 
 
 @pytest.mark.parametrize("drop", [True, False])
-def test_reset_index_named(pdf, gdf, drop):
+@pytest.mark.parametrize("inplace", [False, True])
+def test_reset_index_named(pdf, gdf, drop, inplace):
     pdf.index.name = "cudf"
     gdf.index.name = "cudf"
-    assert_eq(
-        pdf.reset_index(drop=drop, inplace=False),
-        gdf.reset_index(drop=drop, inplace=False),
-    )
-    assert_eq(
-        pdf.x.reset_index(drop=drop, inplace=False),
-        gdf.x.reset_index(drop=drop, inplace=False),
-    )
+
+    expect = pdf.reset_index(drop=drop, inplace=inplace)
+    got = gdf.reset_index(drop=drop, inplace=inplace)
+    if inplace:
+        expect = pdf
+        got = gdf
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(

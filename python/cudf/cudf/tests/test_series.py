@@ -1358,3 +1358,54 @@ def test_reset_index(level, drop, inplace, original_name, name):
         got = gs
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("level", [None, 0, 1, [None]])
+@pytest.mark.parametrize("drop", [False, True])
+@pytest.mark.parametrize("inplace", [False, True])
+@pytest.mark.parametrize("original_name", [None, "original_ser"])
+@pytest.mark.parametrize("name", [None, "ser"])
+def test_reset_index_dup_level_name(level, drop, inplace, original_name, name):
+    if not drop and inplace:
+        pytest.skip()
+    # midx levels are named [None, None]
+    midx = pd.MultiIndex.from_tuples([("a", 1), ("a", 2), ("b", 1), ("b", 2)])
+    ps = pd.Series(range(4), index=midx, name=original_name)
+    gs = cudf.from_pandas(ps)
+    if level == [None]:
+        with pytest.raises(
+            ValueError, match="occurs multiple times, use a level number$"
+        ):
+            gs.reset_index(level=level, drop=drop, inplace=inplace)
+        return
+
+    expect = ps.reset_index(level=level, drop=drop, inplace=inplace, name=name)
+    got = gs.reset_index(level=level, drop=drop, inplace=inplace, name=name)
+    if inplace:
+        expect = ps
+        got = gs
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("drop", [True, False])
+@pytest.mark.parametrize("inplace", [True, False])
+@pytest.mark.parametrize("original_name", [None, "original_ser"])
+@pytest.mark.parametrize("name", [None, "ser"])
+def test_reset_index_named(drop, inplace, original_name, name):
+    if not drop and inplace:
+        pytest.skip()
+    ps = pd.Series(range(4), index=["x", "y", "z", "w"], name=original_name)
+    gs = cudf.from_pandas(ps)
+
+    ps.index.name = "cudf"
+    gs.index.name = "cudf"
+
+    expect = ps.reset_index(drop=drop, inplace=inplace, name=name)
+    got = gs.reset_index(drop=drop, inplace=inplace, name=name)
+
+    if inplace:
+        expect = ps
+        got = gs
+
+    assert_eq(expect, got)
