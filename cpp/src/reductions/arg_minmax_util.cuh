@@ -19,7 +19,7 @@
 #include <cudf/table/row_operators.cuh>
 
 namespace cudf {
-namespace groupby {
+namespace reduction {
 namespace detail {
 
 /**
@@ -62,5 +62,5 @@ struct row_arg_minmax_fn {
 };
 
 }  // namespace detail
-}  // namespace groupby
+}  // namespace reduction
 }  // namespace cudf

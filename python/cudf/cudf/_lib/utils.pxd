@@ -16,3 +16,4 @@ cdef data_from_table_view(
     table_view tv, object owner, object column_names, object index_names=*)
 cdef table_view table_view_from_columns(columns) except *
 cdef table_view table_view_from_table(tbl, ignore_index=*) except*
+cdef columns_from_unique_ptr(unique_ptr[table] c_tbl)

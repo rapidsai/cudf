@@ -228,7 +228,7 @@ TEST_F(RowBitCount, StructsWithLists_RowsExceedingASingleBlock)
   // Tests that `row_bit_count()` can handle struct<list<int32_t>> with more
   // than max_block_size (256) rows.
   // With a large number of rows, computation spills to multiple thread-blocks,
-  // thus exercising the branch-stack comptutation.
+  // thus exercising the branch-stack computation.
   // The contents of the input column aren't as pertinent to this test as the
   // column size. For what it's worth, it looks as follows:
   //   [ struct({0,1}), struct({2,3}), struct({4,5}), ... ]
@@ -362,7 +362,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> build_nested_and_exp
   // Inner list column
   // clang-format off
   cudf::test::lists_column_wrapper<int> list{
-    {1, 2, 3, 4, 5},     
+    {1, 2, 3, 4, 5},
     {6, 7, 8},
     {33, 34, 35, 36, 37, 38, 39},
     {-1, -2},
@@ -408,7 +408,7 @@ std::unique_ptr<column> build_nested_column(std::vector<bool> const& struct_vali
 
   // Inner list column
   // clang-format off
-  cudf::test::lists_column_wrapper<int> list{    
+  cudf::test::lists_column_wrapper<int> list{
      {{1, 2, 3, 4, 5}, {2, 3}},
      {{6, 7, 8}, {8, 9}},
      {{1, 2}, {3, 4, 5}, {33, 34, 35, 36, 37, 38, 39}}};
