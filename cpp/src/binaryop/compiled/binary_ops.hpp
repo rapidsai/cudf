@@ -212,6 +212,7 @@ void apply_binary_op(mutable_column_view& out,
                      column_view const& rhs,
                      bool is_lhs_scalar,
                      bool is_rhs_scalar,
+                     binary_operator op,
                      rmm::cuda_stream_view stream);
 /**
  * @brief Deploys single type or double type dispatcher that runs equality operation on each

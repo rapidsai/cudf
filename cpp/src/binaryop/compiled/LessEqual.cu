@@ -17,15 +17,11 @@
 #include <binaryop/compiled/binary_ops.cuh>
 
 namespace cudf::binops::compiled {
-template <>
-void apply_binary_op<ops::LessEqual>(mutable_column_view& out,
-                                     column_view const& lhs,
-                                     column_view const& rhs,
-                                     bool is_lhs_scalar,
-                                     bool is_rhs_scalar,
-                                     rmm::cuda_stream_view stream)
-{
-  detail::apply_binary_op_impl<ops::LessEqual>(
-    out, lhs, rhs, is_lhs_scalar, is_rhs_scalar, order::DESCENDING, true, stream);
+template void apply_binary_op<ops::LessEqual>(mutable_column_view&,
+                                              column_view const&,
+                                              column_view const&,
+                                              bool is_lhs_scalar,
+                                              bool is_rhs_scalar,
+                                              binary_operator op,
+                                              rmm::cuda_stream_view);
 }
-}  // namespace cudf::binops::compiled
