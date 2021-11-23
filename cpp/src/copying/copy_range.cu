@@ -230,7 +230,7 @@ void copy_range_in_place(column_view const& source,
                "target should be nullable if source has null values.");
 
   if (source_end != source_begin) {  // otherwise no-op
-    cudf::type_dispatcher<dispatch_storage_type>(target.type(),
+    cudf::type_dispatcher<dispatch_storage_width>(target.type(),
                                                  in_place_copy_range_dispatch{source, target},
                                                  source_begin,
                                                  source_end,
@@ -253,7 +253,7 @@ std::unique_ptr<column> copy_range(column_view const& source,
                "Range is out of bounds.");
   CUDF_EXPECTS(target.type() == source.type(), "Data type mismatch.");
 
-  return cudf::type_dispatcher<dispatch_storage_type>(
+  return cudf::type_dispatcher<dispatch_storage_width>(
     target.type(),
     out_of_place_copy_range_dispatch{source, target},
     source_begin,

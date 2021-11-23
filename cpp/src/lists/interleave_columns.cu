@@ -384,7 +384,7 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
     std::any_of(std::cbegin(input), std::cend(input), [](auto const& col) {
       return col.child(lists_column_view::child_column_index).nullable();
     });
-  auto list_entries = type_dispatcher<dispatch_storage_type>(entry_type,
+  auto list_entries = type_dispatcher<dispatch_storage_width>(entry_type,
                                                              interleave_list_entries_fn{},
                                                              input,
                                                              offsets_view,

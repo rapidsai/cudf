@@ -1191,7 +1191,8 @@ struct value_accessor {
    */
   value_accessor(column_device_view const& _col) : col{_col}
   {
-    CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()), "the data type mismatch");
+    CUDF_EXPECTS(type_id_matches_device_storage_width<T>(col.type().id()),
+                 "the data type mismatch");
   }
 
   __device__ T operator()(cudf::size_type i) const { return col.element<T>(i); }
@@ -1235,7 +1236,8 @@ struct optional_accessor {
    */
   optional_accessor(column_device_view const& _col) : col{_col}
   {
-    CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()), "the data type mismatch");
+    CUDF_EXPECTS(type_id_matches_device_storage_width<T>(col.type().id()),
+                 "the data type mismatch");
   }
 
   CUDA_DEVICE_CALLABLE
@@ -1262,7 +1264,8 @@ struct optional_accessor<T, contains_nulls::DYNAMIC> {
   optional_accessor(column_device_view const& _col, bool with_nulls)
     : col{_col}, has_nulls{with_nulls}
   {
-    CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()), "the data type mismatch");
+    CUDF_EXPECTS(type_id_matches_device_storage_width<T>(col.type().id()),
+                 "the data type mismatch");
     if (with_nulls) { CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column."); }
   }
 
@@ -1302,7 +1305,8 @@ struct pair_accessor {
    */
   pair_accessor(column_device_view const& _col) : col{_col}
   {
-    CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()), "the data type mismatch");
+    CUDF_EXPECTS(type_id_matches_device_storage_width<T>(col.type().id()),
+                 "the data type mismatch");
     if (has_nulls) { CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column."); }
   }
 
@@ -1343,7 +1347,8 @@ struct pair_rep_accessor {
    */
   pair_rep_accessor(column_device_view const& _col) : col{_col}
   {
-    CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()), "the data type mismatch");
+    CUDF_EXPECTS(type_id_matches_device_storage_width<T>(col.type().id()),
+                 "the data type mismatch");
     if (has_nulls) { CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column."); }
   }
 
@@ -1354,13 +1359,13 @@ struct pair_rep_accessor {
   }
 
  private:
-  template <typename R, std::enable_if_t<std::is_same_v<R, rep_type>, void>* = nullptr>
+  template <typename R, std::enable_if_t<not cudf::is_fixed_point<R>(), void>* = nullptr>
   CUDA_DEVICE_CALLABLE auto get_rep(cudf::size_type i) const
   {
     return col.element<R>(i);
   }
 
-  template <typename R, std::enable_if_t<not std::is_same_v<R, rep_type>, void>* = nullptr>
+  template <typename R, std::enable_if_t<cudf::is_fixed_point<R>(), void>* = nullptr>
   CUDA_DEVICE_CALLABLE auto get_rep(cudf::size_type i) const
   {
     return col.element<R>(i).value();
@@ -1377,7 +1382,8 @@ struct mutable_value_accessor {
    */
   mutable_value_accessor(mutable_column_device_view& _col) : col{_col}
   {
-    CUDF_EXPECTS(type_id_matches_device_storage_type<T>(col.type().id()), "the data type mismatch");
+    CUDF_EXPECTS(type_id_matches_device_storage_width<T>(col.type().id()),
+                 "the data type mismatch");
   }
 
   __device__ T& operator()(cudf::size_type i) { return col.element<T>(i); }

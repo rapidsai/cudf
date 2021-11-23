@@ -243,7 +243,7 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
     auto scatter_functor   = column_scalar_scatterer<decltype(scatter_iter)>{};
     auto fields_iter_begin = make_counting_transform_iterator(0, [&](auto const& i) {
       auto row_slr = get_element(typed_s->view().column(i), 0, stream);
-      return type_dispatcher<dispatch_storage_type>(row_slr->type(),
+      return type_dispatcher<dispatch_storage_width>(row_slr->type(),
                                                     scatter_functor,
                                                     *row_slr,
                                                     scatter_iter,
@@ -361,7 +361,7 @@ std::unique_ptr<table> scatter(std::vector<std::reference_wrapper<const scalar>>
                  target.begin(),
                  result.begin(),
                  [=](auto const& source_scalar, auto const& target_col) {
-                   return type_dispatcher<dispatch_storage_type>(target_col.type(),
+                   return type_dispatcher<dispatch_storage_width>(target_col.type(),
                                                                  scatter_functor,
                                                                  source_scalar,
                                                                  scatter_iter,

@@ -104,6 +104,26 @@ using device_storage_type_t =
   std::conditional_t<std::is_same_v<numeric::decimal128, T>, __int128_t, T>>>;
 // clang-format on
 
+// clang-format off
+template <typename T>
+using device_storage_width_t =
+  std::conditional_t<std::is_same_v<numeric::decimal32, T> or
+                     std::is_same_v<timestamp_D, T> or
+                     std::is_same_v<duration_D, T> or
+                     std::is_same_v<float, T>, int32_t,
+  std::conditional_t<std::is_same_v<numeric::decimal64, T> or
+                     std::is_same_v<timestamp_s, T> or
+                     std::is_same_v<timestamp_ms, T> or
+                     std::is_same_v<timestamp_us, T> or
+                     std::is_same_v<timestamp_ns, T> or
+                     std::is_same_v<duration_s, T> or
+                     std::is_same_v<duration_ms, T> or
+                     std::is_same_v<duration_us, T> or
+                     std::is_same_v<duration_ns, T> or
+                     std::is_same_v<double, T>, int64_t,
+  std::conditional_t<std::is_same_v<numeric::decimal128, T>, __int128_t, T>>>;
+// clang-format on
+
 /**
  * @brief Checks if `fixed_point`-like types have template type `T` matching the column's
  * stored type id
@@ -119,6 +139,26 @@ constexpr bool type_id_matches_device_storage_type(type_id id)
   return (id == type_id::DECIMAL32 && std::is_same_v<T, int32_t>) ||
          (id == type_id::DECIMAL64 && std::is_same_v<T, int64_t>) ||
          (id == type_id::DECIMAL128 && std::is_same_v<T, __int128_t>) || id == type_to_id<T>();
+}
+
+template <typename T>
+bool type_id_matches_device_storage_width(type_id id)
+{
+  return id == type_to_id<T>() || (id == type_id::DECIMAL32 && std::is_same_v<T, int32_t>) ||
+         (id == type_id::DECIMAL64 && std::is_same_v<T, int64_t>) ||
+         (id == type_id::DECIMAL128 && std::is_same_v<T, __int128_t>) ||
+         (id == type_id::FLOAT32 && std::is_same_v<T, int32_t>) ||
+         (id == type_id::FLOAT64 && std::is_same_v<T, int64_t>) ||
+         (id == type_id::TIMESTAMP_DAYS && std::is_same_v<T, int32_t>) ||
+         (id == type_id::TIMESTAMP_SECONDS && std::is_same_v<T, int64_t>) ||
+         (id == type_id::TIMESTAMP_MILLISECONDS && std::is_same_v<T, int64_t>) ||
+         (id == type_id::TIMESTAMP_MICROSECONDS && std::is_same_v<T, int64_t>) ||
+         (id == type_id::TIMESTAMP_NANOSECONDS && std::is_same_v<T, int64_t>) ||
+         (id == type_id::DURATION_DAYS && std::is_same_v<T, int32_t>) ||
+         (id == type_id::DURATION_SECONDS && std::is_same_v<T, int64_t>) ||
+         (id == type_id::DURATION_MILLISECONDS && std::is_same_v<T, int64_t>) ||
+         (id == type_id::DURATION_MICROSECONDS && std::is_same_v<T, int64_t>) ||
+         (id == type_id::DURATION_NANOSECONDS && std::is_same_v<T, int64_t>);
 }
 
 /**
@@ -197,12 +237,23 @@ CUDF_TYPE_MAPPING(cudf::struct_view, type_id::STRUCT);
  * underlying stored type.
  *
  * For example, `cudf::sort` in sort.cu uses `cudf::type_dispatcher<dispatch_storage_type>(...)`.
- * `cudf::gather` in gather.cuh also uses `cudf::type_dispatcher<dispatch_storage_type>(...)`.
  * However, reductions needs both `data_type` and underlying type, so cannot use this.
  */
 template <cudf::type_id Id>
 struct dispatch_storage_type {
   using type = device_storage_type_t<typename id_to_type_impl<Id>::type>;
+};
+
+/**
+ * @brief Use this specialization on `type_dispatcher` whenever you only need to operate on the
+ * underlying stored type by width.
+ *
+ * For example, `cudf::gather` only needs `type_dispatcher<dispatch_storage_width>(...)` since
+ * it only needs to copy the elements and does not need process the values themselves.
+ */
+template <cudf::type_id Id>
+struct dispatch_storage_width {
+  using type = device_storage_width_t<typename id_to_type_impl<Id>::type>;
 };
 
 template <typename T>

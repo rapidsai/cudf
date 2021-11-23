@@ -271,13 +271,13 @@ class list_device_view {
     }
 
    private:
-    template <typename R, std::enable_if_t<std::is_same_v<R, rep_type>, void>* = nullptr>
+    template <typename R, std::enable_if_t<not cudf::is_fixed_point<R>(), void>* = nullptr>
     CUDA_DEVICE_CALLABLE rep_type get_rep(cudf::size_type i) const
     {
       return list.element<R>(i);
     }
 
-    template <typename R, std::enable_if_t<not std::is_same_v<R, rep_type>, void>* = nullptr>
+    template <typename R, std::enable_if_t<cudf::is_fixed_point<R>(), void>* = nullptr>
     CUDA_DEVICE_CALLABLE rep_type get_rep(cudf::size_type i) const
     {
       return list.element<R>(i).value();
