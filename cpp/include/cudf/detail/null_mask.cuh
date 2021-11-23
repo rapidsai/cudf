@@ -264,18 +264,8 @@ struct bit_to_word_index {
   bool const end_of_segment;
 };
 
-/**
- * @brief Functor that returns the number of set bits for a specified word
- * of a bitmask array.
- *
- */
-struct count_set_bits_in_word {
-  count_set_bits_in_word(bitmask_type const* bitmask) : bitmask(bitmask) {}
-  CUDA_DEVICE_CALLABLE size_type operator()(size_type i) const
-  {
-    return static_cast<size_type>(__popc(bitmask[i]));
-  }
-  bitmask_type const* bitmask;
+struct popc {
+  CUDA_DEVICE_CALLABLE size_type operator()(bitmask_type word) const { return __popc(word); }
 };
 
 // Count set/unset bits in a segmented null mask, using offset iterators accessible by the device.
@@ -289,8 +279,7 @@ rmm::device_uvector<size_type> segmented_count_bits_device(bitmask_type const* b
 {
   rmm::device_uvector<size_type> d_bit_counts(num_ranges, stream);
 
-  auto num_set_bits_in_word = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
-                                                              count_set_bits_in_word{bitmask});
+  auto num_set_bits_in_word = thrust::make_transform_iterator(bitmask, popc{});
   auto first_word_indices =
     thrust::make_transform_iterator(first_bit_indices, bit_to_word_index{false});
   auto last_word_indices =
