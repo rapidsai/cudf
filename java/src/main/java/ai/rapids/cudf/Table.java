@@ -2759,10 +2759,9 @@ public final class Table implements AutoCloseable {
    * replacement: true
    *
    * output:       {col1: {3, 1, 1}, col2: {8, 6, 6}}
-   * @endcode
    *
-   * @throws "logic_error" if `n` > `input.num_rows()` and `replacement` == FALSE.
-   * @throws "logic_error" if `n` < 0.
+   * throws "logic_error" if `n` > table rows and `replacement` == FALSE.
+   * throws "logic_error" if `n` < 0.
    *
    * @param n non-negative number of samples expected from table
    * @param replacement Allow or disallow sampling of the same row more than once.
