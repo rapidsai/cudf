@@ -125,13 +125,19 @@ std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info 
   }
 }
 
-std::unique_ptr<data_sink> make_datasink(sink_info const& info)
+std::vector<std::unique_ptr<data_sink>> make_datasinks(sink_info const& info)
 {
   switch (info.type) {
-    case io_type::FILEPATH: return cudf::io::data_sink::create(info.filepath);
-    case io_type::HOST_BUFFER: return cudf::io::data_sink::create(info.buffer);
-    case io_type::VOID: return cudf::io::data_sink::create();
-    case io_type::USER_IMPLEMENTED: return cudf::io::data_sink::create(info.user_sink);
+    case io_type::FILEPATH: return cudf::io::data_sink::create(info.filepaths);
+    case io_type::HOST_BUFFER: return cudf::io::data_sink::create(info.buffers);
+    case io_type::VOID: {
+      std::vector<std::unique_ptr<data_sink>> sinks;
+      for (size_t i = 0; i < info.num_void_sinks; ++i) {
+        sinks.push_back(cudf::io::data_sink::create());
+      }
+      return sinks;
+    }
+    case io_type::USER_IMPLEMENTED: return cudf::io::data_sink::create(info.user_sinks);
     default: CUDF_FAIL("Unsupported sink type");
   }
 }
@@ -218,10 +224,11 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
 {
   using namespace cudf::io::detail;
 
-  auto sink = make_datasink(options.get_sink());
+  // TODO: protect against multiple sinks until we support it in CSV
+  auto sinks = make_datasinks(options.get_sink());
 
   return csv::write_csv(  //
-    sink.get(),
+    sinks[0].get(),
     options.get_table(),
     options.get_metadata(),
     options,
@@ -350,9 +357,10 @@ void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resourc
 
   CUDF_FUNC_RANGE();
 
-  auto sink   = make_datasink(options.get_sink());
+  // TODO: protect against multiple sinks until we support it in ORC
+  auto sinks  = make_datasinks(options.get_sink());
   auto writer = std::make_unique<detail_orc::writer>(
-    std::move(sink), options, io_detail::SingleWriteMode::YES, rmm::cuda_stream_default, mr);
+    std::move(sinks[0]), options, io_detail::SingleWriteMode::YES, rmm::cuda_stream_default, mr);
 
   writer->write(options.get_table());
 }
@@ -365,10 +373,11 @@ orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& options
 {
   namespace io_detail = cudf::io::detail;
 
-  auto sink = make_datasink(options.get_sink());
+  // TODO: protect against multiple sinks until we support it in ORC
+  auto sinks = make_datasinks(options.get_sink());
 
   writer = std::make_unique<detail_orc::writer>(
-    std::move(sink), options, io_detail::SingleWriteMode::NO, rmm::cuda_stream_default, mr);
+    std::move(sinks[0]), options, io_detail::SingleWriteMode::NO, rmm::cuda_stream_default, mr);
 }
 
 /**
@@ -444,9 +453,9 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
 
   CUDF_FUNC_RANGE();
 
-  auto sink   = make_datasink(options.get_sink());
+  auto sinks  = make_datasinks(options.get_sink());
   auto writer = std::make_unique<detail_parquet::writer>(
-    std::move(sink), options, io_detail::SingleWriteMode::YES, rmm::cuda_stream_default, mr);
+    std::move(sinks), options, io_detail::SingleWriteMode::YES, rmm::cuda_stream_default, mr);
 
   writer->write(options.get_table());
 
@@ -461,10 +470,10 @@ parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options co
 {
   namespace io_detail = cudf::io::detail;
 
-  auto sink = make_datasink(options.get_sink());
+  auto sinks = make_datasinks(options.get_sink());
 
   writer = std::make_unique<detail_parquet::writer>(
-    std::move(sink), options, io_detail::SingleWriteMode::NO, rmm::cuda_stream_default, mr);
+    std::move(sinks), options, io_detail::SingleWriteMode::NO, rmm::cuda_stream_default, mr);
 }
 
 /**

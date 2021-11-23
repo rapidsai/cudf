@@ -1066,7 +1066,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   stream.synchronize();
 }
 
-writer::impl::impl(std::unique_ptr<data_sink> sink,
+writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    parquet_writer_options const& options,
                    SingleWriteMode mode,
                    rmm::cuda_stream_view stream,
@@ -1078,8 +1078,8 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
-    out_sink_(),
-    single_write_mode(mode == SingleWriteMode::YES)
+    single_write_mode(mode == SingleWriteMode::YES),
+    out_sink_(std::move(sinks))
 {
   // out_sink_.push_back(std::move(sink));
   if (options.get_metadata()) {
@@ -1088,7 +1088,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
   init_state();
 }
 
-writer::impl::impl(std::unique_ptr<data_sink> sink,
+writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    chunked_parquet_writer_options const& options,
                    SingleWriteMode mode,
                    rmm::cuda_stream_view stream,
@@ -1101,7 +1101,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
     single_write_mode(mode == SingleWriteMode::YES),
-    out_sink_()
+    out_sink_(std::move(sinks))
 {
   // out_sink_.push_back(std::move(sink));
   if (options.get_metadata()) {
@@ -1114,8 +1114,6 @@ writer::impl::~impl() { close(); }
 
 void writer::impl::init_state()
 {
-  out_sink_.push_back(data_sink::create("first.parquet"));
-  out_sink_.push_back(data_sink::create("second.parquet"));
   current_chunk_offset.resize(out_sink_.size());
   // Write file header
   file_header_s fhdr;
@@ -1638,21 +1636,21 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
 }
 
 // Forward to implementation
-writer::writer(std::unique_ptr<data_sink> sink,
+writer::writer(std::vector<std::unique_ptr<data_sink>> sinks,
                parquet_writer_options const& options,
                SingleWriteMode mode,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
-  : _impl(std::make_unique<impl>(std::move(sink), options, mode, stream, mr))
+  : _impl(std::make_unique<impl>(std::move(sinks), options, mode, stream, mr))
 {
 }
 
-writer::writer(std::unique_ptr<data_sink> sink,
+writer::writer(std::vector<std::unique_ptr<data_sink>> sinks,
                chunked_parquet_writer_options const& options,
                SingleWriteMode mode,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
-  : _impl(std::make_unique<impl>(std::move(sink), options, mode, stream, mr))
+  : _impl(std::make_unique<impl>(std::move(sinks), options, mode, stream, mr))
 {
 }
 

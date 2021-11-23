@@ -97,7 +97,7 @@ class writer {
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
+  explicit writer(std::vector<std::unique_ptr<data_sink>> sinks,
                   parquet_writer_options const& options,
                   SingleWriteMode mode,
                   rmm::cuda_stream_view stream,
@@ -114,7 +114,7 @@ class writer {
    *
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list
    */
-  explicit writer(std::unique_ptr<cudf::io::data_sink> sink,
+  explicit writer(std::vector<std::unique_ptr<data_sink>> sinks,
                   chunked_parquet_writer_options const& options,
                   SingleWriteMode mode,
                   rmm::cuda_stream_view stream,

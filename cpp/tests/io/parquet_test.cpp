@@ -573,9 +573,10 @@ TEST_F(ParquetWriterTest, Strings)
   expected_metadata.column_metadata[1].set_name("col_string");
   expected_metadata.column_metadata[2].set_name("col_another");
 
-  auto filepath = ("Strings.parquet");
   cudf_io::parquet_writer_options out_opts =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
+    cudf_io::parquet_writer_options::builder(
+      cudf_io::sink_info(std::vector<std::string>{"first.parquet", "second.parquet"}),
+      expected->view())
       .metadata(&expected_metadata)
       .stats_level(cudf::io::STATISTICS_NONE);
   cudf_io::write_parquet(out_opts);

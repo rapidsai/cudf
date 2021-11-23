@@ -61,13 +61,13 @@ class writer::impl {
   /**
    * @brief Constructor with writer options.
    *
-   * @param sink data_sink for storing dataset
+   * @param sink data_sink's for storing dataset
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::unique_ptr<data_sink> sink,
+  explicit impl(std::vector<std::unique_ptr<data_sink>> sinks,
                 parquet_writer_options const& options,
                 SingleWriteMode mode,
                 rmm::cuda_stream_view stream,
@@ -76,13 +76,13 @@ class writer::impl {
   /**
    * @brief Constructor with chunked writer options.
    *
-   * @param sink data_sink for storing dataset
+   * @param sink data_sink's for storing dataset
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::unique_ptr<data_sink> sink,
+  explicit impl(std::vector<std::unique_ptr<data_sink>> sinks,
                 chunked_parquet_writer_options const& options,
                 SingleWriteMode mode,
                 rmm::cuda_stream_view stream,
