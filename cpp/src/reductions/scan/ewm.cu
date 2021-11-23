@@ -28,6 +28,51 @@
 
 #include <thrust/scan.h>
 
+template <typename T>
+void print_device_uvector(rmm::device_uvector<T> const& input, rmm::cuda_stream_view stream) {
+ thrust::device_vector<T> input_device(input.size());
+ thrust::copy(rmm::exec_policy(stream), input.begin(), input.end(), input_device.begin());
+ thrust::host_vector<T> input_host = input_device;
+ std::cout << std::endl;
+ for (size_t i = 0; i < input_host.size(); i++) {
+   std::cout << input_host[i] << " ";
+ }
+ std::cout << std::endl;
+}
+
+template <typename T>
+void print_device_uvector_pairs(rmm::device_uvector<thrust::pair<T,T>> const& input, rmm::cuda_stream_view stream) {
+ thrust::device_vector<T> pairs0_d(input.size());
+ thrust::device_vector<T> pairs1_d(input.size());
+
+ thrust::transform(rmm::exec_policy(stream),
+                   input.begin(),
+                   input.end(),
+                   pairs0_d.begin(),
+                   [=] __host__ __device__(thrust::pair<T,T> input) -> T { return thrust::get<0>(input); }
+ );  
+
+
+ thrust::transform(rmm::exec_policy(stream),
+                   input.begin(),
+                   input.end(),
+                   pairs1_d.begin(),
+                   [=] __host__ __device__(thrust::pair<T,T> input) -> T { return thrust::get<1>(input); }
+ );  
+
+
+
+
+ thrust::host_vector<T> pairs0_h = pairs0_d;
+ thrust::host_vector<T> pairs1_h = pairs1_d;
+
+ std::cout << std::endl;
+ for (size_t i = 0; i < input.size(); i++) {
+   std::cout << "(" << pairs0_h[i] << "," << pairs1_h[i] << ")"  << " ";
+ }
+ std::cout << std::endl;
+}
+
 namespace cudf {
 namespace detail {
 
@@ -220,28 +265,34 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
                      return thrust::pair<T, T>(beta, input);
                    });
 
+
  if (input.has_nulls()) {
    /*
    In this case, a denominator actually has to be computed. The formula is
-   y_{i+1} - (1 - alpha)x_{i-1} + alpha x_i, but really there is a "denominator"
+   y_{i+1} = (1 - alpha)x_{i-1} + alpha x_i, but really there is a "denominator"
    which is the sum of the weights: alpha + (1 - alpha) == 1. If a null is
    encountered, that means that the "previous" value is downweighted by a
    factor (for each missing value). For example this would y_2 be for one NULL:
    data = {x_0, NULL, x_1},
    y_2 = (1 - alpha)**2 x_0 + alpha * x_2 / (alpha + (1-alpha)**2)
 
-   As such, the pairs must be updated before summing like the adjusted case,
-   but we also have to compute normalization factors
+   As such, the pairs must be updated before summing like the adjusted case to
+   properly downweight the previous values. But now but we also need to compute
+   the normalization factors and divide the results into them at the end.
 
    */
+
    pair_beta_adjust(input, pairs, stream);
 
+
    rmm::device_uvector<cudf::size_type> nullcnt = null_roll_up(input, stream);
+
+   rmm::device_uvector<T> nullcnt_factor(nullcnt.size(), stream, mr);
 
    thrust::transform(rmm::exec_policy(stream),
                      nullcnt.begin(),
                      nullcnt.end(),
-                     nullcnt.begin(),
+                     nullcnt_factor.begin(),
                      [=] __host__ __device__(T exponent) -> T {
                        // ex: 2 -> alpha + (1  - alpha)**2
                        if (exponent != 0) {
@@ -254,7 +305,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
    auto device_view = *column_device_view::create(input);
    auto valid_it    = detail::make_validity_iterator(device_view);
    auto null_and_null_count =
-     thrust::make_zip_iterator(thrust::make_tuple(valid_it, nullcnt.begin()));
+     thrust::make_zip_iterator(thrust::make_tuple(valid_it, nullcnt_factor.begin()));
    thrust::transform(
      rmm::exec_policy(stream),
      null_and_null_count,
@@ -300,7 +351,6 @@ std::unique_ptr<column> ewma(std::unique_ptr<aggregation> const& agg,
  bool adjust = (dynamic_cast<ewma_aggregation*>(agg.get()))->adjust;
 
  T beta = 1.0 - (1.0 / (com + 1.0));
-
  rmm::device_uvector<T> data(input.size(), stream, mr);
  if (adjust) {
    data = compute_ewma_adjust(input, beta, stream, mr);
@@ -312,17 +362,6 @@ std::unique_ptr<column> ewma(std::unique_ptr<aggregation> const& agg,
  return col;
 }
 
-template <typename T>
-void print_device_uvector(rmm::device_uvector<T> const& input, rmm::cuda_stream_view stream) {
- thrust::device_vector<T> input_device(input.size());
- thrust::copy(rmm::exec_policy(stream), input.begin(), input.end(), input_device.begin());
- thrust::host_vector<T> input_host = input_device;
- std::cout << std::endl;
- for (size_t i = 0; i < input_host.size(); i++) {
-   std::cout << input_host[i] << " ";
- }
- std::cout << std::endl;
-}
 
 struct ewma_functor{
   template <typename T>
