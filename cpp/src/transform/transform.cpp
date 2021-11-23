@@ -57,12 +57,10 @@ void unary_operation(mutable_column_view output,
                                                    "GENERIC_UNARY_OP");
 
   cudf::jit::get_program_cache(*transform_jit_kernel_cu_jit)
-    .get_kernel(kernel_name,
-                {},
-                {{"transform/jit/operation-udf.hpp", cuda_source}},
-                {"-arch=sm_.", "--device-int128"})         //
-    ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
-    ->launch(output.size(),                                //
+    .get_kernel(
+      kernel_name, {}, {{"transform/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_."})  //
+    ->configure_1d_max_occupancy(0, 0, 0, stream.value())                                   //
+    ->launch(output.size(),                                                                 //
              cudf::jit::get_data_ptr(output),
              cudf::jit::get_data_ptr(input));
 }
@@ -136,7 +134,7 @@ void generalized_operation(table_view const& data_view,
     .get_kernel(generic_kernel_name,
                 {},
                 {{"transform/jit/operation-udf.hpp", generic_cuda_source}},
-                {"-arch=sm_.", "--device-int128"})
+                {"-arch=sm_."})
     ->configure_1d_max_occupancy(0, 0, 0, stream.value())
     ->launch(kernel_args.data());
 }
