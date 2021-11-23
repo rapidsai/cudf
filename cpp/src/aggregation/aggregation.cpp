@@ -615,7 +615,6 @@ std::unique_ptr<Base> make_ewma_aggregation(double com, bool adjust)
 }
 template std::unique_ptr<aggregation> make_ewma_aggregation<aggregation>(double com, bool adjust);
 
-
 /// Factory to create a RANK aggregation
 template <typename Base>
 std::unique_ptr<Base> make_rank_aggregation()

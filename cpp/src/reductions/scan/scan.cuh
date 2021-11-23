@@ -42,10 +42,9 @@ std::unique_ptr<column> inclusive_dense_rank_scan(column_view const& order_by,
                                                   rmm::mr::device_memory_resource* mr);
 
 std::unique_ptr<column> ewm(column_view const& input,
-                           std::unique_ptr<aggregation> const& agg,
-                           rmm::cuda_stream_view stream,
-                           rmm::mr::device_memory_resource* mr);
-
+                            std::unique_ptr<aggregation> const& agg,
+                            rmm::cuda_stream_view stream,
+                            rmm::mr::device_memory_resource* mr);
 
 template <template <typename> typename DispatchFn>
 std::unique_ptr<column> scan_agg_dispatch(const column_view& input,

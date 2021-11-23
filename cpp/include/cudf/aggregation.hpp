@@ -293,7 +293,6 @@ std::unique_ptr<Base> make_row_number_aggregation();
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_ewma_aggregation(double com, bool adjust);
 
-
 /**
  * @brief Factory to create a RANK aggregation
  *
