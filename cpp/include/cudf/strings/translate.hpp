@@ -60,7 +60,10 @@ std::unique_ptr<column> translate(
 /**
  * @brief Removes or keeps the specified character ranges in cudf::strings::filter_characters
  */
-enum class filter_type : bool { KEEP, REMOVE };
+enum class filter_type : bool {
+  KEEP,   ///< All characters but those specified are removed
+  REMOVE  ///< Only the specified characters are removed
+};
 
 /**
  * @brief Removes ranges of characters from each string in a strings column.
