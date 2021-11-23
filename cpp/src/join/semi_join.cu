@@ -49,7 +49,9 @@ namespace {
 struct make_pair_function {
   __device__ __forceinline__ cudf::detail::pair_type operator()(size_type i) const noexcept
   {
-    return cuco::make_pair<hash_value_type, size_type>(i, true);
+    // The value is irrelevant since we only ever use the hash map to check for
+    // membership of a particular row index.
+    return cuco::make_pair<hash_value_type, size_type>(i, 0);
   }
 };
 
@@ -112,8 +114,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
     // hash_table.insert(iter, iter + right_num_rows, hash_build, equality_build, stream.value());
   } else {
     thrust::counting_iterator<size_type> stencil(0);
-    [[maybe_unused]] auto const [row_bitmask, null_count] =
-      cudf::detail::bitmask_and(right_flattened_keys, stream);
+    auto const [row_bitmask, _] = cudf::detail::bitmask_and(right_flattened_keys, stream);
     row_is_valid pred{static_cast<bitmask_type const*>(row_bitmask.data())};
 
     // insert valid rows
