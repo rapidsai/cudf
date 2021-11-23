@@ -230,10 +230,7 @@ def test_dataframe_join_combine_cats():
     expect.index = expect.index.astype("category")
     got = lhs.join(rhs, how="outer")
 
-    # TODO: Remove copying to host
-    # after https://github.com/rapidsai/cudf/issues/5676
-    # is implemented
-    assert_eq(expect.index.sort_values(), got.index.to_pandas().sort_values())
+    assert_eq(expect.index.sort_values(), got.index.sort_values())
 
 
 @pytest.mark.parametrize("how", ["left", "right", "inner", "outer"])
@@ -744,12 +741,6 @@ def test_merge_sort(ons, hows):
     [
         {"left_on": ["a"], "left_index": False, "right_index": True},
         {"right_on": ["b"], "left_index": True, "right_index": False},
-        {
-            "left_on": ["a"],
-            "right_on": ["b"],
-            "left_index": True,
-            "right_index": True,
-        },
     ],
 )
 def test_merge_sort_on_indexes(kwargs):
@@ -1791,12 +1782,6 @@ def test_typecast_on_join_indexes_matching_categorical():
         {"left_index": True, "right_on": "b"},
         {"left_on": "a", "right_index": True},
         {"left_index": True, "right_index": True},
-        {
-            "left_on": "a",
-            "right_on": "b",
-            "left_index": True,
-            "right_index": True,
-        },
     ],
 )
 def test_series_dataframe_mixed_merging(lhs, rhs, how, kwargs):
@@ -2148,3 +2133,20 @@ def test_join_on_index_with_duplicate_names():
     got = lhs.join(rhs, how="inner")
 
     assert_join_results_equal(expect, got, how="inner")
+
+
+def test_join_redundant_params():
+    lhs = cudf.DataFrame(
+        {"a": [1, 2, 3], "c": [2, 3, 4]}, index=cudf.Index([0, 1, 2], name="c")
+    )
+    rhs = cudf.DataFrame(
+        {"b": [1, 2, 3]}, index=cudf.Index([0, 1, 2], name="a")
+    )
+    with pytest.raises(ValueError):
+        lhs.merge(rhs, on="a", left_index=True)
+    with pytest.raises(ValueError):
+        lhs.merge(rhs, left_on="a", left_index=True, right_index=True)
+    with pytest.raises(ValueError):
+        lhs.merge(rhs, right_on="a", left_index=True, right_index=True)
+    with pytest.raises(ValueError):
+        lhs.merge(rhs, left_on="c", right_on="b")

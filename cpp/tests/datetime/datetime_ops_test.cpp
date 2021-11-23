@@ -183,10 +183,9 @@ TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedDatetimeComponents)
   using namespace cudf::datetime;
   using namespace cuda::std::chrono;
 
-  auto start = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
-  auto stop_ = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
-  auto timestamps =
-    generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop_));
+  auto start      = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
+  auto stop       = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
+  auto timestamps = generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop));
 
   auto expected_years =
     fixed_width_column_wrapper<int16_t>{1890, 1906, 1922, 1938, 1954, 1970, 1985, 2001, 2017, 2033};
@@ -221,9 +220,9 @@ TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedNullableDatetimeComponen
   using namespace cuda::std::chrono;
 
   auto start = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
-  auto stop_ = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
+  auto stop  = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
   auto timestamps =
-    generate_timestamps<T, true>(this->size(), time_point_ms(start), time_point_ms(stop_));
+    generate_timestamps<T, true>(this->size(), time_point_ms(start), time_point_ms(stop));
 
   auto expected_years = fixed_width_column_wrapper<int16_t>{
     {1890, 1906, 1922, 1938, 1954, 1970, 1985, 2001, 2017, 2033},
@@ -758,7 +757,7 @@ TEST_F(BasicDatetimeOpsTest, TestIsLeapYear)
         707904541L,     // 1992-06-07 08:09:01 GMT - leap year
         -2181005247L,   // 1900-11-20 09:12:33 GMT - non leap year
         0L,             // UNIX EPOCH 1970-01-01 00:00:00 GMT - non leap year
-        -12212553600L,  // First full year of Gregorian Calandar 1583-01-01 00:00:00 - non-leap-year
+        -12212553600L,  // First full year of Gregorian Calendar 1583-01-01 00:00:00 - non-leap-year
         0L,             // null
         13591632822L,   // 2400-09-13 13:33:42 GMT - leap year
         4539564243L,    // 2113-11-08 06:04:03 GMT - non leap year
@@ -827,7 +826,7 @@ TEST_F(BasicDatetimeOpsTest, TestQuarter)
         707904541L,     // 1992-06-07 08:09:01 GMT
         -2181005247L,   // 1900-11-20 09:12:33 GMT
         0L,             // UNIX EPOCH 1970-01-01 00:00:00 GMT
-        -12212553600L,  // First full year of Gregorian Calandar 1583-01-01 00:00:00
+        -12212553600L,  // First full year of Gregorian Calendar 1583-01-01 00:00:00
         0L,             // null
         13591632822L,   // 2400-09-13 13:33:42 GMT
         4539564243L,    // 2113-11-08 06:04:03 GMT
