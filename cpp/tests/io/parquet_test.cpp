@@ -399,7 +399,7 @@ TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampOverflow)
 
 TEST_F(ParquetWriterTest, MultiColumn)
 {
-  constexpr auto num_rows = 100;
+  constexpr auto num_rows = 100000;
 
   // auto col0_data = random_values<bool>(num_rows);
   auto col1_data = random_values<int8_t>(num_rows);
@@ -407,13 +407,17 @@ TEST_F(ParquetWriterTest, MultiColumn)
   auto col3_data = random_values<int32_t>(num_rows);
   auto col4_data = random_values<float>(num_rows);
   auto col5_data = random_values<double>(num_rows);
-  auto col6_vals = random_values<int32_t>(num_rows);
-  auto col7_vals = random_values<int64_t>(num_rows);
+  auto col6_vals = random_values<int16_t>(num_rows);
+  auto col7_vals = random_values<int32_t>(num_rows);
+  auto col8_vals = random_values<int64_t>(num_rows);
   auto col6_data = cudf::detail::make_counting_transform_iterator(0, [col6_vals](auto i) {
     return numeric::decimal32{col6_vals[i], numeric::scale_type{5}};
   });
   auto col7_data = cudf::detail::make_counting_transform_iterator(0, [col7_vals](auto i) {
     return numeric::decimal64{col7_vals[i], numeric::scale_type{-5}};
+  });
+  auto col8_data = cudf::detail::make_counting_transform_iterator(0, [col8_vals](auto i) {
+    return numeric::decimal128{col8_vals[i], numeric::scale_type{-6}};
   });
   auto validity  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
 
@@ -426,6 +430,7 @@ TEST_F(ParquetWriterTest, MultiColumn)
   column_wrapper<double> col5{col5_data.begin(), col5_data.end(), validity};
   column_wrapper<numeric::decimal32> col6{col6_data, col6_data + num_rows, validity};
   column_wrapper<numeric::decimal64> col7{col7_data, col7_data + num_rows, validity};
+  column_wrapper<numeric::decimal128> col8{col8_data, col8_data + num_rows, validity};
 
   std::vector<std::unique_ptr<column>> cols;
   // cols.push_back(col0.release());
@@ -436,8 +441,8 @@ TEST_F(ParquetWriterTest, MultiColumn)
   cols.push_back(col5.release());
   cols.push_back(col6.release());
   cols.push_back(col7.release());
+  cols.push_back(col8.release());
   auto expected = std::make_unique<table>(std::move(cols));
-  EXPECT_EQ(7, expected->num_columns());
 
   cudf_io::table_input_metadata expected_metadata(*expected);
   // expected_metadata.column_metadata[0].set_name( "bools");
@@ -448,6 +453,7 @@ TEST_F(ParquetWriterTest, MultiColumn)
   expected_metadata.column_metadata[4].set_name("doubles");
   expected_metadata.column_metadata[5].set_name("decimal32s").set_decimal_precision(10);
   expected_metadata.column_metadata[6].set_name("decimal64s").set_decimal_precision(20);
+  expected_metadata.column_metadata[7].set_name("decimal128s").set_decimal_precision(40);
 
   auto filepath = temp_env->get_temp_filepath("MultiColumn.parquet");
   cudf_io::parquet_writer_options out_opts =
@@ -2871,7 +2877,6 @@ TEST_F(ParquetReaderTest, DecimalRead)
     cudf::test::expect_columns_equal(result.tbl->view().column(1), col1);
 
     cudf_io::parquet_reader_options read_strict_opts = read_opts;
-    read_strict_opts.set_strict_decimal_types(true);
     read_strict_opts.set_columns({"dec7p4", "dec14p5"});
     EXPECT_NO_THROW(cudf_io::read_parquet(read_strict_opts));
   }
@@ -2967,22 +2972,22 @@ TEST_F(ParquetReaderTest, DecimalRead)
     unsigned int parquet_len = 1226;
 
     cudf_io::parquet_reader_options read_opts =
-      cudf_io::parquet_reader_options::builder(cudf_io::source_info{
-        reinterpret_cast<const char*>(fixed_len_bytes_decimal_parquet), parquet_len});
-    read_opts.set_strict_decimal_types(true);
-    read_opts.set_columns({"dec7p3", "dec12p11"});
+      cudf_io::parquet_reader_options::builder(
+        cudf_io::source_info{reinterpret_cast<const char*>(fixed_len_bytes_decimal_parquet),
+                             parquet_len})
+        .columns({"dec7p3", "dec12p11"});
     auto result = cudf_io::read_parquet(read_opts);
     EXPECT_EQ(result.tbl->view().num_columns(), 2);
 
     auto validity_c0 =
       cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 19; });
-    int64_t col0_data[] = {6361295, 698632,  7821423, 7073444, 9631892, 3021012, 5195059,
+    int32_t col0_data[] = {6361295, 698632,  7821423, 7073444, 9631892, 3021012, 5195059,
                            9913714, 901749,  7776938, 3186566, 4955569, 5131067, 98619,
                            2282579, 7521455, 4430706, 1937859, 4532040, 0};
 
     EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(0).size()),
               sizeof(col0_data) / sizeof(col0_data[0]));
-    cudf::test::fixed_point_column_wrapper<int64_t> col0(
+    cudf::test::fixed_point_column_wrapper<int32_t> col0(
       std::begin(col0_data), std::end(col0_data), validity_c0, numeric::scale_type{-3});
     cudf::test::expect_columns_equal(result.tbl->view().column(0), col0);
 
@@ -3016,7 +3021,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
     cudf::test::expect_columns_equal(result.tbl->view().column(1), col1);
 
     read_opts.set_columns({"dec20p1"});
-    EXPECT_THROW(cudf_io::read_parquet(read_opts), cudf::logic_error);
+    EXPECT_NO_THROW(cudf_io::read_parquet(read_opts));
   }
 }
 
