@@ -211,18 +211,6 @@ TEST_F(RowBitCount, StringsWithNulls)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
-namespace {
-
-/**
- * @brief __device__ functor to multiply input by 2, defined out of line because __device__ lambdas
- * cannot be defined in a TEST_F().
- */
-struct times_2 {
-  int32_t __device__ operator()(int32_t i) const { return i * 2; }
-};
-
-}  // namespace
-
 TEST_F(RowBitCount, StructsWithLists_RowsExceedingASingleBlock)
 {
   // Tests that `row_bit_count()` can handle struct<list<int32_t>> with more
@@ -248,7 +236,7 @@ TEST_F(RowBitCount, StructsWithLists_RowsExceedingASingleBlock)
   thrust::tabulate(thrust::device,
                    list_offsets_view.begin<offset_type>(),
                    list_offsets_view.end<offset_type>(),
-                   times_2{});
+                   [] __device__ (auto e) { return e * 2; });
 
   // List<int32_t> = {{0,1}, {2,3}, {4,5}, ..., {2*(num_rows-1), 2*num_rows-1}};
   auto lists_column = make_lists_column(num_rows, std::move(list_offsets), std::move(ints), 0, {});
