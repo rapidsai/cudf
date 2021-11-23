@@ -72,9 +72,12 @@ struct page_enc_state_s {
   uint16_t vals[rle_buffer_size];
 };
 
+/**
+ * @brief Returns the size of the type in the Parquet file.
+ */
 uint32_t __device__ physical_type_len(Type physical_type, type_id id)
 {
-  if (id == type_id::DECIMAL128 and physical_type == FIXED_LEN_BYTE_ARRAY) return 16u;
+  if (physical_type == FIXED_LEN_BYTE_ARRAY and id == type_id::DECIMAL128) return 16u;
   switch (physical_type) {
     case INT96: return 12u;
     case INT64:
