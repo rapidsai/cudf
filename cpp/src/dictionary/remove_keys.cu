@@ -53,10 +53,11 @@ namespace {
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
 template <typename KeysKeeper>
-std::unique_ptr<column> remove_keys_fn(dictionary_column_view const& dictionary_column,
-                                       KeysKeeper keys_to_keep_fn,
-                                       rmm::cuda_stream_view stream,
-                                       rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> remove_keys_fn(
+  dictionary_column_view const& dictionary_column,
+  KeysKeeper keys_to_keep_fn,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto const keys_view    = dictionary_column.keys();
   auto const indices_type = dictionary_column.indices().type();
@@ -144,10 +145,11 @@ std::unique_ptr<column> remove_keys_fn(dictionary_column_view const& dictionary_
 
 }  // namespace
 
-std::unique_ptr<column> remove_keys(dictionary_column_view const& dictionary_column,
-                                    column_view const& keys_to_remove,
-                                    rmm::cuda_stream_view stream,
-                                    rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> remove_keys(
+  dictionary_column_view const& dictionary_column,
+  column_view const& keys_to_remove,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   CUDF_EXPECTS(!keys_to_remove.has_nulls(), "keys_to_remove must not have nulls");
   auto const keys_view = dictionary_column.keys();
@@ -161,9 +163,10 @@ std::unique_ptr<column> remove_keys(dictionary_column_view const& dictionary_col
   return remove_keys_fn(dictionary_column, key_matcher, stream, mr);
 }
 
-std::unique_ptr<column> remove_unused_keys(dictionary_column_view const& dictionary_column,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> remove_unused_keys(
+  dictionary_column_view const& dictionary_column,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   // locate the keys to remove
   auto const keys_size     = dictionary_column.keys_size();

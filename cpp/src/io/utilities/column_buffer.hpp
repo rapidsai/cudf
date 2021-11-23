@@ -45,10 +45,11 @@ namespace detail {
  *
  * @return `rmm::device_buffer` Device buffer allocation
  */
-inline rmm::device_buffer create_data(data_type type,
-                                      size_type size,
-                                      rmm::cuda_stream_view stream,
-                                      rmm::mr::device_memory_resource* mr)
+inline rmm::device_buffer create_data(
+  data_type type,
+  size_type size,
+  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   std::size_t data_size = size_of(type) * size;
 
@@ -92,7 +93,9 @@ struct column_buffer {
 
   // instantiate a column of known type with a specified size.  Allows deferred creation for
   // preprocessing steps such as in the Parquet reader
-  void create(size_type _size, rmm::cuda_stream_view stream, rmm::mr::device_memory_resource* mr);
+  void create(size_type _size,
+              rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
+              rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   auto data() { return _strings ? _strings->data() : _data.data(); }
   auto data_size() const { return _strings ? _strings->size() : _data.size(); }
