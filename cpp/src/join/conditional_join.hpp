@@ -62,13 +62,12 @@ conditional_join(table_view const& left,
  *
  * @return Join output indices vector pair
  */
-std::size_t compute_conditional_join_output_size(
-  table_view const& left,
-  table_view const& right,
-  ast::expression const& binary_predicate,
-  join_kind JoinKind,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::size_t compute_conditional_join_output_size(table_view const& left,
+                                                 table_view const& right,
+                                                 ast::expression const& binary_predicate,
+                                                 join_kind JoinKind,
+                                                 rmm::cuda_stream_view stream,
+                                                 rmm::mr::device_memory_resource* mr);
 
 }  // namespace detail
 }  // namespace cudf

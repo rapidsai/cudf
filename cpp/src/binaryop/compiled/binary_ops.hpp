@@ -31,29 +31,26 @@ class mutable_column_device_view;
 namespace binops {
 namespace compiled {
 
-std::unique_ptr<column> string_null_min_max(
-  scalar const& lhs,
-  column_view const& rhs,
-  binary_operator op,
-  data_type output_type,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> string_null_min_max(scalar const& lhs,
+                                            column_view const& rhs,
+                                            binary_operator op,
+                                            data_type output_type,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<column> string_null_min_max(
-  column_view const& lhs,
-  scalar const& rhs,
-  binary_operator op,
-  data_type output_type,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> string_null_min_max(column_view const& lhs,
+                                            scalar const& rhs,
+                                            binary_operator op,
+                                            data_type output_type,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr);
 
-std::unique_ptr<column> string_null_min_max(
-  column_view const& lhs,
-  column_view const& rhs,
-  binary_operator op,
-  data_type output_type,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> string_null_min_max(column_view const& lhs,
+                                            column_view const& rhs,
+                                            binary_operator op,
+                                            data_type output_type,
+                                            rmm::cuda_stream_view stream,
+                                            rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Performs a binary operation between a string scalar and a string
@@ -74,13 +71,12 @@ std::unique_ptr<column> string_null_min_max(
  * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> Output column
  */
-std::unique_ptr<column> binary_operation(
-  scalar const& lhs,
-  column_view const& rhs,
-  binary_operator op,
-  data_type output_type,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> binary_operation(scalar const& lhs,
+                                         column_view const& rhs,
+                                         binary_operator op,
+                                         data_type output_type,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Performs a binary operation between a string column and a string
@@ -101,13 +97,12 @@ std::unique_ptr<column> binary_operation(
  * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> Output column
  */
-std::unique_ptr<column> binary_operation(
-  column_view const& lhs,
-  scalar const& rhs,
-  binary_operator op,
-  data_type output_type,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> binary_operation(column_view const& lhs,
+                                         scalar const& rhs,
+                                         binary_operator op,
+                                         data_type output_type,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr);
 
 /**
  * @brief Performs a binary operation between two string columns.
@@ -127,13 +122,12 @@ std::unique_ptr<column> binary_operation(
  * @param mr          Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> Output column
  */
-std::unique_ptr<column> binary_operation(
-  column_view const& lhs,
-  column_view const& rhs,
-  binary_operator op,
-  data_type output_type,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+std::unique_ptr<column> binary_operation(column_view const& lhs,
+                                         column_view const& rhs,
+                                         binary_operator op,
+                                         data_type output_type,
+                                         rmm::cuda_stream_view stream,
+                                         rmm::mr::device_memory_resource* mr);
 
 void binary_operation(mutable_column_view& out,
                       scalar const& lhs,

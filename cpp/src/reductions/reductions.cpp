@@ -107,12 +107,11 @@ struct reduce_dispatch_functor {
   }
 };
 
-std::unique_ptr<scalar> reduce(
-  column_view const& col,
-  std::unique_ptr<aggregation> const& agg,
-  data_type output_dtype,
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<scalar> reduce(column_view const& col,
+                               std::unique_ptr<aggregation> const& agg,
+                               data_type output_dtype,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   // Returns default scalar if input column is non-valid. In terms of nested columns, we need to
   // handcraft the default scalar with input column.
