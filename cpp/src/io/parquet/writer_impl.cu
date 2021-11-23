@@ -1658,9 +1658,10 @@ writer::writer(std::vector<std::unique_ptr<data_sink>> sinks,
 writer::~writer() = default;
 
 // Forward to implementation
-void writer::write(table_view const& table)
+void writer::write(table_view const& table,
+                   std::vector<std::pair<size_type, size_type>> const& partitions)
 {
-  _impl->write(table, {{1, 2}, {4, 1}});
+  _impl->write(table, partitions);
   // _impl->write(table, {{10, 20 * 1024}, {20 * 1024 + 10, 30 * 1024}});
 }
 

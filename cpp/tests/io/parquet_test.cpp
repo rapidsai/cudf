@@ -577,6 +577,7 @@ TEST_F(ParquetWriterTest, Strings)
     cudf_io::parquet_writer_options::builder(
       cudf_io::sink_info(std::vector<std::string>{"first.parquet", "second.parquet"}),
       expected->view())
+      .partitions({{1, 2}, {4, 1}})
       .metadata(&expected_metadata)
       .stats_level(cudf::io::STATISTICS_NONE);
   cudf_io::write_parquet(out_opts);

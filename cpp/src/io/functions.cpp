@@ -457,7 +457,7 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
   auto writer = std::make_unique<detail_parquet::writer>(
     std::move(sinks), options, io_detail::SingleWriteMode::YES, rmm::cuda_stream_default, mr);
 
-  writer->write(options.get_table());
+  writer->write(options.get_table(), options.get_partitions());
 
   return writer->close(options.get_column_chunks_file_path());
 }
@@ -479,11 +479,12 @@ parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options co
 /**
  * @copydoc cudf::io::parquet_chunked_writer::write
  */
-parquet_chunked_writer& parquet_chunked_writer::write(table_view const& table)
+parquet_chunked_writer& parquet_chunked_writer::write(
+  table_view const& table, std::vector<std::pair<size_type, size_type>> const& partitions)
 {
   CUDF_FUNC_RANGE();
 
-  writer->write(table);
+  writer->write(table, partitions);
 
   return *this;
 }

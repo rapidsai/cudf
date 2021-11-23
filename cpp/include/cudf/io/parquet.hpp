@@ -394,6 +394,8 @@ class parquet_writer_options {
   statistics_freq _stats_level = statistics_freq::STATISTICS_ROWGROUP;
   // Sets of columns to output
   table_view _table;
+  // Partitions described in a {start_row, num_rows} pairs
+  std::vector<std::pair<size_type, size_type>> _partitions;
   // Optional associated metadata
   table_input_metadata const* _metadata = nullptr;
   // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
@@ -465,6 +467,11 @@ class parquet_writer_options {
   table_view get_table() const { return _table; }
 
   /**
+   * @brief Returns partitions.
+   */
+  std::vector<std::pair<size_type, size_type>> get_partitions() const { return _partitions; }
+
+  /**
    * @brief Returns associated metadata.
    */
   table_input_metadata const* get_metadata() const { return _metadata; }
@@ -488,6 +495,16 @@ class parquet_writer_options {
    * @brief Returns maximum row group size, in rows.
    */
   auto get_row_group_size_rows() const { return _row_group_size_rows; }
+
+  /**
+   * @brief Sets metadata.
+   *
+   * @param partitions Associated metadata.
+   */
+  void set_partitions(std::vector<std::pair<size_type, size_type>> const& partitions)
+  {
+    _partitions = partitions;
+  }
 
   /**
    * @brief Sets metadata.
@@ -571,6 +588,19 @@ class parquet_writer_options_builder {
   explicit parquet_writer_options_builder(sink_info const& sink, table_view const& table)
     : options(sink, table)
   {
+  }
+
+  /**
+   * @brief Sets partitions in parquet_writer_options.
+   *
+   * @param partitions Partitions of input table in {start_row, num_rows} pairs.
+   * @return this for chaining.
+   */
+  parquet_writer_options_builder& partitions(
+    std::vector<std::pair<size_type, size_type>> partitions)
+  {
+    options._partitions = partitions;
+    return *this;
   }
 
   /**
@@ -988,9 +1018,12 @@ class parquet_chunked_writer {
    * @brief Writes table to output.
    *
    * @param[in] table Table that needs to be written
+   * @param[in] partitions Optional partitions to divide the table into. If specified, must be same
+   * size as number of sinks.
    * @return returns reference of the class object
    */
-  parquet_chunked_writer& write(table_view const& table);
+  parquet_chunked_writer& write(
+    table_view const& table, std::vector<std::pair<size_type, size_type>> const& partitions = {});
 
   /**
    * @brief Finishes the chunked/streamed write process.

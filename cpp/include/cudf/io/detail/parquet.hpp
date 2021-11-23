@@ -130,7 +130,8 @@ class writer {
    *
    * @param[in] table The table information to be written
    */
-  void write(table_view const& table);
+  void write(table_view const& table,
+             std::vector<std::pair<size_type, size_type>> const& partitions = {});
 
   /**
    * @brief Finishes the chunked/streamed write process.
