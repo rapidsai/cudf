@@ -1503,7 +1503,7 @@ class lists_column_wrapper : public detail::column_wrapper {
                     std::cend(cols),
                     valids,  // stencil
                     std::back_inserter(children),
-                    thrust::identity<bool>{});
+                    thrust::identity{});
 
     auto data = children.empty() ? cudf::empty_like(expected_hierarchy) : concatenate(children);
 

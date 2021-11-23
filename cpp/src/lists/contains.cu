@@ -76,7 +76,7 @@ struct lookup_functor {
     } else {
       return cudf::detail::valid_if(result_validity.begin<bool>(),
                                     result_validity.end<bool>(),
-                                    thrust::identity<bool>{},
+                                    thrust::identity{},
                                     stream,
                                     mr);
     }

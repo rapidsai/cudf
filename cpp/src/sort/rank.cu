@@ -171,8 +171,8 @@ void rank_min(cudf::device_span<size_type const> group_keys,
                                        thrust::make_counting_iterator<size_type>(1),
                                        sorted_order_view,
                                        rank_mutable_view.begin<outputType>(),
-                                       thrust::minimum<size_type>{},
-                                       thrust::identity<outputType>{},
+                                       thrust::minimum{},
+                                       thrust::identity{},
                                        stream);
 }
 
@@ -189,8 +189,8 @@ void rank_max(cudf::device_span<size_type const> group_keys,
                                        thrust::make_counting_iterator<size_type>(1),
                                        sorted_order_view,
                                        rank_mutable_view.begin<outputType>(),
-                                       thrust::maximum<size_type>{},
-                                       thrust::identity<outputType>{},
+                                       thrust::maximum{},
+                                       thrust::identity{},
                                        stream);
 }
 

@@ -218,7 +218,7 @@ struct group_reduction_functor<K, T, std::enable_if_t<is_group_reduction_support
                    thrust::logical_or<bool>{});
 
       auto [null_mask, null_count] = cudf::detail::valid_if(
-        validity.begin(), validity.end(), thrust::identity<bool>{}, stream, mr);
+        validity.begin(), validity.end(), thrust::identity{}, stream, mr);
       result->set_null_mask(std::move(null_mask), null_count);
     }
     return result;
