@@ -904,13 +904,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
     }
     if (n_data_type.id() == cudf::type_id::STRING) {
       switch (column->type().id()) {
-        case cudf::type_id::BOOL8: 
-          result = cudf::strings::from_booleans(*column); 
-          break;
+        case cudf::type_id::BOOL8: result = cudf::strings::from_booleans(*column); break;
         case cudf::type_id::FLOAT32:
-        case cudf::type_id::FLOAT64: 
-          result = cudf::strings::from_floats(*column); 
-          break;
+        case cudf::type_id::FLOAT64: result = cudf::strings::from_floats(*column); break;
         case cudf::type_id::INT8:
         case cudf::type_id::UINT8:
         case cudf::type_id::INT16:
@@ -918,25 +914,17 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
         case cudf::type_id::INT32:
         case cudf::type_id::UINT32:
         case cudf::type_id::INT64:
-        case cudf::type_id::UINT64: 
-          result = cudf::strings::from_integers(*column); 
-          break;
+        case cudf::type_id::UINT64: result = cudf::strings::from_integers(*column); break;
         case cudf::type_id::DECIMAL32:
-        case cudf::type_id::DECIMAL64: 
-        case cudf::type_id::DECIMAL128:
-          result = cudf::strings::from_fixed_point(*column); 
-          break;
+        case cudf::type_id::DECIMAL64:
+        case cudf::type_id::DECIMAL128: result = cudf::strings::from_fixed_point(*column); break;
         default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
       }
     } else if (column->type().id() == cudf::type_id::STRING) {
       switch (n_data_type.id()) {
-        case cudf::type_id::BOOL8: 
-          result = cudf::strings::to_booleans(*column); 
-          break;
+        case cudf::type_id::BOOL8: result = cudf::strings::to_booleans(*column); break;
         case cudf::type_id::FLOAT32:
-        case cudf::type_id::FLOAT64: 
-          result = cudf::strings::to_floats(*column, n_data_type); 
-          break;
+        case cudf::type_id::FLOAT64: result = cudf::strings::to_floats(*column, n_data_type); break;
         case cudf::type_id::INT8:
         case cudf::type_id::UINT8:
         case cudf::type_id::INT16:
