@@ -304,7 +304,7 @@ class element_relational_comparator {
       bool const lhs_is_null{lhs.is_null(lhs_element_index)};
       bool const rhs_is_null{rhs.is_null(rhs_element_index)};
 
-      if (lhs_is_null or rhs_is_null) {  // atleast one is null
+      if (lhs_is_null or rhs_is_null) {  // at least one is null
         return null_compare(lhs_is_null, rhs_is_null, null_precedence);
       }
     }

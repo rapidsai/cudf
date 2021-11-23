@@ -57,9 +57,17 @@ struct nullate {
   };
   struct DYNAMIC {
     DYNAMIC() = delete;
+    /**
+     * @brief Create a runtime nullate object.
+     *
+     * @see cudf::column_device_view::optional_begin for example usage
+     *
+     * @param b True if nulls are expected in the operation in which this
+     *          object is applied.
+     */
     constexpr explicit DYNAMIC(bool b) noexcept : value{b} {}
     constexpr operator bool() const noexcept { return value; }
-    bool value;
+    bool value;  ///< True if nulls are expected
   };
 };
 
