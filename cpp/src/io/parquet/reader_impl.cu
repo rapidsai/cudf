@@ -138,16 +138,14 @@ type_id to_type_id(SchemaElement const& schema,
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::TIMESTAMP_MILLISECONDS;
     case parquet::DECIMAL:
-      if (physical == parquet::INT32)
-        return type_id::DECIMAL32;
-      else if (physical == parquet::INT64)
-        return type_id::DECIMAL64;
-      else if (physical == parquet::FIXED_LEN_BYTE_ARRAY && schema.type_length <= 8) {
-        return type_id::DECIMAL64;
-      } else {
-        CUDF_EXPECTS(strict_decimal_types == false, "Unsupported decimal type read!");
-        return type_id::FLOAT64;
+      if (physical == parquet::INT32) { return type_id::DECIMAL32; }
+      if (physical == parquet::INT64) { return type_id::DECIMAL64; }
+      if (physical == parquet::FIXED_LEN_BYTE_ARRAY) {
+        if (schema.type_length <= 4) {return type_id::DECIMAL32; }
+        if (schema.type_length <= 8) { return type_id::DECIMAL64; }
+        if (schema.type_length <= 16) { return type_id::DECIMAL128; }
       }
+      CUDF_FAIL("Invalid representation of decimal type");
       break;
 
     // maps are just List<Struct<>>.
@@ -597,7 +595,8 @@ class aggregate_metadata {
         // if we're at the root, this is a new output column
         auto const col_type =
           to_type_id(schema_elem, strings_to_categorical, timestamp_type_id, strict_decimal_types);
-        auto const dtype = col_type == type_id::DECIMAL32 || col_type == type_id::DECIMAL64
+        auto const dtype = col_type == type_id::DECIMAL32 || col_type == type_id::DECIMAL64 ||
+                               col_type == type_id::DECIMAL128
                              ? data_type{col_type, numeric::scale_type{-schema_elem.decimal_scale}}
                              : data_type{col_type};
 
