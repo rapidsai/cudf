@@ -3371,6 +3371,22 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testCastBigDecimalToString() {
+    BigDecimal[] bigValues = {new BigDecimal("923121331938210123.321"),
+        new BigDecimal("9223372036854775808.191"),
+        new BigDecimal("9328323982309091029831.002")
+    };
+
+    try (ColumnVector cv = ColumnVector.fromDecimals(bigValues);
+         ColumnVector values = cv.castTo(DType.STRING);
+         ColumnVector expected = ColumnVector.fromStrings("923121331938210123.321",
+             "9223372036854775808.191",
+             "9328323982309091029831.002")) {
+      assertColumnsAreEqual(expected, values);
+    }
+  }
+
+  @Test
   void testCastStringToBigDecimal() {
     String[] bigValues = {"923121331938210123.321",
         "9223372036854775808.191",
