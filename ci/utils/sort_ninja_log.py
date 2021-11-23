@@ -56,7 +56,7 @@ else:
                 "time": str(elapsed),
             },
         )
-        if elapsed > 1.0:
+        if elapsed > 60.0:
             message = (
                 "Build time of "
                 + str(elapsed)
