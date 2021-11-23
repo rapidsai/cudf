@@ -238,7 +238,7 @@ std::unique_ptr<column> to_contains(std::unique_ptr<column>&& key_positions,
                     positions_begin + num_rows,
                     result->mutable_view().begin<bool>(),
                     [] __device__(auto i) { return i != absent_index; });
-  auto [_, null_mask, __] = key_positions->release();
+  [[maybe_unused]] auto [_, null_mask, __] = key_positions->release();
   result->set_null_mask(std::move(*null_mask));
   return result;
 }
