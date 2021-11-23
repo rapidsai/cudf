@@ -31,6 +31,7 @@
 
 #include <tests/binaryop/assert-binops.h>
 #include <tests/binaryop/binop-fixture.hpp>
+#include <tests/binaryop/util/runtime_support.h>
 #include "cudf/utilities/error.hpp"
 
 namespace cudf {
@@ -40,6 +41,11 @@ namespace binop {
 constexpr debug_output_level verbosity{debug_output_level::ALL_ERRORS};
 
 struct BinaryOperationIntegrationTest : public BinaryOperationTest {
+ protected:
+  void SetUp() override
+  {
+    if (!can_do_runtime_jit()) { GTEST_SKIP() << "Skipping tests that require 11.5 runtime"; }
+  }
 };
 
 TEST_F(BinaryOperationIntegrationTest, Add_Scalar_Vector_SI32_FP32_SI64)
