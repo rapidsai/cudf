@@ -1193,7 +1193,7 @@ std::unique_ptr<column> rolling_window_udf(column_view const& input,
 
   cudf::jit::get_program_cache(*rolling_jit_kernel_cu_jit)
     .get_kernel(
-      kernel_name, {}, {{"rolling/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_."})  //
+      kernel_name, {}, {{"rolling/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_.", "--device-int128"})  //
     ->configure_1d_max_occupancy(0, 0, 0, stream.value())                                 //
     ->launch(input.size(),
              cudf::jit::get_data_ptr(input),

@@ -143,7 +143,7 @@ void binary_operation(mutable_column_view& out,
                      get_operator_name(op, op_type));
 
     cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
-      .get_kernel(kernel_name, {}, {}, {"-arch=sm_."})       //
+      .get_kernel(kernel_name, {}, {}, {"-arch=sm_.", "--device-int128"})       //
       ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
       ->launch(out.size(),
                cudf::jit::get_data_ptr(out),
@@ -162,7 +162,7 @@ void binary_operation(mutable_column_view& out,
                      get_operator_name(op, op_type));
 
     cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
-      .get_kernel(kernel_name, {}, {}, {"-arch=sm_."})       //
+      .get_kernel(kernel_name, {}, {}, {"-arch=sm_.", "--device-int128"})       //
       ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
       ->launch(out.size(),
                cudf::jit::get_data_ptr(out),
@@ -204,7 +204,7 @@ void binary_operation(mutable_column_view& out,
                      get_operator_name(op, OperatorType::Direct));
 
     cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
-      .get_kernel(kernel_name, {}, {}, {"-arch=sm_."})       //
+      .get_kernel(kernel_name, {}, {}, {"-arch=sm_.", "--device-int128"})       //
       ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
       ->launch(out.size(),
                cudf::jit::get_data_ptr(out),
@@ -224,7 +224,7 @@ void binary_operation(mutable_column_view& out,
                      get_operator_name(op, OperatorType::Direct));
 
     cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
-      .get_kernel(kernel_name, {}, {}, {"-arch=sm_."})       //
+      .get_kernel(kernel_name, {}, {}, {"-arch=sm_.", "--device-int128"})       //
       ->configure_1d_max_occupancy(0, 0, 0, stream.value())  //
       ->launch(out.size(),
                cudf::jit::get_data_ptr(out),
@@ -255,7 +255,7 @@ void binary_operation(mutable_column_view& out,
 
   cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
     .get_kernel(
-      kernel_name, {}, {{"binaryop/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_."})  //
+      kernel_name, {}, {{"binaryop/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_.", "--device-int128"})  //
     ->configure_1d_max_occupancy(0, 0, 0, stream.value())                                  //
     ->launch(out.size(),
              cudf::jit::get_data_ptr(out),
