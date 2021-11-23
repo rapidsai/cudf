@@ -38,9 +38,9 @@ function(jit_preprocess_files)
       COMMAND
         jitify_preprocess ${ARG_FILE} -o
         ${CUDF_GENERATED_INCLUDE_DIR}/include/jit_preprocessed_files -i -m -std=c++17
-        -remove-unused-globals -D__CUDACC_RTC__ -I${CUDF_SOURCE_DIR}/include
+        -remove-unused-globals -D__CUDACC_RTC__ -arch=sm_60 -I${CUDF_SOURCE_DIR}/include
         -I${CUDF_SOURCE_DIR}/src ${libcudacxx_includes} -I${CUDAToolkit_INCLUDE_DIRS}
-        --no-preinclude-workarounds --no-replace-pragma-once
+        --no-preinclude-workarounds --no-replace-pragma-once -DJITIFY_LINK_NVRTC_STATIC=1
       COMMENT "Custom command to JIT-compile files."
     )
   endforeach()
