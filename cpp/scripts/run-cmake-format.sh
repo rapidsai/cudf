@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script is a pre-commit hook that wraps cmakelang's cmake linters. The
+# This script is a wrapper for cmakelang that may be used with pre-commit. The
 # wrapping is necessary because RAPIDS libraries split configuration for
 # cmakelang linters between a local config file and a second config file that's
 # shared across all of RAPIDS via rapids-cmake. In order to keep it up to date
@@ -16,19 +16,33 @@
 # config file at a nonstandard location, they may do so by setting the
 # environment variable RAPIDS_CMAKE_FORMAT_FILE.
 # 
-# While this script can be invoked directly (but only from the repo root since
-# all paths are relative to that), it is advisable to instead use the
-# pre-commit hooks via
-# `pre-commit run (cmake-format)|(cmake-format)`.
+# This script can be invoked directly anywhere within the project repository.
+# Alternatively, it may be invoked as a pre-commit hook via
+# `pre-commit run (cmake-format)|(cmake-lint)`.
 #
 # Usage:
 # bash run-cmake-format.sh {cmake-format,cmake-lint} infile [infile ...]
 
-# Note that pre-commit always runs from the root of the repository, so relative
-# paths are automatically relative to the repo root.
+status=0
+if [ -z ${CUDF_ROOT:+PLACEHOLDER} ]; then
+    CUDF_BUILD_DIR=$(git rev-parse --show-toplevel 2>&1)/cpp/build
+    status=$?
+else
+    CUDF_BUILD_DIR=${CUDF_ROOT}
+fi
+
+if ! [ ${status} -eq 0 ]; then
+    if [[ ${CUDF_BUILD_DIR} == *"not a git repository"* ]]; then
+        echo "This script must be run inside the cudf repository, or the CUDF_ROOT environment variable must be set."
+    else
+        echo "Script failed with unknown error attempting to determine project root:"
+        echo ${CUDF_BUILD_DIR}
+    fi
+    exit 1
+fi
+
 DEFAULT_FORMAT_FILE_LOCATIONS=(
-  "cpp/build/_deps/rapids-cmake-src/cmake-format-rapids-cmake.json" 
-  "${CUDF_ROOT:-${HOME}}/_deps/rapids-cmake-src/cmake-format-rapids-cmake.json"
+  "${CUDF_BUILD_DIR:-${HOME}}/_deps/rapids-cmake-src/cmake-format-rapids-cmake.json"
   "cpp/libcudf_kafka/build/_deps/rapids-cmake-src/cmake-format-rapids-cmake.json"
 )
 
