@@ -138,13 +138,20 @@ rmm::device_uvector<cudf::size_type> null_roll_up(column_view const& input, rmm:
 * become the identity operator (1, 0). The first pair after a nan
 * value or sequence of nan values has its first element multiplied by
 * N factors of beta, where N is the number of preceeding NaNs.
+* 
+* This function requires that the null rollup be passed in as a
+* precomputed device vector. This is because, as in the case with
+* compute_ewma_noadjust, it is possible that the null rollup is needed
+* later in the calculation for something else, and we want to avoid
+* computing it twice.
+
 */
 template <typename T>
 void pair_beta_adjust(column_view const& input,
                      rmm::device_uvector<thrust::pair<T, T>>& pairs,
+                     rmm::device_uvector<cudf::size_type>& nullcnt,
                      rmm::cuda_stream_view stream)
 {
- rmm::device_uvector<cudf::size_type> nullcnt = null_roll_up(input, stream);
 
  auto device_view = *column_device_view::create(input);
  auto valid_it    = cudf::detail::make_validity_iterator(device_view);
@@ -195,46 +202,88 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
  rmm::device_uvector<T> output(input.size(), stream, mr);
  rmm::device_uvector<thrust::pair<T, T>> pairs(input.size(), stream, mr);
 
- // Numerator
- // Fill with pairs
- thrust::transform(rmm::exec_policy(stream),
-                   input.begin<T>(),
-                   input.end<T>(),
-                   pairs.begin(),
-                   [=] __host__ __device__(T input) -> thrust::pair<T, T> {
-                     return thrust::pair<T, T>(beta, input);
-                   });
+ if (input.has_nulls()) {
+  rmm::device_uvector<cudf::size_type> nullcnt = null_roll_up(input, stream);
+  // Numerator
+  // Fill with pairs
+  thrust::transform(rmm::exec_policy(stream),
+                    input.begin<T>(),
+                    input.end<T>(),
+                    pairs.begin(),
+                    [=] __host__ __device__(T input) -> thrust::pair<T, T> {
+                      return thrust::pair<T, T>(beta, input);
+                    });
 
- if (input.has_nulls()) { pair_beta_adjust(input, pairs, stream); }
+  pair_beta_adjust(input, pairs, nullcnt, stream); 
+  compute_recurrence(pairs, stream);
 
- compute_recurrence(pairs, stream);
+  // copy the second elements to the output for now
+  thrust::transform(rmm::exec_policy(stream),
+  pairs.begin(),
+  pairs.end(),
+  output.begin(),
+  [=] __host__ __device__(thrust::pair<T, T> pair) -> T {
+    return thrust::get<1>(pair);
+  });   
 
- // copy the second elements to the output for now
- thrust::transform(rmm::exec_policy(stream),
-                   pairs.begin(),
-                   pairs.end(),
-                   output.begin(),
-                   [=] __host__ __device__(thrust::pair<T, T> pair) -> T {
-                     return thrust::get<1>(pair);
-                   });
+  // Denominator
+  // Fill with pairs
+  thrust::fill(
+    rmm::exec_policy(stream), pairs.begin(), pairs.end(), thrust::pair<T, T>(beta, 1.0)
+  );
 
- // Denominator
- // Fill with pairs
- thrust::fill(
-   rmm::exec_policy(stream), pairs.begin(), pairs.end(), thrust::pair<T, T>(beta, 1.0));
+  pair_beta_adjust(input, pairs, nullcnt, stream); 
+  compute_recurrence(pairs, stream);
+ 
+  thrust::transform(
+    rmm::exec_policy(stream),
+    pairs.begin(),
+    pairs.end(),
+    output.begin(),
+    output.begin(),
+    [=] __host__ __device__(thrust::pair<T, T> pair, T numerator) -> T {
+      return numerator / thrust::get<1>(pair);
+    });
 
- if (input.has_nulls()) { pair_beta_adjust(input, pairs, stream); }
- compute_recurrence(pairs, stream);
+ } else {
 
- thrust::transform(
-   rmm::exec_policy(stream),
-   pairs.begin(),
-   pairs.end(),
-   output.begin(),
-   output.begin(),
-   [=] __host__ __device__(thrust::pair<T, T> pair, T numerator) -> T {
-     return numerator / thrust::get<1>(pair);
-   });
+  // Numerator
+  // Fill with pairs
+  thrust::transform(rmm::exec_policy(stream),
+                    input.begin<T>(),
+                    input.end<T>(),
+                    pairs.begin(),
+                    [=] __host__ __device__(T input) -> thrust::pair<T, T> {
+                      return thrust::pair<T, T>(beta, input);
+                    });
+  compute_recurrence(pairs, stream);
+
+  // copy the second elements to the output for now
+  thrust::transform(rmm::exec_policy(stream),
+                    pairs.begin(),
+                    pairs.end(),
+                    output.begin(),
+                    [=] __host__ __device__(thrust::pair<T, T> pair) -> T {
+                      return thrust::get<1>(pair);
+                    });
+
+  // Denominator
+  // Fill with pairs
+  thrust::fill(
+    rmm::exec_policy(stream), pairs.begin(), pairs.end(), thrust::pair<T, T>(beta, 1.0)
+  );
+  compute_recurrence(pairs, stream);
+
+  thrust::transform(
+    rmm::exec_policy(stream),
+    pairs.begin(),
+    pairs.end(),
+    output.begin(),
+    output.begin(),
+    [=] __host__ __device__(thrust::pair<T, T> pair, T numerator) -> T {
+      return numerator / thrust::get<1>(pair);
+    });
+ }
  return output;
 }
 
@@ -265,7 +314,6 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
                      return thrust::pair<T, T>(beta, input);
                    });
 
-
  if (input.has_nulls()) {
    /*
    In this case, a denominator actually has to be computed. The formula is
@@ -282,10 +330,8 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
 
    */
 
-   pair_beta_adjust(input, pairs, stream);
-
-
    rmm::device_uvector<cudf::size_type> nullcnt = null_roll_up(input, stream);
+   pair_beta_adjust(input, pairs, nullcnt, stream);
 
    rmm::device_uvector<T> nullcnt_factor(nullcnt.size(), stream, mr);
 
