@@ -192,7 +192,7 @@ def cudf_dtype_to_pa_type(dtype):
     """
     if cudf.api.types.is_categorical_dtype(dtype):
         cat_dtype = dtype.categories.dtype
-        cat_typ = pa.string() if is_string_dtype(cat_dtype) else pa.from_numpy_dtype(cat_dtype)
+        cat_typ = pa.string() if cudf.api.types.is_string_dtype(cat_dtype) else pa.from_numpy_dtype(cat_dtype)
         return pa.dictionary(index_type='int32', value_type=cat_typ, ordered=dtype.ordered)
     elif (
         cudf.api.types.is_list_dtype(dtype)

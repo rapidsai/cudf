@@ -2190,58 +2190,12 @@ class Frame:
                 if "field_name" in col
             }
 
-        # Currently we don't have support for
-        # pyarrow.DictionaryArray -> cudf Categorical column,
-        # so handling indices and dictionary as two different columns.
-        # This needs be removed once we have hooked libcudf dictionary32
-        # with categorical.
-        dict_indices = {}
-        dict_dictionaries = {}
-        dict_ordered = {}
-        for field in data.schema:
-            if isinstance(field.type, pa.DictionaryType):
-                dict_ordered[field.name] = field.type.ordered
-                dict_indices[field.name] = pa.chunked_array(
-                    [chunk.indices for chunk in data[field.name].chunks],
-                    type=field.type.index_type,
-                )
-                dict_dictionaries[field.name] = pa.chunked_array(
-                    [chunk.dictionary for chunk in data[field.name].chunks],
-                    type=field.type.value_type,
-                )
 
-        # Handle dict arrays
-        cudf_category_frame = {}
-        if len(dict_indices):
-
-            dict_indices_table = pa.table(dict_indices)
-            data = data.drop(dict_indices_table.column_names)
-            cudf_indices_frame, _ = libcudf.interop.from_arrow(
-                dict_indices_table, dict_indices_table.column_names
-            )
-            # as dictionary size can vary, it can't be a single table
-            cudf_dictionaries_columns = {
-                name: ColumnBase.from_arrow(dict_dictionaries[name])
-                for name in dict_dictionaries.keys()
-            }
-
-            for name, codes in cudf_indices_frame.items():
-                cudf_category_frame[name] = build_categorical_column(
-                    cudf_dictionaries_columns[name],
-                    codes,
-                    mask=codes.base_mask,
-                    size=codes.size,
-                    ordered=dict_ordered[name],
-                )
-
-        # Handle non-dict arrays
-        cudf_non_category_frame = (
+        result = (
             {}
             if data.num_columns == 0
             else libcudf.interop.from_arrow(data, data.column_names)[0]
         )
-
-        result = {**cudf_non_category_frame, **cudf_category_frame}
 
         # There are some special cases that need to be handled
         # based on metadata.

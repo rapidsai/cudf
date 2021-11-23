@@ -906,7 +906,7 @@ class ColumnBase(Column, Serializable):
                     "will be using `ordered` parameter of CategoricalDtype"
                 )
             
-            missing_categorical_mask = ~(labels._column==np.int32(NA_SENTINEL))
+            missing_categorical_mask = libcudf.unary.unary_operation((labels._column==np.int32(NA_SENTINEL)), libcudf.unary.UnaryOp.NOT)
             if self.mask:
                 mask_col = libcudf.transform.mask_to_bools(self.mask, 0, self.size)
                 mask = mask_col & missing_categorical_mask if self.mask is not None else missing_categorical_mask
@@ -983,9 +983,8 @@ class ColumnBase(Column, Serializable):
 
     def apply_boolean_mask(self, mask) -> ColumnBase:
         mask = as_column(mask, dtype="bool")
-        return (
-            self.as_frame()._apply_boolean_mask(boolean_mask=mask)._as_column()
-        )
+        res = self.as_frame()._apply_boolean_mask(boolean_mask=mask)._as_column()
+        return res._with_type_metadata(self.dtype)
 
     def argsort(
         self, ascending: bool = True, na_position: builtins.str = "last"
@@ -1486,15 +1485,14 @@ def build_categorical_column(
     """
 
     if codes.nullable:
-        raise ValueError
+        codes = codes.fillna(0)
     if categories.nullable:
         raise ValueError
 
-    category_order = categories.argsort(ascending=True)
+    category_order = categories.argsort()
     category_sorted = categories.take(category_order)
-    codes = category_order.take(
-        codes, keep_index=False, nullify=True).astype("uint32")
-    codes = codes.fillna(0)
+    codes = category_order.argsort().take(
+        codes, nullify=True).astype("uint32").fillna(0)
 
     dtype = CategoricalDtype(categories=categories, ordered=ordered)
 

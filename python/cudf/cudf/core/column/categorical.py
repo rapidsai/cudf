@@ -31,11 +31,11 @@ from cudf._lib.categories import (
 )
 from cudf._lib.null_mask import create_null_mask, MaskState
 from cudf._lib.stream_compaction import drop_duplicates
-from cudf._lib.table import Table
 from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf._lib.search import contains
 from cudf._lib.copying import gather, scatter
 from cudf._lib.sort import order_by
+from cudf._lib.unary import unary_operation, UnaryOp
 from cudf.api.types import is_categorical_dtype, is_interval_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
@@ -45,6 +45,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     min_signed_type,
     min_unsigned_type,
+    find_common_type
 )
 
 if TYPE_CHECKING:
@@ -439,7 +440,8 @@ class CategoricalAccessor(ColumnMethods):
         # ensure all the removals are in the current categories
         # list. If not, raise an error to match Pandas behavior
         if not removals_mask.all():
-            vals = removal_column[~removals_mask].to_array()
+            removals_mask = unary_operation(removals_mask, UnaryOp.NOT)
+            vals = removal_column[removals_mask].to_array()
             raise ValueError(f"removals must all be in old categories: {vals}")
 
         out_col = cpp_remove_categories(self._column, removal_column)
@@ -1102,7 +1104,7 @@ class CategoricalColumn(column.ColumnBase):
         )
 
         return column.build_categorical_column(
-            categories=new_cats["cats"],
+            categories=new_cats["cats"]._column,
             codes=column.build_column(output.base_data, dtype=output.dtype),
             mask=output.base_mask,
             offset=output.offset,
@@ -1155,7 +1157,7 @@ class CategoricalColumn(column.ColumnBase):
             fill_is_scalar = np.isscalar(fill_value)
 
             if fill_is_scalar:
-                if fill_value == self.default_na_value():
+                if fill_value == self._default_na_value():
                     fill_value = cudf.Scalar(None, dtype=self.dtype)
                 else:
                     fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
@@ -1303,15 +1305,18 @@ class CategoricalColumn(column.ColumnBase):
                 if dtype._categories is not None and dtype.ordered:
                     # Restore original order
                     categories = dtype._categories
-                    category_order = categories.argsort(ascending=True)
+                    category_order = categories.argsort().argsort()
                     codes = category_order.take(self.children[0], nullify=True)
                 else:
                     codes = self.base_children[0]
-                    categories = self.base_children[1]
+                    if len(codes) > 0:
+                        categories = self.base_children[1]
+                    else:
+                        categories = dtype._categories
             
             return column.build_categorical_column(
                 categories=categories,
-                codes=codes.fillna(0),
+                codes=codes,
                 mask=self.base_mask,
                 ordered=dtype.ordered,
                 size=self.size,
@@ -1408,7 +1413,7 @@ class CategoricalColumn(column.ColumnBase):
 
         should_drop_duplicates = is_unique is False or not new_categories.is_unique
         if should_drop_duplicates:
-            new_categories = drop_duplicates(Table({None: new_categories}))[0][None]
+            new_categories = drop_duplicates([new_categories])[0]
 
         # libcudf expects source and target categories to have exact same type.
         # Here we upcast the numerical types to make sure that floating point

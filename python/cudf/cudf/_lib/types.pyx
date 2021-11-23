@@ -15,6 +15,7 @@ from cudf._lib.types cimport (
     underlying_type_t_order,
     underlying_type_t_sorted,
 )
+from cudf._lib.column cimport Column
 
 import cudf
 
@@ -193,7 +194,7 @@ cdef dtype_from_structs_column_view(column_view cv):
 
 cdef dtype_from_decimal_column_view(column_view cv):
     scale = -cv.type().scale()
-    return Decimal64Dtype(precision=Decimal64Dtype.MAX_PRECISION, scale=scale)
+    return cudf.Decimal64Dtype(precision=cudf.Decimal64Dtype.MAX_PRECISION, scale=scale)
 
 cdef dtype_from_dictionary_column_view(column_view cv):
     """
@@ -202,7 +203,7 @@ cdef dtype_from_dictionary_column_view(column_view cv):
     to be recovered at a later stage.
     """
     categories = Column.from_column_view(cv.child(1), None) if cv.num_children() > 0 else []
-    return CategoricalDtype(categories=categories, ordered=False)
+    return cudf.CategoricalDtype(categories=categories, ordered=False)
 
 cdef dtype_from_column_view(column_view cv):
     cdef libcudf_types.type_id tid = cv.type().id()

@@ -2140,7 +2140,7 @@ class CategoricalIndex(GenericIndex):
         elif isinstance(data, (pd.Categorical, pd.CategoricalIndex)):
             codes_data = column.as_column(data.codes)
             data = column.build_categorical_column(
-                categories=data.categories,
+                categories=column.as_column(data.categories._values),
                 codes=codes_data,
                 ordered=data.ordered,
             )

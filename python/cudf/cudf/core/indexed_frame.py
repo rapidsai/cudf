@@ -33,7 +33,7 @@ def _indices_from_labels(obj, labels):
             labels = labels.astype("category")
             codes = labels.codes.astype(obj.index._values.codes.dtype)
             labels = column.build_categorical_column(
-                categories=labels.dtype.categories,
+                categories=labels.dtype.categories._values,
                 codes=codes,
                 ordered=labels.dtype.ordered,
             )
