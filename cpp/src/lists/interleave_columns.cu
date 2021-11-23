@@ -228,8 +228,8 @@ struct interleave_list_entries_impl<T, std::enable_if_t<std::is_same_v<T, cudf::
     auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
       comp_fn, num_output_lists, num_output_entries, stream, mr);
 
-    auto [null_mask, null_count] = cudf::detail::valid_if(
-      validities.begin(), validities.end(), thrust::identity{}, stream, mr);
+    auto [null_mask, null_count] =
+      cudf::detail::valid_if(validities.begin(), validities.end(), thrust::identity{}, stream, mr);
 
     return make_strings_column(num_output_entries,
                                std::move(offsets_column),
