@@ -14,11 +14,7 @@
 
 cmake_minimum_required(VERSION 3.20.1 FATAL_ERROR)
 
-file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-21.12/RAPIDS.cmake
-     ${CMAKE_BINARY_DIR}/RAPIDS.cmake
-)
-include(${CMAKE_BINARY_DIR}/RAPIDS.cmake)
-
+include(../fetch_rapids.cmake)
 include(rapids-cmake)
 include(rapids-cpm)
 include(rapids-cuda)
@@ -315,6 +311,7 @@ add_library(
   src/io/statistics/parquet_column_statistics.cu
   src/io/text/multibyte_split.cu
   src/io/utilities/column_buffer.cpp
+  src/io/utilities/config_utils.cpp
   src/io/utilities/data_sink.cpp
   src/io/utilities/datasource.cpp
   src/io/utilities/file_io_utilities.cpp

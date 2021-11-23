@@ -177,7 +177,7 @@ inline bool is_equality_comparable(data_type type)
 template <typename T>
 constexpr inline bool is_numeric()
 {
-  return std::is_integral<T>::value or std::is_floating_point<T>::value;
+  return cuda::std::is_integral<T>() or std::is_floating_point<T>::value;
 }
 
 struct is_numeric_impl {
@@ -404,7 +404,8 @@ constexpr inline bool is_timestamp(data_type type)
 template <typename T>
 constexpr inline bool is_fixed_point()
 {
-  return std::is_same_v<numeric::decimal32, T> || std::is_same_v<numeric::decimal64, T>;
+  return std::is_same_v<numeric::decimal32, T> || std::is_same_v<numeric::decimal64, T> ||
+         std::is_same_v<numeric::decimal128, T>;
 }
 
 struct is_fixed_point_impl {

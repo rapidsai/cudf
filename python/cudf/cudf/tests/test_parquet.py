@@ -17,8 +17,6 @@ from fsspec.core import get_fs_token_paths
 from packaging import version
 from pyarrow import fs as pa_fs, parquet as pq
 
-import rmm
-
 import cudf
 from cudf.io.parquet import ParquetWriter, merge_parquet_filemetadata
 from cudf.testing import dataset_generator as dg
@@ -233,6 +231,11 @@ def parquet_path_or_buf(datadir):
     yield _make_parquet_path_or_buf
 
 
+@pytest.fixture(scope="module")
+def large_int64_gdf():
+    return cudf.DataFrame.from_pandas(pd.DataFrame({"col": range(0, 1 << 20)}))
+
+
 @pytest.mark.filterwarnings("ignore:Using CPU")
 @pytest.mark.parametrize("engine", ["pyarrow", "cudf"])
 @pytest.mark.parametrize(
@@ -246,12 +249,6 @@ def parquet_path_or_buf(datadir):
     ],
 )
 def test_parquet_reader_basic(parquet_file, columns, engine):
-    if rmm._cuda.gpu.runtimeGetVersion() == 11050 and "brotli_" in str(
-        parquet_file
-    ):
-        pytest.xfail(
-            "Known issue: https://github.com/rapidsai/cudf/issues/9546"
-        )
     expect = pd.read_parquet(parquet_file, columns=columns)
     got = cudf.read_parquet(parquet_file, engine=engine, columns=columns)
     if len(expect) == 0:
@@ -380,6 +377,36 @@ def test_parquet_reader_pandas_metadata(tmpdir, columns, pandas_compat):
     else:
         assert got.index.name is None
     assert_eq(expect, got, check_categorical=False)
+
+
+@pytest.mark.parametrize("pandas_compat", [True, False])
+@pytest.mark.parametrize("as_bytes", [True, False])
+def test_parquet_range_index_pandas_metadata(tmpdir, pandas_compat, as_bytes):
+    df = pd.DataFrame(
+        {"a": range(6, 9), "b": ["abc", "def", "xyz"]},
+        index=pd.RangeIndex(3, 6, 1, name="c"),
+    )
+
+    fname = tmpdir.join("test_parquet_range_index_pandas_metadata")
+    df.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    # PANDAS `read_parquet()` and PyArrow `read_pandas()` always includes index
+    # Instead, directly use PyArrow to optionally omit the index
+    expect = pa.parquet.read_table(
+        fname, use_pandas_metadata=pandas_compat
+    ).to_pandas()
+    if as_bytes:
+        # Make sure we can handle RangeIndex parsing
+        # in pandas when the input is `bytes`
+        with open(fname, "rb") as f:
+            got = cudf.read_parquet(
+                f.read(), use_pandas_metadata=pandas_compat
+            )
+    else:
+        got = cudf.read_parquet(fname, use_pandas_metadata=pandas_compat)
+
+    assert_eq(expect, got)
 
 
 def test_parquet_read_metadata(tmpdir, pdf):
@@ -2139,3 +2166,30 @@ def test_parquet_decimal_precision_empty(tmpdir):
     df.to_parquet(fname)
     df = cudf.read_parquet(fname)
     assert df.val.dtype.precision == 5
+
+
+def test_parquet_reader_brotli(datadir):
+    fname = datadir / "brotli_int16.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname).to_pandas(nullable=True)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("size_bytes", [4_000_000, 1_000_000, 600_000])
+@pytest.mark.parametrize("size_rows", [1_000_000, 100_000, 10_000])
+def test_parquet_writer_row_group_size(
+    tmpdir, large_int64_gdf, size_bytes, size_rows
+):
+    fname = tmpdir.join("row_group_size.parquet")
+    large_int64_gdf.to_parquet(
+        fname, row_group_size_bytes=size_bytes, row_group_size_rows=size_rows
+    )
+
+    num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
+    # 8 bytes per row, as the column is int64
+    expected_num_rows = max(
+        math.ceil(num_rows / size_rows), math.ceil(8 * num_rows / size_bytes)
+    )
+    assert expected_num_rows == row_groups

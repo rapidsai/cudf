@@ -133,7 +133,7 @@ template <typename T>
 class HashTestTyped : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(HashTestTyped, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(HashTestTyped, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(HashTestTyped, Equality)
 {
@@ -194,7 +194,7 @@ template <typename T>
 class HashTestFloatTyped : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(HashTestFloatTyped, cudf::test::FloatingPointTypes);
+TYPED_TEST_SUITE(HashTestFloatTyped, cudf::test::FloatingPointTypes);
 
 TYPED_TEST(HashTestFloatTyped, TestExtremes)
 {
@@ -576,7 +576,7 @@ template <typename T>
 class MD5HashTestTyped : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(MD5HashTestTyped, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(MD5HashTestTyped, cudf::test::NumericTypes);
 
 TYPED_TEST(MD5HashTestTyped, Equality)
 {
@@ -637,7 +637,7 @@ class MD5HashListTestTyped : public cudf::test::BaseFixture {
 };
 
 using NumericTypesNoBools = Concat<IntegralTypesNotBool, FloatingPointTypes>;
-TYPED_TEST_CASE(MD5HashListTestTyped, NumericTypesNoBools);
+TYPED_TEST_SUITE(MD5HashListTestTyped, NumericTypesNoBools);
 
 TYPED_TEST(MD5HashListTestTyped, TestListsWithNulls)
 {
@@ -669,7 +669,7 @@ template <typename T>
 class MD5HashTestFloatTyped : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(MD5HashTestFloatTyped, cudf::test::FloatingPointTypes);
+TYPED_TEST_SUITE(MD5HashTestFloatTyped, cudf::test::FloatingPointTypes);
 
 TYPED_TEST(MD5HashTestFloatTyped, TestExtremes)
 {

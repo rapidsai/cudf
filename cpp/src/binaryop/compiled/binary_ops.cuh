@@ -122,7 +122,7 @@ struct ops_wrapper {
         } else {
           return BinaryOperator{}.template operator()<TypeCommon, TypeCommon>(x, y);
         }
-        // To supress nvcc warning
+        // To suppress nvcc warning
         return std::invoke_result_t<BinaryOperator, TypeCommon, TypeCommon>{};
       }();
       if constexpr (is_bool_result<BinaryOperator, TypeCommon, TypeCommon>())
@@ -169,7 +169,7 @@ struct ops2_wrapper {
         } else {
           return BinaryOperator{}.template operator()<TypeLhs, TypeRhs>(x, y);
         }
-        // To supress nvcc warning
+        // To suppress nvcc warning
         return std::invoke_result_t<BinaryOperator, TypeLhs, TypeRhs>{};
       }();
       if constexpr (is_bool_result<BinaryOperator, TypeLhs, TypeRhs>())
