@@ -16,12 +16,6 @@
 
 #pragma once
 
-#include <cudf/detail/iterator.cuh>
-#include <cudf/table/row_operators.cuh>
-
-#include <rmm/cuda_stream_view.hpp>
-#include <rmm/exec_policy.hpp>
-
 namespace cudf::binops::compiled::detail {
 template <typename Comparator>
 void struct_compare(mutable_column_view& out,
@@ -29,20 +23,5 @@ void struct_compare(mutable_column_view& out,
                     bool is_lhs_scalar,
                     bool is_rhs_scalar,
                     bool flip_output,
-                    rmm::cuda_stream_view stream)
-{
-  auto d_out = column_device_view::create(out, stream);
-  auto optional_iter =
-    cudf::detail::make_optional_iterator<bool>(*d_out, contains_nulls::DYNAMIC{}, out.has_nulls());
-  thrust::tabulate(
-    rmm::exec_policy(stream),
-    out.begin<bool>(),
-    out.end<bool>(),
-    [optional_iter, is_lhs_scalar, is_rhs_scalar, flip_output, compare] __device__(size_type i) {
-      auto lhs = is_lhs_scalar ? 0 : i;
-      auto rhs = is_rhs_scalar ? 0 : i;
-      return optional_iter[i].has_value() and
-             (flip_output ? not compare(lhs, rhs) : compare(lhs, rhs));
-    });
-}
+                    rmm::cuda_stream_view stream);
 }  //  namespace cudf::binops::compiled::detail

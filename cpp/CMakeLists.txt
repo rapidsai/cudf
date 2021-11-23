@@ -172,6 +172,7 @@ add_library(
   src/ast/expressions.cpp
   src/binaryop/binaryop.cpp
   src/binaryop/compiled/binary_ops.cu
+  src/binaryop/compiled/struct_binary_ops.cu
   src/binaryop/compiled/Add.cu
   src/binaryop/compiled/ATan2.cu
   src/binaryop/compiled/BitwiseAnd.cu
