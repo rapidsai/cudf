@@ -25,13 +25,13 @@ build:
 requirements:
   build:
     - cmake >=3.20.1
-    - numpy
+  host:
     - python
     - cython >=0.29,<0.30
+    - setuptools
     - cudf {{ version }}
     - libcudf_kafka {{ version }}
   run:
-    - numpy
     - libcudf_kafka {{ version }}
     - python-confluent-kafka=1.7.0
     - cudf {{ version }}
