@@ -216,7 +216,7 @@ class TestUtils {
   }
 
   public static File getResourceAsFile(String resourceName) {
-    URL url = TableTest.class.getClassLoader().getResource(resourceName);
+    URL url = TestUtils.class.getClassLoader().getResource(resourceName);
     if (url == null) {
       throw new IllegalArgumentException("Unable to locate resource: " + resourceName);
     }
