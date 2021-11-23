@@ -854,3 +854,46 @@ TYPED_TEST(ConditionalLeftAntiJoinTest, TestCompareRandomToHashNulls)
   auto [left, right] = gen_random_nullable_repeated_columns<TypeParam>();
   this->compare_to_hash_join_nulls({left}, {right});
 };
+
+template <typename T>
+struct MixedJoinTest : public ConditionalJoinTest<T> {
+};
+
+TYPED_TEST_SUITE(MixedJoinTest, cudf::test::IntegralTypesNotBool);
+
+TYPED_TEST(MixedJoinTest, Basic)
+{
+  // Note that we need to maintain the column wrappers otherwise the
+  // resulting column views will be referencing potentially invalid memory.
+  ColumnVector<TypeParam> left_inputs{{0, 1, 2}, {10, 20, 30}};
+  ColumnVector<TypeParam> right_inputs{{0, 1, 3}, {30, 40, 50}};
+
+  auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
+    this->parse_input(left_inputs, right_inputs);
+
+  auto predicate = left_zero_eq_right_zero;
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs{{0, 0}, {1, 1}};
+  // The left join output:
+  // std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs{{0, 0}, {1, 1}, {2,
+  // JoinNoneValue}};
+
+  std::vector<cudf::size_type> const left_on{};
+  std::vector<cudf::size_type> const right_on{};
+
+  auto result_size = cudf::mixed_inner_join_size(left, right, left_on, right_on, predicate);
+  EXPECT_TRUE(result_size == expected_outputs.size());
+
+  auto result = cudf::mixed_inner_join(left, right, left_on, right_on, predicate);
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
+  for (size_t i = 0; i < result.first->size(); ++i) {
+    // Note: Not trying to be terribly efficient here since these tests are
+    // small, otherwise a batch copy to host before constructing the tuples
+    // would be important.
+    result_pairs.push_back({result.first->element(i, rmm::cuda_stream_default),
+                            result.second->element(i, rmm::cuda_stream_default)});
+  }
+  std::sort(result_pairs.begin(), result_pairs.end());
+  std::sort(expected_outputs.begin(), expected_outputs.end());
+
+  EXPECT_TRUE(std::equal(expected_outputs.begin(), expected_outputs.end(), result_pairs.begin()));
+}

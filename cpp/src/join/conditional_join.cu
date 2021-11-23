@@ -285,6 +285,26 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
 
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
+mixed_inner_join(table_view const& left,
+                 table_view const& right,
+                 std::vector<cudf::size_type> const& left_on,
+                 std::vector<cudf::size_type> const& right_on,
+                 ast::expression const& binary_predicate,
+                 std::optional<std::size_t> output_size,
+                 rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::conditional_join(left,
+                                  right,
+                                  binary_predicate,
+                                  detail::join_kind::INNER_JOIN,
+                                  output_size,
+                                  rmm::cuda_stream_default,
+                                  mr);
+}
+
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
 conditional_inner_join(table_view const& left,
                        table_view const& right,
                        ast::expression const& binary_predicate,
@@ -365,6 +385,18 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
                                             rmm::cuda_stream_default,
                                             mr)
                      .first);
+}
+
+std::size_t mixed_inner_join_size(table_view const& left,
+                                  table_view const& right,
+                                  std::vector<cudf::size_type> const& left_on,
+                                  std::vector<cudf::size_type> const& right_on,
+                                  ast::expression const& binary_predicate,
+                                  rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::compute_conditional_join_output_size(
+    left, right, binary_predicate, detail::join_kind::INNER_JOIN, rmm::cuda_stream_default, mr);
 }
 
 std::size_t conditional_inner_join_size(table_view const& left,

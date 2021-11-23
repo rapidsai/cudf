@@ -686,6 +686,51 @@ class hash_join {
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
+mixed_inner_join(table_view const& left,
+                 table_view const& right,
+                 std::vector<cudf::size_type> const& left_on,
+                 std::vector<cudf::size_type> const& right_on,
+                 ast::expression const& binary_predicate,
+                 std::optional<std::size_t> output_size = {},
+                 rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns a pair of row index vectors corresponding to all pairs
+ * of rows between the specified tables where the predicate evaluates to true.
+ *
+ * The first returned vector contains the row indices from the left
+ * table that have a match in the right table (in unspecified order).
+ * The corresponding values in the second returned vector are
+ * the matched row indices from the right table.
+ *
+ * If the provided predicate returns NULL for a pair of rows
+ * (left, right), that pair is not included in the output.
+ *
+ * @code{.pseudo}
+ * Left: {{0, 1, 2}}
+ * Right: {{1, 2, 3}}
+ * Expression: Left.Column_0 == Right.Column_0
+ * Result: {{1, 2}, {0, 1}}
+ *
+ * Left: {{0, 1, 2}, {3, 4, 5}}
+ * Right: {{1, 2, 3}, {4, 6, 7}}
+ * Expression: (Left.Column_0 == Right.Column_0) AND (Left.Column_1 == Right.Column_1)
+ * Result: {{1}, {0}}
+ * @endcode
+ *
+ * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
+ *
+ * @param left The left table
+ * @param right The right table
+ * @param binary_predicate The condition on which to join.
+ * @param output_size Optional value which allows users to specify the exact output size.
+ * @param mr Device memory resource used to allocate the returned table and columns' device memory
+ *
+ * @return A pair of vectors [`left_indices`, `right_indices`] that can be used to construct
+ * the result of performing a conditional inner join between two tables `left` and `right` .
+ */
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
 conditional_inner_join(
   table_view const& left,
   table_view const& right,
@@ -857,6 +902,31 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
   ast::expression const& binary_predicate,
   std::optional<std::size_t> output_size = {},
   rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Returns the exact number of matches (rows) when performing a
+ * conditional inner join between the specified tables where the predicate
+ * evaluates to true.
+ *
+ * If the provided predicate returns NULL for a pair of rows
+ * (left, right), that pair is not included in the output.
+ *
+ * @throw cudf::logic_error if the binary predicate outputs a non-boolean result.
+ *
+ * @param left The left table
+ * @param right The right table
+ * @param binary_predicate The condition on which to join.
+ * @param mr Device memory resource used to allocate the returned table and columns' device memory
+ *
+ * @return The size that would result from performing the requested join.
+ */
+std::size_t mixed_inner_join_size(
+  table_view const& left,
+  table_view const& right,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  ast::expression const& binary_predicate,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns the exact number of matches (rows) when performing a
