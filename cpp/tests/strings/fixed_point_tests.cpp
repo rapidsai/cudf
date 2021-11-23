@@ -303,7 +303,11 @@ TEST_F(StringsConvertTest, IsFixedPoint)
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected64_scaled);
 }
 
+#ifdef NDEBUG
 TEST_F(StringsConvertTest, FixedPointStringConversionOperator)
+#else
+TEST_F(StringsConvertTest, DISABLED_FixedPointStringConversionOperator)
+#endif
 {
   auto const max = cuda::std::numeric_limits<__int128_t>::max();
 
