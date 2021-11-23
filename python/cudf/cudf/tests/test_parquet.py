@@ -626,6 +626,7 @@ def test_parquet_reader_spark_timestamps(datadir):
     assert_eq(expect, got)
 
 
+@pytest.mark.xfail(reason="decimal128 not yet supported in cuDF")
 def test_parquet_reader_spark_decimals(datadir):
     fname = datadir / "spark_decimal.parquet"
 
