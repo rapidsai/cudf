@@ -331,7 +331,8 @@ struct dispatch_unary_cast_to {
 
     if constexpr (sizeof(SourceDeviceT) < sizeof(TargetDeviceT)) {
       // device_cast BEFORE rescale when SourceDeviceT is < TargetDeviceT
-      return detail::rescale<TargetT>(*casted(), scale_type{type.scale()}, stream, mr);
+      auto temporary = casted();
+      return detail::rescale<TargetT>(*temporary, scale_type{type.scale()}, stream, mr);
     } else {
       // device_cast AFTER rescale when SourceDeviceT is > TargetDeviceT to avoid overflow
       auto temporary = detail::rescale<SourceT>(input, scale_type{type.scale()}, stream, mr);
