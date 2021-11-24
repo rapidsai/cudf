@@ -297,8 +297,8 @@ def test_get_nulls():
         ([[1, 2, 3], [], [3, 4, 5]], 6, [False, False, False],),
         ([[1.0, 2.0, 3.0], None, []], 2.0, [True, None, False],),
         ([[None, "b", "c"], [], ["b", "e", "f"]], "b", [True, False, True],),
-        ([[None, 2, 3], None, []], 1, [None, None, False]),
-        ([[None, "b", "c"], [], ["b", "e", "f"]], "d", [None, False, False],),
+        ([[None, 2, 3], None, []], 1, [False, None, False]),
+        ([[None, "b", "c"], [], ["b", "e", "f"]], "d", [False, False, False],),
     ],
 )
 def test_contains_scalar(data, scalar, expect):
