@@ -104,12 +104,34 @@ using device_storage_type_t =
   std::conditional_t<std::is_same_v<numeric::decimal128, T>, __int128_t, T>>>;
 // clang-format on
 
+/**
+ * @brief Maps types with the same width to corresponding integer type.
+ *
+ * Types like `uint32`, `float`, `timestamp_D` and `duration_D` map to `int32`
+ * since all are 4 bytes wide.
+ *
+ * This should only be used in operations that simply copy data in memory and
+ * do no require using the data values within the operation.
+ * For example, `gather`, `concatenate`, `interleave` only need to copy data.
+ * Whereas, `scan`, `sort`, `merge` require the data values.
+ *
+ * The types are enumerated to prevent fixed-point types from incorrectly
+ * mapping to incompatible output types.
+ *
+ * Use this "type function" with the `using` type alias:
+ * @code
+ * using Type = device_storage_width_t<Element>;
+ * @endcode
+ *
+ * @tparam T The literal type that is stored on the host
+ */
 // clang-format off
 template <typename T>
 using device_storage_width_t =
   std::conditional_t<std::is_same_v<numeric::decimal32, T> or
                      std::is_same_v<timestamp_D, T> or
                      std::is_same_v<duration_D, T> or
+                     std::is_same_v<uint32_t, T> or
                      std::is_same_v<float, T>, int32_t,
   std::conditional_t<std::is_same_v<numeric::decimal64, T> or
                      std::is_same_v<timestamp_s, T> or
@@ -120,8 +142,11 @@ using device_storage_width_t =
                      std::is_same_v<duration_ms, T> or
                      std::is_same_v<duration_us, T> or
                      std::is_same_v<duration_ns, T> or
+                     std::is_same_v<uint64_t, T> or
                      std::is_same_v<double, T>, int64_t,
-  std::conditional_t<std::is_same_v<numeric::decimal128, T>, __int128_t, T>>>;
+  std::conditional_t<std::is_same_v<uint8_t, T>, int8_t,
+  std::conditional_t<std::is_same_v<uint16_t, T>, int16_t,
+  std::conditional_t<std::is_same_v<numeric::decimal128, T>, __int128_t, T>>>>>;
 // clang-format on
 
 /**
@@ -141,6 +166,17 @@ constexpr bool type_id_matches_device_storage_type(type_id id)
          (id == type_id::DECIMAL128 && std::is_same_v<T, __int128_t>) || id == type_to_id<T>();
 }
 
+/**
+ * @brief Checks the fixed-width types match the corresponding mapped width types.
+ *
+ * This is used to reassure iterators that the types they are provided
+ * are valid to use with data.
+ *
+ * @tparam     T The type that is stored on the device
+ * @param id   The `data_type::id` of the column
+ * @return     `true` If T matches the stored column `type_id`
+ * @return     `false` If T does not match the stored column `type_id`
+ */
 template <typename T>
 bool type_id_matches_device_storage_width(type_id id)
 {
@@ -149,6 +185,10 @@ bool type_id_matches_device_storage_width(type_id id)
          (id == type_id::DECIMAL128 && std::is_same_v<T, __int128_t>) ||
          (id == type_id::FLOAT32 && std::is_same_v<T, int32_t>) ||
          (id == type_id::FLOAT64 && std::is_same_v<T, int64_t>) ||
+         (id == type_id::UINT8 && std::is_same_v<T, int8_t>) ||
+         (id == type_id::UINT16 && std::is_same_v<T, int16_t>) ||
+         (id == type_id::UINT32 && std::is_same_v<T, int32_t>) ||
+         (id == type_id::UINT64 && std::is_same_v<T, int64_t>) ||
          (id == type_id::TIMESTAMP_DAYS && std::is_same_v<T, int32_t>) ||
          (id == type_id::TIMESTAMP_SECONDS && std::is_same_v<T, int64_t>) ||
          (id == type_id::TIMESTAMP_MILLISECONDS && std::is_same_v<T, int64_t>) ||
