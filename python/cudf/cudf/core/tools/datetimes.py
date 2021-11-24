@@ -659,7 +659,7 @@ class DateOffset:
         if freq_part == "m":
             raise ValueError(
                 "Lower cased `m` is ambiguous. Use 'T'/'min' to specify "
-                "minutely frequency or upper cased `M` to specify monthly "
+                "minutely frequency or upper cased 'M' to specify monthly "
                 "frequency."
             )
 

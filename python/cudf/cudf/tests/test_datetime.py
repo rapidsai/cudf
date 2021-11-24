@@ -1615,8 +1615,10 @@ def test_date_range_raise_unsupported(freqstr_unsupported):
     with pytest.raises(ValueError, match="does not yet support"):
         cudf.date_range(start=s, end=e, freq=freqstr_unsupported)
 
-    # 3ms would mean a millisecondly frequencies, not month start frequencies
-    if not freqstr_unsupported == "3MS":
+    # We also check that these values are unsupported when using lowercase
+    # characters. We exclude the value 3MS (every 3 month starts) because 3ms
+    # is a valid frequency for every 3 milliseconds.
+    if freqstr_unsupported != "3MS":
         freqstr_unsupported = freqstr_unsupported.lower()
         pd.date_range(start=s, end=e, freq=freqstr_unsupported)
         with pytest.raises(ValueError, match="does not yet support"):
