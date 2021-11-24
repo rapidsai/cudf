@@ -194,7 +194,7 @@ else
                 ${COMPUTE_SANITIZER_CMD} ${gt} | tee "$WORKSPACE/test-results/${test_name}.cs.log"
             done
             unset GTEST_CUDF_RMM_MODE
-            python ../scripts/compute-sanitizer-to-junit-xml.py -glob "$WORKSPACE/test-results/*.cs.log" -out "$WORKSPACE/test-results/cudamemcheck-junit.xml"
+            # test-results/*.cs.log are processed in gpuci
         fi
     fi
 
