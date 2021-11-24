@@ -1662,7 +1662,6 @@ void writer::write(table_view const& table,
                    std::vector<std::pair<size_type, size_type>> const& partitions)
 {
   _impl->write(table, partitions);
-  // _impl->write(table, {{10, 20 * 1024}, {20 * 1024 + 10, 30 * 1024}});
 }
 
 // Forward to implementation

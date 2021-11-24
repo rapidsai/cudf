@@ -269,7 +269,7 @@ struct PageFragment {
                              //!< non-leaf level
 
   // Add a start_row member because fragments no longer 5000 rows each
-  uint16_t start_row;      //!< First row in fragment
+  size_type start_row;     //!< First row in fragment
   uint16_t num_rows;       //!< Number of rows in fragment
   uint16_t num_dict_vals;  //!< Number of unique dictionary entries
 };
