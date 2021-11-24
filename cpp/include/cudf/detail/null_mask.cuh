@@ -251,17 +251,17 @@ __global__ void subtract_set_bits_range_boundaries_kernel(bitmask_type const* bi
  * @brief Functor that converts bit segment indices to word segment indices.
  *
  * Converts [first_bit_index, last_bit_index) to [first_word_index,
- * last_word_index). The flag `end_of_segment` indicates whether the bit is at
+ * last_word_index). The flag `inclusive` indicates whether the indices are inclusive or exclusive.
  * the end of a segment, in which case the word index should be incremented for
  * bits at the start of a word.
  */
 struct bit_to_word_index {
-  bit_to_word_index(bool end_of_segment) : end_of_segment(end_of_segment) {}
+  bit_to_word_index(bool inclusive) : inclusive(inclusive) {}
   CUDA_DEVICE_CALLABLE size_type operator()(const size_type& bit_index) const
   {
-    return word_index(bit_index) + ((!end_of_segment || intra_word_index(bit_index) == 0) ? 0 : 1);
+    return word_index(bit_index) + ((inclusive || intra_word_index(bit_index) == 0) ? 0 : 1);
   }
-  bool const end_of_segment;
+  bool const inclusive;
 };
 
 struct popc {
@@ -270,20 +270,22 @@ struct popc {
 
 // Count set/unset bits in a segmented null mask, using offset iterators accessible by the device.
 template <typename OffsetIterator>
-rmm::device_uvector<size_type> segmented_count_bits_device(bitmask_type const* bitmask,
-                                                           size_type num_ranges,
-                                                           OffsetIterator first_bit_indices,
-                                                           OffsetIterator last_bit_indices,
-                                                           count_bits_policy count_bits,
-                                                           rmm::cuda_stream_view stream)
+rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
+                                                    OffsetIterator first_bit_indices_begin,
+                                                    OffsetIterator first_bit_indices_end,
+                                                    OffsetIterator last_bit_indices_begin,
+                                                    count_bits_policy count_bits,
+                                                    rmm::cuda_stream_view stream)
 {
+  auto const num_ranges =
+    static_cast<size_type>(std::distance(first_bit_indices_begin, first_bit_indices_end));
   rmm::device_uvector<size_type> d_bit_counts(num_ranges, stream);
 
   auto num_set_bits_in_word = thrust::make_transform_iterator(bitmask, popc{});
   auto first_word_indices =
-    thrust::make_transform_iterator(first_bit_indices, bit_to_word_index{false});
+    thrust::make_transform_iterator(first_bit_indices_begin, bit_to_word_index{true});
   auto last_word_indices =
-    thrust::make_transform_iterator(last_bit_indices, bit_to_word_index{true});
+    thrust::make_transform_iterator(last_bit_indices_begin, bit_to_word_index{false});
 
   // Allocate temporary memory.
   size_t temp_storage_bytes{0};
@@ -316,7 +318,7 @@ rmm::device_uvector<size_type> segmented_count_bits_device(bitmask_type const* b
                                               grid.num_threads_per_block,
                                               0,
                                               stream.value()>>>(
-    bitmask, num_ranges, first_bit_indices, last_bit_indices, d_bit_counts.begin());
+    bitmask, num_ranges, first_bit_indices_begin, last_bit_indices_begin, d_bit_counts.begin());
 
   if (count_bits == count_bits_policy::UNSET_BITS) {
     // Convert from set bits counts to unset bits by subtracting the number of
@@ -324,11 +326,11 @@ rmm::device_uvector<size_type> segmented_count_bits_device(bitmask_type const* b
     thrust::for_each(rmm::exec_policy(stream),
                      thrust::make_counting_iterator(0),
                      thrust::make_counting_iterator(static_cast<size_type>(d_bit_counts.size())),
-                     [first_bit_indices,
-                      last_bit_indices,
+                     [first_bit_indices_begin,
+                      last_bit_indices_begin,
                       d_bit_counts = d_bit_counts.data()] __device__(size_type i) {
-                       auto const begin = *(first_bit_indices + i);
-                       auto const end   = *(last_bit_indices + i);
+                       auto const begin = *(first_bit_indices_begin + i);
+                       auto const end   = *(last_bit_indices_begin + i);
                        d_bit_counts[i]  = (end - begin) - d_bit_counts[i];
                      });
   }
@@ -404,12 +406,18 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
   auto const d_indices = make_device_uvector_async(h_indices, stream);
 
   // Compute the null counts over each segment.
-  auto first_bit_indices = thrust::make_transform_iterator(
+  auto first_bit_indices_begin = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0), index_alternator{false, d_indices.data()});
-  auto last_bit_indices = thrust::make_transform_iterator(thrust::make_counting_iterator(0),
-                                                          index_alternator{true, d_indices.data()});
-  rmm::device_uvector<size_type> d_bit_counts = cudf::detail::segmented_count_bits_device(
-    bitmask, num_ranges, first_bit_indices, last_bit_indices, count_bits, stream);
+  auto const first_bit_indices_end = first_bit_indices_begin + num_ranges;
+  auto last_bit_indices_begin      = thrust::make_transform_iterator(
+    thrust::make_counting_iterator(0), index_alternator{true, d_indices.data()});
+  rmm::device_uvector<size_type> d_bit_counts =
+    cudf::detail::segmented_count_bits(bitmask,
+                                       first_bit_indices_begin,
+                                       first_bit_indices_end,
+                                       last_bit_indices_begin,
+                                       count_bits,
+                                       stream);
 
   // Copy the results back to the host.
   std::vector<size_type> ret(num_ranges);
