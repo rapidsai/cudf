@@ -842,18 +842,17 @@ def date_range(
     if isinstance(freq, DateOffset):
         offset = freq
     elif isinstance(freq, str):
-        if (
-            any(
-                x in freq.upper()
-                for x in {"Y", "A", "Q", "B", "SM", "SMS", "CBMS", "M"}
-            )
-            or "MS" in freq
-        ):
-            raise ValueError(
-                "date_range does not yet support month, quarter, year-anchored"
-                "or business-date frequency."
-            )
-        offset = DateOffset._from_str(freq)
+        e = ValueError(
+            f"Unrecognized frequency string {freq}. cuDF does"
+            " not yet support month, quarter, year-anchored frequency."
+        )
+
+        if "M" in freq or "Y" in freq.upper():
+            raise e
+        try:
+            offset = DateOffset._from_str(freq)
+        except ValueError:
+            raise e
     else:
         raise TypeError("`freq` must be a `str` or cudf.DateOffset object.")
 
