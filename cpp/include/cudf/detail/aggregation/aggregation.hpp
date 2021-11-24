@@ -614,6 +614,7 @@ class ewma_aggregation final : public rolling_aggregation {
  public:
   double com;
   bool adjust;
+
   ewma_aggregation(double com, bool adjust) : aggregation{EWMA}
   {
     this->com    = com;
@@ -624,11 +625,13 @@ class ewma_aggregation final : public rolling_aggregation {
   {
     return std::make_unique<ewma_aggregation>(*this);
   }
+
   std::vector<std::unique_ptr<aggregation>> get_simple_aggregations(
     data_type col_type, simple_aggregations_collector& collector) const override
   {
     return collector.visit(col_type, *this);
   }
+
   bool is_equal(aggregation const& _other) const override
   {
     if (!this->aggregation::is_equal(_other)) { return false; }

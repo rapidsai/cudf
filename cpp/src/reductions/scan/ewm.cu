@@ -28,64 +28,17 @@
 
 #include <thrust/scan.h>
 
-template <typename T>
-void print_device_uvector(rmm::device_uvector<T> const& input, rmm::cuda_stream_view stream)
-{
-  thrust::device_vector<T> input_device(input.size());
-  thrust::copy(rmm::exec_policy(stream), input.begin(), input.end(), input_device.begin());
-  thrust::host_vector<T> input_host = input_device;
-  std::cout << std::endl;
-  for (size_t i = 0; i < input_host.size(); i++) {
-    std::cout << input_host[i] << " ";
-  }
-  std::cout << std::endl;
-}
-
-template <typename T>
-void print_device_uvector_pairs(rmm::device_uvector<thrust::pair<T, T>> const& input,
-                                rmm::cuda_stream_view stream)
-{
-  thrust::device_vector<T> pairs0_d(input.size());
-  thrust::device_vector<T> pairs1_d(input.size());
-
-  thrust::transform(
-    rmm::exec_policy(stream),
-    input.begin(),
-    input.end(),
-    pairs0_d.begin(),
-    [=] __host__ __device__(thrust::pair<T, T> input) -> T { return thrust::get<0>(input); });
-
-  thrust::transform(
-    rmm::exec_policy(stream),
-    input.begin(),
-    input.end(),
-    pairs1_d.begin(),
-    [=] __host__ __device__(thrust::pair<T, T> input) -> T { return thrust::get<1>(input); });
-
-  thrust::host_vector<T> pairs0_h = pairs0_d;
-  thrust::host_vector<T> pairs1_h = pairs1_d;
-
-  std::cout << std::endl;
-  for (size_t i = 0; i < input.size(); i++) {
-    std::cout << "(" << pairs0_h[i] << "," << pairs1_h[i] << ")"
-              << " ";
-  }
-  std::cout << std::endl;
-}
-
 namespace cudf {
 namespace detail {
 
 template <typename T>
-class blelloch_functor {
+class recurrence_functor {
+  using pair_type = thrust::pair<T, T>;
+
  public:
-  __device__ thrust::pair<T, T> operator()(thrust::pair<T, T> ci, thrust::pair<T, T> cj)
+  __device__ pair_type operator()(pair_type ci, pair_type cj)
   {
-    T ci0 = thrust::get<0>(ci);
-    T ci1 = thrust::get<1>(ci);
-    T cj0 = thrust::get<0>(cj);
-    T cj1 = thrust::get<1>(cj);
-    return thrust::pair<T, T>(ci0 * cj0, ci1 * cj0 + cj1);
+    return {ci.first * cj.first, ci.second * cj.first + cj.second};
   }
 };
 
@@ -97,7 +50,7 @@ template <typename T>
 void compute_recurrence(rmm::device_uvector<thrust::pair<T, T>>& input,
                         rmm::cuda_stream_view stream)
 {
-  blelloch_functor<T> op;
+  recurrence_functor<T> op;
   thrust::inclusive_scan(rmm::exec_policy(stream), input.begin(), input.end(), input.begin(), op);
 }
 
@@ -122,7 +75,7 @@ rmm::device_uvector<cudf::size_type> null_roll_up(column_view const& input,
                     valid_it,
                     valid_it + input.size(),
                     output.begin(),
-                    [=] __host__ __device__(bool valid) -> bool { return 1 - valid; });
+                    [=] __device__(bool valid) -> bool { return 1 - valid; });
 
   // 0, 1, 0, 1, 1, 0 -> 0, 0, 1, 0, 0, 2
   thrust::inclusive_scan_by_key(
@@ -151,42 +104,34 @@ void pair_beta_adjust(column_view const& input,
                       rmm::device_uvector<cudf::size_type>& nullcnt,
                       rmm::cuda_stream_view stream)
 {
-  auto device_view = *column_device_view::create(input);
-  auto valid_it    = cudf::detail::make_validity_iterator(device_view);
+  using pair_type        = thrust::pair<T, T>;
+  auto device_view       = *column_device_view::create(input);
+  auto valid_it          = cudf::detail::make_validity_iterator(device_view);
+  auto valid_and_nullcnt = thrust::make_zip_iterator(thrust::make_tuple(valid_it, nullcnt.begin()));
+
   thrust::transform(
     rmm::exec_policy(stream),
-    valid_it,
-    valid_it + input.size(),
+    valid_and_nullcnt,
+    valid_and_nullcnt + input.size(),
     pairs.begin(),
     pairs.begin(),
-    [=] __host__ __device__(bool valid, thrust::pair<T, T> pair) -> thrust::pair<T, T> {
-      if (!valid) {
-        return thrust::pair<T, T>(1.0, 0.0);
+    [=] __device__(thrust::tuple<bool, int> valid_and_nullcnt, pair_type pair) -> pair_type {
+      bool valid = thrust::get<0>(valid_and_nullcnt);
+      int exp    = thrust::get<1>(valid_and_nullcnt);
+      if (valid and (exp != 0)) {
+        // The value is non-null, but nulls preceeded it
+        // must adjust the second element of the pair
+        T beta  = pair.first;
+        T scale = pair.second;
+        return {beta * (pow(beta, exp)), scale};
+      } else if (!valid) {
+        // the value is null, carry the previous value forward
+        // "identity operator" is used
+        return {1.0, 0.0};
       } else {
         return pair;
       }
     });
-
-  valid_it           = cudf::detail::make_validity_iterator(device_view);
-  auto valid_and_exp = thrust::make_zip_iterator(thrust::make_tuple(valid_it, nullcnt.begin()));
-
-  thrust::transform(rmm::exec_policy(stream),
-                    valid_and_exp,
-                    valid_and_exp + input.size(),
-                    pairs.begin(),
-                    pairs.begin(),
-                    [=] __host__ __device__(thrust::tuple<bool, int> valid_and_exp,
-                                            thrust::pair<T, T> pair) -> thrust::pair<T, T> {
-                      bool valid = thrust::get<0>(valid_and_exp);
-                      int exp    = thrust::get<1>(valid_and_exp);
-                      if (valid & (exp != 0)) {
-                        T beta  = thrust::get<0>(pair);
-                        T scale = thrust::get<1>(pair);
-                        return thrust::pair<T, T>(beta * (pow(beta, exp)), scale);
-                      } else {
-                        return pair;
-                      }
-                    });
 }
 
 template <typename T>
@@ -195,8 +140,9 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
+  using pair_type = thrust::pair<T, T>;
   rmm::device_uvector<T> output(input.size(), stream, mr);
-  rmm::device_uvector<thrust::pair<T, T>> pairs(input.size(), stream, mr);
+  rmm::device_uvector<pair_type> pairs(input.size(), stream);
 
   if (input.has_nulls()) {
     rmm::device_uvector<cudf::size_type> nullcnt = null_roll_up(input, stream);
@@ -206,37 +152,34 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                       input.begin<T>(),
                       input.end<T>(),
                       pairs.begin(),
-                      [=] __host__ __device__(T input) -> thrust::pair<T, T> {
-                        return thrust::pair<T, T>(beta, input);
+                      [=] __device__(T input) -> pair_type {
+                        return {beta, input};
                       });
 
     pair_beta_adjust(input, pairs, nullcnt, stream);
     compute_recurrence(pairs, stream);
 
     // copy the second elements to the output for now
+    thrust::transform(rmm::exec_policy(stream),
+                      pairs.begin(),
+                      pairs.end(),
+                      output.begin(),
+                      [=] __device__(pair_type pair) -> T { return pair.second; });
+
+    // Denominator
+    // Fill with pairs
+    thrust::fill(rmm::exec_policy(stream), pairs.begin(), pairs.end(), pair_type(beta, 1.0));
+
+    pair_beta_adjust(input, pairs, nullcnt, stream);
+    compute_recurrence(pairs, stream);
+
     thrust::transform(
       rmm::exec_policy(stream),
       pairs.begin(),
       pairs.end(),
       output.begin(),
-      [=] __host__ __device__(thrust::pair<T, T> pair) -> T { return thrust::get<1>(pair); });
-
-    // Denominator
-    // Fill with pairs
-    thrust::fill(
-      rmm::exec_policy(stream), pairs.begin(), pairs.end(), thrust::pair<T, T>(beta, 1.0));
-
-    pair_beta_adjust(input, pairs, nullcnt, stream);
-    compute_recurrence(pairs, stream);
-
-    thrust::transform(rmm::exec_policy(stream),
-                      pairs.begin(),
-                      pairs.end(),
-                      output.begin(),
-                      output.begin(),
-                      [=] __host__ __device__(thrust::pair<T, T> pair, T numerator) -> T {
-                        return numerator / thrust::get<1>(pair);
-                      });
+      output.begin(),
+      [=] __device__(pair_type pair, T numerator) -> T { return numerator / pair.second; });
 
   } else {
     // Numerator
@@ -245,33 +188,30 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                       input.begin<T>(),
                       input.end<T>(),
                       pairs.begin(),
-                      [=] __host__ __device__(T input) -> thrust::pair<T, T> {
-                        return thrust::pair<T, T>(beta, input);
+                      [=] __device__(T input) -> pair_type {
+                        return {beta, input};
                       });
     compute_recurrence(pairs, stream);
 
     // copy the second elements to the output for now
+    thrust::transform(rmm::exec_policy(stream),
+                      pairs.begin(),
+                      pairs.end(),
+                      output.begin(),
+                      [=] __device__(pair_type pair) -> T { return pair.second; });
+
+    // Denominator
+    // Fill with pairs
+    thrust::fill(rmm::exec_policy(stream), pairs.begin(), pairs.end(), pair_type(beta, 1.0));
+    compute_recurrence(pairs, stream);
+
     thrust::transform(
       rmm::exec_policy(stream),
       pairs.begin(),
       pairs.end(),
       output.begin(),
-      [=] __host__ __device__(thrust::pair<T, T> pair) -> T { return thrust::get<1>(pair); });
-
-    // Denominator
-    // Fill with pairs
-    thrust::fill(
-      rmm::exec_policy(stream), pairs.begin(), pairs.end(), thrust::pair<T, T>(beta, 1.0));
-    compute_recurrence(pairs, stream);
-
-    thrust::transform(rmm::exec_policy(stream),
-                      pairs.begin(),
-                      pairs.end(),
-                      output.begin(),
-                      output.begin(),
-                      [=] __host__ __device__(thrust::pair<T, T> pair, T numerator) -> T {
-                        return numerator / thrust::get<1>(pair);
-                      });
+      output.begin(),
+      [=] __device__(pair_type pair, T numerator) -> T { return numerator / pair.second; });
   }
   return output;
 }
@@ -282,25 +222,26 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
+  using pair_type = thrust::pair<T, T>;
   rmm::device_uvector<T> output(input.size(), stream, mr);
-  rmm::device_uvector<thrust::pair<T, T>> pairs(input.size(), stream, mr);
+  rmm::device_uvector<pair_type> pairs(input.size(), stream);
 
   thrust::transform(rmm::exec_policy(stream),
                     input.begin<T>(),
                     input.end<T>(),
                     pairs.begin(),
-                    [=] __host__ __device__(T input) -> thrust::pair<T, T> {
-                      return thrust::pair<T, T>(beta, (1.0 - beta) * input);
+                    [=] __device__(T input) -> pair_type {
+                      return {beta, (1.0 - beta) * input};
                     });
 
   // TODO: the first pair is WRONG using the above. Reset just that pair
 
   thrust::transform(rmm::exec_policy(stream),
                     input.begin<T>(),
-                    input.begin<T>() + 1,
+                    std::next(input.begin<T>()),
                     pairs.begin(),
-                    [=] __host__ __device__(T input) -> thrust::pair<T, T> {
-                      return thrust::pair<T, T>(beta, input);
+                    [=] __device__(T input) -> pair_type {
+                      return {beta, input};
                     });
 
   if (input.has_nulls()) {
@@ -328,7 +269,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
                       nullcnt.begin(),
                       nullcnt.end(),
                       nullcnt_factor.begin(),
-                      [=] __host__ __device__(T exponent) -> T {
+                      [=] __device__(T exponent) -> T {
                         // ex: 2 -> alpha + (1  - alpha)**2
                         if (exponent != 0) {
                           return (1.0 - beta) + pow(beta, exponent + 1);
@@ -341,34 +282,33 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
     auto valid_it    = detail::make_validity_iterator(device_view);
     auto null_and_null_count =
       thrust::make_zip_iterator(thrust::make_tuple(valid_it, nullcnt_factor.begin()));
-    thrust::transform(rmm::exec_policy(stream),
-                      null_and_null_count,
-                      null_and_null_count + input.size(),
-                      pairs.begin(),
-                      pairs.begin(),
-                      [=] __host__ __device__(thrust::tuple<bool, T> null_and_null_count,
-                                              thrust::pair<T, T> pair) -> thrust::pair<T, T> {
-                        bool is_valid = thrust::get<0>(null_and_null_count);
-                        T factor      = thrust::get<1>(null_and_null_count);
+    thrust::transform(
+      rmm::exec_policy(stream),
+      null_and_null_count,
+      null_and_null_count + input.size(),
+      pairs.begin(),
+      pairs.begin(),
+      [=] __device__(thrust::tuple<bool, T> null_and_null_count, pair_type pair) -> pair_type {
+        bool is_valid = thrust::get<0>(null_and_null_count);
+        T factor      = thrust::get<1>(null_and_null_count);
 
-                        T ci = thrust::get<0>(pair);
-                        T cj = thrust::get<1>(pair);
+        T ci = pair.first;
+        T cj = pair.second;
 
-                        if (is_valid and (factor != 0.0)) {
-                          return {ci / factor, cj / factor};
-                        } else {
-                          return {ci, cj};
-                        }
-                      });
+        if (is_valid and (factor != 0.0)) {
+          return {ci / factor, cj / factor};
+        } else {
+          return {ci, cj};
+        }
+      });
   }
   compute_recurrence(pairs, stream);
   // copy the second elements to the output for now
-  thrust::transform(
-    rmm::exec_policy(stream),
-    pairs.begin(),
-    pairs.end(),
-    output.begin(),
-    [=] __host__ __device__(thrust::pair<T, T> pair) -> T { return thrust::get<1>(pair); });
+  thrust::transform(rmm::exec_policy(stream),
+                    pairs.begin(),
+                    pairs.end(),
+                    output.begin(),
+                    [=] __device__(pair_type pair) -> T { return pair.second; });
   return output;
 }
 

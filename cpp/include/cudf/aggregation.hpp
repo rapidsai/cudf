@@ -292,11 +292,11 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * `EWMA` returns a non-nullable column with the same type as the input,
  * whose values are the exponentially weighted moving average of the input
  * sequence. Let these values be known as the y_i.
- * 
+ *
  * EWMA aggregations are parameterized by a center of mass (`com`) which
  * affects the contribution of the previous values (y_{i-1} ... y_0) in
  * computing the y_i.
- * 
+ *
  * EWMA aggregations are also parameterized by a boolean `adjust`.
  * Special considerations have to be given to the mathematical treatment of
  * the first value of the input sequence. There are two approaches to this,
@@ -304,7 +304,7 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * weighted moving average of some infinite history of data, and one which
  * takes the first value to be the only datapoint known. These assumptions
  * lead to two different formulas for the y_i. `adjust` selects which one.
- * 
+ *
  * EWMA aggregations have special null handling. Nulls have two effects. The
  * first is to propagate forward the last valid value as far as it has been
  * computed. This could be thought of as the nulls not affecting the average
@@ -314,8 +314,8 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * not change the average. For example, if the input sequence is {1, NULL, 3}
  * then when computing y_2 one should weigh y_0 as if it occurs two periods
  * before y_2 rather than just one.
- *  2. 
- * 
+ *  2.
+ *
  * @param com the center of mass.
  * @param adjust which assumption to make about the first value
  */
