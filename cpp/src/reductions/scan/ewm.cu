@@ -319,11 +319,12 @@ std::unique_ptr<column> ewma(std::unique_ptr<aggregation> const& agg,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(cudf::is_floating_point(input.type()), "Column must be floating point type");
-
-  T com       = (dynamic_cast<ewma_aggregation*>(agg.get()))->com;
   bool adjust = (dynamic_cast<ewma_aggregation*>(agg.get()))->adjust;
-
+  T com       = (dynamic_cast<ewma_aggregation*>(agg.get()))->com;
+  // center of mass is easier for the user, but the recurrences are
+  // better expressed in terms of the derived parameter `beta`
   T beta = 1.0 - (1.0 / (com + 1.0));
+  
   rmm::device_uvector<T> data(input.size(), stream, mr);
   if (adjust) {
     data = compute_ewma_adjust(input, beta, stream, mr);
