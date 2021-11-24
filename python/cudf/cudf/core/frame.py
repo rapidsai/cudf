@@ -5192,16 +5192,18 @@ class Frame:
             win_type=win_type,
         )
 
+    @copy_docstring(ExponentialMovingWindow)
     def ewm(
         self,
-        com=None,
-        span=None,
-        halflife=None,
-        alpha=None,
-        min_periods=0,
-        adjust=True,
-        ignore_na=False,
-        axis=0,
+        com: Union[float,None] = None,
+        span: Union[float,None] = None,
+        halflife: Union[float, None] = None,
+        alpha: Union[float,None] = None,
+        min_periods: Union[int, None] = 0,
+        adjust: bool = True,
+        ignore_na: bool = False,
+        axis: int = 0,
+        times: Union[str, np.ndarray, None] = None
     ):
         return ExponentialMovingWindow(
             self,
@@ -5211,8 +5213,9 @@ class Frame:
             alpha=alpha,
             min_periods=min_periods,
             adjust=adjust,
-            ignore_na=False,
-            axis=0,
+            ignore_na=ignore_na,
+            axis=axis,
+            times=times
         )
 
     def nans_to_nulls(self):

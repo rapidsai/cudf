@@ -3,26 +3,111 @@ from pandas.core.window.ewm import get_center_of_mass
 from cudf._lib.reduce import scan
 from cudf.core.window.rolling import _RollingBase
 from cudf.api.types import is_numeric_dtype
+import numpy as np
+
+from typing import Union
 
 class ExponentialMovingWindow(_RollingBase):
+    """
+    Provide exponential weighted (EW) functions.
+    Available EW functions: ``mean()``
+    Exactly one parameter: ``com``, ``span``, ``halflife``, or ``alpha`` must be
+    provided.
+    Parameters
+    ----------
+    com : float, optional
+        Specify decay in terms of center of mass,
+        :math:`\alpha = 1 / (1 + com)`, for :math:`com \geq 0`.
+    span : float, optional
+        Specify decay in terms of span,
+        :math:`\alpha = 2 / (span + 1)`, for :math:`span \geq 1`.
+    halflife : float, str, timedelta, optional
+        Specify decay in terms of half-life,
+        :math:`\alpha = 1 - \exp\left(-\ln(2) / halflife\right)`, for
+        :math:`halflife > 0`.
+    alpha : float, optional
+        Specify smoothing factor :math:`\alpha` directly,
+        :math:`0 < \alpha \leq 1`.
+    min_periods : int, default 0
+        Not Supported
+    adjust : bool, default True
+        Controls mathematical assumptions about the first value in the sequence.
+        See https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.ewm.html
+        for details.
+    ignore_na : bool, default False
+        Not Supported
+    axis : {0, 1}, default 0
+        Not Supported
+    times : str, np.ndarray, Series, default None
+        Not Supported
+
+    Returns
+    -------
+    ``ExponentailMovingWindow`` object
+
+    Notes
+    -----
+    cuDF input data may contain both nulls and nan values. For the purposes
+    of this method, they are taken to have the same meaning, meaning nulls
+    in cuDF will affect the result the same way that nan values would using
+    the equivalent pandas method. 
+    
+    Currently only ``mean`` is supported.
+
+    Examples
+    --------
+    >>> df = cudf.DataFrame({'B': [0, 1, 2, cudf.NA, 4]})
+    >>> df
+          B
+    0     0
+    1     1
+    2     2
+    3  <NA>
+    4     4
+    >>> df.ewm(com=0.5).mean()
+              B
+    0  0.000000
+    1  0.750000
+    2  1.615385
+    3  1.615385
+    4  3.670213
+
+    >>> df.ewm(com=0.5, adjust=False).mean()
+              B
+    0  0.000000
+    1  0.666667
+    2  1.555556
+    3  1.555556
+    4  3.650794
+    """
     def __init__(
         self,
         obj,
-        com=None,
-        span=None,
-        halflife=None,
-        alpha=None,
-        min_periods=0,
-        adjust=True,
-        ignore_na=False,
-        axis=0,
+        com: Union[float,None] = None,
+        span: Union[float,None] = None,
+        halflife: Union[float, None] = None,
+        alpha: Union[float,None] = None,
+        min_periods: Union[int, None] = 0,
+        adjust: bool = True,
+        ignore_na: bool = False,
+        axis: int = 0,
+        times: Union[str, np.ndarray, None] = None
     ):
+
+        if (min_periods, ignore_na, axis, times) != (0, False, 0, None):
+            raise NotImplementedError(
+                "The parameters `min_periods`, `ignore_na`, `axis`, and `times` "
+                "are not yet supported."
+            )
+
         self.obj = obj
         self.adjust = adjust
         self.com = get_center_of_mass(com, span, halflife, alpha)
-        self.bias=None
 
     def mean(self):
+        """
+        Calculate the ewm (exponential weighted moment) mean.
+        """
         return self._apply_agg("ewma")
 
     def var(self, bias):
@@ -38,7 +123,6 @@ class ExponentialMovingWindow(_RollingBase):
         raise NotImplementedError("cov not yet supported.")
 
     def _apply_agg_series(self, sr, agg_name):
-
         if not is_numeric_dtype(sr.dtype):
             raise TypeError("No numeric types to aggregate")
 
@@ -46,7 +130,5 @@ class ExponentialMovingWindow(_RollingBase):
             "com": self.com,
             "adjust": self.adjust,
         }
-        if self.bias is not None:
-            kws['bias'] = self.bias
 
         return scan(agg_name, sr._column.astype('float64'), True, **kws)
