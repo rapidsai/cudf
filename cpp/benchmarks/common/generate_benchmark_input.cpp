@@ -161,8 +161,23 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
  */
 template <typename T>
 struct random_value_fn<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> {
-  random_value_fn(distribution_params<T> const&) {}
-  T operator()(std::mt19937& engine) { CUDF_FAIL("Not implemented"); }
+  typename T::rep const lower_bound;
+  typename T::rep const upper_bound;
+  distribution_fn<typename T::rep> dist;
+
+  random_value_fn(distribution_params<typename T::rep> const& desc)
+    : lower_bound{desc.lower_bound},
+      upper_bound{desc.upper_bound},
+      dist{make_distribution<typename T::rep>(desc.id, desc.lower_bound, desc.upper_bound)}
+  {
+    // TODO generate random scale, since it's one random_value_fn object per column 
+  }
+
+  T operator()(std::mt19937& engine)
+  {
+    // Clamp the generated random value to the specified range
+    return T{std::max(std::min(dist(engine), upper_bound), lower_bound), numeric::scale_type{0}};
+  }
 };
 
 /**
