@@ -182,6 +182,9 @@ size_type inplace_bitmask_binop(
   return d_counter.value(stream);
 }
 
+/**
+ * @brief Enum indicating whether to count set (1) bits or unset (0) bits.
+ */
 enum class count_bits_policy : bool {
   SET_BITS,   /// Count set (1) bits
   UNSET_BITS  /// Count unset (0) bits
