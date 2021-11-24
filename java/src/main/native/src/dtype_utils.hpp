@@ -45,7 +45,8 @@ inline cudf::data_type timestamp_to_duration(cudf::data_type dt) {
 }
 
 inline bool is_decimal_type(cudf::type_id n_type) {
-  return n_type == cudf::type_id::DECIMAL32 || n_type == cudf::type_id::DECIMAL64;
+  return n_type == cudf::type_id::DECIMAL32 || n_type == cudf::type_id::DECIMAL64 ||
+         n_type == cudf::type_id::DECIMAL128;
 }
 
 // create data_type including scale for decimal type

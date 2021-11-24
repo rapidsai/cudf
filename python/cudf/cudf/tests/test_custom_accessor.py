@@ -44,7 +44,7 @@ def test_dataframe_accessor(gdf):
     "gdf2", [gd.datasets.randomdata(nrows=1, dtypes={"x": int, "y": int})]
 )
 def test_dataframe_accessor_idendity(gdf1, gdf2):
-    """Test for accessor idendities
+    """Test for accessor identities
     - An object should hold persistent reference to the same accessor
     - Different objects should hold difference instances of the accessor
     """

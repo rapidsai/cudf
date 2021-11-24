@@ -3,15 +3,7 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 set -e
 
-ARCH=$(arch)
-if [ "${ARCH}" = "x86_64" ]; then
-    DEFAULT_CUDA_VER="11.0"
-elif [ "${ARCH}" = "aarch64" ]; then
-    DEFAULT_CUDA_VER="11.2"
-else
-    echo "Unsupported arch ${ARCH}"
-    exit 1
-fi
+DEFAULT_CUDA_VER="11.5"
 
 #Always upload cudf Python package
 export UPLOAD_CUDF=1

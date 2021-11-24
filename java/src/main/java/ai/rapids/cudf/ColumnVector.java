@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -1388,6 +1389,18 @@ public final class ColumnVector extends ColumnView {
   public static ColumnVector decimalFromDoubles(DType type, RoundingMode mode, double... values) {
     try (HostColumnVector host = HostColumnVector.decimalFromDoubles(type, mode, values)) {
       return host.copyToDevice();
+    }
+  }
+
+
+  /**
+   * Create a new decimal vector from BigIntegers
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static ColumnVector decimalFromBigInt(int scale, BigInteger... values) {
+    try (HostColumnVector host = HostColumnVector.decimalFromBigIntegers(scale, values)) {
+      ColumnVector columnVector = host.copyToDevice();
+      return columnVector;
     }
   }
 

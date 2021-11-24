@@ -502,7 +502,7 @@ def test_orc_writer_sliced(tmpdir):
         "TestOrcFile.decimal.orc",
         "TestOrcFile.decimal.same.values.orc",
         "TestOrcFile.decimal.multiple.values.orc",
-        # For addional information take look at PR 7034
+        # For additional information take look at PR 7034
         "TestOrcFile.decimal.runpos.issue.orc",
     ],
 )
@@ -541,7 +541,7 @@ def test_orc_decimal_precision_fail(datadir):
     assert_eq(pdf, gdf)
 
 
-# For addional information take look at PR 6636 and 6702
+# For additional information take look at PR 6636 and 6702
 @pytest.mark.parametrize(
     "orc_file",
     [

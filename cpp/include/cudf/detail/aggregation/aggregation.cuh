@@ -23,6 +23,7 @@
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/traits.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -131,7 +132,8 @@ struct update_target_element<
   aggregation::MIN,
   target_has_nulls,
   source_has_nulls,
-  std::enable_if_t<is_fixed_width<Source>() && !is_fixed_point<Source>()>> {
+  std::enable_if_t<is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
+                   !is_fixed_point<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -148,11 +150,13 @@ struct update_target_element<
 };
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
-struct update_target_element<Source,
-                             aggregation::MIN,
-                             target_has_nulls,
-                             source_has_nulls,
-                             std::enable_if_t<is_fixed_point<Source>()>> {
+struct update_target_element<
+  Source,
+  aggregation::MIN,
+  target_has_nulls,
+  source_has_nulls,
+  std::enable_if_t<is_fixed_point<Source>() &&
+                   cudf::has_atomic_support<device_storage_type_t<Source>>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -177,7 +181,8 @@ struct update_target_element<
   aggregation::MAX,
   target_has_nulls,
   source_has_nulls,
-  std::enable_if_t<is_fixed_width<Source>() && !is_fixed_point<Source>()>> {
+  std::enable_if_t<is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
+                   !is_fixed_point<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -194,11 +199,13 @@ struct update_target_element<
 };
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
-struct update_target_element<Source,
-                             aggregation::MAX,
-                             target_has_nulls,
-                             source_has_nulls,
-                             std::enable_if_t<is_fixed_point<Source>()>> {
+struct update_target_element<
+  Source,
+  aggregation::MAX,
+  target_has_nulls,
+  source_has_nulls,
+  std::enable_if_t<is_fixed_point<Source>() &&
+                   cudf::has_atomic_support<device_storage_type_t<Source>>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -223,7 +230,8 @@ struct update_target_element<
   aggregation::SUM,
   target_has_nulls,
   source_has_nulls,
-  std::enable_if_t<is_fixed_width<Source>() && !is_fixed_point<Source>()>> {
+  std::enable_if_t<is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
+                   !is_fixed_point<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -240,11 +248,13 @@ struct update_target_element<
 };
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
-struct update_target_element<Source,
-                             aggregation::SUM,
-                             target_has_nulls,
-                             source_has_nulls,
-                             std::enable_if_t<is_fixed_point<Source>()>> {
+struct update_target_element<
+  Source,
+  aggregation::SUM,
+  target_has_nulls,
+  source_has_nulls,
+  std::enable_if_t<is_fixed_point<Source>() &&
+                   cudf::has_atomic_support<device_storage_type_t<Source>>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -267,7 +277,8 @@ struct update_target_element<Source,
  * @brief Function object to update a single element in a target column using
  * the dictionary key addressed by the specific index.
  *
- * SFINAE is used to prevent recursion for dictionary type. Dictionary keys cannot be a dictionary.
+ * SFINAE is used to prevent recursion for dictionary type. Dictionary keys cannot be a
+ * dictionary.
  *
  */
 template <bool target_has_nulls = true>
@@ -581,9 +592,7 @@ struct identity_initializer {
   template <typename T, aggregation::Kind k>
   static constexpr bool is_supported()
   {
-    // Note: !is_fixed_point<T>() means that aggregations for fixed_point should happen on the
-    //       underlying type (see device_storage_type_t), not that fixed_point is not supported
-    return cudf::is_fixed_width<T>() && !is_fixed_point<T>() and
+    return cudf::is_fixed_width<T>() and
            (k == aggregation::SUM or k == aggregation::MIN or k == aggregation::MAX or
             k == aggregation::COUNT_VALID or k == aggregation::COUNT_ALL or
             k == aggregation::ARGMAX or k == aggregation::ARGMIN or
@@ -596,7 +605,8 @@ struct identity_initializer {
   std::enable_if_t<not std::is_same<corresponding_operator_t<k>, void>::value, T>
   identity_from_operator()
   {
-    return corresponding_operator_t<k>::template identity<T>();
+    using DeviceType = device_storage_type_t<T>;
+    return corresponding_operator_t<k>::template identity<DeviceType>();
   }
 
   template <typename T, aggregation::Kind k>
@@ -613,9 +623,11 @@ struct identity_initializer {
       if constexpr (cudf::is_timestamp<T>())
         return k == aggregation::ARGMAX ? T{typename T::duration(ARGMAX_SENTINEL)}
                                         : T{typename T::duration(ARGMIN_SENTINEL)};
-      else
-        return k == aggregation::ARGMAX ? static_cast<T>(ARGMAX_SENTINEL)
-                                        : static_cast<T>(ARGMIN_SENTINEL);
+      else {
+        using DeviceType = device_storage_type_t<T>;
+        return k == aggregation::ARGMAX ? static_cast<DeviceType>(ARGMAX_SENTINEL)
+                                        : static_cast<DeviceType>(ARGMIN_SENTINEL);
+      }
     }
     return identity_from_operator<T, k>();
   }
@@ -625,7 +637,11 @@ struct identity_initializer {
   std::enable_if_t<is_supported<T, k>(), void> operator()(mutable_column_view const& col,
                                                           rmm::cuda_stream_view stream)
   {
-    thrust::fill(rmm::exec_policy(stream), col.begin<T>(), col.end<T>(), get_identity<T, k>());
+    using DeviceType = device_storage_type_t<T>;
+    thrust::fill(rmm::exec_policy(stream),
+                 col.begin<DeviceType>(),
+                 col.end<DeviceType>(),
+                 get_identity<DeviceType, k>());
   }
 
   template <typename T, aggregation::Kind k>
