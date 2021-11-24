@@ -117,7 +117,7 @@ void tie_break_ranks_transform(cudf::device_span<size_type const> dense_rank_sor
                         tie_iter,
                         thrust::make_discard_iterator(),
                         tie_sorted.begin(),
-                        thrust::equal_to<size_type>{},
+                        thrust::equal_to{},
                         tie_breaker);
   auto sorted_tied_rank = thrust::make_transform_iterator(
     dense_rank_sorted.begin(),

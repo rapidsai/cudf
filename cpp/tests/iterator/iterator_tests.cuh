@@ -50,13 +50,8 @@ struct IteratorTest : public cudf::test::BaseFixture {
 
     // Get temporary storage size
     size_t temp_storage_bytes = 0;
-    cub::DeviceReduce::Reduce(nullptr,
-                              temp_storage_bytes,
-                              d_in,
-                              dev_result.begin(),
-                              num_items,
-                              thrust::minimum<T_output>{},
-                              init);
+    cub::DeviceReduce::Reduce(
+      nullptr, temp_storage_bytes, d_in, dev_result.begin(), num_items, thrust::minimum{}, init);
 
     // Allocate temporary storage
     rmm::device_buffer d_temp_storage(temp_storage_bytes, rmm::cuda_stream_default);
@@ -67,7 +62,7 @@ struct IteratorTest : public cudf::test::BaseFixture {
                               d_in,
                               dev_result.begin(),
                               num_items,
-                              thrust::minimum<T_output>{},
+                              thrust::minimum{},
                               init);
 
     evaluate(expected, dev_result, "cub test");

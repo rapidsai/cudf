@@ -1499,11 +1499,8 @@ class lists_column_wrapper : public detail::column_wrapper {
 
     // concatenate them together, skipping children that are null.
     std::vector<column_view> children;
-    thrust::copy_if(std::cbegin(cols),
-                    std::cend(cols),
-                    valids,  // stencil
-                    std::back_inserter(children),
-                    thrust::identity{});
+    thrust::copy_if(
+      std::cbegin(cols), std::cend(cols), valids, std::back_inserter(children), thrust::identity{});
 
     auto data = children.empty() ? cudf::empty_like(expected_hierarchy) : concatenate(children);
 
