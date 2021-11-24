@@ -387,9 +387,7 @@ TEST_F(OrcWriterTest, MultiColumn)
   cudf_io::write_orc(out_opts);
 
   cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
-      .use_index(false)
-      .decimal128_columns({"decimal_pos_scale", "decimal_neg_scale"});
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).use_index(false);
   auto result = cudf_io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
@@ -1438,7 +1436,7 @@ TEST_F(OrcReaderTest, DecimalOptions)
     cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
       .decimal128_columns({"dec", "fake_name"})
       .decimal_cols_as_float({"decc", "fake_name"});
-  // Should not throw
+  // Should not throw, even with "fake name" in both options
   EXPECT_NO_THROW(cudf_io::read_orc(valid_opts));
 
   cudf_io::orc_reader_options invalid_opts =
@@ -1493,10 +1491,11 @@ TEST_F(OrcWriterTest, DecimalOptionsNested)
   cudf_io::orc_reader_options in_opts =
     cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
       .use_index(false)
-      .decimal128_columns({"lists.1.dec128"});
+      .decimal128_columns({"lists.1.dec64"});
   auto result = cudf_io::read_orc(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(0).child(1).child(0),
+                                      result.tbl->view().column(0).child(1).child(1));
 }
 
 CUDF_TEST_PROGRAM_MAIN()
