@@ -59,6 +59,11 @@ struct sum_if_not_null {
   }
 };
 
+template <typename T>
+struct opt_to_meanvar {
+  CUDA_HOST_DEVICE_CALLABLE T operator()(const thrust::optional<T>& v) { return v.value_or(T{0}); }
+};
+
 // TODO: enable this test also at __CUDACC_DEBUG__
 // This test causes fatal compilation error only at device debug mode.
 // Workaround: exclude this test only at device debug mode.
@@ -109,17 +114,27 @@ TYPED_TEST(NumericOptionalIteratorTest, mean_var_output)
   // GPU test
   auto it_dev         = d_col->optional_begin<T>(cudf::contains_nulls::YES{});
   auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
-  auto result         = thrust::reduce(it_dev_squared,
-                               it_dev_squared + d_col->size(),
-                               thrust::optional<T_output>{T_output{}},
-                               sum_if_not_null{});
+
+  auto results = rmm::device_uvector<T_output>(d_col->size(), rmm::cuda_stream_default);
+  thrust::transform(thrust::device,
+                    it_dev_squared,
+                    it_dev_squared + d_col->size(),
+                    results.begin(),
+                    opt_to_meanvar<T_output>{});
+  auto result = thrust::reduce(thrust::device, results.begin(), results.end(), T_output{});
+
+  // auto result = thrust::reduce(it_dev_squared,
+  //                             it_dev_squared + d_col->size(),
+  //                             thrust::optional<T_output>{T_output{}},
+  //                             sum_if_not_null{});
+
   if (not std::is_floating_point<T>()) {
-    EXPECT_EQ(expected_value, *result) << "optional iterator reduction sum";
+    EXPECT_EQ(expected_value, result) << "optional iterator reduction sum";
   } else {
-    EXPECT_NEAR(expected_value.value, result->value, 1e-3) << "optional iterator reduction sum";
-    EXPECT_NEAR(expected_value.value_squared, result->value_squared, 1e-3)
+    EXPECT_NEAR(expected_value.value, result.value, 1e-3) << "optional iterator reduction sum";
+    EXPECT_NEAR(expected_value.value_squared, result.value_squared, 1e-3)
       << "optional iterator reduction sum squared";
-    EXPECT_EQ(expected_value.count, result->count) << "optional iterator reduction count";
+    EXPECT_EQ(expected_value.count, result.count) << "optional iterator reduction count";
   }
 }
 #endif
