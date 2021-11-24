@@ -410,7 +410,7 @@ def assert_series_equal(
         Whether to check the Index class, dtype and inferred_type
         are identical.
     check_series_type : bool, default True
-        Whether to check the seires class, dtype and
+        Whether to check the series class, dtype and
         inferred_type are identical. Currently it is idle,
         and similar to pandas.
     check_less_precise : bool or int, default False

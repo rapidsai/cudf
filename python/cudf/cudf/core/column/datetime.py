@@ -543,7 +543,7 @@ def infer_format(element: str, **kwargs) -> str:
     if len(second_parts) > 1:
         # "Z" indicates Zulu time(widely used in aviation) - Which is
         # UTC timezone that currently cudf only supports. Having any other
-        # unsuppported timezone will let the code fail below
+        # unsupported timezone will let the code fail below
         # with a ValueError.
         second_parts.remove("Z")
         second_part = "".join(second_parts[1:])
