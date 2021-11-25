@@ -83,7 +83,7 @@ distribution_fn<T> make_distribution(distribution_id did, T lower_bound, T upper
   switch (did) {
     case distribution_id::NORMAL:
       return [lower_bound, dist = make_normal_dist(lower_bound, upper_bound)](
-               std::mt19937& engine) mutable -> T { return dist(engine) - lower_bound; };
+               std::mt19937& engine) mutable -> T { return dist(engine) + lower_bound; };
     case distribution_id::UNIFORM:
       return [dist = make_uniform_dist(lower_bound, upper_bound)](
                std::mt19937& engine) mutable -> T { return dist(engine); };
