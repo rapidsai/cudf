@@ -209,7 +209,7 @@ void rank_average(cudf::device_span<size_type const> group_keys,
   tie_break_ranks_transform<MinCount>(
     group_keys,
     cudf::detail::make_counting_transform_iterator(1,
-                                                   [] __device__(auto i) {
+                                                   [] __host__ __device__(size_type i) -> MinCount {
                                                      return MinCount{i, 1};
                                                    }),
     sorted_order_view,
