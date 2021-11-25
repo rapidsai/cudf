@@ -7,6 +7,7 @@ import numpy as np
 from libcpp.memory cimport make_shared, shared_ptr
 
 cimport cudf._lib.cpp.types as libcudf_types
+from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.lists.lists_column_view cimport lists_column_view
 from cudf._lib.types cimport (
@@ -15,7 +16,6 @@ from cudf._lib.types cimport (
     underlying_type_t_order,
     underlying_type_t_sorted,
 )
-from cudf._lib.column cimport Column
 
 import cudf
 
@@ -65,7 +65,9 @@ class TypeId(IntEnum):
     DURATION_NANOSECONDS = (
         <underlying_type_t_type_id> libcudf_types.type_id.DURATION_NANOSECONDS
     )
-    DICTIONARY32 = <underlying_type_t_type_id> libcudf_types.type_id.DICTIONARY32
+    DICTIONARY32 = (
+        <underlying_type_t_type_id> libcudf_types.type_id.DICTIONARY32
+    )
     DECIMAL32 = <underlying_type_t_type_id> libcudf_types.type_id.DECIMAL32
     DECIMAL64 = <underlying_type_t_type_id> libcudf_types.type_id.DECIMAL64
 
@@ -194,7 +196,9 @@ cdef dtype_from_structs_column_view(column_view cv):
 
 cdef dtype_from_decimal_column_view(column_view cv):
     scale = -cv.type().scale()
-    return cudf.Decimal64Dtype(precision=cudf.Decimal64Dtype.MAX_PRECISION, scale=scale)
+    return cudf.Decimal64Dtype(
+        precision=cudf.Decimal64Dtype.MAX_PRECISION, scale=scale
+    )
 
 cdef dtype_from_dictionary_column_view(column_view cv):
     """
@@ -202,7 +206,8 @@ cdef dtype_from_dictionary_column_view(column_view cv):
     carried in libucdf dictionray columns. This information will need
     to be recovered at a later stage.
     """
-    categories = Column.from_column_view(cv.child(1), None) if cv.num_children() > 0 else []
+    categories = Column.from_column_view(
+        cv.child(1), None) if cv.num_children() > 0 else []
     return cudf.CategoricalDtype(categories=categories, ordered=False)
 
 cdef dtype_from_column_view(column_view cv):

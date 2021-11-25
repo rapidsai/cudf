@@ -40,7 +40,6 @@ from cudf.api.types import (
 from cudf.core.column import (
     ColumnBase,
     as_column,
-    build_categorical_column,
     column_empty,
     deserialize_columns,
     serialize_columns,
@@ -2189,7 +2188,6 @@ class Frame:
                 for col in metadata["columns"]
                 if "field_name" in col
             }
-
 
         result = (
             {}

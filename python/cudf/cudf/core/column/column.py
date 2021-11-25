@@ -22,7 +22,6 @@ from typing import (
 import cupy
 import numpy as np
 import pandas as pd
-from pandas._libs import missing
 import pyarrow as pa
 from numba import cuda
 
@@ -263,8 +262,12 @@ class ColumnBase(Column, Serializable):
             return cudf.core.column.IntervalColumn.from_arrow(array)
         elif isinstance(array.type, pa.Decimal128Type):
             return cudf.core.column.Decimal64Column.from_arrow(array)
-        elif isinstance(array, pa.DictionaryArray) and isinstance(array.dictionary, pa.NullArray):
-            array = pa.DictionaryArray.from_arrays(array.indices, pa.array([], type=pa.string()))
+        elif isinstance(array, pa.DictionaryArray) and isinstance(
+            array.dictionary, pa.NullArray
+        ):
+            array = pa.DictionaryArray.from_arrays(
+                array.indices, pa.array([], type=pa.string())
+            )
 
         data = pa.table([array], [None])
         result = libcudf.interop.from_arrow(data, data.column_names)[0]["None"]
@@ -887,6 +890,7 @@ class ColumnBase(Column, Serializable):
     def as_categorical_column(self, dtype, **kwargs) -> ColumnBase:
         if "__DEBUG__" in kwargs:
             import pdb
+
             pdb.set_trace()
 
         if "ordered" in kwargs:
@@ -899,17 +903,28 @@ class ColumnBase(Column, Serializable):
         # Re-label self w.r.t. the provided categories
         if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
             NA_SENTINEL = -1
-            labels = sr.label_encoding(cats=dtype.categories, na_sentinel=NA_SENTINEL)
+            labels = sr.label_encoding(
+                cats=dtype.categories, na_sentinel=NA_SENTINEL
+            )
             if "ordered" in kwargs:
                 warnings.warn(
                     "Ignoring the `ordered` parameter passed in `**kwargs`, "
                     "will be using `ordered` parameter of CategoricalDtype"
                 )
-            
-            missing_categorical_mask = libcudf.unary.unary_operation((labels._column==np.int32(NA_SENTINEL)), libcudf.unary.UnaryOp.NOT)
+
+            missing_categorical_mask = libcudf.unary.unary_operation(
+                (labels._column == np.int32(NA_SENTINEL)),
+                libcudf.unary.UnaryOp.NOT,
+            )
             if self.mask:
-                mask_col = libcudf.transform.mask_to_bools(self.mask, 0, self.size)
-                mask = mask_col & missing_categorical_mask if self.mask is not None else missing_categorical_mask
+                mask_col = libcudf.transform.mask_to_bools(
+                    self.mask, 0, self.size
+                )
+                mask = (
+                    mask_col & missing_categorical_mask
+                    if self.mask is not None
+                    else missing_categorical_mask
+                )
             else:
                 mask = missing_categorical_mask
             bitmask = libcudf.transform.bools_to_mask(mask)
@@ -983,7 +998,9 @@ class ColumnBase(Column, Serializable):
 
     def apply_boolean_mask(self, mask) -> ColumnBase:
         mask = as_column(mask, dtype="bool")
-        res = self.as_frame()._apply_boolean_mask(boolean_mask=mask)._as_column()
+        res = (
+            self.as_frame()._apply_boolean_mask(boolean_mask=mask)._as_column()
+        )
         return res._with_type_metadata(self.dtype)
 
     def argsort(
@@ -1240,21 +1257,6 @@ def column_empty_like(
         dtype = column.dtype
     row_count = len(column) if newsize is None else newsize
 
-    # if (
-    #     hasattr(column, "dtype")
-    #     and is_categorical_dtype(column.dtype)
-    #     and dtype == column.dtype
-    # ):
-    #     column = cast("cudf.core.column.CategoricalColumn", column)
-    #     codes = column_empty_like(column.codes, masked=masked, newsize=newsize)
-    #     return build_column(
-    #         data=None,
-    #         dtype=dtype,
-    #         mask=codes.base_mask,
-    #         children=(as_column(codes.base_data, dtype=codes.dtype),),
-    #         size=codes.size,
-    #     )
-
     return column_empty(row_count, dtype, masked)
 
 
@@ -1291,7 +1293,7 @@ def column_empty(
         data = None
         indices = column_empty(row_count, dtype="uint32", masked=False)
         keys = dtype.categories._values.copy()
-        children = ( indices, keys )
+        children = (indices, keys)
     elif dtype.kind in "OU" and not is_decimal_dtype(dtype):
         data = None
         children = (
@@ -1491,8 +1493,12 @@ def build_categorical_column(
 
     category_order = categories.argsort()
     category_sorted = categories.take(category_order)
-    codes = category_order.argsort().take(
-        codes, nullify=True).astype("uint32").fillna(0)
+    codes = (
+        category_order.argsort()
+        .take(codes, nullify=True)
+        .astype("uint32")
+        .fillna(0)
+    )
 
     dtype = CategoricalDtype(categories=categories, ordered=ordered)
 

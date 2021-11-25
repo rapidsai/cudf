@@ -1,10 +1,8 @@
 # Copyright (c) 2018-2021, NVIDIA CORPORATION.
 
 from __future__ import annotations
-from mimetypes import common_types
 
 import pickle
-from collections.abc import MutableSequence
 from typing import (
     TYPE_CHECKING,
     Any,
@@ -23,29 +21,24 @@ from numba import cuda
 
 import cudf
 from cudf import _lib as libcudf
-from cudf._lib.transform import bools_to_mask
 from cudf._lib.categories import (
+    remove_categories as cpp_remove_categories,
     set_categories as cpp_set_categories,
-    add_categories as cpp_add_categories,
-    remove_categories as cpp_remove_categories
 )
-from cudf._lib.null_mask import create_null_mask, MaskState
-from cudf._lib.stream_compaction import drop_duplicates
-from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf._lib.search import contains
-from cudf._lib.copying import gather, scatter
-from cudf._lib.sort import order_by
-from cudf._lib.unary import unary_operation, UnaryOp
+from cudf._lib.stream_compaction import drop_duplicates
+from cudf._lib.transform import bools_to_mask
+from cudf._lib.unary import UnaryOp, unary_operation
+from cudf._typing import ColumnLike, Dtype, ScalarLike
 from cudf.api.types import is_categorical_dtype, is_interval_dtype
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
 from cudf.core.dtypes import CategoricalDtype
 from cudf.utils.dtypes import (
+    find_common_type,
     is_mixed_with_object_dtype,
     min_signed_type,
-    min_unsigned_type,
-    find_common_type
 )
 
 if TYPE_CHECKING:
@@ -140,7 +133,9 @@ class CategoricalAccessor(ColumnMethods):
             if isinstance(self._parent, cudf.Series)
             else None
         )
-        codes = self._column.codes.astype(min_signed_type(len(self._column.categories)))
+        codes = self._column.codes.astype(
+            min_signed_type(len(self._column.categories))
+        )
         codes = codes.fillna(-1)
         return cudf.Series(codes, index=index)
 
@@ -694,7 +689,7 @@ class CategoricalColumn(column.ColumnBase):
             - subheaders            # children headers
             - sub_frames_types      # type of children
             - frame_count           # number of total frames
-        
+
         The below shows the items stored in `frames` list. The number of
         frames stored for each item can be retrieved via the following key
         from `headers` dict.
@@ -705,10 +700,9 @@ class CategoricalColumn(column.ColumnBase):
         """
         header: Dict[Any, Any] = {}
         frames = []
-        
 
         header["type-serialized"] = pickle.dumps(type(self))
-        
+
         header["dtype"], dtype_frames = self.dtype.serialize()
         header["dtype_frames_count"] = len(dtype_frames)
         frames.extend(dtype_frames)
@@ -718,7 +712,7 @@ class CategoricalColumn(column.ColumnBase):
             header["mask"] = mask_header
             header["mask_frames_count"] = len(mask_frames)
             frames.extend(mask_frames)
-        
+
         sub_headers = []
         sub_frames_counts = []
         sub_frame_type = []
@@ -728,7 +722,7 @@ class CategoricalColumn(column.ColumnBase):
             sub_frames_counts.append(len(sframes))
             sub_frame_type.append(type(item))
             frames.extend(sframes)
-        
+
         header["sub_frames_counts"] = sub_frames_counts
         header["sub_frames_types"] = sub_frame_type
         header["subheaders"] = sub_headers
@@ -742,7 +736,7 @@ class CategoricalColumn(column.ColumnBase):
 
         b = 0
         dtype = CategoricalDtype.deserialize(
-            header["dtype"], frames[b:b+n_dtype_frames]
+            header["dtype"], frames[b : b + n_dtype_frames]
         )
         b += n_dtype_frames
 
@@ -750,23 +744,22 @@ class CategoricalColumn(column.ColumnBase):
         if "mask" in header:
             n_mask_frames = header["mask_frames_count"]
             mask = Buffer.deserialize(
-                header["mask"], frames[b: b+n_mask_frames]
+                header["mask"], frames[b : b + n_mask_frames]
             )
             b += n_mask_frames
 
         children = []
-        for typ, sheader, n_sframe in zip(header["sub_frames_types"], header["subheaders"], n_sframes):
-            child = typ.deserialize(sheader, frames[b:b+n_sframe])
+        for typ, sheader, n_sframe in zip(
+            header["sub_frames_types"], header["subheaders"], n_sframes
+        ):
+            child = typ.deserialize(sheader, frames[b : b + n_sframe])
             children.append(child)
             b += n_sframe
 
         return cast(
             CategoricalColumn,
             column.build_column(
-                data=None,
-                dtype=dtype,
-                mask=mask,
-                children=tuple(children),
+                data=None, dtype=dtype, mask=mask, children=tuple(children),
             ),
         )
 
@@ -904,7 +897,7 @@ class CategoricalColumn(column.ColumnBase):
             categories=self.dtype.categories._values,
             codes=codes,
             size=self.size,
-            ordered=self.dtype.ordered
+            ordered=self.dtype.ordered,
         )
         return col
 
@@ -936,22 +929,27 @@ class CategoricalColumn(column.ColumnBase):
     def to_pandas(self, index: pd.Index = None, **kwargs) -> pd.Series:
         if "__DEBUG__" in kwargs:
             import pdb
+
             pdb.set_trace()
 
         if self.categories.dtype.kind == "f":
             new_mask = bools_to_mask(self.notnull())
-            col = self.__class__(dtype=self.dtype,
-                                 mask=new_mask,
-                                 size=self.size,
-                                 offset=self.offset,
-                                 null_count=self.null_count,
-                                 children=self.base_children)
+            col = self.__class__(
+                dtype=self.dtype,
+                mask=new_mask,
+                size=self.size,
+                offset=self.offset,
+                null_count=self.null_count,
+                children=self.base_children,
+            )
         else:
             col = self
 
-        codes = col.codes.astype(
-            min_signed_type(len(col.categories))
-        ).fillna(-1).to_array()
+        codes = (
+            col.codes.astype(min_signed_type(len(col.categories)))
+            .fillna(-1)
+            .to_array()
+        )
 
         if is_interval_dtype(col.categories.dtype):
             # leaving out dropna because it temporarily changes an interval
@@ -968,7 +966,9 @@ class CategoricalColumn(column.ColumnBase):
     def to_arrow(self) -> pa.Array:
         indices = self.codes.astype(min_signed_type(len(self.categories)))
         dictionary = self.categories
-        return pa.DictionaryArray.from_arrays(indices=indices.to_arrow(), dictionary=dictionary.to_arrow())
+        return pa.DictionaryArray.from_arrays(
+            indices=indices.to_arrow(), dictionary=dictionary.to_arrow()
+        )
 
     @property
     def values_host(self) -> np.ndarray:
@@ -1213,10 +1213,8 @@ class CategoricalColumn(column.ColumnBase):
     def is_monotonic_decreasing(self) -> bool:
         return bool(self.ordered) and self.as_numerical.is_monotonic_decreasing
 
-    def as_categorical_column(
-        self, dtype: Dtype
-    ) -> CategoricalColumn:
-        
+    def as_categorical_column(self, dtype: Dtype) -> CategoricalColumn:
+
         if isinstance(dtype, str) and dtype == "category":
             return self
         if (
@@ -1313,7 +1311,7 @@ class CategoricalColumn(column.ColumnBase):
                         categories = self.base_children[1]
                     else:
                         categories = dtype._categories
-            
+
             return column.build_categorical_column(
                 categories=categories,
                 codes=codes,
@@ -1357,7 +1355,9 @@ class CategoricalColumn(column.ColumnBase):
             )
         else:
             out_col = self
-            if len(out_col.categories) == 0 or not (type(out_col.categories) is type(new_categories)):
+            if len(out_col.categories) == 0 or not (
+                type(out_col.categories) is type(new_categories)
+            ):
                 # If both categories are of different Column types,
                 # or the original categories are empty
                 # return a column full of Nulls.
@@ -1411,7 +1411,9 @@ class CategoricalColumn(column.ColumnBase):
         """
         new_categories = column.as_column(new_categories)
 
-        should_drop_duplicates = is_unique is False or not new_categories.is_unique
+        should_drop_duplicates = (
+            is_unique is False or not new_categories.is_unique
+        )
         if should_drop_duplicates:
             new_categories = drop_duplicates([new_categories])[0]
 
@@ -1424,8 +1426,13 @@ class CategoricalColumn(column.ColumnBase):
         # categories.
         col = self
         new_categories_as_common_type = new_categories
-        if cudf.api.types.is_numeric_dtype(new_categories.dtype) and not new_categories.dtype == col.children[1].dtype:
-            common_type = find_common_type([col.children[1].dtype, new_categories.dtype])
+        if (
+            cudf.api.types.is_numeric_dtype(new_categories.dtype)
+            and not new_categories.dtype == col.children[1].dtype
+        ):
+            common_type = find_common_type(
+                [col.children[1].dtype, new_categories.dtype]
+            )
             converted_categories = col.children[1].astype(common_type)
             col = column.build_categorical_column(
                 categories=converted_categories,
@@ -1434,13 +1441,15 @@ class CategoricalColumn(column.ColumnBase):
                 size=col.base_size,
                 offset=col.offset,
                 null_count=col.null_count,
-                ordered=col.ordered
+                ordered=col.ordered,
             )
             new_categories_as_common_type = new_categories.astype(common_type)
-        
+
         res_col = cpp_set_categories(col, new_categories_as_common_type)
 
-        res_col = res_col._with_type_metadata(CategoricalDtype(categories=new_categories, ordered=ordered))
+        res_col = res_col._with_type_metadata(
+            CategoricalDtype(categories=new_categories, ordered=ordered)
+        )
 
         return res_col
 
@@ -1460,7 +1469,9 @@ class CategoricalColumn(column.ColumnBase):
         # Under the hood, libcudf is unaware of the ordering of the categories.
         # The order information is stored in `dtype`.
         res = self.copy()
-        return res._with_type_metadata(CategoricalDtype(categories=new_categories, ordered=ordered))
+        return res._with_type_metadata(
+            CategoricalDtype(categories=new_categories, ordered=ordered)
+        )
 
     def as_ordered(self):
         out_col = self
@@ -1503,7 +1514,9 @@ def _create_empty_categorical_column(
         ),
         offset=categorical_column.offset,
         size=categorical_column.size,
-        mask=libcudf.null_mask.create_null_mask(categorical_column.size, libcudf.null_mask.MaskState.ALL_NULL),
+        mask=libcudf.null_mask.create_null_mask(
+            categorical_column.size, libcudf.null_mask.MaskState.ALL_NULL
+        ),
         ordered=dtype.ordered,
     )
 

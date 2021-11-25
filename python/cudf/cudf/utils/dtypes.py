@@ -1,6 +1,5 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
-from cudf.core.dtypes import CategoricalDtype
 import datetime as dt
 from collections import namedtuple
 from decimal import Decimal
@@ -192,8 +191,14 @@ def cudf_dtype_to_pa_type(dtype):
     """
     if cudf.api.types.is_categorical_dtype(dtype):
         cat_dtype = dtype.categories.dtype
-        cat_typ = pa.string() if cudf.api.types.is_string_dtype(cat_dtype) else pa.from_numpy_dtype(cat_dtype)
-        return pa.dictionary(index_type='int32', value_type=cat_typ, ordered=dtype.ordered)
+        cat_typ = (
+            pa.string()
+            if cudf.api.types.is_string_dtype(cat_dtype)
+            else pa.from_numpy_dtype(cat_dtype)
+        )
+        return pa.dictionary(
+            index_type="int32", value_type=cat_typ, ordered=dtype.ordered
+        )
     elif (
         cudf.api.types.is_list_dtype(dtype)
         or cudf.api.types.is_struct_dtype(dtype)
@@ -266,7 +271,6 @@ def to_cudf_compatible_scalar(val, dtype=None):
 
     if dtype is not None and not isinstance(dtype, cudf.CategoricalDtype):
         val = val.astype(dtype)
-            
 
     if val.dtype.type is np.datetime64:
         time_unit, _ = np.datetime_data(val.dtype)

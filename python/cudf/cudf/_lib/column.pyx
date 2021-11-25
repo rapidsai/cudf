@@ -8,7 +8,6 @@ import rmm
 
 import cudf
 import cudf._lib as libcudfxx
-from cudf.core.buffer import Buffer
 from cudf.api.types import (
     is_categorical_dtype,
     is_decimal_dtype,

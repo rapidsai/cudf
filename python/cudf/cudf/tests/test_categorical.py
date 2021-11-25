@@ -63,8 +63,7 @@ def test_categorical_integer():
     assert sr.null_count == 2
 
     np.testing.assert_array_equal(
-        pdsr.cat.codes.values,
-        sr.cat.codes.to_array()
+        pdsr.cat.codes.values, sr.cat.codes.to_array()
     )
 
     string = str(sr)
@@ -437,7 +436,8 @@ def test_categorical_reorder_categories(
     pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
     cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
 
-    # Skip checking the order of category if the result is unordered categorical
+    # Skip checking the order of category if the result is unordered
+    # categorical
     assert_eq(pd_sr_1, cd_sr_1, check_category_order=to_ordered)
 
     if to_ordered:
@@ -696,7 +696,7 @@ def test_categorical_dtype(categories, ordered):
 def test_astype_dtype(data, expected):
     expected = data.to_pandas().astype("category").cat.codes.dtype
     got = data.astype("category").cat.codes.dtype
-    # np.testing.assert_equal(got, expected)
+    np.testing.assert_equal(got, expected)
 
 
 @pytest.mark.parametrize(

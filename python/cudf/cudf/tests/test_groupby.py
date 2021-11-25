@@ -2151,7 +2151,10 @@ def test_groupby_fillna_method(nelem, method):
     got = gdf.groupby(key_col).fillna(method=method)
 
     assert_groupby_results_equal(
-        expect[value_cols], got[value_cols], sort=False, check_categorical=False
+        expect[value_cols],
+        got[value_cols],
+        sort=False,
+        check_categorical=False,
     )
 
 

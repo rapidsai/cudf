@@ -7,7 +7,12 @@ from pandas._libs.missing import NAType as pd_NAType
 
 import cudf
 from cudf.core.column.column import ColumnBase
-from cudf.core.dtypes import CategoricalDtype, Decimal64Dtype, ListDtype, StructDtype
+from cudf.core.dtypes import (
+    CategoricalDtype,
+    Decimal64Dtype,
+    ListDtype,
+    StructDtype,
+)
 from cudf.core.index import BaseIndex
 from cudf.core.series import Series
 from cudf.utils.dtypes import (
@@ -15,7 +20,6 @@ from cudf.utils.dtypes import (
     get_allowed_combinations_for_operator,
     to_cudf_compatible_scalar,
 )
-from cudf.api.types import infer_dtype, is_string_dtype
 
 
 class Scalar(object):
@@ -146,7 +150,7 @@ class Scalar(object):
                 raise ValueError(f"Can not coerce {value} to StructDType")
             else:
                 return NA, dtype
-        
+
         if isinstance(dtype, CategoricalDtype):
             if value not in dtype.categories:
                 return NA, dtype.categories.dtype
