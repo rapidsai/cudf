@@ -1000,7 +1000,7 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         mask[true_inds] = True
         return mask
 
-    def __repr__(self):
+    def __repr__(self, debug=False):
         max_seq_items = get_option("max_seq_items") or len(self)
         mr = 0
         if 2 * max_seq_items < len(self):
@@ -1017,6 +1017,8 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         # TODO: Change below usages accordingly to
         # utilize `Index.to_string` once it is implemented
         # related issue : https://github.com/pandas-dev/pandas/issues/35389
+        if debug:
+            breakpoint()
         if isinstance(preprocess, CategoricalIndex):
             if preprocess.categories.dtype.kind == "f":
                 output = (

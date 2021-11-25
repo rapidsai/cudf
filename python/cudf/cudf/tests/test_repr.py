@@ -1462,7 +1462,7 @@ def test_categorical_index_with_nan_repr():
         "categories=[1.0, 2.0, 10.0, NaN], ordered=False, dtype='category')"
     )
 
-    assert cat_index.__repr__() == expected_repr
+    assert cat_index.__repr__(debug=True) == expected_repr
 
     sliced_expected_repr = (
         "CategoricalIndex([NaN, 10.0, NaN, <NA>], "

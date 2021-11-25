@@ -817,9 +817,12 @@ class CategoricalColumn(column.ColumnBase):
 
     @property
     def codes(self) -> NumericalColumn:
-        category_order = self.dtype.categories._values.argsort()
-        codes = category_order.take(self.children[0], nullify=True)
-        codes = codes.set_mask(self.mask)
+        if self.base_children:
+            category_order = self.dtype.categories._values.argsort()
+            codes = category_order.take(self.children[0], nullify=True)
+            codes = codes.set_mask(self.mask)
+        else:
+            codes = cudf.core.column.column_empty(0, np.int32, masked=False)
         return codes
 
     @property
@@ -1211,11 +1214,8 @@ class CategoricalColumn(column.ColumnBase):
         return bool(self.ordered) and self.as_numerical.is_monotonic_decreasing
 
     def as_categorical_column(
-        self, dtype: Dtype, **kwargs
+        self, dtype: Dtype
     ) -> CategoricalColumn:
-        if "__DEBUG__" in kwargs:
-            import pdb
-            pdb.set_trace()
         
         if isinstance(dtype, str) and dtype == "category":
             return self
