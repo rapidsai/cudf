@@ -74,12 +74,18 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> get_empty_joined_table
 void build_join_hash_table(cudf::table_view const& build,
                            multimap_type& hash_table,
                            null_equality compare_nulls,
-                           rmm::cuda_stream_view stream)
+                           rmm::cuda_stream_view stream,
+                           // TODO: Convert this to an enum.
+                           bool allow_empty)
 {
   auto build_table_ptr = cudf::table_device_view::create(build, stream);
 
-  CUDF_EXPECTS(0 != build_table_ptr->num_columns(), "Selected build dataset is empty");
-  CUDF_EXPECTS(0 != build_table_ptr->num_rows(), "Build side table has no rows");
+  if (!allow_empty) {
+    CUDF_EXPECTS(0 != build_table_ptr->num_columns(), "Selected build dataset is empty");
+    CUDF_EXPECTS(0 != build_table_ptr->num_rows(), "Build side table has no rows");
+  } else if ((build_table_ptr->num_columns() == 0) || (0 != build_table_ptr->num_rows())) {
+    return;
+  }
 
   row_hash hash_build{nullate::YES{}, *build_table_ptr};
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();

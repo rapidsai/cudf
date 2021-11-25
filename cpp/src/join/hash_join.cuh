@@ -141,6 +141,12 @@ std::pair<std::unique_ptr<table>, std::unique_ptr<table>> get_empty_joined_table
 std::unique_ptr<cudf::table> combine_table_pair(std::unique_ptr<cudf::table>&& left,
                                                 std::unique_ptr<cudf::table>&& right);
 
+void build_join_hash_table(cudf::table_view const& build,
+                           multimap_type& hash_table,
+                           null_equality compare_nulls,
+                           rmm::cuda_stream_view stream,
+                           // TODO: Convert this to an enum.
+                           bool allow_empty = false);
 }  // namespace detail
 
 struct hash_join::hash_join_impl {

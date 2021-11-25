@@ -24,6 +24,7 @@
 #include <cudf/types.hpp>
 #include <join/conditional_join.hpp>
 #include <join/conditional_join_kernels.cuh>
+#include <join/hash_join.cuh>
 #include <join/join_common_utils.cuh>
 #include <join/join_common_utils.hpp>
 
@@ -92,6 +93,38 @@ mixed_join(table_view const& left,
     ast::detail::expression_parser{binary_predicate, left, right, has_nulls, stream, mr};
   CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
                "The expression must produce a boolean output.");
+
+  // TODO: The non-conditional join impls start with a dictionary matching,
+  // figure out what that is and what it's needed for (and if conditional joins
+  // need to do the same).
+  auto probe = left.select(left_on);
+  auto build = right.select(right_on);
+
+  cudf::detail::multimap_type hash_table{compute_hash_table_size(build.num_rows()),
+                                         std::numeric_limits<hash_value_type>::max(),
+                                         cudf::detail::JoinNoneValue,
+                                         stream.value()};
+
+  // TODO: To add support for nested columns we will need to flatten in many
+  // places. However, this probably isn't worth adding any time soon since we
+  // won't be able to support AST conditions for those types anyway.
+  // TODO: Decide how to handle null equality when mixing AST operators with hash joins.
+  build_join_hash_table(build, hash_table, null_equality::EQUAL, stream, true);
+
+  /*
+     I need to compute the output size. Unlike with hash joins, I think I'll have to use a
+     custom kernel (like in conditional joins) because the expression_evaluator uses shared
+     memory. There's no way to achieve that using thrust. Therefore, rather than writing a
+     probe function like we do in hash joins, I think we need to pass a device view of the
+     container to kernels for both size calculation and the actual join. So ultimately this
+     code is going to end up looking a lot closer to the conditional joins than the hash joins,
+     it's just that we're going to build the hash table on the host side and add a probe of
+     the device view and iterate over the results to determine what indices to test against.
+
+     The multimap does not yet support a device function iterator over the results, so we'll
+     need to dynamically allocate a device-side array for the output indices and insert into
+     that. Eventually we should add an iterator equivalent of static_multimap::retrieve in cuco.
+  */
 
   auto left_table  = table_device_view::create(left, stream);
   auto right_table = table_device_view::create(right, stream);
