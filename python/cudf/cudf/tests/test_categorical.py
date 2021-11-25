@@ -568,13 +568,13 @@ def test_categorical_typecast(data, cat_type):
 @pytest.mark.parametrize(
     "data",
     [
-        # pd.Series([1, 2, 3, 89]),
-        # pd.Series(["a", "b", "c", "c", "b", "a", "b", "b"]),
-        # pd.Series(["aa", "b", "c", "c", "bb", "bb", "a", "b", "b"]),
-        # pd.Series([1, 2, 3, 89, None, np.nan, np.NaN], dtype="float64"),
-        # pd.Series([1, 2, 3, 89], dtype="float64"),
-        # pd.Series([1, 2.5, 3.001, 89], dtype="float64"),
-        # pd.Series([None, None, None]),
+        pd.Series([1, 2, 3, 89]),
+        pd.Series(["a", "b", "c", "c", "b", "a", "b", "b"]),
+        pd.Series(["aa", "b", "c", "c", "bb", "bb", "a", "b", "b"]),
+        pd.Series([1, 2, 3, 89, None, np.nan, np.NaN], dtype="float64"),
+        pd.Series([1, 2, 3, 89], dtype="float64"),
+        pd.Series([1, 2.5, 3.001, 89], dtype="float64"),
+        pd.Series([None, None, None]),
         pd.Series([], dtype="float64"),
     ],
 )
@@ -582,14 +582,14 @@ def test_categorical_typecast(data, cat_type):
     "new_categories",
     [
         ["aa", "bb", "cc"],
-        # [2, 4, 10, 100],
-        # ["aa", "bb", "c"],
-        # ["a", "bb", "c"],
-        # ["a", "b", "c"],
-        # [],
-        # pd.Series(["a", "b", "c"]),
-        # pd.Series(["a", "b", "c"], dtype="category"),
-        # pd.Series([-100, 10, 11, 0, 1, 2], dtype="category"),
+        [2, 4, 10, 100],
+        ["aa", "bb", "c"],
+        ["a", "bb", "c"],
+        ["a", "b", "c"],
+        [],
+        pd.Series(["a", "b", "c"]),
+        pd.Series(["a", "b", "c"], dtype="category"),
+        pd.Series([-100, 10, 11, 0, 1, 2], dtype="category"),
     ],
 )
 def test_categorical_set_categories_categoricals(data, new_categories):
@@ -807,7 +807,7 @@ def test_categorical_assignment(data, cat_dtype):
 def test_categorical_allow_nan():
     gs = cudf.Series([1, 2, np.nan, 10, np.nan, None], nan_as_null=False)
     gs = gs.astype("category")
-    expected_codes = cudf.Series([0, 1, 3, 2, 3, -1], dtype="int8")
+    expected_codes = cudf.Series([0, 1, 3, 2, 3, None], dtype="uint8")
     assert_eq(expected_codes, gs.cat.codes)
 
     expected_categories = cudf.Index([1.0, 2.0, 10.0, np.nan], dtype="float64")

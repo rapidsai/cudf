@@ -888,11 +888,6 @@ class ColumnBase(Column, Serializable):
             return self.as_numerical_column(dtype, **kwargs)
 
     def as_categorical_column(self, dtype, **kwargs) -> ColumnBase:
-        if "__DEBUG__" in kwargs:
-            import pdb
-
-            pdb.set_trace()
-
         if "ordered" in kwargs:
             ordered = kwargs["ordered"]
         else:
