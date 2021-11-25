@@ -191,15 +191,11 @@ ConfigureTest(
 # * io tests --------------------------------------------------------------------------------------
 ConfigureTest(DECOMPRESSION_TEST io/comp/decomp_test.cpp)
 
-ConfigureTest(CSV_TEST io/csv_test.cpp)
-ConfigureTest(ORC_TEST io/orc_test.cpp)
-ConfigureTest(PARQUET_TEST io/parquet_test.cpp)
-ConfigureTest(JSON_TEST io/json_test.cpp)
-ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp)
-ConfigureTest(MULTIBYTE_SPLIT_TEST io/text/multibyte_split_test.cpp)
-if(CUDF_ENABLE_ARROW_S3)
-  target_compile_definitions(ARROW_IO_SOURCE_TEST PRIVATE "S3_ENABLED")
-endif()
+# ConfigureTest(CSV_TEST io/csv_test.cpp) ConfigureTest(ORC_TEST io/orc_test.cpp)
+# ConfigureTest(PARQUET_TEST io/parquet_test.cpp) ConfigureTest(JSON_TEST io/json_test.cpp)
+# ConfigureTest(ARROW_IO_SOURCE_TEST io/arrow_io_source_test.cpp) ConfigureTest(MULTIBYTE_SPLIT_TEST
+# io/text/multibyte_split_test.cpp) if(CUDF_ENABLE_ARROW_S3)
+# target_compile_definitions(ARROW_IO_SOURCE_TEST PRIVATE "S3_ENABLED") endif()
 
 # ##################################################################################################
 # * sort tests ------------------------------------------------------------------------------------
