@@ -900,7 +900,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   }
   chunks.host_to_device(stream);
   gpu::collect_map_entries(chunks.device_view().flat_view(), stream);
-  gpu::get_dictionary_indices(chunks.device_view(), num_rows, stream);
+  gpu::get_dictionary_indices(chunks.device_view(), frags, num_rows, stream);
 
   return std::make_pair(std::move(dict_data), std::move(dict_index));
 }
@@ -1342,6 +1342,9 @@ void writer::impl::write(table_view const& table,
         auto chunk_fragments = fragments[c].subspan(f, fragments_in_chunk);
         // In fragment struct, add a pointer to the chunk it belongs to
         // In each fragment in chunk_fragments, update the chunk pointer here.
+        for (auto& frag : chunk_fragments) {
+          frag.chunk = &chunks.device_view()[r + first_rg_in_part[p]][c];
+        }
         ck->num_values = std::accumulate(
           chunk_fragments.begin(), chunk_fragments.end(), 0, [](uint32_t l, auto r) {
             return l + r.num_values;
@@ -1365,18 +1368,19 @@ void writer::impl::write(table_view const& table,
   }
 
   // Pass fragments hd_vec to build_chunk_dictionaries
-  // auto dict_info_owner = build_chunk_dictionaries(chunks, col_desc, fragments, num_rows, stream);
-  // for (size_t p = 0; partitions.size(); p++) {
-  //   for (int rg = 0; rg < num_rg_in_part[p]; rg++) {
-  //     size_t global_rg = global_rowgroup_base[p] + rg;
-  //     for (int col = 0; col < num_columns; col++) {
-  //       if (chunks.host_view()[rg][col].use_dictionary) {
-  //         md->files[p].row_groups[global_rg].columns[col].meta_data.encodings.push_back(
-  //           Encoding::PLAIN_DICTIONARY);
-  //       }
-  //     }
-  //   }
-  // }
+  fragments.host_to_device(stream);
+  auto dict_info_owner = build_chunk_dictionaries(chunks, col_desc, fragments, num_rows, stream);
+  for (size_t p = 0; p < partitions.size(); p++) {
+    for (int rg = 0; rg < num_rg_in_part[p]; rg++) {
+      size_t global_rg = global_rowgroup_base[p] + rg;
+      for (int col = 0; col < num_columns; col++) {
+        if (chunks.host_view()[rg][col].use_dictionary) {
+          md->files[p].row_groups[global_rg].columns[col].meta_data.encodings.push_back(
+            Encoding::PLAIN_DICTIONARY);
+        }
+      }
+    }
+  }
 
   // Build chunk dictionaries and count pages
   if (num_chunks != 0) { init_page_sizes(chunks, col_desc, num_columns); }

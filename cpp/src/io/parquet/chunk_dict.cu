@@ -95,33 +95,43 @@ struct map_find_fn {
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
   populate_chunk_hash_maps_kernel(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                                  cudf::detail::device_2dspan<gpu::PageFragment const> frags,
                                   size_type num_rows)
 {
   auto col_idx = blockIdx.y;
   auto block_x = blockIdx.x;
   auto t       = threadIdx.x;
+  auto frag    = frags[col_idx][block_x];
+  auto chunk   = frag.chunk;
 
-  auto start_row =
-    block_x *
-    max_page_fragment_size;  // This is fragment size. all chunks are multiple of these many rows.
-  size_type end_row = min(start_row + max_page_fragment_size, num_rows);
+  // auto start_row =
+  //   block_x *
+  //   max_page_fragment_size;  // This is fragment size. all chunks are multiple of these many
+  //   rows.
+  // size_type end_row = min(start_row + max_page_fragment_size, num_rows);
+  size_type start_row = frag.start_row;
+  size_type end_row   = frag.start_row + frag.num_rows;
 
+  // TODO: s_chunk maybe not needed
   __shared__ EncColumnChunk* s_chunk;
   __shared__ parquet_column_device_view s_col;
   __shared__ size_type s_start_value_idx;
   __shared__ size_type s_num_values;
+
+  // TODO: cleanup. No need to get chunk like this
   if (t == 0) {
-    // Find the chunk this block is a part of
-    size_type num_rowgroups = chunks.size().first;
-    size_type rg_idx        = 0;
-    while (rg_idx < num_rowgroups) {
-      if (auto ck = chunks[rg_idx][col_idx];
-          start_row >= ck.start_row and start_row < ck.start_row + ck.num_rows) {
-        break;
-      }
-      ++rg_idx;
-    }
-    s_chunk = &chunks[rg_idx][col_idx];
+    // // Find the chunk this block is a part of
+    // size_type num_rowgroups = chunks.size().first;
+    // size_type rg_idx        = 0;
+    // while (rg_idx < num_rowgroups) {
+    //   if (auto ck = chunks[rg_idx][col_idx];
+    //       start_row >= ck.start_row and start_row < ck.start_row + ck.num_rows) {
+    //     break;
+    //   }
+    //   ++rg_idx;
+    // }
+    // s_chunk = &chunks[rg_idx][col_idx];
+    s_chunk = chunk;
     s_col   = *(s_chunk->col_desc);
   }
   __syncthreads();
@@ -245,14 +255,19 @@ __global__ void __launch_bounds__(block_size, 1)
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
   get_dictionary_indices_kernel(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                                cudf::detail::device_2dspan<gpu::PageFragment const> frags,
                                 size_type num_rows)
 {
   auto col_idx = blockIdx.y;
   auto block_x = blockIdx.x;
   auto t       = threadIdx.x;
+  auto frag    = frags[col_idx][block_x];
+  // auto chunk   = frag.chunk;
 
-  size_type start_row = block_x * max_page_fragment_size;
-  size_type end_row   = min(start_row + max_page_fragment_size, num_rows);
+  // size_type start_row = block_x * max_page_fragment_size;
+  // size_type end_row   = min(start_row + max_page_fragment_size, num_rows);
+  size_type start_row = frag.start_row;
+  size_type end_row   = frag.start_row + frag.num_rows;
 
   __shared__ EncColumnChunk s_chunk;
   __shared__ parquet_column_device_view s_col;
@@ -261,17 +276,18 @@ __global__ void __launch_bounds__(block_size, 1)
   __shared__ size_type s_num_values;
 
   if (t == 0) {
-    // Find the chunk this block is a part of
-    size_type num_rowgroups = chunks.size().first;
-    size_type rg_idx        = 0;
-    while (rg_idx < num_rowgroups) {
-      if (auto ck = chunks[rg_idx][col_idx];
-          start_row >= ck.start_row and start_row < ck.start_row + ck.num_rows) {
-        break;
-      }
-      ++rg_idx;
-    }
-    s_chunk = chunks[rg_idx][col_idx];
+    // // Find the chunk this block is a part of
+    // size_type num_rowgroups = chunks.size().first;
+    // size_type rg_idx        = 0;
+    // while (rg_idx < num_rowgroups) {
+    //   if (auto ck = chunks[rg_idx][col_idx];
+    //       start_row >= ck.start_row and start_row < ck.start_row + ck.num_rows) {
+    //     break;
+    //   }
+    //   ++rg_idx;
+    // }
+    // s_chunk = chunks[rg_idx][col_idx];
+    s_chunk = *frag.chunk;
     s_col   = *(s_chunk.col_desc);
 
     // Find the bounds of values in leaf column to be inserted into the map for current chunk
@@ -340,9 +356,11 @@ void populate_chunk_hash_maps(cudf::detail::device_2dspan<EncColumnChunk> chunks
                               rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 256;
-  auto const grid_x        = cudf::detail::grid_1d(num_rows, max_page_fragment_size);
-  auto const num_columns   = chunks.size().second;
-  dim3 const dim_grid(grid_x.num_blocks, num_columns);
+  // auto const grid_x        = cudf::detail::grid_1d(num_rows, max_page_fragment_size);
+  // auto const num_columns   = chunks.size().second;
+  // dim3 const dim_grid(grid_x.num_blocks, num_columns);
+  // TODO: Is there any perf implications if the kernel is launched with x = cols, y = rows/frags?
+  dim3 const dim_grid(frags.size().second, frags.size().first);
 
   // Convert to a per-fragment kernel. It is like that already and I know we cannot avoid fragments
   // anymore. The only other alternative is using row_bit_count to find per-row size and then use it
@@ -350,7 +368,7 @@ void populate_chunk_hash_maps(cudf::detail::device_2dspan<EncColumnChunk> chunks
   // future we can remove fragments and allow rowgroups to have less than 5000 rows but it's not
   // important right now
   populate_chunk_hash_maps_kernel<block_size>
-    <<<dim_grid, block_size, 0, stream.value()>>>(chunks, num_rows);
+    <<<dim_grid, block_size, 0, stream.value()>>>(chunks, frags, num_rows);
 }
 
 void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
@@ -360,16 +378,18 @@ void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_vi
 }
 
 void get_dictionary_indices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                            cudf::detail::device_2dspan<gpu::PageFragment const> frags,
                             size_type num_rows,
                             rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 256;
-  auto const grid_x        = cudf::detail::grid_1d(num_rows, max_page_fragment_size);
-  auto const num_columns   = chunks.size().second;
-  dim3 const dim_grid(grid_x.num_blocks, num_columns);
+  // auto const grid_x        = cudf::detail::grid_1d(num_rows, max_page_fragment_size);
+  // auto const num_columns   = chunks.size().second;
+  // dim3 const dim_grid(grid_x.num_blocks, num_columns);
+  dim3 const dim_grid(frags.size().second, frags.size().first);
 
   get_dictionary_indices_kernel<block_size>
-    <<<dim_grid, block_size, 0, stream.value()>>>(chunks, num_rows);
+    <<<dim_grid, block_size, 0, stream.value()>>>(chunks, frags, num_rows);
 }
 }  // namespace gpu
 }  // namespace parquet

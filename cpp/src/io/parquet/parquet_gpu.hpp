@@ -257,6 +257,8 @@ struct partition_info {
 
 constexpr int max_page_fragment_size = 5000;  //!< Max number of rows in a page fragment
 
+struct EncColumnChunk;
+
 /**
  * @brief Struct describing an encoder page fragment
  */
@@ -267,11 +269,10 @@ struct PageFragment {
   uint32_t start_value_idx;
   uint32_t num_leaf_values;  //!< Number of leaf values in fragment. Does not include nulls at
                              //!< non-leaf level
-
-  // Add a start_row member because fragments no longer 5000 rows each
-  size_type start_row;     //!< First row in fragment
-  uint16_t num_rows;       //!< Number of rows in fragment
-  uint16_t num_dict_vals;  //!< Number of unique dictionary entries
+  size_type start_row;       //!< First row in fragment
+  uint16_t num_rows;         //!< Number of rows in fragment
+  uint16_t num_dict_vals;    //!< Number of unique dictionary entries
+  EncColumnChunk* chunk;     //!< The chunk that this fragment belongs to
 };
 
 /// Size of hash used for building dictionaries
@@ -540,6 +541,7 @@ void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_vi
  * @param stream CUDA stream to use
  */
 void get_dictionary_indices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                            cudf::detail::device_2dspan<gpu::PageFragment const> frags,
                             size_type num_rows,
                             rmm::cuda_stream_view stream);
 
