@@ -22,11 +22,10 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
-#include <join/conditional_join.hpp>
-#include <join/conditional_join_kernels.cuh>
 #include <join/hash_join.cuh>
 #include <join/join_common_utils.cuh>
 #include <join/join_common_utils.hpp>
+#include <join/mixed_join_kernels.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 
@@ -145,7 +144,7 @@ mixed_join(table_view const& left,
     rmm::device_scalar<std::size_t> size(0, stream, mr);
     CHECK_CUDA(stream.value());
     if (has_nulls) {
-      compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
+      compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
           *left_table,
           *right_table,
@@ -154,7 +153,7 @@ mixed_join(table_view const& left,
           swap_tables,
           size.data());
     } else {
-      compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
+      compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
           *left_table,
           *right_table,
@@ -186,7 +185,7 @@ mixed_join(table_view const& left,
   auto const& join_output_l = left_indices->data();
   auto const& join_output_r = right_indices->data();
   if (has_nulls) {
-    conditional_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, true>
+    mixed_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, true>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
@@ -198,7 +197,7 @@ mixed_join(table_view const& left,
         join_size,
         swap_tables);
   } else {
-    conditional_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, false>
+    mixed_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
@@ -295,7 +294,7 @@ std::size_t compute_mixed_join_output_size(table_view const& left,
   // Determine number of output rows without actually building the output to simply
   // find what the size of the output will be.
   if (has_nulls) {
-    compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
+    compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
@@ -304,7 +303,7 @@ std::size_t compute_mixed_join_output_size(table_view const& left,
         swap_tables,
         size.data());
   } else {
-    compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
+    compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
