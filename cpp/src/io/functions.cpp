@@ -224,8 +224,8 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
 {
   using namespace cudf::io::detail;
 
-  // TODO: protect against multiple sinks until we support it in CSV
   auto sinks = make_datasinks(options.get_sink());
+  CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for CSV writing");
 
   return csv::write_csv(  //
     sinks[0].get(),
@@ -357,8 +357,9 @@ void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resourc
 
   CUDF_FUNC_RANGE();
 
-  // TODO: protect against multiple sinks until we support it in ORC
-  auto sinks  = make_datasinks(options.get_sink());
+  auto sinks = make_datasinks(options.get_sink());
+  CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for ORC writing");
+
   auto writer = std::make_unique<detail_orc::writer>(
     std::move(sinks[0]), options, io_detail::SingleWriteMode::YES, rmm::cuda_stream_default, mr);
 
@@ -373,8 +374,8 @@ orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& options
 {
   namespace io_detail = cudf::io::detail;
 
-  // TODO: protect against multiple sinks until we support it in ORC
   auto sinks = make_datasinks(options.get_sink());
+  CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for ORC writing");
 
   writer = std::make_unique<detail_orc::writer>(
     std::move(sinks[0]), options, io_detail::SingleWriteMode::NO, rmm::cuda_stream_default, mr);

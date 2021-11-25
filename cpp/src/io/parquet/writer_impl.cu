@@ -79,7 +79,6 @@ parquet::Compression to_parquet_compression(compression_type compression)
 
 }  // namespace
 
-// TODO: now I think partition is a better name than file
 struct per_file_metadata {
   per_file_metadata(int num_files) : files(num_files) {}
 

@@ -394,7 +394,7 @@ class parquet_writer_options {
   statistics_freq _stats_level = statistics_freq::STATISTICS_ROWGROUP;
   // Sets of columns to output
   table_view _table;
-  // Partitions described in a {start_row, num_rows} pairs
+  // Partitions described as {start_row, num_rows} pairs
   std::vector<std::pair<size_type, size_type>> _partitions;
   // Optional associated metadata
   table_input_metadata const* _metadata = nullptr;
@@ -497,9 +497,10 @@ class parquet_writer_options {
   auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
   /**
-   * @brief Sets metadata.
+   * @brief Sets partitions.
    *
-   * @param partitions Associated metadata.
+   * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
+   * be same size as number of sinks in sink_info
    */
   void set_partitions(std::vector<std::pair<size_type, size_type>> const& partitions)
   {
@@ -593,7 +594,8 @@ class parquet_writer_options_builder {
   /**
    * @brief Sets partitions in parquet_writer_options.
    *
-   * @param partitions Partitions of input table in {start_row, num_rows} pairs.
+   * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
+   * be same size as number of sinks in sink_info
    * @return this for chaining.
    */
   parquet_writer_options_builder& partitions(

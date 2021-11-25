@@ -91,7 +91,7 @@ class writer {
   /**
    * @brief Constructor for output to a file.
    *
-   * @param sink The data sink to write the data to
+   * @param sinks The data sinks to write the data to
    * @param options Settings for controlling writing behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -106,7 +106,7 @@ class writer {
   /**
    * @brief Constructor for writer to handle chunked parquet options.
    *
-   * @param sink The data sink to write the data to
+   * @param sinks The data sinks to write the data to
    * @param options Settings for controlling writing behavior for chunked writer
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
@@ -129,6 +129,8 @@ class writer {
    * @brief Writes a single subtable as part of a larger parquet file/table write.
    *
    * @param[in] table The table information to be written
+   * @param[in] partitions Optional partitions to divide the table into. If specified, must be same
+   * size as number of sinks.
    */
   void write(table_view const& table,
              std::vector<std::pair<size_type, size_type>> const& partitions = {});
