@@ -28,6 +28,17 @@ namespace cudf {
 namespace binops {
 namespace jit {
 
+struct UserDefinedOp {
+  template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+  static TypeOut operate(TypeLhs x, TypeRhs y)
+  {
+    TypeOut output;
+    using TypeCommon = typename common_type<TypeOut, TypeLhs, TypeRhs>::type;
+    GENERIC_BINARY_OP(&output, static_cast<TypeCommon>(x), static_cast<TypeCommon>(y));
+    return output;
+  }
+};
+
 template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
 __global__ void kernel_v_v(cudf::size_type size,
                            TypeOut* out_data,

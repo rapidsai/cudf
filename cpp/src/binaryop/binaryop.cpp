@@ -142,7 +142,7 @@ void binary_operation(mutable_column_view& out,
                               .instantiate(output_type_name,  // list of template arguments
                                            cudf::jit::get_type_name(lhs.type()),
                                            cudf::jit::get_type_name(rhs.type()),
-                                           std::string("UserDefinedOp"));
+                                           std::string("cudf::binops::jit::UserDefinedOp"));
 
   cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
     .get_kernel(
