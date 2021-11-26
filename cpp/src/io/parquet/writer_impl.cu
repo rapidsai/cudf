@@ -1124,6 +1124,7 @@ void writer::impl::init_state()
 void writer::impl::write(table_view const& table,
                          std::vector<std::pair<size_type, size_type>> partitions)
 {
+  last_write_successful = false;
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
   if (partitions.empty()) { partitions.push_back({0, table.num_rows()}); }
 
@@ -1595,6 +1596,7 @@ void writer::impl::write(table_view const& table,
       task.wait();
     }
   }
+  last_write_successful = true;
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
@@ -1602,6 +1604,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
 {
   if (closed) { return nullptr; }
   closed = true;
+  if (not last_write_successful) { return nullptr; }
   for (size_t p = 0; p < out_sink_.size(); p++) {
     std::vector<uint8_t> buffer;
     CompactProtocolWriter cpw(&buffer);

@@ -216,6 +216,8 @@ class writer::impl {
   std::unique_ptr<table_input_metadata> table_meta;
   // to track if the output has been written to sink
   bool closed = false;
+  // To track if the last write(table) call completed successfully
+  bool last_write_successful = false;
   // current write position for rowgroups/chunks
   std::vector<std::size_t> current_chunk_offset;
   // special parameter only used by detail::write() to indicate that we are guaranteeing
