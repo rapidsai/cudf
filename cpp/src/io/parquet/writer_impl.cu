@@ -1080,7 +1080,6 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     single_write_mode(mode == SingleWriteMode::YES),
     out_sink_(std::move(sinks))
 {
-  // out_sink_.push_back(std::move(sink));
   if (options.get_metadata()) {
     table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
@@ -1102,7 +1101,6 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     single_write_mode(mode == SingleWriteMode::YES),
     out_sink_(std::move(sinks))
 {
-  // out_sink_.push_back(std::move(sink));
   if (options.get_metadata()) {
     table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
   }
@@ -1127,8 +1125,9 @@ void writer::impl::write(table_view const& table,
                          std::vector<std::pair<size_type, size_type>> partitions)
 {
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
-  // Verify that partitions don't overlap
+  if (partitions.empty()) { partitions.push_back({0, table.num_rows()}); }
 
+  // TODO: remove
   size_type num_rows = table.num_rows();
 
   if (not table_meta) { table_meta = std::make_unique<table_input_metadata>(table); }
