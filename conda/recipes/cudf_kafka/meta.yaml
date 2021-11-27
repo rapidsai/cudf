@@ -26,9 +26,9 @@ requirements:
   build:
     - cmake >=3.20.1
   host:
+    - numpy
     - python
     - cython >=0.29,<0.30
-    - setuptools
     - cudf {{ version }}
     - libcudf_kafka {{ version }}
   run:
