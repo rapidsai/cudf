@@ -13,18 +13,29 @@ from dask.dataframe.io.utils import _get_pyarrow_dtypes
 import cudf
 
 
-def _read_orc_stripe(fs, path, stripe, columns, kwargs=None):
+def _read_orc_stripe(fs, path, stripe, columns, filtering_columns_first, kwargs=None):
     """Pull out specific columns from specific stripe"""
     if kwargs is None:
         kwargs = {}
     with fs.open(path, "rb") as f:
         df_stripe = cudf.read_orc(
-            f, stripes=[stripe], columns=columns, **kwargs
+            f,
+            stripes=[stripe],
+            columns=columns,
+            filtering_columns_first=filtering_columns_first,
+            **kwargs
         )
     return df_stripe
 
 
-def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
+def read_orc(
+    path,
+    columns=None,
+    filters=None,
+    filtering_columns_first=False,
+    storage_options=None,
+    **kwargs
+):
     """Read cudf dataframe from ORC file(s).
 
     Note that this function is mostly borrowed from upstream Dask.
@@ -92,7 +103,13 @@ def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
             **kwargs,
         )
 
-    name = "read-orc-" + tokenize(fs_token, path, columns, **kwargs)
+    name = "read-orc-" + tokenize(
+        fs_token,
+        path,
+        columns,
+        filtering_columns_first,
+        **kwargs
+    )
     dsk = {}
     N = 0
     for path, n in zip(paths, nstripes_per_file):
@@ -107,6 +124,7 @@ def read_orc(path, columns=None, filters=None, storage_options=None, **kwargs):
                 path,
                 stripe,
                 columns,
+                filtering_columns_first,
                 kwargs,
             )
             N += 1
