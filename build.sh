@@ -172,7 +172,6 @@ if buildAll || hasArg libcudf; then
         echo "Building for *ALL* supported GPU architectures..."
     fi
 
-    ccache -C
     FIC=$(ccache -s | grep "files in cache" | awk '{print $4;}')
 
     cmake -S $REPODIR/cpp -B ${LIB_BUILD_DIR} \
@@ -191,8 +190,7 @@ if buildAll || hasArg libcudf; then
     cmake --build . -j${PARALLEL_LEVEL} ${VERBOSE_FLAG}
 
     # Record build times
-    # if [[ "$FIC" == "0" && -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
-    if [[ -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
+    if [[ "$FIC" == "0" && -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
         echo "Formatting build times"
         python ${REPODIR}/ci/utils/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log > ${LIB_BUILD_DIR}/ninja_log.csv
         python ${REPODIR}/ci/utils/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --xml > ${LIB_BUILD_DIR}/ninja_log.xml

@@ -30,12 +30,8 @@ if len(entries) == 0:
 keys = list(entries.keys())
 sl = sorted(keys, key=lambda k: entries[k], reverse=True)
 
-if xml_output is False:
-    # output results in CSV format
-    print("time,file")
-    for key in sl:
-        print(entries[key], key, sep=",")
-else:
+if xml_output is True:
+    # output results in XML format
     root = ET.Element(
         "testsuites",
         attrib={
@@ -56,23 +52,13 @@ else:
                 "time": str(elapsed),
             },
         )
-        # if elapsed > 60.0:
-        #     message = (
-        #         "Build time of "
-        #         + str(elapsed)
-        #         + " exceeded maximum build time of 1.0"
-        #     )
-        #     failure = ET.SubElement(
-        #         item, "failure", attrib={"message": message}
-        #     )
-        #     # failure.append(
-        #     #     ET.Comment(
-        #     #         " --><![CDATA[" + "Detailed message goes here"
-        #     #       + "]]><!-- "
-        #     #     )
-        #     # )
         root.append(item)
 
     tree = ET.ElementTree(root)
     xmlstr = minidom.parseString(ET.tostring(root)).toprettyxml(indent="   ")
     print(xmlstr)
+else:
+    # output results in CSV format
+    print("time,file")
+    for key in sl:
+        print(entries[key], key, sep=",")
