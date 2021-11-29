@@ -301,11 +301,14 @@ cpdef write_parquet(
     cdef unique_ptr[cudf_io_types.data_sink] _data_sink
     cdef cudf_io_types.sink_info sink = make_sink_info(path, _data_sink)
 
+    pandas_metadata = generate_pandas_metadata(table, index)
+    user_data[str.encode("pandas")] = str.encode(pandas_metadata)
+
     if index is True or (
         index is None and not isinstance(table._index, cudf.RangeIndex)
     ):
         tv = table_view_from_table(table)
-        tbl_meta = make_unique[table_input_metadata](tv)
+        tbl_meta = make_unique[table_input_metadata](tv, move(user_data))
         for level, idx_name in enumerate(table._index.names):
             tbl_meta.get().column_metadata[level].set_name(
                 str.encode(
@@ -315,7 +318,7 @@ cpdef write_parquet(
         num_index_cols_meta = len(table._index.names)
     else:
         tv = table_view_from_table(table, ignore_index=True)
-        tbl_meta = make_unique[table_input_metadata](tv)
+        tbl_meta = make_unique[table_input_metadata](tv, move(user_data))
         num_index_cols_meta = 0
 
     for i, name in enumerate(table._column_names, num_index_cols_meta):
@@ -326,12 +329,6 @@ cpdef write_parquet(
         _set_col_metadata(
             table[name]._column, tbl_meta.get().column_metadata[i]
         )
-
-    pandas_metadata = generate_pandas_metadata(table, index)
-    user_data[str.encode("pandas")] = str.encode(pandas_metadata)
-
-    # Set the table_metadata
-    tbl_meta.get().user_data = user_data
 
     cdef cudf_io_types.compression_type comp_type = _get_comp_type(compression)
     cdef cudf_io_types.statistics_freq stat_freq = _get_stat_freq(statistics)
@@ -471,7 +468,7 @@ cdef class ParquetWriter:
             )
 
         pandas_metadata = generate_pandas_metadata(table, self.index)
-        self.tbl_meta.get().user_data[str.encode("pandas")] = \
+        self.tbl_meta.get().user_data[0][str.encode("pandas")] = \
             str.encode(pandas_metadata)
 
         cdef chunked_parquet_writer_options args

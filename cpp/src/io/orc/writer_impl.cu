@@ -2053,12 +2053,15 @@ void writer::impl::close()
   PostScript ps;
 
   ff.contentLength = out_sink_->bytes_written();
-  std::transform(table_meta->user_data.begin(),
-                 table_meta->user_data.end(),
-                 std::back_inserter(ff.metadata),
-                 [&](auto const& udata) {
-                   return UserMetadataItem{udata.first, udata.second};
-                 });
+  if (not table_meta->user_data.empty()) {
+    // ORC writer currently does not support multiple file writing
+    std::transform(table_meta->user_data[0].begin(),
+                   table_meta->user_data[0].end(),
+                   std::back_inserter(ff.metadata),
+                   [&](auto const& udata) {
+                     return UserMetadataItem{udata.first, udata.second};
+                   });
+  }
 
   // Write statistics metadata
   if (md.stripeStats.size() != 0) {

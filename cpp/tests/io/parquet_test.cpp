@@ -834,7 +834,7 @@ TEST_F(ParquetWriterTest, MultiIndex)
   expected_metadata.column_metadata[2].set_name("int32s");
   expected_metadata.column_metadata[3].set_name("floats");
   expected_metadata.column_metadata[4].set_name("doubles");
-  expected_metadata.user_data.insert(
+  expected_metadata.user_data[0].insert(
     {"pandas", "\"index_columns\": [\"int8s\", \"int16s\"], \"column1\": [\"int32s\"]"});
 
   auto filepath = temp_env->get_temp_filepath("MultiIndex.parquet");

@@ -1176,13 +1176,15 @@ void writer::impl::write(table_view const& table,
 
     // Think about how this will be passed. Currently it is passed in table_input_metadata which is
     // only passed once as part of args to writer ctor. Now this would need to be passed per sink.
-    // But we only need them once. Just like the list of sinks. Maybe we can
-    // std::transform(table_meta->user_data.begin(),
-    //                table_meta->user_data.end(),
-    //                std::back_inserter(md.key_value_metadata),
-    //                [](auto const& kv) {
-    //                  return KeyValue{kv.first, kv.second};
-    //                });
+    // But we only need them once. Ask in review
+    for (size_t p = 0; p < table_meta->user_data.size(); ++p) {
+      std::transform(table_meta->user_data[p].begin(),
+                     table_meta->user_data[p].end(),
+                     std::back_inserter(md->files[p].key_value_metadata),
+                     [](auto const& kv) {
+                       return KeyValue{kv.first, kv.second};
+                     });
+    }
     md->schema = this_table_schema;
   } else {
     // verify the user isn't passing mismatched tables

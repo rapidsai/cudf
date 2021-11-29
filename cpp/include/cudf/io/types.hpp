@@ -385,12 +385,33 @@ class table_input_metadata {
    * The constructed table_input_metadata has the same structure as the passed table_view
    *
    * @param table The table_view to construct metadata for
-   * @param user_data Optional Additional metadata to encode, as key-value pairs
    */
-  table_input_metadata(table_view const& table, std::map<std::string, std::string> user_data = {});
+  table_input_metadata(table_view const& table);
+
+  /**
+   * @brief Construct a new table_input_metadata from a table_view.
+   *
+   * The constructed table_input_metadata has the same structure as the passed table_view
+   *
+   * @param table The table_view to construct metadata for
+   * @param user_data Additional metadata to encode, as key-value pairs
+   */
+  table_input_metadata(table_view const& table, std::map<std::string, std::string> user_data);
+
+  /**
+   * @brief Construct a new table_input_metadata from a table_view.
+   *
+   * The constructed table_input_metadata has the same structure as the passed table_view
+   *
+   * @param table The table_view to construct metadata for
+   * @param user_data Additional metadata to encode, as key-value pairs. One per output file
+   */
+  table_input_metadata(table_view const& table,
+                       std::vector<std::map<std::string, std::string>> user_data);
 
   std::vector<column_in_metadata> column_metadata;
-  std::map<std::string, std::string> user_data;  //!< Format-dependent metadata as key-values pairs
+  std::vector<std::map<std::string, std::string>>
+    user_data;  //!< Format-dependent metadata as key-values pairs. One per output file
 };
 
 }  // namespace io

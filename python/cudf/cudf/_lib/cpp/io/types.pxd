@@ -76,7 +76,7 @@ cdef extern from "cudf/io/types.hpp" \
         ) except +
 
         vector[column_in_metadata] column_metadata
-        map[string, string] user_data
+        vector[map[string, string]] user_data
 
     cdef cppclass host_buffer:
         const char* data

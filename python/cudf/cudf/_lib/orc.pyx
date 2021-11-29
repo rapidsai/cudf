@@ -340,7 +340,7 @@ cdef class ORCWriter:
             )
 
         pandas_metadata = generate_pandas_metadata(table, self.index)
-        self.tbl_meta.get().user_data[str.encode("pandas")] = \
+        self.tbl_meta.get().user_data[0][str.encode("pandas")] = \
             str.encode(pandas_metadata)
 
         cdef chunked_orc_writer_options args
