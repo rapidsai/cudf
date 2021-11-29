@@ -10,7 +10,6 @@ from dask.dataframe import methods
 from dask.dataframe.core import DataFrame, Index, Series
 from dask.dataframe.shuffle import rearrange_by_column
 from dask.highlevelgraph import HighLevelGraph
-from dask.utils import M
 
 import cudf as gd
 from cudf.api.types import is_categorical_dtype
@@ -222,6 +221,8 @@ def sort_values(
     ignore_index=False,
     ascending=True,
     na_position="last",
+    sort_function=None,
+    sort_function_kwargs=None,
 ):
     """Sort by the given list/tuple of column names."""
     if na_position not in ("first", "last"):
@@ -263,9 +264,7 @@ def sort_values(
     df3.divisions = (None,) * (df3.npartitions + 1)
 
     # Step 3 - Return final sorted df
-    df4 = df3.map_partitions(
-        M.sort_values, by, ascending=ascending, na_position=na_position
-    )
+    df4 = df3.map_partitions(sort_function, **sort_function_kwargs)
     if not isinstance(divisions, gd.DataFrame) and set_divisions:
         # Can't have multi-column divisions elsewhere in dask (yet)
         df4.divisions = methods.tolist(divisions)
