@@ -750,7 +750,7 @@ inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s* s, int src
  * @param[in] dst Pointer to row output data
  */
 template <typename T>
-inline __device__ void gpuOutputFixedLenByteArray(volatile page_state_s* s, int src_pos, T* dst)
+__device__ void gpuOutputFixedLenByteArrayAsInt(volatile page_state_s* s, int src_pos, T* dst)
 {
   uint32_t const dtype_len_in = s->dtype_len_in;
   uint8_t const* data         = s->dict_base ? s->dict_base : s->data_start;
@@ -1707,11 +1707,11 @@ extern "C" __global__ void __launch_bounds__(block_size)
             case INT64: gpuOutputFast(s, val_src_pos, static_cast<uint2*>(dst)); break;
             default:
               if (s->dtype_len_in <= 4) {
-                gpuOutputFixedLenByteArray(s, val_src_pos, static_cast<int32_t*>(dst));
+                gpuOutputFixedLenByteArrayAsInt(s, val_src_pos, static_cast<int32_t*>(dst));
               } else if (s->dtype_len_in <= 8) {
-                gpuOutputFixedLenByteArray(s, val_src_pos, static_cast<int64_t*>(dst));
+                gpuOutputFixedLenByteArrayAsInt(s, val_src_pos, static_cast<int64_t*>(dst));
               } else {
-                gpuOutputFixedLenByteArray(s, val_src_pos, static_cast<__int128_t*>(dst));
+                gpuOutputFixedLenByteArrayAsInt(s, val_src_pos, static_cast<__int128_t*>(dst));
               }
               break;
           }
