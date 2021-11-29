@@ -138,16 +138,15 @@ void binary_operation(mutable_column_view& out,
   std::string cuda_source =
     cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type_name);
 
-  std::string kernel_name = jitify2::reflection::Template("cudf::binops::jit::kernel_v_v")  //
+  std::string kernel_name = jitify2::reflection::Template("cudf::binops::jit::kernel_v_v")
                               .instantiate(output_type_name,  // list of template arguments
                                            cudf::jit::get_type_name(lhs.type()),
                                            cudf::jit::get_type_name(rhs.type()),
                                            std::string("cudf::binops::jit::UserDefinedOp"));
 
   cudf::jit::get_program_cache(*binaryop_jit_kernel_cu_jit)
-    .get_kernel(
-      kernel_name, {}, {{"binaryop/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_."})  //
-    ->configure_1d_max_occupancy(0, 0, 0, stream.value())                                  //
+    .get_kernel(kernel_name, {}, {{"binaryop/jit/operation-udf.hpp", cuda_source}}, {"-arch=sm_."})
+    ->configure_1d_max_occupancy(0, 0, 0, stream.value())
     ->launch(out.size(),
              cudf::jit::get_data_ptr(out),
              cudf::jit::get_data_ptr(lhs),
@@ -221,7 +220,6 @@ namespace detail {
 
 // There are 3 overloads of each of the following functions:
 // - `make_fixed_width_column_for_output`
-// - `fixed_point_binary_operation`
 // - `binary_operation`
 
 // The overloads are overloaded on the first two parameters of each function:
@@ -309,9 +307,7 @@ std::unique_ptr<column> make_fixed_width_column_for_output(column_view const& lh
       output_type, lhs.size(), std::move(new_mask), null_count, stream, mr);
   }
 };
-}  // namespace detail
 
-namespace detail {
 std::unique_ptr<column> binary_operation(scalar const& lhs,
                                          column_view const& rhs,
                                          binary_operator op,
