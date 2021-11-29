@@ -936,6 +936,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
           break;
         case cudf::type_id::DECIMAL32:
         case cudf::type_id::DECIMAL64:
+        case cudf::type_id::DECIMAL128:
           result = cudf::strings::to_fixed_point(*column, n_data_type);
           break;
         default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
@@ -2018,6 +2019,22 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isInteger(JNIEnv *env, jo
     cudf::jni::auto_set_device(env);
     cudf::column_view *view = reinterpret_cast<cudf::column_view *>(handle);
     std::unique_ptr<cudf::column> result = cudf::strings::is_integer(*view);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0)
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_isFixedPoint(JNIEnv *env, jobject,
+                                                                    jlong handle, jint j_dtype,
+                                                                    jint scale) {
+
+  JNI_NULL_CHECK(env, handle, "native view handle is null", 0)
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::column_view *view = reinterpret_cast<cudf::column_view *>(handle);
+    cudf::data_type fp_dtype = cudf::jni::make_data_type(j_dtype, scale);
+    std::unique_ptr<cudf::column> result = cudf::strings::is_fixed_point(*view, fp_dtype);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0)

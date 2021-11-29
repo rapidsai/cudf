@@ -8,17 +8,19 @@ from typing import Type, TypeVar
 from uuid import uuid4
 
 import cupy as cp
+import numpy as np
 import pandas as pd
 from nvtx import annotate
 
 import cudf
+import cudf._lib as libcudf
 from cudf._typing import ColumnLike
-from cudf.api.types import is_categorical_dtype, is_list_like
+from cudf.api.types import is_categorical_dtype, is_integer_dtype, is_list_like
 from cudf.core.column import arange
 from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, _index_from_data
 from cudf.core.multiindex import MultiIndex
-from cudf.utils.utils import cached_property
+from cudf.utils.utils import _gather_map_is_valid, cached_property
 
 
 def _indices_from_labels(obj, labels):
@@ -434,6 +436,113 @@ class IndexedFrame(Frame):
         if ignore_index is True:
             out = out.reset_index(drop=True)
         return self._mimic_inplace(out, inplace=inplace)
+
+    def _gather(
+        self, gather_map, keep_index=True, nullify=False, check_bounds=True
+    ):
+        """Gather rows of frame specified by indices in `gather_map`.
+
+        Skip bounds checking if check_bounds is False.
+        Set rows to null for all out of bound indices if nullify is `True`.
+        """
+        gather_map = cudf.core.column.as_column(gather_map)
+
+        # TODO: For performance, the check and conversion of gather map should
+        # be done by the caller. This check will be removed in future release.
+        if not is_integer_dtype(gather_map.dtype):
+            gather_map = gather_map.astype("int32")
+
+        if not _gather_map_is_valid(
+            gather_map, len(self), check_bounds, nullify
+        ):
+            raise IndexError("Gather map index is out of bounds.")
+
+        result = self.__class__._from_columns(
+            libcudf.copying.gather(
+                list(self._index._columns + self._columns)
+                if keep_index
+                else list(self._columns),
+                gather_map,
+                nullify=nullify,
+            ),
+            self._column_names,
+            self._index.names if keep_index else None,
+        )
+
+        result._copy_type_metadata(self, include_index=keep_index)
+        return result
+
+    def _positions_from_column_names(
+        self, column_names, offset_by_index_columns=False
+    ):
+        """Map each column name into their positions in the frame.
+
+        Return positions of the provided column names, offset by the number of
+        index columns `offset_by_index_columns` is True. The order of indices
+        returned corresponds to the column order in this Frame.
+        """
+        num_index_columns = (
+            len(self._index._data) if offset_by_index_columns else 0
+        )
+        return [
+            i + num_index_columns
+            for i, name in enumerate(self._column_names)
+            if name in set(column_names)
+        ]
+
+    def drop_duplicates(
+        self,
+        subset=None,
+        keep="first",
+        nulls_are_equal=True,
+        ignore_index=False,
+    ):
+        """
+        Drop duplicate rows in frame.
+
+        subset : list, optional
+            List of columns to consider when dropping rows.
+        keep : ["first", "last", False]
+            "first" will keep the first duplicate entry, "last" will keep the
+            last duplicate entry, and False will drop all duplicates.
+        nulls_are_equal: bool, default True
+            Null elements are considered equal to other null elements.
+        ignore_index: bool, default False
+            If True, the resulting axis will be labeled 0, 1, ..., n - 1.
+        """
+        if subset is None:
+            subset = self._column_names
+        elif (
+            not np.iterable(subset)
+            or isinstance(subset, str)
+            or isinstance(subset, tuple)
+            and subset in self._data.names
+        ):
+            subset = (subset,)
+        diff = set(subset) - set(self._data)
+        if len(diff) != 0:
+            raise KeyError(f"columns {diff} do not exist")
+        subset_cols = [name for name in self._column_names if name in subset]
+        if len(subset_cols) == 0:
+            return self.copy(deep=True)
+
+        keys = self._positions_from_column_names(
+            subset, offset_by_index_columns=not ignore_index
+        )
+        result = self.__class__._from_columns(
+            libcudf.stream_compaction.drop_duplicates(
+                list(self._columns)
+                if ignore_index
+                else list(self._index._columns + self._columns),
+                keys=keys,
+                keep=keep,
+                nulls_are_equal=nulls_are_equal,
+            ),
+            self._column_names,
+            self._index.names if not ignore_index else None,
+        )
+        result._copy_type_metadata(self)
+        return result
 
     def sort_values(
         self,

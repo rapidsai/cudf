@@ -310,6 +310,7 @@ add_library(
   src/io/statistics/parquet_column_statistics.cu
   src/io/text/multibyte_split.cu
   src/io/utilities/column_buffer.cpp
+  src/io/utilities/config_utils.cpp
   src/io/utilities/data_sink.cpp
   src/io/utilities/datasource.cpp
   src/io/utilities/file_io_utilities.cpp
@@ -733,6 +734,27 @@ set(install_code_string
     [=[
 set(ArrowCUDA_DIR "${Arrow_DIR}")
 find_dependency(ArrowCUDA)
+]=]
+)
+
+if(CUDF_ENABLE_ARROW_PARQUET)
+  string(
+    APPEND
+    install_code_string
+    [=[
+  if(NOT Parquet_DIR)
+    set(Parquet_DIR "${Arrow_DIR}")
+  endif()
+  set(ArrowDataset_DIR "${Arrow_DIR}")
+  find_dependency(ArrowDataset)
+  ]=]
+  )
+endif()
+
+string(
+  APPEND
+  install_code_string
+  [=[
 if(testing IN_LIST cudf_FIND_COMPONENTS)
   enable_language(CUDA)
   if(EXISTS "${CMAKE_CURRENT_LIST_DIR}/cudf-testing-dependencies.cmake")

@@ -64,11 +64,12 @@ __device__ inline size_type integer_to_string(IntegerType value, char* d_buffer)
     *d_buffer = '0';
     return 1;
   }
-  bool const is_negative = std::is_signed<IntegerType>::value ? (value < 0) : false;
-  //
+  bool const is_negative = cuda::std::is_signed<IntegerType>() ? (value < 0) : false;
+
   constexpr IntegerType base = 10;
-  constexpr int MAX_DIGITS   = 20;  // largest 64-bit integer is 20 digits
-  char digits[MAX_DIGITS];          // place-holder for digit chars
+  // largest 64-bit integer is 20 digits; largest 128-bit integer is 39 digits
+  constexpr int MAX_DIGITS = cuda::std::numeric_limits<IntegerType>::digits10 + 1;
+  char digits[MAX_DIGITS];  // place-holder for digit chars
   int digits_idx = 0;
   while (value != 0) {
     assert(digits_idx < MAX_DIGITS);
@@ -97,36 +98,25 @@ template <typename IntegerType>
 constexpr size_type count_digits(IntegerType value)
 {
   if (value == 0) return 1;
-  bool is_negative = std::is_signed<IntegerType>::value ? (value < 0) : false;
+  bool const is_negative = cuda::std::is_signed<IntegerType>() ? (value < 0) : false;
   // abs(std::numeric_limits<IntegerType>::min()) is negative;
   // for all integer types, the max() and min() values have the same number of digits
-  value = (value == std::numeric_limits<IntegerType>::min())
-            ? std::numeric_limits<IntegerType>::max()
+  value = (value == cuda::std::numeric_limits<IntegerType>::min())
+            ? cuda::std::numeric_limits<IntegerType>::max()
             : cudf::util::absolute_value(value);
-  // largest 8-byte unsigned value is 18446744073709551615 (20 digits)
-  // clang-format off
-  size_type digits =
-    (value < 10 ? 1 :
-    (value < 100 ? 2 :
-    (value < 1000 ? 3 :
-    (value < 10000 ? 4 :
-    (value < 100000 ? 5 :
-    (value < 1000000 ? 6 :
-    (value < 10000000 ? 7 :
-    (value < 100000000 ? 8 :
-    (value < 1000000000 ? 9 :
-    (value < 10000000000 ? 10 :
-    (value < 100000000000 ? 11 :
-    (value < 1000000000000 ? 12 :
-    (value < 10000000000000 ? 13 :
-    (value < 100000000000000 ? 14 :
-    (value < 1000000000000000 ? 15 :
-    (value < 10000000000000000 ? 16 :
-    (value < 100000000000000000 ? 17 :
-    (value < 1000000000000000000 ? 18 :
-    (value < 10000000000000000000 ? 19 :
-    20)))))))))))))))))));
-  // clang-format on
+
+  auto const digits = [value] {
+    // largest 8-byte  unsigned value is 18446744073709551615 (20 digits)
+    // largest 16-byte unsigned value is 340282366920938463463374607431768211455 (39 digits)
+    auto constexpr max_digits = cuda::std::numeric_limits<IntegerType>::digits10 + 1;
+
+    size_type digits = 1;
+    __int128_t pow10 = 10;
+    for (; digits < max_digits; ++digits, pow10 *= 10)
+      if (value < pow10) break;
+    return digits;
+  }();
+
   return digits + static_cast<size_type>(is_negative);
 }
 

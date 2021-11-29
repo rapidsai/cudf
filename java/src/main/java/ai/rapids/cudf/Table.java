@@ -27,6 +27,8 @@ import ai.rapids.cudf.ast.CompiledExpression;
 
 import java.io.File;
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.MathContext;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.*;
@@ -329,10 +331,12 @@ public final class Table implements AutoCloseable {
    * @param usingNumPyTypes   whether the parser should implicitly promote TIMESTAMP
    *                          columns to TIMESTAMP_MILLISECONDS for compatibility with NumPy.
    * @param timeUnit          return type of TimeStamp in units
+   * @param decimal128Columns name of the columns which are read as Decimal128 rather than Decimal64
    */
   private static native long[] readORC(String[] filterColumnNames,
                                        String filePath, long address, long length,
-                                       boolean usingNumPyTypes, int timeUnit) throws CudfException;
+                                       boolean usingNumPyTypes, int timeUnit,
+                                       String[] decimal128Columns) throws CudfException;
 
   /**
    * Setup everything to write ORC formatted data to a file.
@@ -881,7 +885,9 @@ public final class Table implements AutoCloseable {
    */
   public static Table readORC(ORCOptions opts, File path) {
     return new Table(readORC(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0, opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId()));
+        path.getAbsolutePath(), 0, 0,
+        opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
+        opts.getDecimal128Columns()));
   }
 
   /**
@@ -941,8 +947,9 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(readORC(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len, opts.usingNumPyTypes(),
-        opts.timeUnit().typeId.getNativeId()));
+        null, buffer.getAddress() + offset, len,
+        opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
+        opts.getDecimal128Columns()));
   }
 
   private static class ParquetTableWriter implements TableWriter {
@@ -3808,6 +3815,16 @@ public final class Table implements AutoCloseable {
       return this;
     }
 
+    public TestBuilder decimal128Column(int scale, RoundingMode mode, BigInteger... values) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL128, scale)));
+      BigDecimal[] data = Arrays.stream(values).map((x) -> {
+        if (x == null) return null;
+        return new BigDecimal(x, scale, new MathContext(38, mode));
+      }).toArray(BigDecimal[]::new);
+      typeErasedData.add(data);
+      return this;
+    }
+
     private static ColumnVector from(DType type, Object dataArray) {
       ColumnVector ret = null;
       switch (type.typeId) {
@@ -3852,6 +3869,7 @@ public final class Table implements AutoCloseable {
           break;
         case DECIMAL32:
         case DECIMAL64:
+        case DECIMAL128:
           int scale = type.getScale();
           if (dataArray instanceof Integer[]) {
             BigDecimal[] data = Arrays.stream(((Integer[]) dataArray))

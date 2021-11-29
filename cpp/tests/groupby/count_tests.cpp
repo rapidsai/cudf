@@ -169,12 +169,12 @@ TEST_F(groupby_count_string_test, basic)
 // clang-format on
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_SUITE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, GroupByCount)
+TYPED_TEST(FixedPointTestAllReps, GroupByCount)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
