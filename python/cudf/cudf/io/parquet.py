@@ -211,7 +211,7 @@ def _process_row_groups(paths, fs, filters=None, row_groups=None):
     return file_list, row_groups
 
 
-def _get_byte_ranges(file_list, row_groups, columns, fs):
+def _get_byte_ranges(file_list, row_groups, columns, fs, **kwargs):
 
     # This utility is used to collect the footer metadata
     # from a parquet file. This metadata is used to define
@@ -244,7 +244,7 @@ def _get_byte_ranges(file_list, row_groups, columns, fs):
         #
         # This "sample size" can be tunable, but should
         # always be >= 8 bytes (so we can read the footer size)
-        tail_size = min(32_000, file_size)
+        tail_size = min(kwargs.get("footer_sample_size", 32_000), file_size,)
         if fs is None:
             path.seek(file_size - tail_size)
             footer_sample = path.read(tail_size)
@@ -385,7 +385,7 @@ def read_parquet(
             )
         ):
             byte_ranges, footers, file_sizes = _get_byte_ranges(
-                filepath_or_buffer, row_groups, columns, fs,
+                filepath_or_buffer, row_groups, columns, fs, **kwargs
             )
 
     # Only use fsspec.parquet if the fs is remote
@@ -471,6 +471,8 @@ def to_parquet(
     statistics="ROWGROUP",
     metadata_file_path=None,
     int96_timestamps=False,
+    row_group_size_bytes=None,
+    row_group_size_rows=None,
     *args,
     **kwargs,
 ):
@@ -510,6 +512,8 @@ def to_parquet(
                     statistics=statistics,
                     metadata_file_path=metadata_file_path,
                     int96_timestamps=int96_timestamps,
+                    row_group_size_bytes=row_group_size_bytes,
+                    row_group_size_rows=row_group_size_rows,
                 )
         else:
             write_parquet_res = libparquet.write_parquet(
@@ -520,6 +524,8 @@ def to_parquet(
                 statistics=statistics,
                 metadata_file_path=metadata_file_path,
                 int96_timestamps=int96_timestamps,
+                row_group_size_bytes=row_group_size_bytes,
+                row_group_size_rows=row_group_size_rows,
             )
 
         return write_parquet_res

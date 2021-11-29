@@ -42,6 +42,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/traits.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <hash/concurrent_unordered_map.cuh>
 
@@ -50,6 +51,8 @@
 #include <memory>
 #include <unordered_set>
 #include <utility>
+
+#include <cuda/std/atomic>
 
 namespace cudf {
 namespace groupby {
@@ -390,7 +393,7 @@ void sparse_to_dense_results(table_view const& keys,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
-  auto row_bitmask{bitmask_and(keys, stream, rmm::mr::get_current_device_resource())};
+  auto row_bitmask = bitmask_and(keys, stream, rmm::mr::get_current_device_resource()).first;
   bool skip_key_rows_with_nulls = keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
   bitmask_type const* row_bitmask_ptr =
     skip_key_rows_with_nulls ? static_cast<bitmask_type*>(row_bitmask.data()) : nullptr;
@@ -502,7 +505,7 @@ void compute_single_pass_aggs(table_view const& keys,
   bool skip_key_rows_with_nulls = keys_have_nulls and include_null_keys == null_policy::EXCLUDE;
 
   auto row_bitmask =
-    skip_key_rows_with_nulls ? cudf::detail::bitmask_and(keys, stream) : rmm::device_buffer{};
+    skip_key_rows_with_nulls ? cudf::detail::bitmask_and(keys, stream).first : rmm::device_buffer{};
   thrust::for_each_n(
     rmm::exec_policy(stream),
     thrust::make_counting_iterator(0),
@@ -632,11 +635,23 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
  */
 bool can_use_hash_groupby(table_view const& keys, host_span<aggregation_request const> requests)
 {
-  return std::all_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
-    return std::all_of(r.aggregations.begin(), r.aggregations.end(), [](auto const& a) {
-      return is_hash_aggregation(a->kind);
+  auto const all_hash_aggregations =
+    std::all_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
+      return cudf::has_atomic_support(r.values.type()) and
+             std::all_of(r.aggregations.begin(), r.aggregations.end(), [](auto const& a) {
+               return is_hash_aggregation(a->kind);
+             });
     });
-  });
+
+  // Currently, structs are not supported in any of hash-based aggregations.
+  // Therefore, if any request contains structs then we must fallback to sort-based aggregations.
+  // TODO: Support structs in hash-based aggregations.
+  auto const has_struct =
+    std::all_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
+      return r.values.type().id() == type_id::STRUCT;
+    });
+
+  return all_hash_aggregations && !has_struct;
 }
 
 // Hash-based groupby

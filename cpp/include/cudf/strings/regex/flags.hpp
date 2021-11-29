@@ -33,9 +33,9 @@ namespace strings {
  * and to match the Python flag values.
  */
 enum regex_flags : uint32_t {
-  DEFAULT   = 0,  /// default
-  MULTILINE = 8,  /// the '^' and '$' honor new-line characters
-  DOTALL    = 16  /// the '.' matching includes new-line characters
+  DEFAULT   = 0,  ///< default
+  MULTILINE = 8,  ///< the '^' and '$' honor new-line characters
+  DOTALL    = 16  ///< the '.' matching includes new-line characters
 };
 
 /**

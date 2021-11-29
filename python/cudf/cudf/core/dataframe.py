@@ -40,7 +40,7 @@ from cudf.api.types import (
     is_string_dtype,
     is_struct_dtype,
 )
-from cudf.core import column, reshape
+from cudf.core import column, df_protocol, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     as_column,
@@ -59,6 +59,7 @@ from cudf.core.indexed_frame import (
     _get_label_range_or_mask,
     _indices_from_labels,
 )
+from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
@@ -597,9 +598,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             if is_list_like(data):
                 if len(data) > 0 and is_scalar(data[0]):
-                    new_df = self._from_columns(
-                        [data], index=index, columns=columns
-                    )
+                    if columns is not None:
+                        data = dict(zip(columns, [data]))
+                    else:
+                        data = dict(enumerate([data]))
+                    new_df = DataFrame(data=data, index=index)
+
                     self._data = new_df._data
                     self.index = new_df._index
                     self.columns = new_df.columns
@@ -1138,11 +1142,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         self._drop_column(name)
 
-    def __sizeof__(self):
-        columns = sum(col.__sizeof__() for col in self._data.columns)
-        index = self._index.__sizeof__()
-        return columns + index
-
     def _slice(self: T, arg: slice) -> T:
         """
         _slice : slice the frame as per the arg
@@ -1253,12 +1252,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> df['object'].astype('category').memory_usage(deep=True)
         5048
         """
+        if deep:
+            warnings.warn(
+                "The deep parameter is ignored and is only included "
+                "for pandas compatibility."
+            )
         ind = list(self.columns)
-        sizes = [col._memory_usage(deep=deep) for col in self._data.columns]
+        sizes = [col.memory_usage() for col in self._data.columns]
         if index:
             ind.append("Index")
             ind = cudf.Index(ind, dtype="str")
-            sizes.append(self.index.memory_usage(deep=deep))
+            sizes.append(self.index.memory_usage())
         return Series(sizes, index=ind)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
@@ -2066,6 +2070,18 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """Iterate over column names and series pairs"""
         for k in self:
             yield (k, self[k])
+
+    def equals(self, other, **kwargs):
+        ret = super().equals(other)
+        # If all other checks matched, validate names.
+        if ret:
+            for self_name, other_name in zip(
+                self._data.names, other._data.names
+            ):
+                if self_name != other_name:
+                    ret = False
+                    break
+        return ret
 
     @property
     def iat(self):
@@ -3747,11 +3763,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 FutureWarning,
             )
 
-        lhs = self
-        rhs = other
-
-        df = lhs.merge(
-            rhs,
+        df = self.merge(
+            other,
             left_index=True,
             right_index=True,
             how=how,
@@ -3759,7 +3772,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             sort=sort,
         )
         df.index.name = (
-            None if lhs.index.name != rhs.index.name else lhs.index.name
+            None if self.index.name != other.index.name else self.index.name
         )
         return df
 
@@ -3799,13 +3812,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "groupby() requires either by or level to be specified."
             )
 
-        return DataFrameGroupBy(
-            self,
-            by=by,
-            level=level,
-            as_index=as_index,
-            dropna=dropna,
-            sort=sort,
+        return (
+            DataFrameResampler(self, by=by)
+            if isinstance(by, cudf.Grouper) and by.freq
+            else DataFrameGroupBy(
+                self,
+                by=by,
+                level=level,
+                as_index=as_index,
+                dropna=dropna,
+                sort=sort,
+            )
         )
 
     def query(self, expr, local_dict=None):
@@ -3931,16 +3948,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Simple function of a single variable which could be NA
 
-        >>> from cudf.core.udf.pipeline import nulludf
-        >>> @nulludf
-        ... def f(x):
-        ...     if x is cudf.NA:
+        >>> def f(row):
+        ...     if row['a'] is cudf.NA:
         ...             return 0
         ...     else:
-        ...             return x + 1
+        ...             return row['a'] + 1
         ...
         >>> df = cudf.DataFrame({'a': [1, cudf.NA, 3]})
-        >>> df.apply(lambda row: f(row['a']))
+        >>> df.apply(f, axis=1)
         0    2
         1    0
         2    4
@@ -3949,15 +3964,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Function of multiple variables will operate in
         a null aware manner
 
-        >>> @nulludf
-        ... def f(x, y):
-        ...     return x - y
+        >>> def f(row):
+        ...     return row['a'] - row['b']
         ...
         >>> df = cudf.DataFrame({
         ...     'a': [1, cudf.NA, 3, cudf.NA],
         ...     'b': [5, 6, cudf.NA, cudf.NA]
         ... })
-        >>> df.apply(lambda row: f(row['a'], row['b']))
+        >>> df.apply(f)
         0      -4
         1    <NA>
         2    <NA>
@@ -3966,18 +3980,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Functions may conditionally return NA as in pandas
 
-        >>> @nulludf
-        ... def f(x, y):
-        ...     if x + y > 3:
+        >>> def f(row):
+        ...     if row['a'] + row['b'] > 3:
         ...             return cudf.NA
         ...     else:
-        ...             return x + y
+        ...             return row['a'] + row['b']
         ...
         >>> df = cudf.DataFrame({
         ...     'a': [1, 2, 3],
         ...     'b': [2, 1, 1]
         ... })
-        >>> df.apply(lambda row: f(row['a'], row['b']))
+        >>> df.apply(f, axis=1)
         0       3
         1       3
         2    <NA>
@@ -3986,15 +3999,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Mixed types are allowed, but will return the common
         type, rather than object as in pandas
 
-        >>> @nulludf
-        ... def f(x, y):
-        ...     return x + y
+        >>> def f(row):
+        ...     return row['a'] + row['b']
         ...
         >>> df = cudf.DataFrame({
         ...     'a': [1, 2, 3],
         ...     'b': [0.5, cudf.NA, 3.14]
         ... })
-        >>> df.apply(lambda row: f(row['a'], row['b']))
+        >>> df.apply(f, axis=1)
         0     1.5
         1    <NA>
         2    6.14
@@ -4004,17 +4016,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         result will be promoted to a safe type regardless of
         the data
 
-        >>> @nulludf
-        ... def f(x):
-        ...     if x > 3:
-        ...             return x
+        >>> def f(row):
+        ...     if row['a'] > 3:
+        ...             return row['a']
         ...     else:
         ...             return 1.5
         ...
         >>> df = cudf.DataFrame({
         ...     'a': [1, 3, 5]
         ... })
-        >>> df.apply(lambda row: f(row['a']))
+        >>> df.apply(f, axis=1)
         0    1.5
         1    1.5
         2    5.0
@@ -4022,8 +4033,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Ops against N columns are supported generally
 
-        >>> @nulludf
-        ... def f(v, w, x, y, z):
+        >>> def f(row):
+        ...     v, w, x, y, z = (
+        ...         row['a'], row['b'], row['c'], row['d'], row['e']
+        ...     )
         ...     return x + (y - (z / w)) % v
         ...
         >>> df = cudf.DataFrame({
@@ -4033,36 +4046,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         ...     'd': [8, 7, 8],
         ...     'e': [7, 1, 6]
         ... })
-        >>> df.apply(
-        ...     lambda row: f(
-        ...             row['a'],
-        ...             row['b'],
-        ...             row['c'],
-        ...             row['d'],
-        ...             row['e']
-        ...     )
-        ... )
+        >>> df.apply(f, axis=1)
         0    <NA>
         1     4.8
         2     5.0
         dtype: float64
-
-        Notes
-        -----
-        Available only using cuda 11.1+ due to particular required
-        runtime compilation features
         """
-
-        for dtype in self.dtypes:
-            if (
-                isinstance(dtype, cudf.core.dtypes._BaseDtype)
-                or dtype == "object"
-            ):
-                raise TypeError(
-                    "DataFrame.apply currently only "
-                    "supports non decimal numeric types"
-                )
-
         if axis != 1:
             raise ValueError(
                 "DataFrame.apply currently only supports row wise ops"
@@ -4737,7 +4726,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         b     object
         dtype: object
         """
-
         out_data = {}
         out_index = self.index.to_pandas()
 
@@ -5104,18 +5092,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             df._index = as_index(index)
         return df
-
-    @classmethod
-    def _from_columns(cls, cols, index=None, columns=None):
-        """
-        Construct a DataFrame from a list of Columns
-        """
-        if columns is not None:
-            data = dict(zip(columns, cols))
-        else:
-            data = dict(enumerate(cols))
-
-        return cls(data=data, index=index,)
 
     def interpolate(
         self,
@@ -6353,6 +6329,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return super()._explode(column, ignore_index)
 
+    def __dataframe__(
+        self, nan_as_null: bool = False, allow_copy: bool = True
+    ):
+        return df_protocol.__dataframe__(
+            self, nan_as_null=nan_as_null, allow_copy=allow_copy
+        )
+
+
+def from_dataframe(df, allow_copy=False):
+    return df_protocol.from_dataframe(df, allow_copy=allow_copy)
+
 
 def make_binop_func(op, postprocess=None):
     # This function is used to wrap binary operations in Frame with an
@@ -6380,7 +6367,7 @@ def make_binop_func(op, postprocess=None):
     # __wrapped__ attributes to `wrapped_func`. Cpython looks up the signature
     # string of a function by recursively delving into __wrapped__ until
     # it hits the first function that has __signature__ attribute set. To make
-    # the signature stirng of `wrapper` matches with its actual parameter list,
+    # the signature string of `wrapper` matches with its actual parameter list,
     # we directly set the __signature__ attribute of `wrapper` below.
 
     new_sig = inspect.signature(

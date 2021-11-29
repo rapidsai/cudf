@@ -38,7 +38,7 @@ struct groupby_count_scan_test : public cudf::test::BaseFixture {
   using result_wrapper = fixed_width_column_wrapper<R, int32_t>;
 };
 
-TYPED_TEST_CASE(groupby_count_scan_test, cudf::test::AllTypes);
+TYPED_TEST_SUITE(groupby_count_scan_test, cudf::test::AllTypes);
 
 TYPED_TEST(groupby_count_scan_test, basic)
 {
@@ -156,12 +156,12 @@ TEST_F(groupby_count_scan_string_test, basic)
 }
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, GroupByCountScan)
+TYPED_TEST(FixedPointTestAllReps, GroupByCountScan)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;

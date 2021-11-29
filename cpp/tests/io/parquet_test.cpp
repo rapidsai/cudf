@@ -218,13 +218,13 @@ struct ParquetWriterTimestampTypeTest : public ParquetWriterTest {
 // Declare typed test cases
 // TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
 using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
-TYPED_TEST_CASE(ParquetWriterNumericTypeTest, SupportedTypes);
+TYPED_TEST_SUITE(ParquetWriterNumericTypeTest, SupportedTypes);
 using SupportedChronoTypes = cudf::test::Concat<cudf::test::ChronoTypes, cudf::test::DurationTypes>;
-TYPED_TEST_CASE(ParquetWriterChronoTypeTest, SupportedChronoTypes);
+TYPED_TEST_SUITE(ParquetWriterChronoTypeTest, SupportedChronoTypes);
 // TODO: debug truncation errors for `timestamp_ns` and overflow errors for `timestamp_s` , see
 // issue #9393.
 using SupportedTimestampTypes = cudf::test::Types<cudf::timestamp_ms, cudf::timestamp_us>;
-TYPED_TEST_CASE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
+TYPED_TEST_SUITE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
 
 // Base test fixture for chunked writer tests
 struct ParquetChunkedWriterTest : public cudf::test::BaseFixture {
@@ -237,7 +237,7 @@ struct ParquetChunkedWriterNumericTypeTest : public ParquetChunkedWriterTest {
 };
 
 // Declare typed test cases
-TYPED_TEST_CASE(ParquetChunkedWriterNumericTypeTest, SupportedTypes);
+TYPED_TEST_SUITE(ParquetChunkedWriterNumericTypeTest, SupportedTypes);
 
 namespace {
 // Generates a vector of uniform random values of type T
@@ -3054,6 +3054,28 @@ TEST_F(ParquetReaderTest, EmptyOutput)
   auto result = cudf_io::read_parquet(read_args);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+}
+
+TEST_F(ParquetWriterTest, RowGroupSizeInvalid)
+{
+  const auto unused_table = std::make_unique<table>();
+  std::vector<char> out_buffer;
+
+  EXPECT_THROW(
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info(&out_buffer), unused_table->view())
+      .row_group_size_rows(4999),
+    cudf::logic_error);
+  EXPECT_THROW(
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info(&out_buffer), unused_table->view())
+      .row_group_size_bytes(511 << 10),
+    cudf::logic_error);
+
+  EXPECT_THROW(cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info(&out_buffer))
+                 .row_group_size_rows(4999),
+               cudf::logic_error);
+  EXPECT_THROW(cudf_io::chunked_parquet_writer_options::builder(cudf_io::sink_info(&out_buffer))
+                 .row_group_size_bytes(511 << 10),
+               cudf::logic_error);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

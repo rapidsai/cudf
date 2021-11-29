@@ -968,8 +968,13 @@ def test_dataframe_to_cupy():
         df[k] = np.random.random(nelem)
 
     # Check all columns
+    mat = df.to_cupy()
+    assert mat.shape == (nelem, 4)
+    assert mat.strides == (8, 984)
+
     mat = df.to_numpy()
     assert mat.shape == (nelem, 4)
+    assert mat.strides == (8, 984)
     for i, k in enumerate(df.columns):
         np.testing.assert_array_equal(df[k].to_numpy(), mat[:, i])
 
@@ -3649,19 +3654,6 @@ def test_empty_dataframe_any(axis):
     assert_eq(got, expected, check_index_type=False)
 
 
-@pytest.mark.parametrize("indexed", [False, True])
-def test_dataframe_sizeof(indexed):
-    rows = int(1e6)
-    index = list(i for i in range(rows)) if indexed else None
-
-    gdf = cudf.DataFrame({"A": [8] * rows, "B": [32] * rows}, index=index)
-
-    for c in gdf._data.columns:
-        assert gdf._index.__sizeof__() == gdf._index.__sizeof__()
-    cols_sizeof = sum(c.__sizeof__() for c in gdf._data.columns)
-    assert gdf.__sizeof__() == (gdf._index.__sizeof__() + cols_sizeof)
-
-
 @pytest.mark.parametrize("a", [[], ["123"]])
 @pytest.mark.parametrize("b", ["123", ["123"]])
 @pytest.mark.parametrize(
@@ -5394,8 +5386,8 @@ def test_memory_usage_cat():
     gdf = cudf.from_pandas(df)
 
     expected = (
-        gdf.B._column.categories.__sizeof__()
-        + gdf.B._column.codes.__sizeof__()
+        gdf.B._column.categories.memory_usage()
+        + gdf.B._column.codes.memory_usage()
     )
 
     # Check cat column
@@ -5408,15 +5400,14 @@ def test_memory_usage_cat():
 def test_memory_usage_list():
     df = cudf.DataFrame({"A": [[0, 1, 2, 3], [4, 5, 6], [7, 8], [9]]})
     expected = (
-        df.A._column.offsets._memory_usage()
-        + df.A._column.elements._memory_usage()
+        df.A._column.offsets.memory_usage()
+        + df.A._column.elements.memory_usage()
     )
     assert expected == df.A.memory_usage()
 
 
-@pytest.mark.xfail
-def test_memory_usage_multi():
-    rows = int(100)
+@pytest.mark.parametrize("rows", [10, 100])
+def test_memory_usage_multi(rows):
     deep = True
     df = pd.DataFrame(
         {
@@ -5426,7 +5417,6 @@ def test_memory_usage_multi():
         }
     ).set_index(["B", "C"])
     gdf = cudf.from_pandas(df)
-
     # Assume MultiIndex memory footprint is just that
     # of the underlying columns, levels, and codes
     expect = rows * 16  # Source Columns
@@ -7979,7 +7969,9 @@ def test_dataframe_mode(df, numeric_only, dropna):
     assert_eq(expected, actual, check_dtype=False)
 
 
-@pytest.mark.parametrize("lhs, rhs", [("a", "a"), ("a", "b"), (1, 1.0)])
+@pytest.mark.parametrize(
+    "lhs, rhs", [("a", "a"), ("a", "b"), (1, 1.0), (None, None), (None, "a")]
+)
 def test_equals_names(lhs, rhs):
     lhs = cudf.DataFrame({lhs: [1, 2]})
     rhs = cudf.DataFrame({rhs: [1, 2]})

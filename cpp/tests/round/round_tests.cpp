@@ -40,9 +40,9 @@ struct RoundTestsFloatingPointTypes : public cudf::test::BaseFixture {
 
 using IntegerTypes = cudf::test::Types<int16_t, int32_t, int64_t>;
 
-TYPED_TEST_CASE(RoundTestsIntegerTypes, IntegerTypes);
-TYPED_TEST_CASE(RoundTestsFixedPointTypes, cudf::test::FixedPointTypes);
-TYPED_TEST_CASE(RoundTestsFloatingPointTypes, cudf::test::FloatingPointTypes);
+TYPED_TEST_SUITE(RoundTestsIntegerTypes, IntegerTypes);
+TYPED_TEST_SUITE(RoundTestsFixedPointTypes, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(RoundTestsFloatingPointTypes, cudf::test::FloatingPointTypes);
 
 TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfUpZero)
 {
@@ -280,6 +280,20 @@ TYPED_TEST(RoundTestsFixedPointTypes, SimpleFixedPointTestHalfNegEven3)
   auto const input    = fp_wrapper{{1, 2, 3}, scale_type{2}};
   auto const expected = fp_wrapper{{10, 20, 30}, scale_type{1}};
   auto const result   = cudf::round(input, -1, cudf::rounding_method::HALF_EVEN);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TYPED_TEST(RoundTestsFixedPointTypes, TestForBlog)
+{
+  using namespace numeric;
+  using decimalXX  = TypeParam;
+  using RepType    = cudf::device_storage_type_t<decimalXX>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const input    = fp_wrapper{{25649999}, scale_type{-5}};
+  auto const expected = fp_wrapper{{256}, scale_type{0}};
+  auto const result   = cudf::round(input);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
@@ -585,6 +599,54 @@ TEST_F(RoundTests, Int64AtBoundaryHalfUp)
   auto const expected5 = fw_wrapper{9000000000000000000};
   auto const result5   = cudf::round(input, -18, cudf::rounding_method::HALF_UP);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected5, result5->view());
+}
+
+TEST_F(RoundTests, FixedPoint128HalfUp)
+{
+  using namespace numeric;
+  using RepType    = cudf::device_storage_type_t<decimal128>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  {
+    auto const input    = fp_wrapper{{-160714515306}, scale_type{-13}};
+    auto const expected = fp_wrapper{{-16071451531}, scale_type{-12}};
+    auto const result   = cudf::round(input, 12, cudf::rounding_method::HALF_UP);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+}
+
+TEST_F(RoundTests, FixedPointAtBoundaryTestHalfUp)
+{
+  using namespace numeric;
+  using RepType    = cudf::device_storage_type_t<decimal128>;
+  using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
+
+  auto const m = std::numeric_limits<RepType>::max();  // 170141183460469231731687303715884105727
+
+  {
+    auto const input    = fp_wrapper{{m}, scale_type{0}};
+    auto const expected = fp_wrapper{{m / 100000}, scale_type{5}};
+    auto const result   = cudf::round(input, -5, cudf::rounding_method::HALF_UP);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+
+  {
+    auto const input    = fp_wrapper{{m}, scale_type{0}};
+    auto const expected = fp_wrapper{{m / 100000000000}, scale_type{11}};
+    auto const result   = cudf::round(input, -11, cudf::rounding_method::HALF_UP);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+
+  {
+    auto const input    = fp_wrapper{{m}, scale_type{0}};
+    auto const expected = fp_wrapper{{m / 1000000000000000}, scale_type{15}};
+    auto const result   = cudf::round(input, -15, cudf::rounding_method::HALF_UP);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
 }
 
 TEST_F(RoundTests, BoolTestHalfUp)

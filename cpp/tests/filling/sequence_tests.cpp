@@ -38,7 +38,7 @@ class SequenceTestFixture : public cudf::test::BaseFixture {
 
 using NumericTypesNoBool = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
-TYPED_TEST_CASE(SequenceTypedTestFixture, NumericTypesNoBool);
+TYPED_TEST_SUITE(SequenceTypedTestFixture, NumericTypesNoBool);
 
 TYPED_TEST(SequenceTypedTestFixture, Incrementing)
 {

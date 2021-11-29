@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -452,6 +453,24 @@ public final class ColumnVector extends ColumnView {
   }
 
   /**
+   * Create a LIST column from the current column and a given offsets column. The output column will
+   * contain lists having elements that are copied from the current column and their sizes are
+   * determined by the given offsets.
+   *
+   * Note that the caller is responsible to make sure the given offsets column is of type INT32 and
+   * it contains valid indices to create a LIST column. There will not be any validity check for
+   * these offsets during calling to this function. If the given offsets are invalid, we may have
+   * bad memory accesses and/or data corruption.
+   *
+   * @param rows the number of rows to create.
+   * @param offsets the offsets pointing to row indices of the current column to create an output
+   *                LIST column.
+   */
+  public ColumnVector makeListFromOffsets(long rows, ColumnView offsets) {
+    return new ColumnVector(makeListFromOffsets(getNativeView(), offsets.getNativeView(), rows));
+  }
+
+  /**
    * Create a new vector of length rows, starting at the initialValue and going by step each time.
    * Only numeric types are supported.
    * @param initialValue the initial value to start at.
@@ -777,6 +796,9 @@ public final class ColumnVector extends ColumnView {
   private static native long fromScalar(long scalarHandle, int rowCount) throws CudfException;
 
   private static native long makeList(long[] handles, long typeHandle, int scale, long rows)
+      throws CudfException;
+
+  private static native long makeListFromOffsets(long childHandle, long offsetsHandle, long rows)
       throws CudfException;
 
   private static native long concatenate(long[] viewHandles) throws CudfException;
@@ -1367,6 +1389,18 @@ public final class ColumnVector extends ColumnView {
   public static ColumnVector decimalFromDoubles(DType type, RoundingMode mode, double... values) {
     try (HostColumnVector host = HostColumnVector.decimalFromDoubles(type, mode, values)) {
       return host.copyToDevice();
+    }
+  }
+
+
+  /**
+   * Create a new decimal vector from BigIntegers
+   * Compared with scale of [[java.math.BigDecimal]], the scale here represents the opposite meaning.
+   */
+  public static ColumnVector decimalFromBigInt(int scale, BigInteger... values) {
+    try (HostColumnVector host = HostColumnVector.decimalFromBigIntegers(scale, values)) {
+      ColumnVector columnVector = host.copyToDevice();
+      return columnVector;
     }
   }
 

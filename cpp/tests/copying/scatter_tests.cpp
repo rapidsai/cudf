@@ -146,7 +146,7 @@ class ScatterIndexTypeTests : public cudf::test::BaseFixture {
 };
 
 using IndexTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t>;
-TYPED_TEST_CASE(ScatterIndexTypeTests, IndexTypes);
+TYPED_TEST_SUITE(ScatterIndexTypeTests, IndexTypes);
 
 // Throw logic error if check_bounds is set and index is out of bounds
 TYPED_TEST(ScatterIndexTypeTests, ScatterOutOfBounds)
@@ -234,7 +234,7 @@ class ScatterInvalidIndexTypeTests : public cudf::test::BaseFixture {
 using InvalidIndexTypes = cudf::test::Concat<cudf::test::Types<float, double, bool>,
                                              cudf::test::ChronoTypes,
                                              cudf::test::FixedPointTypes>;
-TYPED_TEST_CASE(ScatterInvalidIndexTypeTests, InvalidIndexTypes);
+TYPED_TEST_SUITE(ScatterInvalidIndexTypeTests, InvalidIndexTypes);
 
 // Throw logic error if scatter map column has invalid data type
 TYPED_TEST(ScatterInvalidIndexTypeTests, ScatterInvalidIndexType)
@@ -273,7 +273,7 @@ template <typename T>
 class ScatterDataTypeTests : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(ScatterDataTypeTests, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(ScatterDataTypeTests, cudf::test::FixedWidthTypes);
 
 // Empty scatter map returns copy of input
 TYPED_TEST(ScatterDataTypeTests, EmptyScatterMap)
@@ -577,7 +577,7 @@ template <typename T>
 class BooleanMaskScatter : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(BooleanMaskScatter, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(BooleanMaskScatter, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(BooleanMaskScatter, WithNoNullElementsInTarget)
 {
@@ -744,7 +744,7 @@ struct BooleanMaskScalarScatter : public cudf::test::BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(BooleanMaskScalarScatter, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(BooleanMaskScalarScatter, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(BooleanMaskScalarScatter, WithNoNullElementsInTarget)
 {
@@ -899,14 +899,14 @@ TEST_F(BooleanMaskScatterScalarFails, NumberOfColumnAndScalarMismatch)
 }
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
 template <typename T>
 using wrapper = cudf::test::fixed_width_column_wrapper<T>;
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointScatter)
+TYPED_TEST(FixedPointTestAllReps, FixedPointScatter)
 {
   using namespace numeric;
   using decimalXX = TypeParam;

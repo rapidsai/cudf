@@ -38,7 +38,7 @@ template <typename T>
 struct SegmentedSort : public BaseFixture {
 };
 
-TYPED_TEST_CASE(SegmentedSort, NumericTypes);
+TYPED_TEST_SUITE(SegmentedSort, NumericTypes);
 using SegmentedSortInt = SegmentedSort<int>;
 
 /* Summary of test cases.
