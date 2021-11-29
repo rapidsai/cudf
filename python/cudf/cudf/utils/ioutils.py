@@ -1513,6 +1513,34 @@ def _prepare_filters(filters):
     return filters
 
 
+def _filters_to_query(filters):
+    query_string = ""
+    local_dict = {}
+
+    is_first_conjunction = True
+    for conjunction in filters:
+        # Generate or
+        if is_first_conjunction:
+            is_first_conjunction = False
+        else:
+            query_string += " or "
+
+        # Generate string for conjunction
+        query_string += "("
+        for i, (col, op, val) in enumerate(conjunction):
+            if i > 0:
+                query_string += " and "
+            query_string += "("
+            # TODO: Add backticks around column name when cuDF query
+            # function supports them
+            query_string += col + " " + op + " @var" + str(i)
+            query_string += ")"
+            local_dict["var" + str(i)] = val
+        query_string += ")"
+
+    return query_string, local_dict
+
+
 def _ensure_filesystem(passed_filesystem, path):
     if passed_filesystem is None:
         return get_fs_token_paths(path[0] if isinstance(path, list) else path)[

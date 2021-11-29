@@ -288,6 +288,7 @@ def read_orc(
     decimal_cols_as_float=None,
     timestamp_type=None,
     use_python_file_object=True,
+    filtering_columns_first=False,
     **kwargs,
 ):
     """{docstring}"""
@@ -336,7 +337,9 @@ def read_orc(
         else:
             filepaths_or_buffers.append(tmp_source)
 
-    if filters is not None:
+    # Read in metadata statistics and apply filters as long as we aren't using
+    # the filters to read in filtering columns first
+    if filters is not None and not filtering_columns_first:
         selected_stripes = _filter_stripes(
             filters, filepaths_or_buffers, stripes, skiprows, num_rows
         )
@@ -347,8 +350,49 @@ def read_orc(
         else:
             stripes = selected_stripes
 
+    # Determine whether we should actually read in filtering columns first
+    if filtering_columns_first:
+        # Determine which columns are filtering vs. remaining
+        filters = ioutils._prepare_filters(filters)
+        query_string, local_dict = ioutils._filters_to_query(filters)
+        columns_in_predicate = list(
+            {col for conjunction in filters for (col, _, _) in conjunction}
+        )
+        all_columns = columns
+        columns = [c for c in all_columns if c not in columns_in_predicate]
+
+        # Don't read in filtering columns first if we don't have any remaining
+        # columns
+        if len(columns_in_predicate) == 0:
+            filters = None
+            filtering_columns_first = False
+        elif len(columns) == 0:
+            filtering_columns_first = False 
+    
+    # Read in filtering columns first
+    if filtering_columns_first:
+        # Read in only the columns relevant to the filtering
+        filtered_df = read_orc(
+            filepaths_or_buffers,
+            engine=engine,
+            columns=columns_in_predicate,
+            filters=None,
+            stripes=stripes,
+            skiprows=skiprows,
+            num_rows=num_rows,
+            use_index=use_index,
+            decimal_cols_as_float=decimal_cols_as_float,
+            timestamp_type=timestamp_type,
+            use_python_file_object=use_python_file_object,
+            filtering_columns_first=False,
+            **kwargs
+        )
+
+        if len(filtered_df.query(query_string, local_dict=local_dict)) == 0:
+            return _make_empty_df(filepaths_or_buffers[0], columns)
+
     if engine == "cudf":
-        return DataFrame._from_data(
+        df = DataFrame._from_data(
             *liborc.read_orc(
                 filepaths_or_buffers,
                 columns,
@@ -387,7 +431,18 @@ def read_orc(
             pa_table = orc_file.read(columns=columns)
         df = cudf.DataFrame.from_arrow(pa_table)
 
-    return df
+    # If we read filtering columns first, return a concatenation of those
+    # filtered columns with the remaining columns.
+    if filtering_columns_first:
+        reordering_columns_required = (
+            columns_in_predicate + columns != all_columns
+        )
+        if reordering_columns_required:
+            return cudf.concat([filtered_df, df], axis=1)[all_columns]
+        else:
+            return cudf.concat([filtered_df, df], axis=1)
+    else:
+        return df
 
 
 @ioutils.doc_to_orc()
