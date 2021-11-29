@@ -2486,59 +2486,21 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         df.index = idx
         return df if not inplace else None
 
+    @docutils.doc_dataframe_reset_index()
     def reset_index(
         self, level=None, drop=False, inplace=False, col_level=0, col_fill=""
     ):
-        """
-        Reset the index.
-
-        Reset the index of the DataFrame, and use the default one instead.
-
-        Parameters
-        ----------
-        drop : bool, default False
-            Do not try to insert index into dataframe columns. This resets
-            the index to the default integer index.
-        inplace : bool, default False
-            Modify the DataFrame in place (do not create a new object).
-
-        Returns
-        -------
-        DataFrame or None
-            DataFrame with the new index or None if ``inplace=True``.
-
-        Examples
-        --------
-        >>> df = cudf.DataFrame([('bird', 389.0),
-        ...                    ('bird', 24.0),
-        ...                    ('mammal', 80.5),
-        ...                    ('mammal', np.nan)],
-        ...                   index=['falcon', 'parrot', 'lion', 'monkey'],
-        ...                   columns=('class', 'max_speed'))
-        >>> df
-                 class max_speed
-        falcon    bird     389.0
-        parrot    bird      24.0
-        lion    mammal      80.5
-        monkey  mammal      <NA>
-        >>> df.reset_index()
-            index   class max_speed
-        0  falcon    bird     389.0
-        1  parrot    bird      24.0
-        2    lion  mammal      80.5
-        3  monkey  mammal      <NA>
-        >>> df.reset_index(drop=True)
-            class max_speed
-        0    bird     389.0
-        1    bird      24.0
-        2  mammal      80.5
-        3  mammal      <NA>
-        """
-        data, index = self._reset_index(
-            level=level, drop=drop, col_level=col_level, col_fill=col_fill
-        )
+        """{docstring}"""
         return self._mimic_inplace(
-            DataFrame._from_data(data, index), inplace=inplace
+            DataFrame._from_data(
+                *self._reset_index(
+                    level=level,
+                    drop=drop,
+                    col_level=col_level,
+                    col_fill=col_fill,
+                )
+            ),
+            inplace=inplace,
         )
 
     def take(self, indices, axis=0, keep_index=None):

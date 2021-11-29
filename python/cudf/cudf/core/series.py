@@ -831,50 +831,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         series.name = self.name
         return series
 
+    @docutils.doc_series_reset_index()
     def reset_index(self, level=None, drop=False, name=None, inplace=False):
-        """
-        Reset index to RangeIndex
-
-        Parameters
-        ----------
-        drop : bool, default False
-            Just reset the index, without inserting it as a column in
-            the new DataFrame.
-        inplace : bool, default False
-            Modify the Series in place (do not create a new object).
-
-        Returns
-        -------
-        Series or DataFrame or None
-            When `drop` is False (the default), a DataFrame is returned.
-            The newly created columns will come first in the DataFrame,
-            followed by the original Series values.
-            When `drop` is True, a `Series` is returned.
-            In either case, if ``inplace=True``, no value is returned.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series(['a', 'b', 'c', 'd'], index=[10, 11, 12, 13])
-        >>> series
-        10    a
-        11    b
-        12    c
-        13    d
-        dtype: object
-        >>> series.reset_index()
-           index  0
-        0     10  a
-        1     11  b
-        2     12  c
-        3     13  d
-        >>> series.reset_index(drop=True)
-        0    a
-        1    b
-        2    c
-        3    d
-        dtype: object
-        """
+        """{docstring}"""
         data, index = self._reset_index(level=level, drop=drop)
         if not drop:
             if inplace is True:

@@ -911,8 +911,7 @@ class IndexedFrame(Frame):
             if name == "index" and "index" in self._data:
                 name = "level_0"
             new_column_data[name] = col
-        result_data = {**new_column_data, **self._data}
-        return result_data, index
+        return {**new_column_data, **self._data}, index
 
 
 def _check_duplicate_level_names(specified, level_names):
