@@ -52,6 +52,7 @@ __global__ void compute_mixed_join_output_size(
   table_device_view left_table,
   table_device_view right_table,
   join_kind join_type,
+  cudf::detail::multimap_type::device_view hash_table_view,
   ast::detail::expression_device_view device_expression_data,
   bool const swap_tables,
   std::size_t* output_size)
@@ -136,6 +137,7 @@ template <cudf::size_type block_size, cudf::size_type output_cache_size, bool ha
 __global__ void mixed_join(table_device_view left_table,
                            table_device_view right_table,
                            join_kind join_type,
+                           cudf::detail::multimap_type::device_view hash_table_view,
                            cudf::size_type* join_output_l,
                            cudf::size_type* join_output_r,
                            cudf::size_type* current_idx,

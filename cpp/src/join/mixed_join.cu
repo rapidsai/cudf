@@ -109,6 +109,7 @@ mixed_join(table_view const& left,
   // won't be able to support AST conditions for those types anyway.
   // TODO: Decide how to handle null equality when mixing AST operators with hash joins.
   build_join_hash_table(build, hash_table, null_equality::EQUAL, stream, true);
+  auto hash_table_view = hash_table.get_device_view();
 
   /*
      I need to compute the output size. Unlike with hash joins, I think I'll have to use a
@@ -149,6 +150,7 @@ mixed_join(table_view const& left,
           *left_table,
           *right_table,
           kernel_join_type,
+          hash_table_view,
           parser.device_expression_data,
           swap_tables,
           size.data());
@@ -158,6 +160,7 @@ mixed_join(table_view const& left,
           *left_table,
           *right_table,
           kernel_join_type,
+          hash_table_view,
           parser.device_expression_data,
           swap_tables,
           size.data());
@@ -190,6 +193,7 @@ mixed_join(table_view const& left,
         *left_table,
         *right_table,
         kernel_join_type,
+        hash_table_view,
         join_output_l,
         join_output_r,
         write_index.data(),
@@ -202,6 +206,7 @@ mixed_join(table_view const& left,
         *left_table,
         *right_table,
         kernel_join_type,
+        hash_table_view,
         join_output_l,
         join_output_r,
         write_index.data(),
@@ -276,6 +281,24 @@ std::size_t compute_mixed_join_output_size(table_view const& left,
   CUDF_EXPECTS(parser.output_type().id() == type_id::BOOL8,
                "The expression must produce a boolean output.");
 
+  // TODO: The non-conditional join impls start with a dictionary matching,
+  // figure out what that is and what it's needed for (and if conditional joins
+  // need to do the same).
+  auto probe = left.select(left_on);
+  auto build = right.select(right_on);
+
+  cudf::detail::multimap_type hash_table{compute_hash_table_size(build.num_rows()),
+                                         std::numeric_limits<hash_value_type>::max(),
+                                         cudf::detail::JoinNoneValue,
+                                         stream.value()};
+
+  // TODO: To add support for nested columns we will need to flatten in many
+  // places. However, this probably isn't worth adding any time soon since we
+  // won't be able to support AST conditions for those types anyway.
+  // TODO: Decide how to handle null equality when mixing AST operators with hash joins.
+  build_join_hash_table(build, hash_table, null_equality::EQUAL, stream, true);
+  auto hash_table_view = hash_table.get_device_view();
+
   auto left_table  = table_device_view::create(left, stream);
   auto right_table = table_device_view::create(right, stream);
 
@@ -299,6 +322,7 @@ std::size_t compute_mixed_join_output_size(table_view const& left,
         *left_table,
         *right_table,
         join_type,
+        hash_table_view,
         parser.device_expression_data,
         swap_tables,
         size.data());
@@ -308,6 +332,7 @@ std::size_t compute_mixed_join_output_size(table_view const& left,
         *left_table,
         *right_table,
         join_type,
+        hash_table_view,
         parser.device_expression_data,
         swap_tables,
         size.data());
