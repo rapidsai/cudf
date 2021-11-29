@@ -326,16 +326,21 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
   if (count_bits == count_bits_policy::UNSET_BITS) {
     // Convert from set bits counts to unset bits by subtracting the number of
     // set bits from the length of the segment.
-    thrust::for_each(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator(0),
-                     thrust::make_counting_iterator(static_cast<size_type>(d_bit_counts.size())),
-                     [first_bit_indices_begin,
-                      last_bit_indices_begin,
-                      d_bit_counts = d_bit_counts.data()] __device__(size_type i) {
-                       auto const begin = *(first_bit_indices_begin + i);
-                       auto const end   = *(last_bit_indices_begin + i);
-                       d_bit_counts[i]  = (end - begin) - d_bit_counts[i];
-                     });
+    auto segments_begin =
+      thrust::make_zip_iterator(first_bit_indices_begin, last_bit_indices_begin);
+    auto segments_size = thrust::transform_iterator(segments_begin, [] __device__(auto segment) {
+      auto const begin = segment.template get<0>();
+      auto const end   = segment.template get<1>();
+      return end - begin;
+    });
+    thrust::transform(rmm::exec_policy(stream),
+                      segments_size,
+                      segments_size + num_ranges,
+                      d_bit_counts.data(),
+                      d_bit_counts.data(),
+                      [] __device__(auto segment_size, auto segment_bit_count) {
+                        return segment_size - segment_bit_count;
+                      });
   }
 
   CHECK_CUDA(stream.value());
