@@ -52,8 +52,7 @@ endfunction()
 
 jit_preprocess_files(
   SOURCE_DIRECTORY ${CUDF_SOURCE_DIR}/src FILES binaryop/jit/kernel.cu
-  transform/jit/kernel.cu rolling/jit/kernel.cu
-)
+  transform/jit/kernel.cu rolling/jit/kernel.cu)
 
 add_custom_target(
   jitify_preprocess_run
