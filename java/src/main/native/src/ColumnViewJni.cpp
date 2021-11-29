@@ -936,6 +936,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
           break;
         case cudf::type_id::DECIMAL32:
         case cudf::type_id::DECIMAL64:
+        case cudf::type_id::DECIMAL128:
           result = cudf::strings::to_fixed_point(*column, n_data_type);
           break;
         default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);

@@ -66,9 +66,9 @@ struct bounds_checker {
  * @brief The operation to perform when a gather map index is out of bounds
  */
 enum class gather_bitmask_op {
-  DONT_CHECK,   // Don't check for out of bounds indices
-  PASSTHROUGH,  // Preserve mask at rows with out of bounds indices
-  NULLIFY,      // Nullify rows with out of bounds indices
+  DONT_CHECK,   ///< Don't check for out of bounds indices
+  PASSTHROUGH,  ///< Preserve mask at rows with out of bounds indices
+  NULLIFY,      ///< Nullify rows with out of bounds indices
 };
 
 template <gather_bitmask_op Op, typename MapIterator>
