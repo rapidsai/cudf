@@ -65,7 +65,9 @@ gpuci_logger "Check environment variables"
 env
 
 gpuci_logger "Check GPU usage"
-#nvidia-smi
+set +e
+nvidia-smi
+set -e
 
 gpuci_logger "Activate conda env"
 . /opt/conda/etc/profile.d/conda.sh
@@ -141,7 +143,9 @@ if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
         exit 0
     else
         gpuci_logger "Check GPU usage"
+        set +e
         nvidia-smi
+        set -e
 
         gpuci_logger "GoogleTests"
         set -x
@@ -164,7 +168,9 @@ else
     fi
 
     gpuci_logger "Check GPU usage"
+    set +e
     nvidia-smi
+    set -e
 
     gpuci_logger "GoogleTests"
     set -x

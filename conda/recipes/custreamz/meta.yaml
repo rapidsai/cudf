@@ -27,16 +27,14 @@ requirements:
     - python
     - python-confluent-kafka
     - cudf_kafka {{ version }}
-    - cython
   run:
     - python
     - streamz 
     - cudf {{ version }}
-    - dask>=2021.09.1
-    - distributed>=2021.09.1
+    - dask>=2021.11.1,<=2021.11.2
+    - distributed>=2021.11.1,<=2021.11.2
     - python-confluent-kafka
     - cudf_kafka {{ version }}
-    - cython
 
 test:                                   # [linux64]
   requires:                             # [linux64]
