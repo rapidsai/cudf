@@ -46,32 +46,12 @@ void struct_compare(mutable_column_view& out,
 }
 }  //  namespace binops::compiled::detail
 
-template void binops::compiled::detail::struct_compare<row_lexicographic_comparator<true>>(
-  mutable_column_view& out,
-  row_lexicographic_comparator<true> compare,
-  bool is_lhs_scalar,
-  bool is_rhs_scalar,
-  bool flip_output,
-  rmm::cuda_stream_view stream);
-template void binops::compiled::detail::struct_compare<row_lexicographic_comparator<false>>(
-  mutable_column_view& out,
-  row_lexicographic_comparator<false> compare,
-  bool is_lhs_scalar,
-  bool is_rhs_scalar,
-  bool flip_output,
-  rmm::cuda_stream_view stream);
-template void binops::compiled::detail::struct_compare<row_equality_comparator<true>>(
-  mutable_column_view& out,
-  row_equality_comparator<true> compare,
-  bool is_lhs_scalar,
-  bool is_rhs_scalar,
-  bool flip_output,
-  rmm::cuda_stream_view stream);
-template void binops::compiled::detail::struct_compare<row_equality_comparator<false>>(
-  mutable_column_view& out,
-  row_equality_comparator<false> compare,
-  bool is_lhs_scalar,
-  bool is_rhs_scalar,
-  bool flip_output,
-  rmm::cuda_stream_view stream);
+#define INSTANTIATE_STRUCT_COMPARE(comp_op)                        \
+  template void binops::compiled::detail::struct_compare<comp_op>( \
+    mutable_column_view&, comp_op, bool, bool, bool, rmm::cuda_stream_view);
+
+INSTANTIATE_STRUCT_COMPARE(row_equality_comparator<true>);
+INSTANTIATE_STRUCT_COMPARE(row_equality_comparator<false>);
+INSTANTIATE_STRUCT_COMPARE(row_lexicographic_comparator<true>);
+INSTANTIATE_STRUCT_COMPARE(row_lexicographic_comparator<false>);
 }  //  namespace cudf
