@@ -809,21 +809,16 @@ class IndexedFrame(Frame):
 def _check_duplicate_level_names(specified, level_names):
     if specified is None:
         return
-    # Size: specified M, level_names N
-    # Worst case: Nlog(N) + Mlog(N)
-    existing = set()
+    non_duplicates = set()
     duplicates = set()
 
-    # Worst case: Nlog(N)
     for x in level_names:
-        if x in existing:
+        if x in non_duplicates:
             duplicates.add(x)
         else:
-            existing.add(x)
+            non_duplicates.add(x)
 
-    # Worst case: Mlog(N)
-    for x in specified:
-        if x in duplicates:
-            raise ValueError(
-                f"The name {x} occurs multiple times, use a level number"
-            )
+    if any(x in duplicates for x in specified):
+        raise ValueError(
+            f"The name {x} occurs multiple times, use a level number"
+        )

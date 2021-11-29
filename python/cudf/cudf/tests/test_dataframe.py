@@ -2634,6 +2634,21 @@ def test_reset_index_named(pdf, gdf, drop, inplace):
     assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("drop", [True, False])
+@pytest.mark.parametrize("inplace", [False, True])
+@pytest.mark.parametrize("column_names", [["x", "y"], ["index", "y"]])
+def test_reset_index_unnamed(pdf, gdf, drop, inplace, column_names):
+    pdf.columns = column_names
+    gdf.columns = column_names
+
+    expect = pdf.reset_index(drop=drop, inplace=inplace)
+    got = gdf.reset_index(drop=drop, inplace=inplace)
+    if inplace:
+        expect = pdf
+        got = gdf
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "data",
     [
