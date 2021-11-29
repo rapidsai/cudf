@@ -63,7 +63,6 @@ void unary_operation(mutable_column_view output,
              cudf::jit::get_data_ptr(input));
 }
 
-
 }  // namespace jit
 }  // namespace transformation
 
@@ -89,7 +88,6 @@ std::unique_ptr<column> transform(column_view const& input,
 
   return output;
 }
-
 
 }  // namespace detail
 
