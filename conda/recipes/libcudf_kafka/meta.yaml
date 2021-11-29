@@ -23,8 +23,10 @@ build:
 
 requirements:
   build:
+    - python
     - cmake >=3.20.1
   host:
+    - python
     - libcudf {{version}}
     - librdkafka >=1.7.0,<1.8.0a0
   run:
