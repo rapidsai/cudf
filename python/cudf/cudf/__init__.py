@@ -102,6 +102,17 @@ from cudf.core.tools.datetimes import date_range
 from cudf.utils.dtypes import _NA_REP
 from cudf.utils.utils import set_allocator
 
+try:
+    from ptxcompiler.patch import patch_numba_codegen_if_needed
+except ImportError:
+    pass
+else:
+    # Patch Numba to support CUDA enhanced compatibility.
+    # See https://github.com/rapidsai/ptxcompiler for
+    # details.
+    patch_numba_codegen_if_needed()
+    del patch_numba_codegen_if_needed
+
 cuda.set_memory_manager(rmm.RMMNumbaManager)
 cupy.cuda.set_allocator(rmm.rmm_cupy_allocator)
 
