@@ -281,6 +281,7 @@ def read_orc(
     engine="cudf",
     columns=None,
     filters=None,
+    filtering_columns_first=False,
     stripes=None,
     skiprows=None,
     num_rows=None,
@@ -288,7 +289,6 @@ def read_orc(
     decimal_cols_as_float=None,
     timestamp_type=None,
     use_python_file_object=True,
-    filtering_columns_first=False,
     **kwargs,
 ):
     """{docstring}"""
@@ -377,6 +377,7 @@ def read_orc(
             engine=engine,
             columns=columns_in_predicate,
             filters=None,
+            filtering_columns_first=False,
             stripes=stripes,
             skiprows=skiprows,
             num_rows=num_rows,
@@ -384,7 +385,6 @@ def read_orc(
             decimal_cols_as_float=decimal_cols_as_float,
             timestamp_type=timestamp_type,
             use_python_file_object=use_python_file_object,
-            filtering_columns_first=False,
             **kwargs
         )
 
