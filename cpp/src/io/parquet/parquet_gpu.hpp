@@ -294,6 +294,27 @@ inline uint32_t __device__ GetDtypeLogicalLen(column_device_view const* col)
 }
 
 /**
+ * @brief Translate the row index of a parent column_device_view into the index of the first value
+ * in the leaf child.
+ * Only works in the context of parquet writer where struct columns are previously modified s.t.
+ * they only have one immediate child.
+ */
+inline size_type __device__ row_to_value_idx(size_type idx, column_device_view col)
+{
+  while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
+    if (col.type().id() == type_id::STRUCT) {
+      idx += col.offset();
+      col = col.child(0);
+    } else {
+      auto offset_col = col.child(lists_column_view::offsets_column_index);
+      idx             = offset_col.element<size_type>(idx + col.offset());
+      col             = col.child(lists_column_view::child_column_index);
+    }
+  }
+  return idx;
+}
+
+/**
  * @brief Return worst-case compressed size of compressed data given the uncompressed size
  */
 inline size_t __device__ __host__ GetMaxCompressedBfrSize(size_t uncomp_size,

@@ -146,34 +146,11 @@ __global__ void __launch_bounds__(block_size)
     s->frag.fragment_data_size = 0;
     s->frag.dict_data_size     = 0;
 
-    // To use num_vals instead of num_rows, we need to calculate num_vals on the fly.
-    // For list<list<int>>, values between i and i+50 can be calculated by
-    // off_11 = off[i], off_12 = off[i+50]
-    // off_21 = child.off[off_11], off_22 = child.off[off_12]
-    // etc...
-    size_type end_value_idx = s->frag.start_row + s->frag.num_rows;
-    if (s->col.parent_column == nullptr) {
-      s->start_value_idx = s->frag.start_row;
-    } else {
-      auto col                     = *(s->col.parent_column);
-      auto current_start_value_idx = s->frag.start_row;
-      while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
-        if (col.type().id() == type_id::STRUCT) {
-          current_start_value_idx += col.offset();
-          end_value_idx += col.offset();
-          col = col.child(0);
-        } else {
-          auto offset_col = col.child(lists_column_view::offsets_column_index);
-          current_start_value_idx =
-            offset_col.element<size_type>(current_start_value_idx + col.offset());
-          end_value_idx = offset_col.element<size_type>(end_value_idx + col.offset());
-          col           = col.child(lists_column_view::child_column_index);
-        }
-      }
-      s->start_value_idx = current_start_value_idx;
-    }
-    s->frag.start_value_idx = s->start_value_idx;
-    s->frag.num_leaf_values = end_value_idx - s->start_value_idx;
+    size_type end_row       = s->frag.start_row + s->frag.num_rows;
+    auto col                = *(s->col.parent_column);
+    s->frag.start_value_idx = row_to_value_idx(s->frag.start_row, col);
+    size_type end_value_idx = row_to_value_idx(end_row, col);
+    s->frag.num_leaf_values = end_value_idx - s->frag.start_value_idx;
 
     if (s->col.level_offsets != nullptr) {
       // For nested schemas, the number of values in a fragment is not directly related to the
@@ -194,7 +171,7 @@ __global__ void __launch_bounds__(block_size)
   __syncthreads();
 
   size_type nvals           = s->frag.num_leaf_values;
-  size_type start_value_idx = s->start_value_idx;
+  size_type start_value_idx = s->frag.start_value_idx;
 
   for (uint32_t i = 0; i < nvals; i += block_size) {
     uint32_t val_idx  = start_value_idx + i + t;
@@ -914,28 +891,9 @@ __global__ void __launch_bounds__(128, 8)
       dst[0]     = dict_bits;
       s->rle_out = dst + 1;
     }
-    s->page_start_val    = s->page.start_row;  // Dictionary page's start row is chunk's start row
-    auto chunk_start_val = s->ck.start_row;
-    if (s->col.parent_column != nullptr) {  // TODO: remove this check. parent is now never nullptr
-      auto col                    = *(s->col.parent_column);
-      auto current_page_start_val = s->page_start_val;
-      // TODO: We do this so much. Add a global function that converts row idx to val idx
-      while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
-        if (col.type().id() == type_id::STRUCT) {
-          current_page_start_val += col.offset();
-          chunk_start_val += col.offset();
-          col = col.child(0);
-        } else {
-          auto offset_col = col.child(lists_column_view::offsets_column_index);
-          current_page_start_val =
-            offset_col.element<size_type>(current_page_start_val + col.offset());
-          chunk_start_val = offset_col.element<size_type>(chunk_start_val + col.offset());
-          col             = col.child(lists_column_view::child_column_index);
-        }
-      }
-      s->page_start_val  = current_page_start_val;
-      s->chunk_start_val = chunk_start_val;
-    }
+    auto col           = *(s->col.parent_column);
+    s->page_start_val  = row_to_value_idx(s->page.start_row, col);
+    s->chunk_start_val = row_to_value_idx(s->ck.start_row, col);
   }
   __syncthreads();
   for (uint32_t cur_val_idx = 0; cur_val_idx < s->page.num_leaf_values;) {
