@@ -15,7 +15,7 @@ from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
 from cudf.core.column.column import arange, as_column
-from cudf.core.index import _index_from_data
+from cudf.core.multiindex import MultiIndex
 from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
@@ -841,7 +841,6 @@ class GroupBy(Serializable):
         # create expanded dataframe consisting all combinations of the
         # struct columns-pairs to be correlated
         # i.e (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
-        # breakpoint()
         _cols = self.grouping.values.columns.tolist()
         len_cols = len(_cols)
 
@@ -893,7 +892,7 @@ class GroupBy(Serializable):
             sorted_idx._data[None] = as_column(
                 cudf.Series(_cols).tile(len(gb_corr.index))
             )
-        res.index = _index_from_data(sorted_idx._data)
+        res.index = MultiIndex._from_data(sorted_idx._data)
 
         return res
 
