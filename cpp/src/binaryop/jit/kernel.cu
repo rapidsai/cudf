@@ -18,66 +18,29 @@
  * limitations under the License.
  */
 
-#include <binaryop/jit/operation.hpp>
-
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/wrappers/durations.hpp>
 #include <cudf/wrappers/timestamps.hpp>
 
+#include <binaryop/jit/operation-udf.hpp>
+#include <cuda/std/type_traits>
+
 namespace cudf {
 namespace binops {
 namespace jit {
 
-template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
-__global__ void kernel_v_s_with_validity(cudf::size_type size,
-                                         TypeOut* out_data,
-                                         TypeLhs* lhs_data,
-                                         TypeRhs* rhs_data,
-                                         cudf::bitmask_type* output_mask,
-                                         cudf::bitmask_type const* mask,
-                                         cudf::size_type offset,
-                                         bool scalar_valid)
-{
-  int tid    = threadIdx.x;
-  int blkid  = blockIdx.x;
-  int blksz  = blockDim.x;
-  int gridsz = gridDim.x;
-
-  int start = tid + blkid * blksz;
-  int step  = blksz * gridsz;
-
-  for (cudf::size_type i = start; i < size; i += step) {
-    bool output_valid = false;
-    out_data[i]       = TypeOpe::template operate<TypeOut, TypeLhs, TypeRhs>(
-      lhs_data[i],
-      rhs_data[0],
-      mask ? cudf::bit_is_set(mask, offset + i) : true,
-      scalar_valid,
-      output_valid);
-    if (output_mask && !output_valid) cudf::clear_bit(output_mask, i);
+struct UserDefinedOp {
+  template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+  static TypeOut operate(TypeLhs x, TypeRhs y)
+  {
+    TypeOut output;
+    using TypeCommon = typename cuda::std::common_type<TypeOut, TypeLhs, TypeRhs>::type;
+    GENERIC_BINARY_OP(&output, static_cast<TypeCommon>(x), static_cast<TypeCommon>(y));
+    return output;
   }
-}
-
-template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
-__global__ void kernel_v_s(cudf::size_type size,
-                           TypeOut* out_data,
-                           TypeLhs* lhs_data,
-                           TypeRhs* rhs_data)
-{
-  int tid    = threadIdx.x;
-  int blkid  = blockIdx.x;
-  int blksz  = blockDim.x;
-  int gridsz = gridDim.x;
-
-  int start = tid + blkid * blksz;
-  int step  = blksz * gridsz;
-
-  for (cudf::size_type i = start; i < size; i += step) {
-    out_data[i] = TypeOpe::template operate<TypeOut, TypeLhs, TypeRhs>(lhs_data[i], rhs_data[0]);
-  }
-}
+};
 
 template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
 __global__ void kernel_v_v(cudf::size_type size,
