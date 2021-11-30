@@ -764,7 +764,7 @@ public class TableTest extends CudfTestBase {
           DType.create(DType.DTypeEnum.DECIMAL64, -10),  // Decimal(10, 10)
           DType.create(DType.DTypeEnum.DECIMAL32, 0),  // Decimal(1, 0)
           DType.create(DType.DTypeEnum.DECIMAL64, -15),  // Decimal(18, 15)
-          DType.FLOAT64,  // Decimal(20, 10) which is backed by FIXED_LEN_BYTE_ARRAY
+          DType.create(DType.DTypeEnum.DECIMAL128, -10),  // Decimal(20, 10)
           DType.INT64,
           DType.FLOAT32
       };
