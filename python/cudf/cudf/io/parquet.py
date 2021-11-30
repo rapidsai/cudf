@@ -81,7 +81,7 @@ def write_to_dataset(
         kwargs for to_parquet function.
     """
 
-    fs = ioutils._ensure_filesystem(fs, root_path)
+    fs = ioutils._ensure_filesystem(fs, root_path, **kwargs)
     fs.mkdirs(root_path, exist_ok=True)
     metadata = []
 
