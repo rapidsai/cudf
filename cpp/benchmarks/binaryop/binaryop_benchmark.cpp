@@ -74,14 +74,14 @@ static void BM_binaryop_transform(benchmark::State& state)
     auto const op         = cudf::binary_operator::ADD;
     auto result_data_type = cudf::data_type(cudf::type_to_id<key_type>());
     if (reuse_columns) {
-      auto result = cudf::jit::binary_operation(columns.at(0), columns.at(0), op, result_data_type);
+      auto result = cudf::binary_operation(columns.at(0), columns.at(0), op, result_data_type);
       for (cudf::size_type i = 0; i < tree_levels - 1; i++) {
-        result = cudf::jit::binary_operation(result->view(), columns.at(0), op, result_data_type);
+        result = cudf::binary_operation(result->view(), columns.at(0), op, result_data_type);
       }
     } else {
-      auto result = cudf::jit::binary_operation(columns.at(0), columns.at(1), op, result_data_type);
+      auto result = cudf::binary_operation(columns.at(0), columns.at(1), op, result_data_type);
       std::for_each(std::next(columns.cbegin(), 2), columns.cend(), [&](auto const& col) {
-        result = cudf::jit::binary_operation(result->view(), col, op, result_data_type);
+        result = cudf::binary_operation(result->view(), col, op, result_data_type);
       });
     }
   }
