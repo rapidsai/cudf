@@ -478,8 +478,8 @@ class IndexedFrame(Frame):
         """Map each column name into their positions in the frame.
 
         Return positions of the provided column names, offset by the number of
-        index columns `offset_by_index_columns` is True. The order of indices
-        returned corresponds to the column order in this Frame.
+        index columns if `offset_by_index_columns` is True. The order of
+        indices returned corresponds to the column order in this Frame.
         """
         num_index_columns = (
             len(self._index._data) if offset_by_index_columns else 0
@@ -867,3 +867,173 @@ class IndexedFrame(Frame):
             if isinstance(self, cudf.Series)
             else cudf.core.resample.DataFrameResampler(self, by=by)
         )
+
+    def dropna(
+        self, axis=0, how="any", thresh=None, subset=None, inplace=False
+    ):
+        """
+        Drop rows (or columns) containing nulls from a Column.
+
+        Parameters
+        ----------
+        axis : {0, 1}, optional
+            Whether to drop rows (axis=0, default) or columns (axis=1)
+            containing nulls.
+        how : {"any", "all"}, optional
+            Specifies how to decide whether to drop a row (or column).
+            any (default) drops rows (or columns) containing at least
+            one null value. all drops only rows (or columns) containing
+            *all* null values.
+        thresh: int, optional
+            If specified, then drops every row (or column) containing
+            less than `thresh` non-null values
+        subset : list, optional
+            List of columns to consider when dropping rows (all columns
+            are considered by default). Alternatively, when dropping
+            columns, subset is a list of rows to consider.
+        inplace : bool, default False
+            If True, do operation inplace and return None.
+
+        Returns
+        -------
+        Copy of the DataFrame with rows/columns containing nulls dropped.
+
+        See also
+        --------
+        cudf.DataFrame.isna
+            Indicate null values.
+
+        cudf.DataFrame.notna
+            Indicate non-null values.
+
+        cudf.DataFrame.fillna
+            Replace null values.
+
+        cudf.Series.dropna
+            Drop null values.
+
+        cudf.Index.dropna
+            Drop null indices.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame({"name": ['Alfred', 'Batman', 'Catwoman'],
+        ...                    "toy": ['Batmobile', None, 'Bullwhip'],
+        ...                    "born": [np.datetime64("1940-04-25"),
+        ...                             np.datetime64("NaT"),
+        ...                             np.datetime64("NaT")]})
+        >>> df
+               name        toy                 born
+        0    Alfred  Batmobile  1940-04-25 00:00:00
+        1    Batman       <NA>                 <NA>
+        2  Catwoman   Bullwhip                 <NA>
+
+        Drop the rows where at least one element is null.
+
+        >>> df.dropna()
+             name        toy       born
+        0  Alfred  Batmobile 1940-04-25
+
+        Drop the columns where at least one element is null.
+
+        >>> df.dropna(axis='columns')
+               name
+        0    Alfred
+        1    Batman
+        2  Catwoman
+
+        Drop the rows where all elements are null.
+
+        >>> df.dropna(how='all')
+               name        toy                 born
+        0    Alfred  Batmobile  1940-04-25 00:00:00
+        1    Batman       <NA>                 <NA>
+        2  Catwoman   Bullwhip                 <NA>
+
+        Keep only the rows with at least 2 non-null values.
+
+        >>> df.dropna(thresh=2)
+               name        toy                 born
+        0    Alfred  Batmobile  1940-04-25 00:00:00
+        2  Catwoman   Bullwhip                 <NA>
+
+        Define in which columns to look for null values.
+
+        >>> df.dropna(subset=['name', 'born'])
+             name        toy       born
+        0  Alfred  Batmobile 1940-04-25
+
+        Keep the DataFrame with valid entries in the same variable.
+
+        >>> df.dropna(inplace=True)
+        >>> df
+             name        toy       born
+        0  Alfred  Batmobile 1940-04-25
+        """
+        if axis == 0:
+            result = self._drop_na_rows(
+                how=how, subset=subset, thresh=thresh, drop_nan=True
+            )
+        else:
+            result = self._drop_na_columns(
+                how=how, subset=subset, thresh=thresh
+            )
+
+        return self._mimic_inplace(result, inplace=inplace)
+
+    def _drop_na_rows(
+        self, how="any", subset=None, thresh=None, drop_nan=False
+    ):
+        """
+        Drop null rows from `self`.
+
+        how : {"any", "all"}, optional
+            Specifies how to decide whether to drop a row.
+            any (default) drops rows containing at least
+            one null value. all drops only rows containing
+            *all* null values.
+        subset : list, optional
+            List of columns to consider when dropping rows.
+        thresh: int, optional
+            If specified, then drops every row containing
+            less than `thresh` non-null values.
+        """
+        if subset is None:
+            subset = self._column_names
+        elif (
+            not np.iterable(subset)
+            or isinstance(subset, str)
+            or isinstance(subset, tuple)
+            and subset in self._data.names
+        ):
+            subset = (subset,)
+        diff = set(subset) - set(self._data)
+        if len(diff) != 0:
+            raise KeyError(f"columns {diff} do not exist")
+
+        if len(subset) == 0:
+            return self.copy(deep=True)
+
+        if drop_nan:
+            data_columns = [
+                col.nans_to_nulls()
+                if isinstance(col, cudf.core.column.NumericalColumn)
+                else col
+                for col in self._columns
+            ]
+
+        result = self.__class__._from_maybe_indexed_columns(
+            libcudf.stream_compaction.drop_nulls(
+                list(self._index._data.columns) + data_columns,
+                how=how,
+                keys=self._positions_from_column_names(
+                    subset, offset_by_index_columns=True
+                ),
+                thresh=thresh,
+            ),
+            self._column_names,
+            self._index.names,
+        )
+        result._copy_type_metadata(self)
+        return result
