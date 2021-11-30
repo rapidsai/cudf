@@ -32,6 +32,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cudf/detail/fill.hpp>
 #include <type_traits>
 
 namespace cudf {
@@ -191,13 +192,57 @@ struct half_even_negative {
 template <typename T>
 struct half_up_fixed_point {
   T n;
-  __device__ T operator()(T e) { return half_up_negative<T>{n}(e) / n; }
+  template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
+  __device__ U operator()(U e)
+  {
+    assert(false);  // Should never get here. Just for compilation
+    return U{};
+  }
+
+  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
+  __device__ U operator()(U e)
+  {
+    // Create a container with extra digit for adjustment
+    auto const container = e / n;
+    auto const down      = container / 10;
+    // Use the remainder of 10 to decide whether to round or not
+    return down + (generic_abs(container % 10) >= 5 ? generic_sign(e) : 0);
+  }
 };
 
 template <typename T>
 struct half_even_fixed_point {
   T n;
-  __device__ T operator()(T e) { return half_even_negative<T>{n}(e) / n; }
+  template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
+  __device__ U operator()(U e)
+  {
+    assert(false);  // Should never get here. Just for compilation
+    return U{};
+  }
+
+  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
+  __device__ T operator()(T e)
+  {
+    // Create a container with extra digit for adjustment
+    auto const container = e / n;
+    auto const down      = container / 10;
+    auto abs_mod_10      = generic_abs(container % 10);
+    if ((abs_mod_10 > 5) or (abs_mod_10 == 5 and generic_abs(down) % 2 == 1)) {
+      return down + generic_sign(e);
+    }
+    return down;
+  }
+
+  //    template <typename U = T, typename std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
+//  __device__ U operator()(U e)
+//  {
+//    auto const down_over_n = e / n;            // use this to determine HALF_EVEN case
+//    auto const down        = down_over_n * n;  // result from rounding down
+//    auto const diff        = generic_abs(e - down);
+//    auto const adjustment =
+//      (diff > n / 2) or (diff == n / 2 && generic_abs(down_over_n) % 2 == 1) ? n : 0;
+//    return down + generic_sign(e) * adjustment;
+//  }
 };
 
 template <typename T,
@@ -252,13 +297,26 @@ std::unique_ptr<column> round_with(column_view const& input,
     result_type, input.size(), copy_bitmask(input, stream, mr), input.null_count(), stream, mr);
 
   auto out_view = result->mutable_view();
-  Type const n  = std::pow(10, std::abs(decimal_places + input.type().scale()));
 
-  thrust::transform(rmm::exec_policy(stream),
-                    input.begin<Type>(),
-                    input.end<Type>(),
-                    out_view.begin<Type>(),
-                    FixedPointRoundFunctor{n});
+  constexpr int max_precision = []{
+    if constexpr (std::is_same_v<T, numeric::decimal32>) return 9;
+    if constexpr (std::is_same_v<T, numeric::decimal64>) return 18;
+    return 38;
+  }();
+
+  auto const scale_movement = -decimal_places - input.type().scale();
+
+  if (scale_movement > max_precision) {
+    auto zero_scalar = make_fixed_point_scalar<T>(0, scale_type{-decimal_places});
+    detail::fill_in_place(out_view, 0, out_view.size(), *zero_scalar, stream);
+  } else {
+    Type const n = std::pow(10, scale_movement - 1);
+    thrust::transform(rmm::exec_policy(stream),
+                      input.begin<Type>(),
+                      input.end<Type>(),
+                      out_view.begin<Type>(),
+                      FixedPointRoundFunctor{n});
+  }
 
   return result;
 }
