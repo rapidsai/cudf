@@ -375,7 +375,7 @@ doc_dataframe_reset_index = docfmt_partial(
         ...                   index=['falcon', 'parrot', 'lion', 'monkey'],
         ...                   columns=('class', 'max_speed'))
         >>> df
-                    class max_speed
+                 class max_speed
         falcon    bird     389.0
         parrot    bird      24.0
         lion    mammal      80.5
@@ -407,7 +407,7 @@ doc_dataframe_reset_index = docfmt_partial(
         ...                      index=index,
         ...                      columns=('speed', 'type'))
         >>> df
-                      speed  type
+                       speed  type
         class  name
         bird   falcon  389.0   fly
                parrot   24.0   fly
@@ -467,7 +467,7 @@ doc_series_reset_index = docfmt_partial(
         ...                     ('bar', 'one'), ('bar', 'two'),
         ...                     ('baz', 'one'), ('baz', 'two')],
         ...                     names=['a', 'b']
-        ...     ))
+        ...      ))
         >>> s2
         a    b
         bar  one    0
