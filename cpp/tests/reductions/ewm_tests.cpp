@@ -70,7 +70,6 @@ TYPED_TEST(TypedEwmScanTest, EwmWithNulls)
   auto const v = make_vector<TypeParam>({1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0});
   auto const b = thrust::host_vector<bool>(std::vector<bool>{1, 0, 1, 0, 0, 1, 1});
   auto col     = this->make_column(v, b);
-  cudf::test::print(col->view());
 
   auto const expected_ewma_vals_adjust =
     cudf::test::fixed_width_column_wrapper<TypeParam>{{1.0,
