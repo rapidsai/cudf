@@ -1429,7 +1429,7 @@ class BaseIndex(Serializable):
         """
 
         # This utilizes the fact that all `Index` is also a `Frame`.
-        result = self.__class__._from_maybe_indexed_columns(
+        result = self.__class__._from_columns(
             drop_duplicates(
                 list(self._columns),
                 keys=range(len(self._data)),
@@ -1461,7 +1461,7 @@ class BaseIndex(Serializable):
             for col in self._columns
         ]
 
-        result = self.__class__._from_maybe_indexed_columns(
+        result = self.__class__._from_columns(
             drop_nulls(data_columns, how=how, keys=range(len(data_columns)),),
             self._column_names,
         )

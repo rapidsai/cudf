@@ -1023,7 +1023,7 @@ class IndexedFrame(Frame):
                 for col in self._columns
             ]
 
-        result = self.__class__._from_maybe_indexed_columns(
+        result = self.__class__._from_columns(
             libcudf.stream_compaction.drop_nulls(
                 list(self._index._data.columns) + data_columns,
                 how=how,
