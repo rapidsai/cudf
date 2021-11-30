@@ -80,7 +80,15 @@ class NumericalBaseColumn(ColumnBase):
     def kurtosis(self, skipna: bool = None) -> float:
         skipna = True if skipna is None else skipna
 
-        if len(self) == 0 or (not skipna and self.has_nulls):
+        if len(self) == 0 or (
+            not skipna
+            and (
+                self.has_nulls
+                or (
+                    self.dtype.kind == "f" and libcudf.unary.is_nan(self).any()
+                )
+            )
+        ):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
         self = self.nans_to_nulls().dropna()  # type: ignore
@@ -105,7 +113,15 @@ class NumericalBaseColumn(ColumnBase):
     def skew(self, skipna: bool = None) -> ScalarLike:
         skipna = True if skipna is None else skipna
 
-        if len(self) == 0 or (not skipna and self.has_nulls):
+        if len(self) == 0 or (
+            not skipna
+            and (
+                self.has_nulls
+                or (
+                    self.dtype.kind == "f" and libcudf.unary.is_nan(self).any()
+                )
+            )
+        ):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
         self = self.nans_to_nulls().dropna()  # type: ignore

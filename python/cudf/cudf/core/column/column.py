@@ -1219,7 +1219,9 @@ class ColumnBase(Column, Serializable):
             if result_col.has_nulls:
                 result_col = result_col.dropna()
         else:
-            if self.has_nulls:
+            if self.has_nulls or (
+                self.dtype.kind == "f" and libcudf.unary.is_nan(self).any()
+            ):
                 return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
             result_col = self
@@ -1766,12 +1768,15 @@ def as_column(
                 "https://issues.apache.org/jira/browse/ARROW-3802"
             )
         col = ColumnBase.from_arrow(arbitrary)
+
         if isinstance(arbitrary, pa.NullArray):
-            if type(dtype) == str and dtype == "empty":
-                new_dtype = cudf.dtype(arbitrary.type.to_pandas_dtype())
+            new_dtype = cudf.dtype(arbitrary.type.to_pandas_dtype())
+            if dtype is not None:
+                col = col.astype(dtype)
+            elif len(arbitrary) == 0:
+                col = col.astype("float64")
             else:
-                new_dtype = cudf.dtype(dtype)
-            col = col.astype(new_dtype)
+                col = col.astype(new_dtype)
 
         return col
 

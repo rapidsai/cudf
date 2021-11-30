@@ -514,7 +514,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     _iloc_indexer_type = _DataFrameIlocIndexer
 
     @annotate("DATAFRAME_INIT", color="blue", domain="cudf_python")
-    def __init__(self, data=None, index=None, columns=None, dtype=None):
+    def __init__(
+        self, data=None, index=None, columns=None, dtype=None, nan_as_null=True
+    ):
 
         super().__init__()
 
@@ -619,8 +621,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             else:
                 if not is_dict_like(data):
                     raise TypeError("data must be list or dict-like")
-
-                self._init_from_dict_like(data, index=index, columns=columns)
+                # import pdb;pdb.set_trace()
+                self._init_from_dict_like(
+                    data, index=index, columns=columns, nan_as_null=nan_as_null
+                )
 
         if dtype:
             self._data = self.astype(dtype)._data
@@ -759,7 +763,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             self.columns = columns
 
-    def _init_from_dict_like(self, data, index=None, columns=None):
+    def _init_from_dict_like(
+        self, data, index=None, columns=None, nan_as_null=None
+    ):
         if columns is not None:
             # remove all entries in `data` that are
             # not in `columns`
@@ -786,7 +792,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 }
 
         data, index = self._align_input_series_indices(data, index=index)
-
+        # import pdb;pdb.set_trace()
         if index is None:
             num_rows = 0
             if data:
@@ -794,7 +800,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 if is_scalar(data[col_name]):
                     num_rows = num_rows or 1
                 else:
-                    data[col_name] = column.as_column(data[col_name])
+                    data[col_name] = column.as_column(
+                        data[col_name], nan_as_null=nan_as_null
+                    )
                     num_rows = len(data[col_name])
             self._index = RangeIndex(0, num_rows)
         else:
@@ -806,7 +814,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 self._data.multiindex = self._data.multiindex and isinstance(
                     col_name, tuple
                 )
-                self.insert(i, col_name, data[col_name])
+                self.insert(
+                    i, col_name, data[col_name], nan_as_null=nan_as_null
+                )
 
         if columns is not None:
             self.columns = columns
@@ -2582,7 +2592,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return out
 
     @annotate("INSERT", color="green", domain="cudf_python")
-    def insert(self, loc, name, value):
+    def insert(self, loc, name, value, nan_as_null=None):
         """Add a column to DataFrame at the index specified by loc.
 
         Parameters
@@ -2625,11 +2635,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         )
                 self._data = new_data
         elif isinstance(value, (pd.Series, Series)):
-            value = Series(value)._align_to_index(
+            value = Series(value, nan_as_null=nan_as_null)._align_to_index(
                 self._index, how="right", sort=False
             )
 
-        value = column.as_column(value)
+        value = column.as_column(value, nan_as_null=nan_as_null)
 
         self._data.insert(name, value, loc=loc)
 

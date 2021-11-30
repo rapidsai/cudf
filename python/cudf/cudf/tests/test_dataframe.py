@@ -246,7 +246,7 @@ def test_series_init_none():
     sr1 = cudf.Series()
     got = sr1.to_string()
 
-    expect = "Series([], dtype: float64)"
+    expect = sr1.to_pandas().__repr__()
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
@@ -254,7 +254,7 @@ def test_series_init_none():
     sr2 = cudf.Series(None)
     got = sr2.to_string()
 
-    expect = "Series([], dtype: float64)"
+    expect = sr2.to_pandas().__repr__()
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
@@ -1073,6 +1073,7 @@ def test_dataframe_setitem_from_masked_object():
 
 def test_dataframe_append_to_empty():
     pdf = pd.DataFrame()
+    # Inconsistency in pandas with empty constructor and assignment
     pdf["a"] = []
     pdf["b"] = [1, 2, 3]
 
@@ -2008,8 +2009,8 @@ def test_dataframe_count_reduction(data, func):
         {"x": [np.nan, 2, 3, 4, 100, np.nan], "y": [4, 5, 6, 88, 99, np.nan]},
         {"x": [1, 2, 3], "y": [4, 5, 6]},
         {"x": [np.nan, np.nan, np.nan], "y": [np.nan, np.nan, np.nan]},
-        {"x": [], "y": []},
-        {"x": []},
+        {"x": pd.Series([], dtype="float"), "y": pd.Series([], dtype="float")},
+        {"x": pd.Series([], dtype="int")},
     ],
 )
 @pytest.mark.parametrize("ops", ["sum", "product", "prod"])
@@ -2017,7 +2018,7 @@ def test_dataframe_count_reduction(data, func):
 @pytest.mark.parametrize("min_count", [-10, -1, 0, 1, 2, 3, 10])
 def test_dataframe_min_count_ops(data, ops, skipna, min_count):
     psr = pd.DataFrame(data)
-    gsr = cudf.DataFrame(data)
+    gsr = cudf.from_pandas(psr)
 
     assert_eq(
         getattr(psr, ops)(skipna=skipna, min_count=min_count),
@@ -2498,7 +2499,7 @@ def test_series_all_null(num_elements, null_type):
 
     # Typecast Pandas because None will return `object` dtype
     expect = pd.Series(data, dtype="float64")
-    got = cudf.Series(data)
+    got = cudf.Series(data, dtype="float64")
 
     assert_eq(expect, got)
 
