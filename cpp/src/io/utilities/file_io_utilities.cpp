@@ -75,8 +75,8 @@ class cufile_shim {
 
   ~cufile_shim()
   {
-    driver_close();
-    dlclose(cf_lib);
+    if (driver_close) driver_close();
+    if (cf_lib) dlclose(cf_lib);
   }
 
   decltype(cuFileHandleRegister)* handle_register     = nullptr;
