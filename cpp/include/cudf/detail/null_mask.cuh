@@ -428,16 +428,7 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
                                        stream);
 
   // Copy the results back to the host.
-  std::vector<size_type> ret(num_ranges);
-  CUDA_TRY(cudaMemcpyAsync(ret.data(),
-                           d_bit_counts.data(),
-                           num_ranges * sizeof(size_type),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
-
-  stream.synchronize();  // now ret is valid.
-
-  return ret;
+  return make_std_vector_sync(d_bit_counts, stream);
 }
 
 // Count non-zero bits in the specified ranges
