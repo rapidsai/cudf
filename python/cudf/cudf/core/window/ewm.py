@@ -4,6 +4,7 @@ from cudf._lib.reduce import scan
 from cudf.core.window.rolling import _RollingBase
 from cudf.api.types import is_numeric_dtype
 import numpy as np
+from cudf._lib.transform import nans_to_nulls
 
 from typing import Union
 
@@ -131,4 +132,12 @@ class ExponentialMovingWindow(_RollingBase):
             "adjust": self.adjust,
         }
 
-        return scan(agg_name, sr._column.astype('float64'), True, **kws)
+        # libcudf ewm has special casing for nulls only
+        # and come what may with nans. It treats those nulls like
+        # pandas does nans in the same positions mathematically.
+        # as such we need to convert the nans to nulls before
+        # passing them in.
+        to_libcudf_column = nans_to_nulls(
+            sr._column.astype('float64')
+        )
+        return scan(agg_name, to_libcudf_column, True, **kws)
