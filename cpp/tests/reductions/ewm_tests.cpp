@@ -36,7 +36,6 @@ struct TypedEwmScanTest : BaseScanTest<T> {
                                        null_policy null_handling)
   {
     auto col_out = cudf::scan(input, agg, scan_type::INCLUSIVE, null_handling);
-    cudf::test::print(col_out->view());
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, col_out->view());
   }
 };
@@ -57,6 +56,39 @@ TYPED_TEST(TypedEwmScanTest, Ewm)
                                                        2.55555555555555535818,
                                                        3.51851851851851815667,
                                                        4.50617283950617242283}};
+
+  this->test_ungrouped_ewma_scan(
+    *col, expected_ewma_vals_adjust, cudf::make_ewma_aggregation(0.5, true), null_policy::INCLUDE);
+  this->test_ungrouped_ewma_scan(*col,
+                                 expected_ewma_vals_noadjust,
+                                 cudf::make_ewma_aggregation(0.5, false),
+                                 null_policy::INCLUDE);
+}
+
+TYPED_TEST(TypedEwmScanTest, EwmWithNulls)
+{
+  auto const v = make_vector<TypeParam>({1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0});
+  auto const b = thrust::host_vector<bool>(std::vector<bool>{1, 0, 1, 0, 0, 1, 1});
+  auto col     = this->make_column(v, b);
+  cudf::test::print(col->view());
+
+  auto const expected_ewma_vals_adjust =
+    cudf::test::fixed_width_column_wrapper<TypeParam>{{1.0,
+                                                       1.0,
+                                                       2.79999999999999982236,
+                                                       2.79999999999999982236,
+                                                       2.79999999999999982236,
+                                                       5.87351778656126466416,
+                                                       6.70977596741344139986}};
+
+  auto const expected_ewma_vals_noadjust =
+    cudf::test::fixed_width_column_wrapper<TypeParam>{{1.0,
+                                                       1.0,
+                                                       2.71428571428571441260,
+                                                       2.71428571428571441260,
+                                                       2.71428571428571441260,
+                                                       5.82706766917293172980,
+                                                       6.60902255639097724327}};
 
   this->test_ungrouped_ewma_scan(
     *col, expected_ewma_vals_adjust, cudf::make_ewma_aggregation(0.5, true), null_policy::INCLUDE);
