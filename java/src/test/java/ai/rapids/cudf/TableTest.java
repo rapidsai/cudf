@@ -770,11 +770,6 @@ public class TableTest extends CudfTestBase {
       };
       assertTableTypes(expectedTypes, table);
     }
-    // An CudfException will be thrown here because it contains a FIXED_LEN_BYTE_ARRAY column whose type length exceeds 8.
-    ParquetOptions opts = ParquetOptions.builder().enableStrictDecimalType(true).build();
-    assertThrows(ai.rapids.cudf.CudfException.class, () -> {
-      try (Table table = Table.readParquet(opts, TEST_DECIMAL_PARQUET_FILE)) {}
-    });
   }
 
   @Test
