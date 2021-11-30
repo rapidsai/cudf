@@ -23,6 +23,8 @@
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/filling.hpp>
+#include <cudf/scalar/scalar_factories.hpp>
+#include <cudf/unary.hpp>
 
 using namespace cudf;
 using namespace cudf::test;
@@ -36,7 +38,7 @@ class SequenceTestFixture : public cudf::test::BaseFixture {
 
 using NumericTypesNoBool = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
-TYPED_TEST_CASE(SequenceTypedTestFixture, NumericTypesNoBool);
+TYPED_TEST_SUITE(SequenceTypedTestFixture, NumericTypesNoBool);
 
 TYPED_TEST(SequenceTypedTestFixture, Incrementing)
 {
@@ -133,4 +135,53 @@ TYPED_TEST(SequenceTypedTestFixture, DefaultStep)
   auto result = cudf::sequence(num_els, init);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
+}
+
+TEST_F(SequenceTestFixture, DateSequenceBasic)
+{
+  // Timestamp generated using https://www.epochconverter.com/
+  timestamp_scalar<timestamp_s> init(1629852896L, true);  // 2021-08-25 00:54:56 GMT
+  size_type size{5};
+  size_type months{1};
+
+  fixed_width_column_wrapper<timestamp_s, int64_t> expected{
+    1629852896L,  // 2021-08-25 00:54:56 GMT
+    1632531296L,  // 2021-09-25 00:54:56 GMT
+    1635123296L,  // 2021-10-25 00:54:56 GMT
+    1637801696L,  // 2021-11-25 00:54:56 GMT
+    1640393696L,  // 2021-12-25 00:54:56 GMT
+  };
+
+  auto got = calendrical_month_sequence(size, init, months);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *got);
+}
+
+TEST_F(SequenceTestFixture, DateSequenceLeapYear)
+{
+  // Timestamp generated using https://www.epochconverter.com/
+  timestamp_scalar<timestamp_s> init(951876379L, true);  // 2000-02-29 02:06:19 GMT
+  size_type size{5};
+  size_type months{12};
+
+  fixed_width_column_wrapper<timestamp_s, int64_t> expected{
+    951876379L,   // 2000-02-29 02:06:19 GMT Leap Year
+    983412379L,   // 2001-02-28 02:06:19 GMT
+    1014948379L,  // 2002-02-28 02:06:19 GMT
+    1046484379L,  // 2003-02-28 02:06:19 GMT
+    1078106779L,  // 2004-02-29 02:06:19 GMT Leap Year
+  };
+
+  auto got = calendrical_month_sequence(size, init, months);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *got);
+}
+
+TEST_F(SequenceTestFixture, DateSequenceBadTypes)
+{
+  numeric_scalar<int64_t> init(951876379, true);
+  size_type size   = 5;
+  size_type months = 12;
+
+  EXPECT_THROW(calendrical_month_sequence(size, init, months), cudf::logic_error);
 }

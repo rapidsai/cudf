@@ -217,12 +217,7 @@ struct DeviceType<T, std::enable_if_t<cudf::is_timestamp<T>()>> {
 };
 
 template <typename T>
-struct DeviceType<T, std::enable_if_t<std::is_same_v<numeric::decimal32, T>>> {
-  using type = typename cudf::device_storage_type_t<T>;
-};
-
-template <typename T>
-struct DeviceType<T, std::enable_if_t<std::is_same_v<numeric::decimal64, T>>> {
+struct DeviceType<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
   using type = typename cudf::device_storage_type_t<T>;
 };
 

@@ -35,7 +35,7 @@ struct NumericScalarFactory : public ScalarFactoryTest {
   static constexpr auto factory = cudf::make_numeric_scalar;
 };
 
-TYPED_TEST_CASE(NumericScalarFactory, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(NumericScalarFactory, cudf::test::NumericTypes);
 
 TYPED_TEST(NumericScalarFactory, FactoryDefault)
 {
@@ -65,7 +65,7 @@ struct TimestampScalarFactory : public ScalarFactoryTest {
   static constexpr auto factory = cudf::make_timestamp_scalar;
 };
 
-TYPED_TEST_CASE(TimestampScalarFactory, cudf::test::TimestampTypes);
+TYPED_TEST_SUITE(TimestampScalarFactory, cudf::test::TimestampTypes);
 
 TYPED_TEST(TimestampScalarFactory, FactoryDefault)
 {
@@ -96,7 +96,7 @@ struct DefaultScalarFactory : public ScalarFactoryTest {
 };
 
 using MixedTypes = cudf::test::Concat<cudf::test::AllTypes, cudf::test::StringTypes>;
-TYPED_TEST_CASE(DefaultScalarFactory, MixedTypes);
+TYPED_TEST_SUITE(DefaultScalarFactory, MixedTypes);
 
 TYPED_TEST(DefaultScalarFactory, FactoryDefault)
 {
@@ -123,7 +123,7 @@ template <typename T>
 struct FixedWidthScalarFactory : public ScalarFactoryTest {
 };
 
-TYPED_TEST_CASE(FixedWidthScalarFactory, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(FixedWidthScalarFactory, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(FixedWidthScalarFactory, ValueProvided)
 {
@@ -144,7 +144,7 @@ template <typename T>
 struct FixedPointScalarFactory : public ScalarFactoryTest {
 };
 
-TYPED_TEST_CASE(FixedPointScalarFactory, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointScalarFactory, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointScalarFactory, ValueProvided)
 {

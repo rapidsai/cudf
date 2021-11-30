@@ -23,11 +23,15 @@
 #include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_scalar.hpp>
 
 namespace cudf {
 namespace detail {
 /**
  * @brief Computes the merger of an array of bitmasks using a binary operator
+ *
+ * @tparam block_size Number of threads in each thread block
+ * @tparam Binop Type of binary operator
  *
  * @param op The binary operator used to combine the bitmasks
  * @param destination The bitmask to write result into
@@ -35,16 +39,22 @@ namespace detail {
  * @param source_begin_bits Array of offsets into corresponding @p source masks.
  *                          Must be same size as source array
  * @param source_size_bits Number of bits in each mask in @p source
+ * @param count Pointer to counter of set bits
  */
-template <typename Binop>
+template <int block_size, typename Binop>
 __global__ void offset_bitmask_binop(Binop op,
                                      device_span<bitmask_type> destination,
                                      device_span<bitmask_type const*> source,
                                      device_span<size_type const> source_begin_bits,
-                                     size_type source_size_bits)
+                                     size_type source_size_bits,
+                                     size_type* count_ptr)
 {
-  for (size_type destination_word_index = threadIdx.x + blockIdx.x * blockDim.x;
-       destination_word_index < destination.size();
+  constexpr auto const word_size{detail::size_in_bits<bitmask_type>()};
+  auto const tid = threadIdx.x + blockIdx.x * blockDim.x;
+
+  size_type thread_count = 0;
+
+  for (size_type destination_word_index = tid; destination_word_index < destination.size();
        destination_word_index += blockDim.x * gridDim.x) {
     bitmask_type destination_word =
       detail::get_mask_offset_word(source[0],
@@ -52,17 +62,32 @@ __global__ void offset_bitmask_binop(Binop op,
                                    source_begin_bits[0],
                                    source_begin_bits[0] + source_size_bits);
     for (size_type i = 1; i < source.size(); i++) {
-      destination_word =
-
-        op(destination_word,
-           detail::get_mask_offset_word(source[i],
-                                        destination_word_index,
-                                        source_begin_bits[i],
-                                        source_begin_bits[i] + source_size_bits));
+      destination_word = op(destination_word,
+                            detail::get_mask_offset_word(source[i],
+                                                         destination_word_index,
+                                                         source_begin_bits[i],
+                                                         source_begin_bits[i] + source_size_bits));
     }
 
     destination[destination_word_index] = destination_word;
+    thread_count += __popc(destination_word);
   }
+
+  // Subtract any slack bits from the last word
+  if (tid == 0) {
+    size_type const last_bit_index = source_size_bits - 1;
+    size_type const num_slack_bits = word_size - (last_bit_index % word_size) - 1;
+    if (num_slack_bits > 0) {
+      size_type const word_index = cudf::word_index(last_bit_index);
+      thread_count -= __popc(destination[word_index] & set_most_significant_bits(num_slack_bits));
+    }
+  }
+
+  using BlockReduce = cub::BlockReduce<size_type, block_size>;
+  __shared__ typename BlockReduce::TempStorage temp_storage;
+  size_type block_count = BlockReduce(temp_storage).Sum(thread_count);
+
+  if (threadIdx.x == 0) { atomicAdd(count_ptr, block_count); }
 }
 
 /**
@@ -72,7 +97,7 @@ __global__ void offset_bitmask_binop(Binop op,
  * @param stream CUDA stream used for device memory operations and kernel launches
  */
 template <typename Binop>
-rmm::device_buffer bitmask_binop(
+std::pair<rmm::device_buffer, size_type> bitmask_binop(
   Binop op,
   host_span<bitmask_type const*> masks,
   host_span<size_type const> masks_begin_bits,
@@ -81,34 +106,35 @@ rmm::device_buffer bitmask_binop(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto dest_mask = rmm::device_buffer{bitmask_allocation_size_bytes(mask_size_bits), stream, mr};
+  auto null_count =
+    mask_size_bits -
+    inplace_bitmask_binop(op,
+                          device_span<bitmask_type>(static_cast<bitmask_type*>(dest_mask.data()),
+                                                    num_bitmask_words(mask_size_bits)),
+                          masks,
+                          masks_begin_bits,
+                          mask_size_bits,
+                          stream,
+                          mr);
 
-  inplace_bitmask_binop(op,
-                        device_span<bitmask_type>(static_cast<bitmask_type*>(dest_mask.data()),
-                                                  num_bitmask_words(mask_size_bits)),
-                        masks,
-                        masks_begin_bits,
-                        mask_size_bits,
-                        stream,
-                        mr);
-
-  return dest_mask;
+  return std::make_pair(std::move(dest_mask), null_count);
 }
 
 /**
  * @brief Performs a merge of the specified bitmasks using the binary operator
- *        provided, and writes in place to destination
+ *        provided, writes in place to destination and returns count of set bits
  *
- * @param op The binary operator used to combine the bitmasks
- * @param dest_mask Destination to which the merged result is written
- * @param masks The list of data pointers of the bitmasks to be merged
- * @param masks_begin_bits The bit offsets from which each mask is to be merged
- * @param mask_size_bits The number of bits to be ANDed in each mask
- * @param stream CUDA stream used for device memory operations and kernel launches
- * @param mr Device memory resource used to allocate the returned device_buffer
- * @return rmm::device_buffer Output bitmask
+ * @param[in] op The binary operator used to combine the bitmasks
+ * @param[out] dest_mask Destination to which the merged result is written
+ * @param[in] masks The list of data pointers of the bitmasks to be merged
+ * @param[in] masks_begin_bits The bit offsets from which each mask is to be merged
+ * @param[in] mask_size_bits The number of bits to be ANDed in each mask
+ * @param[in] stream CUDA stream used for device memory operations and kernel launches
+ * @param[in] mr Device memory resource used to allocate the returned device_buffer
+ * @return size_type Count of set bits
  */
 template <typename Binop>
-void inplace_bitmask_binop(
+size_type inplace_bitmask_binop(
   Binop op,
   device_span<bitmask_type> dest_mask,
   host_span<bitmask_type const*> masks,
@@ -124,6 +150,7 @@ void inplace_bitmask_binop(
   CUDF_EXPECTS(std::all_of(masks.begin(), masks.end(), [](auto p) { return p != nullptr; }),
                "Mask pointer cannot be null");
 
+  rmm::device_scalar<size_type> d_counter{0, stream, mr};
   rmm::device_uvector<bitmask_type const*> d_masks(masks.size(), stream, mr);
   rmm::device_uvector<size_type> d_begin_bits(masks_begin_bits.size(), stream, mr);
 
@@ -135,11 +162,13 @@ void inplace_bitmask_binop(
                            cudaMemcpyHostToDevice,
                            stream.value()));
 
-  cudf::detail::grid_1d config(dest_mask.size(), 256);
-  offset_bitmask_binop<<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
-    op, dest_mask, d_masks, d_begin_bits, mask_size_bits);
+  auto constexpr block_size = 256;
+  cudf::detail::grid_1d config(dest_mask.size(), block_size);
+  offset_bitmask_binop<block_size>
+    <<<config.num_blocks, config.num_threads_per_block, 0, stream.value()>>>(
+      op, dest_mask, d_masks, d_begin_bits, mask_size_bits, d_counter.data());
   CHECK_CUDA(stream.value());
-  stream.synchronize();
+  return d_counter.value(stream);
 }
 
 /**

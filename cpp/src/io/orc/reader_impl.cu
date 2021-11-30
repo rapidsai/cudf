@@ -25,6 +25,7 @@
 #include "timezone.cuh"
 
 #include <io/comp/gpuinflate.h>
+#include <io/utilities/config_utils.hpp>
 #include <io/utilities/time_utils.cuh>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -56,7 +57,7 @@ namespace {
 constexpr type_id to_type_id(const orc::SchemaType& schema,
                              bool use_np_dtypes,
                              type_id timestamp_type_id,
-                             bool decimals_as_float64)
+                             type_id decimal_type_id)
 {
   switch (schema.kind) {
     case orc::BOOLEAN: return type_id::BOOL8;
@@ -78,7 +79,7 @@ constexpr type_id to_type_id(const orc::SchemaType& schema,
     case orc::DATE:
       // There isn't a (DAYS -> np.dtype) mapping
       return (use_np_dtypes) ? type_id::TIMESTAMP_MILLISECONDS : type_id::TIMESTAMP_DAYS;
-    case orc::DECIMAL: return (decimals_as_float64) ? type_id::FLOAT64 : type_id::DECIMAL64;
+    case orc::DECIMAL: return decimal_type_id;
     // Need to update once cuDF plans to support map type
     case orc::MAP:
     case orc::LIST: return type_id::LIST;
@@ -227,15 +228,26 @@ size_t gather_stream_info(const size_t stripe_index,
 }
 
 /**
- * @brief Determines if a column should be converted from decimal to float
+ * @brief Determines cuDF type of an ORC Decimal column.
  */
-bool should_convert_decimal_column_to_float(const std::vector<std::string>& columns_to_convert,
-                                            cudf::io::orc::metadata& metadata,
-                                            int column_index)
+auto decimal_column_type(const std::vector<std::string>& float64_columns,
+                         const std::vector<std::string>& decimal128_columns,
+                         cudf::io::orc::metadata& metadata,
+                         int column_index)
 {
-  return (std::find(columns_to_convert.begin(),
-                    columns_to_convert.end(),
-                    metadata.column_name(column_index)) != columns_to_convert.end());
+  auto const& column_path = metadata.column_path(column_index);
+  auto is_column_in       = [&](const std::vector<std::string>& cols) {
+    return std::find(cols.cbegin(), cols.cend(), column_path) != cols.end();
+  };
+
+  auto const user_selected_float64    = is_column_in(float64_columns);
+  auto const user_selected_decimal128 = is_column_in(decimal128_columns);
+  CUDF_EXPECTS(not user_selected_float64 or not user_selected_decimal128,
+               "Both decimal128 and float64 types selected for column " + column_path);
+
+  if (user_selected_float64) return type_id::FLOAT64;
+  if (user_selected_decimal128) return type_id::DECIMAL128;
+  return type_id::DECIMAL64;
 }
 
 }  // namespace
@@ -372,15 +384,13 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
 
   // Dispatch batches of blocks to decompress
   if (num_compressed_blocks > 0) {
-    auto env_use_nvcomp = std::getenv("LIBCUDF_USE_NVCOMP");
-    bool use_nvcomp     = env_use_nvcomp != nullptr ? std::atoi(env_use_nvcomp) : 0;
     switch (decompressor->GetKind()) {
       case orc::ZLIB:
         CUDA_TRY(
           gpuinflate(inflate_in.data(), inflate_out.data(), num_compressed_blocks, 0, stream));
         break;
       case orc::SNAPPY:
-        if (use_nvcomp) {
+        if (nvcomp_integration::is_stable_enabled()) {
           device_span<gpu_inflate_input_s> inflate_in_view{inflate_in.data(),
                                                            num_compressed_blocks};
           device_span<gpu_inflate_status_s> inflate_out_view{inflate_out.data(),
@@ -729,12 +739,12 @@ std::unique_ptr<column> reader::impl::create_empty_column(const size_type orc_co
                                                           rmm::cuda_stream_view stream)
 {
   schema_info.name = _metadata.column_name(0, orc_col_id);
-  // If the column type is orc::DECIMAL see if the user
-  // desires it to be converted to float64 or not
-  auto const decimal_as_float64 = should_convert_decimal_column_to_float(
-    _decimal_cols_as_float, _metadata.per_file_metadata[0], orc_col_id);
-  auto const type = to_type_id(
-    _metadata.get_schema(orc_col_id), _use_np_dtypes, _timestamp_type.id(), decimal_as_float64);
+  auto const type  = to_type_id(
+    _metadata.get_schema(orc_col_id),
+    _use_np_dtypes,
+    _timestamp_type.id(),
+    decimal_column_type(
+      _decimal_cols_as_float, decimal128_columns, _metadata.per_file_metadata[0], orc_col_id));
   int32_t scale = 0;
   std::vector<std::unique_ptr<column>> child_columns;
   std::unique_ptr<column> out_col = nullptr;
@@ -785,7 +795,7 @@ std::unique_ptr<column> reader::impl::create_empty_column(const size_type orc_co
       break;
 
     case orc::DECIMAL:
-      if (type == type_id::DECIMAL64) {
+      if (type == type_id::DECIMAL64 or type == type_id::DECIMAL128) {
         scale = -static_cast<int32_t>(_metadata.get_types()[orc_col_id].scale.value_or(0));
       }
       out_col = make_empty_column(data_type(type, scale));
@@ -876,8 +886,9 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
   // Enable or disable the conversion to numpy-compatible dtypes
   _use_np_dtypes = options.is_enabled_use_np_dtypes();
 
-  // Control decimals conversion (float64 or int64 with optional scale)
+  // Control decimals conversion
   _decimal_cols_as_float = options.get_decimal_cols_as_float();
+  decimal128_columns     = options.get_decimal128_columns();
 }
 
 timezone_table reader::impl::compute_timezone_table(
@@ -937,18 +948,18 @@ table_with_metadata reader::impl::read(size_type skip_rows,
     // Get a list of column data types
     std::vector<data_type> column_types;
     for (auto& col : columns_level) {
-      // If the column type is orc::DECIMAL see if the user
-      // desires it to be converted to float64 or not
-      auto const decimal_as_float64 = should_convert_decimal_column_to_float(
-        _decimal_cols_as_float, _metadata.per_file_metadata[0], col.id);
       auto col_type = to_type_id(
-        _metadata.get_col_type(col.id), _use_np_dtypes, _timestamp_type.id(), decimal_as_float64);
+        _metadata.get_col_type(col.id),
+        _use_np_dtypes,
+        _timestamp_type.id(),
+        decimal_column_type(
+          _decimal_cols_as_float, decimal128_columns, _metadata.per_file_metadata[0], col.id));
       CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
-      // Remove this once we support Decimal128 data type
       CUDF_EXPECTS(
         (col_type != type_id::DECIMAL64) or (_metadata.get_col_type(col.id).precision <= 18),
-        "Decimal data has precision > 18, Decimal64 data type doesn't support it.");
-      if (col_type == type_id::DECIMAL64) {
+        "Precision of column " + std::string{_metadata.column_name(0, col.id)} +
+          " is over 18, use 128-bit Decimal.");
+      if (col_type == type_id::DECIMAL64 or col_type == type_id::DECIMAL128) {
         // sign of the scale is changed since cuDF follows c++ libraries like CNL
         // which uses negative scaling, but liborc and other libraries
         // follow positive scaling.
@@ -1115,13 +1126,11 @@ table_with_metadata reader::impl::read(size_type skip_rows,
                                 .kind;
             // num_child_rows for a struct column will be same, for other nested types it will be
             // calculated.
-            chunk.num_child_rows          = (chunk.type_kind != orc::STRUCT) ? 0 : chunk.num_rows;
-            auto const decimal_as_float64 = should_convert_decimal_column_to_float(
-              _decimal_cols_as_float, _metadata.per_file_metadata[0], columns_level[col_idx].id);
-            chunk.decimal_scale = _metadata.per_file_metadata[stripe_source_mapping.source_idx]
+            chunk.num_child_rows = (chunk.type_kind != orc::STRUCT) ? 0 : chunk.num_rows;
+            chunk.dtype_id       = column_types[col_idx].id();
+            chunk.decimal_scale  = _metadata.per_file_metadata[stripe_source_mapping.source_idx]
                                     .ff.types[columns_level[col_idx].id]
-                                    .scale.value_or(0) |
-                                  (decimal_as_float64 ? orc::gpu::orc_decimal2float64_scale : 0);
+                                    .scale.value_or(0);
 
             chunk.rowgroup_id   = rowgroup_id;
             chunk.dtype_len     = (column_types[col_idx].id() == type_id::STRING)

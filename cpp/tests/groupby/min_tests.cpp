@@ -33,7 +33,7 @@ struct groupby_min_test : public cudf::test::BaseFixture {
 };
 
 using K = int32_t;
-TYPED_TEST_CASE(groupby_min_test, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(groupby_min_test, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(groupby_min_test, basic)
 {
@@ -252,12 +252,12 @@ TEST_F(groupby_dictionary_min_test, fixed_width)
 }
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, GroupBySortMinDecimalAsValue)
+TYPED_TEST(FixedPointTestAllReps, GroupBySortMinDecimalAsValue)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -280,7 +280,7 @@ TYPED_TEST(FixedPointTestBothReps, GroupBySortMinDecimalAsValue)
   }
 }
 
-TYPED_TEST(FixedPointTestBothReps, GroupByHashMinDecimalAsValue)
+TYPED_TEST(FixedPointTestAllReps, GroupByHashMinDecimalAsValue)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;
@@ -301,6 +301,90 @@ TYPED_TEST(FixedPointTestBothReps, GroupByHashMinDecimalAsValue)
     auto agg6 = cudf::make_min_aggregation<cudf::groupby_aggregation>();
     test_single_agg(keys, vals, expect_keys, expect_vals_min, std::move(agg6));
   }
+}
+
+struct groupby_min_struct_test : public cudf::test::BaseFixture {
+};
+
+TEST_F(groupby_min_struct_test, basic)
+{
+  auto const keys = fixed_width_column_wrapper<int32_t>{1, 2, 3, 1, 2, 2, 1, 3, 3, 2};
+  auto const vals = [] {
+    auto child1 =
+      strings_column_wrapper{"año", "bit", "₹1", "aaa", "zit", "bat", "aab", "$1", "€1", "wut"};
+    auto child2 = fixed_width_column_wrapper<int32_t>{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    return structs_column_wrapper{{child1, child2}};
+  }();
+
+  auto const expect_keys = fixed_width_column_wrapper<int32_t>{1, 2, 3};
+  auto const expect_vals = [] {
+    auto child1 = strings_column_wrapper{"aaa", "bat", "$1"};
+    auto child2 = fixed_width_column_wrapper<int32_t>{4, 6, 8};
+    return structs_column_wrapper{{child1, child2}};
+  }();
+
+  auto agg = cudf::make_min_aggregation<groupby_aggregation>();
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+}
+
+TEST_F(groupby_min_struct_test, slice_input)
+{
+  constexpr int32_t dont_care{1};
+  auto const keys_original = fixed_width_column_wrapper<int32_t>{
+    dont_care, dont_care, 1, 2, 3, 1, 2, 2, 1, 3, 3, 2, dont_care};
+  auto const vals_original = [] {
+    auto child1 = strings_column_wrapper{"dont_care",
+                                         "dont_care",
+                                         "año",
+                                         "bit",
+                                         "₹1",
+                                         "aaa",
+                                         "zit",
+                                         "bat",
+                                         "aab",
+                                         "$1",
+                                         "€1",
+                                         "wut",
+                                         "dont_care"};
+    auto child2 = fixed_width_column_wrapper<int32_t>{
+      dont_care, dont_care, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, dont_care};
+    return structs_column_wrapper{{child1, child2}};
+  }();
+
+  auto const keys        = cudf::slice(keys_original, {2, 12})[0];
+  auto const vals        = cudf::slice(vals_original, {2, 12})[0];
+  auto const expect_keys = fixed_width_column_wrapper<int32_t>{1, 2, 3};
+  auto const expect_vals = [] {
+    auto child1 = strings_column_wrapper{"aaa", "bat", "$1"};
+    auto child2 = fixed_width_column_wrapper<int32_t>{4, 6, 8};
+    return structs_column_wrapper{{child1, child2}};
+  }();
+
+  auto agg = cudf::make_min_aggregation<groupby_aggregation>();
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
+}
+
+TEST_F(groupby_min_struct_test, null_keys_and_values)
+{
+  constexpr int32_t null{0};
+  auto const keys =
+    fixed_width_column_wrapper<int32_t>{{1, 2, 3, 1, 2, 2, 1, null, 3, 2, 4}, null_at(7)};
+  auto const vals = [] {
+    auto child1 = strings_column_wrapper{
+      "año", "bit", "₹1", "aaa", "zit", "" /*NULL*/, "" /*NULL*/, "$1", "€1", "wut", "" /*NULL*/};
+    auto child2 = fixed_width_column_wrapper<int32_t>{9, 8, 7, 6, 5, null, null, 2, 1, 0, null};
+    return structs_column_wrapper{{child1, child2}, nulls_at({5, 6, 10})};
+  }();
+
+  auto const expect_keys = fixed_width_column_wrapper<int32_t>{{1, 2, 3, 4}, no_nulls()};
+  auto const expect_vals = [] {
+    auto child1 = strings_column_wrapper{"aaa", "bit", "€1", "" /*NULL*/};
+    auto child2 = fixed_width_column_wrapper<int32_t>{6, 8, 1, null};
+    return structs_column_wrapper{{child1, child2}, null_at(3)};
+  }();
+
+  auto agg = cudf::make_min_aggregation<groupby_aggregation>();
+  test_single_agg(keys, vals, expect_keys, expect_vals, std::move(agg));
 }
 
 }  // namespace test

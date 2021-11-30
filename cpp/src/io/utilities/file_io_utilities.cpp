@@ -15,6 +15,7 @@
  */
 #include "file_io_utilities.hpp"
 #include <cudf/detail/utilities/integer_utils.hpp>
+#include <io/utilities/config_utils.hpp>
 
 #include <rmm/device_buffer.hpp>
 
@@ -47,12 +48,6 @@ file_wrapper::file_wrapper(std::string const& filepath, int flags, mode_t mode)
 }
 
 file_wrapper::~file_wrapper() { close(fd); }
-
-std::string getenv_or(std::string const& env_var_name, std::string const& default_val)
-{
-  auto const env_val = std::getenv(env_var_name.c_str());
-  return (env_val == nullptr) ? default_val : std::string(env_val);
-}
 
 #ifdef CUFILE_FOUND
 
@@ -111,8 +106,8 @@ class cufile_shim {
 
   ~cufile_shim()
   {
-    driver_close();
-    dlclose(cf_lib);
+    if (driver_close) driver_close();
+    if (cf_lib) dlclose(cf_lib);
   }
 
   decltype(cuFileHandleRegister)* handle_register     = nullptr;

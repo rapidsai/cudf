@@ -78,7 +78,7 @@ repos:
                 # Note that pre-commit autoupdate does not update the versions
                 # of dependencies, so we'll have to update this manually.
                 additional_dependencies:
-                  - cmakelang==0.6.13
+                  - cmake-format==0.6.11
               - id: cmake-lint
                 name: cmake-lint
                 entry: bash cpp/scripts/run-cmake-format.sh cmake-lint
@@ -87,7 +87,7 @@ repos:
                 # Note that pre-commit autoupdate does not update the versions
                 # of dependencies, so we'll have to update this manually.
                 additional_dependencies:
-                  - cmakelang==0.6.13
+                  - cmake-format==0.6.11
 
 default_language_version:
       python: python3

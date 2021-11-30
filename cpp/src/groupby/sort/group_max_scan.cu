@@ -27,8 +27,13 @@ std::unique_ptr<column> max_scan(column_view const& values,
                                  rmm::cuda_stream_view stream,
                                  rmm::mr::device_memory_resource* mr)
 {
-  return type_dispatcher(
-    values.type(), scan_functor<aggregation::MAX>{}, values, num_groups, group_labels, stream, mr);
+  return type_dispatcher(values.type(),
+                         group_scan_dispatcher<aggregation::MAX>{},
+                         values,
+                         num_groups,
+                         group_labels,
+                         stream,
+                         mr);
 }
 
 }  // namespace detail

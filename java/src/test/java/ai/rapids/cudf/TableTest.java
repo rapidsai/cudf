@@ -30,6 +30,8 @@ import ai.rapids.cudf.ast.BinaryOperator;
 import ai.rapids.cudf.ast.ColumnReference;
 import ai.rapids.cudf.ast.CompiledExpression;
 import ai.rapids.cudf.ast.TableReference;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 import org.apache.parquet.hadoop.ParquetFileReader;
@@ -45,11 +47,13 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static ai.rapids.cudf.ColumnWriterOptions.mapColumn;
@@ -222,6 +226,10 @@ public class TableTest extends CudfTestBase {
           case TIMESTAMP_SECONDS:
           case DECIMAL64:
             assertEquals(expected.getLong(expectedRow), cv.getLong(tableRow),
+                "Column " + colName + " Row " + tableRow);
+            break;
+          case DECIMAL128:
+            assertEquals(expected.getBigDecimal(expectedRow), cv.getBigDecimal(tableRow),
                 "Column " + colName + " Row " + tableRow);
             break;
           case FLOAT32:
@@ -3340,6 +3348,10 @@ public class TableTest extends CudfTestBase {
         }
       } finally {
         for (HostColumnVector c: hostColumns) {
+          // close child columns for multiple times should NOT throw exceptions
+          for (int i = 0; i < c.getNumChildren(); i++) {
+            c.getChildColumnView(i).close();
+          }
           c.close();
         }
       }
@@ -3656,6 +3668,97 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testGroupByMinMaxDecimal() {
+    try (Table t1 = new Table.TestBuilder()
+        .column( "1",  "1", "1", "1", "2")
+        .column(0, 1, 3 , 3, 4)
+        .decimal128Column(-4, RoundingMode.HALF_UP,
+            new BigInteger("123456789123456789"),
+            new BigInteger("7979879879879798"),
+            new BigInteger("17979879879879798"),
+            new BigInteger("2234563472398472398"),
+            null)
+        .build()) {
+      try (Table result = t1
+          .groupBy(GroupByOptions.builder()
+              .withKeysSorted(true)
+              .withKeysDescending(false, false)
+              .build(), 0, 1)
+          .scan(GroupByScanAggregation.min().onColumn(2),
+              GroupByScanAggregation.max().onColumn(2));
+           Table expected = new Table.TestBuilder()
+               .column( "1",  "1", "1", "1", "2")
+               .column(0, 1, 3, 3, 4)
+               .decimal128Column(-4, RoundingMode.HALF_UP,
+                   new BigInteger("123456789123456789"),
+                   new BigInteger("7979879879879798"),
+                   new BigInteger("17979879879879798"),
+                   new BigInteger("17979879879879798"),
+                   null)
+               .decimal128Column(-4, RoundingMode.HALF_UP,
+                   new BigInteger("123456789123456789"),
+                   new BigInteger("7979879879879798"),
+                   new BigInteger("17979879879879798"),
+                   new BigInteger("2234563472398472398"),
+                   null)
+               .build()) {
+        assertTablesAreEqual(expected, result);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByMinMaxDecimalAgg() {
+    try (Table t1 = new Table.TestBuilder()
+        .column(-341142443, 48424546)
+        .decimal128Column(-2, RoundingMode.HALF_DOWN,
+            new BigInteger("2978603952268112009"),
+            new BigInteger("571526248386900094"))
+        .build()) {
+      try (Table result = t1
+          .groupBy(GroupByOptions.builder()
+              .build(), 0)
+          .aggregate(GroupByAggregation.max().onColumn(1));
+           Table expected = new Table.TestBuilder()
+               .column(-341142443, 48424546)
+               .decimal128Column(-2, RoundingMode.HALF_DOWN,
+                   new BigInteger("2978603952268112009"),
+                   new BigInteger("571526248386900094"))
+               .build()) {
+        assertTablesAreEqual(expected, result);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByCountDecimal() {
+    try (Table t1 = new Table.TestBuilder()
+        .column( "1",  "1", "1", "1", "2")
+        .column(0, 1, 3 , 3, 4)
+        .decimal128Column(-4, RoundingMode.HALF_UP,
+            new BigInteger("123456789123456789"),
+            new BigInteger("7979879879879798"),
+            new BigInteger("17979879879879798"),
+            new BigInteger("2234563472398472398"),
+            null)
+        .build()) {
+      try (Table result = t1
+          .groupBy(GroupByOptions.builder()
+              .withKeysSorted(true)
+              .withKeysDescending(false, false)
+              .build(), 0, 1)
+          .aggregate(GroupByAggregation.count().onColumn(2));
+           Table expected = new Table.TestBuilder()
+               .column( "1",  "1", "1", "2")
+               .column(0, 1, 3, 4)
+               .column(1, 1, 2, 0)
+               .build()) {
+        assertTablesAreEqual(expected, result);
+      }
+    }
+  }
+
+  @Test
   void testGroupByUniqueCount() {
     try (Table t1 = new Table.TestBuilder()
             .column( "1",  "1",  "1",  "1",  "1",  "1")
@@ -3672,6 +3775,33 @@ public class TableTest extends CudfTestBase {
                    .column(   1,    1,    1,    1)
                    .build()) {
         assertTablesAreEqual(expected, sorted);
+      }
+    }
+  }
+
+  @Test
+  void testOrderByDecimal() {
+    try (Table t1 = new Table.TestBuilder()
+        .column( "1",  "1", "1", "1")
+        .column(0, 1, 3 , 3)
+        .decimal64Column(4,
+            123456L,
+            124567L,
+            125678L,
+            126789L)
+        .build()) {
+      try (Table sorted = t1.orderBy(OrderByArg.asc(0), OrderByArg.asc(1), OrderByArg.asc(2));
+           Table expected = new Table.TestBuilder()
+               .column( "1",  "1", "1", "1")
+               .column(   0,    1, 3, 3)
+               .decimal64Column(4,
+                   123456L,
+                   124567L,
+                   125678L,
+                   126789L)
+               .build()) {
+        assertTablesAreEqual(expected, sorted);
+
       }
     }
   }
@@ -6703,43 +6833,202 @@ public class TableTest extends CudfTestBase {
     }
   }
 
-  private Table getExpectedFileTable() {
-    return getExpectedFileTable(false, false);
-  }
+  private enum Columns {
+    BOOL("BOOL"),
+    INT("INT"),
+    BYTE("BYTE"),
+    LONG("LONG"),
+    STRING("STRING"),
+    FLOAT("FLOAT"),
+    DOUBLE("DOUBLE"),
+    DECIMAL64("DECIMAL64"),
+    DECIMAL128("DECIMAL128"),
+    STRUCT("STRUCT"),
+    STRUCT_DEC128("STRUCT_DEC128"),
+    LIST("LIST"),
+    LIST_STRUCT("LIST_STRUCT"),
+    LIST_DEC128("LIST_DEC128");
 
-  private Table getExpectedFileTable(boolean withNestedColumns) {
-    return getExpectedFileTable(true, true);
-  }
+    final String name;
 
-  private Table getExpectedFileTable(boolean withStructColumns, boolean withListColumn) {
-    TestBuilder tb = new TestBuilder()
-        .column(true, false, false, true, false)
-        .column(5, 1, 0, 2, 7)
-        .column(new Byte[]{2, 3, 4, 5, 9})
-        .column(3l, 9l, 4l, 2l, 20l)
-        .column("this", "is", "a", "test", "string")
-        .column(1.0f, 3.5f, 5.9f, 7.1f, 9.8f)
-        .column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d);
-    StructType nestedType = new StructType(true,
-        new BasicType(false, DType.INT32), new BasicType(false, DType.STRING));
-    if (withStructColumns) {
-      tb.column(nestedType,
-          struct(1, "k1"), struct(2, "k2"), struct(3, "k3"),
-          struct(4, "k4"), new HostColumnVector.StructData((List) null));
+    Columns(String columnName) {
+      this.name = columnName;
     }
-    if (withListColumn) {
-      tb.column(new ListType(false, new BasicType(false, DType.INT32)),
-          Arrays.asList(1, 2),
-          Arrays.asList(3, 4),
-          Arrays.asList(5),
-          Arrays.asList(6, 7),
-          Arrays.asList(8, 9, 10))
-          .column(new ListType(false, nestedType),
-              Arrays.asList(struct(1, "k1"), struct(2, "k2"), struct(3, "k3")),
-              Arrays.asList(struct(4, "k4"), struct(5, "k5")),
-              Arrays.asList(struct(6, "k6")),
+  }
+
+  private static class WriteUtils {
+
+    private static final Map<Columns, Function<TestBuilder, TestBuilder>> addColumnFn = Maps.newHashMap();
+
+    static {
+      addColumnFn.put(Columns.BOOL, (t) -> t.column(true, false, false, true, false));
+      addColumnFn.put(Columns.INT, (t) -> t.column(5, 1, 0, 2, 7));
+      addColumnFn.put(Columns.LONG, (t) -> t.column(3l, 9l, 4l, 2l, 20l));
+      addColumnFn.put(Columns.BYTE, (t) -> t.column(new Byte[]{2, 3, 4, 5, 9}));
+      addColumnFn.put(Columns.STRING, (t) -> t.column("this", "is", "a", "test", "string"));
+      addColumnFn.put(Columns.FLOAT, (t) -> t.column(1.0f, 3.5f, 5.9f, 7.1f, 9.8f));
+      addColumnFn.put(Columns.DOUBLE, (t) -> t.column(5.0d, 9.5d, 0.9d, 7.23d, 2.8d));
+      addColumnFn.put(Columns.DECIMAL64, (t) ->
+          t.decimal64Column(-5, 1L, 323L, 12398423L, -231312412L, 239893414231L));
+      addColumnFn.put(Columns.DECIMAL128, (t) ->
+          t.decimal128Column(-10, RoundingMode.UNNECESSARY, BigInteger.ONE, BigInteger.ZERO,
+              BigInteger.TEN, new BigInteger("100000000000000000000000000000"),
+              new BigInteger("-1234567890123456789012345678")));
+
+      BasicType dec64Type = new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL64, 0));
+      StructType structType = new StructType(true,
+          new BasicType(true, DType.INT32), new BasicType(true, DType.STRING), dec64Type);
+      addColumnFn.put(Columns.STRUCT, (t) -> t.column(structType,
+          struct(1, "k1", BigDecimal.ONE),
+          struct(2, "k2", BigDecimal.ZERO),
+          struct(3, "k3", BigDecimal.TEN),
+          struct(4, "k4", BigDecimal.valueOf(Long.MAX_VALUE)),
+          new HostColumnVector.StructData((List) null)));
+      BasicType dec128Type = new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL128, -5));
+      addColumnFn.put(Columns.STRUCT_DEC128, (t) ->
+          t.column(new StructType(false, dec128Type),
+              struct(BigDecimal.valueOf(Integer.MAX_VALUE, 5)),
+              struct(BigDecimal.valueOf(Long.MAX_VALUE, 5)),
+              struct(new BigDecimal("111111111122222222223333333333").setScale(5)),
+              struct(new BigDecimal("123456789123456789123456789").setScale(5)),
+              struct((BigDecimal) null)));
+
+      addColumnFn.put(Columns.LIST, (t) ->
+          t.column(new ListType(false, new BasicType(false, DType.INT32)),
+              Arrays.asList(1, 2),
+              Arrays.asList(3, 4),
+              Arrays.asList(5),
+              Arrays.asList(6, 7),
+              Arrays.asList(8, 9, 10)));
+      addColumnFn.put(Columns.LIST_STRUCT, (t) ->
+          t.column(new ListType(true, structType),
+              Arrays.asList(struct(1, "k1", BigDecimal.ONE), struct(2, "k2", BigDecimal.ONE),
+                  struct(3, "k3", BigDecimal.ONE)),
+              Arrays.asList(struct(4, "k4", BigDecimal.ONE), struct(5, "k5", BigDecimal.ONE)),
+              Arrays.asList(struct(6, "k6", BigDecimal.ONE)),
               Arrays.asList(new HostColumnVector.StructData((List) null)),
-              Arrays.asList());
+              (List) null));
+      addColumnFn.put(Columns.LIST_DEC128, (t) ->
+          t.column(new ListType(true, new StructType(false, dec128Type)),
+              Arrays.asList(struct(BigDecimal.valueOf(Integer.MAX_VALUE, 5)),
+                  struct(BigDecimal.valueOf(Integer.MIN_VALUE, 5))),
+              Arrays.asList(struct(BigDecimal.valueOf(Long.MAX_VALUE, 5)),
+                  struct(BigDecimal.valueOf(0, 5)), struct(BigDecimal.valueOf(-1, 5))),
+              Arrays.asList(struct(new BigDecimal("111111111122222222223333333333").setScale(5))),
+              Arrays.asList(struct(new BigDecimal("123456789123456789123456789").setScale(5))),
+              Arrays.asList(struct((BigDecimal) null))));
+    }
+
+    static TestBuilder addColumn(TestBuilder tb, String colName) {
+      if (!addColumnFn.containsKey(Columns.valueOf(colName))) {
+        throw new IllegalArgumentException("Unknown column name: " + colName);
+      }
+      return addColumnFn.get(Columns.valueOf(colName)).apply(tb);
+    }
+
+    static String[] getAllColumns(boolean withDecimal128) {
+      List<String> columns = Lists.newArrayList(
+          Columns.BOOL.name, Columns.INT.name, Columns.BYTE.name, Columns.LONG.name,
+          Columns.STRING.name, Columns.FLOAT.name, Columns.DOUBLE.name, Columns.DECIMAL64.name,
+          Columns.STRUCT.name, Columns.LIST.name, Columns.LIST_STRUCT.name);
+      if (withDecimal128) {
+        columns.add(Columns.DECIMAL128.name);
+        columns.add(Columns.STRUCT_DEC128.name);
+        columns.add(Columns.LIST_DEC128.name);
+      }
+      String[] ret = new String[columns.size()];
+      columns.toArray(ret);
+      return ret;
+    }
+
+    static String[] getNonNestedColumns(boolean withDecimal128) {
+      List<String> columns = Lists.newArrayList(
+          Columns.BOOL.name, Columns.INT.name, Columns.BYTE.name, Columns.LONG.name,
+          Columns.STRING.name, Columns.FLOAT.name, Columns.DOUBLE.name, Columns.DECIMAL64.name);
+      if (withDecimal128) {
+        columns.add(Columns.DECIMAL128.name);
+      }
+      String[] ret = new String[columns.size()];
+      columns.toArray(ret);
+      return ret;
+    }
+
+    static void buildWriterOptions(ColumnWriterOptions.NestedBuilder builder, List<String> columns) {
+      for (String colName : columns) {
+        buildWriterOptions(builder, colName);
+      }
+    }
+
+    static void buildWriterOptions(ColumnWriterOptions.NestedBuilder builder, String... columns) {
+      for (String colName : columns) {
+        buildWriterOptions(builder, colName);
+      }
+    }
+
+    static void buildWriterOptions(ColumnWriterOptions.NestedBuilder builder, String colName) {
+      switch (Columns.valueOf(colName)) {
+      case BOOL:
+      case INT:
+      case LONG:
+      case FLOAT:
+      case DOUBLE:
+      case BYTE:
+      case STRING:
+        builder.withColumns(false, colName);
+        break;
+      case DECIMAL64:
+        builder.withDecimalColumn(colName, DType.DECIMAL64_MAX_PRECISION);
+        break;
+      case DECIMAL128:
+        builder.withDecimalColumn(colName, DType.DECIMAL128_MAX_PRECISION);
+        break;
+      case STRUCT:
+        builder.withStructColumn(structBuilder(colName)
+            .withNullableColumns("ch_int")
+            .withNullableColumns("ch_str")
+            .withDecimalColumn("ch_dec64", DType.DECIMAL64_MAX_PRECISION, true)
+            .build());
+        break;
+      case LIST:
+        builder.withListColumn(listBuilder(colName, false)
+            .withNonNullableColumns("ch_int")
+            .build());
+        break;
+      case LIST_STRUCT:
+        builder.withListColumn(listBuilder(colName)
+            .withStructColumn(structBuilder(colName)
+                .withNullableColumns("ch_int")
+                .withNullableColumns("ch_str")
+                .withDecimalColumn("ch_dec64", DType.DECIMAL64_MAX_PRECISION, true)
+                .build())
+            .build());
+        break;
+      case STRUCT_DEC128:
+        builder.withStructColumn(structBuilder(colName, false)
+            .withDecimalColumn("ch_dec128", DType.DECIMAL128_MAX_PRECISION, true)
+            .build());
+        break;
+      case LIST_DEC128:
+        builder.withListColumn(listBuilder(colName)
+            .withStructColumn(structBuilder(colName, false)
+                .withDecimalColumn("ch_dec128", DType.DECIMAL128_MAX_PRECISION, true)
+                .build())
+            .build());
+        break;
+      default:
+        throw new IllegalArgumentException("should NOT reach here");
+      }
+    }
+  }
+
+  private Table getExpectedFileTable(String... selectColumns) {
+    return getExpectedFileTable(Lists.newArrayList(selectColumns));
+  }
+
+  private Table getExpectedFileTable(List<String> selectColumns) {
+    TestBuilder tb = new TestBuilder();
+    for (String c : selectColumns) {
+      WriteUtils.addColumn(tb, c);
     }
     return tb.build();
   }
@@ -6861,21 +7150,10 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testParquetWriteToBufferChunkedWithNested() {
-    ParquetWriterOptions options = ParquetWriterOptions.builder()
-        .withNullableColumns("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
-        .withStructColumn(structBuilder("_c7")
-            .withNullableColumns("_c7-1")
-            .withNullableColumns("_c7-2")
-            .build())
-      .withListColumn(listBuilder("_c8")
-            .withNullableColumns("c8-1").build())
-        .withListColumn(listBuilder("c9")
-            .withStructColumn(structBuilder("c9-1")
-                .withNullableColumns("c9-1-1")
-                .withNullableColumns("c9-1-2").build())
-            .build())
-        .build();
-    try (Table table0 = getExpectedFileTable(true);
+    ParquetWriterOptions.Builder optBuilder = ParquetWriterOptions.builder();
+    WriteUtils.buildWriterOptions(optBuilder, WriteUtils.getAllColumns(false));
+    ParquetWriterOptions options = optBuilder.build();
+    try (Table table0 = getExpectedFileTable(WriteUtils.getAllColumns(false));
          MyBufferConsumer consumer = new MyBufferConsumer()) {
       try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
         writer.write(table0);
@@ -6892,20 +7170,18 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testParquetWriteToBufferChunked() {
-    ParquetWriterOptions options = ParquetWriterOptions.builder()
-        .withNullableColumns("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
-        .withStructColumn(structBuilder("_c7")
-            .withNullableColumns("_c7-1")
-            .withNullableColumns("_c7-2")
-            .build())
-        .build();
-    try (Table table0 = getExpectedFileTable(true, false);
+    ParquetWriterOptions.Builder optBuilder = ParquetWriterOptions.builder();
+    List<String> columns = Lists.newArrayList(WriteUtils.getNonNestedColumns(false));
+    columns.add(Columns.STRUCT.name);
+    WriteUtils.buildWriterOptions(optBuilder, columns);
+    ParquetWriterOptions options = optBuilder.build();
+    try (Table table0 = getExpectedFileTable(columns);
          MyBufferConsumer consumer = new MyBufferConsumer()) {
-         try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
-           writer.write(table0);
-           writer.write(table0);
-           writer.write(table0);
-         }
+      try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
+        writer.write(table0);
+        writer.write(table0);
+        writer.write(table0);
+      }
       try (Table table1 = Table.readParquet(ParquetOptions.DEFAULT, consumer.buffer, 0, consumer.offset);
            Table concat = Table.concatenate(table0, table0, table0)) {
         assertTablesAreEqual(concat, table1);
@@ -6983,9 +7259,10 @@ public class TableTest extends CudfTestBase {
   @Test
   void testArrowIPCWriteToFileWithNamesAndMetadata() throws IOException {
     File tempFile = File.createTempFile("test-names-metadata", ".arrow");
-    try (Table table0 = getExpectedFileTable()) {
+    String[] columnNames = WriteUtils.getNonNestedColumns(false);
+    try (Table table0 = getExpectedFileTable(columnNames)) {
       ArrowIPCWriterOptions options = ArrowIPCWriterOptions.builder()
-              .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
+              .withColumnNames(columnNames)
               .build();
       try (TableWriter writer = Table.writeArrowIPCChunked(options, tempFile.getAbsoluteFile())) {
         writer.write(table0);
@@ -7012,13 +7289,18 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testArrowIPCWriteToBufferChunked() {
-    try (Table table0 = getExpectedFileTable(true);
+    String[] nonNestedCols = WriteUtils.getNonNestedColumns(false);
+    List<String> columns = Lists.newArrayList(nonNestedCols);
+    columns.add(Columns.STRUCT.name);
+    columns.add(Columns.LIST.name);
+    columns.add(Columns.LIST_STRUCT.name);
+    try (Table table0 = getExpectedFileTable(columns);
          MyBufferConsumer consumer = new MyBufferConsumer()) {
       ArrowIPCWriterOptions options = ArrowIPCWriterOptions.builder()
-              .withColumnNames("first", "second", "third", "fourth", "fifth", "sixth", "seventh")
-              .withColumnNames("eighth", "eighth_id", "eighth_name")
-              .withColumnNames("ninth")
-              .withColumnNames("tenth", "child_id", "child_name")
+              .withColumnNames(nonNestedCols)
+              .withColumnNames(Columns.STRUCT.name, "int", "str", "dec64")
+              .withColumnNames(Columns.LIST.name)
+              .withColumnNames(Columns.LIST_STRUCT.name, "int", "str", "dec64")
               .build();
       try (TableWriter writer = Table.writeArrowIPCChunked(options, consumer)) {
         writer.write(table0);
@@ -7045,9 +7327,12 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testORCWriteToBufferChunked() {
-    try (Table table0 = getExpectedFileTable(true);
+    String[] selectedColumns = WriteUtils.getAllColumns(false);
+    try (Table table0 = getExpectedFileTable(selectedColumns);
          MyBufferConsumer consumer = new MyBufferConsumer()) {
-      ORCWriterOptions opts = createORCWriterOptionsWithNested();
+      ORCWriterOptions.Builder builder = ORCWriterOptions.builder();
+      WriteUtils.buildWriterOptions(builder, selectedColumns);
+      ORCWriterOptions opts = builder.build();
       try (TableWriter writer = Table.writeORCChunked(opts, consumer)) {
         writer.write(table0);
         writer.write(table0);
@@ -7063,8 +7348,11 @@ public class TableTest extends CudfTestBase {
   @Test
   void testORCWriteToFileChunked() throws IOException {
     File tempFile = File.createTempFile("test", ".orc");
-    try (Table table0 = getExpectedFileTable(true)) {
-      ORCWriterOptions opts = createORCWriterOptionsWithNested();
+    String[] selectedColumns = WriteUtils.getAllColumns(false);
+    try (Table table0 = getExpectedFileTable(selectedColumns)) {
+      ORCWriterOptions.Builder builder = ORCWriterOptions.builder();
+      WriteUtils.buildWriterOptions(builder, selectedColumns);
+      ORCWriterOptions opts = builder.build();
       try (TableWriter writer = Table.writeORCChunked(opts, tempFile.getAbsoluteFile())) {
         writer.write(table0);
       }
@@ -7107,7 +7395,7 @@ public class TableTest extends CudfTestBase {
   @Test
   void testORCWriteToFile() throws IOException {
     File tempFile = File.createTempFile("test", ".orc");
-    try (Table table0 = getExpectedFileTable()) {
+    try (Table table0 = getExpectedFileTable(WriteUtils.getNonNestedColumns(false))) {
       table0.writeORC(tempFile.getAbsoluteFile());
       try (Table table1 = Table.readORC(tempFile.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table1);
@@ -7120,12 +7408,11 @@ public class TableTest extends CudfTestBase {
   @Test
   void testORCWriteToFileWithColNames() throws IOException {
     File tempFile = File.createTempFile("test", ".orc");
-    final String[] colNames = new String[]{"bool", "int", "byte","long","str","float","double"};
-    try (Table table0 = getExpectedFileTable()) {
-      ORCWriterOptions options = ORCWriterOptions.builder()
-          .withColumns(true, colNames)
-          .withMetadata("somekey", "somevalue")
-          .build();
+    String[] colNames = WriteUtils.getNonNestedColumns(false);
+    try (Table table0 = getExpectedFileTable(colNames)) {
+      ORCWriterOptions.Builder optBuilder = ORCWriterOptions.builder();
+      WriteUtils.buildWriterOptions(optBuilder, colNames);
+      ORCWriterOptions options = optBuilder.build();
       table0.writeORC(options, tempFile.getAbsoluteFile());
       ORCOptions opts = ORCOptions.builder().includeColumn(colNames).build();
       try (Table table1 = Table.readORC(opts, tempFile.getAbsoluteFile())) {
@@ -7137,9 +7424,33 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testORCReadAndWriteForDecimal128() throws IOException {
+    File tempFile = File.createTempFile("test", ".orc");
+    String[] colNames = new String[]{Columns.DECIMAL64.name,
+        Columns.DECIMAL128.name, Columns.STRUCT_DEC128.name, Columns.LIST_DEC128.name};
+    try (Table table0 = getExpectedFileTable(colNames)) {
+      ORCWriterOptions.Builder optBuilder = ORCWriterOptions.builder();
+      WriteUtils.buildWriterOptions(optBuilder, colNames);
+      ORCWriterOptions options = optBuilder.build();
+      table0.writeORC(options, tempFile.getAbsoluteFile());
+      ORCOptions opts = ORCOptions.builder()
+          .includeColumn(colNames)
+          .decimal128Column(Columns.DECIMAL128.name,
+              String.format("%s.%s", Columns.STRUCT_DEC128.name, "ch_dec128"),
+              String.format("%s.1.%s", Columns.LIST_DEC128.name, "ch_dec128"))
+          .build();
+      try (Table table1 = Table.readORC(opts, tempFile.getAbsoluteFile())) {
+        assertTablesAreEqual(table0, table1);
+      }
+    } finally {
+      tempFile.delete();
+    }
+  }
+
+  @Test
   void testORCWriteToFileUncompressed() throws IOException {
     File tempFileUncompressed = File.createTempFile("test-uncompressed", ".orc");
-    try (Table table0 = getExpectedFileTable()) {
+    try (Table table0 = getExpectedFileTable(WriteUtils.getNonNestedColumns(false))) {
       String[] colNames = new String[table0.getNumberOfColumns()];
       Arrays.fill(colNames, "");
       ORCWriterOptions opts = ORCWriterOptions.builder()
@@ -7245,27 +7556,7 @@ public class TableTest extends CudfTestBase {
 
   // utility methods to reduce typing
 
-  private ORCWriterOptions createORCWriterOptionsWithNested() {
-    // The column metadata should match the table returned from
-    // 'getExpectedFileTable(true)'.
-    return ORCWriterOptions.builder()
-        .withNullableColumns("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
-        .withStructColumn(structBuilder("_c7")
-            .withNullableColumns("_c7-1")
-            .withNullableColumns("_c7-2")
-            .build())
-        .withListColumn(listBuilder("_c8")
-            .withNullableColumns("_c8-1").build())
-        .withListColumn(listBuilder("_c9")
-            .withStructColumn(structBuilder("_c9-1")
-                .withNullableColumns("_c9-1-1")
-                .withNullableColumns("_c9-1-2")
-                .build())
-            .build())
-        .build();
-  }
-
-  private StructData struct(Object... values) {
+  private static StructData struct(Object... values) {
     return new StructData(values);
   }
 
