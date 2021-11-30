@@ -16,21 +16,6 @@ from cudf.utils.metadata import (  # type: ignore
 )
 
 
-def _make_empty_df(filepath_or_buffer, columns):
-    orc_file = orc.ORCFile(filepath_or_buffer)
-    schema = orc_file.schema
-    col_names = schema.names if columns is None else columns
-    return cudf.DataFrame(
-        {
-            col_name: cudf.core.column.column_empty(
-                row_count=0,
-                dtype=schema.field(col_name).type.to_pandas_dtype(),
-            )
-            for col_name in col_names
-        }
-    )
-
-
 def _parse_column_statistics(cs, column_statistics_blob):
     # Initialize stats to return and parse stats blob
     column_statistics = {}
@@ -346,7 +331,10 @@ def read_orc(
 
         # Return empty if everything was filtered
         if len(selected_stripes) == 0:
-            return _make_empty_df(filepaths_or_buffers[0], columns)
+            return ioutils._make_empty_df(
+                orc.ORCFile(filepaths_or_buffers[0]).schema,
+                columns
+            )
         else:
             stripes = selected_stripes
 
@@ -389,7 +377,10 @@ def read_orc(
         )
 
         if len(filtered_df.query(query_string, local_dict=local_dict)) == 0:
-            return _make_empty_df(filepaths_or_buffers[0], columns)
+            return ioutils._make_empty_df(
+                orc.ORCFile(filepaths_or_buffers[0]).schema,
+                all_columns
+            )
 
     if engine == "cudf":
         df = DataFrame._from_data(
