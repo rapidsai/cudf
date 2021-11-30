@@ -349,6 +349,7 @@ def read_parquet(
     columns=None,
     split_row_groups=None,
     row_groups_per_part=None,
+    filtering_columns_first=False,
     **kwargs,
 ):
     """Read parquet files into a Dask DataFrame
@@ -380,11 +381,17 @@ def read_parquet(
         if split_row_groups is None:
             split_row_groups = row_groups_per_part
 
+    # Propagate `filtering_columns_first` to individual calls to
+    # `cudf.read_parquet`.
+    read_kwargs = kwargs.get("read", {})
+    read_kwargs["filtering_columns_first"] = filtering_columns_first
+
     return dd.read_parquet(
         path,
         columns=columns,
         split_row_groups=split_row_groups,
         engine=CudfEngine,
+        read=read_kwargs,
         **kwargs,
     )
 
