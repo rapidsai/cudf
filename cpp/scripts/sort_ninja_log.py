@@ -10,7 +10,7 @@ log_file = ".ninja_log"
 if len(sys.argv) > 1:
     log_file = sys.argv[1]
 
-xml_output = len(sys.argv) > 2
+xml_output = len(sys.argv) > 2 and sys.argv[2] == "--xml"
 
 # build a map of the log entries
 entries = {}
@@ -32,15 +32,17 @@ sl = sorted(keys, key=lambda k: entries[k], reverse=True)
 
 if xml_output is True:
     # output results in XML format
-    root = ET.Element(
-        "testsuites",
+    root = ET.Element("testsuites")
+    testsuite = ET.Element(
+        "testsuite",
         attrib={
+            "name": "build-time",
             "tests": str(len(keys)),
             "failures": str(0),
             "errors": str(0),
-            "name": "build-time",
         },
     )
+    root.append(testsuite)
     for key in sl:
         entry = entries[key]
         elapsed = float(entry) / 1000
@@ -52,7 +54,7 @@ if xml_output is True:
                 "time": str(elapsed),
             },
         )
-        root.append(item)
+        testsuite.append(item)
 
     tree = ET.ElementTree(root)
     xmlstr = minidom.parseString(ET.tostring(root)).toprettyxml(indent="   ")

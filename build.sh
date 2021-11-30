@@ -192,8 +192,8 @@ if buildAll || hasArg libcudf; then
     # Record build times
     if [[ "$FIC" == "0" && -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
         echo "Formatting build times"
-        python ${REPODIR}/ci/utils/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log > ${LIB_BUILD_DIR}/ninja_log.csv
-        python ${REPODIR}/ci/utils/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --xml > ${LIB_BUILD_DIR}/ninja_log.xml
+        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log > ${LIB_BUILD_DIR}/ninja_log.csv
+        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --xml > ${LIB_BUILD_DIR}/ninja_log.xml
         echo "===Top 50 build time offenders==="
         cat ${LIB_BUILD_DIR}/ninja_log.csv | head -n 50
     fi

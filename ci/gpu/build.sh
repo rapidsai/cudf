@@ -185,6 +185,7 @@ else
         gpuci_logger "Copying build time results"
         cp "$LIB_BUILD_DIR/ninja_log.csv" "$WORKSPACE/test-results/."
         cp "$LIB_BUILD_DIR/ninja_log.xml" "$WORKSPACE/test-results/buildtimes-junit.xml"
+        cp "$LIB_BUILD_DIR/ninja_log.xml" "$WORKSPACE/junit-buildtimes.xml"
     fi
 
     CUDF_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf-*.tar.bz2"`
