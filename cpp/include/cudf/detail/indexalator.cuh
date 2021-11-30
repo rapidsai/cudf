@@ -55,7 +55,7 @@ struct base_indexalator {
   /**
    * @brief Prefix increment operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE T& operator++()
+  CUDF_HDI T& operator++()
   {
     T& derived = static_cast<T&>(*this);
     derived.p_ += width_;
@@ -65,7 +65,7 @@ struct base_indexalator {
   /**
    * @brief Postfix increment operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE T operator++(int)
+  CUDF_HDI T operator++(int)
   {
     T tmp{static_cast<T&>(*this)};
     operator++();
@@ -75,7 +75,7 @@ struct base_indexalator {
   /**
    * @brief Prefix decrement operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE T& operator--()
+  CUDF_HDI T& operator--()
   {
     T& derived = static_cast<T&>(*this);
     derived.p_ -= width_;
@@ -85,7 +85,7 @@ struct base_indexalator {
   /**
    * @brief Postfix decrement operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE T operator--(int)
+  CUDF_HDI T operator--(int)
   {
     T tmp{static_cast<T&>(*this)};
     operator--();
@@ -95,7 +95,7 @@ struct base_indexalator {
   /**
    * @brief Compound assignment by sum operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE T& operator+=(difference_type offset)
+  CUDF_HDI T& operator+=(difference_type offset)
   {
     T& derived = static_cast<T&>(*this);
     derived.p_ += offset * width_;
@@ -105,7 +105,7 @@ struct base_indexalator {
   /**
    * @brief Increment by offset operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE T operator+(difference_type offset) const
+  CUDF_HDI T operator+(difference_type offset) const
   {
     auto tmp = T{static_cast<T const&>(*this)};
     tmp.p_ += (offset * width_);
@@ -115,7 +115,7 @@ struct base_indexalator {
   /**
    * @brief Addition assignment operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE friend T operator+(difference_type offset, T const& rhs)
+  CUDF_HDI friend T operator+(difference_type offset, T const& rhs)
   {
     T tmp{rhs};
     tmp.p_ += (offset * rhs.width_);
@@ -125,7 +125,7 @@ struct base_indexalator {
   /**
    * @brief Compound assignment by difference operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE T& operator-=(difference_type offset)
+  CUDF_HDI T& operator-=(difference_type offset)
   {
     T& derived = static_cast<T&>(*this);
     derived.p_ -= offset * width_;
@@ -135,7 +135,7 @@ struct base_indexalator {
   /**
    * @brief Decrement by offset operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE T operator-(difference_type offset) const
+  CUDF_HDI T operator-(difference_type offset) const
   {
     auto tmp = T{static_cast<T const&>(*this)};
     tmp.p_ -= (offset * width_);
@@ -145,7 +145,7 @@ struct base_indexalator {
   /**
    * @brief Subtraction assignment operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE friend T operator-(difference_type offset, T const& rhs)
+  CUDF_HDI friend T operator-(difference_type offset, T const& rhs)
   {
     T tmp{rhs};
     tmp.p_ -= (offset * rhs.width_);
@@ -155,7 +155,7 @@ struct base_indexalator {
   /**
    * @brief Compute offset from iterator difference operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE difference_type operator-(T const& rhs) const
+  CUDF_HDI difference_type operator-(T const& rhs) const
   {
     return (static_cast<T const&>(*this).p_ - rhs.p_) / width_;
   }
@@ -163,45 +163,27 @@ struct base_indexalator {
   /**
    * @brief Equals to operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE bool operator==(T const& rhs) const
-  {
-    return rhs.p_ == static_cast<T const&>(*this).p_;
-  }
+  CUDF_HDI bool operator==(T const& rhs) const { return rhs.p_ == static_cast<T const&>(*this).p_; }
   /**
    * @brief Not equals to operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE bool operator!=(T const& rhs) const
-  {
-    return rhs.p_ != static_cast<T const&>(*this).p_;
-  }
+  CUDF_HDI bool operator!=(T const& rhs) const { return rhs.p_ != static_cast<T const&>(*this).p_; }
   /**
    * @brief Less than operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE bool operator<(T const& rhs) const
-  {
-    return static_cast<T const&>(*this).p_ < rhs.p_;
-  }
+  CUDF_HDI bool operator<(T const& rhs) const { return static_cast<T const&>(*this).p_ < rhs.p_; }
   /**
    * @brief Greater than operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE bool operator>(T const& rhs) const
-  {
-    return static_cast<T const&>(*this).p_ > rhs.p_;
-  }
+  CUDF_HDI bool operator>(T const& rhs) const { return static_cast<T const&>(*this).p_ > rhs.p_; }
   /**
    * @brief Less than or equals to operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE bool operator<=(T const& rhs) const
-  {
-    return static_cast<T const&>(*this).p_ <= rhs.p_;
-  }
+  CUDF_HDI bool operator<=(T const& rhs) const { return static_cast<T const&>(*this).p_ <= rhs.p_; }
   /**
    * @brief Greater than or equals to operator.
    */
-  CUDA_HOST_DEVICE_CALLABLE bool operator>=(T const& rhs) const
-  {
-    return static_cast<T const&>(*this).p_ >= rhs.p_;
-  }
+  CUDF_HDI bool operator>=(T const& rhs) const { return static_cast<T const&>(*this).p_ >= rhs.p_; }
 
  protected:
   /**
@@ -253,7 +235,7 @@ struct input_indexalator : base_indexalator<input_indexalator> {
   /**
    * @brief Indirection operator returns the value at the current iterator position.
    */
-  CUDA_DEVICE_CALLABLE size_type operator*() const { return operator[](0); }
+  CUDF_DI size_type operator*() const { return operator[](0); }
 
   /**
    * @brief Dispatch functor for resolving a size_type value from any index type.
@@ -275,7 +257,7 @@ struct input_indexalator : base_indexalator<input_indexalator> {
    * @brief Array subscript operator returns a value at the input
    * `idx` position as a `size_type` value.
    */
-  CUDA_DEVICE_CALLABLE size_type operator[](size_type idx) const
+  CUDF_DI size_type operator[](size_type idx) const
   {
     void const* tp = p_ + (idx * width_);
     return type_dispatcher(dtype_, index_as_size_type{}, tp);
@@ -339,14 +321,14 @@ struct output_indexalator : base_indexalator<output_indexalator> {
    * @brief Indirection operator returns this iterator instance in order
    * to capture the `operator=(size_type)` calls.
    */
-  CUDA_DEVICE_CALLABLE output_indexalator const& operator*() const { return *this; }
+  CUDF_DI output_indexalator const& operator*() const { return *this; }
 
   /**
    * @brief Array subscript operator returns an iterator instance at the specified `idx` position.
    *
    * This allows capturing the subsequent `operator=(size_type)` call in this class.
    */
-  CUDA_DEVICE_CALLABLE output_indexalator const operator[](size_type idx) const
+  CUDF_DI output_indexalator const operator[](size_type idx) const
   {
     output_indexalator tmp{*this};
     tmp.p_ += (idx * width_);
@@ -372,7 +354,7 @@ struct output_indexalator : base_indexalator<output_indexalator> {
   /**
    * @brief Assign a size_type value to the current iterator position.
    */
-  CUDA_DEVICE_CALLABLE output_indexalator const& operator=(size_type const value) const
+  CUDF_DI output_indexalator const& operator=(size_type const value) const
   {
     void* tp = p_;
     type_dispatcher(dtype_, size_type_to_index{}, tp, value);

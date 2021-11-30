@@ -17,17 +17,16 @@
 #pragma once
 
 #ifdef __CUDACC__
-#define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ inline
-#define CUDA_DEVICE_CALLABLE      __device__ inline
-
-// This version of the macro maximizes the chances of inlining when applied to
-// a callable that is called on the GPU.
+#define CUDF_HDI  __host__ __device__ inline
+#define CUDF_DI   __device__ inline
 #define CUDF_HDFI __host__ __device__ __forceinline__
 #define CUDF_DFI  __device__ __forceinline__
 #else
-#define CUDA_HOST_DEVICE_CALLABLE inline
-#define CUDA_DEVICE_CALLABLE      inline
-
+#define CUDF_HDI  inline
+#define CUDF_DI   inline
+// TODO: Should we make these use __attribute__((always_inline))? It's
+// supported by gcc and clang, but it is unlikely to bet worthwhile to force
+// inlining of host code in libcudf.
 #define CUDF_HDFI inline
 #define CUDF_DFI  inline
 #endif

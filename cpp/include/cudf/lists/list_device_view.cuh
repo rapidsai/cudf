@@ -32,8 +32,7 @@ class list_device_view {
  public:
   list_device_view() = default;
 
-  CUDA_DEVICE_CALLABLE list_device_view(lists_column_device_view const& lists_column,
-                                        size_type const& row_index)
+  CUDF_DI list_device_view(lists_column_device_view const& lists_column, size_type const& row_index)
     : lists_column(lists_column), _row_index(row_index)
   {
     column_device_view const& offsets = lists_column.offsets();
@@ -69,7 +68,7 @@ class list_device_view {
    * The offset of this element as stored in the child column (i.e. 5)
    * may be fetched using this method.
    */
-  CUDA_DEVICE_CALLABLE size_type element_offset(size_type idx) const
+  CUDF_DI size_type element_offset(size_type idx) const
   {
     cudf_assert(idx >= 0 && idx < size() && "idx out of bounds");
     return begin_offset + idx;
@@ -83,7 +82,7 @@ class list_device_view {
    * @return The element at the specified index of the list row.
    */
   template <typename T>
-  CUDA_DEVICE_CALLABLE T element(size_type idx) const
+  CUDF_DI T element(size_type idx) const
   {
     return lists_column.child().element<T>(element_offset(idx));
   }
@@ -91,7 +90,7 @@ class list_device_view {
   /**
    * @brief Checks whether element is null at specified index in the list row.
    */
-  CUDA_DEVICE_CALLABLE bool is_null(size_type idx) const
+  CUDF_DI bool is_null(size_type idx) const
   {
     cudf_assert(idx >= 0 && idx < size() && "Index out of bounds.");
     auto element_offset = begin_offset + idx;
@@ -101,17 +100,17 @@ class list_device_view {
   /**
    * @brief Checks whether this list row is null.
    */
-  CUDA_DEVICE_CALLABLE bool is_null() const { return lists_column.is_null(_row_index); }
+  CUDF_DI bool is_null() const { return lists_column.is_null(_row_index); }
 
   /**
    * @brief Fetches the number of elements in this list row.
    */
-  CUDA_DEVICE_CALLABLE size_type size() const { return _size; }
+  CUDF_DI size_type size() const { return _size; }
 
   /**
    * @brief Fetches the lists_column_device_view that contains this list.
    */
-  CUDA_DEVICE_CALLABLE lists_column_device_view const& get_column() const { return lists_column; }
+  CUDF_DI lists_column_device_view const& get_column() const { return lists_column; }
 
   template <typename T>
   struct pair_accessor;
@@ -141,7 +140,7 @@ class list_device_view {
    *   2. `p.second == false`
    */
   template <typename T>
-  CUDA_DEVICE_CALLABLE const_pair_iterator<T> pair_begin() const
+  CUDF_DI const_pair_iterator<T> pair_begin() const
   {
     return const_pair_iterator<T>{thrust::counting_iterator<size_type>(0), pair_accessor<T>{*this}};
   }
@@ -151,7 +150,7 @@ class list_device_view {
    * list_device_view.
    */
   template <typename T>
-  CUDA_DEVICE_CALLABLE const_pair_iterator<T> pair_end() const
+  CUDF_DI const_pair_iterator<T> pair_end() const
   {
     return const_pair_iterator<T>{thrust::counting_iterator<size_type>(size()),
                                   pair_accessor<T>{*this}};
@@ -173,7 +172,7 @@ class list_device_view {
    *   2. `p.second == false`
    */
   template <typename T>
-  CUDA_DEVICE_CALLABLE const_pair_rep_iterator<T> pair_rep_begin() const
+  CUDF_DI const_pair_rep_iterator<T> pair_rep_begin() const
   {
     return const_pair_rep_iterator<T>{thrust::counting_iterator<size_type>(0),
                                       pair_rep_accessor<T>{*this}};
@@ -184,7 +183,7 @@ class list_device_view {
    * list_device_view.
    */
   template <typename T>
-  CUDA_DEVICE_CALLABLE const_pair_rep_iterator<T> pair_rep_end() const
+  CUDF_DI const_pair_rep_iterator<T> pair_rep_end() const
   {
     return const_pair_rep_iterator<T>{thrust::counting_iterator<size_type>(size()),
                                       pair_rep_accessor<T>{*this}};
@@ -215,7 +214,7 @@ class list_device_view {
      *
      * @param _list The `list_device_view` whose rows are being accessed.
      */
-    explicit CUDA_HOST_DEVICE_CALLABLE pair_accessor(list_device_view const& _list) : list{_list} {}
+    explicit CUDF_HDI pair_accessor(list_device_view const& _list) : list{_list} {}
 
     /**
      * @brief Accessor for the {data, validity} pair at the specified index
@@ -223,7 +222,7 @@ class list_device_view {
      * @param i Index into the list_device_view
      * @return A pair of data element and its validity flag.
      */
-    CUDA_DEVICE_CALLABLE
+    CUDF_DI
     thrust::pair<T, bool> operator()(cudf::size_type i) const
     {
       return {list.element<T>(i), !list.is_null(i)};
@@ -253,10 +252,7 @@ class list_device_view {
      *
      * @param _list The `list_device_view` whose rows are being accessed.
      */
-    explicit CUDA_HOST_DEVICE_CALLABLE pair_rep_accessor(list_device_view const& _list)
-      : list{_list}
-    {
-    }
+    explicit CUDF_HDI pair_rep_accessor(list_device_view const& _list) : list{_list} {}
 
     /**
      * @brief Accessor for the {rep_data, validity} pair at the specified index
@@ -264,7 +260,7 @@ class list_device_view {
      * @param i Index into the list_device_view
      * @return A pair of data element and its validity flag.
      */
-    CUDA_DEVICE_CALLABLE
+    CUDF_DI
     thrust::pair<rep_type, bool> operator()(cudf::size_type i) const
     {
       return {get_rep<T>(i), !list.is_null(i)};
@@ -272,13 +268,13 @@ class list_device_view {
 
    private:
     template <typename R, std::enable_if_t<std::is_same_v<R, rep_type>, void>* = nullptr>
-    CUDA_DEVICE_CALLABLE rep_type get_rep(cudf::size_type i) const
+    CUDF_DI rep_type get_rep(cudf::size_type i) const
     {
       return list.element<R>(i);
     }
 
     template <typename R, std::enable_if_t<not std::is_same_v<R, rep_type>, void>* = nullptr>
-    CUDA_DEVICE_CALLABLE rep_type get_rep(cudf::size_type i) const
+    CUDF_DI rep_type get_rep(cudf::size_type i) const
     {
       return list.element<R>(i).value();
     }
@@ -291,7 +287,7 @@ class list_device_view {
  */
 struct list_size_functor {
   column_device_view const d_column;
-  CUDA_HOST_DEVICE_CALLABLE list_size_functor(column_device_view const& d_col) : d_column(d_col)
+  CUDF_HDI list_size_functor(column_device_view const& d_col) : d_column(d_col)
   {
 #if defined(__CUDA_ARCH__)
     cudf_assert(d_col.type().id() == type_id::LIST && "Only list type column is supported");
@@ -299,7 +295,7 @@ struct list_size_functor {
     CUDF_EXPECTS(d_col.type().id() == type_id::LIST, "Only list type column is supported");
 #endif
   }
-  CUDA_DEVICE_CALLABLE size_type operator()(size_type idx)
+  CUDF_DI size_type operator()(size_type idx)
   {
     if (d_column.is_null(idx)) return size_type{0};
     auto d_offsets =

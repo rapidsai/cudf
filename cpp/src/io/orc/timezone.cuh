@@ -57,10 +57,10 @@ static constexpr uint32_t cycle_entry_cnt = 2 * cycle_years;
  *
  * @return GMT offset
  */
-CUDA_HOST_DEVICE_CALLABLE int32_t get_gmt_offset_impl(int64_t const* ttimes,
-                                                      int32_t const* offsets,
-                                                      size_t count,
-                                                      int64_t ts)
+CUDF_HDI int32_t get_gmt_offset_impl(int64_t const* ttimes,
+                                     int32_t const* offsets,
+                                     size_t count,
+                                     int64_t ts)
 {
   // Returns start of the range if all elements are larger than the input timestamp
   auto last_less_equal_ttime_idx = [&](long begin_idx, long end_idx, int64_t ts) {

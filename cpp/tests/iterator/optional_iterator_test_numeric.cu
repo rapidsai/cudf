@@ -39,7 +39,7 @@ template <typename ElementType>
 struct transformer_optional_meanvar {
   using ResultType = thrust::optional<cudf::meanvar<ElementType>>;
 
-  CUDA_HOST_DEVICE_CALLABLE
+  CUDF_HDI
   ResultType operator()(thrust::optional<ElementType> const& optional)
   {
     if (optional.has_value()) {
@@ -52,8 +52,8 @@ struct transformer_optional_meanvar {
 
 struct sum_if_not_null {
   template <typename T>
-  CUDA_HOST_DEVICE_CALLABLE thrust::optional<T> operator()(const thrust::optional<T>& lhs,
-                                                           const thrust::optional<T>& rhs)
+  CUDF_HDI thrust::optional<T> operator()(const thrust::optional<T>& lhs,
+                                          const thrust::optional<T>& rhs)
   {
     return lhs.value_or(T{0}) + rhs.value_or(T{0});
   }

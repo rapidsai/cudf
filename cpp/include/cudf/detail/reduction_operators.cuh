@@ -19,7 +19,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/detail/utilities/transform_unary_functions.cuh>
-#include <cudf/types.hpp>  //for CUDA_HOST_DEVICE_CALLABLE
+#include <cudf/types.hpp>  //for CUDF_HDI
 
 #include <thrust/functional.h>
 #include <cmath>
@@ -32,13 +32,13 @@ struct var_std {
   ResultType value;          /// the value
   ResultType value_squared;  /// the value of squared
 
-  CUDA_HOST_DEVICE_CALLABLE
+  CUDF_HDI
   var_std(ResultType _value = 0, ResultType _value_squared = 0)
     : value(_value), value_squared(_value_squared){};
 
   using this_t = var_std<ResultType>;
 
-  CUDA_HOST_DEVICE_CALLABLE
+  CUDF_HDI
   this_t operator+(this_t const& rhs) const
   {
     return this_t((this->value + rhs.value), (this->value_squared + rhs.value_squared));
@@ -50,7 +50,7 @@ template <typename ResultType>
 struct transformer_var_std {
   using OutputType = var_std<ResultType>;
 
-  CUDA_HOST_DEVICE_CALLABLE
+  CUDF_HDI
   OutputType operator()(ResultType const& value) { return OutputType(value, value * value); };
 };
 
@@ -201,9 +201,9 @@ struct compound_op : public simple_op<Derived> {
    * @return transformed output result of compound operator
    */
   template <typename ResultType, typename IntermediateType>
-  CUDA_HOST_DEVICE_CALLABLE static ResultType compute_result(const IntermediateType& input,
-                                                             const cudf::size_type& count,
-                                                             const cudf::size_type& ddof)
+  CUDF_HDI static ResultType compute_result(const IntermediateType& input,
+                                            const cudf::size_type& count,
+                                            const cudf::size_type& ddof)
   {
     // Enforced interface
     return Derived::template intermediate<ResultType>::compute_result(input, count, ddof);
@@ -230,7 +230,7 @@ struct mean : public compound_op<mean> {
     using IntermediateType = ResultType;  // sum value
 
     // compute `mean` from intermediate type `IntermediateType`
-    CUDA_HOST_DEVICE_CALLABLE
+    CUDF_HDI
     static ResultType compute_result(const IntermediateType& input,
                                      const cudf::size_type& count,
                                      const cudf::size_type& ddof)
@@ -252,7 +252,7 @@ struct variance : public compound_op<variance> {
     using IntermediateType = var_std<ResultType>;  // with sum of value, and sum of squared value
 
     // compute `variance` from intermediate type `IntermediateType`
-    CUDA_HOST_DEVICE_CALLABLE
+    CUDF_HDI
     static ResultType compute_result(const IntermediateType& input,
                                      const cudf::size_type& count,
                                      const cudf::size_type& ddof)
@@ -279,7 +279,7 @@ struct standard_deviation : public compound_op<standard_deviation> {
     using IntermediateType = var_std<ResultType>;  // with sum of value, and sum of squared value
 
     // compute `standard deviation` from intermediate type `IntermediateType`
-    CUDA_HOST_DEVICE_CALLABLE
+    CUDF_HDI
     static ResultType compute_result(const IntermediateType& input,
                                      const cudf::size_type& count,
                                      const cudf::size_type& ddof)

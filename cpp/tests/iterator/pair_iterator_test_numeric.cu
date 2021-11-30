@@ -36,7 +36,7 @@ template <typename ElementType>
 struct transformer_pair_meanvar {
   using ResultType = thrust::pair<cudf::meanvar<ElementType>, bool>;
 
-  CUDA_HOST_DEVICE_CALLABLE
+  CUDF_HDI
   ResultType operator()(thrust::pair<ElementType, bool> const& pair)
   {
     ElementType v = pair.first;
@@ -46,8 +46,8 @@ struct transformer_pair_meanvar {
 
 struct sum_if_not_null {
   template <typename T>
-  CUDA_HOST_DEVICE_CALLABLE thrust::pair<T, bool> operator()(const thrust::pair<T, bool>& lhs,
-                                                             const thrust::pair<T, bool>& rhs)
+  CUDF_HDI thrust::pair<T, bool> operator()(const thrust::pair<T, bool>& lhs,
+                                            const thrust::pair<T, bool>& rhs)
   {
     if (lhs.second & rhs.second)
       return {lhs.first + rhs.first, true};

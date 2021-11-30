@@ -56,22 +56,22 @@ struct dictionary_wrapper {
   dictionary_wrapper& operator=(const dictionary_wrapper&) = default;
 
   // construct object from type
-  CUDA_HOST_DEVICE_CALLABLE constexpr explicit dictionary_wrapper(value_type v) : _value{v} {}
+  CUDF_HDI constexpr explicit dictionary_wrapper(value_type v) : _value{v} {}
 
   // conversion operator
-  CUDA_HOST_DEVICE_CALLABLE explicit operator value_type() const { return _value; }
+  CUDF_HDI explicit operator value_type() const { return _value; }
   // simple accessor
-  CUDA_HOST_DEVICE_CALLABLE value_type value() const { return _value; }
+  CUDF_HDI value_type value() const { return _value; }
 
-  static CUDA_HOST_DEVICE_CALLABLE constexpr value_type max_value()
+  static CUDF_HDI constexpr value_type max_value()
   {
     return std::numeric_limits<value_type>::max();
   }
-  static CUDA_HOST_DEVICE_CALLABLE constexpr value_type min_value()
+  static CUDF_HDI constexpr value_type min_value()
   {
     return std::numeric_limits<value_type>::min();
   }
-  static CUDA_HOST_DEVICE_CALLABLE constexpr value_type lowest_value()
+  static CUDF_HDI constexpr value_type lowest_value()
   {
     return std::numeric_limits<IndexType>::lowest();
   }
@@ -82,43 +82,43 @@ struct dictionary_wrapper {
 
 // comparison operators
 template <typename Integer>
-CUDA_HOST_DEVICE_CALLABLE bool operator==(dictionary_wrapper<Integer> const& lhs,
-                                          dictionary_wrapper<Integer> const& rhs)
+CUDF_HDI bool operator==(dictionary_wrapper<Integer> const& lhs,
+                         dictionary_wrapper<Integer> const& rhs)
 {
   return lhs.value() == rhs.value();
 }
 
 template <typename Integer>
-CUDA_HOST_DEVICE_CALLABLE bool operator!=(dictionary_wrapper<Integer> const& lhs,
-                                          dictionary_wrapper<Integer> const& rhs)
+CUDF_HDI bool operator!=(dictionary_wrapper<Integer> const& lhs,
+                         dictionary_wrapper<Integer> const& rhs)
 {
   return lhs.value() != rhs.value();
 }
 
 template <typename Integer>
-CUDA_HOST_DEVICE_CALLABLE bool operator<=(dictionary_wrapper<Integer> const& lhs,
-                                          dictionary_wrapper<Integer> const& rhs)
+CUDF_HDI bool operator<=(dictionary_wrapper<Integer> const& lhs,
+                         dictionary_wrapper<Integer> const& rhs)
 {
   return lhs.value() <= rhs.value();
 }
 
 template <typename Integer>
-CUDA_HOST_DEVICE_CALLABLE bool operator>=(dictionary_wrapper<Integer> const& lhs,
-                                          dictionary_wrapper<Integer> const& rhs)
+CUDF_HDI bool operator>=(dictionary_wrapper<Integer> const& lhs,
+                         dictionary_wrapper<Integer> const& rhs)
 {
   return lhs.value() >= rhs.value();
 }
 
 template <typename Integer>
-CUDA_HOST_DEVICE_CALLABLE constexpr bool operator<(dictionary_wrapper<Integer> const& lhs,
-                                                   dictionary_wrapper<Integer> const& rhs)
+CUDF_HDI constexpr bool operator<(dictionary_wrapper<Integer> const& lhs,
+                                  dictionary_wrapper<Integer> const& rhs)
 {
   return lhs.value() < rhs.value();
 }
 
 template <typename Integer>
-CUDA_HOST_DEVICE_CALLABLE bool operator>(dictionary_wrapper<Integer> const& lhs,
-                                         dictionary_wrapper<Integer> const& rhs)
+CUDF_HDI bool operator>(dictionary_wrapper<Integer> const& lhs,
+                        dictionary_wrapper<Integer> const& rhs)
 {
   return lhs.value() > rhs.value();
 }

@@ -87,7 +87,7 @@ struct min_max_scan_operator {
     if (has_nulls) CUDF_EXPECTS(col.nullable(), "column with nulls must have a validity bitmask");
   }
 
-  CUDA_DEVICE_CALLABLE
+  CUDF_DI
   size_type operator()(size_type lhs, size_type rhs) const
   {
     // thrust::inclusive_scan may pass us garbage values so we need to protect ourselves;

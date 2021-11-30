@@ -62,13 +62,13 @@ constexpr auto abs(T value)
 }
 
 template <typename T>
-CUDA_HOST_DEVICE_CALLABLE auto min(T lhs, T rhs)
+CUDF_HDI auto min(T lhs, T rhs)
 {
   return lhs < rhs ? lhs : rhs;
 }
 
 template <typename T>
-CUDA_HOST_DEVICE_CALLABLE auto max(T lhs, T rhs)
+CUDF_HDI auto max(T lhs, T rhs)
 {
   return lhs > rhs ? lhs : rhs;
 }
