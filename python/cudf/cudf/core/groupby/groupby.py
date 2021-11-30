@@ -787,8 +787,9 @@ class GroupBy(Serializable):
 
         Parameters
         ----------
-        method: {"pearson" (default), "kendall", "spearman"} or callable
-            Currently only the pearson correlation coefficient is supported.
+        method: {"pearson", "kendall", "spearman"} or callable,
+            default "pearson". Currently only the pearson correlation
+            coefficient is supported.
 
         min_periods: int, optional
             Minimum number of observations required per pair of columns
@@ -830,10 +831,9 @@ class GroupBy(Serializable):
         c   val1  1.000000  0.714575  0.714575
             val2  0.714575  1.000000  1.000000
             val3  0.714575  1.000000  1.000000
-
         """
 
-        if not method.lower() in ["pearson"]:
+        if not method.lower() in ("pearson",):
             raise NotImplementedError(
                 "Only pearson correlation is currently supported"
             )
@@ -841,7 +841,9 @@ class GroupBy(Serializable):
         # create expanded dataframe consisting all combinations of the
         # struct columns-pairs to be correlated
         # i.e (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
+        # breakpoint()
         _cols = self.grouping.values.columns.tolist()
+        len_cols = len(_cols)
 
         new_df_data = {}
         for x, y in itertools.combinations_with_replacement(_cols, 2):
@@ -868,8 +870,8 @@ class GroupBy(Serializable):
             for i, x in enumerate(_cols)
         ]
         cols_split = [
-            cols_list[i : i + len(_cols)]
-            for i in range(0, len(cols_list), len(_cols))
+            cols_list[i : i + len_cols]
+            for i in range(0, len(cols_list), len_cols)
         ]
 
         # interleave: combine the correlation results for each column-pair
@@ -883,7 +885,7 @@ class GroupBy(Serializable):
 
         # create a multiindex for the groupby correlated dataframe,
         # to match pandas behavior
-        unsorted_idx = gb_corr.index.repeat(len(_cols))
+        unsorted_idx = gb_corr.index.repeat(len_cols)
         idx_sort_order = unsorted_idx._get_sorted_inds()
         sorted_idx = unsorted_idx._gather(idx_sort_order)
         if len(gb_corr):
