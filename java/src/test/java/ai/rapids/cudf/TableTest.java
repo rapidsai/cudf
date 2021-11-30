@@ -70,11 +70,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TableTest extends CudfTestBase {
-  private static final File TEST_PARQUET_FILE = new File("src/test/resources/acq.parquet");
-  private static final File TEST_ORC_FILE = new File("src/test/resources/TestOrcFile.orc");
-  private static final File TEST_ORC_TIMESTAMP_DATE_FILE = new File(
-      "src/test/resources/timestamp-date-test.orc");
-  private static final File TEST_DECIMAL_PARQUET_FILE = new File("src/test/resources/decimal.parquet");
+  private static final File TEST_PARQUET_FILE = TestUtils.getResourceAsFile("acq.parquet");
+  private static final File TEST_ORC_FILE = TestUtils.getResourceAsFile("TestOrcFile.orc");
+  private static final File TEST_ORC_TIMESTAMP_DATE_FILE = TestUtils.getResourceAsFile("timestamp-date-test.orc");
+  private static final File TEST_DECIMAL_PARQUET_FILE = TestUtils.getResourceAsFile("decimal.parquet");
+  private static final File TEST_SIMPLE_CSV_FILE = TestUtils.getResourceAsFile("simple.csv");
 
   private static final Schema CSV_DATA_BUFFER_SCHEMA = Schema.builder()
       .column(DType.INT32, "A")
@@ -548,7 +548,7 @@ public class TableTest extends CudfTestBase {
         .column(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
         .column(110.0, 111.0, 112.0, 113.0, 114.0, 115.0, 116.0, 117.0, 118.2, 119.8)
         .build();
-         Table table = Table.readCSV(schema, opts, new File("./src/test/resources/simple.csv"))) {
+         Table table = Table.readCSV(schema, opts, TEST_SIMPLE_CSV_FILE)) {
       assertTablesAreEqual(expected, table);
     }
   }
@@ -675,7 +675,7 @@ public class TableTest extends CudfTestBase {
         .column(120L, 121L, 122L, 123L, 124L, 125L, 126L, 127L, 128L, 129L)
         .column("one", "two", "three", "four", "five", "six", "seven\ud801\uddb8", "eight\uBF68", "nine\u03E8", "ten")
         .build();
-         Table table = Table.readCSV(schema, new File("./src/test/resources/simple.csv"))) {
+         Table table = Table.readCSV(schema, TEST_SIMPLE_CSV_FILE)) {
       assertTablesAreEqual(expected, table);
     }
   }
