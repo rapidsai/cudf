@@ -44,7 +44,7 @@ TYPED_TEST_SUITE(TypedEwmScanTest, cudf::test::FloatingPointTypes);
 
 TYPED_TEST(TypedEwmScanTest, Ewm)
 {
-  auto const v = [] { return make_vector<TypeParam>({1.0, 2.0, 3.0, 4.0, 5.0}); }();
+  auto const v = make_vector<TypeParam>({1.0, 2.0, 3.0, 4.0, 5.0});
   auto col     = this->make_column(v);
 
   auto const expected_ewma_vals_adjust = cudf::test::fixed_width_column_wrapper<TypeParam>{
