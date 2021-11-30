@@ -1692,7 +1692,7 @@ def _handle_fsspec_parquet(use_fsspec_parquet, use_python_file_object, fs):
     use_fsspec_parquet_kwargs = (
         use_fsspec_parquet if isinstance(use_fsspec_parquet, dict) else {}
     )
-    use_fsspec_parquet = bool(use_fsspec_parquet) and fsspec_parquet
+    use_fsspec_parquet = bool(use_fsspec_parquet) and bool(fsspec_parquet)
 
     # Check if this is a local filesystem
     if use_fsspec_parquet and (fs is None or _is_local_filesystem(fs)):
@@ -1719,9 +1719,9 @@ def _handle_fsspec_parquet(use_fsspec_parquet, use_python_file_object, fs):
                 f"to the latest s3fs version for better performance."
             )
 
-    # By default, only use python file objects with fsspec.parquet
-    if use_python_file_object is None and not use_fsspec_parquet:
-        use_python_file_object = False
+    # Default use_python_file_object setting depends on use_fsspec_parquet
+    if use_python_file_object is None:
+        use_python_file_object = use_fsspec_parquet
 
     return (
         use_fsspec_parquet,

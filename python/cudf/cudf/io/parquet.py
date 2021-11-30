@@ -391,19 +391,17 @@ def read_parquet(
     filepaths_or_buffers = []
     for i, source in enumerate(filepath_or_buffer):
 
-        remote_open = None
-        if use_fsspec_parquet:
-            # Use fsspec.parquet.open_parquet_file to transfer
-            # the required column-chunks more efficiently
-            remote_open = partial(
-                ioutils._open_parquet_file,
-                fs=fs,
-                columns=columns,
-                row_groups=None if row_groups is None else row_groups[i],
-                engine="pyarrow",
-                use_fsspec_parquet=use_fsspec_parquet,
-                **use_fsspec_parquet_kwargs,
-            )
+        # Use fsspec.parquet.open_parquet_file to transfer
+        # the required column-chunks more efficiently
+        remote_open = partial(
+            ioutils._open_parquet_file,
+            fs=fs,
+            columns=columns,
+            row_groups=None if row_groups is None else row_groups[i],
+            engine="pyarrow",
+            use_fsspec_parquet=use_fsspec_parquet,
+            **use_fsspec_parquet_kwargs,
+        )
 
         if ioutils.is_directory(source, **kwargs):
             # Note: For now, we know `fs` is an fsspec filesystem
