@@ -319,21 +319,12 @@ def read_parquet(
     num_rows=None,
     strings_to_categorical=False,
     use_pandas_metadata=True,
-    use_python_file_object=False,
-    use_fsspec_parquet=False,
+    use_python_file_object=None,
+    use_fsspec_parquet=True,
     *args,
     **kwargs,
 ):
     """{docstring}"""
-
-    # Check `use_fsspec_parquet` kwarg
-    (
-        use_fsspec_parquet,
-        use_fsspec_parquet_kwargs,
-        use_python_file_object,
-    ) = ioutils._handle_fsspec_parquet(
-        use_fsspec_parquet, use_python_file_object
-    )
 
     # Multiple sources are passed as a list. If a single source is passed,
     # wrap it in a list for unified processing downstream.
@@ -359,6 +350,15 @@ def read_parquet(
     filepath_or_buffer = paths if paths else filepath_or_buffer
     if fs is None and filters is not None:
         raise ValueError("cudf cannot apply filters to open file objects.")
+
+    # Check `use_fsspec_parquet` kwarg
+    (
+        use_fsspec_parquet,
+        use_fsspec_parquet_kwargs,
+        use_python_file_object,
+    ) = ioutils._handle_fsspec_parquet(
+        use_fsspec_parquet, use_python_file_object, fs
+    )
 
     # Apply filters now (before converting non-local paths to buffers).
     # Note that `_process_row_groups` will also expand `filepath_or_buffer`
@@ -387,10 +387,6 @@ def read_parquet(
             byte_ranges, footers, file_sizes = _get_byte_ranges(
                 filepath_or_buffer, row_groups, columns, fs, **kwargs
             )
-
-    # Only use fsspec.parquet if the fs is remote
-    if use_fsspec_parquet and (fs is None or ioutils._is_local_filesystem(fs)):
-        use_fsspec_parquet = False
 
     filepaths_or_buffers = []
     for i, source in enumerate(filepath_or_buffer):

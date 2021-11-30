@@ -65,8 +65,8 @@ class CudfEngine(ArrowDatasetEngine):
         partitions=None,
         partitioning=None,
         partition_keys=None,
-        use_python_file_object=False,
-        use_fsspec_parquet=False,
+        use_python_file_object=None,
+        use_fsspec_parquet=True,
         **kwargs,
     ):
 
@@ -76,7 +76,7 @@ class CudfEngine(ArrowDatasetEngine):
             use_fsspec_parquet_kwargs,
             use_python_file_object,
         ) = ioutils._handle_fsspec_parquet(
-            use_fsspec_parquet, use_python_file_object
+            use_fsspec_parquet, use_python_file_object, fs
         )
 
         # Simplify row_groups if all None
@@ -195,7 +195,7 @@ class CudfEngine(ArrowDatasetEngine):
 
         # Extract supported kwargs from `kwargs`
         strings_to_cats = kwargs.get("strings_to_categorical", False)
-        use_fsspec_parquet = kwargs.get("use_fsspec_parquet", False)
+        use_fsspec_parquet = kwargs.get("use_fsspec_parquet", True)
         read_kwargs = kwargs.get("read", {})
 
         # Assume multi-piece read

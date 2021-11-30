@@ -3,6 +3,7 @@
 import datetime
 import os
 import urllib
+import warnings
 from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 from threading import Thread
 
@@ -165,16 +166,19 @@ strings_to_categorical : boolean, default False
 use_pandas_metadata : boolean, default True
     If True and dataset has custom PANDAS schema metadata, ensure that index
     columns are also loaded.
-use_python_file_object : boolean, default False
-    If True, Arrow-backed PythonFile objects will be used in place of fsspec
-    AbstractBufferedFile objects at IO time. This option is likely to improve
-    performance when making small reads from larger parquet files.
-use_fsspec_parquet : boolean or dict, default False
-    WARNING: This option is experimental, and may be removed in the future.
+use_python_file_object : boolean, default None
+    Relevant for remote storage only. If False, fsspec AbstractBufferedFile
+    objects will be converted to bytes before being passed to the libcudf
+    backend. If True, AbstractBufferedFile objects will be converted to
+    Arrow-backed PythonFile objects instead. By default, this argument
+    will be set equal to `bool(use_fsspec_parquet)` (or to False if the
+    fsspec version is too old to support `use_fsspec_parquet=True`).
+use_fsspec_parquet : boolean or dict, default True
     If True, or a non-empty dictionary of key-word arguments is passed, the
     optimized `fsspec.parquet.open_parquet_file` function will be used to open
-    remote parquet files. Note that `use_python_file_object=False` will be
-    overriden if `bool(use_fsspec_parquet) == True`.
+    remote parquet files. If False, the file-opening behavior depends on the
+    `use_python_file_object` setting. For newer versions of fsspec, the default
+    value of True is expected to give optimal performance.
 
 Returns
 -------
@@ -1682,19 +1686,42 @@ def _read_byte_ranges(
         worker.join()
 
 
-def _handle_fsspec_parquet(use_fsspec_parquet, use_python_file_object):
+def _handle_fsspec_parquet(use_fsspec_parquet, use_python_file_object, fs):
     # Convert `use_fsspec_parquet` to bool and define
-    # separate `use_fsspec_parquet_kwargs`. For now,
-    # we override `use_python_file_object=False` if
-    # the (experimental) `use_fsspec_parquet` option
-    # is used
+    # separate `use_fsspec_parquet_kwargs`
     use_fsspec_parquet_kwargs = (
         use_fsspec_parquet if isinstance(use_fsspec_parquet, dict) else {}
     )
     use_fsspec_parquet = bool(use_fsspec_parquet) and fsspec_parquet
-    use_python_file_object = (
-        True if use_fsspec_parquet else use_python_file_object
-    )
+
+    # Check if this is a local filesystem
+    if use_fsspec_parquet and (fs is None or _is_local_filesystem(fs)):
+        use_fsspec_parquet = False
+
+    # Older versions of s3fs may not work properly with
+    # `fsspec.parquet.open_parquet_file`. To be safe,
+    # we should check if fs is based on s3fs, and
+    # set `use_fsspec_parquet=False` if the version is
+    # too old
+    if use_fsspec_parquet and fs and "s3" in fs.protocol:
+        try:
+            import s3fs
+
+            use_fsspec_parquet = parse_version(
+                s3fs.__version__
+            ) > parse_version("2021.11.0")
+        except ImportError:
+            pass
+        if not use_fsspec_parquet:
+            warnings.warn(
+                f"This version of s3fs ({s3fs.__version__}) does not "
+                f"support optimized parquet-file opening. Please update "
+                f"to the latest s3fs version for better performance."
+            )
+
+    # By default, only use python file objects with fsspec.parquet
+    if use_python_file_object is None and not use_fsspec_parquet:
+        use_python_file_object = False
 
     return (
         use_fsspec_parquet,

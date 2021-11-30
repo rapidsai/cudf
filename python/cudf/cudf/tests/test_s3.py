@@ -131,6 +131,7 @@ def pdf_ext(scope="module"):
     df["Integer"] = np.array([i for i in range(size)])
     df["List"] = [[i] for i in range(size)]
     df["Struct"] = [{"a": i} for i in range(size)]
+    df["String"] = ["Alpha", "Beta", "Gamma", "Delta"] * (size // 4)
     return df
 
 
@@ -335,7 +336,10 @@ def test_read_parquet_arrow_nativefile(s3_base, s3so, pdf, columns):
 
 
 @pytest.mark.parametrize("python_file", [True, False])
-def test_read_parquet_filters(s3_base, s3so, pdf_ext, python_file):
+@pytest.mark.parametrize("fsspec_parquet", [True, False])
+def test_read_parquet_filters(
+    s3_base, s3so, pdf_ext, python_file, fsspec_parquet
+):
     fname = "test_parquet_reader_filters.parquet"
     bname = "parquet"
     buffer = BytesIO()
@@ -348,6 +352,7 @@ def test_read_parquet_filters(s3_base, s3so, pdf_ext, python_file):
             storage_options=s3so,
             filters=filters,
             use_python_file_object=python_file,
+            use_fsspec_parquet=fsspec_parquet,
         )
 
     # All row-groups should be filtered out
