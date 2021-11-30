@@ -231,11 +231,11 @@ void copy_range_in_place(column_view const& source,
 
   if (source_end != source_begin) {  // otherwise no-op
     cudf::type_dispatcher<dispatch_storage_width>(target.type(),
-                                                 in_place_copy_range_dispatch{source, target},
-                                                 source_begin,
-                                                 source_end,
-                                                 target_begin,
-                                                 stream);
+                                                  in_place_copy_range_dispatch{source, target},
+                                                  source_begin,
+                                                  source_end,
+                                                  target_begin,
+                                                  stream);
   }
 }
 

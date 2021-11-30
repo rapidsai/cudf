@@ -484,13 +484,13 @@ std::unique_ptr<column> build_lists_child_column_recursive(
   rmm::mr::device_memory_resource* mr)
 {
   return cudf::type_dispatcher<dispatch_storage_width>(child_column_type,
-                                                      list_child_constructor{},
-                                                      list_vector,
-                                                      list_offsets,
-                                                      source_lists_column_view,
-                                                      target_lists_column_view,
-                                                      stream,
-                                                      mr);
+                                                       list_child_constructor{},
+                                                       list_vector,
+                                                       list_offsets,
+                                                       source_lists_column_view,
+                                                       target_lists_column_view,
+                                                       stream,
+                                                       mr);
 }
 
 }  // namespace detail
