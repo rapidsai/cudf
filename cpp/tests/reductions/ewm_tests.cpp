@@ -35,9 +35,8 @@ struct TypedEwmScanTest : BaseScanTest<T> {
                                        std::unique_ptr<aggregation> const& agg,
                                        null_policy null_handling)
   {
-    std::cout << "hello world!" << std::endl;
     auto col_out = cudf::scan(input, agg, scan_type::INCLUSIVE, null_handling);
-    std::cout << "scan done!" << std::endl;
+    cudf::test::print(col_out->view());
     CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expect_vals, col_out->view());
   }
 };
@@ -46,13 +45,23 @@ TYPED_TEST_SUITE(TypedEwmScanTest, cudf::test::FloatingPointTypes);
 
 TYPED_TEST(TypedEwmScanTest, Ewm)
 {
-  auto const v = [] {
-    return make_vector<TypeParam>({1.0,1.0,1.0});
-  }();
-  auto col = this->make_column(v);
+  auto const v = [] { return make_vector<TypeParam>({1.0, 2.0, 3.0, 4.0, 5.0}); }();
+  auto col     = this->make_column(v);
 
-  auto const expected_ewma_vals =
-    cudf::test::fixed_width_column_wrapper<TypeParam>{{1.0,1.0,1.0}};
+  auto const expected_ewma_vals_adjust = cudf::test::fixed_width_column_wrapper<TypeParam>{
+    {1.0, 1.75, 2.61538461538461497469, 3.54999999999999982236, 4.52066115702479365268}};
+
+  auto const expected_ewma_vals_noadjust =
+    cudf::test::fixed_width_column_wrapper<TypeParam>{{1.0,
+                                                       1.66666666666666651864,
+                                                       2.55555555555555535818,
+                                                       3.51851851851851815667,
+                                                       4.50617283950617242283}};
+
   this->test_ungrouped_ewma_scan(
-    *col, expected_ewma_vals, cudf::make_ewma_aggregation(0.5, true), null_policy::INCLUDE);
+    *col, expected_ewma_vals_adjust, cudf::make_ewma_aggregation(0.5, true), null_policy::INCLUDE);
+  this->test_ungrouped_ewma_scan(*col,
+                                 expected_ewma_vals_noadjust,
+                                 cudf::make_ewma_aggregation(0.5, false),
+                                 null_policy::INCLUDE);
 }
