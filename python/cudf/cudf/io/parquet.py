@@ -163,11 +163,22 @@ def read_parquet_metadata(path):
     return num_rows, num_row_groups, col_names
 
 
-def _process_row_groups(paths, fs, filters=None, row_groups=None):
+def _process_row_groups(
+    paths,
+    fs,
+    filters=None,
+    filtering_columns_first=False,
+    row_groups=None
+):
 
     # The general purpose of this function is to (1) expand
     # directory input into a list of paths (using the pyarrow
     # dataset API), and (2) to apply row-group filters.
+
+    # Don't filter row groups based on statistics metadata if we are reading
+    # filtering columns first.
+    if filtering_columns_first:
+        filters = None
 
     # Deal with case that the user passed in a directory name
     file_list = paths
@@ -182,9 +193,31 @@ def _process_row_groups(paths, fs, filters=None, row_groups=None):
     dataset = ds.dataset(
         paths, filesystem=fs, format="parquet", partitioning="hive",
     )
+    columns = dataset.names
     file_list = dataset.files
     if len(file_list) == 0:
         raise FileNotFoundError(f"{paths} could not be resolved to any files")
+
+    # Determine what filtering columns to read first
+    all_columns, columns_in_predicate = None, None
+    if filtering_columns_first:
+        # Determine which columns are filtering vs. remaining
+        columns_in_predicate = list(
+            {col for conjunction in filters for (col, _, _) in conjunction}
+        )
+        all_columns = columns
+        columns = [c for c in all_columns if c not in columns_in_predicate]
+
+        # Don't read in filtering columns first if we don't have any remaining
+        # columns. If we _are_ reading in filtering columns first, we shouldn't
+        # use the filters for any metadata-based filtering.
+        if len(columns_in_predicate) == 0:
+            filters = None
+            filtering_columns_first = False
+        elif len(columns) == 0:
+            filtering_columns_first = False
+        else:
+            filters = None
 
     if filters is not None:
         # Load IDs of filtered row groups for each file in dataset
@@ -207,7 +240,15 @@ def _process_row_groups(paths, fs, filters=None, row_groups=None):
                     lambda id: id in row_groups[i], filtered_rg_ids[file]
                 )
 
-    return file_list, row_groups
+    return (
+        file_list,
+        row_groups,
+        filtering_columns_first,
+        all_columns,
+        columns,
+        columns_in_predicate,
+        dataset.schema
+    )
 
 
 def _get_byte_ranges(file_list, row_groups, columns, fs, **kwargs):
@@ -313,6 +354,7 @@ def read_parquet(
     engine="cudf",
     columns=None,
     filters=None,
+    filtering_columns_first=False,
     row_groups=None,
     skiprows=None,
     num_rows=None,
@@ -349,13 +391,67 @@ def read_parquet(
     if fs is None and filters is not None:
         raise ValueError("cudf cannot apply filters to open file objects.")
 
+    # Prepare filters
+    filters = ioutils._prepare_filters(filters)
+
     # Apply filters now (before converting non-local paths to buffers).
     # Note that `_process_row_groups` will also expand `filepath_or_buffer`
     # into a full list of files if it is a directory.
     if fs is not None:
-        filepath_or_buffer, row_groups = _process_row_groups(
-            filepath_or_buffer, fs, filters=filters, row_groups=row_groups,
+        (
+            filepath_or_buffer,
+            row_groups,
+            # We might no longer want to read filtering columns first
+            # if there are no _non-filtering_ columns to read.
+            filtering_columns_first,
+            # If we are reading filtering columns first, we need to know which
+            # columns are filtering columns, which ones we should read in as
+            # remaining columns, the ordering of _all_ columns, and also the
+            # schema so we can return an empty dataframe if the filtering
+            # columns get filtered into emptiness.
+            all_columns,
+            columns,
+            columns_in_predicate,
+            schema
+        ) = _process_row_groups(
+            filepath_or_buffer,
+            fs,
+            filters=filters,
+            filtering_columns_first=filtering_columns_first,
+            row_groups=row_groups
         )
+        
+        # Read in filtering columns first
+        if filtering_columns_first:
+            # Don't filter using metadata if we're reading in filtering columns first
+            filters = None
+
+            # Read in only the columns relevant to the filtering
+            filtered_df = read_parquet(
+                filepath_or_buffer,
+                engine=engine,
+                columns=columns_in_predicate,
+                filters=None,
+                filtering_columns_first=False,
+                row_groups=row_groups,
+                skiprows=skiprows,
+                num_rows=num_rows,
+                strings_to_categorical=strings_to_categorical,
+                use_pandas_metadata=use_pandas_metadata,
+                use_python_file_object=use_python_file_object,
+                *args,
+                **kwargs,
+            )
+
+            # Convert filters to query string
+            query_string, local_dict = ioutils._filters_to_query(filters)
+
+            # Return empty dataframe if the filtering columns will get filtered
+            # into emptiness.
+            if len(
+                filtered_df.query(query_string, local_dict=local_dict)
+            ) == 0:
+                return ioutils._make_empty_df(schema, all_columns)
 
     # Check if we should calculate the specific byte-ranges
     # needed for each parquet file. We always do this when we
@@ -411,7 +507,7 @@ def read_parquet(
             filepaths_or_buffers.append(tmp_source)
 
     if engine == "cudf":
-        return libparquet.read_parquet(
+        df = libparquet.read_parquet(
             filepaths_or_buffers,
             columns=columns,
             row_groups=row_groups,
@@ -422,11 +518,24 @@ def read_parquet(
         )
     else:
         warnings.warn("Using CPU via PyArrow to read Parquet dataset.")
-        return cudf.DataFrame.from_arrow(
+        df = cudf.DataFrame.from_arrow(
             pq.ParquetDataset(filepaths_or_buffers).read_pandas(
                 columns=columns, *args, **kwargs
             )
         )
+
+    # If we read filtering columns first, return a concatenation of those
+    # filtered columns with the remaining columns.
+    if filtering_columns_first:
+        reordering_columns_required = (
+            columns_in_predicate + columns != all_columns
+        )
+        if reordering_columns_required:
+            return cudf.concat([filtered_df, df], axis=1)[all_columns]
+        else:
+            return cudf.concat([filtered_df, df], axis=1)
+    else:
+        return df
 
 
 @ioutils.doc_to_parquet()
