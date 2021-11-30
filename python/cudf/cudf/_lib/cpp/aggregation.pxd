@@ -1,5 +1,5 @@
-# Copyright (c) 2020, NVIDIA CORPORATION.
-
+# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+from libc.stdint cimport int32_t
 from libcpp.memory cimport unique_ptr
 from libcpp.string cimport string
 from libcpp.vector cimport vector
@@ -11,6 +11,7 @@ from cudf._lib.cpp.types cimport (
     size_type,
 )
 
+ctypedef int32_t underlying_type_t_correlation_type
 
 cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
 
@@ -38,6 +39,8 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
             COLLECT_SET 'cudf::aggregation::COLLECT_SET'
             PTX 'cudf::aggregation::PTX'
             CUDA 'cudf::aggregation::CUDA'
+            CORRELATION 'cudf::aggregation::CORRELATION'
+
         Kind kind
 
     cdef cppclass rolling_aggregation:
@@ -52,6 +55,11 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
     ctypedef enum udf_type:
         CUDA 'cudf::udf_type::CUDA'
         PTX 'cudf::udf_type::PTX'
+
+    ctypedef enum correlation_type:
+        PEARSON 'cudf::correlation_type::PEARSON'
+        KENDALL 'cudf::correlation_type::KENDALL'
+        SPEARMAN 'cudf::correlation_type::SPEARMAN'
 
     cdef unique_ptr[T] make_sum_aggregation[T]() except +
 
@@ -106,3 +114,6 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         udf_type type,
         string user_defined_aggregator,
         data_type output_type) except +
+
+    cdef unique_ptr[T] make_correlation_aggregation[T](
+        correlation_type type, size_type min_periods) except +
