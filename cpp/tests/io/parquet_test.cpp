@@ -2972,12 +2972,10 @@ TEST_F(ParquetReaderTest, DecimalRead)
     unsigned int parquet_len = 1226;
 
     cudf_io::parquet_reader_options read_opts =
-      cudf_io::parquet_reader_options::builder(
-        cudf_io::source_info{reinterpret_cast<const char*>(fixed_len_bytes_decimal_parquet),
-                             parquet_len})
-        .columns({"dec7p3", "dec12p11"});
+      cudf_io::parquet_reader_options::builder(cudf_io::source_info{
+        reinterpret_cast<const char*>(fixed_len_bytes_decimal_parquet), parquet_len});
     auto result = cudf_io::read_parquet(read_opts);
-    EXPECT_EQ(result.tbl->view().num_columns(), 2);
+    EXPECT_EQ(result.tbl->view().num_columns(), 3);
 
     auto validity_c0 =
       cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 19; });
@@ -3020,8 +3018,34 @@ TEST_F(ParquetReaderTest, DecimalRead)
       std::begin(col1_data), std::end(col1_data), validity_c1, numeric::scale_type{-11});
     cudf::test::expect_columns_equal(result.tbl->view().column(1), col1);
 
-    read_opts.set_columns({"dec20p1"});
-    EXPECT_NO_THROW(cudf_io::read_parquet(read_opts));
+    auto validity_c2 =
+      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 6 and i != 14; });
+    __int128_t col2_data[] = {9078697037144433659,
+                              9050770539577117612,
+                              2358363961733893636,
+                              1566059559232276662,
+                              6658306200002735268,
+                              4967909073046397334,
+                              0,
+                              7235588493887532473,
+                              5023160741463849572,
+                              2765173712965988273,
+                              3880866513515749646,
+                              5019704400576359500,
+                              5544435986818825655,
+                              7265381725809874549,
+                              0,
+                              1576192427381240677,
+                              2828305195087094598,
+                              260308667809395171,
+                              2460080200895288476,
+                              2718441925197820439};
+
+    EXPECT_EQ(static_cast<std::size_t>(result.tbl->view().column(2).size()),
+              sizeof(col2_data) / sizeof(col2_data[0]));
+    cudf::test::fixed_point_column_wrapper<__int128_t> col2(
+      std::begin(col2_data), std::end(col2_data), validity_c2, numeric::scale_type{-1});
+    cudf::test::expect_columns_equal(result.tbl->view().column(2), col2);
   }
 }
 
