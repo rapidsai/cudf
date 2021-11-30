@@ -626,6 +626,7 @@ def test_parquet_reader_spark_timestamps(datadir):
     assert_eq(expect, got)
 
 
+@pytest.mark.xfail(reason="decimal128 not yet supported in cuDF")
 def test_parquet_reader_spark_decimals(datadir):
     fname = datadir / "spark_decimal.parquet"
 
@@ -638,6 +639,15 @@ def test_parquet_reader_spark_decimals(datadir):
 
     # np.testing.assert_allclose(expect, got)
     assert_eq(expect, got)
+
+
+def test_parquet_reader_decimal128_error_validation(datadir):
+    fname = datadir / "decimal128_file.parquet"
+    with pytest.raises(
+        NotImplementedError,
+        match="Decimal type greater than Decimal64 is not yet supported",
+    ):
+        cudf.read_parquet(fname)
 
 
 def test_parquet_reader_microsecond_timestamps(datadir):

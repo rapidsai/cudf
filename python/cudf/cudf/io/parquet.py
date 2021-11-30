@@ -7,6 +7,7 @@ from collections import defaultdict
 from uuid import uuid4
 
 import fsspec
+import pyarrow as pa
 from pyarrow import dataset as ds, parquet as pq
 
 import cudf
@@ -411,6 +412,26 @@ def read_parquet(
             filepaths_or_buffers.append(tmp_source)
 
     if engine == "cudf":
+        # Temporary error to probe a parquet file
+        # and raise decimal128 support error.
+        if len(filepaths_or_buffers) > 0:
+            try:
+                metadata = pq.read_metadata(filepaths_or_buffers[0])
+            except TypeError:
+                pass
+            else:
+                arrow_types = metadata.schema.to_arrow_schema().types
+                for arrow_type in arrow_types:
+                    if isinstance(arrow_type, pa.Decimal128Type):
+                        if (
+                            arrow_type.precision
+                            > cudf.Decimal64Dtype.MAX_PRECISION
+                        ):
+                            raise NotImplementedError(
+                                "Decimal type greater than Decimal64 is not "
+                                "yet supported"
+                            )
+
         return libparquet.read_parquet(
             filepaths_or_buffers,
             columns=columns,
