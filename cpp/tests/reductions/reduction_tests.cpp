@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
@@ -28,7 +29,6 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-#include <cudf_test/table_utilities.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
