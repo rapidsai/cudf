@@ -205,8 +205,9 @@ struct half_up_fixed_point {
     // Create a container with extra digit for adjustment
     auto const container = e / n;
     auto const down      = container / 10;
-    // Use the remainder of 10 to decide whether to round or not
-    return down + (generic_abs(container % 10) >= 5 ? generic_sign(e) : 0);
+    // Use the remainder of 10 to determine whether to round or not
+    auto remainder_of_10 = generic_abs(container % 10);
+    return down + (remainder_of_10 >= 5 ? generic_sign(e) : 0);
   }
 };
 
@@ -226,23 +227,13 @@ struct half_even_fixed_point {
     // Create a container with extra digit for adjustment
     auto const container = e / n;
     auto const down      = container / 10;
-    auto abs_mod_10      = generic_abs(container % 10);
-    if ((abs_mod_10 > 5) or (abs_mod_10 == 5 and generic_abs(down) % 2 == 1)) {
+    // Use the remainder of 10 to determine whether to round or not
+    auto remainder_of_10 = generic_abs(container % 10);
+    if ((remainder_of_10 > 5) or (remainder_of_10 == 5 and generic_abs(down) % 2 == 1)) {
       return down + generic_sign(e);
     }
     return down;
   }
-
-  //    template <typename U = T, typename std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
-//  __device__ U operator()(U e)
-//  {
-//    auto const down_over_n = e / n;            // use this to determine HALF_EVEN case
-//    auto const down        = down_over_n * n;  // result from rounding down
-//    auto const diff        = generic_abs(e - down);
-//    auto const adjustment =
-//      (diff > n / 2) or (diff == n / 2 && generic_abs(down_over_n) % 2 == 1) ? n : 0;
-//    return down + generic_sign(e) * adjustment;
-//  }
 };
 
 template <typename T,
@@ -298,18 +289,21 @@ std::unique_ptr<column> round_with(column_view const& input,
 
   auto out_view = result->mutable_view();
 
-  constexpr int max_precision = []{
+  constexpr int max_precision = [] {
     if constexpr (std::is_same_v<T, numeric::decimal32>) return 9;
     if constexpr (std::is_same_v<T, numeric::decimal64>) return 18;
     return 38;
   }();
 
   auto const scale_movement = -decimal_places - input.type().scale();
-
+  // If scale_movement is larger than max precision of current type, the pow operation will
+  // overflow. Under this circumstance, we can simply output a zero column because no digits can
+  // survive such a large scale movement.
   if (scale_movement > max_precision) {
     auto zero_scalar = make_fixed_point_scalar<T>(0, scale_type{-decimal_places});
     detail::fill_in_place(out_view, 0, out_view.size(), *zero_scalar, stream);
   } else {
+    // Creates n to truncate the input number, keeping one more digit than the result type
     Type const n = std::pow(10, scale_movement - 1);
     thrust::transform(rmm::exec_policy(stream),
                       input.begin<Type>(),
