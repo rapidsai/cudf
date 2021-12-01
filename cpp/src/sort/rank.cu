@@ -194,6 +194,12 @@ void rank_max(cudf::device_span<size_type const> group_keys,
                                        stream);
 }
 
+// Returns index, count
+template <typename T>
+struct index_counter {
+  __device__ T operator()(size_type i) { return T{i, 1}; }
+};
+
 void rank_average(cudf::device_span<size_type const> group_keys,
                   column_view sorted_order_view,
                   mutable_column_view rank_mutable_view,
@@ -208,10 +214,9 @@ void rank_average(cudf::device_span<size_type const> group_keys,
   using MinCount = thrust::pair<size_type, size_type>;
   tie_break_ranks_transform<MinCount>(
     group_keys,
-    cudf::detail::make_counting_transform_iterator(1,
-                                                   [] __device__(auto i) {
-                                                     return MinCount{i, 1};
-                                                   }),
+    // Use device functor with return type. Cannot use device lambda due to limitation.
+    // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#extended-lambda-restrictions
+    cudf::detail::make_counting_transform_iterator(1, index_counter<MinCount>{}),
     sorted_order_view,
     rank_mutable_view.begin<double>(),
     [] __device__(auto rank_count1, auto rank_count2) {
