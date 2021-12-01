@@ -136,7 +136,7 @@ cudf::size_type count_unset_bits(bitmask_type const* bitmask, size_type start, s
  * @brief Given a bitmask, counts the number of set (1) bits in every range
  * `[indices[2*i], indices[(2*i)+1])` (where 0 <= i < indices.size() / 2).
  *
- * Returns an empty vector if `bitmask == nullptr`.
+ * Returns a vector of length `indices.size()` containing segment lengths if `bitmask == nullptr`.
  *
  * @throws cudf::logic_error if `indices.size() % 2 != 0`
  * @throws cudf::logic_error if `indices[2*i] < 0 or indices[2*i] > indices[(2*i)+1]`
@@ -152,7 +152,7 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
  * @brief Given a bitmask, counts the number of unset (0) bits in every range
  * `[indices[2*i], indices[(2*i)+1])` (where 0 <= i < indices.size() / 2).
  *
- * Returns an empty vector if `bitmask == nullptr`.
+ * Returns a vector of length `indices.size()` containing all zeros if `bitmask == nullptr`.
  *
  * @throws cudf::logic_error if `indices.size() % 2 != 0`
  * @throws cudf::logic_error if `indices[2*i] < 0 or indices[2*i] > indices[(2*i)+1]`

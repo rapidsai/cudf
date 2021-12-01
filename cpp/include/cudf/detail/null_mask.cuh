@@ -50,7 +50,7 @@ namespace detail {
  * @param source_begin_bits Array of offsets into corresponding @p source masks.
  *                          Must be same size as source array
  * @param source_size_bits Number of bits in each mask in @p source
- * @param count Pointer to counter of set bits
+ * @param count_ptr Pointer to counter of set bits
  */
 template <int block_size, typename Binop>
 __global__ void offset_bitmask_binop(Binop op,
@@ -413,7 +413,7 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
   auto const h_indices = std::vector<size_type>(indices_begin, indices_end);
   auto const d_indices = make_device_uvector_async(h_indices, stream);
 
-  // Compute the null counts over each segment.
+  // Compute the bit counts over each segment.
   auto first_bit_indices_begin = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0), index_alternator{false, d_indices.data()});
   auto const first_bit_indices_end = first_bit_indices_begin + num_ranges;
