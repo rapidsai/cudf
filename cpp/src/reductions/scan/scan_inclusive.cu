@@ -183,15 +183,12 @@ struct scan_functor<Op, cudf::struct_view> {
       is_min_op ? cudf::detail::make_device_uvector_async(flattened_input.null_orders(), stream)
                 : rmm::device_uvector<cudf::null_order>(0, stream);
 
-    if (input.has_nulls()) {
-      auto const binop = cudf::reduction::detail::row_arg_minmax_fn<true>(
-        input.size(), *d_flattened_input_ptr, flattened_null_precedences.data(), is_min_op);
-      do_scan(binop);
-    } else {
-      auto const binop = cudf::reduction::detail::row_arg_minmax_fn<false>(
-        input.size(), *d_flattened_input_ptr, flattened_null_precedences.data(), is_min_op);
-      do_scan(binop);
-    }
+    auto const binop = cudf::reduction::detail::row_arg_minmax_fn(input.size(),
+                                                                  *d_flattened_input_ptr,
+                                                                  input.has_nulls(),
+                                                                  flattened_null_precedences.data(),
+                                                                  is_min_op);
+    do_scan(binop);
 
     // Gather the children columns of the input column. Must use `get_sliced_child` to properly
     // handle input in case it is a sliced view.
