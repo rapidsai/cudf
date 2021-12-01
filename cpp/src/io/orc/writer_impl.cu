@@ -1849,9 +1849,9 @@ void writer::impl::write(table_view const& table)
 
   if (num_rows > 0) {
     // Gather column statistics
-    std::vector<ColStatsBlob> column_stats;
-    if (enable_statistics_ && table.num_columns() > 0) {
-      column_stats = gather_statistic_blobs(orc_table, segmentation);
+  auto column_stats = enable_statistics_ && table.num_columns() > 0
+                        ? gather_statistic_blobs(orc_table, segmentation)
+                        : std::vector<ColStatsBlob>{};
     }
 
     // Allocate intermediate output stream buffer
@@ -1977,7 +1977,7 @@ void writer::impl::write(table_view const& table)
       task.wait();
     }
 
-    if (column_stats.size() != 0) {
+    if (not column_stats.empty()) {
       // File-level statistics
       // NOTE: Excluded from chunked write mode to avoid the need for merging stats across calls
       if (single_write_mode) {
