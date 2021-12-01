@@ -445,8 +445,6 @@ class element_hasher {
 template <template <typename> class hash_function, typename Nullate>
 class element_hasher_with_seed {
  public:
-  // element_hasher_with_seed() = default;
-
   __device__ element_hasher_with_seed(Nullate has_nulls, uint32_t seed)
     : _seed{seed}, _has_nulls{has_nulls}
   {
