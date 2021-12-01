@@ -974,7 +974,7 @@ def test_series_update(data, other):
 @pytest.mark.parametrize("nan_as_null", [True, False])
 @pytest.mark.parametrize("fill_value", [1.2, 332, np.nan])
 def test_fillna_with_nan(data, nan_as_null, fill_value):
-    gs = cudf.Series(data, nan_as_null=nan_as_null)
+    gs = cudf.Series(data, dtype="float64", nan_as_null=nan_as_null)
     ps = gs.to_pandas()
 
     expected = ps.fillna(fill_value)

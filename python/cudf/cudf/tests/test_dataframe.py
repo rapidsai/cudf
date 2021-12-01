@@ -1309,7 +1309,7 @@ def test_concat_empty_dataframe(df_1, df_2):
     [
         {"a": [1, 2], "b": [1, 2], "c": ["s1", "s2"], "d": [1.0, 2.0]},
         {"b": [1.9, 10.9], "c": ["s1", "s2"]},
-        {"c": ["s1"], "b": [None], "a": [False]},
+        {"c": ["s1"], "b": pd.Series([None], dtype="float"), "a": [False]},
     ],
 )
 @pytest.mark.parametrize(
@@ -8481,10 +8481,10 @@ def test_agg_for_dataframe_with_string_columns(aggs):
 )
 def test_update_for_dataframes(data, data2, join, overwrite, errors):
     pdf = pd.DataFrame(data)
-    gdf = cudf.DataFrame(data)
+    gdf = cudf.DataFrame(data, nan_as_null=False)
 
     other_pd = pd.DataFrame(data2)
-    other_gd = cudf.DataFrame(data2)
+    other_gd = cudf.DataFrame(data2, nan_as_null=False)
 
     pdf.update(other=other_pd, join=join, overwrite=overwrite, errors=errors)
     gdf.update(other=other_gd, join=join, overwrite=overwrite, errors=errors)
@@ -8950,7 +8950,9 @@ def test_frame_series_where_other(data):
         (
             {
                 "id": ["a", "a", "b", "b", "c", "c"],
-                "val": [None, None, None, None, None, None],
+                "val": cudf.Series(
+                    [None, None, None, None, None, None], dtype="float64"
+                ),
             },
             ["id"],
         ),
