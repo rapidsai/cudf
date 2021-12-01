@@ -422,15 +422,12 @@ def read_parquet(
             else:
                 arrow_types = metadata.schema.to_arrow_schema().types
                 for arrow_type in arrow_types:
-                    if isinstance(arrow_type, pa.Decimal128Type):
-                        if (
-                            arrow_type.precision
-                            > cudf.Decimal64Dtype.MAX_PRECISION
-                        ):
-                            raise NotImplementedError(
-                                "Decimal type greater than Decimal64 is not "
-                                "yet supported"
-                            )
+                    if isinstance(arrow_type, (pa.ListType, pa.StructType)):
+                        val_field_types = arrow_type.value_field.flatten()
+                        for val_field_type in val_field_types:
+                            _check_decimal128_type(val_field_type.type)
+                    else:
+                        _check_decimal128_type(arrow_type)
 
         return libparquet.read_parquet(
             filepaths_or_buffers,
@@ -550,3 +547,11 @@ def merge_parquet_filemetadata(filemetadata_list):
 
 
 ParquetWriter = libparquet.ParquetWriter
+
+
+def _check_decimal128_type(arrow_type):
+    if isinstance(arrow_type, pa.Decimal128Type):
+        if arrow_type.precision > cudf.Decimal64Dtype.MAX_PRECISION:
+            raise NotImplementedError(
+                "Decimal type greater than Decimal64 is not " "yet supported"
+            )
