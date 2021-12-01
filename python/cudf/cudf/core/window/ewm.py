@@ -137,6 +137,7 @@ class ExponentialMovingWindow(_RollingBase):
         # pandas does nans in the same positions mathematically.
         # as such we need to convert the nans to nulls before
         # passing them in.
+        breakpoint()
         to_libcudf_column = nans_to_nulls(
             sr._column.astype('float64')
         )
