@@ -145,7 +145,6 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
   rmm::device_uvector<pair_type> pairs(input.size(), stream);
 
   if (input.has_nulls()) {
-    std::cout << "nulls detected." << std::endl;
     rmm::device_uvector<cudf::size_type> nullcnt = null_roll_up(input, stream);
     // Numerator
     // Fill with pairs

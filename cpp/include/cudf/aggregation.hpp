@@ -314,7 +314,6 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * not change the average. For example, if the input sequence is {1, NULL, 3}
  * then when computing y_2 one should weigh y_0 as if it occurs two periods
  * before y_2 rather than just one.
- *  2.
  *
  * @param com the center of mass.
  * @param adjust which assumption to make about the first value
