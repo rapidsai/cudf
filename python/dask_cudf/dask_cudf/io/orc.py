@@ -61,6 +61,13 @@ def read_orc(
         as a list of tuples. This form is interpreted as a single conjunction.
         To express OR in predicates, one must use the (preferred) notation of
         list of lists of tuples.
+    filtering_columns_first : bool, default False
+        If True, filtering columns (the columns mentioned in the specified
+        `filters`) are first read in and queried. Then, the remaining columns
+        are only read in if the result of querying the filtering columns is
+        empty. Otherwise, an empty dataframe is returned using schema from
+        parsed metadata. This should be set to True if a highly selective
+        `filters` is specified and there are many non-filtering columns.
     storage_options: None or dict
         Further parameters to pass to the bytes backend.
 

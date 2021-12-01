@@ -144,6 +144,13 @@ filters : list of tuple, list of lists of tuples default None
     as a list of tuples. This form is interpreted as a single conjunction.
     To express OR in predicates, one must use the (preferred) notation of
     list of lists of tuples.
+filtering_columns_first : bool, default False
+    If True, filtering columns (the columns mentioned in the specified
+    `filters`) are first read in and queried. Then, the remaining columns are
+    only read in if the result of querying the filtering columns is empty.
+    Otherwise, an empty dataframe is returned using schema from parsed
+    metadata. This should be set to True if a highly selective `filters` is
+    specified and there are many non-filtering columns.
 row_groups : int, or list, or a list of lists default None
     If not None, specifies, for each input file, which row groups to read.
     If reading multiple inputs, a list of lists should be passed, one list
@@ -352,6 +359,13 @@ filters : list of tuple, list of lists of tuples default None
     as a list of tuples. This form is interpreted as a single conjunction.
     To express OR in predicates, one must use the (preferred) notation of
     list of lists of tuples.
+filtering_columns_first : bool, default False
+    If True, filtering columns (the columns mentioned in the specified
+    `filters`) are first read in and queried. Then, the remaining columns are
+    only read in if the result of querying the filtering columns is empty.
+    Otherwise, an empty dataframe is returned using schema from parsed
+    metadata. This should be set to True if a highly selective `filters` is
+    specified and there are many non-filtering columns.
 stripes: list, default None
     If not None, only these stripe will be read from the file. Stripes are
     concatenated with index ignored.
