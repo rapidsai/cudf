@@ -23,7 +23,6 @@ def set_index_post(df, index_name, drop, column_dtype):
 
 
 def _set_partitions_pre(s, divisions, ascending=True, na_position="last"):
-    breakpoint()
     if ascending:
         partitions = divisions.searchsorted(s, side="right") - 1
     else:
