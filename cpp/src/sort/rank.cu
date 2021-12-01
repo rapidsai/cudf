@@ -214,7 +214,7 @@ void rank_average(cudf::device_span<size_type const> group_keys,
   using MinCount = thrust::pair<size_type, size_type>;
   tie_break_ranks_transform<MinCount>(
     group_keys,
-    // use device functor with return type. Cannot use device lambda due to limitation.
+    // Use device functor with return type. Cannot use device lambda due to limitation.
     // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#extended-lambda-restrictions
     cudf::detail::make_counting_transform_iterator(1, index_counter<MinCount>{}),
     sorted_order_view,
