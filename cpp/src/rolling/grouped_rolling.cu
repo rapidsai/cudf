@@ -142,8 +142,8 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
                                preceding_window] __device__(size_type idx) {
     auto group_label = d_group_labels[idx];
     auto group_start = d_group_offsets[group_label];
-    return thrust::minimum<size_type>{}(preceding_window,
-                                        idx - group_start + 1);  // Preceding includes current row.
+    return thrust::minimum{}(preceding_window,
+                             idx - group_start + 1);  // Preceding includes current row.
   };
 
   auto following_calculator = [d_group_offsets = group_offsets.data(),
@@ -152,7 +152,7 @@ std::unique_ptr<column> grouped_rolling_window(table_view const& group_keys,
     auto group_label = d_group_labels[idx];
     auto group_end   = d_group_offsets[group_label + 1];  // Cannot fall off the end, since offsets
                                                           // is capped with `input.size()`.
-    return thrust::minimum<size_type>{}(following_window, (group_end - 1) - idx);
+    return thrust::minimum{}(following_window, (group_end - 1) - idx);
   };
 
   if (aggr.kind == aggregation::CUDA || aggr.kind == aggregation::PTX) {

@@ -74,11 +74,8 @@ struct lookup_functor {
     if (!search_keys_have_nulls && !input_lists.has_nulls() && !input_lists.child().has_nulls()) {
       return {rmm::device_buffer{0, stream, mr}, size_type{0}};
     } else {
-      return cudf::detail::valid_if(result_validity.begin<bool>(),
-                                    result_validity.end<bool>(),
-                                    thrust::identity<bool>{},
-                                    stream,
-                                    mr);
+      return cudf::detail::valid_if(
+        result_validity.begin<bool>(), result_validity.end<bool>(), thrust::identity{}, stream, mr);
     }
   }
 
