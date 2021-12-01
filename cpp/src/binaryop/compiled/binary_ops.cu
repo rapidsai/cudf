@@ -295,7 +295,7 @@ std::unique_ptr<column> string_null_min_max(column_view const& lhs,
     *lhs_device_view, *rhs_device_view, op, output_type, lhs.size(), stream, mr);
 }
 
-void operator_dispatcher(mutable_column_device_view& out,
+__forceinline__ void operator_dispatcher(mutable_column_device_view& out,
                          column_device_view const& lhs,
                          column_device_view const& rhs,
                          bool is_lhs_scalar,
