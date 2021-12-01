@@ -95,8 +95,7 @@ struct map_find_fn {
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
   populate_chunk_hash_maps_kernel(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                                  cudf::detail::device_2dspan<gpu::PageFragment const> frags,
-                                  size_type num_rows)
+                                  cudf::detail::device_2dspan<gpu::PageFragment const> frags)
 {
   auto col_idx = blockIdx.y;
   auto block_x = blockIdx.x;
@@ -218,8 +217,7 @@ __global__ void __launch_bounds__(block_size, 1)
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
   get_dictionary_indices_kernel(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                                cudf::detail::device_2dspan<gpu::PageFragment const> frags,
-                                size_type num_rows)
+                                cudf::detail::device_2dspan<gpu::PageFragment const> frags)
 {
   auto col_idx = blockIdx.y;
   auto block_x = blockIdx.x;
@@ -281,23 +279,13 @@ void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_st
 
 void populate_chunk_hash_maps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                               cudf::detail::device_2dspan<gpu::PageFragment const> frags,
-                              size_type num_rows,
                               rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 256;
-  // auto const grid_x        = cudf::detail::grid_1d(num_rows, max_page_fragment_size);
-  // auto const num_columns   = chunks.size().second;
-  // dim3 const dim_grid(grid_x.num_blocks, num_columns);
-  // TODO: Is there any perf implications if the kernel is launched with x = cols, y = rows/frags?
   dim3 const dim_grid(frags.size().second, frags.size().first);
 
-  // Convert to a per-fragment kernel. It is like that already and I know we cannot avoid fragments
-  // anymore. The only other alternative is using row_bit_count to find per-row size and then use it
-  // to calculate rowgroup boundaries. And that one doesn't exclude null data size. Maybe in the
-  // future we can remove fragments and allow rowgroups to have less than 5000 rows but it's not
-  // important right now
   populate_chunk_hash_maps_kernel<block_size>
-    <<<dim_grid, block_size, 0, stream.value()>>>(chunks, frags, num_rows);
+    <<<dim_grid, block_size, 0, stream.value()>>>(chunks, frags);
 }
 
 void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
@@ -308,17 +296,13 @@ void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_vi
 
 void get_dictionary_indices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                             cudf::detail::device_2dspan<gpu::PageFragment const> frags,
-                            size_type num_rows,
                             rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 256;
-  // auto const grid_x        = cudf::detail::grid_1d(num_rows, max_page_fragment_size);
-  // auto const num_columns   = chunks.size().second;
-  // dim3 const dim_grid(grid_x.num_blocks, num_columns);
   dim3 const dim_grid(frags.size().second, frags.size().first);
 
   get_dictionary_indices_kernel<block_size>
-    <<<dim_grid, block_size, 0, stream.value()>>>(chunks, frags, num_rows);
+    <<<dim_grid, block_size, 0, stream.value()>>>(chunks, frags);
 }
 }  // namespace gpu
 }  // namespace parquet

@@ -772,7 +772,6 @@ void writer::impl::init_page_fragments(cudf::detail::hostdevice_2dvector<gpu::Pa
                                        device_span<gpu::parquet_column_device_view const> col_desc,
                                        std::vector<std::pair<size_type, size_type>> partitions,
                                        device_span<int const> part_frag_offset,
-                                       uint32_t num_rows,
                                        uint32_t fragment_size)
 {
   // TODO: partitions as pairs aren't convertible to device_uvector because device_uvector does not
@@ -786,8 +785,7 @@ void writer::impl::init_page_fragments(cudf::detail::hostdevice_2dvector<gpu::Pa
       return gpu::partition_info{part.first, part.second};
     });
   auto d_partitions = cudf::detail::make_device_uvector_async(h_partitions, stream);
-  gpu::InitPageFragments(
-    frag, col_desc, d_partitions, part_frag_offset, fragment_size, num_rows, stream);
+  gpu::InitPageFragments(frag, col_desc, d_partitions, part_frag_offset, fragment_size, stream);
   frag.device_to_host(stream, true);
 }
 
@@ -820,7 +818,6 @@ void writer::impl::init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chu
 auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                               host_span<gpu::parquet_column_device_view const> col_desc,
                               device_2dspan<gpu::PageFragment const> frags,
-                              uint32_t num_rows,
                               rmm::cuda_stream_view stream)
 {
   // At this point, we know all chunks and their sizes. We want to allocate dictionaries for each
@@ -850,7 +847,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   chunks.host_to_device(stream);
 
   gpu::initialize_chunk_hash_maps(chunks.device_view().flat_view(), stream);
-  gpu::populate_chunk_hash_maps(chunks, frags, num_rows, stream);
+  gpu::populate_chunk_hash_maps(chunks, frags, stream);
 
   chunks.device_to_host(stream, true);
 
@@ -899,7 +896,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   }
   chunks.host_to_device(stream);
   gpu::collect_map_entries(chunks.device_view().flat_view(), stream);
-  gpu::get_dictionary_indices(chunks.device_view(), frags, num_rows, stream);
+  gpu::get_dictionary_indices(chunks.device_view(), frags, stream);
 
   return std::make_pair(std::move(dict_data), std::move(dict_index));
 }
@@ -1128,9 +1125,6 @@ void writer::impl::write(table_view const& table,
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
   if (partitions.empty()) { partitions.push_back({0, table.num_rows()}); }
 
-  // TODO: remove
-  size_type num_rows = table.num_rows();
-
   if (not table_meta) { table_meta = std::make_unique<table_input_metadata>(table); }
 
   // Fill unnamed columns' names in table_meta
@@ -1243,7 +1237,7 @@ void writer::impl::write(table_view const& table,
       col_desc, *parent_column_table_device_view, stream);
 
     init_page_fragments(
-      fragments, col_desc, partitions, d_part_frag_offset, num_rows, max_page_fragment_size);
+      fragments, col_desc, partitions, d_part_frag_offset, max_page_fragment_size);
   }
 
   // TODO: size_type
@@ -1370,7 +1364,7 @@ void writer::impl::write(table_view const& table,
 
   // Pass fragments hd_vec to build_chunk_dictionaries
   fragments.host_to_device(stream);
-  auto dict_info_owner = build_chunk_dictionaries(chunks, col_desc, fragments, num_rows, stream);
+  auto dict_info_owner = build_chunk_dictionaries(chunks, col_desc, fragments, stream);
   for (size_t p = 0; p < partitions.size(); p++) {
     for (int rg = 0; rg < num_rg_in_part[p]; rg++) {
       size_t global_rg = global_rowgroup_base[p] + rg;

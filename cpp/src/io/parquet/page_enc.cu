@@ -98,17 +98,6 @@ inline __device__ uint32_t uint64_init_hash(uint64_t v)
   return uint32_init_hash(static_cast<uint32_t>(v + (v >> 32)));
 }
 
-/**
- * @brief Initializes encoder page fragments
- *
- * Based on the number of rows in each fragment, populates the value count, the size of data in the
- * fragment, the number of unique values, and the data size of unique values.
- *
- * @param[in] frag Fragment array [fragment_id][column_id]
- * @param[in] col_desc Column description array [column_id]
- * @param[in] num_fragments Number of fragments per column
- * @param[in] num_columns Number of columns
- */
 // blockDim {512,1,1}
 template <int block_size>
 __global__ void __launch_bounds__(block_size)
@@ -116,8 +105,7 @@ __global__ void __launch_bounds__(block_size)
                        device_span<parquet_column_device_view const> col_desc,
                        device_span<gpu::partition_info const> partitions,
                        device_span<int const> part_frag_offset,
-                       uint32_t fragment_size,
-                       uint32_t max_num_rows)  // TODO: remove
+                       uint32_t fragment_size)
 {
   __shared__ __align__(16) frag_init_state_s state_g;
 
@@ -1902,38 +1890,20 @@ dremel_data get_dremel_data(column_view h_col,
     std::move(new_offsets), std::move(rep_level), std::move(def_level), leaf_data_size};
 }
 
-/**
- * @brief Launches kernel for initializing encoder page fragments
- *
- * @param[in,out] frag Fragment array [column_id][fragment_id]
- * @param[in] col_desc Column description array [column_id]
- * @param[in] num_fragments Number of fragments per column
- * @param[in] num_columns Number of columns
- * @param[in] stream CUDA stream to use, default 0
- */
 void InitPageFragments(device_2dspan<PageFragment> frag,
                        device_span<parquet_column_device_view const> col_desc,
                        device_span<gpu::partition_info const> partitions,
                        device_span<int const> part_frag_offset,
                        uint32_t fragment_size,
-                       uint32_t num_rows,
                        rmm::cuda_stream_view stream)
 {
   auto num_columns              = frag.size().first;
   auto num_fragments_per_column = frag.size().second;
   dim3 dim_grid(num_columns, num_fragments_per_column);  // 1 threadblock per fragment
   gpuInitPageFragments<512><<<dim_grid, 512, 0, stream.value()>>>(
-    frag, col_desc, partitions, part_frag_offset, fragment_size, num_rows);
+    frag, col_desc, partitions, part_frag_offset, fragment_size);
 }
 
-/**
- * @brief Launches kernel for initializing fragment statistics groups
- *
- * @param[out] groups Statistics groups [num_columns x num_fragments]
- * @param[in] fragments Page fragments [num_columns x num_fragments]
- * @param[in] col_desc Column description [num_columns]
- * @param[in] stream CUDA stream to use, default 0
- */
 void InitFragmentStatistics(device_2dspan<statistics_group> groups,
                             device_2dspan<PageFragment const> fragments,
                             device_span<parquet_column_device_view const> col_desc,
@@ -1946,19 +1916,6 @@ void InitFragmentStatistics(device_2dspan<statistics_group> groups,
   gpuInitFragmentStats<<<dim_grid, 128, 0, stream.value()>>>(groups, fragments, col_desc);
 }
 
-/**
- * @brief Launches kernel for initializing encoder data pages
- *
- * @param[in,out] chunks Column chunks [rowgroup][column]
- * @param[out] pages Encode page array (null if just counting pages)
- * @param[in] col_desc Column description array [column_id]
- * @param[in] num_rowgroups Number of fragments per column
- * @param[in] num_columns Number of columns
- * @param[out] page_grstats Setup for page-level stats
- * @param[out] chunk_grstats Setup for chunk-level stats
- * @param[in] max_page_comp_data_size Calculated maximum compressed data size of pages
- * @param[in] stream CUDA stream to use, default 0
- */
 void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
                       device_span<gpu::EncPage> pages,
                       device_span<parquet_column_device_view const> col_desc,
@@ -1974,14 +1931,6 @@ void InitEncoderPages(device_2dspan<EncColumnChunk> chunks,
     chunks, pages, col_desc, page_grstats, chunk_grstats, max_page_comp_data_size, num_columns);
 }
 
-/**
- * @brief Launches kernel for packing column data into parquet pages
- *
- * @param[in,out] pages Device array of EncPages (unordered)
- * @param[out] comp_in Optionally initializes compressor input params
- * @param[out] comp_stat Optionally initializes compressor status
- * @param[in] stream CUDA stream to use, default 0
- */
 void EncodePages(device_span<gpu::EncPage> pages,
                  device_span<gpu_inflate_input_s> comp_in,
                  device_span<gpu_inflate_status_s> comp_stat,
@@ -1993,26 +1942,11 @@ void EncodePages(device_span<gpu::EncPage> pages,
   gpuEncodePages<128><<<num_pages, 128, 0, stream.value()>>>(pages, comp_in, comp_stat);
 }
 
-/**
- * @brief Launches kernel to make the compressed vs uncompressed chunk-level decision
- *
- * @param[in,out] chunks Column chunks
- * @param[in] stream CUDA stream to use, default 0
- */
 void DecideCompression(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
 {
   gpuDecideCompression<<<chunks.size(), 128, 0, stream.value()>>>(chunks);
 }
 
-/**
- * @brief Launches kernel to encode page headers
- *
- * @param[in,out] pages Device array of EncPages
- * @param[in] comp_stat Compressor status or nullptr if no compression
- * @param[in] page_stats Optional page-level statistics to be included in page header
- * @param[in] chunk_stats Optional chunk-level statistics to be encoded
- * @param[in] stream CUDA stream to use, default 0
- */
 void EncodePageHeaders(device_span<EncPage> pages,
                        device_span<gpu_inflate_status_s const> comp_stat,
                        device_span<statistics_chunk const> page_stats,
@@ -2025,13 +1959,6 @@ void EncodePageHeaders(device_span<EncPage> pages,
     pages, comp_stat, page_stats, chunk_stats);
 }
 
-/**
- * @brief Launches kernel to gather pages to a single contiguous block per chunk
- *
- * @param[in,out] chunks Column chunks
- * @param[in] pages Device array of EncPages
- * @param[in] stream CUDA stream to use, default 0
- */
 void GatherPages(device_span<EncColumnChunk> chunks,
                  device_span<gpu::EncPage const> pages,
                  rmm::cuda_stream_view stream)

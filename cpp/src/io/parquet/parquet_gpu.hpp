@@ -491,12 +491,14 @@ dremel_data get_dremel_data(column_view h_col,
 /**
  * @brief Launches kernel for initializing encoder page fragments
  *
+ * Based on the number of rows in each fragment, populates the value count, the size of data in the
+ * fragment, the number of unique values, and the data size of unique values.
+ *
  * @param[out] frag Fragment array [column_id][fragment_id]
  * @param[in] col_desc Column description array [column_id]
- * @param[in] num_fragments Number of fragments per column
- * @param[in] num_columns Number of columns
+ * @param[in] partitions Information about partitioning of table
+ * @param[in] first_frag_in_part A Partition's offset into fragment array
  * @param[in] fragment_size Number of rows per fragment
- * @param[in] num_rows Number of rows per column
  * @param[in] stream CUDA stream to use
  */
 void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
@@ -504,7 +506,6 @@ void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
                        device_span<gpu::partition_info const> partitions,
                        device_span<int const> first_frag_in_part,
                        uint32_t fragment_size,
-                       uint32_t num_rows,
                        rmm::cuda_stream_view stream);
 
 /**
@@ -532,12 +533,11 @@ void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_st
  * @brief Insert chunk values into their respective hash maps
  *
  * @param chunks Column chunks [rowgroup][column]
- * @param num_rows Number of rows per column
+ * @param frags Column fragments
  * @param stream CUDA stream to use
  */
 void populate_chunk_hash_maps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                               cudf::detail::device_2dspan<gpu::PageFragment const> frags,
-                              size_type num_rows,
                               rmm::cuda_stream_view stream);
 
 /**
@@ -558,12 +558,11 @@ void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_vi
  * col[row] == col[dict_data[dict_index[row - chunk.start_row]]]
  *
  * @param chunks Column chunks [rowgroup][column]
- * @param num_rows Number of rows per column
+ * @param frags Column fragments
  * @param stream CUDA stream to use
  */
 void get_dictionary_indices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
                             cudf::detail::device_2dspan<gpu::PageFragment const> frags,
-                            size_type num_rows,
                             rmm::cuda_stream_view stream);
 
 /**
