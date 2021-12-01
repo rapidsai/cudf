@@ -580,7 +580,7 @@ orc_streams writer::impl::create_streams(host_span<orc_column_view> columns,
 
         auto const direct_data_size =
           segmentation.num_stripes() == 0
-            ? 0ul
+            ? 0
             : std::accumulate(segmentation.stripes.front().cbegin(),
                               segmentation.stripes.back().cend(),
                               size_t{0},
