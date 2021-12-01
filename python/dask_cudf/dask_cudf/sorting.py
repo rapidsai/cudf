@@ -23,6 +23,7 @@ def set_index_post(df, index_name, drop, column_dtype):
 
 
 def _set_partitions_pre(s, divisions, ascending=True, na_position="last"):
+    breakpoint()
     if ascending:
         partitions = divisions.searchsorted(s, side="right") - 1
     else:
@@ -224,6 +225,8 @@ def sort_values(
     na_position="last",
 ):
     """Sort by the given list/tuple of column names."""
+    # if not isinstance(ascending, bool):
+    #     raise ValueError("ascending must be either True or False")
     if na_position not in ("first", "last"):
         raise ValueError("na_position must be either 'first' or 'last'")
 
