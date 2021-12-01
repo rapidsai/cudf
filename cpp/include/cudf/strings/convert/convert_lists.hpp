@@ -50,7 +50,7 @@ namespace strings {
  *
  * @param input Lists column to format.
  * @param na_rep Replacment string for null elements.
- * @param separator Strings to use for enclosing list components and separating elements.
+ * @param separators Strings to use for enclosing list components and separating elements.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
