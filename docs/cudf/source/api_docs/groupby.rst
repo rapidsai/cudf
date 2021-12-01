@@ -59,6 +59,7 @@ Computations / descriptive stats
    GroupBy.std
    GroupBy.sum
    GroupBy.var
+   GroupBy.corr
    
 The following methods are available in both ``SeriesGroupBy`` and
 ``DataFrameGroupBy`` objects, but may differ slightly, usually in that
