@@ -626,23 +626,26 @@ def test_parquet_reader_spark_timestamps(datadir):
     assert_eq(expect, got)
 
 
-@pytest.mark.xfail(reason="decimal128 not yet supported in cuDF")
 def test_parquet_reader_spark_decimals(datadir):
     fname = datadir / "spark_decimal.parquet"
 
-    expect = pd.read_parquet(fname)
-    got = cudf.read_parquet(fname)
+    # expect = pd.read_parquet(fname)
+    with pytest.raises(
+        NotImplementedError,
+        match="Decimal type greater than Decimal64 is not yet supported",
+    ):
+        _ = cudf.read_parquet(fname)
 
     # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
     # This is because cuDF returns as float64 as it lacks an equivalent dtype
-    expect = expect.apply(pd.to_numeric)
+    # expect = expect.apply(pd.to_numeric)
 
     # np.testing.assert_allclose(expect, got)
-    assert_eq(expect, got)
+    # assert_eq(expect, got)
 
 
 def test_parquet_reader_decimal128_error_validation(datadir):
-    fname = datadir / "decimal128_file.parquet"
+    fname = datadir / "nested_decimal128_file.parquet"
     with pytest.raises(
         NotImplementedError,
         match="Decimal type greater than Decimal64 is not yet supported",
