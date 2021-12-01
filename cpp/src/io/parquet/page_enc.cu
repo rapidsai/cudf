@@ -49,8 +49,6 @@ constexpr uint32_t rle_buffer_size = (1 << 9);
 struct frag_init_state_s {
   parquet_column_device_view col;
   PageFragment frag;
-  // TODO: replace this with frag.start_value
-  size_type start_value_idx;
 };
 
 struct page_enc_state_s {

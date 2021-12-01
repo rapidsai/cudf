@@ -3,6 +3,7 @@
 import cudf
 
 from libcpp cimport bool, int
+from libcpp.map cimport map
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -311,14 +312,19 @@ cdef class ORCWriter:
         cdef table_view tv
 
         # Set the table_metadata
+        cdef map[string, string] user_data
+        pandas_metadata = generate_pandas_metadata(table, self.index)
+        user_data[str.encode("pandas")] = str.encode(pandas_metadata)
+
         num_index_cols_meta = 0
         self.tbl_meta = make_unique[table_input_metadata](
-            table_view_from_table(table, ignore_index=True)
+            table_view_from_table(table, ignore_index=True),
+            user_data,
         )
         if self.index is not False:
             if isinstance(table._index, cudf.core.multiindex.MultiIndex):
                 tv = table_view_from_table(table)
-                self.tbl_meta = make_unique[table_input_metadata](tv)
+                self.tbl_meta = make_unique[table_input_metadata](tv, user_data)
                 for level, idx_name in enumerate(table._index.names):
                     self.tbl_meta.get().column_metadata[level].set_name(
                         (str.encode(idx_name))
@@ -327,7 +333,10 @@ cdef class ORCWriter:
             else:
                 if table._index.name is not None:
                     tv = table_view_from_table(table)
-                    self.tbl_meta = make_unique[table_input_metadata](tv)
+                    self.tbl_meta = make_unique[table_input_metadata](
+                        tv,
+                        user_data,
+                    )
                     self.tbl_meta.get().column_metadata[0].set_name(
                         str.encode(table._index.name)
                     )
@@ -338,10 +347,6 @@ cdef class ORCWriter:
             _set_col_children_names(
                 table[name]._column, self.tbl_meta.get().column_metadata[i]
             )
-
-        pandas_metadata = generate_pandas_metadata(table, self.index)
-        self.tbl_meta.get().user_data[0][str.encode("pandas")] = \
-            str.encode(pandas_metadata)
 
         cdef chunked_orc_writer_options args
         with nogil:
