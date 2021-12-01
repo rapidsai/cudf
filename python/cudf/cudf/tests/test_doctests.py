@@ -5,34 +5,39 @@ import pytest
 
 import cudf
 
-# These classes and all subclasses will be doctested
-doctested_classes = [
-    "Frame",
-    "BaseIndex",
-]
+
+def _name_in_all(parent, name, member):
+    return name in getattr(parent, "__all__", [])
 
 
-def find_docstrings_in_module(finder, module):
-    print("Finding in module", module.__name__)
-    for docstring in finder.find(module):
-        print("Finding in docstring", docstring.name, docstring.filename)
+def _is_public_name(parent, name, member):
+    return not name.startswith("_")
+
+
+def find_docstrings_in_obj(finder, obj, criteria=None):
+    for docstring in finder.find(obj):
         if docstring.examples:
             yield docstring
-    for name, member in inspect.getmembers(module):
-        if name not in getattr(module, "__all__", []):
-            if inspect.ismodule(member):
-                print("SKIPPING MODULE", module.__name__, name)
-            else:
-                print("Skipping member", module.__name__, name)
+    for name, member in inspect.getmembers(obj):
+        # Filter out non-matching objects with criteria
+        if criteria is not None and not criteria(obj, name, member):
             continue
-        # print("Investigating", name)
+        # Recurse over the public API of modules (objects defined in __all__)
         if inspect.ismodule(member):
-            yield from find_docstrings_in_module(finder, member)
+            yield from find_docstrings_in_obj(
+                finder, member, criteria=_name_in_all
+            )
+        # Recurse over the public API of classes (attributes not prefixed with
+        # an underscore)
+        if inspect.isclass(member):
+            yield from find_docstrings_in_obj(
+                finder, member, criteria=_is_public_name
+            )
 
 
 def fetch_doctests():
     finder = doctest.DocTestFinder()
-    yield from find_docstrings_in_module(finder, cudf)
+    yield from find_docstrings_in_obj(finder, cudf, criteria=_name_in_all)
 
 
 class TestDoctests:
