@@ -2633,6 +2633,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         self._data.insert(name, value, loc=loc)
 
+    def diff(self):
+        """
+        Calculates the difference of a Dataframe element compared with
+        another element in the Dataframe (default is element in previous row).
+        """
+        pass
+
     def drop(
         self,
         labels=None,
