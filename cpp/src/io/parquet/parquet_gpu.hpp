@@ -341,7 +341,7 @@ struct EncColumnChunk {
   uint32_t compressed_size;       //!< Compressed buffer size
   uint32_t max_page_data_size;    //!< Max data size (excluding header) of any page in this chunk
   uint32_t page_headers_size;     //!< Sum of size of all page headers
-  uint32_t start_row;             //!< First row of chunk
+  size_type start_row;            //!< First row of chunk
   uint32_t num_rows;              //!< Number of rows in chunk
   size_type num_values;     //!< Number of values in chunk. Different from num_rows for nested types
   uint32_t first_fragment;  //!< First fragment of chunk

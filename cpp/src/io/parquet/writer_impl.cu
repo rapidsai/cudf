@@ -1240,7 +1240,6 @@ void writer::impl::write(table_view const& table,
       fragments, col_desc, partitions, d_part_frag_offset, max_page_fragment_size);
   }
 
-  // TODO: size_type
   std::vector<size_t> global_rowgroup_base;
   std::transform(md->files.begin(),
                  md->files.end(),
@@ -1248,28 +1247,25 @@ void writer::impl::write(table_view const& table,
                  [](auto const& part) { return part.row_groups.size(); });
 
   // Decide row group boundaries based on uncompressed data size
-  // size_t rowgroup_size   = 0;
   size_type num_rowgroups = 0;
 
-  std::vector<int> num_frag_in_rg;  // TODO: Why do we need this?
   std::vector<int> num_rg_in_part(partitions.size());
   for (size_t p = 0; p < partitions.size(); ++p) {
-    // TODO: size_type
-    int curr_rg_num_rows  = 0;
-    int curr_rg_data_size = 0;
-    int first_frag_in_rg  = part_frag_offset[p];
-    int last_frag_in_part = part_frag_offset[p + 1] - 1;
-    for (int f = first_frag_in_rg; f <= last_frag_in_part; ++f) {
-      int fragment_data_size = 0;
+    size_type curr_rg_num_rows = 0;
+    size_t curr_rg_data_size   = 0;
+    int first_frag_in_rg       = part_frag_offset[p];
+    int last_frag_in_part      = part_frag_offset[p + 1] - 1;
+    for (auto f = first_frag_in_rg; f <= last_frag_in_part; ++f) {
+      size_t fragment_data_size = 0;
       for (auto c = 0; c < num_columns; c++) {
         fragment_data_size += fragments[c][f].fragment_data_size;
       }
-      int fragment_num_rows = fragments[0][f].num_rows;
+      size_type fragment_num_rows = fragments[0][f].num_rows;
 
       // If the fragment size gets larger than rg limit then break off a rg
       if (f > first_frag_in_rg &&  // There has to be at least one fragment in row group
-          (curr_rg_data_size + fragment_data_size > (int)max_row_group_size ||
-           curr_rg_num_rows + fragment_num_rows > (int)max_row_group_rows)) {
+          (curr_rg_data_size + fragment_data_size > max_row_group_size ||
+           curr_rg_num_rows + fragment_num_rows > max_row_group_rows)) {
         auto& rg    = md->files[p].row_groups.emplace_back();
         rg.num_rows = curr_rg_num_rows;
         num_rowgroups++;
@@ -1311,11 +1307,9 @@ void writer::impl::write(table_view const& table,
   auto const num_chunks = num_rowgroups * num_columns;
   hostdevice_2dvector<gpu::EncColumnChunk> chunks(num_rowgroups, num_columns, stream);
 
-  // TODO: alternative method is to make this a loop ovr only rg and get p using rg_to_part
   for (size_t p = 0; p < partitions.size(); ++p) {
-    // TODO: size_type
-    size_t f         = part_frag_offset[p];
-    size_t start_row = partitions[p].first;
+    int f               = part_frag_offset[p];
+    size_type start_row = partitions[p].first;
     for (int r = 0; r < num_rg_in_part[p]; r++) {
       size_t global_r = global_rowgroup_base[p] + r;  // Number of rowgroups already in file/part
       uint32_t fragments_in_chunk = util::div_rounding_up_unsafe(
@@ -1403,14 +1397,6 @@ void writer::impl::write(table_view const& table,
     num_rg_in_part.begin(), num_rg_in_part.end(), std::back_inserter(part_end_rg));
   std::vector<int> rg_to_part;
   auto it = thrust::make_counting_iterator(0);
-  // std::vector<int> range(num_rowgroups);
-  // std::iota(range.begin(), range.end(), 0);
-  // thrust::upper_bound(thrust::host,
-  //                     part_end_rg.begin(),
-  //                     part_end_rg.end(),
-  //                     range.begin(),
-  //                     range.end(),
-  //                     rg_to_part.begin());
   std::transform(it, it + num_rowgroups, std::back_inserter(rg_to_part), [&](auto i) {
     return std::upper_bound(part_end_rg.begin(), part_end_rg.end(), i) - part_end_rg.begin();
   });
