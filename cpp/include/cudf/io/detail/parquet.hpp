@@ -143,7 +143,8 @@ class writer {
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list only if
    * `column_chunks_file_path` is provided, else null.
    */
-  std::unique_ptr<std::vector<uint8_t>> close(std::string const& column_chunks_file_path = "");
+  std::unique_ptr<std::vector<uint8_t>> close(
+    std::vector<std::string> const& column_chunks_file_path = {});
 
   /**
    * @brief Merges multiple metadata blobs returned by write_all into a single metadata blob

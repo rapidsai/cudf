@@ -1331,7 +1331,7 @@ TEST_F(ParquetChunkedWriterTest, ManyTables)
   std::for_each(table_views.begin(), table_views.end(), [&writer](table_view const& tbl) {
     writer.write(tbl);
   });
-  auto md = writer.close("dummy/path");
+  auto md = writer.close({"dummy/path"});
   CUDF_EXPECTS(md, "The returned metadata should not be null.");
 
   cudf_io::parquet_reader_options read_opts =

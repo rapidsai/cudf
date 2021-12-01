@@ -401,8 +401,8 @@ class parquet_writer_options {
   // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
   // If true then overrides any per-column setting in _metadata.
   bool _write_timestamps_as_int96 = false;
-  // Column chunks file path to be set in the raw output metadata
-  std::string _column_chunks_file_path;
+  // Column chunks file paths to be set in the raw output metadata. One per output file
+  std::vector<std::string> _column_chunks_file_paths;
   // Maximum size of each row group (unless smaller than a single page)
   size_t _row_group_size_bytes = default_row_group_size_bytes;
   // Maximum number of rows in row group (unless smaller than a single page)
@@ -482,9 +482,12 @@ class parquet_writer_options {
   bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
 
   /**
-   * @brief Returns Column chunks file path to be set in the raw output metadata.
+   * @brief Returns Column chunks file paths to be set in the raw output metadata.
    */
-  std::string get_column_chunks_file_path() const { return _column_chunks_file_path; }
+  std::vector<std::string> get_column_chunks_file_paths() const
+  {
+    return _column_chunks_file_paths;
+  }
 
   /**
    * @brief Returns maximum row group size, in bytes.
@@ -539,11 +542,11 @@ class parquet_writer_options {
   /**
    * @brief Sets column chunks file path to be set in the raw output metadata.
    *
-   * @param file_path String which indicates file path.
+   * @param file_paths Vector of Strings which indicates file path.
    */
-  void set_column_chunks_file_path(std::string file_path)
+  void set_column_chunks_file_paths(std::vector<std::string> const& file_paths)
   {
-    _column_chunks_file_path.assign(file_path);
+    _column_chunks_file_paths = file_paths;
   }
 
   /**
@@ -644,12 +647,13 @@ class parquet_writer_options_builder {
   /**
    * @brief Sets column chunks file path to be set in the raw output metadata.
    *
-   * @param file_path String which indicates file path.
+   * @param file_paths Vector of Strings which indicates file path.
    * @return this for chaining.
    */
-  parquet_writer_options_builder& column_chunks_file_path(std::string file_path)
+  parquet_writer_options_builder& column_chunks_file_paths(
+    std::vector<std::string> const& file_paths)
   {
-    options._column_chunks_file_path.assign(file_path);
+    options._column_chunks_file_paths = file_paths;
     return *this;
   }
 
@@ -1030,11 +1034,13 @@ class parquet_chunked_writer {
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata
+   * @param[in] column_chunks_file_paths Column chunks file path to be set in the raw output
+   * metadata
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list only if
-   * `column_chunks_file_path` is provided, else null.
+   * `column_chunks_file_paths` is provided, else null.
    */
-  std::unique_ptr<std::vector<uint8_t>> close(std::string const& column_chunks_file_path = "");
+  std::unique_ptr<std::vector<uint8_t>> close(
+    std::vector<std::string> const& column_chunks_file_paths = {});
 
   // Unique pointer to impl writer class
   std::unique_ptr<cudf::io::detail::parquet::writer> writer;

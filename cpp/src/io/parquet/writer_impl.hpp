@@ -113,7 +113,8 @@ class writer::impl {
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list only if
    * `column_chunks_file_path` is provided, else null.
    */
-  std::unique_ptr<std::vector<uint8_t>> close(std::string const& column_chunks_file_path = "");
+  std::unique_ptr<std::vector<uint8_t>> close(
+    std::vector<std::string> const& column_chunks_file_path = {});
 
  private:
   /**
@@ -224,7 +225,6 @@ class writer::impl {
   // a single table write.  this enables some internal optimizations.
   bool const single_write_mode = true;
 
-  std::vector<uint8_t> buffer_;
   std::vector<std::unique_ptr<data_sink>> out_sink_;
 };
 

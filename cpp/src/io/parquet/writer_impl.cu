@@ -1602,7 +1602,7 @@ void writer::impl::write(table_view const& table,
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
-  std::string const& column_chunks_file_path)
+  std::vector<std::string> const& column_chunks_file_path)
 {
   if (closed) { return nullptr; }
   closed = true;
@@ -1619,26 +1619,44 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
     out_sink_[p]->flush();
   }
 
-  // // Optionally output raw file metadata with the specified column chunk file path
-  // if (column_chunks_file_path.length() > 0) {
-  //   file_header_s fhdr = {parquet_magic};
-  //   buffer_.resize(0);
-  //   buffer_.insert(buffer_.end(),
-  //                  reinterpret_cast<const uint8_t*>(&fhdr),
-  //                  reinterpret_cast<const uint8_t*>(&fhdr) + sizeof(fhdr));
-  //   for (auto& rowgroup : md.row_groups) {
-  //     for (auto& col : rowgroup.columns) {
-  //       col.file_path = column_chunks_file_path;
-  //     }
-  //   }
-  //   fendr.footer_len = static_cast<uint32_t>(cpw.write(md));
-  //   buffer_.insert(buffer_.end(),
-  //                  reinterpret_cast<const uint8_t*>(&fendr),
-  //                  reinterpret_cast<const uint8_t*>(&fendr) + sizeof(fendr));
-  //   return std::make_unique<std::vector<uint8_t>>(std::move(buffer_));
-  // } else {
-  //   return {nullptr};
-  // }
+  // Optionally output raw file metadata with the specified column chunk file path
+  if (column_chunks_file_path.size() > 0) {
+    CUDF_EXPECTS(column_chunks_file_path.size() == md->files.size(),
+                 "Expected one column chunk path per output file");
+    file_header_s fhdr = {parquet_magic};
+    std::vector<uint8_t> buffer;
+    CompactProtocolWriter cpw(&buffer);
+    buffer.insert(buffer.end(),
+                  reinterpret_cast<const uint8_t*>(&fhdr),
+                  reinterpret_cast<const uint8_t*>(&fhdr) + sizeof(fhdr));
+    FileMetaData merged_md;
+    for (size_t p = 0; p < md->files.size(); ++p) {
+      auto& file            = md->files[p];
+      auto const& file_path = column_chunks_file_path[p];
+      for (auto& rowgroup : file.row_groups) {
+        for (auto& col : rowgroup.columns) {
+          col.file_path = file_path;
+        }
+      }
+      if (p == 0) {
+        merged_md = md->get_metadata(0);
+      } else {
+        merged_md.row_groups.insert(merged_md.row_groups.end(),
+                                    std::make_move_iterator(file.row_groups.begin()),
+                                    std::make_move_iterator(file.row_groups.end()));
+        merged_md.num_rows += file.num_rows;
+      }
+    }
+    file_ender_s fendr;
+    fendr.magic      = parquet_magic;
+    fendr.footer_len = static_cast<uint32_t>(cpw.write(merged_md));
+    buffer.insert(buffer.end(),
+                  reinterpret_cast<const uint8_t*>(&fendr),
+                  reinterpret_cast<const uint8_t*>(&fendr) + sizeof(fendr));
+    return std::make_unique<std::vector<uint8_t>>(std::move(buffer));
+  } else {
+    return {nullptr};
+  }
   return nullptr;
 }
 
@@ -1672,13 +1690,14 @@ void writer::write(table_view const& table,
 }
 
 // Forward to implementation
-std::unique_ptr<std::vector<uint8_t>> writer::close(std::string const& column_chunks_file_path)
+std::unique_ptr<std::vector<uint8_t>> writer::close(
+  std::vector<std::string> const& column_chunks_file_path)
 {
   return _impl->close(column_chunks_file_path);
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::merge_row_group_metadata(
-  const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list)
+  std::vector<std::unique_ptr<std::vector<uint8_t>>> const& metadata_list)
 {
   std::vector<uint8_t> output;
   CompactProtocolWriter cpw(&output);

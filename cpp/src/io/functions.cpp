@@ -472,7 +472,7 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
 
   writer->write(options.get_table(), options.get_partitions());
 
-  return writer->close(options.get_column_chunks_file_path());
+  return writer->close(options.get_column_chunks_file_paths());
 }
 
 /**
@@ -506,7 +506,7 @@ parquet_chunked_writer& parquet_chunked_writer::write(
  * @copydoc cudf::io::parquet_chunked_writer::close
  */
 std::unique_ptr<std::vector<uint8_t>> parquet_chunked_writer::close(
-  std::string const& column_chunks_file_path)
+  std::vector<std::string> const& column_chunks_file_path)
 {
   CUDF_FUNC_RANGE();
   return writer->close(column_chunks_file_path);
