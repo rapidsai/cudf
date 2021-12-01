@@ -1849,10 +1849,9 @@ void writer::impl::write(table_view const& table)
 
   if (num_rows > 0) {
     // Gather column statistics
-  auto column_stats = enable_statistics_ && table.num_columns() > 0
-                        ? gather_statistic_blobs(orc_table, segmentation)
-                        : std::vector<ColStatsBlob>{};
-    }
+    auto const column_stats = enable_statistics_ && table.num_columns() > 0
+                                ? gather_statistic_blobs(orc_table, segmentation)
+                                : std::vector<ColStatsBlob>{};
 
     // Allocate intermediate output stream buffer
     size_t compressed_bfr_size       = 0;
