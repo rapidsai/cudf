@@ -18,8 +18,8 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/detail/iterator.cuh>                             // include iterator header
-#include <cudf/detail/utilities/transform_unary_functions.cuh>  //for meanvar
+#include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/transform_unary_functions.cuh>  // for meanvar
 #include <cudf/detail/utilities/vector_factories.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -28,6 +28,7 @@
 
 #include <thrust/equal.h>
 #include <thrust/functional.h>
+#include <thrust/logical.h>
 #include <thrust/transform.h>
 
 #include <cub/device/device_reduce.cuh>
@@ -78,7 +79,17 @@ struct IteratorTest : public cudf::test::BaseFixture {
     EXPECT_EQ(thrust::distance(d_in, d_in_last), num_items);
     auto dev_expected = cudf::detail::make_device_uvector_sync(expected);
 
-    bool result = thrust::equal(thrust::device, d_in, d_in_last, dev_expected.begin());
+    // using a temporary vector and calling transform and all_of separately is
+    // equivalent to thrust::equal but compiles ~3x faster
+    auto dev_results = rmm::device_uvector<bool>(num_items, rmm::cuda_stream_default);
+    thrust::transform(thrust::device,
+                      d_in,
+                      d_in_last,
+                      dev_expected.begin(),
+                      dev_results.begin(),
+                      thrust::equal_to{});
+    auto result = thrust::all_of(
+      thrust::device, dev_results.begin(), dev_results.end(), thrust::identity<bool>{});
     EXPECT_TRUE(result) << "thrust test";
   }
 

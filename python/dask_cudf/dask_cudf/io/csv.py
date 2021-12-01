@@ -110,9 +110,17 @@ def _internal_read_csv(path, chunksize="256 MiB", **kwargs):
     if chunksize is None:
         return read_csv_without_chunksize(path, **kwargs)
 
+    # Let dask.dataframe generate meta
     dask_reader = make_reader(cudf.read_csv, "read_csv", "CSV")
-    usecols = kwargs.pop("usecols", None)
-    meta = dask_reader(filenames[0], **kwargs)._meta
+    kwargs1 = kwargs.copy()
+    usecols = kwargs1.pop("usecols", None)
+    dtype = kwargs1.pop("dtype", None)
+    meta = dask_reader(filenames[0], **kwargs1)._meta
+    names = meta.columns
+    if usecols or dtype:
+        # Regenerate meta with original kwargs if
+        # `usecols` or `dtype` was specified
+        meta = dask_reader(filenames[0], **kwargs)._meta
 
     dsk = {}
     i = 0
@@ -127,18 +135,13 @@ def _internal_read_csv(path, chunksize="256 MiB", **kwargs):
                 chunksize,
             )  # specify which chunk of the file we care about
             if start != 0:
-                kwargs2[
-                    "names"
-                ] = meta.columns  # no header in the middle of the file
+                kwargs2["names"] = names  # no header in the middle of the file
                 kwargs2["header"] = None
-            kwargs2["usecols"] = usecols
             dsk[(name, i)] = (apply, _read_csv, [fn, dtypes], kwargs2)
 
             i += 1
 
     divisions = [None] * (len(dsk) + 1)
-    if usecols is not None:
-        meta = meta[usecols]
     return dd.core.new_dd_object(dsk, name, meta, divisions)
 
 
