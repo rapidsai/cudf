@@ -949,7 +949,9 @@ static __device__ bool setupLocalPageInfo(page_state_s* const s,
       // Special check for downconversions
       s->dtype_len_in = s->dtype_len;
       if (s->col.converted_type == DECIMAL && data_type == FIXED_LEN_BYTE_ARRAY) {
-        s->dtype_len = s->dtype_len <= 4 ? 4 : s->dtype_len <= 8 ? 8 : 16;
+        s->dtype_len = s->dtype_len <= sizeof(int32_t)   ? sizeof(int32_t)
+                       : s->dtype_len <= sizeof(int64_t) ? sizeof(int64_t)
+                                                         : sizeof(__int128_t);
       } else if (data_type == INT32) {
         if (dtype_len_out == 1) s->dtype_len = 1;  // INT8 output
         if (dtype_len_out == 2) s->dtype_len = 2;  // INT16 output
@@ -1706,9 +1708,9 @@ extern "C" __global__ void __launch_bounds__(block_size)
             case INT32: gpuOutputFast(s, val_src_pos, static_cast<uint32_t*>(dst)); break;
             case INT64: gpuOutputFast(s, val_src_pos, static_cast<uint2*>(dst)); break;
             default:
-              if (s->dtype_len_in <= 4) {
+              if (s->dtype_len_in <= sizeof(int32_t)) {
                 gpuOutputFixedLenByteArrayAsInt(s, val_src_pos, static_cast<int32_t*>(dst));
-              } else if (s->dtype_len_in <= 8) {
+              } else if (s->dtype_len_in <= sizeof(int64_t)) {
                 gpuOutputFixedLenByteArrayAsInt(s, val_src_pos, static_cast<int64_t*>(dst));
               } else {
                 gpuOutputFixedLenByteArrayAsInt(s, val_src_pos, static_cast<__int128_t*>(dst));

@@ -140,9 +140,15 @@ type_id to_type_id(SchemaElement const& schema,
       if (physical == parquet::INT32) { return type_id::DECIMAL32; }
       if (physical == parquet::INT64) { return type_id::DECIMAL64; }
       if (physical == parquet::FIXED_LEN_BYTE_ARRAY) {
-        if (schema.type_length <= 4) { return type_id::DECIMAL32; }
-        if (schema.type_length <= 8) { return type_id::DECIMAL64; }
-        if (schema.type_length <= 16) { return type_id::DECIMAL128; }
+        if (schema.type_length <= static_cast<int32_t>(sizeof(int32_t))) {
+          return type_id::DECIMAL32;
+        }
+        if (schema.type_length <= static_cast<int32_t>(sizeof(int64_t))) {
+          return type_id::DECIMAL64;
+        }
+        if (schema.type_length <= static_cast<int32_t>(sizeof(__int128_t))) {
+          return type_id::DECIMAL128;
+        }
       }
       CUDF_FAIL("Invalid representation of decimal type");
       break;

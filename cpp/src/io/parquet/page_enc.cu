@@ -77,13 +77,14 @@ struct page_enc_state_s {
  */
 uint32_t __device__ physical_type_len(Type physical_type, type_id id)
 {
-  if (physical_type == FIXED_LEN_BYTE_ARRAY and id == type_id::DECIMAL128) return 16u;
+  if (physical_type == FIXED_LEN_BYTE_ARRAY and id == type_id::DECIMAL128)
+    return sizeof(__int128_t);
   switch (physical_type) {
     case INT96: return 12u;
     case INT64:
-    case DOUBLE: return 8u;
+    case DOUBLE: return sizeof(int64_t);
     case BOOLEAN: return 1u;
-    default: return 4u;
+    default: return sizeof(int32_t);
   }
 }
 
@@ -889,9 +890,9 @@ __global__ void __launch_bounds__(128, 8)
   auto const physical_type = s->col.physical_type;
   auto const type_id       = s->col.leaf_column->type().id();
   auto const dtype_len_out = physical_type_len(physical_type, type_id);
-  auto const dtype_len_in  = [&]() {
+  auto const dtype_len_in  = [&]() -> uint32_t {
     if (physical_type == INT32) { return int32_logical_len(type_id); }
-    if (physical_type == INT96) { return 8u; }
+    if (physical_type == INT96) { return sizeof(int64_t); }
     return dtype_len_out;
   }();
 

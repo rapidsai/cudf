@@ -29,6 +29,7 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/io_metadata_utilities.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
@@ -2977,8 +2978,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
     auto result = cudf_io::read_parquet(read_opts);
     EXPECT_EQ(result.tbl->view().num_columns(), 3);
 
-    auto validity_c0 =
-      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 19; });
+    auto validity_c0    = cudf::test::iterators::nulls_at({19});
     int32_t col0_data[] = {6361295, 698632,  7821423, 7073444, 9631892, 3021012, 5195059,
                            9913714, 901749,  7776938, 3186566, 4955569, 5131067, 98619,
                            2282579, 7521455, 4430706, 1937859, 4532040, 0};
@@ -2989,8 +2989,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
       std::begin(col0_data), std::end(col0_data), validity_c0, numeric::scale_type{-3});
     cudf::test::expect_columns_equal(result.tbl->view().column(0), col0);
 
-    auto validity_c1 =
-      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 18; });
+    auto validity_c1    = cudf::test::iterators::nulls_at({18});
     int64_t col1_data[] = {361378026250,
                            30646804862,
                            429930238629,
@@ -3018,8 +3017,7 @@ TEST_F(ParquetReaderTest, DecimalRead)
       std::begin(col1_data), std::end(col1_data), validity_c1, numeric::scale_type{-11});
     cudf::test::expect_columns_equal(result.tbl->view().column(1), col1);
 
-    auto validity_c2 =
-      cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i != 6 and i != 14; });
+    auto validity_c2       = cudf::test::iterators::nulls_at({6, 14});
     __int128_t col2_data[] = {9078697037144433659,
                               9050770539577117612,
                               2358363961733893636,
