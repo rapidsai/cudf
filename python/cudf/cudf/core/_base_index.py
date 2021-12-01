@@ -9,9 +9,17 @@ from typing import Any, Set
 import pandas as pd
 
 import cudf
+from cudf._lib.copying import gather
 from cudf._lib.stream_compaction import drop_duplicates, drop_nulls
 from cudf._typing import DtypeObj
-from cudf.api.types import is_dtype_equal, is_integer, is_list_like, is_scalar
+from cudf.api.types import (
+    is_bool_dtype,
+    is_dtype_equal,
+    is_integer,
+    is_integer_dtype,
+    is_list_like,
+    is_scalar,
+)
 from cudf.core.abc import Serializable
 from cudf.core.column import ColumnBase, column
 from cudf.core.column_accessor import ColumnAccessor
@@ -20,7 +28,7 @@ from cudf.utils.dtypes import (
     is_mixed_with_object_dtype,
     numeric_normalize_types,
 )
-from cudf.utils.utils import cached_property
+from cudf.utils.utils import _gather_map_is_valid, cached_property
 
 
 class BaseIndex(Serializable):
@@ -1467,6 +1475,75 @@ class BaseIndex(Serializable):
         )
         result._copy_type_metadata(self)
         return result
+
+    def _gather(self, gather_map, nullify=False, check_bounds=True):
+        """Gather rows of index specified by indices in `gather_map`.
+
+        Skip bounds checking if check_bounds is False.
+        Set rows to null for all out of bound indices if nullify is `True`.
+        """
+        gather_map = cudf.core.column.as_column(gather_map)
+
+        # TODO: For performance, the check and conversion of gather map should
+        # be done by the caller. This check will be removed in future release.
+        if not is_integer_dtype(gather_map.dtype):
+            gather_map = gather_map.astype("int32")
+
+        if not _gather_map_is_valid(
+            gather_map, len(self), check_bounds, nullify
+        ):
+            raise IndexError("Gather map index is out of bounds.")
+
+        result = self.__class__._from_columns(
+            gather(list(self._columns), gather_map, nullify=nullify,),
+            self._column_names,
+        )
+
+        result._copy_type_metadata(self)
+        return result
+
+    def take(self, indices, axis=0, allow_fill=True, fill_value=None):
+        """Return a new index containing the rows specified by *indices*
+
+        Parameters
+        ----------
+        indices : array-like
+            Array of ints indicating which positions to take.
+        axis : int
+            The axis over which to select values, always 0.
+        allow_fill : Unsupported
+        fill_value : Unsupported
+
+        Returns
+        -------
+        out : Index
+            New object with desired subset of rows.
+
+        Examples
+        --------
+        >>> idx = cudf.Index(['a', 'b', 'c', 'd', 'e'])
+        >>> idx.take([2, 0, 4, 3])
+        StringIndex(['c' 'a' 'e' 'd'], dtype='object')
+        """
+
+        if axis not in {0, "index"}:
+            raise NotImplementedError(
+                "Gather along column axis is not yet supported."
+            )
+        if not allow_fill or fill_value is not None:
+            raise NotImplementedError(
+                "`allow_fill` and `fill_value` is unsupported."
+            )
+
+        indices = cudf.core.column.as_column(indices)
+        if is_bool_dtype(indices):
+            warnings.warn(
+                "Calling take with a boolean array is deprecated and will be "
+                "removed in the future.",
+                FutureWarning,
+            )
+            return self._apply_boolean_mask(indices)
+        return self._gather(indices)
 
 
 def _get_result_name(left_name, right_name):

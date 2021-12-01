@@ -15,7 +15,12 @@ from nvtx import annotate
 import cudf
 import cudf._lib as libcudf
 from cudf._typing import ColumnLike
-from cudf.api.types import is_categorical_dtype, is_integer_dtype, is_list_like
+from cudf.api.types import (
+    is_bool_dtype,
+    is_categorical_dtype,
+    is_integer_dtype,
+    is_list_like,
+)
 from cudf.core.column import arange
 from cudf.core.frame import Frame
 from cudf.core.index import Index
@@ -637,11 +642,12 @@ class IndexedFrame(Frame):
                 n = 0
 
             # argsort the `by` column
-            return self.take(
+            return self._gather(
                 self._get_columns_by_label(columns)._get_sorted_inds(
                     ascending=not largest
                 )[:n],
                 keep_index=True,
+                check_bounds=False,
             )
         elif keep == "last":
             indices = self._get_columns_by_label(columns)._get_sorted_inds(
@@ -653,7 +659,7 @@ class IndexedFrame(Frame):
                 indices = indices[0:0]
             else:
                 indices = indices[: -n - 1 : -1]
-            return self.take(indices, keep_index=True)
+            return self._gather(indices, keep_index=True, check_bounds=False)
         else:
             raise ValueError('keep must be either "first", "last"')
 
@@ -1037,3 +1043,56 @@ class IndexedFrame(Frame):
         )
         result._copy_type_metadata(self)
         return result
+
+    def take(self, indices, axis=0):
+        """Return a new frame containing the rows specified by *indices*.
+
+        Parameters
+        ----------
+        indices : array-like
+            Array of ints indicating which positions to take.
+        axis : Unsupported
+
+        Returns
+        -------
+        out : Series or DataFrame
+            New object with desired subset of rows.
+
+        Examples
+        --------
+        **Series**
+        >>> s = cudf.Series(['a', 'b', 'c', 'd', 'e'])
+        >>> s.take([2, 0, 4, 3])
+        2    c
+        0    a
+        4    e
+        3    d
+        dtype: object
+
+        **DataFrame**
+
+        >>> a = cudf.DataFrame({'a': [1.0, 2.0, 3.0],
+        ...                    'b': cudf.Series(['a', 'b', 'c'])})
+        >>> a.take([0, 2, 2])
+             a  b
+        0  1.0  a
+        2  3.0  c
+        2  3.0  c
+        >>> a.take([True, False, True])
+             a  b
+        0  1.0  a
+        2  3.0  c
+        """
+        axis = self._get_axis_from_axis_arg(axis)
+        if axis != 0:
+            raise NotImplementedError("Only axis=0 is supported.")
+
+        indices = cudf.core.column.as_column(indices)
+        if is_bool_dtype(indices):
+            warnings.warn(
+                "Calling take with a boolean array is deprecated and will be "
+                "removed in the future.",
+                FutureWarning,
+            )
+            return self._apply_boolean_mask(indices)
+        return self._gather(indices)

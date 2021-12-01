@@ -30,10 +30,8 @@ from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries, Dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
-    is_bool_dtype,
     is_decimal_dtype,
     is_dict_like,
-    is_integer_dtype,
     is_scalar,
     issubdtype,
 )
@@ -52,7 +50,6 @@ from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type, is_column_like
-from cudf.utils.utils import _gather_map_is_valid
 
 T = TypeVar("T", bound="Frame")
 
@@ -548,37 +545,6 @@ class Frame:
         return self.__class__(
             data, columns=data.to_pandas_index(), index=self.index
         )
-
-    def _gather(
-        self, gather_map, keep_index=True, nullify=False, check_bounds=True
-    ):
-        """Gather rows of frame specified by indices in `gather_map`.
-
-        Skip bounds checking if check_bounds is False.
-        Set rows to null for all out of bound indices if nullify is `True`.
-        """
-        # TODO: `keep_index` argument is to be removed.
-        gather_map = cudf.core.column.as_column(gather_map)
-
-        # TODO: For performance, the check and conversion of gather map should
-        # be done by the caller. This check will be removed in future release.
-        if not is_integer_dtype(gather_map.dtype):
-            gather_map = gather_map.astype("int32")
-
-        if not _gather_map_is_valid(
-            gather_map, len(self), check_bounds, nullify
-        ):
-            raise IndexError("Gather map index is out of bounds.")
-
-        result = self.__class__._from_columns(
-            libcudf.copying.gather(
-                list(self._columns), gather_map, nullify=nullify,
-            ),
-            self._column_names,
-        )
-
-        result._copy_type_metadata(self)
-        return result
 
     def _hash(self, method, initial_hash=None):
         return libcudf.hash.hash(self, method, initial_hash)
@@ -2853,74 +2819,6 @@ class Frame:
 
         return libcudf.sort.order_by(to_sort, ascending, na_position)
 
-    def take(self, indices, keep_index=None):
-        """Return a new object containing the rows specified by *positions*
-
-        Parameters
-        ----------
-        indices : array-like
-            Array of ints indicating which positions to take.
-        keep_index : bool, default True
-            Whether to retain the index in result or not.
-
-        Returns
-        -------
-        out : Series or DataFrame or Index
-            New object with desired subset of rows.
-
-        Examples
-        --------
-        **Series**
-        >>> s = cudf.Series(['a', 'b', 'c', 'd', 'e'])
-        >>> s.take([2, 0, 4, 3])
-        2    c
-        0    a
-        4    e
-        3    d
-        dtype: object
-
-        **DataFrame**
-
-        >>> a = cudf.DataFrame({'a': [1.0, 2.0, 3.0],
-        ...                    'b': cudf.Series(['a', 'b', 'c'])})
-        >>> a.take([0, 2, 2])
-             a  b
-        0  1.0  a
-        2  3.0  c
-        2  3.0  c
-        >>> a.take([True, False, True])
-             a  b
-        0  1.0  a
-        2  3.0  c
-
-        **Index**
-
-        >>> idx = cudf.Index(['a', 'b', 'c', 'd', 'e'])
-        >>> idx.take([2, 0, 4, 3])
-        StringIndex(['c' 'a' 'e' 'd'], dtype='object')
-        """
-        # TODO: When we remove keep_index we should introduce the axis
-        # parameter. We could also introduce is_copy, but that's already
-        # deprecated in pandas so it's probably unnecessary. We also need to
-        # introduce Index.take's allow_fill and fill_value parameters.
-        if keep_index is not None:
-            warnings.warn(
-                "keep_index is deprecated and will be removed in the future.",
-                FutureWarning,
-            )
-        else:
-            keep_index = True
-
-        indices = as_column(indices)
-        if is_bool_dtype(indices):
-            warnings.warn(
-                "Calling take with a boolean array is deprecated and will be "
-                "removed in the future.",
-                FutureWarning,
-            )
-            return self._apply_boolean_mask(indices)
-        return self._gather(indices, keep_index=keep_index)
-
     def sin(self):
         """
         Get Trigonometric sine, element-wise.
@@ -3610,6 +3508,8 @@ class Frame:
         elif how in {"leftsemi", "leftanti"}:
             merge_cls = MergeSemi
 
+        # TODO: the two isinstance checks below indicates that `_merge` should
+        # not be defined in `Frame`, but in `IndexedFrame`.
         return merge_cls(
             lhs,
             rhs,
@@ -3618,6 +3518,8 @@ class Frame:
             right_on=right_on,
             left_index=left_index,
             right_index=right_index,
+            lhs_is_index=isinstance(lhs, cudf.core._base_index.BaseIndex),
+            rhs_is_index=isinstance(rhs, cudf.core._base_index.BaseIndex),
             how=how,
             sort=sort,
             indicator=indicator,
