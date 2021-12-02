@@ -719,23 +719,20 @@ def get_dummies(
             }
 
             for name in columns:
-                if len(df._data[name]) == 0:
-                    col_enc_data = {name: df._data[name].astype(dtype)}
-                else:
-                    if name not in cats:
-                        unique = _get_unique(
-                            column=df._data[name], dummy_na=dummy_na
-                        )
-                    else:
-                        unique = as_column(cats[name])
-
-                    col_enc_data = _one_hot_encode_column(
-                        column=df._data[name],
-                        categories=unique,
-                        prefix=prefix_map.get(name, prefix),
-                        prefix_sep=prefix_sep_map.get(name, prefix_sep),
-                        dtype=dtype,
+                if name not in cats:
+                    unique = _get_unique(
+                        column=df._data[name], dummy_na=dummy_na
                     )
+                else:
+                    unique = as_column(cats[name])
+
+                col_enc_data = _one_hot_encode_column(
+                    column=df._data[name],
+                    categories=unique,
+                    prefix=prefix_map.get(name, prefix),
+                    prefix_sep=prefix_sep_map.get(name, prefix_sep),
+                    dtype=dtype,
+                )
                 result_data.update(col_enc_data)
             return cudf.DataFrame._from_data(result_data, index=df._index)
     else:
