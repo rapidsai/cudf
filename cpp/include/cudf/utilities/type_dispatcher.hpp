@@ -180,25 +180,25 @@ constexpr bool type_id_matches_device_storage_type(type_id id)
 template <typename T>
 bool type_id_matches_device_storage_width(type_id id)
 {
-  return id == type_to_id<T>() || (id == type_id::DECIMAL32 && std::is_same_v<T, int32_t>) ||
-         (id == type_id::DECIMAL64 && std::is_same_v<T, int64_t>) ||
-         (id == type_id::DECIMAL128 && std::is_same_v<T, __int128_t>) ||
-         (id == type_id::FLOAT32 && std::is_same_v<T, int32_t>) ||
-         (id == type_id::FLOAT64 && std::is_same_v<T, int64_t>) ||
-         (id == type_id::UINT8 && std::is_same_v<T, int8_t>) ||
-         (id == type_id::UINT16 && std::is_same_v<T, int16_t>) ||
-         (id == type_id::UINT32 && std::is_same_v<T, int32_t>) ||
-         (id == type_id::UINT64 && std::is_same_v<T, int64_t>) ||
-         (id == type_id::TIMESTAMP_DAYS && std::is_same_v<T, int32_t>) ||
-         (id == type_id::TIMESTAMP_SECONDS && std::is_same_v<T, int64_t>) ||
-         (id == type_id::TIMESTAMP_MILLISECONDS && std::is_same_v<T, int64_t>) ||
-         (id == type_id::TIMESTAMP_MICROSECONDS && std::is_same_v<T, int64_t>) ||
-         (id == type_id::TIMESTAMP_NANOSECONDS && std::is_same_v<T, int64_t>) ||
-         (id == type_id::DURATION_DAYS && std::is_same_v<T, int32_t>) ||
-         (id == type_id::DURATION_SECONDS && std::is_same_v<T, int64_t>) ||
-         (id == type_id::DURATION_MILLISECONDS && std::is_same_v<T, int64_t>) ||
-         (id == type_id::DURATION_MICROSECONDS && std::is_same_v<T, int64_t>) ||
-         (id == type_id::DURATION_NANOSECONDS && std::is_same_v<T, int64_t>);
+  return id == type_to_id<T>() || (id == type_id::DECIMAL32 && sizeof(T) == sizeof(int32_t)) ||
+         (id == type_id::DECIMAL64 && sizeof(T) == sizeof(int64_t)) ||
+         (id == type_id::DECIMAL128 && sizeof(T) == sizeof(__int128_t)) ||
+         (id == type_id::FLOAT32 && sizeof(T) == sizeof(float)) ||
+         (id == type_id::FLOAT64 && sizeof(T) == sizeof(double)) ||
+         (id == type_id::UINT8 && sizeof(T) == sizeof(uint8_t)) ||
+         (id == type_id::UINT16 && sizeof(T) == sizeof(uint16_t)) ||
+         (id == type_id::UINT32 && sizeof(T) == sizeof(uint32_t)) ||
+         (id == type_id::UINT64 && sizeof(T) == sizeof(uint64_t)) ||
+         (id == type_id::TIMESTAMP_DAYS && sizeof(T) == sizeof(int32_t)) ||
+         (id == type_id::TIMESTAMP_SECONDS && sizeof(T) == sizeof(int64_t)) ||
+         (id == type_id::TIMESTAMP_MILLISECONDS && sizeof(T) == sizeof(int64_t)) ||
+         (id == type_id::TIMESTAMP_MICROSECONDS && sizeof(T) == sizeof(int64_t)) ||
+         (id == type_id::TIMESTAMP_NANOSECONDS && sizeof(T) == sizeof(int64_t)) ||
+         (id == type_id::DURATION_DAYS && sizeof(T) == sizeof(int32_t)) ||
+         (id == type_id::DURATION_SECONDS && sizeof(T) == sizeof(int64_t)) ||
+         (id == type_id::DURATION_MILLISECONDS && sizeof(T) == sizeof(int64_t)) ||
+         (id == type_id::DURATION_MICROSECONDS && sizeof(T) == sizeof(int64_t)) ||
+         (id == type_id::DURATION_NANOSECONDS && sizeof(T) == sizeof(int64_t));
 }
 
 /**
