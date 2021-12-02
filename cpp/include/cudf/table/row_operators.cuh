@@ -67,7 +67,7 @@ __device__ weak_ordering compare_elements(Element lhs, Element rhs)
 }
 }  // namespace detail
 
-/*
+/**
  * @brief A specialization for floating-point `Element` type relational comparison
  * to derive the order of the elements with respect to `lhs`. Specialization is to
  * handle `nan` in the order shown below.
@@ -187,6 +187,7 @@ class element_equality_comparator {
    *
    * @param lhs_element_index The index of the first element
    * @param rhs_element_index The index of the second element
+   * @return True if both lhs and rhs element are both nulls and `nulls_are_equal` is true, or equal
    *
    */
   template <typename Element,
