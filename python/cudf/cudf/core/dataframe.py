@@ -6329,7 +6329,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return super()._explode(column, ignore_index)
 
-    def pct_change(self):
+    def pct_change(
+        self, periods=1, fill_method="ffill", limit=None, freq=None
+    ):
         """
         Calculates the percent change between sequential elements
         in the DataFrame.
@@ -6351,7 +6353,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
         """
-        pass
+        if limit is not None:
+            raise NotImplementedError("limit parameter not supported yet.")
+        if freq is not None:
+            raise NotImplementedError("freq parameter not supported yet.")
+        elif fill_method not in {"ffill", "pad", "bfill", "backfill"}:
+            raise ValueError(
+                "fill_method must be one of 'ffill', 'pad', "
+                "'bfill', or 'backfill'."
+            )
+
+        data = self.fillna(method=fill_method, limit=limit)
+        data_diff = data.diff(periods=periods)  # need to implem. diff method
+        change = data_diff / data.shift(periods=periods, freq=freq)
+        return change
 
     def __dataframe__(
         self, nan_as_null: bool = False, allow_copy: bool = True
