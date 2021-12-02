@@ -472,6 +472,21 @@ def test_parquet_read_filtered(tmpdir, rdg_seed):
     assert len(df_filtered) < len(df)
     assert len(tbl_filtered) <= len(df_filtered)
 
+    # Test out filtering_columns_first=True
+    df_filtering_columns_first = cudf.read_parquet(
+        fname,
+        filters=[("1", ">", 0)],
+        filtering_columns_first=True
+    )
+    assert_eq(len(df_filtering_columns_first), 2048)
+
+    emptied_df_filtering_columns_first = cudf.read_parquet(
+        fname,
+        filters=[("1", ">", 160)],
+        filtering_columns_first=True
+    )
+    assert_eq(len(emptied_df_filtering_columns_first), 0)
+
 
 def test_parquet_read_filtered_everything(tmpdir):
     # Generate data
