@@ -2839,7 +2839,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> s.autocorr(lag=2)
         -0.9999999999999999
         """
-        return self.corr(self, self.shift(lag))
+        return self.corr(self.shift(lag))
 
     def isin(self, values):
         """Check whether values are contained in Series.
