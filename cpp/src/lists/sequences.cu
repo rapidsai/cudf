@@ -21,6 +21,7 @@
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/lists/filling.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -163,15 +164,32 @@ std::unique_ptr<column> sequences(column_view const& starts,
     data_type(type_to_id<offset_type>()), n_lists + 1, mask_state::UNALLOCATED, stream, mr);
   auto const offsets_begin = list_offsets->mutable_view().template begin<offset_type>();
 
-  // Normalize the input sizes: convert any integer type into size_type, and clamp negative values
-  // to zero.
-  auto const sizes_input = cudf::detail::indexalator_factory::make_input_iterator(sizes);
-  auto const sizes_norm  = thrust::make_transform_iterator(
-    sizes_input, [] __device__(size_type idx) { return idx < 0 ? 0 : idx; });
+  // Any null of the input columns will result in a null in the output lists column.
+  // We need the output null mask early here to normalize the input list sizes.
+  auto [null_mask, null_count] =
+    steps ? cudf::detail::bitmask_and(table_view{{starts, steps.value(), sizes}}, stream, mr)
+          : cudf::detail::bitmask_and(table_view{{starts, sizes}}, stream, mr);
+
+  // Normalize the input sizes:
+  // - Convert input integer type into size_type,
+  // - Clamp negative sizes to zero, and
+  // - Set zero size for null output.
+  auto const sizes_input_it = cudf::detail::indexalator_factory::make_input_iterator(sizes);
+  auto const sizes_norm_it  = thrust::make_transform_iterator(
+    thrust::make_counting_iterator<size_type>(0),
+    [sizes_input_it,
+     null_count = null_count,
+     bitmask    = static_cast<bitmask_type*>(null_mask.data())] __device__(size_type idx) {
+      // Output list size is zero if output bitmask for that list is invalid.
+      if (null_count && !cudf::bit_is_set(bitmask, idx)) { return 0; }
+
+      auto const size = sizes_input_it[idx];
+      return size < 0 ? 0 : size;
+    });
 
   CUDA_TRY(cudaMemsetAsync(offsets_begin, 0, sizeof(offset_type), stream.value()));
   thrust::inclusive_scan(
-    rmm::exec_policy(stream), sizes_norm, sizes_norm + n_lists, offsets_begin + 1);
+    rmm::exec_policy(stream), sizes_norm_it, sizes_norm_it + n_lists, offsets_begin + 1);
   auto const n_elements = cudf::detail::get_value<size_type>(list_offsets->view(), n_lists, stream);
 
   // Generate (temporary) list labels (1-based list indices) for all elements.
@@ -192,11 +210,6 @@ std::unique_ptr<column> sequences(column_view const& starts,
                                labels.begin(),
                                stream,
                                mr);
-
-  // Any null of the input columns will result in a null in the output lists column.
-  auto [null_mask, null_count] =
-    steps ? cudf::detail::bitmask_and(table_view{{starts, steps.value(), sizes}}, stream, mr)
-          : cudf::detail::bitmask_and(table_view{{starts, sizes}}, stream, mr);
 
   return make_lists_column(n_lists,
                            std::move(list_offsets),
