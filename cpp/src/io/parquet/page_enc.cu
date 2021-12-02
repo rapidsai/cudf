@@ -132,10 +132,9 @@ __global__ void __launch_bounds__(block_size)
     s->frag.fragment_data_size = 0;
     s->frag.dict_data_size     = 0;
 
-    size_type end_row       = s->frag.start_row + s->frag.num_rows;
     auto col                = *(s->col.parent_column);
     s->frag.start_value_idx = row_to_value_idx(s->frag.start_row, col);
-    size_type end_value_idx = row_to_value_idx(end_row, col);
+    size_type end_value_idx = row_to_value_idx(s->frag.start_row + s->frag.num_rows, col);
     s->frag.num_leaf_values = end_value_idx - s->frag.start_value_idx;
 
     if (s->col.level_offsets != nullptr) {

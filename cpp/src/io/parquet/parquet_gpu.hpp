@@ -331,8 +331,6 @@ struct EncPage;
 struct EncColumnChunk {
   parquet_column_device_view const* col_desc;  //!< Column description
   size_type col_desc_id;
-
-  // Add a num fragments
   PageFragment* fragments;        //!< First fragment in chunk
   uint8_t* uncompressed_bfr;      //!< Uncompressed page data
   uint8_t* compressed_bfr;        //!< Compressed page data

@@ -324,7 +324,9 @@ cdef class ORCWriter:
         if self.index is not False:
             if isinstance(table._index, cudf.core.multiindex.MultiIndex):
                 tv = table_view_from_table(table)
-                self.tbl_meta = make_unique[table_input_metadata](tv, user_data)
+                self.tbl_meta = make_unique[table_input_metadata](
+                    tv, user_data,
+                )
                 for level, idx_name in enumerate(table._index.names):
                     self.tbl_meta.get().column_metadata[level].set_name(
                         (str.encode(idx_name))

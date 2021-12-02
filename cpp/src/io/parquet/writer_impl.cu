@@ -1168,9 +1168,6 @@ void writer::impl::write(table_view const& table,
     md->column_order_listsize =
       (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_columns : 0;
 
-    // Think about how this will be passed. Currently it is passed in table_input_metadata which is
-    // only passed once as part of args to writer ctor. Now this would need to be passed per sink.
-    // But we only need them once. Ask in review
     for (size_t p = 0; p < table_meta->user_data.size(); ++p) {
       std::transform(table_meta->user_data[p].begin(),
                      table_meta->user_data[p].end(),
@@ -1220,7 +1217,6 @@ void writer::impl::write(table_view const& table,
 
   size_type num_fragments = std::reduce(num_frag_in_part.begin(), num_frag_in_part.end());
 
-  // TODO: better comments, size_type
   std::vector<int> part_frag_offset;  // Store the idx of the first fragment in each partition
   std::exclusive_scan(
     num_frag_in_part.begin(), num_frag_in_part.end(), std::back_inserter(part_frag_offset), 0);
@@ -1247,7 +1243,7 @@ void writer::impl::write(table_view const& table,
                  [](auto const& part) { return part.row_groups.size(); });
 
   // Decide row group boundaries based on uncompressed data size
-  size_type num_rowgroups = 0;
+  int num_rowgroups = 0;
 
   std::vector<int> num_rg_in_part(partitions.size());
   for (size_t p = 0; p < partitions.size(); ++p) {
@@ -1356,7 +1352,6 @@ void writer::impl::write(table_view const& table,
     }
   }
 
-  // Pass fragments hd_vec to build_chunk_dictionaries
   fragments.host_to_device(stream);
   auto dict_info_owner = build_chunk_dictionaries(chunks, col_desc, fragments, stream);
   for (size_t p = 0; p < partitions.size(); p++) {
