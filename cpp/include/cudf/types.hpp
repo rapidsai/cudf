@@ -17,15 +17,19 @@
 #pragma once
 
 #ifdef __CUDACC__
+#define CUDF_HD   __host__ __device__
+#define CUDF_D    __device__
 #define CUDF_HDI  __host__ __device__ inline
 #define CUDF_DI   __device__ inline
 #define CUDF_HDFI __host__ __device__ __forceinline__
 #define CUDF_DFI  __device__ __forceinline__
 #else
+#define CUDF_HD
+#define CUDF_D
 #define CUDF_HDI  inline
 #define CUDF_DI   inline
 // TODO: Should we make these use __attribute__((always_inline))? It's
-// supported by gcc and clang, but it is unlikely to bet worthwhile to force
+// supported by gcc and clang, but it is unlikely to be worthwhile to force
 // inlining of host code in libcudf.
 #define CUDF_HDFI inline
 #define CUDF_DFI  inline
