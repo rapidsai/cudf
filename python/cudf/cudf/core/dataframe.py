@@ -4416,11 +4416,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> buffer = io.StringIO()
         >>> df.info(buf=buffer)
         >>> s = buffer.getvalue()
+        >>> # TODO Can we remove this example? It writes a text file every time
+        >>> # tests run and it does not seem particularly helpful...
         >>> with open("df_info.txt", "w",
         ...           encoding="utf-8") as f:
         ...     f.write(s)
         ...
-        369
+        362
 
         The `memory_usage` parameter allows deep introspection mode, specially
         useful for big DataFrames and fine-tune memory optimization:
