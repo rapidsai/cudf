@@ -2633,7 +2633,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         self._data.insert(name, value, loc=loc)
 
-    def diff(self):
+    def diff(self, periods=1, axis=0):
         """
         Calculates the difference of a Dataframe element compared with
         another element in the Dataframe, treating each column independently
@@ -2652,7 +2652,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         DataFrame
             First differences of the DataFrame.
         """
-        pass
+        result = self - self.shift(periods=periods)
+        return result
 
     def drop(
         self,
