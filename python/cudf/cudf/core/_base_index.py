@@ -546,7 +546,7 @@ class BaseIndex(Serializable):
         >>> type(idx.to_pandas())
         <class 'pandas.core.indexes.numeric.Int64Index'>
         >>> type(idx)
-        <class 'cudf.core.index.GenericIndex'>
+        <class 'cudf.core.index.Int64Index'>
         """
         return pd.Index(self._values.to_pandas(), name=self.name)
 
