@@ -75,7 +75,7 @@ std::unique_ptr<column> get_list_child_to_list_row_mapping(cudf::column_view con
                          per_row_mapping_begin,
                          per_row_mapping_begin + num_child_rows,
                          per_row_mapping_begin,
-                         thrust::maximum<size_type>{});
+                         thrust::maximum{});
   return per_row_mapping;
 }
 

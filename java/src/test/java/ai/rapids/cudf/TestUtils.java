@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2020, NVIDIA CORPORATION.
+ *  Copyright (c) 2020-2021, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -18,6 +18,9 @@
 
 package ai.rapids.cudf;
 
+import java.io.File;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
@@ -210,5 +213,17 @@ class TestUtils {
       }
     });
     return result;
+  }
+
+  public static File getResourceAsFile(String resourceName) {
+    URL url = TestUtils.class.getClassLoader().getResource(resourceName);
+    if (url == null) {
+      throw new IllegalArgumentException("Unable to locate resource: " + resourceName);
+    }
+    try {
+      return new File(url.toURI());
+    } catch (URISyntaxException e) {
+      throw new RuntimeException(e);
+    }
   }
 }
