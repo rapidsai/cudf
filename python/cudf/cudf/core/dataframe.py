@@ -469,12 +469,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     ...     [(t0+ timedelta(seconds=x)) for x in range(n)])
     ... })
     >>> df
-        id                datetimes
-    0    0  2018-10-07T12:00:00.000
-    1    1  2018-10-07T12:00:01.000
-    2    2  2018-10-07T12:00:02.000
-    3    3  2018-10-07T12:00:03.000
-    4    4  2018-10-07T12:00:04.000
+        id            datetimes
+    0    0  2018-10-07 12:00:00
+    1    1  2018-10-07 12:00:01
+    2    2  2018-10-07 12:00:02
+    3    3  2018-10-07 12:00:03
+    4    4  2018-10-07 12:00:04
 
     Build DataFrame via list of rows as tuples:
 
