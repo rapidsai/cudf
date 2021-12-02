@@ -347,6 +347,7 @@ def set_object_dtypes_from_pa_schema(df, schema):
 def read_parquet(
     path,
     columns=None,
+    filters=None,
     split_row_groups=None,
     row_groups_per_part=None,
     filtering_columns_first=False,
@@ -385,6 +386,7 @@ def read_parquet(
     # `cudf.read_parquet`.
     read_kwargs = kwargs.get("read", {})
     read_kwargs["filtering_columns_first"] = filtering_columns_first
+    read_kwargs["filters"] = filters if filtering_columns_first else None
 
     return dd.read_parquet(
         path,

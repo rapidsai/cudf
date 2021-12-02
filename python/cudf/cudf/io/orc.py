@@ -339,6 +339,8 @@ def read_orc(
             stripes = selected_stripes
 
     # Determine whether we should actually read in filtering columns first
+    if filters is None:
+        filtering_columns_first = False
     if filtering_columns_first:
         # Determine which columns are filtering vs. remaining
         filters = ioutils._prepare_filters(filters)

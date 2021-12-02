@@ -13,7 +13,7 @@ from dask.dataframe.io.utils import _get_pyarrow_dtypes
 import cudf
 
 
-def _read_orc_stripe(fs, path, stripe, columns, filtering_columns_first, kwargs=None):
+def _read_orc_stripe(fs, path, stripe, columns, filters, filtering_columns_first, kwargs=None):
     """Pull out specific columns from specific stripe"""
     if kwargs is None:
         kwargs = {}
@@ -22,6 +22,7 @@ def _read_orc_stripe(fs, path, stripe, columns, filtering_columns_first, kwargs=
             f,
             stripes=[stripe],
             columns=columns,
+            filters=filters,
             filtering_columns_first=filtering_columns_first,
             **kwargs
         )
@@ -110,10 +111,14 @@ def read_orc(
             **kwargs,
         )
 
+    # Only pass through filters if we are reading filtering columns first
+    filters_passed_through = filters if filtering_columns_first else None
+
     name = "read-orc-" + tokenize(
         fs_token,
         path,
         columns,
+        filters_passed_through,
         filtering_columns_first,
         **kwargs
     )
@@ -131,6 +136,7 @@ def read_orc(
                 path,
                 stripe,
                 columns,
+                filters_passed_through,
                 filtering_columns_first,
                 kwargs,
             )
