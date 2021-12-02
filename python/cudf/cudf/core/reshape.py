@@ -891,7 +891,7 @@ def pivot(data, index=None, columns=None, values=None):
     Examples
     --------
     >>> a = cudf.DataFrame()
-    >>> a['a'] = [1, 1, 2, 2],
+    >>> a['a'] = [1, 1, 2, 2]
     >>> a['b'] = ['a', 'b', 'a', 'b']
     >>> a['c'] = [1, 2, 3, 4]
     >>> a.pivot(index='a', columns='b')
