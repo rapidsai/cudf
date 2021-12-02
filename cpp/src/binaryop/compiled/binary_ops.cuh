@@ -192,7 +192,7 @@ struct binary_op_device_dispatcher {
   bool is_lhs_scalar;
   bool is_rhs_scalar;
 
-  __device__ void operator()(size_type i)
+  __forceinline__ __device__ void operator()(size_type i)
   {
     type_dispatcher(common_data_type,
                     ops_wrapper<BinaryOperator>{out, lhs, rhs, is_lhs_scalar, is_rhs_scalar},
@@ -215,7 +215,7 @@ struct binary_op_double_device_dispatcher {
   bool is_lhs_scalar;
   bool is_rhs_scalar;
 
-  __device__ void operator()(size_type i)
+  __forceinline__ __device__ void operator()(size_type i)
   {
     double_type_dispatcher(
       lhs.type(),
