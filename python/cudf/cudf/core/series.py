@@ -1529,7 +1529,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> ser
         0       1
         1       2
-        2    null
+        2    <NA>
         dtype: int64
 
         Drop null values from a Series.
