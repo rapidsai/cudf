@@ -67,8 +67,9 @@ __device__ inline size_type integer_to_string(IntegerType value, char* d_buffer)
   bool const is_negative = cuda::std::is_signed<IntegerType>() ? (value < 0) : false;
 
   constexpr IntegerType base = 10;
-  constexpr int MAX_DIGITS   = 20;  // largest 64-bit integer is 20 digits
-  char digits[MAX_DIGITS];          // place-holder for digit chars
+  // largest 64-bit integer is 20 digits; largest 128-bit integer is 39 digits
+  constexpr int MAX_DIGITS = cuda::std::numeric_limits<IntegerType>::digits10 + 1;
+  char digits[MAX_DIGITS];  // place-holder for digit chars
   int digits_idx = 0;
   while (value != 0) {
     assert(digits_idx < MAX_DIGITS);
@@ -107,7 +108,7 @@ constexpr size_type count_digits(IntegerType value)
   auto const digits = [value] {
     // largest 8-byte  unsigned value is 18446744073709551615 (20 digits)
     // largest 16-byte unsigned value is 340282366920938463463374607431768211455 (39 digits)
-    auto constexpr max_digits = std::is_same_v<IntegerType, __int128_t> ? 39 : 20;
+    auto constexpr max_digits = cuda::std::numeric_limits<IntegerType>::digits10 + 1;
 
     size_type digits = 1;
     __int128_t pow10 = 10;
