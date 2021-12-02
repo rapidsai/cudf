@@ -687,10 +687,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
            y    3
         2  x    4
            y    5
+        dtype: int64
         >>> s.drop(labels='y', level=1)
         0  x    0
         1  x    2
         2  x    4
+        Name: 2, dtype: int64
         """
         if labels is not None:
             if index is not None or columns is not None:
