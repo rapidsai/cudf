@@ -15,7 +15,12 @@ from nvtx import annotate
 import cudf
 import cudf._lib as libcudf
 from cudf._typing import ColumnLike
-from cudf.api.types import is_categorical_dtype, is_integer_dtype, is_list_like
+from cudf.api.types import (
+    is_bool_dtype,
+    is_categorical_dtype,
+    is_integer_dtype,
+    is_list_like,
+)
 from cudf.core.column import arange
 from cudf.core.frame import Frame
 from cudf.core.index import Index
@@ -867,3 +872,22 @@ class IndexedFrame(Frame):
             if isinstance(self, cudf.Series)
             else cudf.core.resample.DataFrameResampler(self, by=by)
         )
+
+    def _apply_boolean_mask(self, boolean_mask):
+        """Apply boolean mask to each row of `self`.
+
+        Rows corresponding to `False` is dropped.
+        """
+        boolean_mask = cudf.core.column.as_column(boolean_mask)
+        if not is_bool_dtype(boolean_mask.dtype):
+            raise ValueError("boolean_mask is not boolean type.")
+
+        result = self.__class__._from_columns(
+            libcudf.stream_compaction.apply_boolean_mask(
+                list(self._index._columns + self._columns), boolean_mask
+            ),
+            column_names=self._column_names,
+            index_names=self._index.names,
+        )
+        result._copy_type_metadata(self)
+        return result

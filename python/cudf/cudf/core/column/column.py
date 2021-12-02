@@ -35,6 +35,7 @@ from cudf._lib.null_mask import (
 )
 from cudf._lib.scalar import as_device_scalar
 from cudf._lib.stream_compaction import (
+    apply_boolean_mask,
     distinct_count as cpp_distinct_count,
     drop_duplicates,
     drop_nulls,
@@ -997,9 +998,12 @@ class ColumnBase(Column, Serializable):
         raise NotImplementedError
 
     def apply_boolean_mask(self, mask) -> ColumnBase:
-        mask = as_column(mask, dtype="bool")
-        return (
-            self.as_frame()._apply_boolean_mask(boolean_mask=mask)._as_column()
+        mask = as_column(mask)
+        if not is_bool_dtype(mask.dtype):
+            raise ValueError("boolean_mask is not boolean type.")
+
+        return apply_boolean_mask([self], mask)[0]._with_type_metadata(
+            self.dtype
         )
 
     def argsort(
