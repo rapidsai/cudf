@@ -3159,9 +3159,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         encoding by specifying `use_name=True`
 
         >>> series.hash_encode(stop=200, use_name=True)
-        0    131
-        1     29
-        2     76
+        0     57
+        1     23
+        2    104
         dtype: int32
         """
         warnings.warn(
