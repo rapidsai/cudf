@@ -22,12 +22,16 @@ include(rapids-find)
 
 project(
   CUDA_KAFKA
-  VERSION 21.12.00
+  VERSION 22.02.00
   LANGUAGES CXX
 )
 
 # Set a default build type if none was specified
 rapids_cmake_build_type(Release)
+
+# ##################################################################################################
+# * conda environment -----------------------------------------------------------------------------
+rapids_cmake_support_conda_env(conda_env MODIFY_PREFIX_PATH)
 
 # ##################################################################################################
 # * Build options
@@ -70,6 +74,11 @@ target_include_directories(
 # ##################################################################################################
 # * library paths ---------------------------------------------------------------------------------
 target_link_libraries(cudf_kafka PUBLIC cudf::cudf RDKAFKA::RDKAFKA Python3::Python)
+
+# Add Conda library, and include paths if specified
+if(TARGET conda_env)
+  target_link_libraries(cudf_kafka PRIVATE conda_env)
+endif()
 
 set_target_properties(
   cudf_kafka
