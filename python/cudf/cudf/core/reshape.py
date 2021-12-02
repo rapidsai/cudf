@@ -973,6 +973,7 @@ def unstack(df, level, fill_value=None):
 
     Examples
     --------
+    >>> df = cudf.DataFrame()
     >>> df['a'] = [1, 1, 1, 2, 2]
     >>> df['b'] = [1, 2, 3, 1, 2]
     >>> df['c'] = [5, 6, 7, 8, 9]
