@@ -282,6 +282,7 @@ Time-specific operations
    DatetimeIndex.round
    DatetimeIndex.ceil
    DatetimeIndex.floor
+   DatetimeIndex.round
 
 Conversion
 ~~~~~~~~~~
