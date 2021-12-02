@@ -84,6 +84,7 @@ std::unique_ptr<column> sequences(
  * @endcode
  *
  * @throws cudf::logic_error if @p sizes column is not of integer types.
+ * @throws cudf::logic_error if @p starts and @p steps have different types.
  * @throws cudf::logic_error if @p starts, @p steps, and @p sizes columns do not have the same size.
  *
  * @param starts First values in the sequences.
