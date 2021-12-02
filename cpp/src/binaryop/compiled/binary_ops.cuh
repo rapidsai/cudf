@@ -196,7 +196,7 @@ struct binary_op_device_dispatcher {
   {
     type_dispatcher(common_data_type,
                     ops_wrapper<BinaryOperator>{out, lhs, rhs, is_lhs_scalar, is_rhs_scalar},
-                      i);
+                    i);
   }
 };
 
@@ -217,11 +217,11 @@ struct binary_op_double_device_dispatcher {
 
   __device__ void operator()(size_type i)
   {
-  double_type_dispatcher(
-        lhs.type(),
-        rhs.type(),
-        ops2_wrapper<BinaryOperator>{out, lhs, rhs, is_lhs_scalar, is_rhs_scalar},
-        i);
+    double_type_dispatcher(
+      lhs.type(),
+      rhs.type(),
+      ops2_wrapper<BinaryOperator>{out, lhs, rhs, is_lhs_scalar, is_rhs_scalar},
+      i);
   }
 };
 

@@ -296,12 +296,12 @@ std::unique_ptr<column> string_null_min_max(column_view const& lhs,
 }
 
 __forceinline__ void operator_dispatcher(mutable_column_device_view& out,
-                         column_device_view const& lhs,
-                         column_device_view const& rhs,
-                         bool is_lhs_scalar,
-                         bool is_rhs_scalar,
-                         binary_operator op,
-                         rmm::cuda_stream_view stream)
+                                         column_device_view const& lhs,
+                                         column_device_view const& rhs,
+                                         bool is_lhs_scalar,
+                                         bool is_rhs_scalar,
+                                         binary_operator op,
+                                         rmm::cuda_stream_view stream)
 {
   // clang-format off
 switch (op) {

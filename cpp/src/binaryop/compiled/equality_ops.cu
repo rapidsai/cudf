@@ -43,10 +43,10 @@ void dispatch_equality_op(mutable_column_device_view& outd,
     }
   } else {
     if (op == binary_operator::EQUAL) {
-      for_each(
-        stream,
-        outd.size(),
-        binary_op_double_device_dispatcher<ops::Equal>{outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar});
+      for_each(stream,
+               outd.size(),
+               binary_op_double_device_dispatcher<ops::Equal>{
+                 outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar});
     } else if (op == binary_operator::NOT_EQUAL) {
       for_each(stream,
                outd.size(),
