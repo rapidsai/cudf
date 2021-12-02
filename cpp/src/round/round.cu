@@ -192,48 +192,13 @@ struct half_even_negative {
 template <typename T>
 struct half_up_fixed_point {
   T n;
-  template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
-  __device__ U operator()(U e)
-  {
-    assert(false);  // Should never get here. Just for compilation
-    return U{};
-  }
-
-  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
-  __device__ U operator()(U e)
-  {
-    // Create a container with extra digit for adjustment
-    auto const container = e / n;
-    auto const down      = container / 10;
-    // Use the remainder of 10 to determine whether to round or not
-    auto const remainder_of_10 = generic_abs(container) % 10;
-    return down + (remainder_of_10 >= 5 ? generic_sign(e) : 0);
-  }
+  __device__ T operator()(T e) { return half_up_negative<T>{n}(e) / n; }
 };
 
 template <typename T>
 struct half_even_fixed_point {
   T n;
-  template <typename U = T, typename std::enable_if_t<cudf::is_floating_point<U>()>* = nullptr>
-  __device__ U operator()(U e)
-  {
-    assert(false);  // Should never get here. Just for compilation
-    return U{};
-  }
-
-  template <typename U = T, typename std::enable_if_t<cuda::std::is_integral<U>::value>* = nullptr>
-  __device__ T operator()(T e)
-  {
-    // Create a container with extra digit for adjustment
-    auto const container = e / n;
-    auto const down      = container / 10;
-    // Use the remainder of 10 to determine whether to round or not
-    auto const remainder_of_10 = generic_abs(container) % 10;
-    if (remainder_of_10 > 5 || (remainder_of_10 == 5 && generic_abs(down) % 2)) {
-      return down + generic_sign(e);
-    }
-    return down;
-  }
+  __device__ T operator()(T e) { return half_even_negative<T>{n}(e) / n; }
 };
 
 template <typename T,
@@ -299,8 +264,7 @@ std::unique_ptr<column> round_with(column_view const& input,
     auto zero_scalar = make_fixed_point_scalar<T>(0, scale_type{-decimal_places});
     detail::fill_in_place(out_view, 0, out_view.size(), *zero_scalar, stream);
   } else {
-    // Creates n to truncate the input number, keeping one more digit than the result type
-    Type const n = std::pow(10, scale_movement - 1);
+    Type const n = std::pow(10, scale_movement);
     thrust::transform(rmm::exec_policy(stream),
                       input.begin<Type>(),
                       input.end<Type>(),
