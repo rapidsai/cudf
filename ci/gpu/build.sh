@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright (c) 2018-2020, NVIDIA CORPORATION.
+# Copyright (c) 2018-2021, NVIDIA CORPORATION.
 ##############################################
 # cuDF GPU build and test script for CI      #
 ##############################################
@@ -176,6 +176,28 @@ else
         echo "Running GoogleTest $test_name"
         ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
     done
+
+    ################################################################################
+    # MEMCHECK - Run compute-sanitizer on GoogleTest (only in nightly builds)
+    ################################################################################
+    if [[ "$BUILD_MODE" == "branch" && "$BUILD_TYPE" == "gpu" ]]; then
+        if [[ "$COMPUTE_SANITIZER_ENABLE" == "true" ]]; then
+            gpuci_logger "Memcheck on GoogleTests with rmm_mode=cuda"
+            export GTEST_CUDF_RMM_MODE=cuda
+            COMPUTE_SANITIZER_CMD="compute-sanitizer --tool memcheck"
+            mkdir -p "$WORKSPACE/test-results/"
+            for gt in gtests/*; do
+                test_name=$(basename ${gt})
+                if [[ "$test_name" == "ERROR_TEST" ]]; then
+                  continue
+                fi
+                echo "Running GoogleTest $test_name"
+                ${COMPUTE_SANITIZER_CMD} ${gt} | tee "$WORKSPACE/test-results/${test_name}.cs.log"
+            done
+            unset GTEST_CUDF_RMM_MODE
+            # test-results/*.cs.log are processed in gpuci
+        fi
+    fi
 
     CUDF_CONDA_FILE=`find ${CONDA_ARTIFACT_PATH} -name "libcudf-*.tar.bz2"`
     CUDF_CONDA_FILE=`basename "$CUDF_CONDA_FILE" .tar.bz2` #get filename without extension
