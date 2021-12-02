@@ -228,8 +228,8 @@ struct interleave_list_entries_impl<T, std::enable_if_t<std::is_same_v<T, cudf::
     auto [offsets_column, chars_column] = cudf::strings::detail::make_strings_children(
       comp_fn, num_output_lists, num_output_entries, stream, mr);
 
-    auto [null_mask, null_count] = cudf::detail::valid_if(
-      validities.begin(), validities.end(), thrust::identity<int8_t>{}, stream, mr);
+    auto [null_mask, null_count] =
+      cudf::detail::valid_if(validities.begin(), validities.end(), thrust::identity{}, stream, mr);
 
     return make_strings_column(num_output_entries,
                                std::move(offsets_column),
@@ -306,7 +306,7 @@ struct interleave_list_entries_impl<T, std::enable_if_t<cudf::is_fixed_width<T>(
 
     if (data_has_null_mask) {
       auto [null_mask, null_count] = cudf::detail::valid_if(
-        validities.begin(), validities.end(), thrust::identity<int8_t>{}, stream, mr);
+        validities.begin(), validities.end(), thrust::identity{}, stream, mr);
       if (null_count > 0) { output->set_null_mask(null_mask, null_count); }
     }
 
@@ -405,7 +405,7 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
   }
 
   auto [null_mask, null_count] = cudf::detail::valid_if(
-    list_validities.begin(), list_validities.end(), thrust::identity<int8_t>{}, stream, mr);
+    list_validities.begin(), list_validities.end(), thrust::identity{}, stream, mr);
   return make_lists_column(num_output_lists,
                            std::move(list_offsets),
                            std::move(list_entries),
