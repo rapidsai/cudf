@@ -43,23 +43,22 @@ struct tabulator {
   size_type const* const labels;
 
   template <typename T_ = T>
-  static std::enable_if_t<!cudf::is_duration<T_>(), T> __device__ multiply(T x, T y)
+  static std::enable_if_t<!cudf::is_duration<T_>(), T> __device__ multiply(T x, size_type times)
   {
-    return x * y;
+    return x * static_cast<T>(times);
   }
 
   template <typename T_ = T>
-  static std::enable_if_t<cudf::is_duration<T_>(), T> __device__ multiply(T x, T y)
+  static std::enable_if_t<cudf::is_duration<T_>(), T> __device__ multiply(T x, size_type times)
   {
-    return T{x.count() * y.count()};
+    return T{x.count() * times};
   }
 
   auto __device__ operator()(size_type idx) const
   {
     auto const list_idx    = labels[idx] - 1;  // labels are 1-based indices
     auto const list_offset = offsets[list_idx];
-    return starts.element<T>(list_idx) +
-           multiply(static_cast<T>(idx - list_offset), steps.element<T>(list_idx));
+    return starts.element<T>(list_idx) + multiply(steps.element<T>(list_idx), idx - list_offset);
   }
 };
 
@@ -135,20 +134,6 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
     return result;
   }
 };
-
-// template <typename T>
-// struct sequences_functor<T, std::enable_if_t<cudf::is_timestamp<T>()>> {
-//  static std::unique_ptr<column> invoke(size_type n_elements,
-//                                        column_view const& starts,
-//                                        std::optional<column_view> const& steps,
-//                                        offset_type const* offsets,
-//                                        size_type const* labels,
-//                                        rmm::cuda_stream_view stream,
-//                                        rmm::mr::device_memory_resource* mr)
-//  {
-//    return nullptr;
-//  }
-//};
 
 }  // anonymous namespace
 
