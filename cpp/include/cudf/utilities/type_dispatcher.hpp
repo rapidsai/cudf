@@ -541,9 +541,7 @@ template <template <cudf::type_id> typename IdTypeMap>
 struct double_type_dispatcher_first_type {
 #pragma nv_exec_check_disable
   template <typename T1, typename F, typename... Ts>
-  CUDF_HDFI decltype(auto) operator()(cudf::data_type type2,
-                                                      F&& f,
-                                                      Ts&&... args) const
+  CUDF_HDFI decltype(auto) operator()(cudf::data_type type2, F&& f, Ts&&... args) const
   {
     return type_dispatcher<IdTypeMap>(type2,
                                       detail::double_type_dispatcher_second_type<T1>{},
