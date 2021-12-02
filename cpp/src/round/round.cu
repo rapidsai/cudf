@@ -206,7 +206,7 @@ struct half_up_fixed_point {
     auto const container = e / n;
     auto const down      = container / 10;
     // Use the remainder of 10 to determine whether to round or not
-    auto remainder_of_10 = generic_abs(container % 10);
+    auto const remainder_of_10 = generic_abs(container) % 10;
     return down + (remainder_of_10 >= 5 ? generic_sign(e) : 0);
   }
 };
@@ -228,8 +228,8 @@ struct half_even_fixed_point {
     auto const container = e / n;
     auto const down      = container / 10;
     // Use the remainder of 10 to determine whether to round or not
-    auto remainder_of_10 = generic_abs(container % 10);
-    if ((remainder_of_10 > 5) or (remainder_of_10 == 5 and generic_abs(down) % 2 == 1)) {
+    auto const remainder_of_10 = generic_abs(container) % 10;
+    if (remainder_of_10 > 5 || (remainder_of_10 == 5 && generic_abs(down) % 2)) {
       return down + generic_sign(e);
     }
     return down;
@@ -289,11 +289,7 @@ std::unique_ptr<column> round_with(column_view const& input,
 
   auto out_view = result->mutable_view();
 
-  constexpr int max_precision = [] {
-    if constexpr (std::is_same_v<T, numeric::decimal32>) return 9;
-    if constexpr (std::is_same_v<T, numeric::decimal64>) return 18;
-    return 38;
-  }();
+  constexpr int max_precision = cuda::std::numeric_limits<Type>::digits10;
 
   auto const scale_movement = -decimal_places - input.type().scale();
   // If scale_movement is larger than max precision of current type, the pow operation will
