@@ -77,8 +77,9 @@ struct page_enc_state_s {
  */
 uint32_t __device__ physical_type_len(Type physical_type, type_id id)
 {
-  if (physical_type == FIXED_LEN_BYTE_ARRAY and id == type_id::DECIMAL128)
+  if (physical_type == FIXED_LEN_BYTE_ARRAY and id == type_id::DECIMAL128){
     return sizeof(__int128_t);
+  }
   switch (physical_type) {
     case INT96: return 12u;
     case INT64:
