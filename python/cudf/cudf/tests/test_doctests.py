@@ -1,6 +1,7 @@
 import doctest
 import inspect
 
+import numpy as np
 import pytest
 
 import cudf
@@ -47,6 +48,8 @@ class TestDoctests:
     def test_docstring(self, docstring):
         optionflags = doctest.ELLIPSIS | doctest.NORMALIZE_WHITESPACE
         runner = doctest.DocTestRunner(optionflags=optionflags)
+        globs = dict(np=np,)
+        docstring.globs = globs
         runner.run(docstring)
         results = runner.summarize()
         if results.failed:
