@@ -1923,12 +1923,13 @@ class DatetimeIndex(GenericIndex):
         Examples
         --------
         >>> import cudf
-        >>> gIndex = cudf.DatetimeIndex(["2020-05-31 08:59:59"
-        ... ,"1999-12-31 18:44:59"])
+        >>> gIndex = cudf.DatetimeIndex([
+        ...     "2020-05-31 08:59:59",
+        ...     "1999-12-31 18:44:59",
+        ... ])
         >>> gIndex.floor("T")
-        DatetimeIndex(['2020-05-31 08:59:00', '1999-12-31 18:44:00'],
-        dtype='datetime64[ns]', freq=None)
-        """
+        DatetimeIndex(['2020-05-31 08:59:00', '1999-12-31 18:44:00'], dtype='datetime64[ns]')
+        """  # noqa: E501
         out_column = self._values.floor(field)
 
         return self.__class__._from_data({self.name: out_column})
