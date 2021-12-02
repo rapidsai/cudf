@@ -1799,13 +1799,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> s = cudf.Series([True, False, True])
         >>> s.as_mask()
         <cudf.core.buffer.Buffer object at 0x...>
-        >>> s.as_mask().to_host_array()
-        array([  5,   0,   0,   0,   0,   0,   0,   0,   1,   0,   0,   0,   0,
-                 0,   0,   0,   2,   0,   0,   0,   0,   0,   0,   0, 181, 164,
-               188,   1,   0,   0,   0,   0, 255, 255, 255, 255, 255, 255, 255,
-               127, 253, 214,  62, 241,   1,   0,   0,   0,   0,   0,   0,   0,
-                 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0],
-             dtype=uint8)
         """
         if not is_bool_dtype(self.dtype):
             raise TypeError(
