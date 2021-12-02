@@ -1774,7 +1774,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3    4
         dtype: int64
         >>> series.data
-        <cudf.core.buffer.Buffer object at 0x7f23c192d110>
+        <cudf.core.buffer.Buffer object at 0x...>
         >>> series.data.to_host_array()
         array([1, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0,
                0, 0, 4, 0, 0, 0, 0, 0, 0, 0], dtype=uint8)
@@ -1798,7 +1798,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> import cudf
         >>> s = cudf.Series([True, False, True])
         >>> s.as_mask()
-        <cudf.core.buffer.Buffer object at 0x7f23c3eed0d0>
+        <cudf.core.buffer.Buffer object at 0x...>
         >>> s.as_mask().to_host_array()
         array([  5,   0,   0,   0,   0,   0,   0,   0,   1,   0,   0,   0,   0,
                  0,   0,   0,   2,   0,   0,   0,   0,   0,   0,   0, 181, 164,
