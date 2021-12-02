@@ -22,42 +22,52 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <cudf/filling.hpp>
-#include <cudf/scalar/scalar_factories.hpp>
-#include <cudf/unary.hpp>
+template <typename T>
+using ListsCol = cudf::test::lists_column_wrapper<T, int32_t>;
+template <typename T>
+using FWDCol = cudf::test::fixed_width_column_wrapper<T, int32_t>;
 
-using namespace cudf;
-using namespace cudf::test;
+using IntsCol = cudf::test::fixed_width_column_wrapper<int32_t>;
 
 template <typename T>
-class SequenceTypedTestFixture : public cudf::test::BaseFixture {
+class SequencesTypedTest : public cudf::test::BaseFixture {
 };
 
-class SequenceTestFixture : public cudf::test::BaseFixture {
-};
+// using TestTypes = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
+//                                     cudf::test::FloatingPointTypes,
+//                                     cudf::test::FixedPointTypes,
+//                                     cudf::test::DurationTypes>;
+using TestTypes =
+  cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
 
-using NumericTypesNoBool = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
+TYPED_TEST_SUITE(SequencesTypedTest, TestTypes);
 
-TYPED_TEST_SUITE(SequenceTypedTestFixture, NumericTypesNoBool);
-
-TYPED_TEST(SequenceTypedTestFixture, Incrementing)
+TYPED_TEST(SequencesTypedTest, SimpleTest)
 {
   using T = TypeParam;
 
-  numeric_scalar<T> init(0);
-  numeric_scalar<T> step(1);
+  auto const starts = FWDCol<T>{1, 2, 3};
+  auto const sizes  = IntsCol{5, 3, 4};
 
-  size_type num_els = 10;
+  {
+    auto const expected =
+      ListsCol<T>{ListsCol<T>{1, 2, 3, 4, 5}, ListsCol<T>{2, 3, 4}, ListsCol<T>{3, 4, 5, 6}};
+    auto const result = cudf::lists::sequences(starts, sizes);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
 
-  T expected[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-  fixed_width_column_wrapper<T> expected_w(expected, expected + num_els);
-
-  auto result = cudf::sequence(num_els, init, step);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
+  {
+    auto const steps = FWDCol<T>{1, 3, 2};
+    auto const expected =
+      ListsCol<T>{ListsCol<T>{1, 2, 3, 4, 5}, ListsCol<T>{2, 5, 8}, ListsCol<T>{3, 5, 7, 9}};
+    auto const result = cudf::lists::sequences(starts, steps, sizes);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
 }
 
-TYPED_TEST(SequenceTypedTestFixture, Decrementing)
+#if 0
+
+TYPED_TEST(SequencesTypedTest, Decrementing)
 {
   using T = TypeParam;
 
@@ -74,7 +84,7 @@ TYPED_TEST(SequenceTypedTestFixture, Decrementing)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
 
-TYPED_TEST(SequenceTypedTestFixture, EmptyOutput)
+TYPED_TEST(SequencesTypedTest, EmptyOutput)
 {
   using T = TypeParam;
 
@@ -91,7 +101,7 @@ TYPED_TEST(SequenceTypedTestFixture, EmptyOutput)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
 
-TEST_F(SequenceTestFixture, BadTypes)
+TEST_F(SequencesTypedTest, BadTypes)
 {
   string_scalar string_init("zero");
   string_scalar string_step("???");
@@ -106,7 +116,7 @@ TEST_F(SequenceTestFixture, BadTypes)
   EXPECT_THROW(cudf::sequence(10, ts_init, ts_step), cudf::logic_error);
 }
 
-TEST_F(SequenceTestFixture, MismatchedInputs)
+TEST_F(SequencesTypedTest, MismatchedInputs)
 {
   numeric_scalar<int> init(0);
   numeric_scalar<float> step(-5);
@@ -121,7 +131,7 @@ TEST_F(SequenceTestFixture, MismatchedInputs)
   EXPECT_THROW(cudf::sequence(10, init3, step3), cudf::logic_error);
 }
 
-TYPED_TEST(SequenceTypedTestFixture, DefaultStep)
+TYPED_TEST(SequencesTypedTest, DefaultStep)
 {
   using T = TypeParam;
 
@@ -137,7 +147,7 @@ TYPED_TEST(SequenceTypedTestFixture, DefaultStep)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
 }
 
-TEST_F(SequenceTestFixture, DateSequenceBasic)
+TEST_F(SequencesTypedTest, DateSequenceBasic)
 {
   // Timestamp generated using https://www.epochconverter.com/
   timestamp_scalar<timestamp_s> init(1629852896L, true);  // 2021-08-25 00:54:56 GMT
@@ -157,7 +167,7 @@ TEST_F(SequenceTestFixture, DateSequenceBasic)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *got);
 }
 
-TEST_F(SequenceTestFixture, DateSequenceLeapYear)
+TEST_F(SequencesTypedTest, DateSequenceLeapYear)
 {
   // Timestamp generated using https://www.epochconverter.com/
   timestamp_scalar<timestamp_s> init(951876379L, true);  // 2000-02-29 02:06:19 GMT
@@ -177,7 +187,7 @@ TEST_F(SequenceTestFixture, DateSequenceLeapYear)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *got);
 }
 
-TEST_F(SequenceTestFixture, DateSequenceBadTypes)
+TEST_F(SequencesTypedTest, DateSequenceBadTypes)
 {
   numeric_scalar<int64_t> init(951876379, true);
   size_type size   = 5;
@@ -185,3 +195,5 @@ TEST_F(SequenceTestFixture, DateSequenceBadTypes)
 
   EXPECT_THROW(calendrical_month_sequence(size, init, months), cudf::logic_error);
 }
+
+#endif
