@@ -2636,7 +2636,21 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     def diff(self):
         """
         Calculates the difference of a Dataframe element compared with
-        another element in the Dataframe (default is element in previous row).
+        another element in the Dataframe, treating each column independently
+
+        Parameters
+        ----------
+        periods : int, default 1
+            Periods to shift for calculating difference,
+            accepts negative values.
+        axis : {0 or ‘index’, 1 or ‘columns’}, default 0
+            Take difference over rows (0) or columns (1).
+            Only row-wise (0) shift is supported.
+
+        Returns
+        -------
+        DataFrame
+            First differences of the DataFrame.
         """
         pass
 
