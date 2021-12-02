@@ -488,7 +488,7 @@ class BaseIndex(Serializable):
         >>> import cudf
         >>> index = cudf.Index([1, 2, None, 4])
         >>> index
-        Int64Index([1, 2, null, 4], dtype='int64')
+        Int64Index([1, 2, <NA>, 4], dtype='int64')
         >>> index.fillna(3)
         Int64Index([1, 2, 3, 4], dtype='int64')
         """
