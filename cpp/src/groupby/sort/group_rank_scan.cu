@@ -81,7 +81,7 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
                                 group_labels.end(),
                                 mutable_ranks.begin<size_type>(),
                                 mutable_ranks.begin<size_type>(),
-                                thrust::equal_to<size_type>{},
+                                thrust::equal_to{},
                                 scan_op);
 
   return ranks;

@@ -191,7 +191,7 @@ struct group_reduction_functor<K, T, std::enable_if_t<is_group_reduction_support
                             inp_iter,
                             thrust::make_discard_iterator(),
                             out_iter,
-                            thrust::equal_to<size_type>{},
+                            thrust::equal_to{},
                             binop);
     };
 
@@ -215,10 +215,10 @@ struct group_reduction_functor<K, T, std::enable_if_t<is_group_reduction_support
       rmm::device_uvector<bool> validity(num_groups, stream);
       do_reduction(cudf::detail::make_validity_iterator(*d_values_ptr),
                    validity.begin(),
-                   thrust::logical_or<bool>{});
+                   thrust::logical_or{});
 
-      auto [null_mask, null_count] = cudf::detail::valid_if(
-        validity.begin(), validity.end(), thrust::identity<bool>{}, stream, mr);
+      auto [null_mask, null_count] =
+        cudf::detail::valid_if(validity.begin(), validity.end(), thrust::identity{}, stream, mr);
       result->set_null_mask(std::move(null_mask), null_count);
     }
     return result;
@@ -264,7 +264,7 @@ struct group_reduction_functor<
                             inp_iter,
                             thrust::make_discard_iterator(),
                             out_iter,
-                            thrust::equal_to<size_type>{},
+                            thrust::equal_to{},
                             binop);
     };
 
@@ -283,10 +283,10 @@ struct group_reduction_functor<
       auto validity           = rmm::device_uvector<bool>(num_groups, stream);
       do_reduction(cudf::detail::make_validity_iterator(*d_values_ptr),
                    validity.begin(),
-                   thrust::logical_or<bool>{});
+                   thrust::logical_or{});
 
-      auto [null_mask, null_count] = cudf::detail::valid_if(
-        validity.begin(), validity.end(), thrust::identity<bool>{}, stream, mr);
+      auto [null_mask, null_count] =
+        cudf::detail::valid_if(validity.begin(), validity.end(), thrust::identity{}, stream, mr);
       result->set_null_mask(std::move(null_mask), null_count);
     }
 

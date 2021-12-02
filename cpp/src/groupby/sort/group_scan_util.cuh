@@ -115,7 +115,7 @@ struct group_scan_functor<K, T, std::enable_if_t<is_group_scan_supported<K, T>()
                                     group_labels.end(),
                                     inp_iter,
                                     out_iter,
-                                    thrust::equal_to<size_type>{},
+                                    thrust::equal_to{},
                                     binop);
     };
 
@@ -160,7 +160,7 @@ struct group_scan_functor<K,
                                     group_labels.end(),
                                     inp_iter,
                                     out_iter,
-                                    thrust::equal_to<size_type>{},
+                                    thrust::equal_to{},
                                     binop);
     };
 
@@ -214,7 +214,7 @@ struct group_scan_functor<K,
                                     group_labels.end(),
                                     inp_iter,
                                     out_iter,
-                                    thrust::equal_to<size_type>{},
+                                    thrust::equal_to{},
                                     binop);
     };
 
