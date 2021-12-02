@@ -525,7 +525,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if isinstance(data, (DataFrame, pd.DataFrame)):
             if isinstance(data, pd.DataFrame):
-                data = self.from_pandas(data)
+                data = self.from_pandas(data, nan_as_null=nan_as_null)
 
             if index is not None:
                 if not data.index.equals(index):
@@ -548,11 +548,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 self.columns = data.columns
         elif isinstance(data, (cudf.Series, pd.Series)):
             if isinstance(data, pd.Series):
-                data = cudf.Series.from_pandas(data)
+                data = cudf.Series.from_pandas(data, nan_as_null=nan_as_null)
 
             name = data.name or 0
             self._init_from_dict_like(
-                {name: data}, index=index, columns=columns
+                {name: data},
+                index=index,
+                columns=columns,
+                nan_as_null=nan_as_null,
             )
         elif data is None:
             if index is None:
@@ -621,7 +624,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             else:
                 if not is_dict_like(data):
                     raise TypeError("data must be list or dict-like")
-                # import pdb;pdb.set_trace()
+
                 self._init_from_dict_like(
                     data, index=index, columns=columns, nan_as_null=nan_as_null
                 )
