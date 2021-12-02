@@ -96,13 +96,19 @@ mixed_join(table_view const& left,
   // TODO: The non-conditional join impls start with a dictionary matching,
   // figure out what that is and what it's needed for (and if conditional joins
   // need to do the same).
-  auto probe = left.select(left_on);
-  auto build = right.select(right_on);
+  auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
+  CUDF_EXPECTS(left_on.size() > 0 && right_on.size() > 0,
+               "Need to equality join on at least one column.");
+  auto probe      = swap_tables ? right.select(right_on) : left.select(left_on);
+  auto build      = swap_tables ? left.select(right_on) : right.select(left_on);
+  auto build_view = table_device_view::create(build, stream);
+  auto probe_view = table_device_view::create(probe, stream);
 
-  cudf::detail::multimap_type hash_table{compute_hash_table_size(build.num_rows()),
-                                         std::numeric_limits<hash_value_type>::max(),
-                                         cudf::detail::JoinNoneValue,
-                                         stream.value()};
+  // Don't use multimap_type because we want a CG size of 1.
+  mixed_multimap_type hash_table{compute_hash_table_size(build.num_rows()),
+                                 std::numeric_limits<hash_value_type>::max(),
+                                 cudf::detail::JoinNoneValue,
+                                 stream.value()};
 
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
@@ -111,6 +117,9 @@ mixed_join(table_view const& left,
   if ((build.num_columns() == 0) && (build.num_rows() != 0)) {
     build_join_hash_table(build, hash_table, null_equality::EQUAL, stream);
   }
+  // TODO: Should this be a pair_equality?
+  row_equality equality{*probe_view, *build_view, true};
+  // row_equality equality{*probe_view, *build_view, compare_nulls == null_equality::EQUAL};
   auto hash_table_view = hash_table.get_device_view();
 
   /*
@@ -133,7 +142,6 @@ mixed_join(table_view const& left,
 
   // For inner joins we support optimizing the join by launching one thread for
   // whichever table is larger rather than always using the left table.
-  auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
   detail::grid_1d config(swap_tables ? right_num_rows : left_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
   join_kind kernel_join_type = join_type == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : join_type;
@@ -151,6 +159,8 @@ mixed_join(table_view const& left,
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
           *left_table,
           *right_table,
+          *probe_view,
+          equality,
           kernel_join_type,
           hash_table_view,
           parser.device_expression_data,
@@ -161,6 +171,8 @@ mixed_join(table_view const& left,
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
           *left_table,
           *right_table,
+          *probe_view,
+          equality,
           kernel_join_type,
           hash_table_view,
           parser.device_expression_data,
@@ -194,6 +206,8 @@ mixed_join(table_view const& left,
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
+        *probe_view,
+        equality,
         kernel_join_type,
         hash_table_view,
         join_output_l,
@@ -207,6 +221,8 @@ mixed_join(table_view const& left,
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
+        *probe_view,
+        equality,
         kernel_join_type,
         hash_table_view,
         join_output_l,
@@ -286,13 +302,17 @@ std::size_t compute_mixed_join_output_size(table_view const& left,
   // TODO: The non-conditional join impls start with a dictionary matching,
   // figure out what that is and what it's needed for (and if conditional joins
   // need to do the same).
-  auto probe = left.select(left_on);
-  auto build = right.select(right_on);
+  auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
+  auto probe       = swap_tables ? right.select(right_on) : left.select(left_on);
+  auto build       = swap_tables ? left.select(right_on) : right.select(left_on);
+  auto probe_view  = table_device_view::create(probe, stream);
+  auto build_view  = table_device_view::create(build, stream);
 
-  cudf::detail::multimap_type hash_table{compute_hash_table_size(build.num_rows()),
-                                         std::numeric_limits<hash_value_type>::max(),
-                                         cudf::detail::JoinNoneValue,
-                                         stream.value()};
+  // Don't use multimap_type because we want a CG size of 1.
+  mixed_multimap_type hash_table{compute_hash_table_size(build.num_rows()),
+                                 std::numeric_limits<hash_value_type>::max(),
+                                 cudf::detail::JoinNoneValue,
+                                 stream.value()};
 
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
@@ -301,6 +321,8 @@ std::size_t compute_mixed_join_output_size(table_view const& left,
   if ((build.num_columns() == 0) && (build.num_rows() != 0)) {
     build_join_hash_table(build, hash_table, null_equality::EQUAL, stream);
   }
+  row_equality equality{*probe_view, *build_view, true};
+  // row_equality equality{*probe_view, *build_view, compare_nulls == null_equality::EQUAL};
   auto hash_table_view = hash_table.get_device_view();
 
   auto left_table  = table_device_view::create(left, stream);
@@ -308,7 +330,6 @@ std::size_t compute_mixed_join_output_size(table_view const& left,
 
   // For inner joins we support optimizing the join by launching one thread for
   // whichever table is larger rather than always using the left table.
-  auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
   detail::grid_1d config(swap_tables ? right_num_rows : left_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
 
@@ -325,6 +346,8 @@ std::size_t compute_mixed_join_output_size(table_view const& left,
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
+        *probe_view,
+        equality,
         join_type,
         hash_table_view,
         parser.device_expression_data,
@@ -335,6 +358,8 @@ std::size_t compute_mixed_join_output_size(table_view const& left,
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
         *left_table,
         *right_table,
+        *probe_view,
+        equality,
         join_type,
         hash_table_view,
         parser.device_expression_data,

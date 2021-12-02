@@ -871,14 +871,15 @@ TYPED_TEST(MixedJoinTest, Basic)
   auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
     this->parse_input(left_inputs, right_inputs);
 
-  auto predicate = left_zero_eq_right_zero;
+  auto scalar    = cudf::numeric_scalar<unsigned int>(1);
+  auto predicate = cudf::ast::literal(scalar);
   std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs{{0, 0}, {1, 1}};
   // The left join output:
   // std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs{{0, 0}, {1, 1}, {2,
   // JoinNoneValue}};
 
-  std::vector<cudf::size_type> const left_on{};
-  std::vector<cudf::size_type> const right_on{};
+  std::vector<cudf::size_type> const left_on{0};
+  std::vector<cudf::size_type> const right_on{0};
 
   auto result_size = cudf::mixed_inner_join_size(left, right, left_on, right_on, predicate);
   EXPECT_TRUE(result_size == expected_outputs.size());

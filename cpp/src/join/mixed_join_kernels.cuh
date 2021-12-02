@@ -24,10 +24,14 @@
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/table_device_view.cuh>
 
+#include <cooperative_groups.h>
+
 #include <cub/cub.cuh>
+#include <cuco/detail/pair.cuh>
 
 namespace cudf {
 namespace detail {
+namespace cg = cooperative_groups;
 
 /**
  * @brief Computes the output size of joining the left table to the right table.
@@ -51,12 +55,26 @@ template <int block_size, bool has_nulls>
 __global__ void compute_mixed_join_output_size(
   table_device_view left_table,
   table_device_view right_table,
+  table_device_view probe,
+  row_equality equality,
   join_kind join_type,
-  cudf::detail::multimap_type::device_view hash_table_view,
+  cudf::detail::mixed_multimap_type::device_view hash_table_view,
   ast::detail::expression_device_view device_expression_data,
   bool const swap_tables,
   std::size_t* output_size)
 {
+  constexpr uint32_t flushing_cg_size = 1;
+  const uint32_t flushing_cg_id       = threadIdx.x / flushing_cg_size;
+  constexpr uint32_t num_flushing_cgs = block_size / flushing_cg_size;
+  __shared__ uint32_t flushing_cg_counter[num_flushing_cgs];
+  // constexpr auto buffer_size =
+  // cuco::detail::is_packable<cudf::detail::mixed_multimap::type::device_view::value_type>()() ?
+  // (warp_size() * 3u) : (cg_size() * 3u);
+  using multimap_value_type = cudf::detail::mixed_multimap_type::device_view::value_type;
+  constexpr auto buffer_size =
+    cuco::detail::is_packable<multimap_value_type>() ? (32 * 3u) : (1 * 3u);
+  __shared__ multimap_value_type output_buffer[num_flushing_cgs][buffer_size];
+
   // The (required) extern storage of the shared memory array leads to
   // conflicting declarations between different templates. The easiest
   // workaround is to declare an arbitrary (here char) array type then cast it
@@ -73,7 +91,6 @@ __global__ void compute_mixed_join_output_size(
   cudf::size_type const left_num_rows  = left_table.num_rows();
   cudf::size_type const right_num_rows = right_table.num_rows();
   auto const outer_num_rows            = (swap_tables ? right_num_rows : left_num_rows);
-  auto const inner_num_rows            = (swap_tables ? left_num_rows : right_num_rows);
 
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
@@ -81,8 +98,28 @@ __global__ void compute_mixed_join_output_size(
   for (cudf::size_type outer_row_index = start_idx; outer_row_index < outer_num_rows;
        outer_row_index += stride) {
     bool found_match = false;
-    for (cudf::size_type inner_row_index = 0; inner_row_index < inner_num_rows; inner_row_index++) {
+
+    // Figure out the number of elements for this key.
+    cg::thread_block_tile<1> this_thread = cg::this_thread();
+    auto casted_outer_row_index          = static_cast<uint32_t>(outer_row_index);
+    auto const num_matches = hash_table_view.count(this_thread, casted_outer_row_index);
+    if (!num_matches) continue;
+
+    mixed_multimap_type::value_type* inner_row_indices = (mixed_multimap_type::value_type*)malloc(
+      sizeof(mixed_multimap_type::value_type) * num_matches);
+    cuda::atomic<std::size_t, cuda::thread_scope_device> num_matches_atomic;
+    hash_table_view.retrieve<buffer_size>(this_thread,
+                                          this_thread,
+                                          casted_outer_row_index,
+                                          &flushing_cg_counter[flushing_cg_id],
+                                          output_buffer[flushing_cg_id],
+                                          &num_matches_atomic,
+                                          inner_row_indices,
+                                          equality);
+
+    for (size_type i(0); i < num_matches; ++i) {
       auto output_dest           = cudf::ast::detail::value_expression_result<bool, has_nulls>();
+      auto inner_row_index       = inner_row_indices[i].second;
       auto const left_row_index  = swap_tables ? inner_row_index : outer_row_index;
       auto const right_row_index = swap_tables ? outer_row_index : inner_row_index;
       evaluator.evaluate(
@@ -136,8 +173,10 @@ __global__ void compute_mixed_join_output_size(
 template <cudf::size_type block_size, cudf::size_type output_cache_size, bool has_nulls>
 __global__ void mixed_join(table_device_view left_table,
                            table_device_view right_table,
+                           table_device_view probe,
+                           row_equality equality,
                            join_kind join_type,
-                           cudf::detail::multimap_type::device_view hash_table_view,
+                           cudf::detail::mixed_multimap_type::device_view hash_table_view,
                            cudf::size_type* join_output_l,
                            cudf::size_type* join_output_r,
                            cudf::size_type* current_idx,
@@ -149,6 +188,16 @@ __global__ void mixed_join(table_device_view left_table,
   __shared__ cudf::size_type current_idx_shared[num_warps];
   __shared__ cudf::size_type join_shared_l[num_warps][output_cache_size];
   __shared__ cudf::size_type join_shared_r[num_warps][output_cache_size];
+
+  constexpr uint32_t flushing_cg_size = 1;
+  const uint32_t flushing_cg_id       = threadIdx.x / flushing_cg_size;
+  constexpr uint32_t num_flushing_cgs = block_size / flushing_cg_size;
+  __shared__ uint32_t flushing_cg_counter[num_flushing_cgs];
+  using multimap_value_type = cudf::detail::mixed_multimap_type::device_view::value_type;
+  namespace cucodetail      = cuco::detail;
+  constexpr auto buffer_size =
+    cucodetail::is_packable<multimap_value_type>() ? (32 * 3u) : (1 * 3u);
+  __shared__ multimap_value_type output_buffer[num_flushing_cgs][buffer_size];
 
   // Normally the casting of a shared memory array is used to create multiple
   // arrays of different types from the shared memory buffer, but here it is
@@ -165,7 +214,6 @@ __global__ void mixed_join(table_device_view left_table,
   cudf::size_type const left_num_rows  = left_table.num_rows();
   cudf::size_type const right_num_rows = right_table.num_rows();
   auto const outer_num_rows            = (swap_tables ? right_num_rows : left_num_rows);
-  auto const inner_num_rows            = (swap_tables ? left_num_rows : right_num_rows);
 
   if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
 
@@ -180,50 +228,71 @@ __global__ void mixed_join(table_device_view left_table,
 
   if (outer_row_index < outer_num_rows) {
     bool found_match = false;
-    for (size_type inner_row_index(0); inner_row_index < inner_num_rows; ++inner_row_index) {
-      auto output_dest           = cudf::ast::detail::value_expression_result<bool, has_nulls>();
-      auto const left_row_index  = swap_tables ? inner_row_index : outer_row_index;
-      auto const right_row_index = swap_tables ? outer_row_index : inner_row_index;
-      evaluator.evaluate(
-        output_dest, left_row_index, right_row_index, 0, thread_intermediate_storage);
 
-      if (output_dest.is_valid() && output_dest.value()) {
-        // If the rows are equal, then we have found a true match
-        // In the case of left anti joins we only add indices from left after
-        // the loop if we have found _no_ matches from the right.
-        // In the case of left semi joins we only add the first match (note
-        // that the current logic relies on the fact that we process all right
-        // table rows for a single left table row on a single thread so that no
-        // synchronization of found_match is required).
-        if ((join_type != join_kind::LEFT_ANTI_JOIN) &&
-            !(join_type == join_kind::LEFT_SEMI_JOIN && found_match)) {
-          add_pair_to_cache(left_row_index,
-                            right_row_index,
-                            current_idx_shared,
-                            warp_id,
-                            join_shared_l[warp_id],
-                            join_shared_r[warp_id]);
+    // Figure out the number of elements for this key.
+    cg::thread_block_tile<1> this_thread = cg::this_thread();
+    auto casted_outer_row_index          = static_cast<uint32_t>(outer_row_index);
+    auto const num_matches = hash_table_view.count(this_thread, casted_outer_row_index);
+    if (num_matches) {
+      mixed_multimap_type::value_type* inner_row_indices = (mixed_multimap_type::value_type*)malloc(
+        sizeof(mixed_multimap_type::value_type) * num_matches);
+      cuda::atomic<std::size_t, cuda::thread_scope_device> num_matches_atomic;
+      hash_table_view.retrieve<buffer_size>(this_thread,
+                                            this_thread,
+                                            casted_outer_row_index,
+                                            &flushing_cg_counter[flushing_cg_id],
+                                            output_buffer[flushing_cg_id],
+                                            &num_matches_atomic,
+                                            inner_row_indices,
+                                            equality);
+
+      for (size_type i(0); i < num_matches; ++i) {
+        auto output_dest           = cudf::ast::detail::value_expression_result<bool, has_nulls>();
+        auto inner_row_index       = inner_row_indices[i].second;
+        auto const left_row_index  = swap_tables ? inner_row_index : outer_row_index;
+        auto const right_row_index = swap_tables ? outer_row_index : inner_row_index;
+        evaluator.evaluate(
+          output_dest, left_row_index, right_row_index, 0, thread_intermediate_storage);
+
+        if (output_dest.is_valid() && output_dest.value()) {
+          // If the rows are equal, then we have found a true match
+          // In the case of left anti joins we only add indices from left after
+          // the loop if we have found _no_ matches from the right.
+          // In the case of left semi joins we only add the first match (note
+          // that the current logic relies on the fact that we process all right
+          // table rows for a single left table row on a single thread so that no
+          // synchronization of found_match is required).
+          if ((join_type != join_kind::LEFT_ANTI_JOIN) &&
+              !(join_type == join_kind::LEFT_SEMI_JOIN && found_match)) {
+            add_pair_to_cache(left_row_index,
+                              right_row_index,
+                              current_idx_shared,
+                              warp_id,
+                              join_shared_l[warp_id],
+                              join_shared_r[warp_id]);
+          }
+          found_match = true;
         }
-        found_match = true;
-      }
 
-      __syncwarp(activemask);
-      // flush output cache if next iteration does not fit
-      if (current_idx_shared[warp_id] + detail::warp_size >= output_cache_size) {
-        flush_output_cache<num_warps, output_cache_size>(activemask,
-                                                         max_size,
-                                                         warp_id,
-                                                         lane_id,
-                                                         current_idx,
-                                                         current_idx_shared,
-                                                         join_shared_l,
-                                                         join_shared_r,
-                                                         join_output_l,
-                                                         join_output_r);
         __syncwarp(activemask);
-        if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
-        __syncwarp(activemask);
+        // flush output cache if next iteration does not fit
+        if (current_idx_shared[warp_id] + detail::warp_size >= output_cache_size) {
+          flush_output_cache<num_warps, output_cache_size>(activemask,
+                                                           max_size,
+                                                           warp_id,
+                                                           lane_id,
+                                                           current_idx,
+                                                           current_idx_shared,
+                                                           join_shared_l,
+                                                           join_shared_r,
+                                                           join_output_l,
+                                                           join_output_r);
+          __syncwarp(activemask);
+          if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
+          __syncwarp(activemask);
+        }
       }
+      free(inner_row_indices);
     }
 
     // Left, left anti, and full joins all require saving left columns that
