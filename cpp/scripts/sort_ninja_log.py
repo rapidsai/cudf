@@ -10,7 +10,9 @@ log_file = ".ninja_log"
 if len(sys.argv) > 1:
     log_file = sys.argv[1]
 
-xml_output = len(sys.argv) > 2 and sys.argv[2] == "--xml"
+output_fmt = "csv"
+if len(sys.argv) > 2:
+    output_fmt = sys.argv[2][2:]
 
 # build a map of the log entries
 entries = {}
@@ -30,7 +32,7 @@ if len(entries) == 0:
 keys = list(entries.keys())
 sl = sorted(keys, key=lambda k: entries[k], reverse=True)
 
-if xml_output is True:
+if output_fmt == "xml":
     # output results in XML format
     root = ET.Element("testsuites")
     testsuite = ET.Element(
@@ -59,6 +61,25 @@ if xml_output is True:
     tree = ET.ElementTree(root)
     xmlstr = minidom.parseString(ET.tostring(root)).toprettyxml(indent="   ")
     print(xmlstr)
+
+elif output_fmt == "html":
+    # output results in HTML format
+    print("<html><head><title>Sorted Ninja Build Times</title>")
+    print("<style>", "table, th, td { border:1px solid black; }", "</style>")
+    print("</head><body><table>")
+    print("<tr><th>File</th><th align='right'>Compile time (ms)</th></tr>")
+    for key in sl:
+        entry = entries[key]
+        print(
+            "<tr><td>",
+            key,
+            "</td><td align='right'>",
+            entry,
+            "</td></tr>",
+            sep="",
+        )
+    print("</table></body></html>")
+
 else:
     # output results in CSV format
     print("time,file")

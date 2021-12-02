@@ -192,6 +192,7 @@ if buildAll || hasArg libcudf; then
         echo "Formatting build times"
         python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log > ${LIB_BUILD_DIR}/ninja_log.csv
         python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --xml > ${LIB_BUILD_DIR}/ninja_log.xml
+        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --html > ${LIB_BUILD_DIR}/ninja_log.html
         echo "===Top 50 build time offenders for this commit==="
         cat ${LIB_BUILD_DIR}/ninja_log.csv | head -n 51
     fi
