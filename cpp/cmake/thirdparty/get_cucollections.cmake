@@ -20,8 +20,8 @@ function(find_and_configure_cucollections)
     # cuCollections doesn't have a version yet
     cuco 0.0
     GLOBAL_TARGETS cuco::cuco
-    CPM_ARGS GITHUB_REPOSITORY PointKernel/cuCollections
-    GIT_TAG allocator-without-stream
+    CPM_ARGS GITHUB_REPOSITORY NVIDIA/cuCollections
+    GIT_TAG 6433e8ad7571f14cc5384051b049029c60dd1ce0
     OPTIONS "BUILD_TESTS OFF" "BUILD_BENCHMARKS OFF" "BUILD_EXAMPLES OFF"
   )
 
