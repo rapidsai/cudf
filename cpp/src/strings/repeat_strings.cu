@@ -369,7 +369,7 @@ std::pair<std::unique_ptr<column>, int64_t> repeat_strings_output_sizes(
                              thrust::make_counting_iterator<size_type>(strings_count),
                              fn,
                              int64_t{0},
-                             thrust::plus<int64_t>{});
+                             thrust::plus{});
 
   return std::make_pair(std::move(output_sizes), total_bytes);
 }
