@@ -1021,7 +1021,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         --------
         >>> s = cudf.Series(range(3), index=['a','b','c'])
         >>> s.memory_usage()
-        48
+        43
 
         Not including the index gives the size of the rest of the data, which
         is necessarily smaller:
