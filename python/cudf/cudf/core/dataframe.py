@@ -1247,10 +1247,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         object     40000
         bool        5000
         dtype: int64
+
         Use a Categorical for efficient storage of an object-dtype column with
         many repeated values.
+
         >>> df['object'].astype('category').memory_usage(deep=True)
-        5048
+        5008
         """
         if deep:
             warnings.warn(
