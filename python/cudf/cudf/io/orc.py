@@ -347,7 +347,9 @@ def read_orc(
         columns_in_predicate = list(
             {col for conjunction in filters for (col, _, _) in conjunction}
         )
-        all_columns = columns
+        if columns is None:
+            schema = orc.ORCFile(filepaths_or_buffers[0]).schema
+        all_columns = columns if columns is not None else schema.names
         columns = [c for c in all_columns if c not in columns_in_predicate]
 
         # Don't read in filtering columns first if we don't have any remaining
@@ -378,9 +380,9 @@ def read_orc(
         )
 
         if len(filtered_df.query(query_string, local_dict=local_dict)) == 0:
-            return ioutils._make_empty_df(
-                orc.ORCFile(filepaths_or_buffers[0]).schema, all_columns
-            )
+            if schema is None:
+                schema = orc.ORCFile(filepaths_or_buffers[0]).schema
+            return ioutils._make_empty_df(schema, all_columns)
 
     if engine == "cudf":
         df = DataFrame._from_data(

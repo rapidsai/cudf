@@ -474,16 +474,12 @@ def test_parquet_read_filtered(tmpdir, rdg_seed):
 
     # Test out filtering_columns_first=True
     df_filtering_columns_first = cudf.read_parquet(
-        fname,
-        filters=[("1", ">", 0)],
-        filtering_columns_first=True
+        fname, filters=[("1", ">", 0)], filtering_columns_first=True
     )
     assert_eq(len(df_filtering_columns_first), 2048)
 
     emptied_df_filtering_columns_first = cudf.read_parquet(
-        fname,
-        filters=[("1", ">", 160)],
-        filtering_columns_first=True
+        fname, filters=[("1", ">", 160)], filtering_columns_first=True
     )
     assert_eq(len(emptied_df_filtering_columns_first), 0)
 
