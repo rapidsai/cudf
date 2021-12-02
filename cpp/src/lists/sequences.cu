@@ -42,12 +42,24 @@ struct tabulator {
   offset_type const* const offsets;
   size_type const* const labels;
 
+  template <typename T_ = T>
+  static std::enable_if_t<!cudf::is_duration<T_>(), T> __device__ multiply(T x, T y)
+  {
+    return x * y;
+  }
+
+  template <typename T_ = T>
+  static std::enable_if_t<cudf::is_duration<T_>(), T> __device__ multiply(T x, T y)
+  {
+    return T{x.count() * y.count()};
+  }
+
   auto __device__ operator()(size_type idx) const
   {
     auto const list_idx    = labels[idx] - 1;  // labels are 1-based indices
     auto const list_offset = offsets[list_idx];
     return starts.element<T>(list_idx) +
-           static_cast<T>(idx - list_offset) * steps.element<T>(list_idx);
+           multiply(static_cast<T>(idx - list_offset), steps.element<T>(list_idx));
   }
 };
 
@@ -91,7 +103,7 @@ struct sequences_dispatcher {
 template <typename T>
 static constexpr bool is_supported()
 {
-  return (cudf::is_numeric<T>() && !cudf::is_boolean<T>());  // || cudf::is_duration<T>();
+  return (cudf::is_numeric<T>() && !cudf::is_boolean<T>()) || cudf::is_duration<T>();
 }
 
 template <typename T>
