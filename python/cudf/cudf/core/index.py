@@ -2396,9 +2396,7 @@ class IntervalIndex(GenericIndex):
         >>> import cudf
         >>> import pandas as pd
         >>> cudf.IntervalIndex.from_breaks([0, 1, 2, 3])
-        IntervalIndex([(0, 1], (1, 2], (2, 3]],
-                    closed='right',
-                    dtype='interval[int64]')
+        IntervalIndex([(0, 1], (1, 2], (2, 3]], dtype='interval')
         """
         if copy:
             breaks = column.as_column(breaks, dtype=dtype).copy()
