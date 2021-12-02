@@ -7584,4 +7584,25 @@ public class TableTest extends CudfTestBase {
       }
     }
   }
+
+  @Test
+  void testSample() {
+    try (Table t = new Table.TestBuilder().column("s1", "s2", "s3", "s4", "s5").build()) {
+      try (Table ret = t.sample(3, false, 0);
+           Table expected = new Table.TestBuilder().column("s3", "s4", "s5").build()) {
+        assertTablesAreEqual(expected, ret);
+      }
+
+      try (Table ret = t.sample(5, false, 0);
+           Table expected = new Table.TestBuilder().column("s3", "s4", "s5", "s2", "s1").build()) {
+        assertTablesAreEqual(expected, ret);
+      }
+
+      try (Table ret = t.sample(8, true, 0);
+           Table expected = new Table.TestBuilder()
+               .column("s1", "s1", "s4", "s5", "s5", "s1", "s3", "s2").build()) {
+        assertTablesAreEqual(expected, ret);
+      }
+    }
+  }
 }
