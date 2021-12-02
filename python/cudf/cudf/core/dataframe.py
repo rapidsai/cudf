@@ -3854,10 +3854,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Examples
         --------
-        >>> import cudf
-        >>> a = ('a', [1, 2, 2])
-        >>> b = ('b', [3, 4, 5])
-        >>> df = cudf.DataFrame([a, b])
+        >>> df = cudf.DataFrame({
+        ...     "a": [1, 2, 2],
+        ...     "b": [3, 4, 5],
+        ... })
         >>> expr = "(a == 2 and b == 4) or (b == 3)"
         >>> df.query(expr)
            a  b
@@ -3873,8 +3873,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> df['datetimes'] = data
         >>> search_date = datetime.datetime.strptime('2018-10-08', '%Y-%m-%d')
         >>> df.query('datetimes==@search_date')
-                        datetimes
-        1 2018-10-08T00:00:00.000
+           datetimes
+        1 2018-10-08
 
         Using local_dict:
 
@@ -3885,9 +3885,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         >>> df['datetimes'] = data
         >>> search_date2 = datetime.datetime.strptime('2018-10-08', '%Y-%m-%d')
         >>> df.query('datetimes==@search_date',
-        ...         local_dict={'search_date':search_date2})
-                        datetimes
-        1 2018-10-08T00:00:00.000
+        ...          local_dict={'search_date': search_date2})
+           datetimes
+        1 2018-10-08
         """
         # can't use `annotate` decorator here as we inspect the calling
         # environment.
