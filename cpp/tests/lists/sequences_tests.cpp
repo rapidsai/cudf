@@ -22,10 +22,11 @@
 #include <cudf_test/cudf_gtest.hpp>
 #include <cudf_test/type_lists.hpp>
 
-template <typename T>
-using ListsCol = cudf::test::lists_column_wrapper<T, int32_t>;
-template <typename T>
-using FWDCol = cudf::test::fixed_width_column_wrapper<T, int32_t>;
+template <typename T, typename U = int32_t>
+using ListsCol = cudf::test::lists_column_wrapper<T, U>;
+
+template <typename T, typename U = int32_t>
+using FWDCol = cudf::test::fixed_width_column_wrapper<T, U>;
 
 using IntsCol = cudf::test::fixed_width_column_wrapper<int32_t>;
 
@@ -60,6 +61,43 @@ TYPED_TEST(SequencesTypedTest, SimpleTest)
     auto const steps = FWDCol<T>{1, 3, 2};
     auto const expected =
       ListsCol<T>{ListsCol<T>{1, 2, 3, 4, 5}, ListsCol<T>{2, 5, 8}, ListsCol<T>{3, 5, 7, 9}};
+    auto const result = cudf::lists::sequences(starts, steps, sizes);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+}
+
+// Data generated using https://www.epochconverter.com/
+template <typename T>
+class ChronoSequencesTypedTest : public cudf::test::BaseFixture {
+};
+TYPED_TEST_SUITE(ChronoSequencesTypedTest, cudf::test::DurationTypes);
+
+// Start time is 1638477473L - Thursday, December 2, 2021 8:37:53 PM.
+auto constexpr start_time = 1638477473L;
+
+TYPED_TEST(ChronoSequencesTypedTest, SequencesOfSeconds)
+{
+  using T = TypeParam;
+
+  auto const starts = FWDCol<T, int64_t>{start_time, start_time, start_time};
+  auto const sizes  = IntsCol{1, 2, 3};
+
+  {
+    auto const expected_h = std::vector<int64_t>{start_time, start_time + 1L, start_time + 2L};
+    auto const expected =
+      ListsCol<T, int64_t>{ListsCol<T, int64_t>{expected_h.begin(), expected_h.begin() + 1},
+                           ListsCol<T, int64_t>{expected_h.begin(), expected_h.begin() + 2},
+                           ListsCol<T, int64_t>{expected_h.begin(), expected_h.begin() + 3}};
+    auto const result = cudf::lists::sequences(starts, sizes);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+
+  {
+    auto const steps    = FWDCol<T, int64_t>{10L, 155L, 13L};
+    auto const expected = ListsCol<T, int64_t>{
+      ListsCol<T, int64_t>{start_time},
+      ListsCol<T, int64_t>{start_time, start_time + 155L},
+      ListsCol<T, int64_t>{start_time, start_time + 13L, start_time + 13L * 2L}};
     auto const result = cudf::lists::sequences(starts, steps, sizes);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
