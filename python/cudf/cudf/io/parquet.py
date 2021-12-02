@@ -169,7 +169,7 @@ def _process_row_groups(
     columns=None,
     filters=None,
     filtering_columns_first=False,
-    row_groups=None
+    row_groups=None,
 ):
 
     # The general purpose of this function is to (1) expand
@@ -244,7 +244,7 @@ def _process_row_groups(
         all_columns,
         columns,
         columns_in_predicate,
-        schema
+        schema,
     )
 
 
@@ -412,16 +412,16 @@ def read_parquet(
             all_columns,
             columns,
             columns_in_predicate,
-            schema
+            schema,
         ) = _process_row_groups(
             filepath_or_buffer,
             fs,
             columns=columns,
             filters=filters,
             filtering_columns_first=filtering_columns_first,
-            row_groups=row_groups
+            row_groups=row_groups,
         )
-        
+
         # Read in filtering columns first
         if filtering_columns_first:
             # Read in only the columns relevant to the filtering
@@ -440,18 +440,20 @@ def read_parquet(
                 *args,
                 **kwargs,
             )
-            
+
             # Convert filters to query string
             query_string, local_dict = ioutils._filters_to_query(filters)
 
             # Return empty dataframe if the filtering columns will get filtered
             # into emptiness.
-            if len(
-                filtered_df.query(query_string, local_dict=local_dict)
-            ) == 0:
+            if (
+                len(filtered_df.query(query_string, local_dict=local_dict))
+                == 0
+            ):
                 return ioutils._make_empty_df(schema, all_columns)
 
-            # Don't filter using metadata if we're reading in filtering columns first
+            # Don't filter using metadata if we're reading in filtering
+            # columns first
             filters = None
 
     # Check if we should calculate the specific byte-ranges

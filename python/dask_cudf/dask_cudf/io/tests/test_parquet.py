@@ -262,9 +262,7 @@ def test_filters_with_filtering_columns_first(tmpdir):
     ddf.to_parquet(tmp_path, engine="pyarrow", row_group_size=10 / 5)
 
     a = dask_cudf.read_parquet(
-        tmp_path,
-        filters=[("y", "==", "b")],
-        filtering_columns_first=True
+        tmp_path, filters=[("y", "==", "b")], filtering_columns_first=True
     )
     assert a.npartitions == 4
     assert (a.shape[0] == 4).compute()
@@ -272,9 +270,7 @@ def test_filters_with_filtering_columns_first(tmpdir):
     ddf.to_parquet(tmp_path, engine="pyarrow", row_group_size=1)
 
     b = dask_cudf.read_parquet(
-        tmp_path,
-        filters=[("x", "==", 1)],
-        filtering_columns_first=True
+        tmp_path, filters=[("x", "==", 1)], filtering_columns_first=True
     )
     assert b.npartitions == 2
     assert (b.shape[0] == 2).compute()

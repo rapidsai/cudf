@@ -13,7 +13,9 @@ from dask.dataframe.io.utils import _get_pyarrow_dtypes
 import cudf
 
 
-def _read_orc_stripe(fs, path, stripe, columns, filters, filtering_columns_first, kwargs=None):
+def _read_orc_stripe(
+    fs, path, stripe, columns, filters, filtering_columns_first, kwargs=None
+):
     """Pull out specific columns from specific stripe"""
     if kwargs is None:
         kwargs = {}
@@ -24,7 +26,7 @@ def _read_orc_stripe(fs, path, stripe, columns, filters, filtering_columns_first
             columns=columns,
             filters=filters,
             filtering_columns_first=filtering_columns_first,
-            **kwargs
+            **kwargs,
         )
     return df_stripe
 
@@ -35,7 +37,7 @@ def read_orc(
     filters=None,
     filtering_columns_first=False,
     storage_options=None,
-    **kwargs
+    **kwargs,
 ):
     """Read cudf dataframe from ORC file(s).
 
@@ -120,7 +122,7 @@ def read_orc(
         columns,
         filters_passed_through,
         filtering_columns_first,
-        **kwargs
+        **kwargs,
     )
     dsk = {}
     N = 0

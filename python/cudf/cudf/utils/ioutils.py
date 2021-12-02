@@ -6,7 +6,6 @@ import urllib
 from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 from threading import Thread
 
-import cudf
 import fsspec
 import fsspec.implementations.local
 import numpy as np
@@ -16,6 +15,7 @@ from pyarrow import PythonFile as ArrowPythonFile
 from pyarrow.fs import FSSpecHandler, PyFileSystem
 from pyarrow.lib import NativeFile
 
+import cudf
 from cudf.utils.docutils import docfmt_partial
 
 _docstring_remote_sources = """

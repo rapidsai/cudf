@@ -332,8 +332,7 @@ def read_orc(
         # Return empty if everything was filtered
         if len(selected_stripes) == 0:
             return ioutils._make_empty_df(
-                orc.ORCFile(filepaths_or_buffers[0]).schema,
-                columns
+                orc.ORCFile(filepaths_or_buffers[0]).schema, columns
             )
         else:
             stripes = selected_stripes
@@ -357,8 +356,8 @@ def read_orc(
             filters = None
             filtering_columns_first = False
         elif len(columns) == 0:
-            filtering_columns_first = False 
-    
+            filtering_columns_first = False
+
     # Read in filtering columns first
     if filtering_columns_first:
         # Read in only the columns relevant to the filtering
@@ -375,13 +374,12 @@ def read_orc(
             decimal_cols_as_float=decimal_cols_as_float,
             timestamp_type=timestamp_type,
             use_python_file_object=use_python_file_object,
-            **kwargs
+            **kwargs,
         )
 
         if len(filtered_df.query(query_string, local_dict=local_dict)) == 0:
             return ioutils._make_empty_df(
-                orc.ORCFile(filepaths_or_buffers[0]).schema,
-                all_columns
+                orc.ORCFile(filepaths_or_buffers[0]).schema, all_columns
             )
 
     if engine == "cudf":
