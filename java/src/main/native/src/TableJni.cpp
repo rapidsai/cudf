@@ -20,6 +20,7 @@
 #include <arrow/ipc/api.h>
 #include <cudf/aggregation.hpp>
 #include <cudf/concatenate.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/hashing.hpp>
@@ -39,7 +40,6 @@
 #include <cudf/sorting.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/types.hpp>
-#include <cudf/copying.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
 #include "cudf_jni_apis.hpp"
@@ -3147,7 +3147,8 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplitGroups(
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_sample(JNIEnv *env, jclass, jlong j_input,
-                                                              jlong n, jboolean replacement, jlong seed) {
+                                                              jlong n, jboolean replacement,
+                                                              jlong seed) {
   JNI_NULL_CHECK(env, j_input, "input table is null", 0);
   try {
     cudf::jni::auto_set_device(env);
