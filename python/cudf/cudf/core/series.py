@@ -2794,6 +2794,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return self
 
+    @property
+    def T(self):
+        """Return the transpose, which is by definition self.
+        """
+
+        return self.transpose()
+
     def corr(self, other, method="pearson", min_periods=None):
         """Calculates the sample correlation between two Series,
         excluding missing values.
