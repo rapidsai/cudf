@@ -118,7 +118,6 @@ Computations / descriptive stats
    Series.abs
    Series.all
    Series.any
-   Series.autocorr
    Series.ceil
    Series.clip
    Series.corr
@@ -207,6 +206,7 @@ Reshaping, sorting
    Series.scatter_by_map
    Series.searchsorted
    Series.repeat
+   Series.transpose
 
 Combining / comparing / joining / merging / encoding
 ----------------------------------------------------

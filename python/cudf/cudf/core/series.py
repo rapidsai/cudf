@@ -2788,6 +2788,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return lhs._column.cov(rhs._column)
 
+    def transpose(self):
+        """Return the transpose, which is by definition self.
+        """
+
+        return self
+
     def corr(self, other, method="pearson", min_periods=None):
         """Calculates the sample correlation between two Series,
         excluding missing values.
@@ -2815,31 +2821,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         lhs, rhs = _align_indices([lhs, rhs], how="inner")
 
         return lhs._column.corr(rhs._column)
-
-    def autocorr(self, lag=1):
-        """Compute the lag-N autocorrelation. This method computes the Pearson
-        correlation between the Series and its shifted self.
-
-        Parameters
-        ----------
-        lag : int, default 1
-            Number of lags to apply before performing autocorrelation.
-
-        Returns
-        -------
-        result : float
-            The Pearson correlation between self and self.shift(lag).
-
-        Examples
-        --------
-        >>> import cudf
-        >>> s = cudf.Series([0.25, 0.5, 0.2, -0.05])
-        >>> s.autocorr()
-        0.10355263309024071
-        >>> s.autocorr(lag=2)
-        -0.9999999999999999
-        """
-        return self.corr(self.shift(lag))
 
     def isin(self, values):
         """Check whether values are contained in Series.
