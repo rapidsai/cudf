@@ -9044,10 +9044,10 @@ def test_pearson_corr_multiindex_dataframe():
 @pytest.mark.parametrize(
     "data",
     [
-        np.random.normal(-100, 100, 1000),
-        np.random.randint(-50, 50, 1000),
+        np.random.normal(-100, 100, (50, 50)),
+        np.random.randint(-50, 50, (25, 30)),
         np.random.random_sample((4, 4)),
-        np.random.uniform(10.5, 75.5, (10,)),
+        np.random.uniform(10.5, 75.5, (10, 6)),
         np.array([1.123, 2.343, 5.890, 0.0]),
     ],
 )
