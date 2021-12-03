@@ -471,6 +471,24 @@ std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
     bitmask, indices.begin(), indices.end(), rmm::cuda_stream_default);
 }
 
+// Count valid elements in the specified ranges of a bitmask
+std::vector<size_type> segmented_valid_count(bitmask_type const* bitmask,
+                                             host_span<size_type const> indices)
+{
+  CUDF_FUNC_RANGE();
+  return detail::segmented_valid_count(
+    bitmask, indices.begin(), indices.end(), rmm::cuda_stream_default);
+}
+
+// Count null elements in the specified ranges of a bitmask
+std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
+                                            host_span<size_type const> indices)
+{
+  CUDF_FUNC_RANGE();
+  return detail::segmented_null_count(
+    bitmask, indices.begin(), indices.end(), rmm::cuda_stream_default);
+}
+
 // Create a bitmask from a specific range
 rmm::device_buffer copy_bitmask(bitmask_type const* mask,
                                 size_type begin_bit,
