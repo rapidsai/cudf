@@ -2651,7 +2651,30 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         -------
         DataFrame
             First differences of the DataFrame.
+
+        Notes
+        -----
+        Diff currently only supports float and integer dtype columns with
+        no null values.
+
+        Examples
+        --------
+
         """
+
+        if not axis == 0:
+            raise NotImplementedError("Only axis=0 is supported.")
+
+        if self.isna().any().any():
+            raise AssertionError(
+                "Diff currently requires columns with no null values"
+            )
+
+        if not np.issubdtype(self.dtypes[0], np.number):
+            raise NotImplementedError(
+                "Diff currently only supports numeric dtypes"
+            )
+
         result = self - self.shift(periods=periods)
         return result
 
