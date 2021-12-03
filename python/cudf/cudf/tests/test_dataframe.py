@@ -9051,7 +9051,7 @@ def test_pearson_corr_multiindex_dataframe():
         np.array([1.123, 2.343, 5.890, 0.0]),
     ],
 )
-@pytest.mark.parametrize("periods", [-1, -2, -3, -4, 1, 2, 3, 4])
+@pytest.mark.parametrize("periods", range(-4, 5))
 def test_diff_dataframe_valid(data, periods):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
