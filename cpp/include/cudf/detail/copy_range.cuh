@@ -143,7 +143,7 @@ void copy_range(SourceValueIterator source_value_begin,
                "Range is out of bounds.");
   using T = typename std::iterator_traits<SourceValueIterator>::value_type;
 
-  // this code assumes that source and target have the same type.
+  // this code assumes that source and target have the same storage width.
   CUDF_EXPECTS(type_id_matches_device_storage_width<T>(target.type().id()), "data type mismatch");
 
   auto warp_aligned_begin_lower_bound = cudf::util::round_down_safe(target_begin, warp_size);

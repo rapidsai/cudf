@@ -103,7 +103,7 @@ struct null_replaced_value_accessor {
     : col{col}, null_replacement{null_val}, has_nulls{has_nulls}
   {
     CUDF_EXPECTS(type_id_matches_device_storage_width<Element>(col.type().id()),
-                 "the data type mismatch");
+                 "data type mismatch");
     if (has_nulls) CUDF_EXPECTS(col.nullable(), "column with nulls must have a validity bitmask");
   }
 
@@ -400,7 +400,7 @@ struct scalar_value_accessor {
     : dscalar(get_scalar_device_view(static_cast<ScalarType&>(const_cast<scalar&>(scalar_value))))
   {
     CUDF_EXPECTS(type_id_matches_device_storage_width<Element>(scalar_value.type().id()),
-                 "the data type mismatch");
+                 "data type mismatch");
   }
 
   /**
@@ -441,7 +441,7 @@ struct scalar_value_accessor {
 template <typename Element>
 auto inline make_scalar_iterator(scalar const& scalar_value)
 {
-  CUDF_EXPECTS(data_type(type_to_id<Element>()) == scalar_value.type(), "the data type mismatch");
+  CUDF_EXPECTS(data_type(type_to_id<Element>()) == scalar_value.type(), "data type mismatch");
   CUDF_EXPECTS(scalar_value.is_valid(), "the scalar value must be valid");
   return thrust::make_transform_iterator(thrust::make_constant_iterator<size_type>(0),
                                          scalar_value_accessor<Element>{scalar_value});
@@ -662,7 +662,7 @@ auto inline make_optional_iterator(scalar const& scalar_value,
                                    bool has_nulls)
 {
   CUDF_EXPECTS(type_id_matches_device_storage_width<Element>(scalar_value.type().id()),
-               "the data type mismatch");
+               "data type mismatch");
   return thrust::make_transform_iterator(
     thrust::make_constant_iterator<size_type>(0),
     scalar_optional_accessor<Element, contains_nulls::DYNAMIC>{scalar_value, has_nulls});
@@ -716,7 +716,7 @@ template <typename Element>
 auto inline make_optional_iterator(scalar const& scalar_value, contains_nulls::YES)
 {
   CUDF_EXPECTS(type_id_matches_device_storage_width<Element>(scalar_value.type().id()),
-               "the data type mismatch");
+               "data type mismatch");
   return thrust::make_transform_iterator(
     thrust::make_constant_iterator<size_type>(0),
     scalar_optional_accessor<Element, contains_nulls::YES>{scalar_value});
@@ -768,7 +768,7 @@ template <typename Element>
 auto inline make_optional_iterator(scalar const& scalar_value, contains_nulls::NO)
 {
   CUDF_EXPECTS(type_id_matches_device_storage_width<Element>(scalar_value.type().id()),
-               "the data type mismatch");
+               "data type mismatch");
   return thrust::make_transform_iterator(
     thrust::make_constant_iterator<size_type>(0),
     scalar_optional_accessor<Element, contains_nulls::NO>{scalar_value});
@@ -799,7 +799,7 @@ template <typename Element, bool = false>
 auto inline make_pair_iterator(scalar const& scalar_value)
 {
   CUDF_EXPECTS(type_id_matches_device_storage_width<Element>(scalar_value.type().id()),
-               "the data type mismatch");
+               "data type mismatch");
   return thrust::make_transform_iterator(thrust::make_constant_iterator<size_type>(0),
                                          scalar_pair_accessor<Element>{scalar_value});
 }
@@ -834,7 +834,7 @@ template <typename Element, bool = false>
 auto make_pair_rep_iterator(scalar const& scalar_value)
 {
   CUDF_EXPECTS(type_id_matches_device_storage_width<Element>(scalar_value.type().id()),
-               "the data type mismatch");
+               "data type mismatch");
   return make_counting_transform_iterator(
     0, scalar_representation_pair_accessor<Element>{scalar_value});
 }
