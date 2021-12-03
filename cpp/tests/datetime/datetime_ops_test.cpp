@@ -929,60 +929,60 @@ TYPED_TEST(TypedDatetimeOpsTest, TestRoundDatetime)
   auto host_val                     = to_host<T>(input);
   thrust::host_vector<T> timestamps = host_val.first;
 
-  std::vector<T> round_day(timestamps.size());
-  std::transform(timestamps.begin(), timestamps.end(), round_day.begin(), [](auto i) {
+  std::vector<T> rounded_day(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), rounded_day.begin(), [](auto i) {
     return time_point_cast<typename T::duration>(round<days>(i));
   });
-  auto expected_day =
-    fixed_width_column_wrapper<T, typename T::duration::rep>(round_day.begin(), round_day.end());
+  auto expected_day = fixed_width_column_wrapper<T, typename T::duration::rep>(rounded_day.begin(),
+                                                                               rounded_day.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*round_day(input), expected_day);
 
-  std::vector<T> round_hour(timestamps.size());
-  std::transform(timestamps.begin(), timestamps.end(), round_hour.begin(), [](auto i) {
+  std::vector<T> rounded_hour(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), rounded_hour.begin(), [](auto i) {
     return time_point_cast<typename T::duration>(round<hours>(i));
   });
-  auto expected_hour =
-    fixed_width_column_wrapper<T, typename T::duration::rep>(round_hour.begin(), round_hour.end());
+  auto expected_hour = fixed_width_column_wrapper<T, typename T::duration::rep>(
+    rounded_hour.begin(), rounded_hour.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*round_hour(input), expected_hour);
 
-  std::vector<T> round_minute(timestamps.size());
-  std::transform(timestamps.begin(), timestamps.end(), round_minute.begin(), [](auto i) {
+  std::vector<T> rounded_minute(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), rounded_minute.begin(), [](auto i) {
     return time_point_cast<typename T::duration>(round<minutes>(i));
   });
   auto expected_minute = fixed_width_column_wrapper<T, typename T::duration::rep>(
-    round_minute.begin(), round_minute.end());
+    rounded_minute.begin(), rounded_minute.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*round_minute(input), expected_minute);
 
-  std::vector<T> round_second(timestamps.size());
-  std::transform(timestamps.begin(), timestamps.end(), round_second.begin(), [](auto i) {
+  std::vector<T> rounded_second(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), rounded_second.begin(), [](auto i) {
     return time_point_cast<typename T::duration>(round<seconds>(i));
   });
   auto expected_second = fixed_width_column_wrapper<T, typename T::duration::rep>(
-    round_second.begin(), round_second.end());
+    rounded_second.begin(), rounded_second.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*round_second(input), expected_second);
 
-  std::vector<T> round_millisecond(timestamps.size());
-  std::transform(timestamps.begin(), timestamps.end(), round_millisecond.begin(), [](auto i) {
+  std::vector<T> rounded_millisecond(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), rounded_millisecond.begin(), [](auto i) {
     return time_point_cast<typename T::duration>(round<milliseconds>(i));
   });
   auto expected_millisecond = fixed_width_column_wrapper<T, typename T::duration::rep>(
-    round_millisecond.begin(), round_millisecond.end());
+    rounded_millisecond.begin(), rounded_millisecond.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*round_millisecond(input), expected_millisecond);
 
-  std::vector<T> round_microsecond(timestamps.size());
-  std::transform(timestamps.begin(), timestamps.end(), round_microsecond.begin(), [](auto i) {
+  std::vector<T> rounded_microsecond(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), rounded_microsecond.begin(), [](auto i) {
     return time_point_cast<typename T::duration>(round<microseconds>(i));
   });
   auto expected_microsecond = fixed_width_column_wrapper<T, typename T::duration::rep>(
-    round_microsecond.begin(), round_microsecond.end());
+    rounded_microsecond.begin(), rounded_microsecond.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*round_second(input), expected_microsecond);
 
-  std::vector<T> round_nanosecond(timestamps.size());
-  std::transform(timestamps.begin(), timestamps.end(), round_nanosecond.begin(), [](auto i) {
+  std::vector<T> rounded_nanosecond(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), rounded_nanosecond.begin(), [](auto i) {
     return time_point_cast<typename T::duration>(round<nanoseconds>(i));
   });
   auto expected_nanosecond = fixed_width_column_wrapper<T, typename T::duration::rep>(
-    round_nanosecond.begin(), rounded_nanosecond.end());
+    rounded_nanosecond.begin(), rounded_nanosecond.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*round_millisecond(input), expected_nanosecond);
 }
 
