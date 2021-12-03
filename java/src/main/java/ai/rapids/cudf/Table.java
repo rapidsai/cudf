@@ -1825,15 +1825,20 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Copy rows of the current table to an output table if the corresponding rows in the keys columns
-   * are unique. The keys columns are a subset of the current table columns and their indices are
-   * specified by an input array.
+   * Copy rows of the current table to an output table such that duplicate rows in the key columns
+   * are ignored (i.e., only one row from the duplicate ones will be copied). These keys columns are
+   * a subset of the current table columns and their indices are specified by an input array.
+   *
+   * Currently, the output table is sorted by key columns, using stable sort. However, this is not
+   * guaranteed in the future.
    *
    * @param keyColumns Array of indices representing key columns from the current table.
-   * @param keepFirst If it is true, the first element in a sequence of duplicate elements will be
-   *                  copied. Otherwise, copy the last element.
-   * @param nullsEqual Flag to denote whether nulls are treated as equal.
-   * @param nullsBefore Flag to specify whether nulls should appear before or after non-null elements.
+   * @param keepFirst If it is true, the first row in a sequence of duplicate rows will be copied.
+   *                  Otherwise, copy the last row.
+   * @param nullsEqual Flag to denote whether nulls are treated as equal when comparing rows of the
+   *                   key columns to check for uniqueness.
+   * @param nullsBefore Flag to specify whether nulls in the key columns will appear before or
+   *                    after non-null elements when sorting the table.
    *
    * @return Table with unique keys.
    */
