@@ -19,10 +19,9 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 
-#include <hash/concurrent_unordered_multimap.cuh>
+#include <rmm/mr/device/polymorphic_allocator.hpp>
 
 #include <cuco/static_multimap.cuh>
-#include <rmm/mr/device/polymorphic_allocator.hpp>
 
 #include <limits>
 
