@@ -20,8 +20,12 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
+using namespace cudf::test::iterators;
+
+namespace {
 template <typename T, typename U = int32_t>
 using ListsCol = cudf::test::lists_column_wrapper<T, U>;
 
@@ -29,27 +33,24 @@ template <typename T, typename U = int32_t>
 using FWDCol = cudf::test::fixed_width_column_wrapper<T, U>;
 
 using IntsCol = cudf::test::fixed_width_column_wrapper<int32_t>;
+}  // namespace
 
+/*-----------------------------------------------------------------------------------------------*/
 template <typename T>
-class SequencesTypedTest : public cudf::test::BaseFixture {
+class NumericSequencesTypedTest : public cudf::test::BaseFixture {
 };
-
-// using TestTypes = cudf::test::Concat<cudf::test::IntegralTypesNotBool,
-//                                     cudf::test::FloatingPointTypes,
-//                                     cudf::test::FixedPointTypes,
-//                                     cudf::test::DurationTypes>;
-using TestTypes =
+using NumericTypes =
   cudf::test::Concat<cudf::test::IntegralTypesNotBool, cudf::test::FloatingPointTypes>;
+TYPED_TEST_SUITE(NumericSequencesTypedTest, NumericTypes);
 
-TYPED_TEST_SUITE(SequencesTypedTest, TestTypes);
-
-TYPED_TEST(SequencesTypedTest, SimpleTest)
+TYPED_TEST(NumericSequencesTypedTest, SimpleTestNoNull)
 {
   using T = TypeParam;
 
   auto const starts = FWDCol<T>{1, 2, 3};
   auto const sizes  = IntsCol{5, 3, 4};
 
+  // Sequences with step == 1.
   {
     auto const expected =
       ListsCol<T>{ListsCol<T>{1, 2, 3, 4, 5}, ListsCol<T>{2, 3, 4}, ListsCol<T>{3, 4, 5, 6}};
@@ -57,6 +58,7 @@ TYPED_TEST(SequencesTypedTest, SimpleTest)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
 
+  // Sequences with various steps.
   {
     auto const steps = FWDCol<T>{1, 3, 2};
     auto const expected =
@@ -66,22 +68,117 @@ TYPED_TEST(SequencesTypedTest, SimpleTest)
   }
 }
 
+TYPED_TEST(NumericSequencesTypedTest, SimpleTestWithNulls)
+{
+  using T = TypeParam;
+  auto constexpr null{0};
+
+  auto const starts = FWDCol<T>{{1, 2, null, 4, 5}, null_at(2)};
+  auto const sizes  = IntsCol{{5, 3, 4, 1, null}, null_at(4)};
+
+  // Sequences with step == 1.
+  {
+    auto const expected = ListsCol<T>{{
+                                        ListsCol<T>{1, 2, 3, 4, 5},
+                                        ListsCol<T>{2, 3, 4},
+                                        ListsCol<T>{} /* NULL */,
+                                        ListsCol<T>{4},
+                                        ListsCol<T>{} /* NULL */
+                                      },
+                                      nulls_at({2, 4})
+
+    };
+    auto const result   = cudf::lists::sequences(starts, sizes);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+
+  // Sequences with various steps.
+  {
+    auto const steps    = FWDCol<T>{{null, 3, 2, 2, 3}, null_at(0)};
+    auto const expected = ListsCol<T>{{
+                                        ListsCol<T>{} /* NULL */,
+                                        ListsCol<T>{2, 5, 8},
+                                        ListsCol<T>{} /* NULL */,
+                                        ListsCol<T>{4},
+                                        ListsCol<T>{} /* NULL */
+                                      },
+                                      nulls_at({0, 2, 4})
+
+    };
+    auto const result   = cudf::lists::sequences(starts, steps, sizes);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+}
+
+TYPED_TEST(NumericSequencesTypedTest, SlicedInputTestWithNulls)
+{
+  using T = TypeParam;
+  constexpr int32_t null{0};
+  constexpr int32_t dont_care{123};
+
+  auto const starts_original = FWDCol<T>{
+    {dont_care, dont_care, dont_care, 1, 2, null, 4, 5, dont_care, dont_care}, null_at(5)};
+  auto const sizes_original =
+    IntsCol{{dont_care, 5, 3, 4, 1, null, dont_care, dont_care}, null_at(5)};
+
+  auto const starts = cudf::slice(starts_original, {3, 8})[0];
+  auto const sizes  = cudf::slice(sizes_original, {1, 6})[0];
+
+  // Sequences with step == 1.
+  {
+    auto const expected = ListsCol<T>{{
+                                        ListsCol<T>{1, 2, 3, 4, 5},
+                                        ListsCol<T>{2, 3, 4},
+                                        ListsCol<T>{} /* NULL */,
+                                        ListsCol<T>{4},
+                                        ListsCol<T>{} /* NULL */
+                                      },
+                                      nulls_at({2, 4})
+
+    };
+    auto const result   = cudf::lists::sequences(starts, sizes);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+
+  // Sequences with various steps.
+  {
+    auto const steps_original =
+      FWDCol<T>{{dont_care, dont_care, null, 3, 2, 2, 3, dont_care}, null_at(2)};
+    auto const steps = cudf::slice(steps_original, {2, 7})[0];
+
+    auto const expected = ListsCol<T>{{
+                                        ListsCol<T>{} /* NULL */,
+                                        ListsCol<T>{2, 5, 8},
+                                        ListsCol<T>{} /* NULL */,
+                                        ListsCol<T>{4},
+                                        ListsCol<T>{} /* NULL */
+                                      },
+                                      nulls_at({0, 2, 4})
+
+    };
+    auto const result   = cudf::lists::sequences(starts, steps, sizes);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+}
+
+/*-----------------------------------------------------------------------------------------------*/
 // Data generated using https://www.epochconverter.com/
 template <typename T>
-class ChronoSequencesTypedTest : public cudf::test::BaseFixture {
+class DurationSequencesTypedTest : public cudf::test::BaseFixture {
 };
-TYPED_TEST_SUITE(ChronoSequencesTypedTest, cudf::test::DurationTypes);
+TYPED_TEST_SUITE(DurationSequencesTypedTest, cudf::test::DurationTypes);
 
 // Start time is 1638477473L - Thursday, December 2, 2021 8:37:53 PM.
-auto constexpr start_time = 1638477473L;
+constexpr int64_t start_time = 1638477473L;
 
-TYPED_TEST(ChronoSequencesTypedTest, SequencesOfSeconds)
+TYPED_TEST(DurationSequencesTypedTest, SequencesNoNull)
 {
   using T = TypeParam;
 
   auto const starts = FWDCol<T, int64_t>{start_time, start_time, start_time};
   auto const sizes  = IntsCol{1, 2, 3};
 
+  // Sequences with step == 1.
   {
     auto const expected_h = std::vector<int64_t>{start_time, start_time + 1L, start_time + 2L};
     auto const expected =
@@ -92,146 +189,104 @@ TYPED_TEST(ChronoSequencesTypedTest, SequencesOfSeconds)
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
 
+  // Sequences with various steps, including negative.
   {
-    auto const steps    = FWDCol<T, int64_t>{10L, 155L, 13L};
+    auto const steps    = FWDCol<T, int64_t>{10L, -155L, -13L};
     auto const expected = ListsCol<T, int64_t>{
       ListsCol<T, int64_t>{start_time},
-      ListsCol<T, int64_t>{start_time, start_time + 155L},
-      ListsCol<T, int64_t>{start_time, start_time + 13L, start_time + 13L * 2L}};
+      ListsCol<T, int64_t>{start_time, start_time - 155L},
+      ListsCol<T, int64_t>{start_time, start_time - 13L, start_time - 13L * 2L}};
     auto const result = cudf::lists::sequences(starts, steps, sizes);
     CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
   }
 }
 
-#if 0
-
-TYPED_TEST(SequencesTypedTest, Decrementing)
+TYPED_TEST(DurationSequencesTypedTest, SequencesWithNulls)
 {
   using T = TypeParam;
+  constexpr int32_t null{0};
 
-  numeric_scalar<T> init(0);
-  numeric_scalar<T> step(-5);
+  auto const starts = FWDCol<T, int64_t>{start_time, start_time, start_time};
+  auto const sizes  = IntsCol{{1, 2, null}, null_at(2)};
 
-  size_type num_els = 10;
+  // Sequences with step == 1.
+  {
+    auto const expected_h = std::vector<int64_t>{start_time, start_time + 1L, start_time + 2L};
+    auto const expected =
+      ListsCol<T, int64_t>{{
+                             ListsCol<T, int64_t>{expected_h.begin(), expected_h.begin() + 1},
+                             ListsCol<T, int64_t>{expected_h.begin(), expected_h.begin() + 2},
+                             ListsCol<T, int64_t>{} /* NULL */
+                           },
+                           null_at(2)};
+    auto const result = cudf::lists::sequences(starts, sizes);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
 
-  T expected[] = {0, -5, -10, -15, -20, -25, -30, -35, -40, -45};
-  fixed_width_column_wrapper<T> expected_w(expected, expected + num_els);
-
-  auto result = cudf::sequence(num_els, init, step);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
+  // Sequences with various steps, including negative.
+  {
+    auto const steps = FWDCol<T, int64_t>{{static_cast<int64_t>(null), -155L, -13L}, null_at(0)};
+    auto const expected =
+      ListsCol<T, int64_t>{{
+                             ListsCol<T, int64_t>{} /* NULL */,
+                             ListsCol<T, int64_t>{start_time, start_time - 155L},
+                             ListsCol<T, int64_t>{} /* NULL */
+                           },
+                           nulls_at({0, 2})};
+    auto const result = cudf::lists::sequences(starts, steps, sizes);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
 }
 
-TYPED_TEST(SequencesTypedTest, EmptyOutput)
+/*-----------------------------------------------------------------------------------------------*/
+class NumericSequencesTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(NumericSequencesTest, EmptyInput)
 {
-  using T = TypeParam;
+  auto const starts   = IntsCol{};
+  auto const sizes    = IntsCol{};
+  auto const steps    = IntsCol{};
+  auto const expected = ListsCol<int32_t>{};
 
-  numeric_scalar<T> init(0);
-  numeric_scalar<T> step(-5);
+  // Sequences with step == 1.
+  {
+    auto const result = cudf::lists::sequences(starts, sizes);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
 
-  size_type num_els = 0;
-
-  T expected[] = {};
-  fixed_width_column_wrapper<T> expected_w(expected, expected + num_els);
-
-  auto result = cudf::sequence(num_els, init, step);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
+  // Sequences with given steps.
+  {
+    auto const result = cudf::lists::sequences(starts, steps, sizes);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
 }
 
-TEST_F(SequencesTypedTest, BadTypes)
+TEST_F(NumericSequencesTest, InvalidSizesInput)
 {
-  string_scalar string_init("zero");
-  string_scalar string_step("???");
-  EXPECT_THROW(cudf::sequence(10, string_init, string_step), cudf::logic_error);
+  auto const starts = IntsCol{};
+  auto const steps  = IntsCol{};
+  auto const sizes  = FWDCol<float>{};
 
-  numeric_scalar<bool> bool_init(true);
-  numeric_scalar<bool> bool_step(false);
-  EXPECT_THROW(cudf::sequence(10, bool_init, bool_step), cudf::logic_error);
-
-  timestamp_scalar<timestamp_s> ts_init(duration_s{10}, true);
-  timestamp_scalar<timestamp_s> ts_step(duration_s{10}, true);
-  EXPECT_THROW(cudf::sequence(10, ts_init, ts_step), cudf::logic_error);
+  EXPECT_THROW(cudf::lists::sequences(starts, sizes), cudf::logic_error);
+  EXPECT_THROW(cudf::lists::sequences(starts, steps, sizes), cudf::logic_error);
 }
 
-TEST_F(SequencesTypedTest, MismatchedInputs)
+TEST_F(NumericSequencesTest, MismatchedColumnSizesInput)
 {
-  numeric_scalar<int> init(0);
-  numeric_scalar<float> step(-5);
-  EXPECT_THROW(cudf::sequence(10, init, step), cudf::logic_error);
+  auto const starts = IntsCol{1, 2, 3};
+  auto const steps  = IntsCol{1, 2};
+  auto const sizes  = IntsCol{1, 2, 3, 4};
 
-  numeric_scalar<int> init2(0);
-  numeric_scalar<int8_t> step2(-5);
-  EXPECT_THROW(cudf::sequence(10, init2, step2), cudf::logic_error);
-
-  numeric_scalar<float> init3(0);
-  numeric_scalar<double> step3(-5);
-  EXPECT_THROW(cudf::sequence(10, init3, step3), cudf::logic_error);
+  EXPECT_THROW(cudf::lists::sequences(starts, sizes), cudf::logic_error);
+  EXPECT_THROW(cudf::lists::sequences(starts, steps, sizes), cudf::logic_error);
 }
 
-TYPED_TEST(SequencesTypedTest, DefaultStep)
+TEST_F(NumericSequencesTest, MismatchedColumnTypesInput)
 {
-  using T = TypeParam;
+  auto const starts = IntsCol{1, 2, 3};
+  auto const steps  = FWDCol<float>{1, 2, 3};
+  auto const sizes  = IntsCol{1, 2, 3};
 
-  numeric_scalar<T> init(0);
-
-  size_type num_els = 10;
-
-  T expected[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
-  fixed_width_column_wrapper<T> expected_w(expected, expected + num_els);
-
-  auto result = cudf::sequence(num_els, init);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expected_w);
+  EXPECT_THROW(cudf::lists::sequences(starts, steps, sizes), cudf::logic_error);
 }
-
-TEST_F(SequencesTypedTest, DateSequenceBasic)
-{
-  // Timestamp generated using https://www.epochconverter.com/
-  timestamp_scalar<timestamp_s> init(1629852896L, true);  // 2021-08-25 00:54:56 GMT
-  size_type size{5};
-  size_type months{1};
-
-  fixed_width_column_wrapper<timestamp_s, int64_t> expected{
-    1629852896L,  // 2021-08-25 00:54:56 GMT
-    1632531296L,  // 2021-09-25 00:54:56 GMT
-    1635123296L,  // 2021-10-25 00:54:56 GMT
-    1637801696L,  // 2021-11-25 00:54:56 GMT
-    1640393696L,  // 2021-12-25 00:54:56 GMT
-  };
-
-  auto got = calendrical_month_sequence(size, init, months);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *got);
-}
-
-TEST_F(SequencesTypedTest, DateSequenceLeapYear)
-{
-  // Timestamp generated using https://www.epochconverter.com/
-  timestamp_scalar<timestamp_s> init(951876379L, true);  // 2000-02-29 02:06:19 GMT
-  size_type size{5};
-  size_type months{12};
-
-  fixed_width_column_wrapper<timestamp_s, int64_t> expected{
-    951876379L,   // 2000-02-29 02:06:19 GMT Leap Year
-    983412379L,   // 2001-02-28 02:06:19 GMT
-    1014948379L,  // 2002-02-28 02:06:19 GMT
-    1046484379L,  // 2003-02-28 02:06:19 GMT
-    1078106779L,  // 2004-02-29 02:06:19 GMT Leap Year
-  };
-
-  auto got = calendrical_month_sequence(size, init, months);
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *got);
-}
-
-TEST_F(SequencesTypedTest, DateSequenceBadTypes)
-{
-  numeric_scalar<int64_t> init(951876379, true);
-  size_type size   = 5;
-  size_type months = 12;
-
-  EXPECT_THROW(calendrical_month_sequence(size, init, months), cudf::logic_error);
-}
-
-#endif
