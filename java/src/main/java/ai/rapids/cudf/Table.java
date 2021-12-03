@@ -645,6 +645,10 @@ public final class Table implements AutoCloseable {
 
   private static native long[] filter(long input, long mask);
 
+  private static native long[] dropDuplicates(long nativeHandle, int[] keyColumns,
+                                              boolean keepFirst, boolean nullsEqual,
+                                              boolean nullsBefore) throws CudfException;
+
   private static native long[] gather(long tableHandle, long gatherView, boolean checkBounds);
 
   private static native long[] convertToRows(long nativeHandle);
@@ -1818,6 +1822,25 @@ public final class Table implements AutoCloseable {
     assert mask.getType().equals(DType.BOOL8) : "Mask column must be of type BOOL8";
     assert getRowCount() == 0 || getRowCount() == mask.getRowCount() : "Mask column has incorrect size";
     return new Table(filter(nativeHandle, mask.getNativeView()));
+  }
+
+  /**
+   * Copy rows of the current table to an output table if the corresponding rows in the keys columns
+   * are unique. The keys columns are a subset of the current table columns and their indices are
+   * specified by an input array.
+   *
+   * @param keyColumns Array of indices representing key columns from the current table.
+   * @param keepFirst If it is true, the first element in a sequence of duplicate elements will be
+   *                  copied. Otherwise, copy the last element.
+   * @param nullsEqual Flag to denote whether nulls are treated as equal.
+   * @param nullsBefore Flag to specify whether nulls should appear before or after non-null elements.
+   *
+   * @return Table with unique keys.
+   */
+  public Table dropDuplicates(int[] keyColumns, boolean keepFirst, boolean nullsEqual,
+                              boolean nullsBefore) {
+    assert keyColumns.length >= 1 : "Input keyColumns must contain indices of at least one column";
+    return new Table(dropDuplicates(nativeHandle, keyColumns, keepFirst, nullsEqual, nullsBefore));
   }
 
   /**
