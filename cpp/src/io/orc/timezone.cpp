@@ -316,14 +316,6 @@ dst_transition_s posix_parser<Container>::parse_transition()
 }
 
 /**
- * @brief Checks if a given year is a leap year.
- */
-static bool is_leap_year(uint32_t year)
-{
-  return ((year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0)));
-}
-
-/**
  * @brief Returns the number of days in a month.
  */
 static int days_in_month(int month, bool is_leap_year)
@@ -346,10 +338,11 @@ static int64_t get_transition_time(dst_transition_s const& trans, int year)
 {
   auto day = trans.day;
 
+  auto const is_leap = cuda::std::chrono::year{year}.is_leap();
+
   if (trans.type == 'M') {
-    auto const is_leap = is_leap_year(year);
-    auto const month   = std::min(std::max(trans.month, 1), 12);
-    auto week          = std::min(std::max(trans.week, 1), 52);
+    auto const month = std::min(std::max(trans.month, 1), 12);
+    auto week        = std::min(std::max(trans.week, 1), 52);
 
     // Year-to-year day adjustment
     auto const adjusted_month = (month + 9) % 12 + 1;
@@ -372,10 +365,10 @@ static int64_t get_transition_time(dst_transition_s const& trans, int year)
     }
   } else if (trans.type == 'J') {
     // Account for 29th of February on leap years
-    day += (day > 31 + 29 && is_leap_year(year));
+    day += (day > 31 + 29 && is_leap);
   }
 
-  return trans.time + day * day_seconds;
+  return trans.time + cuda::std::chrono::duration_cast<duration_s>(duration_D{day}).count();
 }
 
 timezone_table build_timezone_transition_table(std::string const& timezone_name,
@@ -445,7 +438,7 @@ timezone_table build_timezone_transition_table(std::string const& timezone_name,
 
   // Add entries to fill the transition cycle
   int64_t year_timestamp = 0;
-  for (uint32_t year = 1970; year < 1970 + cycle_years; ++year) {
+  for (int32_t year = 1970; year < 1970 + cycle_years; ++year) {
     auto const dst_start_time = get_transition_time(dst_start, year);
     auto const dst_end_time   = get_transition_time(dst_end, year);
 
@@ -461,7 +454,9 @@ timezone_table build_timezone_transition_table(std::string const& timezone_name,
       std::swap(offsets.rbegin()[0], offsets.rbegin()[1]);
     }
 
-    year_timestamp += (365 + is_leap_year(year)) * day_seconds;
+    year_timestamp += cuda::std::chrono::duration_cast<duration_s>(
+                        duration_D{365 + cuda::std::chrono::year{year}.is_leap()})
+                        .count();
   }
 
   rmm::device_uvector<int64_t> d_ttimes{ttimes.size(), stream};

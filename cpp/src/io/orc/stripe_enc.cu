@@ -21,6 +21,8 @@
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <io/utilities/block_utils.cuh>
+#include <io/utilities/config_utils.hpp>
+#include <io/utilities/time_utils.cuh>
 
 #include <cub/cub.cuh>
 #include <rmm/cuda_stream_view.hpp>
@@ -110,6 +112,12 @@ static inline __device__ uint32_t zigzag(int32_t v)
 }
 static inline __device__ uint64_t zigzag(uint64_t v) { return v; }
 static inline __device__ uint64_t zigzag(int64_t v)
+{
+  int64_t s = (v < 0) ? 1 : 0;
+  return ((v ^ -s) * 2) + s;
+}
+
+static inline __device__ __uint128_t zigzag(__int128_t v)
 {
   int64_t s = (v < 0) ? 1 : 0;
   return ((v ^ -s) * 2) + s;
@@ -277,11 +285,11 @@ static const __device__ __constant__ uint8_t kByteLengthToRLEv2_W[9] = {
 /**
  * @brief Encode a varint value, return the number of bytes written
  */
-static inline __device__ uint32_t StoreVarint(uint8_t* dst, uint64_t v)
+static inline __device__ uint32_t StoreVarint(uint8_t* dst, __uint128_t v)
 {
   uint32_t bytecnt = 0;
   for (;;) {
-    uint32_t c = (uint32_t)(v & 0x7f);
+    auto c = static_cast<uint32_t>(v & 0x7f);
     v >>= 7u;
     if (v == 0) {
       dst[bytecnt++] = c;
@@ -348,13 +356,8 @@ template <StreamIndexType cid,
           uint32_t inmask,
           int block_size,
           typename Storage>
-static __device__ uint32_t IntegerRLE(orcenc_state_s* s,
-                                      const T* inbuf,
-                                      uint32_t inpos,
-                                      uint32_t numvals,
-                                      uint32_t flush,
-                                      int t,
-                                      Storage& temp_storage)
+static __device__ uint32_t IntegerRLE(
+  orcenc_state_s* s, const T* inbuf, uint32_t inpos, uint32_t numvals, int t, Storage& temp_storage)
 {
   using block_reduce = cub::BlockReduce<T, block_size>;
   uint8_t* dst       = s->stream.data_ptrs[cid] + s->strm_pos[cid];
@@ -614,12 +617,6 @@ inline __device__ void lengths_to_positions(volatile T* vals, uint32_t numvals, 
   }
 }
 
-/**
- * @brief Timestamp scale table (powers of 10)
- */
-static const __device__ __constant__ int32_t kTimeScale[10] = {
-  1000000000, 100000000, 10000000, 1000000, 100000, 10000, 1000, 100, 10, 1};
-
 template <int block_size, typename Storage>
 static __device__ void encode_null_mask(orcenc_state_s* s,
                                         bitmask_type const* pushdown_mask,
@@ -771,7 +768,8 @@ __global__ void __launch_bounds__(block_size)
   auto const column = *s->chunk.column;
   while (s->cur_row < s->chunk.num_rows || s->numvals + s->numlengths != 0) {
     // Fetch non-null values
-    if (s->chunk.type_kind != LIST && !s->stream.data_ptrs[CI_DATA]) {
+    auto const length_stream_only = s->chunk.type_kind == LIST or s->chunk.type_kind == MAP;
+    if (not length_stream_only && s->stream.data_ptrs[CI_DATA] == nullptr) {
       // Pass-through
       __syncthreads();
       if (!t) {
@@ -808,7 +806,7 @@ __global__ void __launch_bounds__(block_size)
           case BYTE: s->vals.u8[nz_idx] = column.element<uint8_t>(row); break;
           case TIMESTAMP: {
             int64_t ts       = column.element<int64_t>(row);
-            int32_t ts_scale = kTimeScale[min(s->chunk.scale, 9)];
+            int32_t ts_scale = powers_of_ten[9 - min(s->chunk.scale, 9)];
             int64_t seconds  = ts / ts_scale;
             int64_t nanos    = (ts - seconds * ts_scale);
             // There is a bug in the ORC spec such that for negative timestamps, it is understood
@@ -822,7 +820,7 @@ __global__ void __launch_bounds__(block_size)
             if (nanos != 0) {
               // Trailing zeroes are encoded in the lower 3-bits
               uint32_t zeroes = 0;
-              nanos *= kTimeScale[9 - min(s->chunk.scale, 9)];
+              nanos *= powers_of_ten[min(s->chunk.scale, 9)];
               if (!(nanos % 100)) {
                 nanos /= 100;
                 zeroes = 1;
@@ -852,7 +850,8 @@ __global__ void __launch_bounds__(block_size)
             // Reusing the lengths array for the scale stream
             // Note: can be written in a faster manner, given that all values are equal
           case DECIMAL: s->lengths.u32[nz_idx] = zigzag(s->chunk.scale); break;
-          case LIST: {
+          case LIST:
+          case MAP: {
             auto const& offsets = column.child(lists_column_view::offsets_column_index);
             // Compute list length from the offsets
             s->lengths.u32[nz_idx] = offsets.element<size_type>(row + 1 + column.offset()) -
@@ -892,7 +891,7 @@ __global__ void __launch_bounds__(block_size)
         s->nnz += nz;
         s->numvals += nz;
         s->numlengths += (s->chunk.type_kind == TIMESTAMP || s->chunk.type_kind == DECIMAL ||
-                          s->chunk.type_kind == LIST ||
+                          s->chunk.type_kind == LIST || s->chunk.type_kind == MAP ||
                           (s->chunk.type_kind == STRING && s->chunk.encoding_kind != DICTIONARY_V2))
                            ? nz
                            : 0;
@@ -907,12 +906,12 @@ __global__ void __launch_bounds__(block_size)
           case INT:
           case DATE:
             n = IntegerRLE<CI_DATA, int32_t, true, 0x3ff, block_size>(
-              s, s->vals.i32, s->nnz - s->numvals, s->numvals, flush, t, temp_storage.i32);
+              s, s->vals.i32, s->nnz - s->numvals, s->numvals, t, temp_storage.i32);
             break;
           case LONG:
           case TIMESTAMP:
             n = IntegerRLE<CI_DATA, int64_t, true, 0x3ff, block_size>(
-              s, s->vals.i64, s->nnz - s->numvals, s->numvals, flush, t, temp_storage.i64);
+              s, s->vals.i64, s->nnz - s->numvals, s->numvals, t, temp_storage.i64);
             break;
           case BYTE:
             n = ByteRLE<CI_DATA, 0x3ff>(s, s->vals.u8, s->nnz - s->numvals, s->numvals, flush, t);
@@ -938,16 +937,18 @@ __global__ void __launch_bounds__(block_size)
           case STRING:
             if (s->chunk.encoding_kind == DICTIONARY_V2) {
               n = IntegerRLE<CI_DATA, uint32_t, false, 0x3ff, block_size>(
-                s, s->vals.u32, s->nnz - s->numvals, s->numvals, flush, t, temp_storage.u32);
+                s, s->vals.u32, s->nnz - s->numvals, s->numvals, t, temp_storage.u32);
             } else {
               n = s->numvals;
             }
             break;
           case DECIMAL: {
             if (is_value_valid) {
-              uint64_t const zz_val = (column.type().id() == type_id::DECIMAL32)
-                                        ? zigzag(column.element<int32_t>(row))
-                                        : zigzag(column.element<int64_t>(row));
+              auto const id = column.type().id();
+              __uint128_t const zz_val =
+                id == type_id::DECIMAL32   ? zigzag(column.element<int32_t>(row))
+                : id == type_id::DECIMAL64 ? zigzag(column.element<int64_t>(row))
+                                           : zigzag(column.element<__int128_t>(row));
               auto const offset =
                 (row == s->chunk.start_row) ? 0 : s->chunk.decimal_offsets[row - 1];
               StoreVarint(s->stream.data_ptrs[CI_DATA] + offset, zz_val);
@@ -961,17 +962,18 @@ __global__ void __launch_bounds__(block_size)
       }
       // Encode secondary stream values
       if (s->numlengths > 0) {
-        uint32_t flush = (s->cur_row == s->chunk.num_rows) ? 1 : 0, n;
+        uint32_t n;
         switch (s->chunk.type_kind) {
           case TIMESTAMP:
             n = IntegerRLE<CI_DATA2, uint64_t, false, 0x3ff, block_size>(
-              s, s->lengths.u64, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u64);
+              s, s->lengths.u64, s->nnz - s->numlengths, s->numlengths, t, temp_storage.u64);
             break;
           case DECIMAL:
           case LIST:
+          case MAP:
           case STRING:
             n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
-              s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, flush, t, temp_storage.u32);
+              s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, t, temp_storage.u32);
             break;
           default: n = s->numlengths; break;
         }
@@ -1064,9 +1066,8 @@ __global__ void __launch_bounds__(block_size)
       if (t < numvals) s->lengths.u32[nz_idx] = count;
       __syncthreads();
       if (s->numlengths + numvals > 0) {
-        uint32_t flush = (s->cur_row + numvals == s->nrows) ? 1 : 0;
-        uint32_t n     = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
-          s, s->lengths.u32, s->cur_row, s->numlengths + numvals, flush, t, temp_storage);
+        uint32_t n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff, block_size>(
+          s, s->lengths.u32, s->cur_row, s->numlengths + numvals, t, temp_storage);
         __syncthreads();
         if (!t) {
           s->numlengths += numvals;
@@ -1317,9 +1318,7 @@ void CompressOrcDataStreams(uint8_t* compressed_data,
   gpuInitCompressionBlocks<<<dim_grid, dim_block_init, 0, stream.value()>>>(
     strm_desc, enc_streams, comp_in, comp_out, compressed_data, comp_blk_size, max_comp_blk_size);
   if (compression == SNAPPY) {
-    auto env_use_nvcomp = std::getenv("LIBCUDF_USE_NVCOMP");
-    bool use_nvcomp     = env_use_nvcomp != nullptr ? std::atoi(env_use_nvcomp) : 0;
-    if (use_nvcomp) {
+    if (detail::nvcomp_integration::is_stable_enabled()) {
       try {
         size_t temp_size;
         nvcompStatus_t nvcomp_status = nvcompBatchedSnappyCompressGetTempSize(

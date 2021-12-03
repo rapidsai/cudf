@@ -4,12 +4,12 @@ import collections
 import pickle
 import warnings
 
+import numpy as np
 import pandas as pd
 from nvtx import annotate
 
 import cudf
 from cudf._lib import groupby as libgroupby
-from cudf._lib.table import Table
 from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
@@ -32,8 +32,6 @@ def _quantile_75(x):
     return x.quantile(0.75)
 
 
-# Note that all valid aggregation methods (e.g. GroupBy.min) are bound to the
-# class after its definition (see below).
 class GroupBy(Serializable):
 
     _MAX_GROUPS_BEFORE_WARN = 100
@@ -241,22 +239,20 @@ class GroupBy(Serializable):
             result = result.sort_index()
 
         if not _is_multi_agg(func):
-            if result.columns.nlevels == 1:
+            if result._data.nlevels <= 1:  # 0 or 1 levels
                 # make sure it's a flat index:
-                result.columns = result.columns.get_level_values(0)
+                result._data.multiindex = False
 
-            if result.columns.nlevels > 1:
-                try:
-                    # drop the last level
-                    result.columns = result.columns.droplevel(-1)
-                except IndexError:
-                    # Pandas raises an IndexError if we are left
-                    # with an all-nan MultiIndex when dropping
-                    # the last level
-                    if result.shape[1] == 1:
-                        result.columns = [None]
-                    else:
-                        raise
+            if result._data.nlevels > 1:
+                result._data.droplevel(-1)
+
+                # if, after dropping the last level, the only
+                # remaining key is `NaN`, we need to convert to `None`
+                # for Pandas compat:
+                if result._data.names == (np.nan,):
+                    result._data = result._data.rename_levels(
+                        {np.nan: None}, level=0
+                    )
 
         if libgroupby._is_all_scan_aggregate(normalized_aggs):
             # Scan aggregations return rows in original index order
@@ -821,7 +817,7 @@ class GroupBy(Serializable):
         interpolation : {"linear", "lower", "higher", "midpoint", "nearest"}
             The interpolation method to use when the desired quantile lies
             between two data points. Defaults to "linear".
-       """
+        """
 
         def func(x):
             return getattr(x, "quantile")(q=q, interpolation=interpolation)
@@ -861,12 +857,45 @@ class GroupBy(Serializable):
         """Get the last non-null value in each group."""
         return self.agg("last")
 
-    def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
-        """Internal implementation for `ffill` and `bfill`
+    def diff(self, periods=1, axis=0):
+        """Get the difference between the values in each group.
+
+        Parameters
+        ----------
+        periods : int, default 1
+            Periods to shift for calculating difference,
+            accepts negative values.
+        axis : {0 or 'index', 1 or 'columns'}, default 0
+            Take difference over rows (0) or columns (1).
+            Only row-wise (0) shift is supported.
+
+        Returns
+        -------
+        Series or DataFrame
+            First differences of the Series or DataFrame.
         """
+
+        if not axis == 0:
+            raise NotImplementedError("Only axis=0 is supported.")
+
+        # grouped values
+        value_columns = self.grouping.values
+        _, (data, index), _ = self._groupby.groups(
+            cudf.core.frame.Frame(value_columns._data)
+        )
+        grouped = self.obj.__class__._from_data(data, index)
+        grouped = self._mimic_pandas_order(grouped)
+
+        result = grouped - self.shift(periods=periods)
+        return result._copy_type_metadata(value_columns)
+
+    def _scan_fill(self, method: str, limit: int) -> DataFrameOrSeries:
+        """Internal implementation for `ffill` and `bfill`"""
         value_columns = self.grouping.values
         result = self.obj.__class__._from_data(
-            self._groupby.replace_nulls(Table(value_columns._data), method)
+            self._groupby.replace_nulls(
+                cudf.core.frame.Frame(value_columns._data), method
+            )
         )
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(value_columns)
@@ -981,7 +1010,9 @@ class GroupBy(Serializable):
             return getattr(self, method, limit)()
 
         value_columns = self.grouping.values
-        _, (data, index), _ = self._groupby.groups(Table(value_columns._data))
+        _, (data, index), _ = self._groupby.groups(
+            cudf.core.frame.Frame(value_columns._data)
+        )
 
         grouped = self.obj.__class__._from_data(data, index)
         result = grouped.fillna(
@@ -1039,7 +1070,9 @@ class GroupBy(Serializable):
             fill_value = [fill_value] * len(value_columns._data)
 
         result = self.obj.__class__._from_data(
-            *self._groupby.shift(Table(value_columns), periods, fill_value)
+            *self._groupby.shift(
+                cudf.core.frame.Frame(value_columns), periods, fill_value
+            )
         )
         result = self._mimic_pandas_order(result)
         return result._copy_type_metadata(value_columns)
@@ -1052,7 +1085,7 @@ class GroupBy(Serializable):
         """
         sorted_order_column = arange(0, result._data.nrows)
         _, (order, _), _ = self._groupby.groups(
-            Table({"sorted_order_column": sorted_order_column})
+            cudf.core.frame.Frame({"sorted_order_column": sorted_order_column})
         )
         gather_map = order["sorted_order_column"].argsort()
         result = result.take(gather_map)
@@ -1267,14 +1300,20 @@ class SeriesGroupBy(GroupBy):
         return result
 
 
+# TODO: should we define this as a dataclass instead?
 class Grouper(object):
-    def __init__(self, key=None, level=None):
+    def __init__(
+        self, key=None, level=None, freq=None, closed=None, label=None
+    ):
         if key is not None and level is not None:
             raise ValueError("Grouper cannot specify both key and level")
-        if key is None and level is None:
+        if (key, level) == (None, None) and not freq:
             raise ValueError("Grouper must specify either key or level")
         self.key = key
         self.level = level
+        self.freq = freq
+        self.closed = closed
+        self.label = label
 
 
 class _Grouping(Serializable):
@@ -1282,14 +1321,6 @@ class _Grouping(Serializable):
         self._obj = obj
         self._key_columns = []
         self.names = []
-        # For transform operations, we want to filter out only the value
-        # columns that will be used. When part of the key columns are composed
-        # from columns in `obj`, these columns are not included in the value
-        # columns. This only happens when `by` is specified with
-        # column labels or `Grouper` object with `key` param. To avoid that
-        # external objects overlaps in names to `obj`, these column
-        # names are recorded separately in this list.
-        self._key_column_names_from_obj = []
 
         # Need to keep track of named key columns
         # to support `as_index=False` correctly
@@ -1328,8 +1359,7 @@ class _Grouping(Serializable):
 
     @property
     def keys(self):
-        """Return grouping key columns as index
-        """
+        """Return grouping key columns as index"""
         nkeys = len(self._key_columns)
 
         if nkeys == 0:
@@ -1355,9 +1385,7 @@ class _Grouping(Serializable):
         """
         # If the key columns are in `obj`, filter them out
         value_column_names = [
-            x
-            for x in self._obj._data.names
-            if x not in self._key_column_names_from_obj
+            x for x in self._obj._data.names if x not in self._named_columns
         ]
         value_columns = self._obj._data.select_by_label(value_column_names)
         return self._obj.__class__._from_data(value_columns)
@@ -1383,13 +1411,17 @@ class _Grouping(Serializable):
         self._key_columns.append(self._obj._data[by])
         self.names.append(by)
         self._named_columns.append(by)
-        self._key_column_names_from_obj.append(by)
 
     def _handle_grouper(self, by):
-        if by.key:
+        if by.freq:
+            self._handle_frequency_grouper(by)
+        elif by.key:
             self._handle_label(by.key)
         else:
             self._handle_level(by.level)
+
+    def _handle_frequency_grouper(self, by):
+        raise NotImplementedError()
 
     def _handle_level(self, by):
         level_values = self._obj.index.get_level_values(by)

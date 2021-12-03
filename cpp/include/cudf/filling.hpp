@@ -52,7 +52,6 @@ namespace cudf {
  * @param begin The starting index of the fill range (inclusive)
  * @param end The index of the last element in the fill range (exclusive)
  * @param value The scalar value to fill
- * @return void
  */
 void fill_in_place(mutable_column_view& destination,
                    size_type begin,
@@ -162,7 +161,7 @@ std::unique_ptr<table> repeat(
  * step = 2
  * return = [0, 2, 4]
  * ```
- * @throws cudf::logic_error if @p init and @p @step are not the same type.
+ * @throws cudf::logic_error if @p init and @p step are not the same type.
  * @throws cudf::logic_error if scalar types are not numeric.
  * @throws cudf::logic_error if @p size is < 0.
  *
@@ -201,6 +200,35 @@ std::unique_ptr<column> sequence(
 std::unique_ptr<column> sequence(
   size_type size,
   scalar const& init,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Generate a sequence of timestamps beginning at `init` and incrementing by `months` for
+ * each successive element, i.e., `output[i] = init + i * months` for `i` in `[0, size)`.
+ *
+ * If a given date is invalid, the date is scaled back to the last available day of that month.
+ *
+ * Example:
+ * ```
+ * size = 3
+ * init = 2020-01-31 08:00:00
+ * months = 1
+ * return = [2020-01-31 08:00:00, 2020-02-29 08:00:00, 2020-03-31 08:00:00]
+ * ```
+ *
+ * @throw cudf::logic_error if input datatype is not a TIMESTAMP
+ *
+ * @param size Number of timestamps to generate
+ * @param init The initial timestamp
+ * @param months Months to increment
+ * @param mr Device memory resource used to allocate the returned column's device memory
+ *
+ * @returns Timestamps column with sequences of months.
+ */
+std::unique_ptr<cudf::column> calendrical_month_sequence(
+  size_type size,
+  scalar const& init,
+  size_type months,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group

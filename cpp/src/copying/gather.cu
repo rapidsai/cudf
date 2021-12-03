@@ -54,6 +54,21 @@ std::unique_ptr<table> gather(table_view const& source_table,
   return gather(source_table, map_begin, map_end, bounds_policy, stream, mr);
 }
 
+std::unique_ptr<table> gather(table_view const& source_table,
+                              device_span<size_type const> const gather_map,
+                              out_of_bounds_policy bounds_policy,
+                              negative_index_policy neg_indices,
+                              rmm::cuda_stream_view stream,
+                              rmm::mr::device_memory_resource* mr)
+{
+  CUDF_EXPECTS(gather_map.size() <= static_cast<size_t>(std::numeric_limits<size_type>::max()),
+               "invalid gather map size");
+  auto map_col = column_view(data_type{type_to_id<size_type>()},
+                             static_cast<size_type>(gather_map.size()),
+                             gather_map.data());
+  return gather(source_table, map_col, bounds_policy, neg_indices, stream, mr);
+}
+
 }  // namespace detail
 
 std::unique_ptr<table> gather(table_view const& source_table,

@@ -16,12 +16,12 @@ from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport data_type, size_type, type_id
-from cudf._lib.table cimport Table, table_view_from_table
+from cudf._lib.utils cimport table_view_from_table
 
 # The functions below return the *gathermaps* that represent
 # the join result when joining on the keys `lhs` and `rhs`.
 
-cpdef join(Table lhs, Table rhs, how=None):
+cpdef join(lhs, rhs, how=None):
     cdef pair[cpp_join.gather_map_type, cpp_join.gather_map_type] c_result
     cdef table_view c_lhs = table_view_from_table(lhs)
     cdef table_view c_rhs = table_view_from_table(rhs)
@@ -49,7 +49,7 @@ cpdef join(Table lhs, Table rhs, how=None):
     return left_rows, right_rows
 
 
-cpdef semi_join(Table lhs, Table rhs, how=None):
+cpdef semi_join(lhs, rhs, how=None):
     # left-semi and left-anti joins
     cdef cpp_join.gather_map_type c_result
     cdef table_view c_lhs = table_view_from_table(lhs)

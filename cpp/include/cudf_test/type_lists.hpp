@@ -32,7 +32,7 @@
 #include <type_traits>
 
 /**
- * @filename type_lists.hpp
+ * @file type_lists.hpp
  * @brief Provides centralized type lists for use in Google Test
  * type-parameterized tests.
  *
@@ -176,7 +176,7 @@ using IntegralTypes = Concat<IntegralTypesNotBool, cudf::test::Types<bool>>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all floating point types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FloatingPointTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::FloatingPointTypes);
  * ```
  */
 using FloatingPointTypes = cudf::test::Types<float, double>;
@@ -188,7 +188,7 @@ using FloatingPointTypes = cudf::test::Types<float, double>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all numeric types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::NumericTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::NumericTypes);
  * ```
  */
 using NumericTypes = Concat<IntegralTypes, FloatingPointTypes>;
@@ -200,7 +200,7 @@ using NumericTypes = Concat<IntegralTypes, FloatingPointTypes>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all timestamp types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::TimestampTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::TimestampTypes);
  * ```
  */
 using TimestampTypes =
@@ -213,7 +213,7 @@ using TimestampTypes =
  * Example:
  * ```
  * // Invokes all typed fixture tests for all duration types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::DurationTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::DurationTypes);
  * ```
  */
 using DurationTypes =
@@ -225,7 +225,7 @@ using DurationTypes =
  * Example:
  * ```
  * // Invokes all typed fixture tests for all chrono types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::ChronoTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::ChronoTypes);
  * ```
  */
 using ChronoTypes = Concat<TimestampTypes, DurationTypes>;
@@ -237,7 +237,7 @@ using ChronoTypes = Concat<TimestampTypes, DurationTypes>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all string types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::StringTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::StringTypes);
  * ```
  */
 using StringTypes = cudf::test::Types<string_view>;
@@ -249,7 +249,7 @@ using StringTypes = cudf::test::Types<string_view>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all list types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::ListTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::ListTypes);
  * ```
  */
 using ListTypes = cudf::test::Types<list_view>;
@@ -261,10 +261,11 @@ using ListTypes = cudf::test::Types<list_view>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all fixed-width types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FixedPointTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::FixedPointTypes);
  * ```
  */
-using FixedPointTypes = cudf::test::Types<numeric::decimal32, numeric::decimal64>;
+using FixedPointTypes =
+  cudf::test::Types<numeric::decimal32, numeric::decimal64, numeric::decimal128>;
 
 /**
  * @brief Provides a list of all fixed-width element types for use in GTest
@@ -273,7 +274,7 @@ using FixedPointTypes = cudf::test::Types<numeric::decimal32, numeric::decimal64
  * Example:
  * ```
  * // Invokes all typed fixture tests for all fixed-width types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FixedWidthTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::FixedWidthTypes);
  * ```
  */
 using FixedWidthTypes = Concat<NumericTypes, ChronoTypes, FixedPointTypes>;
@@ -287,7 +288,7 @@ using FixedWidthTypes = Concat<NumericTypes, ChronoTypes, FixedPointTypes>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all fixed-width types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FixedWidthTypesWithoutFixedPoint);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::FixedWidthTypesWithoutFixedPoint);
  * ```
  */
 using FixedWidthTypesWithoutFixedPoint = Concat<NumericTypes, ChronoTypes>;
@@ -299,7 +300,7 @@ using FixedWidthTypesWithoutFixedPoint = Concat<NumericTypes, ChronoTypes>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all fixed-width types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::FixedWidthTypesWithoutChrono);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::FixedWidthTypesWithoutChrono);
  * ```
  */
 using FixedWidthTypesWithoutChrono = Concat<NumericTypes, FixedPointTypes>;
@@ -310,10 +311,22 @@ using FixedWidthTypesWithoutChrono = Concat<NumericTypes, FixedPointTypes>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all sortable types in libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::ComparableTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::ComparableTypes);
  * ```
  */
 using ComparableTypes = Concat<NumericTypes, ChronoTypes, StringTypes>;
+
+/**
+ * @brief Provides a list of all compound types for use in GTest typed tests.
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all compound types in libcudf
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::CompoundTypes);
+ * ```
+ */
+using CompoundTypes =
+  cudf::test::Types<cudf::string_view, cudf::dictionary32, cudf::list_view, cudf::struct_view>;
 
 /**
  * @brief Provides a list of all types supported in libcudf for use in a GTest
@@ -325,10 +338,10 @@ using ComparableTypes = Concat<NumericTypes, ChronoTypes, StringTypes>;
  * Example:
  * ```
  * // Invokes all typed fixture tests for all types supported by libcudf
- * TYPED_TEST_CASE(MyTypedFixture, cudf::test::AllTypes);
+ * TYPED_TEST_SUITE(MyTypedFixture, cudf::test::AllTypes);
  * ```
  */
-using AllTypes = Concat<NumericTypes, ChronoTypes>;
+using AllTypes = Concat<NumericTypes, ChronoTypes, FixedPointTypes>;
 
 /**
  * @brief `std::array` of all `cudf::type_id`s

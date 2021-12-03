@@ -33,7 +33,6 @@ from cudf._lib.cpp.types cimport (
     size_type,
 )
 from cudf._lib.scalar cimport DeviceScalar
-from cudf._lib.table cimport Table, table_view_from_table
 from cudf._lib.types cimport (
     underlying_type_t_null_order,
     underlying_type_t_order,
@@ -43,7 +42,7 @@ from cudf.core.dtypes import ListDtype
 
 from cudf._lib.cpp.lists.contains cimport contains
 from cudf._lib.cpp.lists.extract cimport extract_list_element
-from cudf._lib.utils cimport data_from_unique_ptr
+from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
 
 def count_elements(Column col):
@@ -62,7 +61,7 @@ def count_elements(Column col):
     return result
 
 
-def explode_outer(Table tbl, int explode_column_idx, bool ignore_index=False):
+def explode_outer(tbl, int explode_column_idx, bool ignore_index=False):
     cdef table_view c_table_view = table_view_from_table(tbl, ignore_index)
     cdef size_type c_explode_column_idx = explode_column_idx
 
@@ -163,7 +162,7 @@ def contains_scalar(Column col, object py_search_key):
     return result
 
 
-def concatenate_rows(Table tbl):
+def concatenate_rows(tbl):
     cdef unique_ptr[column] c_result
 
     cdef table_view c_table_view = table_view_from_table(tbl)

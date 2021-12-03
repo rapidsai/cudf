@@ -205,7 +205,7 @@ struct flatten_functor {
                   thrust::optional<int> parent_index)
   {
     // track branch depth as we reach this list and after we pass it
-    size_type const branch_depth_start = cur_branch_depth;
+    auto const branch_depth_start = cur_branch_depth;
     auto const is_list_inside_struct =
       parent_index && out[parent_index.value()].type().id() == type_id::STRUCT;
     if (is_list_inside_struct) {
@@ -468,7 +468,7 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
                                       rmm::mr::device_memory_resource* mr)
 {
   // no rows
-  if (t.num_rows() <= 0) { return cudf::make_empty_column(data_type{type_id::INT32}); }
+  if (t.num_rows() <= 0) { return cudf::make_empty_column(type_id::INT32); }
 
   // flatten the hierarchy and determine some information about it.
   std::vector<cudf::column_view> cols;

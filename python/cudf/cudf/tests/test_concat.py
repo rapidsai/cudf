@@ -229,7 +229,11 @@ def test_concat_multiindex_dataframe():
         pd.concat([pdg1, pdg2]),
         check_index_type=True,
     )
-    assert_eq(gd.concat([gdg1, gdg2], axis=1), pd.concat([pdg1, pdg2], axis=1))
+    assert_eq(
+        gd.concat([gdg1, gdg2], axis=1),
+        pd.concat([pdg1, pdg2], axis=1),
+        check_index_type=True,
+    )
 
 
 def test_concat_multiindex_series():
@@ -269,7 +273,11 @@ def test_concat_multiindex_dataframe_and_series():
     pdg2.name = "a"
     gdg1 = gd.from_pandas(pdg1)
     gdg2 = gd.from_pandas(pdg2)
-    assert_eq(gd.concat([gdg1, gdg2], axis=1), pd.concat([pdg1, pdg2], axis=1))
+    assert_eq(
+        gd.concat([gdg1, gdg2], axis=1),
+        pd.concat([pdg1, pdg2], axis=1),
+        check_index_type=True,
+    )
 
 
 def test_concat_multiindex_series_and_dataframe():
@@ -288,7 +296,11 @@ def test_concat_multiindex_series_and_dataframe():
     pdg1.name = "a"
     gdg1 = gd.from_pandas(pdg1)
     gdg2 = gd.from_pandas(pdg2)
-    assert_eq(gd.concat([gdg1, gdg2], axis=1), pd.concat([pdg1, pdg2], axis=1))
+    assert_eq(
+        gd.concat([gdg1, gdg2], axis=1),
+        pd.concat([pdg1, pdg2], axis=1),
+        check_index_type=True,
+    )
 
 
 @pytest.mark.parametrize("myindex", ["a", "b"])
@@ -328,7 +340,9 @@ def test_pandas_concat_compatibility_axis1():
     expect = pd.concat([pd1, pd2, pd3, pd4, pd5], axis=1)
     got = gd.concat([d1, d2, d3, d4, d5], axis=1)
 
-    assert_eq(got, expect)
+    assert_eq(
+        got, expect, check_index_type=True,
+    )
 
 
 @pytest.mark.parametrize("index", [[0, 1, 2], [2, 1, 0], [5, 9, 10]])
@@ -350,7 +364,7 @@ def test_pandas_concat_compatibility_axis1_overlap(index, names, data):
     ps2 = s2.to_pandas()
     got = gd.concat([s1, s2], axis=1)
     expect = pd.concat([ps1, ps2], axis=1)
-    assert_eq(got, expect)
+    assert_eq(got, expect, check_index_type=True)
 
 
 def test_pandas_concat_compatibility_axis1_eq_index():
@@ -562,7 +576,7 @@ def test_concat_empty_dataframes(df, other, ignore_index):
     if expected.shape != df.shape:
         for key, col in actual[actual.columns].iteritems():
             if is_categorical_dtype(col.dtype):
-                if expected[key].dtype != "category":
+                if not is_categorical_dtype(expected[key].dtype):
                     # TODO: Pandas bug:
                     # https://github.com/pandas-dev/pandas/issues/42840
                     expected[key] = expected[key].fillna("-1").astype("str")
@@ -640,10 +654,12 @@ def test_concat_dataframe_with_multiIndex(df1, df2):
     pdf1 = gdf1.to_pandas()
     pdf2 = gdf2.to_pandas()
 
-    expected = gd.concat([gdf1, gdf2], axis=1)
-    actual = pd.concat([pdf1, pdf2], axis=1)
+    actual = gd.concat([gdf1, gdf2], axis=1)
+    expected = pd.concat([pdf1, pdf2], axis=1)
 
-    assert_eq(expected, actual)
+    assert_eq(
+        expected, actual, check_index_type=True,
+    )
 
 
 @pytest.mark.parametrize(
@@ -761,18 +777,23 @@ def test_concat_join_axis_1_dup_error(objs):
 def test_concat_join_axis_1(objs, ignore_index, sort, join, axis):
     # no duplicate columns
     gpu_objs = [gd.from_pandas(o) for o in objs]
-
+    expected = pd.concat(
+        objs, sort=sort, join=join, ignore_index=ignore_index, axis=axis
+    )
+    actual = gd.concat(
+        gpu_objs, sort=sort, join=join, ignore_index=ignore_index, axis=axis,
+    )
+    # TODO: Remove special handling below
+    # after following bug from pandas is fixed:
+    # https://github.com/pandas-dev/pandas/issues/43584
     assert_eq(
-        pd.concat(
-            objs, sort=sort, join=join, ignore_index=ignore_index, axis=axis
-        ),
-        gd.concat(
-            gpu_objs,
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        ),
+        expected,
+        actual,
+        check_index_type=False
+        if sort
+        and isinstance(expected.index, pd.Int64Index)
+        and isinstance(actual.index, gd.RangeIndex)
+        else True,
     )
 
 
@@ -833,14 +854,23 @@ def test_concat_join_one_df(ignore_index, sort, join, axis):
     )
 
     gdf1 = gd.from_pandas(pdf1)
-
+    expected = pd.concat(
+        [pdf1], sort=sort, join=join, ignore_index=ignore_index, axis=axis
+    )
+    actual = gd.concat(
+        [gdf1], sort=sort, join=join, ignore_index=ignore_index, axis=axis
+    )
+    # TODO: Remove special handling below
+    # after following bug from pandas is fixed:
+    # https://github.com/pandas-dev/pandas/issues/43584
     assert_eq(
-        pd.concat(
-            [pdf1], sort=sort, join=join, ignore_index=ignore_index, axis=axis
-        ),
-        gd.concat(
-            [gdf1], sort=sort, join=join, ignore_index=ignore_index, axis=axis
-        ),
+        expected,
+        actual,
+        check_index_type=False
+        if sort
+        and isinstance(expected.index, pd.Int64Index)
+        and isinstance(actual.index, gd.RangeIndex)
+        else True,
     )
 
 
@@ -870,21 +900,34 @@ def test_concat_join_no_overlapping_columns(
 ):
     gdf1 = gd.from_pandas(pdf1)
     gdf2 = gd.from_pandas(pdf2)
+
+    expected = pd.concat(
+        [pdf1, pdf2],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
+    actual = gd.concat(
+        [gdf1, gdf2],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
+
+    # TODO: Remove special handling below
+    # after following bug from pandas is fixed:
+    # https://github.com/pandas-dev/pandas/issues/43584
     assert_eq(
-        pd.concat(
-            [pdf1, pdf2],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        ),
-        gd.concat(
-            [gdf1, gdf2],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        ),
+        expected,
+        actual,
+        check_index_type=False
+        if sort
+        and axis == 1
+        and isinstance(expected.index, pd.Int64Index)
+        and isinstance(actual.index, gd.RangeIndex)
+        else True,
     )
 
 
@@ -1013,22 +1056,24 @@ def test_concat_join_no_overlapping_columns_empty_df_basic(
     gdf6 = gd.from_pandas(pdf6)
     gdf_empty = gd.from_pandas(pdf_empty)
 
-    assert_eq(
-        pd.concat(
-            [pdf6, pdf_empty],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        ).reset_index(drop=True),
-        gd.concat(
-            [gdf6, gdf_empty],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        ),
+    expected = pd.concat(
+        [pdf6, pdf_empty],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
     )
+    actual = gd.concat(
+        [gdf6, gdf_empty],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
+    # TODO: change `check_index_type` to `True`
+    # after following bug from pandas is fixed:
+    # https://github.com/pandas-dev/pandas/issues/43584
+    assert_eq(expected, actual, check_index_type=False)
 
 
 @pytest.mark.parametrize("ignore_index", [True, False])
@@ -1046,21 +1091,32 @@ def test_concat_join_series(ignore_index, sort, join, axis):
     ps3 = s3.to_pandas()
     ps4 = s4.to_pandas()
 
+    expected = pd.concat(
+        [ps1, ps2, ps3, ps4],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
+    actual = gd.concat(
+        [s1, s2, s3, s4],
+        sort=sort,
+        join=join,
+        ignore_index=ignore_index,
+        axis=axis,
+    )
+
+    # TODO: Remove special handling below
+    # after following bug from pandas is fixed:
+    # https://github.com/pandas-dev/pandas/issues/43584
     assert_eq(
-        gd.concat(
-            [s1, s2, s3, s4],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        ),
-        pd.concat(
-            [ps1, ps2, ps3, ps4],
-            sort=sort,
-            join=join,
-            ignore_index=ignore_index,
-            axis=axis,
-        ),
+        expected,
+        actual,
+        check_index_type=False
+        if sort
+        and isinstance(expected.index, pd.Int64Index)
+        and isinstance(actual.index, gd.RangeIndex)
+        else True,
     )
 
 
@@ -1130,7 +1186,7 @@ def test_concat_join_empty_dataframes(
         if axis == 0:
             for key, col in actual[actual.columns].iteritems():
                 if is_categorical_dtype(col.dtype):
-                    if expected[key].dtype != "category":
+                    if not is_categorical_dtype(expected[key].dtype):
                         # TODO: Pandas bug:
                         # https://github.com/pandas-dev/pandas/issues/42840
                         expected[key] = (

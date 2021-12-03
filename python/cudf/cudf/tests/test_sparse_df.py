@@ -46,7 +46,7 @@ def test_fillna():
     masked_col = gar[8]
     sr = Series(data=masked_col.data)
     dense = sr.nans_to_nulls().fillna(123)
-    np.testing.assert_equal(123, dense.to_array())
+    np.testing.assert_equal(123, dense.to_numpy())
     assert len(dense) == len(sr)
     assert dense.null_count == 0
 
@@ -58,8 +58,8 @@ def test_to_dense_array():
     sr = Series.from_masked_array(data=data, mask=mask, null_count=3)
     assert sr.has_nulls
     assert sr.null_count != len(sr)
-    filled = sr.to_array(fillna="pandas")
-    dense = sr.to_array()
+    filled = sr.to_numpy(na_value=np.nan)
+    dense = sr.dropna().to_numpy()
     assert dense.size < filled.size
     assert filled.size == len(sr)
 

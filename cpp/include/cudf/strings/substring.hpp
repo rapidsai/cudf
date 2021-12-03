@@ -111,12 +111,12 @@ std::unique_ptr<column> slice_strings(
  * Returns a column of strings after searching for @p delimiter @p count number of
  * times in the source @p strings from left to right if @p count is positive or from
  * right to left if @p count is negative. If @p count is positive, it returns a substring
- * from the start of the source @p strings up until @p count occurrence of the @delimiter
+ * from the start of the source @p strings up until @p count occurrence of the @p delimiter
  * not including the @p delimiter. If @p count is negative, it returns a substring from
- * the start of the @p count occurrence of the @delimiter in the source @p strings past
+ * the start of the @p count occurrence of the @p delimiter in the source @p strings past
  * the delimiter until the end of the string.
  *
- * The search for @delimiter in @p strings is case sensitive.
+ * The search for @p delimiter in @p strings is case sensitive.
  * If the row value of @p strings is null, the row value in the output column will be null.
  * If the @p count is 0 or if @p delimiter is invalid or empty, every row in the output column
  * will be an empty string.
@@ -182,7 +182,8 @@ std::unique_ptr<column> slice_strings(
  * r =          ['nvidia.com',     null, '',               '',  '..goo',           'apache.org']
  * @endcode
  *
- * @throw cudf::logic_error if the number of rows in @p strings and @delimiter_strings do not match.
+ * @throw cudf::logic_error if the number of rows in @p strings and @p delimiter_strings do not
+ * match.
  *
  * @param strings Strings instance for this operation.
  * @param delimiter_strings UTF-8 encoded string for each row.

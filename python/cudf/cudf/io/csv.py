@@ -3,6 +3,7 @@
 from io import BytesIO, StringIO
 
 from nvtx import annotate
+from pyarrow.lib import NativeFile
 
 import cudf
 from cudf import _lib as libcudf
@@ -45,6 +46,7 @@ def read_csv(
     na_filter=True,
     prefix=None,
     index_col=None,
+    use_python_file_object=True,
     **kwargs,
 ):
     """{docstring}"""
@@ -57,20 +59,20 @@ def read_csv(
             "`read_csv` does not yet support reading multiple files"
         )
 
+    # Only need to pass byte_ranges to get_filepath_or_buffer
+    # if `use_python_file_object=False`
+    byte_ranges = None
+    if not use_python_file_object and byte_range:
+        byte_ranges = [byte_range]
+
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
         path_or_data=filepath_or_buffer,
         compression=compression,
-        iotypes=(BytesIO, StringIO),
-        byte_ranges=[byte_range] if byte_range else None,
-        clip_local_buffer=True if byte_range else False,
+        iotypes=(BytesIO, StringIO, NativeFile),
+        byte_ranges=byte_ranges,
+        use_python_file_object=use_python_file_object,
         **kwargs,
     )
-
-    # Adjust byte_range for clipped local buffers
-    use_byte_range = byte_range
-    if byte_range and isinstance(filepath_or_buffer, BytesIO):
-        if byte_range[1] == filepath_or_buffer.getbuffer().nbytes:
-            use_byte_range = (0, byte_range[1])
 
     if na_values is not None and is_scalar(na_values):
         na_values = [na_values]
@@ -99,7 +101,7 @@ def read_csv(
         true_values=true_values,
         false_values=false_values,
         nrows=nrows,
-        byte_range=use_byte_range,
+        byte_range=byte_range,
         skip_blank_lines=skip_blank_lines,
         parse_dates=parse_dates,
         comment=comment,

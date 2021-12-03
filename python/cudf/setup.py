@@ -32,7 +32,6 @@ import versioneer
 install_requires = [
     "numba>=0.53.1",
     "Cython>=0.29,<0.30",
-    "fastavro>=0.22.9",
     "fsspec>=0.6.0",
     "numpy",
     "pandas>=1.0,<1.4.0dev0",
@@ -49,6 +48,8 @@ extras_require = {
         "pytest-benchmark",
         "pytest-xdist",
         "hypothesis" "mimesis",
+        "fastavro>=0.22.9",
+        "python-snappy>=0.6.0",
         "pyorc",
         "msgpack",
         "transformers<=4.10.3",
@@ -208,7 +209,7 @@ extensions = [
             os.path.join(CUDF_ROOT, "_deps/dlpack-src/include"),
             os.path.join(
                 os.path.dirname(sysconfig.get_path("include")),
-                "libcudf/libcudacxx",
+                "rapids/libcudacxx",
             ),
             os.path.dirname(sysconfig.get_path("include")),
             np.get_include(),

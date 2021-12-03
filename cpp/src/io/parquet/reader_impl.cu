@@ -22,6 +22,8 @@
 #include "reader_impl.hpp"
 
 #include <io/comp/gpuinflate.h>
+#include <io/utilities/config_utils.hpp>
+#include <io/utilities/time_utils.cuh>
 
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/table.hpp>
@@ -181,24 +183,6 @@ type_id to_type_id(SchemaElement const& schema,
 }
 
 /**
- * @brief Function that translates cuDF time unit to Parquet clock frequency
- */
-constexpr int32_t to_clockrate(type_id timestamp_type_id)
-{
-  switch (timestamp_type_id) {
-    case type_id::DURATION_SECONDS: return 1;
-    case type_id::DURATION_MILLISECONDS: return 1000;
-    case type_id::DURATION_MICROSECONDS: return 1000000;
-    case type_id::DURATION_NANOSECONDS: return 1000000000;
-    case type_id::TIMESTAMP_SECONDS: return 1;
-    case type_id::TIMESTAMP_MILLISECONDS: return 1000;
-    case type_id::TIMESTAMP_MICROSECONDS: return 1000000;
-    case type_id::TIMESTAMP_NANOSECONDS: return 1000000000;
-    default: return 0;
-  }
-}
-
-/**
  * @brief Function that returns the required the number of bits to store a value
  */
 template <typename T = uint8_t>
@@ -207,6 +191,11 @@ T required_bits(uint32_t max_level)
   return static_cast<T>(CompactProtocolReader::NumRequiredBits(max_level));
 }
 
+/**
+ * @brief Converts cuDF units to Parquet units.
+ *
+ * @return A tuple of Parquet type width, Parquet clock rate and Parquet decimal type.
+ */
 std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
                                                      type_id timestamp_type_id,
                                                      parquet::Type physical,
@@ -227,7 +216,7 @@ std::tuple<int32_t, int32_t, int8_t> conversion_info(type_id column_type_id,
 
   int8_t converted_type = converted;
   if (converted_type == parquet::DECIMAL && column_type_id != type_id::FLOAT64 &&
-      column_type_id != type_id::DECIMAL32 && column_type_id != type_id::DECIMAL64) {
+      not cudf::is_fixed_point(column_type_id)) {
     converted_type = parquet::UNKNOWN;  // Not converting to float64 or decimal
   }
   return std::make_tuple(type_width, clock_rate, converted_type);
@@ -1166,9 +1155,6 @@ rmm::device_buffer reader::impl::decompress_page_data(
                                cudaMemcpyHostToDevice,
                                stream.value()));
 
-      auto env_use_nvcomp = std::getenv("LIBCUDF_USE_NVCOMP");
-      bool use_nvcomp     = env_use_nvcomp != nullptr ? std::atoi(env_use_nvcomp) : 0;
-
       switch (codec.compression_type) {
         case parquet::GZIP:
           CUDA_TRY(gpuinflate(inflate_in.device_ptr(start_pos),
@@ -1178,7 +1164,7 @@ rmm::device_buffer reader::impl::decompress_page_data(
                               stream))
           break;
         case parquet::SNAPPY:
-          if (use_nvcomp) {
+          if (nvcomp_integration::is_stable_enabled()) {
             snappy_decompress(inflate_in_view.subspan(start_pos, argc - start_pos),
                               inflate_out_view.subspan(start_pos, argc - start_pos),
                               codec.max_decompressed_size,

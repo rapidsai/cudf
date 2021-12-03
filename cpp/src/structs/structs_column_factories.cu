@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 
-#include <structs/utilities.hpp>
-
 #include <cudf/column/column_factories.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/types.hpp>
 #include <rmm/cuda_stream_view.hpp>
 

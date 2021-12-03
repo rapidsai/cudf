@@ -1,9 +1,13 @@
 # Copyright (c) 2019-2021, NVIDIA CORPORATION.
 
+import math
+import re
 import warnings
-from typing import Sequence, Union
+from typing import Sequence, Type, TypeVar, Union
 
+import cupy as cp
 import numpy as np
+import pandas as pd
 from pandas.core.tools.datetimes import _unit_map
 
 import cudf
@@ -23,6 +27,21 @@ _unit_dtype_map = {
     "h": "datetime64[s]",
     "s": "datetime64[s]",
     "D": "datetime64[s]",
+}
+
+_offset_alias_to_code = {
+    "W": "W",
+    "D": "D",
+    "H": "h",
+    "h": "h",
+    "T": "m",
+    "min": "m",
+    "s": "s",
+    "S": "s",
+    "U": "us",
+    "us": "us",
+    "N": "ns",
+    "ns": "ns",
 }
 
 
@@ -221,8 +240,8 @@ def to_datetime(
                 format=format,
             )
             return as_index(col, name=arg.name)
-        elif isinstance(arg, cudf.Series):
-            col = arg._column
+        elif isinstance(arg, (cudf.Series, pd.Series)):
+            col = column.as_column(arg)
             col = _process_col(
                 col=col,
                 unit=unit,
@@ -347,6 +366,9 @@ def get_units(value):
     return value
 
 
+_T = TypeVar("_T", bound="DateOffset")
+
+
 class DateOffset:
     """
     An object used for binary ops where calendrical arithmetic
@@ -422,7 +444,21 @@ class DateOffset:
         "years": "Y",
     }
 
-    _CODES_TO_UNITS = {v: k for k, v in _UNITS_TO_CODES.items()}
+    _CODES_TO_UNITS = {
+        "ns": "nanoseconds",
+        "us": "microseconds",
+        "ms": "milliseconds",
+        "L": "milliseconds",
+        "s": "seconds",
+        "m": "minutes",
+        "h": "hours",
+        "D": "days",
+        "W": "weeks",
+        "M": "months",
+        "Y": "years",
+    }
+
+    _FREQSTR_REGEX = re.compile("([0-9]*)([a-zA-Z]+)")
 
     def __init__(self, n=1, normalize=False, **kwds):
         if normalize:
@@ -536,7 +572,9 @@ class DateOffset:
             kwargs["seconds"] = seconds
         return kwargs
 
-    def _datetime_binop(self, datetime_col, op, reflect=False):
+    def _datetime_binop(
+        self, datetime_col, op, reflect=False
+    ) -> column.DatetimeColumn:
         if reflect and op == "sub":
             raise TypeError(
                 f"Can not subtract a {type(datetime_col).__name__}"
@@ -570,7 +608,7 @@ class DateOffset:
         return col
 
     @property
-    def _is_no_op(self):
+    def _is_no_op(self) -> bool:
         # some logic could be implemented here for more complex cases
         # such as +1 year, -12 months
         return all([i == 0 for i in self._kwds.values()])
@@ -591,27 +629,37 @@ class DateOffset:
         return repr_str
 
     @classmethod
-    def _from_freqstr(cls, freqstr):
+    def _from_freqstr(cls: Type[_T], freqstr: str) -> _T:
         """
         Parse a string and return a DateOffset object
         expects strings of the form 3D, 25W, 10ms, 42ns, etc.
         """
-        numeric_part = ""
-        freq_part = ""
+        match = cls._FREQSTR_REGEX.match(freqstr)
 
-        for x in freqstr:
-            if x.isdigit():
-                numeric_part += x
-            else:
-                freq_part += x
+        if match is None:
+            raise ValueError(f"Invalid frequency string: {freqstr}")
 
-        if (
-            freq_part not in cls._CODES_TO_UNITS
-            or not numeric_part + freq_part == freqstr
-        ):
+        numeric_part = match.group(1)
+        if numeric_part == "":
+            numeric_part = "1"
+        freq_part = match.group(2)
+
+        if freq_part not in cls._CODES_TO_UNITS:
             raise ValueError(f"Cannot interpret frequency str: {freqstr}")
 
         return cls(**{cls._CODES_TO_UNITS[freq_part]: int(numeric_part)})
+
+    def _maybe_as_fast_pandas_offset(self):
+        if (
+            len(self.kwds) == 1
+            and _has_fixed_frequency(self)
+            and not _has_non_fixed_frequency(self)
+        ):
+            # Pandas computation between `n*offsets.Minute()` is faster than
+            # `n*DateOffset`. If only single offset unit is in use, we return
+            # the base offset for faster binary ops.
+            return pd.tseries.frequencies.to_offset(pd.Timedelta(**self.kwds))
+        return pd.DateOffset(**self.kwds, n=1)
 
 
 def _isin_datetimelike(
@@ -652,3 +700,293 @@ def _isin_datetimelike(
 
     res = lhs._obtain_isin_result(rhs)
     return res
+
+
+def date_range(
+    start=None,
+    end=None,
+    periods=None,
+    freq=None,
+    tz=None,
+    normalize=False,
+    name=None,
+    closed=None,
+):
+    """Return a fixed frequency DatetimeIndex.
+
+    Returns the range of equally spaced time points (where the difference
+    between any two adjacent points is specified by the given frequency)
+    such that they all satisfy `start` <[=] x <[=] `end`, where the first one
+    and the last one are, resp., the first and last time points in that range
+    that are valid for `freq`.
+
+    Parameters
+    ----------
+    start : str or datetime-like, optional
+        Left bound for generating dates.
+
+    end : str or datetime-like, optional
+        Right bound for generating dates.
+
+    periods : int, optional
+        Number of periods to generate.
+
+    freq : str or DateOffset
+        Frequencies to generate the datetime series. Mixed fixed-frequency and
+        non-fixed frequency offset is unsupported. See notes for detail.
+        Supported offset alias: ``D``, ``h``, ``H``, ``T``, ``min``, ``S``,
+        ``U``, ``us``, ``N``, ``ns``.
+
+    tz : str or tzinfo, optional
+        Not Supported
+
+    normalize : bool, default False
+        Not Supported
+
+    name : str, default None
+        Name of the resulting DatetimeIndex
+
+    closed : {None, 'left', 'right'}, optional
+        Not Supported
+
+    Returns
+    -------
+    DatetimeIndex
+
+    Notes
+    -----
+    Of the four parameters `start`, `end`, `periods`, and `freq`, exactly three
+    must be specified. If `freq` is omitted, the resulting DatetimeIndex will
+    have periods linearly spaced elements between start and end (closed on both
+    sides).
+
+    cudf supports `freq` specified with either fixed-frequency offset
+    (such as weeks, days, hours, minutes...) or non-fixed frequency offset
+    (such as years and months). Specifying `freq` with a mixed fixed and
+    non-fixed frequency is currently unsupported. For example:
+
+    >>> cudf.date_range(
+    ...     start='2021-08-23 08:00:00',
+    ...     freq=cudf.DateOffset(months=2, days=5),
+    ...     periods=5)
+    ...
+    NotImplementedError: Mixing fixed and non-fixed frequency offset is
+    unsupported.
+
+    Examples
+    --------
+    >>> cudf.date_range(
+    ...     start='2021-08-23 08:00:00',
+    ...     freq=cudf.DateOffset(years=1, months=2),
+    ...     periods=5)
+    DatetimeIndex(['2021-08-23 08:00:00', '2022-10-23 08:00:00',
+                '2023-12-23 08:00:00', '2025-02-23 08:00:00',
+                '2026-04-23 08:00:00'],
+                dtype='datetime64[ns]')
+
+    """
+    if tz is not None:
+        raise NotImplementedError("tz is currently unsupported.")
+
+    if closed is not None:
+        raise NotImplementedError("closed is currently unsupported.")
+
+    if (start, end, periods, freq).count(None) > 1:
+        raise ValueError(
+            "Of the four parameters: start, end, periods, and freq, exactly "
+            "three must be specified"
+        )
+
+    dtype = np.dtype("<M8[ns]")
+
+    if freq is None:
+        # `start`, `end`, `periods` is specified, we treat the timestamps as
+        # integers and divide the number range evenly with `periods` elements.
+        start = cudf.Scalar(start, dtype=dtype).value.astype("int64")
+        end = cudf.Scalar(end, dtype=dtype).value.astype("int64")
+        arr = cp.linspace(start=start, stop=end, num=periods)
+        result = cudf.core.column.as_column(arr).astype("datetime64[ns]")
+        return cudf.DatetimeIndex._from_data({name: result})
+
+    # The code logic below assumes `freq` is defined. It is first normalized
+    # into `DateOffset` for further computation with timestamps.
+
+    if isinstance(freq, DateOffset):
+        offset = freq
+    elif isinstance(freq, str):
+        # Map pandas `offset alias` into cudf DateOffset `CODE`, only
+        # fixed-frequency, non-anchored offset aliases are supported.
+        mo = re.fullmatch(
+            rf'(-)*(\d*)({"|".join(_offset_alias_to_code.keys())})', freq
+        )
+        if mo is None:
+            raise ValueError(
+                f"Unrecognized or unsupported offset alias {freq}."
+            )
+
+        sign, n, offset_alias = mo.groups()
+        code = _offset_alias_to_code[offset_alias]
+
+        freq = "".join([n, code])
+        offset = DateOffset._from_freqstr(freq)
+        if sign:
+            offset.kwds.update({s: -i for s, i in offset.kwds.items()})
+    else:
+        raise TypeError("`freq` must be a `str` or cudf.DateOffset object.")
+
+    if _has_mixed_freqeuency(offset):
+        raise NotImplementedError(
+            "Mixing fixed and non-fixed frequency offset is unsupported."
+        )
+
+    # Depending on different combinations of `start`, `end`, `offset`,
+    # `periods`, the following logic makes sure before computing the sequence,
+    # `start`, `periods`, `offset` is defined
+
+    _periods_not_specified = False
+
+    if start is None:
+        end = cudf.Scalar(end, dtype=dtype)
+        start = cudf.Scalar(
+            pd.Timestamp(end.value)
+            - (periods - 1) * offset._maybe_as_fast_pandas_offset(),
+            dtype=dtype,
+        )
+    elif end is None:
+        start = cudf.Scalar(start, dtype=dtype)
+    elif periods is None:
+        # When `periods` is unspecified, its upper bound estimated by
+        # dividing the number of nanoseconds between two timestamps with
+        # the lower bound of `freq` in nanoseconds. While the final result
+        # may contain extra elements that exceeds `end`, they are trimmed
+        # as a post processing step. [1]
+        _periods_not_specified = True
+        start = cudf.Scalar(start, dtype=dtype)
+        end = cudf.Scalar(end, dtype=dtype)
+        _is_increment_sequence = end >= start
+
+        periods = math.ceil(
+            int(end - start) / _offset_to_nanoseconds_lower_bound(offset)
+        )
+
+        if periods < 0:
+            # Mismatched sign between (end-start) and offset, return empty
+            # column
+            periods = 0
+        elif periods == 0:
+            # end == start, return exactly 1 timestamp (start)
+            periods = 1
+
+    # We compute `end_estim` (the estimated upper bound of the date
+    # range) below, but don't always use it.  We do this to ensure
+    # that the appropriate OverflowError is raised by Pandas in case
+    # of overflow.
+    # FIXME: when `end_estim` is out of bound, but the actual `end` is not,
+    # we shouldn't raise but compute the sequence as is. The trailing overflow
+    # part should get trimmed at the end.
+    end_estim = (
+        pd.Timestamp(start.value)
+        + periods * offset._maybe_as_fast_pandas_offset()
+    ).to_datetime64()
+
+    if "months" in offset.kwds or "years" in offset.kwds:
+        # If `offset` is non-fixed frequency, resort to libcudf.
+        res = libcudf.datetime.date_range(start.device_value, periods, offset)
+        if _periods_not_specified:
+            # As mentioned in [1], this is a post processing step to trim extra
+            # elements when `periods` is an estimated value. Only offset
+            # specified with non fixed frequencies requires trimming.
+            res = res[
+                (res <= end) if _is_increment_sequence else (res <= start)
+            ]
+    else:
+        # If `offset` is fixed frequency, we generate a range of
+        # treating `start`, `stop` and `step` as ints:
+        stop = end_estim.astype("int64")
+        start = start.value.astype("int64")
+        step = int(_offset_to_nanoseconds_lower_bound(offset))
+        arr = cp.arange(start=start, stop=stop, step=step)
+        res = cudf.core.column.as_column(arr).astype("datetime64[ns]")
+
+    return cudf.DatetimeIndex._from_data({name: res})
+
+
+def _has_fixed_frequency(freq: DateOffset) -> bool:
+    """Utility to determine if `freq` contains fixed frequency offset
+    """
+    fixed_frequencies = {
+        "weeks",
+        "days",
+        "hours",
+        "minutes",
+        "seconds",
+        "milliseconds",
+        "microseconds",
+        "nanoseconds",
+    }
+
+    return len(freq.kwds.keys() & fixed_frequencies) > 0
+
+
+def _has_non_fixed_frequency(freq: DateOffset) -> bool:
+    """Utility to determine if `freq` contains non-fixed frequency offset
+    """
+    non_fixed_frequencies = {"years", "months"}
+    return len(freq.kwds.keys() & non_fixed_frequencies) > 0
+
+
+def _has_mixed_freqeuency(freq: DateOffset) -> bool:
+    """Utility to determine if `freq` contains mixed fixed and non-fixed
+    frequency offset. e.g. {months=1, days=5}
+    """
+
+    return _has_fixed_frequency(freq) and _has_non_fixed_frequency(freq)
+
+
+def _offset_to_nanoseconds_lower_bound(offset: DateOffset) -> int:
+    """Given a DateOffset, which can consist of either fixed frequency or
+    non-fixed frequency offset, convert to the smallest possible fixed
+    frequency offset based in nanoseconds.
+
+    Specifically, the smallest fixed frequency conversion for {months=1}
+    is 28 * nano_seconds_per_day, because 1 month contains at least 28 days.
+    Similarly, the smallest fixed frequency conversion for {year=1} is
+    365 * nano_seconds_per_day.
+
+    This utility is used to compute the upper bound of the count of timestamps
+    given a range of datetime and an offset.
+    """
+    nanoseconds_per_day = 24 * 60 * 60 * 1e9
+    kwds = offset.kwds
+    return (
+        kwds.get("years", 0) * (365 * nanoseconds_per_day)
+        + kwds.get("months", 0) * (28 * nanoseconds_per_day)
+        + kwds.get("weeks", 0) * (7 * nanoseconds_per_day)
+        + kwds.get("days", 0) * nanoseconds_per_day
+        + kwds.get("hours", 0) * 3600 * 1e9
+        + kwds.get("minutes", 0) * 60 * 1e9
+        + kwds.get("seconds", 0) * 1e9
+        + kwds.get("milliseconds", 0) * 1e6
+        + kwds.get("microseconds", 0) * 1e3
+        + kwds.get("nanoseconds", 0)
+    )
+
+
+def _to_iso_calendar(arg):
+    formats = ["%G", "%V", "%u"]
+    if not isinstance(arg, (cudf.Index, cudf.core.series.DatetimeProperties)):
+        raise AttributeError(
+            "Can only use .isocalendar accessor with series or index"
+        )
+    if isinstance(arg, cudf.Index):
+        iso_params = [
+            arg._column.as_string_column(arg._values.dtype, fmt)
+            for fmt in formats
+        ]
+        index = arg._column
+    elif isinstance(arg.series, cudf.Series):
+        iso_params = [arg.strftime(fmt) for fmt in formats]
+        index = arg.series.index
+
+    data = dict(zip(["year", "week", "day"], iso_params))
+    return cudf.DataFrame(data, index=index, dtype=np.int32)

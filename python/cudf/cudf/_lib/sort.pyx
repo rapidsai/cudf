@@ -23,20 +23,19 @@ from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.types cimport null_order, null_policy, order
 from cudf._lib.sort cimport underlying_type_t_rank_method
-from cudf._lib.table cimport Table, table_view_from_table
-from cudf._lib.utils cimport data_from_unique_ptr
+from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
 
 def is_sorted(
-    Table source_table, object ascending=None, object null_position=None
+    source_table, object ascending=None, object null_position=None
 ):
     """
     Checks whether the rows of a `table` are sorted in lexicographical order.
 
     Parameters
     ----------
-    source_table : Table
-        Table whose columns are to be checked for sort order
+    source_table : Frame
+        Frame whose columns are to be checked for sort order
     ascending : None or list-like of booleans
         None or list-like of boolean values indicating expected sort order of
         each column. If list-like, size of list-like must be len(columns). If
@@ -114,7 +113,7 @@ def is_sorted(
     return c_result
 
 
-def order_by(Table source_table, object ascending, bool na_position):
+def order_by(source_table, object ascending, str na_position):
     """
     Sorting the table ascending/descending
 
@@ -124,33 +123,27 @@ def order_by(Table source_table, object ascending, bool na_position):
     ascending : list of boolean values which correspond to each column
                 in source_table signifying order of each column
                 True - Ascending and False - Descending
-    na_position : whether null should be considered larget or smallest value
-                  0 - largest and 1 - smallest
-
+    na_position : whether null value should show up at the "first" or "last"
+                position of **all** sorted column.
     """
-
     cdef table_view source_table_view = table_view_from_table(
         source_table, ignore_index=True
     )
     cdef vector[order] column_order
     column_order.reserve(len(ascending))
-    cdef null_order pred = (
-        null_order.BEFORE
-        if na_position == 1
-        else null_order.AFTER
-    )
-    cdef vector[null_order] null_precedence = (
-        vector[null_order](
-            source_table._num_columns,
-            pred
-        )
-    )
+    cdef vector[null_order] null_precedence
+    null_precedence.reserve(len(ascending))
 
     for i in ascending:
         if i is True:
             column_order.push_back(order.ASCENDING)
         else:
             column_order.push_back(order.DESCENDING)
+
+        if i ^ (na_position == "first"):
+            null_precedence.push_back(null_order.AFTER)
+        else:
+            null_precedence.push_back(null_order.BEFORE)
 
     cdef unique_ptr[column] c_result
     with nogil:
@@ -161,14 +154,14 @@ def order_by(Table source_table, object ascending, bool na_position):
     return Column.from_unique_ptr(move(c_result))
 
 
-def digitize(Table source_values_table, Table bins, bool right=False):
+def digitize(source_values_table, bins, bool right=False):
     """
     Return the indices of the bins to which each value in source_table belongs.
 
     Parameters
     ----------
     source_table : Input table to be binned.
-    bins : Table containing columns of bins
+    bins : Frame containing columns of bins
     right : Indicating whether the intervals include the
             right or the left bin edge.
     """
@@ -219,7 +212,7 @@ class RankMethod(IntEnum):
     DENSE = < underlying_type_t_rank_method > rank_method.DENSE
 
 
-def rank_columns(Table source_table, object method, str na_option,
+def rank_columns(source_table, object method, str na_option,
                  bool ascending, bool pct
                  ):
     """

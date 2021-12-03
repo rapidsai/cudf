@@ -31,7 +31,7 @@ export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 
 # Dask & Distributed git tag
-export DASK_DISTRIBUTED_GIT_TAG='2021.09.1'
+export DASK_DISTRIBUTED_GIT_TAG='2021.11.2'
 
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
@@ -83,7 +83,7 @@ gpuci_mamba_retry install -y \
                   "rapids-notebook-env=$MINOR_VERSION.*" \
                   "dask-cuda=${MINOR_VERSION}" \
                   "rmm=$MINOR_VERSION.*" \
-                  "ucx-py=0.22.*"
+                  "ucx-py=0.23.*"
 
 # https://docs.rapids.ai/maintainers/depmgmt/
 # gpuci_mamba_retry remove --force rapids-build-env rapids-notebook-env

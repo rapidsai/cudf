@@ -401,7 +401,7 @@ struct column_gatherer_impl<dictionary32> {
   {
     dictionary_column_view dictionary(source_column);
     auto output_count = std::distance(gather_map_begin, gather_map_end);
-    if (output_count == 0) return make_empty_column(data_type{type_id::DICTIONARY32});
+    if (output_count == 0) return make_empty_column(type_id::DICTIONARY32);
     // The gather could cause some keys to be abandoned -- no indices point to them.
     // In this case, we could do further work to remove the abandoned keys and
     // reshuffle the indices values.
@@ -640,8 +640,8 @@ void gather_bitmask(table_view const& source,
  * use `DONT_CHECK` when they are certain that the gather_map contains only valid indices for
  * better performance. In case there are out-of-bound indices in the gather map, the behavior
  * is undefined. Defaults to `DONT_CHECK`.
- * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @param[in] stream CUDA stream used for device memory operations and kernel launches.
+ * @param[in] mr Device memory resource used to allocate the returned table's device memory
  * @return cudf::table Result of the gather
  */
 template <typename MapIterator>

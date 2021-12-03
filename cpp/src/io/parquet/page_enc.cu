@@ -712,6 +712,13 @@ static __device__ void PlainBoolEncode(page_enc_state_s* s,
   }
 }
 
+/**
+ * @brief Determines the difference between the Proleptic Gregorian Calendar epoch (1970-01-01
+ * 00:00:00 UTC) and the Julian date epoch (-4713-11-24 12:00:00 UTC).
+ *
+ * @return The difference between two epochs in `cuda::std::chrono::duration` format with a period
+ * of hours.
+ */
 constexpr auto julian_calendar_epoch_diff()
 {
   using namespace cuda::std::chrono;
@@ -720,22 +727,21 @@ constexpr auto julian_calendar_epoch_diff()
 }
 
 /**
- * @brief Converts a sys_time<nanoseconds> into a pair with nanoseconds since midnight and number of
- * Julian days. Does not deal with time zones. Used by INT96 code.
+ * @brief Converts a timestamp_ns into a pair with nanoseconds since midnight and number of Julian
+ * days. Does not deal with time zones. Used by INT96 code.
  *
  * @param ns number of nanoseconds since epoch
  * @return std::pair<nanoseconds,days> where nanoseconds is the number of nanoseconds
  * elapsed in the day and days is the number of days from Julian epoch.
  */
-static __device__ std::pair<cuda::std::chrono::nanoseconds, cuda::std::chrono::days>
-convert_nanoseconds(cuda::std::chrono::sys_time<cuda::std::chrono::nanoseconds> const ns)
+static __device__ std::pair<duration_ns, duration_D> convert_nanoseconds(timestamp_ns const ns)
 {
   using namespace cuda::std::chrono;
   auto const nanosecond_ticks = ns.time_since_epoch();
   auto const gregorian_days   = floor<days>(nanosecond_ticks);
   auto const julian_days      = gregorian_days + ceil<days>(julian_calendar_epoch_diff());
 
-  auto const last_day_ticks = nanosecond_ticks - duration_cast<nanoseconds>(gregorian_days);
+  auto const last_day_ticks = nanosecond_ticks - gregorian_days;
   return {last_day_ticks, julian_days};
 }
 
@@ -1038,19 +1044,17 @@ __global__ void __launch_bounds__(128, 8)
             }
 
             auto const ret = convert_nanoseconds([&]() {
-              using namespace cuda::std::chrono;
-
               switch (s->col.leaf_column->type().id()) {
                 case type_id::TIMESTAMP_SECONDS:
                 case type_id::TIMESTAMP_MILLISECONDS: {
-                  return sys_time<nanoseconds>{milliseconds{v}};
+                  return timestamp_ns{duration_ms{v}};
                 } break;
                 case type_id::TIMESTAMP_MICROSECONDS:
                 case type_id::TIMESTAMP_NANOSECONDS: {
-                  return sys_time<nanoseconds>{microseconds{v}};
+                  return timestamp_ns{duration_us{v}};
                 } break;
               }
-              return sys_time<nanoseconds>{microseconds{0}};
+              return timestamp_ns{duration_ns{0}};
             }());
 
             // the 12 bytes of fixed length data.
@@ -1591,7 +1595,7 @@ struct def_level_fn {
  *
  * 4. LLSLSSi = L   L   SL   SSi
  *              - | - | -- | ---
-```
+ * ```
  */
 dremel_data get_dremel_data(column_view h_col,
                             // TODO(cp): use device_span once it is converted to a single hd_vec

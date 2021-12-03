@@ -182,7 +182,7 @@ std::unique_ptr<table> partition(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
   auto strings_count = strings.size();
   if (strings_count == 0) return std::make_unique<table>(std::vector<std::unique_ptr<column>>());
   auto strings_column = column_device_view::create(strings.parent(), stream);
@@ -210,7 +210,7 @@ std::unique_ptr<table> rpartition(
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
-  CUDF_EXPECTS(delimiter.is_valid(), "Parameter delimiter must be valid");
+  CUDF_EXPECTS(delimiter.is_valid(stream), "Parameter delimiter must be valid");
   auto strings_count = strings.size();
   if (strings_count == 0) return std::make_unique<table>(std::vector<std::unique_ptr<column>>());
   auto strings_column = column_device_view::create(strings.parent(), stream);

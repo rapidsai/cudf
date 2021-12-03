@@ -4,6 +4,7 @@
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set py_version=environ.get('CONDA_PY', 36) %}
 {% set cuda_version='.'.join(environ.get('CUDA', '10.1').split('.')[:2]) %}
+{% set cuda_major=cuda_version.split('.')[0] %}
 
 package:
   name: dask-cudf
@@ -14,7 +15,7 @@ source:
 
 build:
   number: {{ GIT_DESCRIBE_NUMBER }}
-  string: py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+  string: cuda_{{ cuda_major }}_py{{ py_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
     - VERSION_SUFFIX
     - PARALLEL_LEVEL
@@ -26,13 +27,15 @@ requirements:
   host:
     - python
     - cudf {{ version }}
-    - dask=2021.09.1
-    - distributed=2021.09.1
+    - dask>=2021.11.1,<=2021.11.2
+    - distributed>=2021.11.1,<=2021.11.2
+    - cudatoolkit {{ cuda_version }}
   run:
     - python
     - cudf {{ version }}
-    - dask=2021.09.1
-    - distributed=2021.09.1
+    - dask>=2021.11.1,<=2021.11.2
+    - distributed>=2021.11.1,<=2021.11.2
+    - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
 
 test:                                   # [linux64]
   requires:                             # [linux64]

@@ -82,7 +82,7 @@ def test_string_export(ps_gs):
     assert_eq(expect, got)
 
     expect = np.array(ps)
-    got = gs.to_array()
+    got = gs.to_numpy()
     assert_eq(expect, got)
 
     expect = pa.Array.from_pandas(ps)
@@ -183,7 +183,19 @@ def test_string_astype(dtype):
     ):
         data = ["1", "2", "3", "4", "5"]
     elif dtype.startswith("float"):
-        data = ["1.0", "2.0", "3.0", "4.0", "5.0"]
+        data = [
+            "1.0",
+            "2.0",
+            "3.0",
+            "4.0",
+            None,
+            "5.0",
+            "nan",
+            "-INF",
+            "NaN",
+            "inF",
+            "NAn",
+        ]
     elif dtype.startswith("bool"):
         data = ["True", "False", "True", "False", "False"]
     elif dtype.startswith("datetime64"):
@@ -834,12 +846,19 @@ def test_string_extract(ps_gs, pat, expand, flags, flags_raise):
         ("FGHI", False),
     ],
 )
-@pytest.mark.parametrize("flags,flags_raise", [(0, 0), (1, 1)])
+@pytest.mark.parametrize(
+    "flags,flags_raise",
+    [(0, 0), (re.MULTILINE | re.DOTALL, 0), (re.I, 1), (re.I | re.DOTALL, 1)],
+)
 @pytest.mark.parametrize("na,na_raise", [(np.nan, 0), (None, 1), ("", 1)])
 def test_string_contains(ps_gs, pat, regex, flags, flags_raise, na, na_raise):
     ps, gs = ps_gs
 
-    expectation = raise_builder([flags_raise, na_raise], NotImplementedError)
+    expectation = does_not_raise()
+    if flags_raise:
+        expectation = pytest.raises(ValueError)
+    if na_raise:
+        expectation = pytest.raises(NotImplementedError)
 
     with expectation:
         expect = ps.str.contains(pat, flags=flags, na=na, regex=regex)
@@ -873,7 +892,7 @@ def test_string_repeat(data, repeats):
     assert_eq(expect, got)
 
 
-# Pandas isn't respect the `n` parameter so ignoring it in test parameters
+# Pandas doesn't respect the `n` parameter so ignoring it in test parameters
 @pytest.mark.parametrize(
     "pat,regex",
     [("a", False), ("f", False), (r"[a-z]", True), (r"[A-Z]", True)],
@@ -1386,6 +1405,26 @@ def test_string_char_case(case_op, data):
     assert_eq(gs.str.isempty(), ps == "")
 
 
+def test_string_is_title():
+    data = [
+        "leopard",
+        "Golden Eagle",
+        "SNAKE",
+        "",
+        "!A",
+        "hello World",
+        "A B C",
+        "#",
+        "AƻB",
+        "Ⓑⓖ",
+        "Art of War",
+    ]
+    gs = cudf.Series(data)
+    ps = pd.Series(data)
+
+    assert_eq(gs.str.istitle(), ps.str.istitle())
+
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -1708,15 +1747,22 @@ def test_string_wrap(data, width):
         ["23", "³", "⅕", ""],
         [" ", "\t\r\n ", ""],
         ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
-        ["line to be wrapped", "another line to be wrapped"],
+        ["line\nto be wrapped", "another\nline\nto be wrapped"],
     ],
 )
-@pytest.mark.parametrize("pat", ["a", " ", "\t", "another", "0", r"\$"])
-def test_string_count(data, pat):
+@pytest.mark.parametrize(
+    "pat", ["a", " ", "\t", "another", "0", r"\$", "^line$", "line.*be"]
+)
+@pytest.mark.parametrize("flags", [0, re.MULTILINE, re.DOTALL])
+def test_string_count(data, pat, flags):
     gs = cudf.Series(data)
     ps = pd.Series(data)
 
-    assert_eq(gs.str.count(pat=pat), ps.str.count(pat=pat), check_dtype=False)
+    assert_eq(
+        gs.str.count(pat=pat, flags=flags),
+        ps.str.count(pat=pat, flags=flags),
+        check_dtype=False,
+    )
     assert_eq(as_index(gs).str.count(pat=pat), pd.Index(ps).str.count(pat=pat))
 
 
@@ -1765,6 +1811,7 @@ def test_string_replace_multi():
         "([a-z])-([a-zé])",
         "([a-z])-([a-z])",
         "([a-z])-([a-zé])",
+        re.compile("([A-Z])(\\d)"),
     ],
 )
 @pytest.mark.parametrize(
@@ -2069,6 +2116,32 @@ def test_string_contains_multi(data, sub, expect):
     got = gs.str.contains(sub)
     expect = cudf.Series(expect)
     assert_eq(expect, got, check_dtype=False)
+
+
+# Pandas does not allow 'case' or 'flags' if 'pat' is re.Pattern
+# This covers contains, match, count, and replace
+@pytest.mark.parametrize(
+    "pat", [re.compile("[n-z]"), re.compile("[A-Z]"), re.compile("de"), "A"],
+)
+@pytest.mark.parametrize("repl", ["xyz", "", " "])
+def test_string_compiled_re(ps_gs, pat, repl):
+    ps, gs = ps_gs
+
+    expect = ps.str.contains(pat, regex=True)
+    got = gs.str.contains(pat, regex=True)
+    assert_eq(expect, got)
+
+    expect = ps.str.match(pat)
+    got = gs.str.match(pat)
+    assert_eq(expect, got)
+
+    expect = ps.str.count(pat)
+    got = gs.str.count(pat)
+    assert_eq(expect, got, check_dtype=False)
+
+    expect = ps.str.replace(pat, repl, regex=True)
+    got = gs.str.replace(pat, repl, regex=True)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(

@@ -68,7 +68,7 @@ struct parse_options {
   cudf::detail::optional_trie trie_na;
   bool multi_delimiter;
 
-  parse_options_view view()
+  parse_options_view view() const
   {
     return {delimiter,
             terminator,
@@ -159,6 +159,7 @@ constexpr bool is_infinity(char const* begin, char const* end)
  * @param begin Pointer to the first element of the string
  * @param end Pointer to the first element after the string
  * @param opts The global parsing behavior options
+ * @param error_result Value to return on parse error
  * @tparam base Base (radix) to use for conversion
  *
  * @return The parsed and converted value
@@ -390,8 +391,8 @@ __device__ __inline__ cudf::size_type* infer_integral_field_counter(char const* 
  * @return cudf::size_type total number of occurrences
  */
 template <class T>
-cudf::size_type find_all_from_set(const rmm::device_buffer& d_data,
-                                  const std::vector<char>& keys,
+cudf::size_type find_all_from_set(device_span<char const> data,
+                                  std::vector<char> const& keys,
                                   uint64_t result_offset,
                                   T* positions,
                                   rmm::cuda_stream_view stream);
@@ -414,8 +415,7 @@ cudf::size_type find_all_from_set(const rmm::device_buffer& d_data,
  * @return cudf::size_type total number of occurrences
  */
 template <class T>
-cudf::size_type find_all_from_set(const char* h_data,
-                                  size_t h_size,
+cudf::size_type find_all_from_set(host_span<char const> data,
                                   const std::vector<char>& keys,
                                   uint64_t result_offset,
                                   T* positions,
@@ -431,8 +431,8 @@ cudf::size_type find_all_from_set(const char* h_data,
  *
  * @return cudf::size_type total number of occurrences
  */
-cudf::size_type count_all_from_set(const rmm::device_buffer& d_data,
-                                   const std::vector<char>& keys,
+cudf::size_type count_all_from_set(device_span<char const> data,
+                                   std::vector<char> const& keys,
                                    rmm::cuda_stream_view stream);
 
 /**
@@ -449,8 +449,7 @@ cudf::size_type count_all_from_set(const rmm::device_buffer& d_data,
  *
  * @return cudf::size_type total number of occurrences
  */
-cudf::size_type count_all_from_set(const char* h_data,
-                                   size_t h_size,
+cudf::size_type count_all_from_set(host_span<char const> data,
                                    const std::vector<char>& keys,
                                    rmm::cuda_stream_view stream);
 
@@ -499,7 +498,7 @@ __inline__ __device__ std::pair<char const*, char const*> trim_whitespaces_quote
  * @brief Excludes the prefix from the input range if the string starts with the prefix.
  *
  * @tparam N length on the prefix, plus one
- * @param begin[in, out] Pointer to the first element of the string
+ * @param[in, out] begin Pointer to the first element of the string
  * @param end Pointer to the first element after the string
  * @param prefix String we're searching for at the start of the input range
  */

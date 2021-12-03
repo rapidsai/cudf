@@ -285,25 +285,25 @@ def test_series_append_existing_buffers():
     a2 = cudf.Series(np.arange(5))
     gs = gs.append(a2)
     assert len(gs) == 15
-    np.testing.assert_equal(gs.to_array(), np.hstack([a1, a2.to_array()]))
+    np.testing.assert_equal(gs.to_numpy(), np.hstack([a1, a2.to_numpy()]))
 
     # Ensure appending to previous buffer
     a3 = cudf.Series(np.arange(3))
     gs = gs.append(a3)
     assert len(gs) == 18
-    a4 = np.hstack([a1, a2.to_array(), a3.to_array()])
-    np.testing.assert_equal(gs.to_array(), a4)
+    a4 = np.hstack([a1, a2.to_numpy(), a3.to_numpy()])
+    np.testing.assert_equal(gs.to_numpy(), a4)
 
     # Appending different dtype
     a5 = cudf.Series(np.array([1, 2, 3], dtype=np.int32))
     a6 = cudf.Series(np.array([4.5, 5.5, 6.5], dtype=np.float64))
     gs = a5.append(a6)
     np.testing.assert_equal(
-        gs.to_array(), np.hstack([a5.to_array(), a6.to_array()])
+        gs.to_numpy(), np.hstack([a5.to_numpy(), a6.to_numpy()])
     )
     gs = cudf.Series(a6).append(a5)
     np.testing.assert_equal(
-        gs.to_array(), np.hstack([a6.to_array(), a5.to_array()])
+        gs.to_numpy(), np.hstack([a6.to_numpy(), a5.to_numpy()])
     )
 
 
@@ -673,7 +673,7 @@ def test_series_mode(df, dropna):
         np.arange(-100.5, 101.5, 1),
     ],
 )
-@pytest.mark.parametrize("decimals", [-5, -3, -1, 0, 1, 4, 12])
+@pytest.mark.parametrize("decimals", [-5, -3, -1, 0, 1, 4, 12, np.int8(1)])
 def test_series_round(arr, decimals):
     pser = pd.Series(arr)
     ser = cudf.Series(arr)
@@ -694,7 +694,6 @@ def test_series_round(arr, decimals):
     expected = pser.round(decimals)
 
     assert_eq(result, expected)
-    np.array_equal(ser.nullmask.to_array(), result.to_array())
 
 
 def test_series_round_half_up():
@@ -958,14 +957,8 @@ def test_series_update(data, other):
 
     ps = gs.to_pandas()
 
-    gs_column_before = gs._column
-    gs.update(g_other)
-    gs_column_after = gs._column
-
-    assert_eq(gs_column_before.to_array(), gs_column_after.to_array())
-
     ps.update(p_other)
-
+    gs.update(g_other)
     assert_eq(gs, ps)
 
 
@@ -1279,3 +1272,66 @@ def test_series_sort_index(
         assert_eq(ps, gs, check_index_type=True)
     else:
         assert_eq(expected, got, check_index_type=True)
+
+
+@pytest.mark.parametrize(
+    "method,validation_data",
+    [
+        (
+            "md5",
+            [
+                "d41d8cd98f00b204e9800998ecf8427e",
+                "cfcd208495d565ef66e7dff9f98764da",
+                "3d3aaae21d57b101227f0384f644abe0",
+                "3e76c7023d771ad1c1520c27ab3d4874",
+                "f8d805e33ec3ade1a6ea251ac1c118e7",
+                "c30515f66a5aec7af7666abf33600c92",
+                "c61a4185135eda043f35e92c3505e180",
+                "52da74c75cb6575d25be29e66bd0adde",
+                "5152ac13bdd09110d9ee9c169a3d9237",
+                "f1d3ff8443297732862df21dc4e57262",
+            ],
+        )
+    ],
+)
+def test_series_hash_values(method, validation_data):
+    inputs = cudf.Series(
+        [
+            "",
+            "0",
+            "A 56 character string to test message padding algorithm.",
+            "A 63 character string to test message padding algorithm, again.",
+            "A 64 character string to test message padding algorithm, again!!",
+            (
+                "A very long (greater than 128 bytes/char string) to execute "
+                "a multi hash-step data point in the hash function being "
+                "tested. This string needed to be longer."
+            ),
+            "All work and no play makes Jack a dull boy",
+            "!\"#$%&'()*+,-./0123456789:;<=>?@[\\]^_`{|}~",
+            "\x00\x00\x00\x10\x00\x00\x00\x00",
+            "\x00\x00\x00\x00",
+        ]
+    )
+    validation_results = cudf.Series(validation_data)
+    hash_values = inputs.hash_values(method=method)
+    assert_eq(hash_values, validation_results)
+
+
+def test_set_index_unequal_length():
+    s = cudf.Series()
+    with pytest.raises(ValueError):
+        s.index = [1, 2, 3]
+
+
+@pytest.mark.parametrize(
+    "lhs, rhs", [("a", "a"), ("a", "b"), (1, 1.0), (None, None), (None, "a")]
+)
+def test_equals_names(lhs, rhs):
+    lhs = cudf.Series([1, 2], name=lhs)
+    rhs = cudf.Series([1, 2], name=rhs)
+
+    got = lhs.equals(rhs)
+    expect = lhs.to_pandas().equals(rhs.to_pandas())
+
+    assert_eq(expect, got)

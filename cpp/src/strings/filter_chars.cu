@@ -115,8 +115,8 @@ std::unique_ptr<column> filter_characters(
   rmm::mr::device_memory_resource* mr)
 {
   size_type strings_count = strings.size();
-  if (strings_count == 0) return make_empty_column(data_type{type_id::STRING});
-  CUDF_EXPECTS(replacement.is_valid(), "Parameter replacement must be valid");
+  if (strings_count == 0) return make_empty_column(type_id::STRING);
+  CUDF_EXPECTS(replacement.is_valid(stream), "Parameter replacement must be valid");
   cudf::string_view d_replacement(replacement.data(), replacement.size());
 
   // convert input table for copy to device memory

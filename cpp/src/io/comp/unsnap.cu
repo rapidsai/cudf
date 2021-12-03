@@ -489,6 +489,7 @@ __device__ void snappy_decode_symbols(unsnap_state_s* s, uint32_t t)
  *
  * @param s decompression state
  * @param t thread id within participating group (lane id)
+ * @param temp_storage temporary storage used by the algorithm
  *
  * NOTE: No error checks at this stage (WARP0 responsible for not sending offsets and lengths that
  *would result in out-of-bounds accesses)

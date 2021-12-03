@@ -49,8 +49,8 @@ namespace {
  *                    and returns true if that key is to be used in the output dictionary.
  * @param dictionary_column The column to use for creating the new dictionary.
  * @param keys_to_keep_fn Called to determine which keys in `dictionary_column` to keep.
- * @param mr Device memory resource used to allocate the returned column's device memory.
  * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
  */
 template <typename KeysKeeper>
 std::unique_ptr<column> remove_keys_fn(

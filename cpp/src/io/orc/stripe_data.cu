@@ -17,6 +17,7 @@
 #include <cub/cub.cuh>
 #include <io/utilities/block_utils.cuh>
 #include <rmm/cuda_stream_view.hpp>
+
 #include "orc_common.h"
 #include "orc_gpu.h"
 
@@ -43,11 +44,6 @@ inline __device__ uint8_t is_dictionary(uint8_t encoding_mode) { return encoding
 
 static __device__ __constant__ int64_t kORCTimeToUTC =
   1420070400;  // Seconds from January 1st, 1970 to January 1st, 2015
-
-struct int128_s {
-  uint64_t lo;
-  int64_t hi;
-};
 
 struct orc_bytestream_s {
   const uint8_t* base;
@@ -126,12 +122,14 @@ struct orcdec_state_s {
     orc_rowdec_state_s rowdec;
   } u;
   union values {
-    uint8_t u8[block_size * 8];
-    uint32_t u32[block_size * 2];
-    int32_t i32[block_size * 2];
-    uint64_t u64[block_size];
-    int64_t i64[block_size];
-    double f64[block_size];
+    uint8_t u8[block_size * 16];
+    uint32_t u32[block_size * 4];
+    int32_t i32[block_size * 4];
+    uint64_t u64[block_size * 2];
+    int64_t i64[block_size * 2];
+    double f64[block_size * 2];
+    __int128_t i128[block_size];
+    __uint128_t u128[block_size];
   } vals;
 };
 
@@ -450,29 +448,18 @@ inline __device__ int decode_base128_varint(volatile orc_bytestream_s* bs, int p
 /**
  * @brief Decodes a signed int128 encoded as base-128 varint (used for decimals)
  */
-inline __device__ int128_s decode_varint128(volatile orc_bytestream_s* bs, int pos)
+inline __device__ __int128_t decode_varint128(volatile orc_bytestream_s* bs, int pos)
 {
-  uint32_t b        = bytestream_readbyte(bs, pos++);
-  int64_t sign_mask = -(int32_t)(b & 1);
-  uint64_t v        = (b >> 1) & 0x3f;
-  uint32_t bitpos   = 6;
-  uint64_t lo       = v;
-  uint64_t hi       = 0;
-  while (b > 0x7f && bitpos < 128) {
-    b = bytestream_readbyte(bs, pos++);
-    v |= ((uint64_t)(b & 0x7f)) << (bitpos & 0x3f);
-    if (bitpos == 62) {  // 6 + 7 * 8 = 62
-      lo = v;
-      v  = (b & 0x7f) >> 2;  // 64 - 62
-    }
+  auto byte                  = bytestream_readbyte(bs, pos++);
+  __int128_t const sign_mask = -(int32_t)(byte & 1);
+  __int128_t value           = (byte >> 1) & 0x3f;
+  uint32_t bitpos            = 6;
+  while (byte & 0x80 && bitpos < 128) {
+    byte = bytestream_readbyte(bs, pos++);
+    value |= ((__uint128_t)(byte & 0x7f)) << bitpos;
     bitpos += 7;
   }
-  if (bitpos >= 64) {
-    hi = v;
-  } else {
-    lo = v;
-  }
-  return {(uint64_t)(lo ^ sign_mask), (int64_t)(hi ^ sign_mask)};
+  return value ^ sign_mask;
 }
 
 /**
@@ -1030,6 +1017,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
                                       volatile orcdec_state_s::values& vals,
                                       int val_scale,
                                       int numvals,
+                                      type_id dtype_id,
                                       int col_scale,
                                       int t)
 {
@@ -1045,8 +1033,8 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
         uint32_t pos = lastpos;
         pos += varint_length<uint4>(bs, pos);
         if (pos > maxpos) break;
-        vals.i64[n] = lastpos;
-        lastpos     = pos;
+        vals.i64[2 * n] = lastpos;
+        lastpos         = pos;
       }
       scratch->num_vals = n;
       bytestream_flush_bytes(bs, lastpos - bs->pos);
@@ -1054,43 +1042,36 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
     __syncthreads();
     uint32_t num_vals_to_read = scratch->num_vals;
     if (t >= num_vals_read and t < num_vals_to_read) {
-      auto const pos = static_cast<int>(vals.i64[t]);
-      int128_s v     = decode_varint128(bs, pos);
+      auto const pos = static_cast<int>(vals.i64[2 * t]);
+      __int128_t v   = decode_varint128(bs, pos);
 
-      if (col_scale & orc_decimal2float64_scale) {
-        double f      = Int128ToDouble_rn(v.lo, v.hi);
+      if (dtype_id == type_id::FLOAT64) {
+        double f      = v;
         int32_t scale = (t < numvals) ? val_scale : 0;
         if (scale >= 0)
           vals.f64[t] = f / kPow10[min(scale, 39)];
         else
           vals.f64[t] = f * kPow10[min(-scale, 39)];
       } else {
-        // Since cuDF column stores just one scale, value needs to
-        // be adjusted to col_scale from val_scale. So the difference
-        // of them will be used to add 0s or remove digits.
-        int32_t scale = (t < numvals) ? col_scale - val_scale : 0;
-        if (scale >= 0) {
-          scale       = min(scale, 27);
-          vals.i64[t] = ((int64_t)v.lo * kPow5i[scale]) << scale;
-        } else  // if (scale < 0)
-        {
-          bool is_negative = (v.hi < 0);
-          uint64_t hi = v.hi, lo = v.lo;
-          scale = min(-scale, 27);
-          if (is_negative) {
-            hi = (~hi) + (lo == 0);
-            lo = (~lo) + 1;
+        auto const scaled_value = [&]() {
+          // Since cuDF column stores just one scale, value needs to be adjusted to col_scale from
+          // val_scale. So the difference of them will be used to add 0s or remove digits.
+          int32_t scale = (t < numvals) ? col_scale - val_scale : 0;
+          if (scale >= 0) {
+            scale = min(scale, 27);
+            return (v * kPow5i[scale]) << scale;
+          } else  // if (scale < 0)
+          {
+            scale = min(-scale, 27);
+            return (v / kPow5i[scale]) >> scale;
           }
-          lo = (lo >> (uint32_t)scale) | ((uint64_t)hi << (64 - scale));
-          hi >>= (int32_t)scale;
-          if (hi != 0) {
-            // Use intermediate float
-            lo = __double2ull_rn(Int128ToDouble_rn(lo, hi) / __ll2double_rn(kPow5i[scale]));
-            hi = 0;
-          } else {
-            lo /= kPow5i[scale];
+        }();
+        if (dtype_id == type_id::DECIMAL64) {
+          vals.i64[t] = scaled_value;
+        } else {
+          {
+            vals.i128[t] = scaled_value;
           }
-          vals.i64[t] = (is_negative) ? -(int64_t)lo : (int64_t)lo;
         }
       }
     }
@@ -1652,8 +1633,14 @@ __global__ void __launch_bounds__(block_size)
           }
           val_scale = (t < numvals) ? (int)s->vals.i64[skip + t] : 0;
           __syncthreads();
-          numvals = Decode_Decimals(
-            &s->bs, &s->u.rle8, s->vals, val_scale, numvals, s->chunk.decimal_scale, t);
+          numvals = Decode_Decimals(&s->bs,
+                                    &s->u.rle8,
+                                    s->vals,
+                                    val_scale,
+                                    numvals,
+                                    s->chunk.dtype_id,
+                                    s->chunk.decimal_scale,
+                                    t);
         }
         __syncthreads();
       } else if (s->chunk.type_kind == FLOAT) {
@@ -1719,16 +1706,22 @@ __global__ void __launch_bounds__(block_size)
             case FLOAT:
             case INT: static_cast<uint32_t*>(data_out)[row] = s->vals.u32[t + vals_skipped]; break;
             case DOUBLE:
-            case LONG:
+            case LONG: static_cast<uint64_t*>(data_out)[row] = s->vals.u64[t + vals_skipped]; break;
             case DECIMAL:
-              static_cast<uint64_t*>(data_out)[row] = s->vals.u64[t + vals_skipped];
+              if (s->chunk.dtype_id == type_id::FLOAT64 or
+                  s->chunk.dtype_id == type_id::DECIMAL64) {
+                static_cast<uint64_t*>(data_out)[row] = s->vals.u64[t + vals_skipped];
+              } else {
+                // decimal128
+                static_cast<__uint128_t*>(data_out)[row] = s->vals.u128[t + vals_skipped];
+              }
               break;
             case MAP:
             case LIST: {
               // Since the offsets column in cudf is `size_type`,
               // If the limit exceeds then value will be 0, which is Fail.
               cudf_assert(
-                (s->vals.u64[t + vals_skipped] > std::numeric_limits<size_type>::max()) and
+                (s->vals.u64[t + vals_skipped] <= std::numeric_limits<size_type>::max()) and
                 "Number of elements is more than what size_type can handle");
               list_child_elements                   = s->vals.u64[t + vals_skipped];
               static_cast<uint32_t*>(data_out)[row] = list_child_elements;
@@ -1744,9 +1737,10 @@ __global__ void __launch_bounds__(block_size)
               break;
             case DATE:
               if (s->chunk.dtype_len == 8) {
-                // Convert from days to milliseconds by multiplying by 24*3600*1000
+                cudf::duration_D days{s->vals.i32[t + vals_skipped]};
+                // Convert from days to milliseconds
                 static_cast<int64_t*>(data_out)[row] =
-                  86400000ll * (int64_t)s->vals.i32[t + vals_skipped];
+                  cuda::std::chrono::duration_cast<cudf::duration_ms>(days).count();
               } else {
                 static_cast<uint32_t*>(data_out)[row] = s->vals.u32[t + vals_skipped];
               }
@@ -1787,13 +1781,29 @@ __global__ void __launch_bounds__(block_size)
                 seconds += get_gmt_offset(tz_table.ttimes, tz_table.offsets, seconds);
               }
               if (seconds < 0 && nanos != 0) { seconds -= 1; }
-              if (s->chunk.ts_clock_rate)
-                static_cast<int64_t*>(data_out)[row] =
-                  seconds * s->chunk.ts_clock_rate +
-                  (nanos + (499999999 / s->chunk.ts_clock_rate)) /
-                    (1000000000 / s->chunk.ts_clock_rate);  // Output to desired clock rate
-              else
-                static_cast<int64_t*>(data_out)[row] = seconds * 1000000000 + nanos;
+
+              duration_ns d_ns{nanos};
+              duration_s d_s{seconds};
+
+              static_cast<int64_t*>(data_out)[row] = [&]() {
+                using cuda::std::chrono::duration_cast;
+                switch (s->chunk.timestamp_type_id) {
+                  case type_id::TIMESTAMP_SECONDS:
+                    return d_s.count() + duration_cast<duration_s>(d_ns).count();
+                  case type_id::TIMESTAMP_MILLISECONDS:
+                    return duration_cast<duration_ms>(d_s).count() +
+                           duration_cast<duration_ms>(d_ns).count();
+                  case type_id::TIMESTAMP_MICROSECONDS:
+                    return duration_cast<duration_us>(d_s).count() +
+                           duration_cast<duration_us>(d_ns).count();
+                  case type_id::TIMESTAMP_NANOSECONDS:
+                  default:
+                    return duration_cast<duration_ns>(d_s).count() +
+                           d_ns.count();  // nanoseconds as output in case of `type_id::EMPTY` and
+                                          // `type_id::TIMESTAMP_NANOSECONDS`
+                }
+              }();
+
               break;
             }
           }

@@ -38,7 +38,7 @@ struct FixedPointCompiledTestBothReps : public cudf::test::BaseFixture {
 
 template <typename T>
 using wrapper = cudf::test::fixed_width_column_wrapper<T>;
-TYPED_TEST_CASE(FixedPointCompiledTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointCompiledTestBothReps, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpAdd)
 {
@@ -682,6 +682,46 @@ TYPED_TEST(FixedPointCompiledTestBothReps, FixedPointBinaryOpThrows)
   auto const non_bool_type = data_type{type_to_id<decimalXX>(), -2};
   EXPECT_THROW(cudf::binary_operation(col, col, cudf::binary_operator::LESS, non_bool_type),
                cudf::logic_error);
+}
+
+template <typename T>
+struct FixedPointTest_64_128_Reps : public cudf::test::BaseFixture {
+};
+
+using Decimal64And128Types = cudf::test::Types<numeric::decimal64, numeric::decimal128>;
+TYPED_TEST_SUITE(FixedPointTest_64_128_Reps, Decimal64And128Types);
+
+TYPED_TEST(FixedPointTest_64_128_Reps, FixedPoint_64_128_ComparisonTests)
+{
+  using namespace numeric;
+  using decimalXX = TypeParam;
+  using RepType   = device_storage_type_t<decimalXX>;
+
+  for (auto const rhs_value : {10000000000000000, 100000000000000000}) {
+    auto const lhs       = fp_wrapper<RepType>{{33041, 97290, 36438, 25379, 48473}, scale_type{2}};
+    auto const rhs       = make_fixed_point_scalar<decimalXX>(rhs_value, scale_type{0});
+    auto const trues     = wrapper<bool>{{1, 1, 1, 1, 1}};
+    auto const falses    = wrapper<bool>{{0, 0, 0, 0, 0}};
+    auto const bool_type = cudf::data_type{type_id::BOOL8};
+
+    auto const a = cudf::binary_operation(lhs, *rhs, binary_operator::LESS, bool_type);
+    auto const b = cudf::binary_operation(lhs, *rhs, binary_operator::LESS_EQUAL, bool_type);
+    auto const c = cudf::binary_operation(lhs, *rhs, binary_operator::GREATER, bool_type);
+    auto const d = cudf::binary_operation(lhs, *rhs, binary_operator::GREATER_EQUAL, bool_type);
+    auto const e = cudf::binary_operation(*rhs, lhs, binary_operator::GREATER, bool_type);
+    auto const f = cudf::binary_operation(*rhs, lhs, binary_operator::GREATER_EQUAL, bool_type);
+    auto const g = cudf::binary_operation(*rhs, lhs, binary_operator::LESS, bool_type);
+    auto const h = cudf::binary_operation(*rhs, lhs, binary_operator::LESS_EQUAL, bool_type);
+
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(a->view(), trues);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(b->view(), trues);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(c->view(), falses);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(d->view(), falses);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(e->view(), trues);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(f->view(), trues);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(g->view(), falses);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(h->view(), falses);
+  }
 }
 
 }  // namespace cudf::test::binop

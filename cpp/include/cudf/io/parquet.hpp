@@ -632,6 +632,8 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(
  * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
  * into a single metadata blob.
  *
+ * @ingroup io_writers
+ *
  * @param[in] metadata_list List of input file metadata.
  * @return A parquet-compatible blob that contains the data for all row groups in the list.
  */
@@ -823,18 +825,6 @@ class chunked_parquet_writer_options_builder {
 };
 
 /**
- * @brief Merges multiple raw metadata blobs that were previously created by write_parquet
- * into a single metadata blob
- *
- * @ingroup io_writers
- *
- * @param[in] metadata_list List of input file metadata
- * @return A parquet-compatible blob that contains the data for all rowgroups in the list
- */
-std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
-  const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
-
-/**
  * @brief chunked parquet writer class to handle options and write tables in chunks.
  *
  * The intent of the parquet_chunked_writer is to allow writing of an
@@ -864,11 +854,11 @@ class parquet_chunked_writer {
   /**
    * @brief Constructor with chunked writer options
    *
-   * @param[in] op options used to write table
+   * @param[in] options options used to write table
    * @param[in] mr Device memory resource to use for device memory allocation
    */
   parquet_chunked_writer(
-    chunked_parquet_writer_options const& op,
+    chunked_parquet_writer_options const& options,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
   /**

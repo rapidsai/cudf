@@ -125,7 +125,7 @@ def _match_join_keys(
         else:
             warnings.warn(
                 f"Can't safely cast column from {rtype} to {ltype}, "
-                "upcasting to {common_type}."
+                f"upcasting to {common_type}."
             )
 
     return lcol.astype(common_type), rcol.astype(common_type)

@@ -96,7 +96,7 @@ class wordpiece_tokenizer {
   /**
    * @brief Splits the code points from the normalizer into tokens.
    *
-   * @param cps_and_offsets[in,out] The output code points and offsets
+   * @param[in,out] cps_and_offsets The output code points and offsets
    *        from the normalizer.
    *        The data is modified to contain the token ids and token counts
    *        per string.

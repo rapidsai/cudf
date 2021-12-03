@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2020, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/copy.hpp>
-#include <cudf/detail/gather.cuh>
+#include <cudf/detail/gather.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/device_atomics.cuh>
@@ -36,12 +36,15 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
 #include <rmm/device_uvector.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <cub/cub.cuh>
 
 #include <algorithm>
 
-namespace {
+namespace cudf {
+namespace detail {
+
 // Compute the count of elements that pass the mask within each block
 template <typename Filter, int block_size>
 __global__ void compute_block_counts(cudf::size_type* __restrict__ block_counts,
@@ -214,12 +217,7 @@ struct DeviceType<T, std::enable_if_t<cudf::is_timestamp<T>()>> {
 };
 
 template <typename T>
-struct DeviceType<T, std::enable_if_t<std::is_same_v<numeric::decimal32, T>>> {
-  using type = typename cudf::device_storage_type_t<T>;
-};
-
-template <typename T>
-struct DeviceType<T, std::enable_if_t<std::is_same_v<numeric::decimal64, T>>> {
+struct DeviceType<T, std::enable_if_t<cudf::is_fixed_point<T>()>> {
   using type = typename cudf::device_storage_type_t<T>;
 };
 
@@ -293,9 +291,9 @@ struct scatter_gather_functor {
                     filter);
 
     auto output_table = cudf::detail::gather(cudf::table_view{{input}},
-                                             indices.begin(),
-                                             indices.end(),
+                                             indices,
                                              cudf::out_of_bounds_policy::DONT_CHECK,
+                                             cudf::detail::negative_index_policy::NOT_ALLOWED,
                                              stream,
                                              mr);
 
@@ -304,10 +302,6 @@ struct scatter_gather_functor {
   }
 };
 
-}  // namespace
-
-namespace cudf {
-namespace detail {
 /**
  * @brief Filters `input` using a Filter function object
  *

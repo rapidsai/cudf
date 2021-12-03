@@ -241,7 +241,7 @@ class alignas(16) column_device_view_base {
    * @note It is undefined behavior to call this function if `nullable() ==
    * false`.
    *
-   * @param element_index
+   * @param word_index The index of the word to get
    * @return bitmask word for the given word_index
    */
   __device__ bitmask_type get_mask_word(size_type word_index) const noexcept
@@ -421,39 +421,22 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   }
 
   /**
-   * @brief Returns a `numeric::decimal32` element at the specified index for a `fixed_point`
+   * @brief Returns a `numeric::fixed_point` element at the specified index for a `fixed_point`
    * column.
    *
    * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
    * then any attempt to use the result will lead to undefined behavior.
    *
    * @param element_index Position of the desired element
-   * @return numeric::decimal32 representing the element at this index
+   * @return numeric::fixed_point representing the element at this index
    */
-  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, numeric::decimal32>)>
+  template <typename T, CUDF_ENABLE_IF(cudf::is_fixed_point<T>())>
   __device__ T element(size_type element_index) const noexcept
   {
     using namespace numeric;
+    using rep        = typename T::rep;
     auto const scale = scale_type{_type.scale()};
-    return decimal32{scaled_integer<int32_t>{data<int32_t>()[element_index], scale}};
-  }
-
-  /**
-   * @brief Returns a `numeric::decimal64` element at the specified index for a `fixed_point`
-   * column.
-   *
-   * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
-   * then any attempt to use the result will lead to undefined behavior.
-   *
-   * @param element_index Position of the desired element
-   * @return numeric::decimal64 representing the element at this index
-   */
-  template <typename T, CUDF_ENABLE_IF(std::is_same_v<T, numeric::decimal64>)>
-  __device__ T element(size_type element_index) const noexcept
-  {
-    using namespace numeric;
-    auto const scale = scale_type{_type.scale()};
-    return decimal64{scaled_integer<int64_t>{data<int64_t>()[element_index], scale}};
+    return T{scaled_integer<rep>{data<rep>()[element_index], scale}};
   }
 
   /**
@@ -1115,8 +1098,8 @@ class alignas(16) mutable_column_device_view : public detail::column_device_view
    * @note It is undefined behavior to call this function if `nullable() ==
    * false`.
    *
-   * @param element_index The index of the element to update
-   * @param new_element The new bitmask element
+   * @param word_index The index of the word to update
+   * @param new_word The new bitmask word
    */
   __device__ void set_mask_word(size_type word_index, bitmask_type new_word) const noexcept
   {
@@ -1274,6 +1257,7 @@ struct optional_accessor<T, contains_nulls::DYNAMIC> {
   /**
    * @brief constructor
    * @param[in] _col column device view of cudf column
+   * @param[in] with_nulls Indicates if @p _col has nulls
    */
   optional_accessor(column_device_view const& _col, bool with_nulls)
     : col{_col}, has_nulls{with_nulls}
@@ -1419,7 +1403,7 @@ struct mutable_value_accessor {
  * @tparam ColumnDeviceView is either column_device_view or mutable_column_device_view
  *
  * @param child_begin Iterator pointing to begin of child columns to make into a device view
- * @param child_begin Iterator pointing to end   of child columns to make into a device view
+ * @param child_end   Iterator pointing to end   of child columns to make into a device view
  * @param h_ptr The host memory where to place any child data
  * @param d_ptr The device pointer for calculating the d_children member of any child data
  * @return The device pointer to be used for the d_children member of the given column

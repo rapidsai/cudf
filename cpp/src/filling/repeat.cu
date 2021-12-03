@@ -57,7 +57,7 @@ struct count_accessor {
 #else
     auto p_count = static_cast<ScalarType const*>(this->p_scalar);
 #endif
-    auto count = p_count->value();
+    auto count = p_count->value(stream);
     // static_cast is necessary due to bool
     CUDF_EXPECTS(static_cast<int64_t>(count) <= std::numeric_limits<cudf::size_type>::max(),
                  "count should not exceed size_type's limit.");

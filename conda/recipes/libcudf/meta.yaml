@@ -3,6 +3,7 @@
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set cuda_version='.'.join(environ.get('CUDA', '10.1').split('.')[:2]) %}
+{% set cuda_major=cuda_version.split('.')[0] %}
 
 package:
   name: libcudf
@@ -13,7 +14,7 @@ source:
 
 build:
   number: {{ GIT_DESCRIBE_NUMBER }}
-  string: cuda{{ cuda_version }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
+  string: cuda{{ cuda_major }}_{{ GIT_DESCRIBE_HASH }}_{{ GIT_DESCRIBE_NUMBER }}
   script_env:
     - CC
     - CXX
@@ -41,7 +42,7 @@ requirements:
     - arrow-cpp-proc * cuda
     - dlpack>=0.5,<0.6.0a0
   run:
-    - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
+    - {{ pin_compatible('cudatoolkit', max_pin='x', min_pin='x') }}
     - arrow-cpp * *cuda
     - arrow-cpp-proc * cuda
     - {{ pin_compatible('dlpack', max_pin='x.x') }}
@@ -55,7 +56,6 @@ test:
     - test -f $PREFIX/include/cudf/ast/detail/operators.hpp
     - test -f $PREFIX/include/cudf/ast/expressions.hpp
     - test -f $PREFIX/include/cudf/binaryop.hpp
-    - test -f $PREFIX/include/cudf/labeling/label_bins.hpp
     - test -f $PREFIX/include/cudf/column/column_factories.hpp
     - test -f $PREFIX/include/cudf/column/column.hpp
     - test -f $PREFIX/include/cudf/column/column_view.hpp
@@ -66,6 +66,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/aggregation/result_cache.hpp
     - test -f $PREFIX/include/cudf/detail/label_bins.hpp
     - test -f $PREFIX/include/cudf/detail/binaryop.hpp
+    - test -f $PREFIX/include/cudf/detail/calendrical_month_sequence.cuh
     - test -f $PREFIX/include/cudf/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/detail/copy.hpp
     - test -f $PREFIX/include/cudf/detail/datetime.hpp
@@ -93,6 +94,7 @@ test:
     - test -f $PREFIX/include/cudf/detail/sequence.hpp
     - test -f $PREFIX/include/cudf/detail/sorting.hpp
     - test -f $PREFIX/include/cudf/detail/stream_compaction.hpp
+    - test -f $PREFIX/include/cudf/detail/structs/utilities.hpp
     - test -f $PREFIX/include/cudf/detail/tdigest/tdigest.hpp
     - test -f $PREFIX/include/cudf/detail/transform.hpp
     - test -f $PREFIX/include/cudf/detail/transpose.hpp
@@ -115,6 +117,7 @@ test:
     - test -f $PREFIX/include/cudf/dictionary/update_keys.hpp
     - test -f $PREFIX/include/cudf/filling.hpp
     - test -f $PREFIX/include/cudf/fixed_point/fixed_point.hpp
+    - test -f $PREFIX/include/cudf/fixed_point/temporary.hpp
     - test -f $PREFIX/include/cudf/groupby.hpp
     - test -f $PREFIX/include/cudf/hashing.hpp
     - test -f $PREFIX/include/cudf/interop.hpp
@@ -141,6 +144,7 @@ test:
     - test -f $PREFIX/include/cudf/io/types.hpp
     - test -f $PREFIX/include/cudf/ipc.hpp
     - test -f $PREFIX/include/cudf/join.hpp
+    - test -f $PREFIX/include/cudf/labeling/label_bins.hpp
     - test -f $PREFIX/include/cudf/lists/detail/combine.hpp
     - test -f $PREFIX/include/cudf/lists/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/lists/detail/copying.hpp
@@ -187,6 +191,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/convert/convert_floats.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_integers.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_ipv4.hpp
+    - test -f $PREFIX/include/cudf/strings/convert/convert_lists.hpp
     - test -f $PREFIX/include/cudf/strings/convert/convert_urls.hpp
     - test -f $PREFIX/include/cudf/strings/detail/combine.hpp
     - test -f $PREFIX/include/cudf/strings/detail/concatenate.hpp
@@ -202,6 +207,7 @@ test:
     - test -f $PREFIX/include/cudf/strings/find_multiple.hpp
     - test -f $PREFIX/include/cudf/strings/json.hpp
     - test -f $PREFIX/include/cudf/strings/padding.hpp
+    - test -f $PREFIX/include/cudf/strings/regex/flags.hpp
     - test -f $PREFIX/include/cudf/strings/repeat_strings.hpp
     - test -f $PREFIX/include/cudf/strings/replace.hpp
     - test -f $PREFIX/include/cudf/strings/replace_re.hpp
@@ -218,6 +224,7 @@ test:
     - test -f $PREFIX/include/cudf/structs/detail/concatenate.hpp
     - test -f $PREFIX/include/cudf/table/table.hpp
     - test -f $PREFIX/include/cudf/table/table_view.hpp
+    - test -f $PREFIX/include/cudf/tdigest/tdigest_column_view.cuh
     - test -f $PREFIX/include/cudf/transform.hpp
     - test -f $PREFIX/include/cudf/transpose.hpp
     - test -f $PREFIX/include/cudf/types.hpp

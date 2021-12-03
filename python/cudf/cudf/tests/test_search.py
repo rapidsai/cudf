@@ -26,13 +26,13 @@ def test_searchsorted(side, obj_class, vals_class):
 
     # Reference object can be Series, Index, or Column
     if obj_class == "index":
-        sr = cudf.Series.as_index(sr)
+        sr.reset_index(drop=True)
     elif obj_class == "column":
         sr = sr._column
 
     # Values can be Series or Index
     if vals_class == "index":
-        vals = cudf.Series.as_index(vals)
+        vals.reset_index(drop=True)
 
     psr = sr.to_pandas()
     pvals = vals.to_pandas()

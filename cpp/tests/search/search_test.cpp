@@ -1817,12 +1817,12 @@ TEST_F(SearchTest, multi_contains_empty_input_set_string)
 }
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointLowerBound)
+TYPED_TEST(FixedPointTestAllReps, FixedPointLowerBound)
 {
   using namespace numeric;
   using decimalXX = TypeParam;
@@ -1846,7 +1846,7 @@ TYPED_TEST(FixedPointTestBothReps, FixedPointLowerBound)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*result, expect);
 }
 
-TYPED_TEST(FixedPointTestBothReps, FixedPointUpperBound)
+TYPED_TEST(FixedPointTestAllReps, FixedPointUpperBound)
 {
   using namespace numeric;
   using decimalXX = TypeParam;

@@ -50,7 +50,7 @@ struct scan_dispatcher {
    * @param mr Device memory resource used to allocate the returned column's device memory
    * @return Output column with scan results
    */
-  template <typename T, typename std::enable_if_t<std::is_arithmetic<T>::value>* = nullptr>
+  template <typename T, typename std::enable_if_t<cuda::std::is_arithmetic<T>::value>* = nullptr>
   std::unique_ptr<column> operator()(column_view const& input,
                                      null_policy,
                                      rmm::cuda_stream_view stream,
@@ -72,7 +72,8 @@ struct scan_dispatcher {
   }
 
   template <typename T, typename... Args>
-  std::enable_if_t<!std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(Args&&...)
+  std::enable_if_t<not cuda::std::is_arithmetic<T>::value, std::unique_ptr<column>> operator()(
+    Args&&...)
   {
     CUDF_FAIL("Non-arithmetic types not supported for exclusive scan");
   }
@@ -86,8 +87,6 @@ std::unique_ptr<column> scan_exclusive(const column_view& input,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  CUDF_EXPECTS(agg->kind != aggregation::RANK && agg->kind != aggregation::DENSE_RANK,
-               "Unsupported rank aggregation operator for exclusive scan");
   auto output = scan_agg_dispatch<scan_dispatcher>(input, agg, null_handling, stream, mr);
 
   if (null_handling == null_policy::EXCLUDE) {

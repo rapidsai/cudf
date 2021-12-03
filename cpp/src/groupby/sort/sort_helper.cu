@@ -23,11 +23,11 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/scatter.hpp>
 #include <cudf/detail/sorting.hpp>
+#include <cudf/detail/structs/utilities.hpp>
 #include <cudf/strings/string_view.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/traits.hpp>
-#include <structs/utilities.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -102,13 +102,11 @@ sort_groupby_helper::sort_groupby_helper(table_view const& keys,
 {
   using namespace cudf::structs::detail;
 
-  auto [flattened_keys, _, __, struct_null_vectors] =
-    flatten_nested_columns(keys, {}, {}, column_nullability::FORCE);
+  _flattened                 = flatten_nested_columns(keys, {}, {}, column_nullability::FORCE);
+  _keys                      = _flattened;
   auto is_supported_key_type = [](auto col) { return cudf::is_equality_comparable(col.type()); };
-  CUDF_EXPECTS(std::all_of(flattened_keys.begin(), flattened_keys.end(), is_supported_key_type),
+  CUDF_EXPECTS(std::all_of(_keys.begin(), _keys.end(), is_supported_key_type),
                "Unsupported groupby key type does not support equality comparison");
-  _struct_null_vectors = std::move(struct_null_vectors);
-  _keys                = flattened_keys;
 
   // Cannot depend on caller's sorting if the column contains nulls,
   // and null values are to be excluded.
@@ -278,13 +276,10 @@ column_view sort_groupby_helper::keys_bitmask_column(rmm::cuda_stream_view strea
 {
   if (_keys_bitmask_column) return _keys_bitmask_column->view();
 
-  auto row_bitmask = cudf::detail::bitmask_and(_keys, stream);
+  auto [row_bitmask, null_count] = cudf::detail::bitmask_and(_keys, stream);
 
-  _keys_bitmask_column = make_numeric_column(data_type(type_id::INT8),
-                                             _keys.num_rows(),
-                                             std::move(row_bitmask),
-                                             cudf::UNKNOWN_NULL_COUNT,
-                                             stream);
+  _keys_bitmask_column = make_numeric_column(
+    data_type(type_id::INT8), _keys.num_rows(), std::move(row_bitmask), null_count, stream);
 
   auto keys_bitmask_view = _keys_bitmask_column->mutable_view();
   using T                = id_to_type<type_id::INT8>;

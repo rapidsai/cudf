@@ -51,7 +51,7 @@ namespace strings {
  *
  * @throw cudf::logic_error if `output_type` is not a fixed-point decimal type.
  *
- * @param strings Strings instance for this operation.
+ * @param input Strings instance for this operation.
  * @param output_type Type of fixed-point column to return including the scale value.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New column of `output_type`.

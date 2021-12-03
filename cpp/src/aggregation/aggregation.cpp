@@ -203,6 +203,16 @@ std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
 }
 
 std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
+  data_type col_type, covariance_aggregation const& agg)
+{
+  return visit(col_type, static_cast<aggregation const&>(agg));
+}
+std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
+  data_type col_type, correlation_aggregation const& agg)
+{
+  return visit(col_type, static_cast<aggregation const&>(agg));
+}
+std::vector<std::unique_ptr<aggregation>> simple_aggregations_collector::visit(
   data_type col_type, tdigest_aggregation const& agg)
 {
   return visit(col_type, static_cast<aggregation const&>(agg));
@@ -354,6 +364,16 @@ void aggregation_finalizer::visit(merge_sets_aggregation const& agg)
 }
 
 void aggregation_finalizer::visit(merge_m2_aggregation const& agg)
+{
+  visit(static_cast<aggregation const&>(agg));
+}
+
+void aggregation_finalizer::visit(covariance_aggregation const& agg)
+{
+  visit(static_cast<aggregation const&>(agg));
+}
+
+void aggregation_finalizer::visit(correlation_aggregation const& agg)
 {
   visit(static_cast<aggregation const&>(agg));
 }
@@ -515,14 +535,15 @@ template std::unique_ptr<groupby_aggregation> make_median_aggregation<groupby_ag
 
 /// Factory to create a QUANTILE aggregation
 template <typename Base>
-std::unique_ptr<Base> make_quantile_aggregation(std::vector<double> const& q, interpolation i)
+std::unique_ptr<Base> make_quantile_aggregation(std::vector<double> const& quantiles,
+                                                interpolation interp)
 {
-  return std::make_unique<detail::quantile_aggregation>(q, i);
+  return std::make_unique<detail::quantile_aggregation>(quantiles, interp);
 }
 template std::unique_ptr<aggregation> make_quantile_aggregation<aggregation>(
-  std::vector<double> const& q, interpolation i);
+  std::vector<double> const& quantiles, interpolation interp);
 template std::unique_ptr<groupby_aggregation> make_quantile_aggregation<groupby_aggregation>(
-  std::vector<double> const& q, interpolation i);
+  std::vector<double> const& quantiles, interpolation interp);
 
 /// Factory to create an ARGMAX aggregation
 template <typename Base>
@@ -690,6 +711,28 @@ std::unique_ptr<Base> make_merge_m2_aggregation()
 template std::unique_ptr<aggregation> make_merge_m2_aggregation<aggregation>();
 template std::unique_ptr<groupby_aggregation> make_merge_m2_aggregation<groupby_aggregation>();
 
+/// Factory to create a COVARIANCE aggregation
+template <typename Base>
+std::unique_ptr<Base> make_covariance_aggregation(size_type min_periods, size_type ddof)
+{
+  return std::make_unique<detail::covariance_aggregation>(min_periods, ddof);
+}
+template std::unique_ptr<aggregation> make_covariance_aggregation<aggregation>(
+  size_type min_periods, size_type ddof);
+template std::unique_ptr<groupby_aggregation> make_covariance_aggregation<groupby_aggregation>(
+  size_type min_periods, size_type ddof);
+
+/// Factory to create a CORRELATION aggregation
+template <typename Base>
+std::unique_ptr<Base> make_correlation_aggregation(correlation_type type, size_type min_periods)
+{
+  return std::make_unique<detail::correlation_aggregation>(type, min_periods);
+}
+template std::unique_ptr<aggregation> make_correlation_aggregation<aggregation>(
+  correlation_type type, size_type min_periods);
+template std::unique_ptr<groupby_aggregation> make_correlation_aggregation<groupby_aggregation>(
+  correlation_type type, size_type min_periods);
+
 template <typename Base>
 std::unique_ptr<Base> make_tdigest_aggregation(int max_centroids)
 {
@@ -716,9 +759,9 @@ struct target_type_functor {
   template <typename Source, aggregation::Kind k>
   constexpr data_type operator()() const noexcept
   {
-    auto const id = type_to_id<target_type_t<Source, k>>();
-    return id == type_id::DECIMAL32 || id == type_id::DECIMAL64 ? data_type{id, type.scale()}
-                                                                : data_type{id};
+    using Type    = target_type_t<Source, k>;
+    auto const id = type_to_id<Type>();
+    return cudf::is_fixed_point<Type>() ? data_type{id, type.scale()} : data_type{id};
   }
 };
 

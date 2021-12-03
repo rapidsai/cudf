@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import pickle
-from typing import Sequence
+from typing import List, Sequence
 
 import numpy as np
 import pyarrow as pa
@@ -17,7 +17,7 @@ from cudf._lib.lists import (
     extract_element,
     sort_lists,
 )
-from cudf._lib.table import Table
+from cudf._lib.strings.convert.convert_lists import format_list_column
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import _is_non_decimal_numeric_dtype, is_list_dtype
 from cudf.core.buffer import Buffer
@@ -42,41 +42,34 @@ class ListColumn(ColumnBase):
             children=children,
         )
 
-    def __sizeof__(self):
-        if self._cached_sizeof is None:
-            n = 0
-            if self.nullable:
-                n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
-                    self.size
-                )
+    def memory_usage(self):
+        n = 0
+        if self.nullable:
+            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(self.size)
 
-            child0_size = (self.size + 1) * self.base_children[
-                0
-            ].dtype.itemsize
-            current_base_child = self.base_children[1]
-            current_offset = self.offset
+        child0_size = (self.size + 1) * self.base_children[0].dtype.itemsize
+        current_base_child = self.base_children[1]
+        current_offset = self.offset
+        n += child0_size
+        while type(current_base_child) is ListColumn:
+            child0_size = (
+                current_base_child.size + 1 - current_offset
+            ) * current_base_child.base_children[0].dtype.itemsize
+            current_offset = current_base_child.base_children[0][
+                current_offset
+            ]
             n += child0_size
-            while type(current_base_child) is ListColumn:
-                child0_size = (
-                    current_base_child.size + 1 - current_offset
-                ) * current_base_child.base_children[0].dtype.itemsize
-                current_offset = current_base_child.base_children[0][
-                    current_offset
-                ]
-                n += child0_size
-                current_base_child = current_base_child.base_children[1]
+            current_base_child = current_base_child.base_children[1]
 
-            n += (
-                current_base_child.size - current_offset
-            ) * current_base_child.dtype.itemsize
+        n += (
+            current_base_child.size - current_offset
+        ) * current_base_child.dtype.itemsize
 
-            if current_base_child.nullable:
-                n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
-                    current_base_child.size
-                )
-            self._cached_sizeof = n
-
-        return self._cached_sizeof
+        if current_base_child.nullable:
+            n += cudf._lib.null_mask.bitmask_allocation_size_bytes(
+                current_base_child.size
+            )
+        return n
 
     def __setitem__(self, key, value):
         if isinstance(value, list):
@@ -141,7 +134,9 @@ class ListColumn(ColumnBase):
 
         if isinstance(other.dtype, ListDtype):
             if binop == "add":
-                return concatenate_rows(Table({0: self, 1: other}))
+                return concatenate_rows(
+                    cudf.core.frame.Frame({0: self, 1: other})
+                )
             else:
                 raise NotImplementedError(
                     "Lists concatenation for this operation is not yet"
@@ -315,6 +310,39 @@ class ListColumn(ColumnBase):
             children=(offset_col, data_col),
         )
         return res
+
+    def as_string_column(
+        self, dtype: Dtype, format=None, **kwargs
+    ) -> "cudf.core.column.StringColumn":
+        """
+        Create a strings column from a list column
+        """
+        # Convert the leaf child column to strings column
+        cc: List[ListColumn] = []
+        c: ColumnBase = self
+        while isinstance(c, ListColumn):
+            cc.insert(0, c)
+            c = c.children[1]
+        s = c.as_string_column(dtype)
+
+        # Rebuild the list column replacing just the leaf child
+        lc = s
+        for c in cc:
+            o = c.children[0]
+            lc = cudf.core.column.ListColumn(  # type: ignore
+                size=c.size,
+                dtype=cudf.ListDtype(lc.dtype),
+                mask=c.mask,
+                offset=c.offset,
+                null_count=c.null_count,
+                children=(o, lc),
+            )
+
+        # Separator strings to match the Python format
+        separators = as_column([", ", "[", "]"])
+
+        # Call libcudf to format the list column
+        return format_list_column(lc, separators)
 
 
 class ListMethods(ColumnMethods):

@@ -35,7 +35,7 @@ using types =
 
 // using types = cudf::test::Types<cudf::test::Types<int32_t, int32_t> >;
 
-TYPED_TEST_CASE(PartitionTest, types);
+TYPED_TEST_SUITE(PartitionTest, types);
 
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
@@ -234,7 +234,7 @@ template <typename T>
 class PartitionTestFixedPoint : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(PartitionTestFixedPoint, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(PartitionTestFixedPoint, cudf::test::FixedPointTypes);
 
 TYPED_TEST(PartitionTestFixedPoint, Partition)
 {

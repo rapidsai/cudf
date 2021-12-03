@@ -140,24 +140,24 @@ def test_datetime_series_binops_numpy(lhs_dtype, rhs_dtype):
     gdf_data_2 = Series(pd_data_2).astype(rhs_dtype)
     np_data_1 = np.array(pd_data_1).astype(lhs_dtype)
     np_data_2 = np.array(pd_data_2).astype(rhs_dtype)
-    np.testing.assert_equal(np_data_1, gdf_data_1.to_array())
-    np.testing.assert_equal(np_data_2, gdf_data_2.to_array())
+    np.testing.assert_equal(np_data_1, gdf_data_1.to_numpy())
+    np.testing.assert_equal(np_data_2, gdf_data_2.to_numpy())
     np.testing.assert_equal(
-        np.less(np_data_1, np_data_2), (gdf_data_1 < gdf_data_2).to_array()
+        np.less(np_data_1, np_data_2), (gdf_data_1 < gdf_data_2).to_numpy()
     )
     np.testing.assert_equal(
-        np.greater(np_data_1, np_data_2), (gdf_data_1 > gdf_data_2).to_array()
+        np.greater(np_data_1, np_data_2), (gdf_data_1 > gdf_data_2).to_numpy()
     )
     np.testing.assert_equal(
-        np.equal(np_data_1, np_data_2), (gdf_data_1 == gdf_data_2).to_array()
+        np.equal(np_data_1, np_data_2), (gdf_data_1 == gdf_data_2).to_numpy()
     )
     np.testing.assert_equal(
         np.less_equal(np_data_1, np_data_2),
-        (gdf_data_1 <= gdf_data_2).to_array(),
+        (gdf_data_1 <= gdf_data_2).to_numpy(),
     )
     np.testing.assert_equal(
         np.greater_equal(np_data_1, np_data_2),
-        (gdf_data_1 >= gdf_data_2).to_array(),
+        (gdf_data_1 >= gdf_data_2).to_numpy(),
     )
 
 
@@ -268,7 +268,7 @@ def test_typecast_from_datetime(data, dtype):
     np_casted = np_data.astype(dtype)
     gdf_casted = gdf_data.astype(dtype)
 
-    np.testing.assert_equal(np_casted, gdf_casted.to_array())
+    np.testing.assert_equal(np_casted, gdf_casted.to_numpy())
 
 
 @pytest.mark.parametrize("data", [data1(), data2()])
@@ -284,7 +284,7 @@ def test_typecast_from_datetime_to_int64_to_datetime(data, dtype):
     np_casted = np_data.astype(np.int64).astype(dtype)
     gdf_casted = gdf_data.astype(np.int64).astype(dtype)
 
-    np.testing.assert_equal(np_casted, gdf_casted.to_array())
+    np.testing.assert_equal(np_casted, gdf_casted.to_numpy())
 
 
 @pytest.mark.parametrize("data", [timeseries_us_data()])
@@ -296,7 +296,7 @@ def test_typecast_to_different_datetime_resolutions(data, dtype):
     pd_data = pd.Series(data.copy())
     np_data = np.array(pd_data).astype(dtype)
     gdf_series = Series(pd_data).astype(dtype)
-    np.testing.assert_equal(np_data, gdf_series.to_array())
+    np.testing.assert_equal(np_data, gdf_series.to_numpy())
 
 
 @pytest.mark.parametrize(
@@ -331,7 +331,7 @@ def test_typecast_to_datetime(data, from_dtype, to_dtype):
     np_casted = np_data.astype(to_dtype)
     gdf_casted = gdf_data.astype(to_dtype)
 
-    np.testing.assert_equal(np_casted, gdf_casted.to_array())
+    np.testing.assert_equal(np_casted, gdf_casted.to_numpy())
 
 
 @pytest.mark.parametrize("data", [numerical_data()])
@@ -347,7 +347,7 @@ def test_typecast_to_from_datetime(data, from_dtype, to_dtype):
     np_casted = np_data.astype(to_dtype).astype(from_dtype)
     gdf_casted = gdf_data.astype(to_dtype).astype(from_dtype)
 
-    np.testing.assert_equal(np_casted, gdf_casted.to_array())
+    np.testing.assert_equal(np_casted, gdf_casted.to_numpy())
 
 
 @pytest.mark.parametrize("data", [numerical_data()])
@@ -361,12 +361,12 @@ def test_typecast_to_from_datetime(data, from_dtype, to_dtype):
 )
 def test_typecast_from_datetime_to_datetime(data, from_dtype, to_dtype):
     np_data = data.astype(from_dtype)
-    gdf_col = Series(np_data)._column
+    ser = Series(np_data)
 
     np_casted = np_data.astype(to_dtype)
-    gdf_casted = gdf_col.astype(to_dtype)
+    ser_casted = ser.astype(to_dtype)
 
-    np.testing.assert_equal(np_casted, gdf_casted.to_array())
+    np.testing.assert_equal(np_casted, ser_casted.to_numpy())
 
 
 @pytest.mark.parametrize("data", [numerical_data()])
@@ -1131,7 +1131,26 @@ def test_datetime_fillna(data, dtype, fill_value):
 )
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)
 @pytest.mark.parametrize(
-    "date_format", ["%d - %m", "%y/%H", "%Y", "%I - %M / %S", "%f", "%j", "%p"]
+    "date_format",
+    [
+        "%d - %m",
+        "%y/%H",
+        "%Y",
+        "%I - %M / %S",
+        "%f",
+        "%j",
+        "%p",
+        "%w",
+        "%U",
+        "%W",
+        "%G",
+        "%u",
+        "%V",
+        "%b",
+        "%B",
+        "%a",
+        "%A",
+    ],
 )
 def test_datetime_strftime(data, dtype, date_format):
     gsr = cudf.Series(data, dtype=dtype)
@@ -1143,24 +1162,7 @@ def test_datetime_strftime(data, dtype, date_format):
     assert_eq(expected, actual)
 
 
-@pytest.mark.parametrize(
-    "date_format",
-    [
-        "%a",
-        "%A",
-        "%w",
-        "%b",
-        "%B",
-        "%U",
-        "%W",
-        "%c",
-        "%x",
-        "%X",
-        "%G",
-        "%u",
-        "%V",
-    ],
-)
+@pytest.mark.parametrize("date_format", ["%c", "%x", "%X"])
 def test_datetime_strftime_not_implemented_formats(date_format):
     gsr = cudf.Series([1, 2, 3], dtype="datetime64[ms]")
 
@@ -1334,6 +1336,55 @@ def test_quarter():
     assert_eq(expect2.values, got2.values, check_dtype=False)
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.Series([], dtype="datetime64[ns]"),
+        pd.Series(pd.date_range("2010-01-01", "2010-02-01")),
+        pd.Series([None, None], dtype="datetime64[ns]"),
+        pd.Series("2020-05-31 08:00:00", dtype="datetime64[s]"),
+        pd.Series(
+            pd.date_range(start="2021-07-25", end="2021-07-30"),
+            index=["a", "b", "c", "d", "e", "f"],
+        ),
+    ],
+)
+def test_isocalendar_series(data):
+    ps = data.copy()
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.dt.isocalendar()
+    got = gs.dt.isocalendar()
+
+    assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        pd.DatetimeIndex([], dtype="datetime64[ns]"),
+        pd.DatetimeIndex([None, None], dtype="datetime64[ns]"),
+        pd.DatetimeIndex(
+            [
+                "2020-05-31 08:00:00",
+                "1999-12-31 18:40:00",
+                "2000-12-31 04:00:00",
+            ],
+            dtype="datetime64[ns]",
+        ),
+        pd.DatetimeIndex(["2100-03-14 07:30:00"], dtype="datetime64[ns]"),
+    ],
+)
+def test_isocalendar_index(data):
+    ps = data.copy()
+    gs = cudf.from_pandas(ps)
+
+    expect = ps.isocalendar()
+    got = gs.isocalendar()
+
+    assert_eq(expect, got, check_dtype=False)
+
+
 @pytest.mark.parametrize("dtype", DATETIME_TYPES)
 def test_days_in_months(dtype):
     nrows = 1000
@@ -1380,6 +1431,161 @@ def test_is_month_start(data, dtype):
     got = gs.dt.is_month_start
 
     assert_eq(expect, got)
+
+
+##################################################################
+#                       Date Range Tests                         #
+##################################################################
+
+date_range_test_dates_start = [
+    "2000-02-13 08:41:06",  # leap year
+    "1996-11-21 04:05:30",  # non leap year
+    "1970-01-01 00:00:00",  # unix epoch time 0
+    "1831-05-08 15:23:21",
+]
+date_range_test_dates_end = [
+    "2000-02-13 08:41:06",  # leap year
+    "1996-11-21 04:05:30",  # non leap year
+    "1970-01-01 00:00:00",  # unix epoch time 0
+    "1831-05-08 15:23:21",
+]
+date_range_test_periods = [1, 10, 100]
+date_range_test_freq = [
+    {"months": 3, "years": 1},
+    pytest.param(
+        {"hours": 10, "days": 57, "nanoseconds": 3},
+        marks=pytest.mark.xfail(
+            True,
+            reason="Pandas ignoring nanoseconds component. "
+            "https://github.com/pandas-dev/pandas/issues/44393",
+        ),
+    ),
+    "83D",
+    "17h",
+    "-680T",
+    "110546s",
+    pytest.param(
+        "110546789L",
+        marks=pytest.mark.xfail(
+            True,
+            reason="Pandas DateOffset ignores milliseconds. "
+            "https://github.com/pandas-dev/pandas/issues/43371",
+        ),
+    ),
+    "110546789248U",
+]
+
+
+@pytest.fixture(params=date_range_test_dates_start[:])
+def start(request):
+    return request.param
+
+
+@pytest.fixture(params=date_range_test_dates_end[:])
+def end(request):
+    return request.param
+
+
+@pytest.fixture(params=date_range_test_periods[:])
+def periods(request):
+    return request.param
+
+
+@pytest.fixture(params=date_range_test_freq[:])
+def freq(request):
+    return request.param
+
+
+def test_date_range_start_end_periods(start, end, periods):
+    expect = pd.date_range(start=start, end=end, periods=periods, name="a")
+    got = cudf.date_range(start=start, end=end, periods=periods, name="a")
+
+    np.testing.assert_allclose(
+        expect.to_numpy().astype("int64"),
+        got.to_pandas().to_numpy().astype("int64"),
+    )
+
+
+def test_date_range_start_end_freq(start, end, freq):
+    if isinstance(freq, str):
+        _gfreq = _pfreq = freq
+    else:
+        _gfreq = cudf.DateOffset(**freq)
+        _pfreq = pd.DateOffset(**freq)
+
+    expect = pd.date_range(start=start, end=end, freq=_pfreq, name="a")
+    got = cudf.date_range(start=start, end=end, freq=_gfreq, name="a")
+
+    np.testing.assert_allclose(
+        expect.to_numpy().astype("int64"),
+        got.to_pandas().to_numpy().astype("int64"),
+    )
+
+
+def test_date_range_start_freq_periods(start, freq, periods):
+    if isinstance(freq, str):
+        _gfreq = _pfreq = freq
+    else:
+        _gfreq = cudf.DateOffset(**freq)
+        _pfreq = pd.DateOffset(**freq)
+
+    expect = pd.date_range(start=start, periods=periods, freq=_pfreq, name="a")
+    got = cudf.date_range(start=start, periods=periods, freq=_gfreq, name="a")
+
+    np.testing.assert_allclose(
+        expect.to_numpy().astype("int64"),
+        got.to_pandas().to_numpy().astype("int64"),
+    )
+
+
+def test_date_range_end_freq_periods(end, freq, periods):
+    if isinstance(freq, str):
+        _gfreq = _pfreq = freq
+    else:
+        _gfreq = cudf.DateOffset(**freq)
+        _pfreq = pd.DateOffset(**freq)
+
+    expect = pd.date_range(end=end, periods=periods, freq=_pfreq, name="a")
+    got = cudf.date_range(end=end, periods=periods, freq=_gfreq, name="a")
+
+    np.testing.assert_allclose(
+        expect.to_numpy().astype("int64"),
+        got.to_pandas().to_numpy().astype("int64"),
+    )
+
+
+def test_date_range_freq_does_not_divide_range():
+    expect = pd.date_range(
+        "2001-01-01 00:00:00.000000", "2001-01-01 00:00:00.000010", freq="3us"
+    )
+    got = cudf.date_range(
+        "2001-01-01 00:00:00.000000", "2001-01-01 00:00:00.000010", freq="3us"
+    )
+    np.testing.assert_allclose(
+        expect.to_numpy().astype("int64"),
+        got.to_pandas().to_numpy().astype("int64"),
+    )
+
+
+def test_date_range_raise_overflow():
+    # Fixed offset
+    start = np.datetime64(np.iinfo("int64").max, "ns")
+    periods = 2
+    freq = cudf.DateOffset(nanoseconds=1)
+    with pytest.raises(pd._libs.tslibs.np_datetime.OutOfBoundsDatetime):
+        cudf.date_range(start=start, periods=periods, freq=freq)
+
+    # Non-fixed offset
+    start = np.datetime64(np.iinfo("int64").max, "ns")
+    periods = 2
+    freq = cudf.DateOffset(months=1)
+    with pytest.raises(pd._libs.tslibs.np_datetime.OutOfBoundsDatetime):
+        cudf.date_range(start=start, periods=periods, freq=freq)
+
+
+##################################################################
+#                    End of Date Range Test                      #
+##################################################################
 
 
 @pytest.mark.parametrize(

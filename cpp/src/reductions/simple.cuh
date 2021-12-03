@@ -41,8 +41,8 @@ namespace simple {
  * @tparam Op           the operator of cudf::reduction::op::
 
  * @param col Input column of data to reduce
- * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @param stream Used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Output scalar in device memory
  */
 template <typename ElementType, typename ResultType, typename Op>
@@ -74,12 +74,12 @@ std::unique_ptr<scalar> simple_reduction(column_view const& col,
 /**
  * @brief Reduction for `sum`, `product`, `min` and `max` for decimal types
  *
- * @tparam DecimalXX  The `decimal32` or `decimal64` type
+ * @tparam DecimalXX  The `decimal32`, `decimal64` or `decimal128` type
  * @tparam Op         The operator of cudf::reduction::op::
+ *
  * @param col         Input column of data to reduce
-
- * @param mr          Device memory resource used to allocate the returned scalar's device memory
  * @param stream      Used for device memory operations and kernel launches.
+ * @param mr          Device memory resource used to allocate the returned scalar's device memory
  * @return            Output scalar in device memory
  */
 template <typename DecimalXX, typename Op>
@@ -115,7 +115,7 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
   }();
 
   auto const val = static_cast<cudf::scalar_type_t<Type>*>(result.get());
-  return cudf::make_fixed_point_scalar<DecimalXX>(val->value(), scale);
+  return cudf::make_fixed_point_scalar<DecimalXX>(val->value(stream), scale);
 }
 
 /**
@@ -124,10 +124,10 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
  * @tparam ElementType  The key type of the input dictionary column.
  * @tparam ResultType   The output data-type for the resulting scalar
  * @tparam Op           The operator of cudf::reduction::op::
-
+ *
  * @param col Input dictionary column of data to reduce
- * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @param stream Used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @return Output scalar in device memory
  */
 template <typename ElementType, typename ResultType, typename Op>
@@ -376,8 +376,8 @@ struct element_type_dispatcher {
    * @tparam ElementType The input column type or key type.
    * @param col Input column (must be numeric)
    * @param output_type Requested type of the scalar result
-   * @param mr Device memory resource used to allocate the returned scalar's device memory
    * @param stream CUDA stream used for device memory operations and kernel launches.
+   * @param mr Device memory resource used to allocate the returned scalar's device memory
    */
   template <typename ElementType,
             typename std::enable_if_t<cudf::is_numeric<ElementType>()>* = nullptr>
@@ -395,7 +395,7 @@ struct element_type_dispatcher {
   }
 
   /**
-   * @brief Specialization for reducing integer column types to any output type.
+   * @brief Specialization for reducing fixed_point column types to fixed_point number
    */
   template <typename ElementType,
             typename std::enable_if_t<cudf::is_fixed_point<ElementType>()>* = nullptr>

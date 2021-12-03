@@ -24,11 +24,10 @@ from cudf._lib.cpp.types cimport (
     null_policy,
     size_type,
 )
-from cudf._lib.table cimport Table, table_view_from_table
-from cudf._lib.utils cimport data_from_unique_ptr
+from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
 
-def drop_nulls(Table source_table, how="any", keys=None, thresh=None):
+def drop_nulls(source_table, how="any", keys=None, thresh=None):
     """
     Drops null rows from cols depending on key columns.
 
@@ -43,7 +42,7 @@ def drop_nulls(Table source_table, how="any", keys=None, thresh=None):
 
     Returns
     -------
-    Table with null rows dropped
+    Frame with null rows dropped
     """
 
     num_index_columns = (
@@ -88,7 +87,7 @@ def drop_nulls(Table source_table, how="any", keys=None, thresh=None):
     )
 
 
-def apply_boolean_mask(Table source_table, Column boolean_mask):
+def apply_boolean_mask(source_table, Column boolean_mask):
     """
     Drops the rows which correspond to False in boolean_mask.
 
@@ -99,7 +98,7 @@ def apply_boolean_mask(Table source_table, Column boolean_mask):
 
     Returns
     -------
-    Table obtained from applying mask
+    Frame obtained from applying mask
     """
 
     assert pd.api.types.is_bool_dtype(boolean_mask.dtype)
@@ -125,7 +124,7 @@ def apply_boolean_mask(Table source_table, Column boolean_mask):
     )
 
 
-def drop_duplicates(Table source_table,
+def drop_duplicates(source_table,
                     object keys=None,
                     object keep='first',
                     bool nulls_are_equal=True,
@@ -142,7 +141,7 @@ def drop_duplicates(Table source_table,
 
     Returns
     -------
-    Table with duplicate dropped
+    Frame with duplicate dropped
     """
 
     cdef duplicate_keep_option cpp_keep_option

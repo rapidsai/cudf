@@ -9,6 +9,7 @@ from libcpp.vector cimport vector
 
 cimport cudf._lib.cpp.types as libcudf_types
 from cudf._lib.cpp.types cimport data_type, type_id
+from cudf._lib.io.datasource cimport Datasource, NativeFileDatasource
 from cudf._lib.types cimport dtype_to_data_type
 
 import numpy as np
@@ -44,12 +45,13 @@ from cudf._lib.cpp.io.types cimport (
 )
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.io.utils cimport make_sink_info, make_source_info
-from cudf._lib.table cimport (
-    Table,
+from cudf._lib.utils cimport (
+    data_from_unique_ptr,
     table_view_from_columns,
     table_view_from_table,
 )
-from cudf._lib.utils cimport data_from_unique_ptr
+
+from pyarrow.lib import NativeFile
 
 ctypedef int32_t underlying_type_t_compression
 
@@ -394,7 +396,8 @@ def read_csv(
     """
 
     if not isinstance(datasource, (BytesIO, StringIO, bytes,
-                                   cudf._lib.io.datasource.Datasource)):
+                                   Datasource,
+                                   NativeFile)):
         if not os.path.isfile(datasource):
             raise FileNotFoundError(
                 errno.ENOENT, os.strerror(errno.ENOENT), datasource
@@ -404,6 +407,8 @@ def read_csv(
         datasource = datasource.read().encode()
     elif isinstance(datasource, str) and not os.path.isfile(datasource):
         datasource = datasource.encode()
+    elif isinstance(datasource, NativeFile):
+        datasource = NativeFileDatasource(datasource)
 
     validate_args(delimiter, sep, delim_whitespace, decimal, thousands,
                   nrows, skipfooter, byte_range, skiprows)
@@ -446,7 +451,7 @@ def read_csv(
 
 
 cpdef write_csv(
-    Table table,
+    table,
     object path_or_buf=None,
     object sep=",",
     object na_rep="",

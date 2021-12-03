@@ -7,7 +7,7 @@ import pytest
 
 import cudf
 from cudf.core.dtypes import StructDtype
-from cudf.testing._utils import assert_eq
+from cudf.testing._utils import DATETIME_TYPES, TIMEDELTA_TYPES, assert_eq
 
 
 @pytest.mark.parametrize(
@@ -207,7 +207,7 @@ def test_dataframe_to_struct():
 
 
 @pytest.mark.parametrize(
-    "series, start, end",
+    "series, slce",
     [
         (
             [
@@ -216,8 +216,7 @@ def test_dataframe_to_struct():
                 {},
                 None,
             ],
-            1,
-            None,
+            slice(1, None),
         ),
         (
             [
@@ -229,8 +228,7 @@ def test_dataframe_to_struct():
                 None,
                 cudf.NA,
             ],
-            1,
-            5,
+            slice(1, 5),
         ),
         (
             [
@@ -242,22 +240,15 @@ def test_dataframe_to_struct():
                 None,
                 cudf.NA,
             ],
-            None,
-            4,
+            slice(None, 4),
         ),
+        ([{"a": {"b": 42, "c": -1}}, {"a": {"b": 0, "c": None}}], slice(0, 1)),
     ],
 )
-def test_struct_slice(series, start, end):
-    sr = cudf.Series(series)
-    if not end:
-        expected = cudf.Series(series[start:])
-        assert sr[start:].to_arrow() == expected.to_arrow()
-    elif not start:
-        expected = cudf.Series(series[:end])
-        assert sr[:end].to_arrow() == expected.to_arrow()
-    else:
-        expected = cudf.Series(series[start:end])
-        assert sr[start:end].to_arrow() == expected.to_arrow()
+def test_struct_slice(series, slce):
+    got = cudf.Series(series)[slce]
+    expected = cudf.Series(series[slce])
+    assert got.to_arrow() == expected.to_arrow()
 
 
 def test_struct_slice_nested_struct():
@@ -268,8 +259,7 @@ def test_struct_slice_nested_struct():
 
     got = cudf.Series(data)[0:1]
     expect = cudf.Series(data[0:1])
-    assert got.__repr__() == expect.__repr__()
-    assert got.dtype.to_arrow() == expect.dtype.to_arrow()
+    assert got.to_arrow() == expect.to_arrow()
 
 
 @pytest.mark.parametrize(
@@ -292,3 +282,35 @@ def test_struct_field_errors(data):
 
     with pytest.raises(IndexError):
         got.struct.field(100)
+
+
+@pytest.mark.parametrize("dtype", DATETIME_TYPES + TIMEDELTA_TYPES)
+def test_struct_with_datetime_and_timedelta(dtype):
+    df = cudf.DataFrame(
+        {
+            "a": [12, 232, 2334],
+            "datetime": cudf.Series([23432, 3432423, 324324], dtype=dtype),
+        }
+    )
+    series = df.to_struct()
+    a_array = np.array([12, 232, 2334])
+    datetime_array = np.array([23432, 3432423, 324324]).astype(dtype)
+
+    actual = series.to_pandas()
+    values_list = []
+    for i, val in enumerate(a_array):
+        values_list.append({"a": val, "datetime": datetime_array[i]})
+
+    expected = pd.Series(values_list)
+    assert_eq(expected, actual)
+
+
+def test_struct_int_values():
+    series = cudf.Series(
+        [{"a": 1, "b": 2}, {"a": 10, "b": None}, {"a": 5, "b": 6}]
+    )
+    actual_series = series.to_pandas()
+
+    assert isinstance(actual_series[0]["b"], int)
+    assert isinstance(actual_series[1]["b"], type(None))
+    assert isinstance(actual_series[2]["b"], int)

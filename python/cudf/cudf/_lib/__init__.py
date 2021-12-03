@@ -33,7 +33,6 @@ from . import (
     stream_compaction,
     string_casting,
     strings,
-    table,
     transpose,
     unary,
     text,

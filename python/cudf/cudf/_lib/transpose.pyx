@@ -13,11 +13,10 @@ from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
 from cudf._lib.cpp.transpose cimport transpose as cpp_transpose
-from cudf._lib.table cimport Table, table_view_from_table
-from cudf._lib.utils cimport data_from_table_view
+from cudf._lib.utils cimport data_from_table_view, table_view_from_table
 
 
-def transpose(Table source):
+def transpose(source):
     """Transpose index and columns.
 
     See Also
@@ -36,7 +35,7 @@ def transpose(Table source):
             raise ValueError('Columns must all have the same dtype')
         cats = list(c.categories for c in source._columns)
         cats = cudf.core.column.concat_columns(cats).unique()
-        source = Table(index=source._index, data=[
+        source = cudf.core.frame.Frame(index=source._index, data=[
             (name, col._set_categories(cats, is_unique=True).codes)
             for name, col in source._data.items()
         ])
@@ -56,13 +55,13 @@ def transpose(Table source):
     data, _ = data_from_table_view(
         c_result.second,
         owner=result_owner,
-        column_names=range(source._num_rows)
+        column_names=range(c_input.num_rows())
     )
 
     if cats is not None:
         data= [
             (name, cudf.core.column.column.build_categorical_column(
-                codes=cudf.core.column.column.as_column(
+                codes=cudf.core.column.column.build_column(
                     col.base_data, dtype=col.dtype),
                 mask=col.base_mask,
                 size=col.size,

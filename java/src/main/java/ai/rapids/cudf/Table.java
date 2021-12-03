@@ -27,6 +27,8 @@ import ai.rapids.cudf.ast.CompiledExpression;
 
 import java.io.File;
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.MathContext;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.*;
@@ -329,43 +331,63 @@ public final class Table implements AutoCloseable {
    * @param usingNumPyTypes   whether the parser should implicitly promote TIMESTAMP
    *                          columns to TIMESTAMP_MILLISECONDS for compatibility with NumPy.
    * @param timeUnit          return type of TimeStamp in units
+   * @param decimal128Columns name of the columns which are read as Decimal128 rather than Decimal64
    */
   private static native long[] readORC(String[] filterColumnNames,
                                        String filePath, long address, long length,
-                                       boolean usingNumPyTypes, int timeUnit) throws CudfException;
+                                       boolean usingNumPyTypes, int timeUnit,
+                                       String[] decimal128Columns) throws CudfException;
 
   /**
    * Setup everything to write ORC formatted data to a file.
    * @param columnNames     names that correspond to the table columns
+   * @param numChildren     Children of the top level
+   * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
+   * @param precisions      precision list containing all the precisions of the decimal types in
+   *                        the columns
+   * @param isMapValues     true if a column is a map
    * @param filename        local output path
    * @return a handle that is used in later calls to writeORCChunk and writeORCEnd.
    */
   private static native long writeORCFileBegin(String[] columnNames,
+                                               int numChildren,
+                                               int[] flatNumChildren,
                                                boolean[] nullable,
                                                String[] metadataKeys,
                                                String[] metadataValues,
                                                int compression,
+                                               int[] precisions,
+                                               boolean[] isMapValues,
                                                String filename) throws CudfException;
 
   /**
    * Setup everything to write ORC formatted data to a buffer.
    * @param columnNames     names that correspond to the table columns
+   * @param numChildren     Children of the top level
+   * @param flatNumChildren flattened list of children per column
    * @param nullable        true if the column can have nulls else false
    * @param metadataKeys    Metadata key names to place in the Parquet file
    * @param metadataValues  Metadata values corresponding to metadataKeys
    * @param compression     native compression codec ID
+   * @param precisions      precision list containing all the precisions of the decimal types in
+   *                        the columns
+   * @param isMapValues     true if a column is a map
    * @param consumer        consumer of host buffers produced.
    * @return a handle that is used in later calls to writeORCChunk and writeORCEnd.
    */
   private static native long writeORCBufferBegin(String[] columnNames,
+                                                 int numChildren,
+                                                 int[] flatNumChildren,
                                                  boolean[] nullable,
                                                  String[] metadataKeys,
                                                  String[] metadataValues,
                                                  int compression,
+                                                 int[] precisions,
+                                                 boolean[] isMapValues,
                                                  HostBufferConsumer consumer) throws CudfException;
 
   /**
@@ -863,7 +885,9 @@ public final class Table implements AutoCloseable {
    */
   public static Table readORC(ORCOptions opts, File path) {
     return new Table(readORC(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0, opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId()));
+        path.getAbsolutePath(), 0, 0,
+        opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
+        opts.getDecimal128Columns()));
   }
 
   /**
@@ -923,8 +947,9 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(readORC(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len, opts.usingNumPyTypes(),
-        opts.timeUnit().typeId.getNativeId()));
+        null, buffer.getAddress() + offset, len,
+        opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
+        opts.getDecimal128Columns()));
   }
 
   private static class ParquetTableWriter implements TableWriter {
@@ -1079,21 +1104,29 @@ public final class Table implements AutoCloseable {
     HostBufferConsumer consumer;
 
     private ORCTableWriter(ORCWriterOptions options, File outputFile) {
-      this.handle = writeORCFileBegin(options.getColumnNames(),
-          options.getColumnNullability(),
+      this.handle = writeORCFileBegin(options.getFlatColumnNames(),
+          options.getTopLevelChildren(),
+          options.getFlatNumChildren(),
+          options.getFlatIsNullable(),
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
+          options.getFlatPrecision(),
+          options.getFlatIsMap(),
           outputFile.getAbsolutePath());
       this.consumer = null;
     }
 
     private ORCTableWriter(ORCWriterOptions options, HostBufferConsumer consumer) {
-      this.handle = writeORCBufferBegin(options.getColumnNames(),
-          options.getColumnNullability(),
+      this.handle = writeORCBufferBegin(options.getFlatColumnNames(),
+          options.getTopLevelChildren(),
+          options.getFlatNumChildren(),
+          options.getFlatIsNullable(),
           options.getMetadataKeys(),
           options.getMetadataValues(),
           options.getCompressionType().nativeId,
+          options.getFlatPrecision(),
+          options.getFlatIsMap(),
           consumer);
       this.consumer = consumer;
     }
@@ -1150,7 +1183,7 @@ public final class Table implements AutoCloseable {
     // Need to specify the number of columns but leave all column names undefined
     String[] names = new String[getNumberOfColumns()];
     Arrays.fill(names, "");
-    ORCWriterOptions opts = ORCWriterOptions.builder().withColumnNames(names).build();
+    ORCWriterOptions opts = ORCWriterOptions.builder().withColumns(true, names).build();
     writeORC(opts, outputFile);
   }
 
@@ -1161,7 +1194,7 @@ public final class Table implements AutoCloseable {
    */
   @Deprecated
   public void writeORC(ORCWriterOptions options, File outputFile) {
-    assert options.getColumnNames().length == getNumberOfColumns() : "must specify names for all columns";
+    assert options.getTopLevelChildren() == getNumberOfColumns() : "must specify names for all columns";
     try (TableWriter writer = Table.writeORCChunked(options, outputFile)) {
       writer.write(this);
     }
@@ -2016,7 +2049,7 @@ public final class Table implements AutoCloseable {
    * @return the resulting Table.
    */
   public Table gather(ColumnView gatherMap) {
-    return gather(gatherMap, true);
+    return gather(gatherMap, OutOfBoundsPolicy.NULLIFY);
   }
 
   /**
@@ -2027,13 +2060,33 @@ public final class Table implements AutoCloseable {
    *
    * A negative value `i` in the `gatherMap` is interpreted as `i+n`, where
    * `n` is the number of rows in this table.
-
+   *
+   * @deprecated Use {@link #gather(ColumnView, OutOfBoundsPolicy)}
    * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
    * @param checkBounds if true bounds checking is performed on the value. Be very careful
    *                    when setting this to false.
    * @return the resulting Table.
    */
+  @Deprecated
   public Table gather(ColumnView gatherMap, boolean checkBounds) {
+    return new Table(gather(nativeHandle, gatherMap.getNativeView(), checkBounds));
+  }
+
+  /**
+   * Gathers the rows of this table according to `gatherMap` such that row "i"
+   * in the resulting table's columns will contain row "gatherMap[i]" from this table.
+   * The number of rows in the result table will be equal to the number of elements in
+   * `gatherMap`.
+   *
+   * A negative value `i` in the `gatherMap` is interpreted as `i+n`, where
+   * `n` is the number of rows in this table.
+   *
+   * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
+   * @param outOfBoundsPolicy policy to use when an out-of-range value is in `gatherMap`
+   * @return the resulting Table.
+   */
+  public Table gather(ColumnView gatherMap, OutOfBoundsPolicy outOfBoundsPolicy) {
+    boolean checkBounds = outOfBoundsPolicy == OutOfBoundsPolicy.NULLIFY;
     return new Table(gather(nativeHandle, gatherMap.getNativeView(), checkBounds));
   }
 
@@ -3762,6 +3815,16 @@ public final class Table implements AutoCloseable {
       return this;
     }
 
+    public TestBuilder decimal128Column(int scale, RoundingMode mode, BigInteger... values) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL128, scale)));
+      BigDecimal[] data = Arrays.stream(values).map((x) -> {
+        if (x == null) return null;
+        return new BigDecimal(x, scale, new MathContext(38, mode));
+      }).toArray(BigDecimal[]::new);
+      typeErasedData.add(data);
+      return this;
+    }
+
     private static ColumnVector from(DType type, Object dataArray) {
       ColumnVector ret = null;
       switch (type.typeId) {
@@ -3806,6 +3869,7 @@ public final class Table implements AutoCloseable {
           break;
         case DECIMAL32:
         case DECIMAL64:
+        case DECIMAL128:
           int scale = type.getScale();
           if (dataArray instanceof Integer[]) {
             BigDecimal[] data = Arrays.stream(((Integer[]) dataArray))

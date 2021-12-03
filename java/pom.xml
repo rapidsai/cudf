@@ -21,7 +21,7 @@
 
     <groupId>ai.rapids</groupId>
     <artifactId>cudf</artifactId>
-    <version>21.10.0-SNAPSHOT</version>
+    <version>21.12.0-SNAPSHOT</version>
 
     <name>cudfjni</name>
     <description>
@@ -158,6 +158,7 @@
         <maven.compiler.target>1.8</maven.compiler.target>
         <junit.version>5.4.2</junit.version>
         <ai.rapids.refcount.debug>false</ai.rapids.refcount.debug>
+        <ai.rapids.cudf.nvtx.enabled>false</ai.rapids.cudf.nvtx.enabled>
         <native.build.path>${basedir}/target/cmake-build</native.build.path>
         <skipNativeCopy>false</skipNativeCopy>
         <cxx.flags/>
@@ -489,6 +490,7 @@
                   <redirectTestOutputToFile>true</redirectTestOutputToFile>
                   <systemPropertyVariables>
                     <ai.rapids.refcount.debug>${ai.rapids.refcount.debug}</ai.rapids.refcount.debug>
+                    <ai.rapids.cudf.nvtx.enabled>${ai.rapids.cudf.nvtx.enabled}</ai.rapids.cudf.nvtx.enabled>
                   </systemPropertyVariables>
                 </configuration>
             </plugin>

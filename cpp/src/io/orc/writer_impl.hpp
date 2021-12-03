@@ -167,14 +167,19 @@ struct string_dictionaries {
 };
 
 /**
+ * @brief Maximum size of stripes in the output file.
+ */
+struct stripe_size_limits {
+  size_t bytes;
+  size_type rows;
+};
+
+/**
  * @brief Implementation for ORC writer
  */
 class writer::impl {
   // ORC datasets start with a 3 byte header
   static constexpr const char* MAGIC = "ORC";
-
-  // ORC datasets are divided into fixed-size, independent stripes
-  static constexpr uint32_t DEFAULT_STRIPE_SIZE = 64 * 1024 * 1024;
 
   // ORC compresses streams into independent chunks
   static constexpr uint32_t DEFAULT_COMPRESSION_BLOCKSIZE = 256 * 1024;
@@ -325,13 +330,14 @@ class writer::impl {
    * @param[in,out] stream_out Temporary host output buffer
    * @param[in,out] stripe Stream's parent stripe
    * @param[in,out] streams List of all streams
+   * @return An std::future that should be synchronized to ensure the writing is complete
    */
-  void write_data_stream(gpu::StripeStream const& strm_desc,
-                         gpu::encoder_chunk_streams const& enc_stream,
-                         uint8_t const* compressed_data,
-                         uint8_t* stream_out,
-                         StripeInformation* stripe,
-                         orc_streams* streams);
+  std::future<void> write_data_stream(gpu::StripeStream const& strm_desc,
+                                      gpu::encoder_chunk_streams const& enc_stream,
+                                      uint8_t const* compressed_data,
+                                      uint8_t* stream_out,
+                                      StripeInformation* stripe,
+                                      orc_streams* streams);
 
   /**
    * @brief Insert 3-byte uncompressed block headers in a byte vector
@@ -345,8 +351,8 @@ class writer::impl {
   // Cuda stream to be used
   rmm::cuda_stream_view stream = rmm::cuda_stream_default;
 
-  size_t max_stripe_size_           = DEFAULT_STRIPE_SIZE;
-  size_t row_index_stride_          = default_row_index_stride;
+  stripe_size_limits max_stripe_size;
+  size_type row_index_stride;
   size_t compression_blocksize_     = DEFAULT_COMPRESSION_BLOCKSIZE;
   CompressionKind compression_kind_ = CompressionKind::NONE;
 

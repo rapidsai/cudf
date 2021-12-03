@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include <stream_compaction/drop_duplicates.cuh>
+
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
@@ -40,74 +42,6 @@
 namespace cudf {
 namespace detail {
 namespace {
-
-template <typename InputIterator, typename BinaryPredicate>
-struct unique_copy_fn {
-  /**
-   * @brief Functor for unique_copy()
-   *
-   * The logic here is equivalent to:
-   * @code
-   *   ((keep == duplicate_keep_option::KEEP_LAST) ||
-   *    (i == 0 || !comp(iter[i], iter[i - 1]))) &&
-   *   ((keep == duplicate_keep_option::KEEP_FIRST) ||
-   *    (i == last_index || !comp(iter[i], iter[i + 1])))
-   * @endcode
-   *
-   * It is written this way so that the `comp` comparator
-   * function appears only once minimizing the inlining
-   * required and reducing the compile time.
-   */
-  __device__ bool operator()(size_type i)
-  {
-    size_type boundary = 0;
-    size_type offset   = 1;
-    auto keep_option   = duplicate_keep_option::KEEP_LAST;
-    do {
-      if ((keep != keep_option) && (i != boundary) && comp(iter[i], iter[i - offset])) {
-        return false;
-      }
-      keep_option = duplicate_keep_option::KEEP_FIRST;
-      boundary    = last_index;
-      offset      = -offset;
-    } while (offset < 0);
-    return true;
-  }
-
-  InputIterator iter;
-  duplicate_keep_option const keep;
-  BinaryPredicate comp;
-  size_type const last_index;
-};
-
-}  // namespace
-
-/**
- * @brief Copies unique elements from the range [first, last) to output iterator `output`.
- *
- * In a consecutive group of duplicate elements, depending on parameter `keep`,
- * only the first element is copied, or the last element is copied or neither is copied.
- *
- * @return End of the range to which the elements are copied.
- */
-template <typename InputIterator, typename OutputIterator, typename BinaryPredicate>
-OutputIterator unique_copy(InputIterator first,
-                           InputIterator last,
-                           OutputIterator output,
-                           BinaryPredicate comp,
-                           duplicate_keep_option const keep,
-                           rmm::cuda_stream_view stream)
-{
-  size_type const last_index = thrust::distance(first, last) - 1;
-  return thrust::copy_if(
-    rmm::exec_policy(stream),
-    first,
-    last,
-    thrust::counting_iterator<size_type>(0),
-    output,
-    unique_copy_fn<InputIterator, BinaryPredicate>{first, keep, comp, last_index});
-}
-
 /**
  * @brief Create a column_view of index values which represent the row values
  * without duplicates as per @p `keep`
@@ -137,8 +71,9 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
                                        null_order null_precedence,
                                        rmm::cuda_stream_view stream)
 {
-  // sort only indices
-  auto sorted_indices = sorted_order(
+  // Sort only the indices.
+  // Note that stable sort must be used to maintain the order of duplicate elements.
+  auto sorted_indices = stable_sorted_order(
     keys,
     std::vector<order>{},
     std::vector<null_order>{static_cast<uint64_t>(keys.num_columns()), null_precedence},
@@ -178,6 +113,7 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
       thrust::distance(unique_indices.begin<cudf::size_type>(), result_end));
   }
 }
+}  // namespace
 
 std::unique_ptr<table> drop_duplicates(table_view const& input,
                                        std::vector<size_type> const& keys,

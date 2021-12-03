@@ -10,20 +10,20 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.column.column cimport column
 from cudf._lib.cpp.column.column_view cimport column_view
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.table cimport Table, table_view_from_table
+from cudf._lib.utils cimport table_view_from_table
 
 
 def search_sorted(
-    Table table, Table values, side, ascending=True, na_position="last"
+    table, values, side, ascending=True, na_position="last"
 ):
     """Find indices where elements should be inserted to maintain order
 
     Parameters
     ----------
-    table : Table
-        Table to search in
-    values : Table
-        Table of values to search for
+    table : Frame
+        Frame to search in
+    values : Frame
+        Frame of values to search for
     side : str {‘left’, ‘right’} optional
         If ‘left’, the index of the first suitable location is given.
         If ‘right’, return the last such index

@@ -10,8 +10,7 @@ from cudf._lib.column cimport Column
 from cudf._lib.cpp.merge cimport merge as cpp_merge
 from cudf._lib.cpp.table.table cimport table
 from cudf._lib.cpp.table.table_view cimport table_view
-from cudf._lib.table cimport Table, table_view_from_table
-from cudf._lib.utils cimport data_from_unique_ptr
+from cudf._lib.utils cimport data_from_unique_ptr, table_view_from_table
 
 
 def merge_sorted(
@@ -28,7 +27,7 @@ def merge_sorted(
     cdef vector[libcudf_types.null_order] c_null_precedence
     cdef libcudf_types.order column_order
     cdef libcudf_types.null_order null_precedence
-    cdef Table source_table
+    cdef source_table
 
     # Create vector of tables
     # Use metadata from 0th table for names, etc

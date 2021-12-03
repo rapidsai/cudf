@@ -209,12 +209,22 @@ struct ParquetWriterChronoTypeTest : public ParquetWriterTest {
   auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
 };
 
+// Typed test fixture for timestamp type tests
+template <typename T>
+struct ParquetWriterTimestampTypeTest : public ParquetWriterTest {
+  auto type() { return cudf::data_type{cudf::type_to_id<T>()}; }
+};
+
 // Declare typed test cases
 // TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5352
 using SupportedTypes = cudf::test::Types<int8_t, int16_t, int32_t, int64_t, bool, float, double>;
-TYPED_TEST_CASE(ParquetWriterNumericTypeTest, SupportedTypes);
+TYPED_TEST_SUITE(ParquetWriterNumericTypeTest, SupportedTypes);
 using SupportedChronoTypes = cudf::test::Concat<cudf::test::ChronoTypes, cudf::test::DurationTypes>;
-TYPED_TEST_CASE(ParquetWriterChronoTypeTest, SupportedChronoTypes);
+TYPED_TEST_SUITE(ParquetWriterChronoTypeTest, SupportedChronoTypes);
+// TODO: debug truncation errors for `timestamp_ns` and overflow errors for `timestamp_s` , see
+// issue #9393.
+using SupportedTimestampTypes = cudf::test::Types<cudf::timestamp_ms, cudf::timestamp_us>;
+TYPED_TEST_SUITE(ParquetWriterTimestampTypeTest, SupportedTimestampTypes);
 
 // Base test fixture for chunked writer tests
 struct ParquetChunkedWriterTest : public cudf::test::BaseFixture {
@@ -227,7 +237,7 @@ struct ParquetChunkedWriterNumericTypeTest : public ParquetChunkedWriterTest {
 };
 
 // Declare typed test cases
-TYPED_TEST_CASE(ParquetChunkedWriterNumericTypeTest, SupportedTypes);
+TYPED_TEST_SUITE(ParquetChunkedWriterNumericTypeTest, SupportedTypes);
 
 namespace {
 // Generates a vector of uniform random values of type T
@@ -361,6 +371,30 @@ TYPED_TEST(ParquetWriterChronoTypeTest, ChronosWithNulls)
   auto result = cudf_io::read_parquet(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected->view(), result.tbl->view());
+}
+
+TYPED_TEST(ParquetWriterTimestampTypeTest, TimestampOverflow)
+{
+  constexpr int64_t max = std::numeric_limits<int64_t>::max();
+  auto sequence = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return max - i; });
+  auto validity = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+
+  constexpr auto num_rows = 100;
+  column_wrapper<TypeParam, typename decltype(sequence)::value_type> col(
+    sequence, sequence + num_rows, validity);
+  table_view expected({col});
+
+  auto filepath = temp_env->get_temp_filepath("OrcTimestampOverflow.orc");
+  cudf_io::parquet_writer_options out_opts =
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected);
+  cudf_io::write_parquet(out_opts);
+
+  cudf_io::parquet_reader_options in_opts =
+    cudf_io::parquet_reader_options::builder(cudf_io::source_info{filepath})
+      .timestamp_type(this->type());
+  auto result = cudf_io::read_parquet(in_opts);
+
+  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
 }
 
 TEST_F(ParquetWriterTest, MultiColumn)
@@ -1049,12 +1083,21 @@ class custom_test_data_sink : public cudf::io::data_sink {
 
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
-    char* ptr = nullptr;
-    CUDA_TRY(cudaMallocHost(&ptr, size));
-    CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
-    stream.synchronize();
-    outfile_.write(ptr, size);
-    CUDA_TRY(cudaFreeHost(ptr));
+    this->device_write_async(gpu_data, size, stream).get();
+  }
+
+  std::future<void> device_write_async(void const* gpu_data,
+                                       size_t size,
+                                       rmm::cuda_stream_view stream) override
+  {
+    return std::async(std::launch::deferred, [=] {
+      char* ptr = nullptr;
+      CUDA_TRY(cudaMallocHost(&ptr, size));
+      CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
+      stream.synchronize();
+      outfile_.write(ptr, size);
+      CUDA_TRY(cudaFreeHost(ptr));
+    });
   }
 
   void flush() override { outfile_.flush(); }
@@ -2012,12 +2055,21 @@ class custom_test_memmap_sink : public cudf::io::data_sink {
 
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
-    char* ptr = nullptr;
-    CUDA_TRY(cudaMallocHost(&ptr, size));
-    CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
-    stream.synchronize();
-    mm_writer->host_write(ptr, size);
-    CUDA_TRY(cudaFreeHost(ptr));
+    this->device_write_async(gpu_data, size, stream).get();
+  }
+
+  std::future<void> device_write_async(void const* gpu_data,
+                                       size_t size,
+                                       rmm::cuda_stream_view stream) override
+  {
+    return std::async(std::launch::deferred, [=] {
+      char* ptr = nullptr;
+      CUDA_TRY(cudaMallocHost(&ptr, size));
+      CUDA_TRY(cudaMemcpyAsync(ptr, gpu_data, size, cudaMemcpyDeviceToHost, stream.value()));
+      stream.synchronize();
+      mm_writer->host_write(ptr, size);
+      CUDA_TRY(cudaFreeHost(ptr));
+    });
   }
 
   void flush() override { mm_writer->flush(); }

@@ -64,6 +64,17 @@ class file_sink : public data_sink {
     _bytes_written += size;
   }
 
+  std::future<void> device_write_async(void const* gpu_data,
+                                       size_t size,
+                                       rmm::cuda_stream_view stream) override
+  {
+    if (!supports_device_write()) CUDF_FAIL("Device writes are not supported for this file.");
+
+    auto result = _cufile_out->write_async(gpu_data, _bytes_written, size);
+    _bytes_written += size;
+    return result;
+  }
+
  private:
   std::ofstream _output_stream;
   size_t _bytes_written = 0;
@@ -111,6 +122,14 @@ class void_sink : public data_sink {
     _bytes_written += size;
   }
 
+  std::future<void> device_write_async(void const* gpu_data,
+                                       size_t size,
+                                       rmm::cuda_stream_view stream) override
+  {
+    _bytes_written += size;
+    return std::async(std::launch::deferred, [] {});
+  }
+
   void flush() override {}
 
   size_t bytes_written() override { return _bytes_written; }
@@ -132,8 +151,17 @@ class user_sink_wrapper : public data_sink {
   void device_write(void const* gpu_data, size_t size, rmm::cuda_stream_view stream) override
   {
     CUDF_EXPECTS(user_sink->supports_device_write(),
-                 "device_write() being called on a data_sink that doesn't support it");
+                 "device_write() was called on a data_sink that doesn't support it");
     user_sink->device_write(gpu_data, size, stream);
+  }
+
+  std::future<void> device_write_async(void const* gpu_data,
+                                       size_t size,
+                                       rmm::cuda_stream_view stream) override
+  {
+    CUDF_EXPECTS(user_sink->supports_device_write(),
+                 "device_write_async() was called on a data_sink that doesn't support it");
+    return user_sink->device_write_async(gpu_data, size, stream);
   }
 
   void flush() override { user_sink->flush(); }
