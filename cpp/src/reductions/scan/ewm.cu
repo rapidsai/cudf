@@ -31,11 +31,11 @@
 namespace cudf {
 namespace detail {
 
-template <typename T> using pair_type = thrust::pair<T, T>;
+template <typename T>
+using pair_type = thrust::pair<T, T>;
 
 template <typename T>
 class recurrence_functor {
-
  public:
   __device__ pair_type<T> operator()(pair_type<T> ci, pair_type<T> cj)
   {
@@ -48,10 +48,10 @@ class recurrence_functor {
  * The second elements of the pairs will contain the result
  */
 template <typename T>
-void compute_recurrence(rmm::device_uvector<pair_type<T>>& input,
-                        rmm::cuda_stream_view stream)
+void compute_recurrence(rmm::device_uvector<pair_type<T>>& input, rmm::cuda_stream_view stream)
 {
-  thrust::inclusive_scan(rmm::exec_policy(stream), input.begin(), input.end(), input.begin(), recurrence_functor<T>{});
+  thrust::inclusive_scan(
+    rmm::exec_policy(stream), input.begin(), input.end(), input.begin(), recurrence_functor<T>{});
 }
 
 /**
@@ -337,7 +337,7 @@ struct ewma_functor {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    return std::unique_ptr<column>();
+    CUDF_FAIL("Unsupported type for EWMA.");
   }
 };
 

@@ -613,7 +613,8 @@ std::unique_ptr<Base> make_ewma_aggregation(double const com, bool const adjust)
 {
   return std::make_unique<detail::ewma_aggregation>(com, adjust);
 }
-template std::unique_ptr<aggregation> make_ewma_aggregation<aggregation>(double const com, bool const adjust);
+template std::unique_ptr<aggregation> make_ewma_aggregation<aggregation>(double const com,
+                                                                         bool const adjust);
 
 /// Factory to create a RANK aggregation
 template <typename Base>

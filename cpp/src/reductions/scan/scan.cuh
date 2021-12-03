@@ -22,7 +22,6 @@
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
-#include <iostream>
 #include <rmm/cuda_stream_view.hpp>
 namespace cudf {
 namespace detail {
