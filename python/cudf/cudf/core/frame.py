@@ -1798,14 +1798,11 @@ class Frame:
                 "Only axis=`None` supported at this time."
             )
 
-        return self._repeat(repeats)
-
-    def _repeat(self, count):
-        if not is_scalar(count):
-            count = as_column(count)
+        if not is_scalar(repeats):
+            repeats = as_column(repeats)
 
         result = self.__class__._from_data(
-            *libcudf.filling.repeat(self, count)
+            *libcudf.filling.repeat(self, repeats)
         )
 
         result._copy_type_metadata(self)
@@ -1827,11 +1824,15 @@ class Frame:
 
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
         """Shift values by `periods` positions."""
-        assert axis in (None, 0) and freq is None
-        return self._shift(periods)
+        axis = self._get_axis_from_axis_arg(axis)
+        if axis != 0:
+            raise ValueError("Only axis=0 is supported.")
+        if freq is not None:
+            raise ValueError("The freq argument is not yet supported.")
 
-    def _shift(self, offset, fill_value=None):
-        data_columns = (col.shift(offset, fill_value) for col in self._columns)
+        data_columns = (
+            col.shift(periods, fill_value) for col in self._columns
+        )
         return self.__class__._from_data(
             zip(self._column_names, data_columns), self._index
         )
