@@ -37,7 +37,7 @@ def read_json(
         for source in path_or_buf:
             if ioutils.is_directory(source, **kwargs):
                 fs = ioutils._ensure_filesystem(
-                    passed_filesystem=None, path=source
+                    passed_filesystem=None, path=source, **kwargs
                 )
                 source = ioutils.stringify_pathlike(source)
                 source = fs.sep.join([source, "*.json"])
