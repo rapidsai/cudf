@@ -54,7 +54,11 @@ enum class datetime_component {
   NANOSECOND
 };
 
-enum class rounding_kind { CEIL, FLOOR, ROUND };
+enum class rounding_kind {
+    CEIL,  ///< Rounds up to the next integer multiple of the provided frequency
+    FLOOR, ///< Rounds down to the next integer multiple of the provided frequency
+    ROUND  ///< Rounds to the nearest integer multiple of the provided frequency
+};
 
 template <datetime_component Component>
 struct extract_component_operator {
