@@ -113,7 +113,7 @@ using device_storage_type_t =
  * This should only be used in operations that simply copy data in memory and
  * do no require using the data values within the operation.
  * For example, `gather`, `concatenate`, and `interleave` only need to copy data,
- * whereas, `scan`, `sort`, and `merge` require computation using the data values.
+ * whereas `scan`, `sort`, and `merge` require computation using the data values.
  *
  * The types are enumerated to prevent fixed-point types from incorrectly
  * mapping to incompatible output types.
