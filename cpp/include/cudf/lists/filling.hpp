@@ -30,20 +30,21 @@ namespace cudf::lists {
 
 /**
  * @brief Create a lists column in which each row contains a sequence of values specified by a tuple
- * of (start, size) parameters.
+ * of (`start`, `size`) parameters.
  *
- * Create a lists column in which each row is a sequence of values starting from a start value,
- * incrementing by one, and its cardinality is specified by a size value. The values start and size
- * used to generate each list is taken from the corresponding row of the input @p starts, and @p
- * sizes columns.
+ * Create a lists column in which each row is a sequence of values starting from a `start` value,
+ * incrementing by one, and its cardinality is specified by a `size` value. The `start` and `size`
+ * values used to generate each list is taken from the corresponding row of the input @p starts and
+ * @p sizes columns.
  *
  *  - @p sizes must be a column of integer types.
  *  - If any row in the input columns is null then the corresponding output row will be null.
- *  - If any size is non-positive, the corresponding output list will be empty.
+ *  - If any row of the @p sizes column contains non-positive values, the corresponding output list
+ *    will be empty.
  *
  * @code{.pseudo}
  * starts = [0, 1, 2,    null, 4]
- * sizes  = [0, 2, 4,    2,    3]
+ * sizes  = [0, 2, null, 2,    3]
  *
  * output = [ [], [1, 2], null, null, [4, 5, 6] ]
  * @endcode
@@ -51,10 +52,10 @@ namespace cudf::lists {
  * @throws cudf::logic_error if @p sizes column is not of integer types.
  * @throws cudf::logic_error if @p starts and @p sizes columns do not have the same size.
  *
- * @param starts First values in the sequences.
- * @param sizes Numbers of values in the sequences.
+ * @param starts First values in the result sequences.
+ * @param sizes Numbers of values in the result sequences.
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return The result column containing the generated sequences.
+ * @return The result column containing generated sequences.
  */
 std::unique_ptr<column> sequences(
   column_view const& starts,
@@ -63,35 +64,36 @@ std::unique_ptr<column> sequences(
 
 /**
  * @brief Create a lists column in which each row contains a sequence of values specified by a tuple
- * of (start, step, size) parameters.
+ * of (`start`, `step`, `size`) parameters.
  *
- * Create a lists column in which each row is a sequence of values starting from a start value,
- * incrementing by a step value, and its cardinality is specified by a size value. The values
- * start, step, and size used to generate each list is taken from the corresponding row of the input
- * @p starts, @p steps, and @p sizes columns.
+ * Create a lists column in which each row is a sequence of values starting from a `start` value,
+ * incrementing by a `step` value, and its cardinality is specified by a `size` value. The values
+ * `start`, `step`, and `size` used to generate each list is taken from the corresponding row of the
+ * input @p starts, @p steps, and @p sizes columns.
  *
  *  - @p sizes must be a column of integer types.
- *  - If @p starts is Timestamp types then @p steps must be a duration type.
+ *  - @p starts and @p steps columns must have the same type.
  *  - If any row in the input columns is null then the corresponding output row will be null.
- *  - If any size is non-positive, the corresponding output list will be empty.
+ *  - If any row of the @p sizes column contains non-positive values, the corresponding output list
+ *    will be empty.
  *
  * @code{.pseudo}
- * starts = [0, 1, 2,    null, 4]
- * steps  = [2, 1, null, 1,    3]
- * sizes  = [0, 2, 4,    2,    3]
+ * starts = [0,  1, 2,    null, 4]
+ * steps  = [2,  1, null, 1,    3]
+ * sizes  = [-1, 2, 4,    2,    3]
  *
  * output = [ [], [1, 2], null, null, [4, 7, 10] ]
  * @endcode
  *
  * @throws cudf::logic_error if @p sizes column is not of integer types.
- * @throws cudf::logic_error if @p starts and @p steps have different types.
+ * @throws cudf::logic_error if @p starts and @p steps columns have different types.
  * @throws cudf::logic_error if @p starts, @p steps, and @p sizes columns do not have the same size.
  *
- * @param starts First values in the sequences.
- * @param steps Increment values for the sequences.
- * @param sizes Numbers of values in the sequences.
+ * @param starts First values in the result sequences.
+ * @param steps Increment values for the result sequences.
+ * @param sizes Numbers of values in the result sequences.
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return The result column containing the generated sequences.
+ * @return The result column containing generated sequences.
  */
 std::unique_ptr<column> sequences(
   column_view const& starts,
