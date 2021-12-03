@@ -316,7 +316,7 @@ def read_orc(
     for source in filepath_or_buffer:
         if ioutils.is_directory(source, **kwargs):
             fs = ioutils._ensure_filesystem(
-                passed_filesystem=None, path=source
+                passed_filesystem=None, path=source, **kwargs,
             )
             source = stringify_path(source)
             source = fs.sep.join([source, "*.orc"])
