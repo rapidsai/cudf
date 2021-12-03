@@ -975,7 +975,7 @@ TYPED_TEST(TypedDatetimeOpsTest, TestRoundDatetime)
   });
   auto expected_microsecond = fixed_width_column_wrapper<T, typename T::duration::rep>(
     rounded_microsecond.begin(), rounded_microsecond.end());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*round_second(input), expected_microsecond);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*round_microsecond(input), expected_microsecond);
 
   std::vector<T> rounded_nanosecond(timestamps.size());
   std::transform(timestamps.begin(), timestamps.end(), rounded_nanosecond.begin(), [](auto i) {
@@ -983,7 +983,7 @@ TYPED_TEST(TypedDatetimeOpsTest, TestRoundDatetime)
   });
   auto expected_nanosecond = fixed_width_column_wrapper<T, typename T::duration::rep>(
     rounded_nanosecond.begin(), rounded_nanosecond.end());
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*round_millisecond(input), expected_nanosecond);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*round_nanosecond(input), expected_nanosecond);
 }
 
 CUDF_TEST_PROGRAM_MAIN()
