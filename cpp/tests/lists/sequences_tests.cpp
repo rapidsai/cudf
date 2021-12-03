@@ -68,6 +68,29 @@ TYPED_TEST(NumericSequencesTypedTest, SimpleTestNoNull)
   }
 }
 
+TYPED_TEST(NumericSequencesTypedTest, ZeroAndNegativeSizesTest)
+{
+  using T = TypeParam;
+
+  auto const starts = FWDCol<T>{1, 2, 3};
+  auto const sizes  = IntsCol{-5, 3, 0};
+
+  // Sequences with step == 1.
+  {
+    auto const expected = ListsCol<T>{ListsCol<T>{}, ListsCol<T>{2, 3, 4}, ListsCol<T>{}};
+    auto const result   = cudf::lists::sequences(starts, sizes);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+
+  // Sequences with various steps.
+  {
+    auto const steps    = FWDCol<T>{1, 3, 2};
+    auto const expected = ListsCol<T>{ListsCol<T>{}, ListsCol<T>{2, 5, 8}, ListsCol<T>{}};
+    auto const result   = cudf::lists::sequences(starts, steps, sizes);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
+  }
+}
+
 TYPED_TEST(NumericSequencesTypedTest, SimpleTestWithNulls)
 {
   using T = TypeParam;
