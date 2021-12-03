@@ -10,6 +10,8 @@ log_file = ".ninja_log"
 if len(sys.argv) > 1:
     log_file = sys.argv[1]
 
+log_path = os.path.dirname(os.path.abspath(log_file))
+
 output_fmt = "csv"
 if len(sys.argv) > 2:
     output_fmt = sys.argv[2][2:]
@@ -21,7 +23,14 @@ with open(log_file, "r") as log:
         entry = line.split()
         if len(entry) > 4:
             elapsed = int(entry[1]) - int(entry[0])
-            entries[entry[3]] = elapsed
+            obj_file = entry[3]
+            if obj_file[:6] != "_deps/":
+                file_size = (
+                    os.path.getsize(os.path.join(log_path, obj_file))
+                    if os.path.exists(obj_file)
+                    else 0
+                )
+                entries[entry[3]] = (elapsed, file_size)
 
 # check file could be loaded
 if len(entries) == 0:
@@ -30,7 +39,7 @@ if len(entries) == 0:
 
 # sort the keys by build time (descending order)
 keys = list(entries.keys())
-sl = sorted(keys, key=lambda k: entries[k], reverse=True)
+sl = sorted(keys, key=lambda k: entries[k][0], reverse=True)
 
 if output_fmt == "xml":
     # output results in XML format
@@ -47,7 +56,7 @@ if output_fmt == "xml":
     root.append(testsuite)
     for key in sl:
         entry = entries[key]
-        elapsed = float(entry) / 1000
+        elapsed = float(entry[0]) / 1000
         item = ET.Element(
             "testcase",
             attrib={
@@ -67,14 +76,21 @@ elif output_fmt == "html":
     print("<html><head><title>Sorted Ninja Build Times</title>")
     print("<style>", "table, th, td { border:1px solid black; }", "</style>")
     print("</head><body><table>")
-    print("<tr><th>File</th><th align='right'>Compile time (ms)</th></tr>")
+    print(
+        "<tr><th>File</th>",
+        "<th align='right'>Compile time (ms)</th>",
+        "<th align='right'>Size (bytes)</th><tr>",
+        sep="",
+    )
     for key in sl:
-        entry = entries[key]
+        result = entries[key]
         print(
             "<tr><td>",
             key,
             "</td><td align='right'>",
-            entry,
+            result[0],
+            "</td><td align='right'>",
+            result[1],
             "</td></tr>",
             sep="",
         )
@@ -82,6 +98,7 @@ elif output_fmt == "html":
 
 else:
     # output results in CSV format
-    print("time,file")
+    print("time,size,file")
     for key in sl:
-        print(entries[key], key, sep=",")
+        result = entries[key]
+        print(result[0], result[1], key, sep=",")
