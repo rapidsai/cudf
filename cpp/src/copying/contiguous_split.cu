@@ -195,13 +195,15 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
       std::size_t idx = (num_bytes - remainder) / 4;
       uint32_t v = remainder > 0 ? (reinterpret_cast<uint32_t const*>(src)[idx] - value_shift) : 0;
       while (remainder) {
-        // if we're doing a validity copy, do we need to read an extra bitmask word to OR it's relevant bits in?
-        auto const have_extra_rows = bit_shift > 0 && remainder == 4 ? (num_elements * 32) - num_rows < bit_shift : false;
-        uint32_t const next =  (have_extra_rows || remainder > 4)
+        // if we're doing a validity copy, do we need to read an extra bitmask word to OR it's
+        // relevant bits in?
+        auto const have_extra_rows =
+          bit_shift > 0 && remainder == 4 ? (num_elements * 32) - num_rows < bit_shift : false;
+        uint32_t const next = (have_extra_rows || remainder > 4)
                                 ? (reinterpret_cast<uint32_t const*>(src)[idx + 1] - value_shift)
                                 : 0;
-                                
-        uint32_t const val  = (v >> bit_shift) | (next << (32 - bit_shift));
+
+        uint32_t const val = (v >> bit_shift) | (next << (32 - bit_shift));
         if (valid_count) { thread_valid_count += __popc(val); }
         reinterpret_cast<uint32_t*>(dst)[idx] = val;
         v                                     = next;
