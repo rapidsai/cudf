@@ -27,6 +27,7 @@ import numpy as np
 
 cimport cudf._lib.cpp.types as libcudf_types
 
+
 def reduce(reduction_op, Column incol, dtype=None, **kwargs):
     """
     Top level Cython reduce function wrapping libcudf++ reductions.
