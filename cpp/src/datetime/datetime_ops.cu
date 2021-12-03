@@ -90,7 +90,7 @@ struct extract_component_operator {
   }
 };
 
-// This functor takes the rounding type as runtime info and dispatches to the ceil/floor
+// This functor takes the rounding type as runtime info and dispatches to the ceil/floor/round
 // function.
 template <typename DurationType>
 struct RoundFunctor {

@@ -468,3 +468,6 @@ std::unique_ptr<column> floor_microsecond(
 std::unique_ptr<column> floor_nanosecond(
   column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+}  // namespace datetime
+}  // namespace cudf
