@@ -54,7 +54,7 @@ enum class datetime_component {
   NANOSECOND
 };
 
-enum class rounding_kind { CEIL, FLOOR, ROUND };
+enum class rounding_kind { CEIL, FLOOR };
 
 template <datetime_component Component>
 struct extract_component_operator {
@@ -90,7 +90,7 @@ struct extract_component_operator {
   }
 };
 
-// This functor takes the rounding type as runtime info and dispatches to the ceil/floor/round
+// This functor takes the rounding type as runtime info and dispatches to the ceil/floor
 // function.
 template <typename DurationType>
 struct RoundFunctor {
@@ -100,7 +100,6 @@ struct RoundFunctor {
     switch (round_kind) {
       case rounding_kind::CEIL: return cuda::std::chrono::ceil<DurationType>(dt);
       case rounding_kind::FLOOR: return cuda::std::chrono::floor<DurationType>(dt);
-      case rounding_kind::ROUND: return cuda::std::chrono::round<DurationType>(dt);
       default: cudf_assert(false && "Unsupported rounding kind.");
     }
     __builtin_unreachable();
@@ -225,7 +224,7 @@ struct is_leap_year_op {
   }
 };
 
-// Specific function for applying ceil/floor/round date ops
+// Specific function for applying ceil/floor date ops
 struct dispatch_round {
   template <typename Timestamp>
   std::enable_if_t<cudf::is_timestamp<Timestamp>(), std::unique_ptr<cudf::column>> operator()(
@@ -667,79 +666,6 @@ std::unique_ptr<column> floor_nanosecond(column_view const& column,
 {
   CUDF_FUNC_RANGE();
   return detail::round_general(detail::rounding_kind::FLOOR,
-                               detail::datetime_component::NANOSECOND,
-                               column,
-                               rmm::cuda_stream_default,
-                               mr);
-}
-
-std::unique_ptr<column> round_day(column_view const& column, rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::round_general(detail::rounding_kind::ROUND,
-                               detail::datetime_component::DAY,
-                               column,
-                               rmm::cuda_stream_default,
-                               mr);
-}
-
-std::unique_ptr<column> round_hour(column_view const& column, rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::round_general(detail::rounding_kind::ROUND,
-                               detail::datetime_component::HOUR,
-                               column,
-                               rmm::cuda_stream_default,
-                               mr);
-}
-
-std::unique_ptr<column> round_minute(column_view const& column, rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::round_general(detail::rounding_kind::ROUND,
-                               detail::datetime_component::MINUTE,
-                               column,
-                               rmm::cuda_stream_default,
-                               mr);
-}
-
-std::unique_ptr<column> round_second(column_view const& column, rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::round_general(detail::rounding_kind::ROUND,
-                               detail::datetime_component::SECOND,
-                               column,
-                               rmm::cuda_stream_default,
-                               mr);
-}
-
-std::unique_ptr<column> round_millisecond(column_view const& column,
-                                          rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::round_general(detail::rounding_kind::ROUND,
-                               detail::datetime_component::MILLISECOND,
-                               column,
-                               rmm::cuda_stream_default,
-                               mr);
-}
-
-std::unique_ptr<column> round_microsecond(column_view const& column,
-                                          rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::round_general(detail::rounding_kind::ROUND,
-                               detail::datetime_component::MICROSECOND,
-                               column,
-                               rmm::cuda_stream_default,
-                               mr);
-}
-
-std::unique_ptr<column> round_nanosecond(column_view const& column,
-                                         rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::round_general(detail::rounding_kind::ROUND,
                                detail::datetime_component::NANOSECOND,
                                column,
                                rmm::cuda_stream_default,

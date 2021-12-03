@@ -303,7 +303,6 @@ Datetime methods
    isocalendar
    ceil
    floor
-   round
 
 
 Timedelta properties

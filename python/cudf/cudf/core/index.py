@@ -1933,39 +1933,6 @@ class DatetimeIndex(GenericIndex):
 
         return self.__class__._from_data({self.name: out_column})
 
-    def round(self, field):
-        """
-        Perform round operation on the data to the specified freq.
-
-        Parameters
-        ----------
-        field : str
-            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
-            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
-            See `frequency aliases <https://pandas.pydata.org/docs/\
-                user_guide/timeseries.html#timeseries-offset-aliases>`__
-            for more details on these aliases.
-
-        Returns
-        -------
-        DatetimeIndex
-            Index of the same type for a DatetimeIndex
-
-        Examples
-        --------
-        >>> import cudf
-        >>> import pandas as pd
-        >>> rng = cudf.Index(pd.date_range('1/1/2018 11:59:00',
-        ... periods=3, freq='min'))
-        >>> rng.round('H')
-        DatetimeIndex(['2018-01-01 12:00:00', '2018-01-01 12:00:00',
-               '2018-01-01 12:00:00'],
-              dtype='datetime64[ns]', freq=None)
-        """
-        out_column = self._values.round(field)
-
-        return self.__class__._from_data({self.name: out_column})
-
 
 class TimedeltaIndex(GenericIndex):
     """

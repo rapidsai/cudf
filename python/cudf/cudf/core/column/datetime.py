@@ -228,9 +228,6 @@ class DatetimeColumn(column.ColumnBase):
     def floor(self, freq: str) -> ColumnBase:
         return libcudf.datetime.floor_datetime(self, freq)
 
-    def round(self, freq: str) -> ColumnBase:
-        return libcudf.datetime.round_datetime(self, freq)
-
     def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarLike:
         if isinstance(other, cudf.Scalar):
             return other
