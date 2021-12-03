@@ -9039,3 +9039,50 @@ def test_pearson_corr_multiindex_dataframe():
     expected = gdf.to_pandas().groupby(level="a").corr("pearson")
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        np.random.normal(-100, 100, 1000),
+        np.random.randint(-50, 50, 1000),
+        np.random.random_sample((4, 4)),
+        np.random.uniform(10.5, 75.5, (10,)),
+        np.array([1.123, 2.343, 5.890, 0.0]),
+    ],
+)
+@pytest.mark.parametrize("periods", [-1, -2, -3, -4, 1, 2, 3, 4])
+def test_diff_dataframe_valid(data, periods):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    actual = gdf.diff(periods=periods, axis=0)
+    expected = pdf.diff(periods=periods, axis=0)
+
+    assert_eq(
+        expected, actual, check_dtype=False,
+    )
+
+
+def test_diff_dataframe_invalid_axis():
+    with pytest.raises(NotImplementedError, match="Only axis=0 is supported."):
+        gdf = cudf.DataFrame(np.random.random_sample((4, 4)))
+        gdf.diff(periods=1, axis=1)
+
+
+def test_diff_dataframe_null_columns():
+    with pytest.raises(
+        AssertionError,
+        match="Diff currently requires columns with no null values",
+    ):
+        gdf = cudf.DataFrame([1.123, 2.343, np.nan, None, 6.072, None])
+        gdf.diff(periods=4, axis=0)
+
+
+def test_diff_dataframe_non_numeric_dtypes():
+    with pytest.raises(
+        NotImplementedError,
+        match="Diff currently only supports numeric dtypes",
+    ):
+        gdf = cudf.DataFrame(["a", "b", "c", "d", "e"])
+        gdf.diff(periods=2, axis=0)
