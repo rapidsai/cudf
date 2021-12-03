@@ -1833,8 +1833,8 @@ public final class Table implements AutoCloseable {
    * guaranteed in the future.
    *
    * @param keyColumns Array of indices representing key columns from the current table.
-   * @param keepFirst If it is true, the first row in a sequence of duplicate rows will be copied.
-   *                  Otherwise, copy the last row.
+   * @param keepFirst If it is true, the first row with a duplicated key will be copied. Otherwise,
+   *                  copy the last row with a duplicated key.
    * @param nullsEqual Flag to denote whether nulls are treated as equal when comparing rows of the
    *                   key columns to check for uniqueness.
    * @param nullsBefore Flag to specify whether nulls in the key columns will appear before or
