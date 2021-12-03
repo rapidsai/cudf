@@ -6364,9 +6364,10 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             )
 
         data = self.fillna(method=fill_method, limit=limit)
-        data_diff = data.diff(periods=periods)  # need to implem. diff method
-        change = data_diff / data.shift(periods=periods, freq=freq)
-        return change
+
+        return data.diff(periods=periods) / data.shift(
+            periods=periods, freq=freq
+        )
 
     def __dataframe__(
         self, nan_as_null: bool = False, allow_copy: bool = True
