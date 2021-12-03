@@ -707,9 +707,9 @@ struct from_timestamp_base {
    *     scale( 61,60) ->  1
    * @endcode
    */
-  __device__ int32_t scale_time(int64_t time, int64_t base) const
+  __device__ int64_t scale_time(int64_t time, int64_t base) const
   {
-    return static_cast<int32_t>((time - ((time < 0) * (base - 1L))) / base);
+    return (time - ((time < 0) * (base - 1L))) / base;
   };
 
   __device__ time_components get_time_components(int64_t tstamp) const
