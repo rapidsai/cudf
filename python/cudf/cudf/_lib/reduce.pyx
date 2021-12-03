@@ -43,8 +43,8 @@ def reduce(reduction_op, Column incol, dtype=None, **kwargs):
     """
 
     col_dtype = (
-        dtype if dtype is not None 
-        else incol._resolve_reduction_dtype(reduction_op)
+        dtype if dtype is not None
+        else incol._reduction_result_dtype(reduction_op)
     )
 
     cdef column_view c_incol_view = incol.view()

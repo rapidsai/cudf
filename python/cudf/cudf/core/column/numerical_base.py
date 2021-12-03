@@ -202,7 +202,7 @@ class NumericalBaseColumn(ColumnBase):
             self.dtype
         )
 
-    def _resolve_reduction_dtype(self, reduction_op: str) -> Dtype:
+    def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
         col_dtype = self.dtype
         if reduction_op in {"sum", "product"}:
             col_dtype = (

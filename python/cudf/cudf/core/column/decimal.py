@@ -290,7 +290,7 @@ class Decimal64Column(DecimalBaseColumn):
 
         return self
 
-    def _resolve_reduction_dtype(self, reduction_op: str) -> Dtype:
+    def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
         return self.dtype
 
 
