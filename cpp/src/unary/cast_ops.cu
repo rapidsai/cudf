@@ -160,7 +160,7 @@ struct device_cast {
  * @brief Takes a `fixed_point` column_view as @p input and returns a `fixed_point` column with new
  * @p scale
  *
- * @tparam T     Type of the `fixed_point` column_view (`decimal32` or `decimal64`)
+ * @tparam T     Type of the `fixed_point` column_view (`decimal32`, `decimal64` or `decimal128`)
  * @param input  Input `column_view`
  * @param scale  `scale` of the returned `column`
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -176,7 +176,7 @@ std::unique_ptr<column> rescale(column_view input,
 {
   using namespace numeric;
 
-  if (input.type().scale() > scale) {
+  if (input.type().scale() >= scale) {
     auto const scalar = make_fixed_point_scalar<T>(0, scale_type{scale});
     auto const type   = cudf::data_type{cudf::type_to_id<T>(), scale};
     return detail::binary_operation(input, *scalar, binary_operator::ADD, type, stream, mr);
@@ -305,28 +305,39 @@ struct dispatch_unary_cast_to {
                                      rmm::mr::device_memory_resource* mr)
   {
     using namespace numeric;
-
-    auto const size = input.size();
-    auto temporary =
-      std::make_unique<column>(cudf::data_type{type.id(), input.type().scale()},
-                               size,
-                               rmm::device_buffer{size * cudf::size_of(type), stream},
-                               copy_bitmask(input, stream),
-                               input.null_count());
-
     using SourceDeviceT = device_storage_type_t<SourceT>;
     using TargetDeviceT = device_storage_type_t<TargetT>;
 
-    mutable_column_view output_mutable = *temporary;
+    auto casted = [&]() {
+      auto const size = input.size();
+      auto output     = std::make_unique<column>(cudf::data_type{type.id(), input.type().scale()},
+                                             size,
+                                             rmm::device_buffer{size * cudf::size_of(type), stream},
+                                             copy_bitmask(input, stream),
+                                             input.null_count());
 
-    thrust::transform(rmm::exec_policy(stream),
-                      input.begin<SourceDeviceT>(),
-                      input.end<SourceDeviceT>(),
-                      output_mutable.begin<TargetDeviceT>(),
-                      device_cast<SourceDeviceT, TargetDeviceT>{});
+      mutable_column_view output_mutable = *output;
 
-    // clearly there is a more efficient way to do this, can optimize in the future
-    return rescale<TargetT>(*temporary, numeric::scale_type{type.scale()}, stream, mr);
+      thrust::transform(rmm::exec_policy(stream),
+                        input.begin<SourceDeviceT>(),
+                        input.end<SourceDeviceT>(),
+                        output_mutable.begin<TargetDeviceT>(),
+                        device_cast<SourceDeviceT, TargetDeviceT>{});
+
+      return output;
+    };
+
+    if (input.type().scale() == type.scale()) return casted();
+
+    if constexpr (sizeof(SourceDeviceT) < sizeof(TargetDeviceT)) {
+      // device_cast BEFORE rescale when SourceDeviceT is < TargetDeviceT
+      auto temporary = casted();
+      return detail::rescale<TargetT>(*temporary, scale_type{type.scale()}, stream, mr);
+    } else {
+      // device_cast AFTER rescale when SourceDeviceT is > TargetDeviceT to avoid overflow
+      auto temporary = detail::rescale<SourceT>(input, scale_type{type.scale()}, stream, mr);
+      return detail::cast(*temporary, type, stream, mr);
+    }
   }
 
   template <typename TargetT,
@@ -338,9 +349,9 @@ struct dispatch_unary_cast_to {
 
   {
     if (!cudf::is_fixed_width<TargetT>())
-      CUDF_FAIL("Column type must be numeric or chrono or decimal32/64");
+      CUDF_FAIL("Column type must be numeric or chrono or decimal32/64/128");
     else if (cudf::is_fixed_point<SourceT>())
-      CUDF_FAIL("Currently only decimal32/64 to floating point/integral is supported");
+      CUDF_FAIL("Currently only decimal32/64/128 to floating point/integral is supported");
     else if (cudf::is_timestamp<SourceT>() && is_numeric<TargetT>())
       CUDF_FAIL("Timestamps can be created only from duration");
     else
@@ -364,7 +375,7 @@ struct dispatch_unary_cast_from {
   template <typename T, typename... Args>
   std::enable_if_t<!cudf::is_fixed_width<T>(), std::unique_ptr<column>> operator()(Args&&...)
   {
-    CUDF_FAIL("Column type must be numeric or chrono or decimal32/64");
+    CUDF_FAIL("Column type must be numeric or chrono or decimal32/64/128");
   }
 };
 }  // anonymous namespace

@@ -160,7 +160,7 @@ class Decimal64Column(DecimalBaseColumn):
         if reflect:
             self, other = other, self
 
-        # Binary Arithmatics between decimal columns. `Scale` and `precision`
+        # Binary Arithmetics between decimal columns. `Scale` and `precision`
         # are computed outside of libcudf
         if op in ("add", "sub", "mul", "div"):
             scale = _binop_scale(self.dtype, other.dtype, op)

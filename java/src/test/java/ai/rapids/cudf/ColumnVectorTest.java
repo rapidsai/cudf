@@ -18,16 +18,12 @@
 
 package ai.rapids.cudf;
 
-import ai.rapids.cudf.HostColumnVector.BasicType;
-import ai.rapids.cudf.HostColumnVector.DataType;
-import ai.rapids.cudf.HostColumnVector.ListType;
-import ai.rapids.cudf.HostColumnVector.StructData;
-import ai.rapids.cudf.HostColumnVector.StructType;
-
+import ai.rapids.cudf.HostColumnVector.*;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -38,20 +34,11 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static ai.rapids.cudf.QuantileMethod.HIGHER;
-import static ai.rapids.cudf.QuantileMethod.LINEAR;
-import static ai.rapids.cudf.QuantileMethod.LOWER;
-import static ai.rapids.cudf.QuantileMethod.MIDPOINT;
-import static ai.rapids.cudf.QuantileMethod.NEAREST;
-import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
-import static ai.rapids.cudf.TableTest.assertStructColumnsAreEqual;
-import static ai.rapids.cudf.TableTest.assertTablesAreEqual;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static ai.rapids.cudf.AssertUtils.assertColumnsAreEqual;
+import static ai.rapids.cudf.AssertUtils.assertStructColumnsAreEqual;
+import static ai.rapids.cudf.AssertUtils.assertTablesAreEqual;
+import static ai.rapids.cudf.QuantileMethod.*;
+import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class ColumnVectorTest extends CudfTestBase {
@@ -101,8 +88,8 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector cv1 = cv.transform(ptx, true);
          ColumnVector cv2 = cv.transform(cuda, false);
          ColumnVector expected = ColumnVector.fromBoxedInts(2*2-2, 3*3-3, null, 4*4-4)) {
-      TableTest.assertColumnsAreEqual(expected, cv1);
-      TableTest.assertColumnsAreEqual(expected, cv2);
+      assertColumnsAreEqual(expected, cv1);
+      assertColumnsAreEqual(expected, cv2);
     }
   }
 
@@ -267,7 +254,7 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector cv = ColumnVector.fromStrings("d", "sd", "sde", null, "END");
          HostColumnVector host = cv.copyToHost();
          ColumnVector backAgain = host.copyToDevice()) {
-      TableTest.assertColumnsAreEqual(cv, backAgain);
+      assertColumnsAreEqual(cv, backAgain);
     }
   }
 
@@ -280,7 +267,7 @@ public class ColumnVectorTest extends CudfTestBase {
             null,
             "END".getBytes(StandardCharsets.UTF_8));
          ColumnVector expected = ColumnVector.fromStrings("d", "sd", "sde", null, "END")) {
-      TableTest.assertColumnsAreEqual(expected, cv);
+      assertColumnsAreEqual(expected, cv);
     }
   }
 
@@ -314,7 +301,7 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector v2 = ColumnVector.fromInts(8, 9);
          ColumnVector v = ColumnVector.concatenate(v0, v1, v2);
          ColumnVector expected = ColumnVector.fromInts(1, 2, 3, 4, 5, 6, 7, 8, 9)) {
-      TableTest.assertColumnsAreEqual(expected, v);
+      assertColumnsAreEqual(expected, v);
     }
   }
 
@@ -325,7 +312,7 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector v2 = ColumnVector.fromBoxedDoubles(null, 9.0);
          ColumnVector v = ColumnVector.concatenate(v0, v1, v2);
          ColumnVector expected = ColumnVector.fromBoxedDoubles(1., 2., 3., 4., 5., 6., 7., null, 9.)) {
-      TableTest.assertColumnsAreEqual(expected, v);
+      assertColumnsAreEqual(expected, v);
     }
   }
 
@@ -1064,6 +1051,21 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void decimal128Cv() {
+    final int dec32Scale1 = -2;
+    BigInteger bigInteger1 = new BigInteger("-831457");
+    BigInteger bigInteger2 = new BigInteger("14");
+    BigInteger bigInteger3 = new BigInteger("152345742357340573405745");
+    final BigInteger[] bigInts = new BigInteger[] {bigInteger1, bigInteger2, bigInteger3};
+    try (ColumnVector v = ColumnVector.decimalFromBigInt(-dec32Scale1, bigInts)) {
+      HostColumnVector hostColumnVector = v.copyToHost();
+      assertEquals(bigInteger1, hostColumnVector.getBigDecimal(0).unscaledValue());
+      assertEquals(bigInteger2, hostColumnVector.getBigDecimal(1).unscaledValue());
+      assertEquals(bigInteger3, hostColumnVector.getBigDecimal(2).unscaledValue());
+    }
+  }
+
+  @Test
   void testGetDeviceMemorySizeNonStrings() {
     try (ColumnVector v0 = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 6);
          ColumnVector v1 = ColumnVector.fromBoxedInts(1, 2, 3, null, null, 4, 5, 6)) {
@@ -1259,6 +1261,9 @@ public class ColumnVectorTest extends CudfTestBase {
           break;
         case DECIMAL64:
           s = Scalar.fromDecimal(mockScale, 1234567890123456789L);
+          break;
+        case DECIMAL128:
+          s = Scalar.fromDecimal(mockScale, new BigInteger("1234567890123456789"));
           break;
         case TIMESTAMP_DAYS:
           s = Scalar.timestampDaysFromInt(12345);
@@ -1879,13 +1884,13 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector vec = ColumnVector.fromBoxedInts(1, 2, 3, null, 5);
          ColumnVector expected = ColumnVector.fromBoxedInts(2, 3, null, 5);
          ColumnVector found = vec.subVector(1, 5)) {
-      TableTest.assertColumnsAreEqual(expected, found);
+      assertColumnsAreEqual(expected, found);
     }
 
     try (ColumnVector vec = ColumnVector.fromStrings("1", "2", "3", null, "5");
          ColumnVector expected = ColumnVector.fromStrings("2", "3", null, "5");
          ColumnVector found = vec.subVector(1, 5)) {
-      TableTest.assertColumnsAreEqual(expected, found);
+      assertColumnsAreEqual(expected, found);
     }
   }
 
@@ -2011,7 +2016,7 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector cv = ColumnVector.fromStrings(" 123", "123 ", null, " 123 ", "\t\t123\n\n");
          ColumnVector trimmed = cv.strip();
          ColumnVector expected = ColumnVector.fromStrings("123", "123", null, "123", "123")) {
-      TableTest.assertColumnsAreEqual(expected, trimmed);
+      assertColumnsAreEqual(expected, trimmed);
     }
   }
 
@@ -2021,7 +2026,7 @@ public class ColumnVectorTest extends CudfTestBase {
          Scalar one = Scalar.fromString(" 1");
          ColumnVector trimmed = cv.strip(one);
          ColumnVector expected = ColumnVector.fromStrings("23", "23", null, "23", "\t\t123\n\n")) {
-      TableTest.assertColumnsAreEqual(expected, trimmed);
+      assertColumnsAreEqual(expected, trimmed);
     }
   }
 
@@ -2030,7 +2035,7 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector cv = ColumnVector.fromStrings(" 123", "123 ", null, " 123 ", "\t\t123\n\n");
          ColumnVector trimmed = cv.lstrip();
          ColumnVector expected = ColumnVector.fromStrings("123", "123 ", null, "123 ", "123\n\n")) {
-      TableTest.assertColumnsAreEqual(expected, trimmed);
+      assertColumnsAreEqual(expected, trimmed);
     }
   }
 
@@ -2040,7 +2045,7 @@ public class ColumnVectorTest extends CudfTestBase {
          Scalar one = Scalar.fromString(" 1");
          ColumnVector trimmed = cv.lstrip(one);
          ColumnVector expected = ColumnVector.fromStrings("23", "23 ", null, "231", "\t\t123\n\n")) {
-      TableTest.assertColumnsAreEqual(expected, trimmed);
+      assertColumnsAreEqual(expected, trimmed);
     }
   }
 
@@ -2049,7 +2054,7 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector cv = ColumnVector.fromStrings(" 123", "123 ", null, " 123 ", "\t\t123\n\n");
          ColumnVector trimmed = cv.rstrip();
          ColumnVector expected = ColumnVector.fromStrings(" 123", "123", null, " 123", "\t\t123")) {
-      TableTest.assertColumnsAreEqual(expected, trimmed);
+      assertColumnsAreEqual(expected, trimmed);
     }
   }
 
@@ -2059,7 +2064,7 @@ public class ColumnVectorTest extends CudfTestBase {
          Scalar one = Scalar.fromString(" 1");
          ColumnVector trimmed = cv.rstrip(one);
          ColumnVector expected = ColumnVector.fromStrings("123", "123", null, "123", "\t\t123\n\n")) {
-      TableTest.assertColumnsAreEqual(expected, trimmed);
+      assertColumnsAreEqual(expected, trimmed);
     }
   }
 
@@ -2105,7 +2110,7 @@ public class ColumnVectorTest extends CudfTestBase {
         Arrays.asList(1, 2, 3), Arrays.asList(1, 2, 3, 4));
          ColumnVector lengths = cv.countElements();
          ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, null, 2, 3, 4)) {
-      TableTest.assertColumnsAreEqual(expected, lengths);
+      assertColumnsAreEqual(expected, lengths);
     }
   }
 
@@ -2114,7 +2119,7 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector cv = ColumnVector.fromStrings("1", "12", null, "123", "1234");
       ColumnVector lengths = cv.getCharLengths();
       ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, null, 3, 4)) {
-      TableTest.assertColumnsAreEqual(expected, lengths);
+      assertColumnsAreEqual(expected, lengths);
     }
   }
 
@@ -2123,7 +2128,7 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector cv = ColumnVector.fromStrings("1", "12", "123", null, "1234");
          ColumnVector byteLengthVector = cv.getByteCount();
          ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, 3, null, 4)) {
-      TableTest.assertColumnsAreEqual(expected, byteLengthVector);
+      assertColumnsAreEqual(expected, byteLengthVector);
     }
   }
 
@@ -3368,6 +3373,38 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testCastBigDecimalToString() {
+    BigDecimal[] bigValues = {new BigDecimal("923121331938210123.321"),
+        new BigDecimal("9223372036854775808.191"),
+        new BigDecimal("9328323982309091029831.002")
+    };
+
+    try (ColumnVector cv = ColumnVector.fromDecimals(bigValues);
+         ColumnVector values = cv.castTo(DType.STRING);
+         ColumnVector expected = ColumnVector.fromStrings("923121331938210123.321",
+             "9223372036854775808.191",
+             "9328323982309091029831.002")) {
+      assertColumnsAreEqual(expected, values);
+    }
+  }
+
+  @Test
+  void testCastStringToBigDecimal() {
+    String[] bigValues = {"923121331938210123.321",
+        "9223372036854775808.191",
+       "9328323982309091029831.002"
+    };
+
+    try (ColumnVector cv = ColumnVector.fromStrings(bigValues);
+        ColumnVector values = cv.castTo(DType.create(DType.DTypeEnum.DECIMAL128, -3));
+        ColumnVector expected = ColumnVector.fromDecimals(new BigDecimal("923121331938210123.321"),
+            new BigDecimal("9223372036854775808.191"),
+            new BigDecimal("9328323982309091029831.002"))) {
+      assertColumnsAreEqual(expected, values);
+    }
+  }
+
+  @Test
   void testCastByteToString() {
 
     Byte[] byteValues = {1, 3, 45, -0, null, Byte.MIN_VALUE, Byte.MAX_VALUE};
@@ -3559,6 +3596,30 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testCastDecimal64ToDecimal128() {
+    testCastDecimal128(DType.DTypeEnum.DECIMAL64, DType.DTypeEnum.DECIMAL128, 0,
+        () -> ColumnVector.fromBoxedLongs(1L, -21L, 345L, null, 8008L, Long.MIN_VALUE, Long.MAX_VALUE),
+        () -> ColumnVector.fromDecimals(new BigDecimal(1), new BigDecimal(-21), new BigDecimal(345),
+            null, new BigDecimal(8008), new BigDecimal(Long.MIN_VALUE), new BigDecimal(Long.MAX_VALUE)),
+        new BigInteger[]{new BigInteger("1"), new BigInteger("-21"),
+            new BigInteger("345"), null, new BigInteger("8008"),
+            new BigInteger(String.valueOf(Long.MIN_VALUE)),
+            new BigInteger(String.valueOf(Long.MAX_VALUE))}
+    );
+    testCastDecimal128(DType.DTypeEnum.DECIMAL32, DType.DTypeEnum.DECIMAL128, 0,
+        () -> ColumnVector.fromBoxedInts(1, 21, 345, null, 8008, Integer.MIN_VALUE, Integer.MAX_VALUE),
+        () -> ColumnVector.decimalFromBigInt(0, new BigInteger("1"), new BigInteger("21"),
+            new BigInteger("345"), null, new BigInteger("8008"),
+            new BigInteger(String.valueOf(Integer.MIN_VALUE)),
+            new BigInteger(String.valueOf(Integer.MAX_VALUE))),
+        new BigInteger[]{new BigInteger("1"), new BigInteger("21"),
+            new BigInteger("345"), null, new BigInteger("8008"),
+            new BigInteger(String.valueOf(Integer.MIN_VALUE)),
+            new BigInteger(String.valueOf(Integer.MAX_VALUE))}
+    );
+  }
+
+  @Test
   void testCastFloatToDecimal() {
     testCastNumericToDecimalsAndBack(DType.FLOAT32, true, 0,
         () -> ColumnVector.fromBoxedFloats(1.0f, 2.1f, -3.23f, null, 2.41281f, 1378952.001f),
@@ -3645,6 +3706,26 @@ public class ColumnVectorTest extends CudfTestBase {
       for (int i = 0; i < sourceColumn.rows; i++) {
         Long actual = hostDecimalColumn.isNull(i) ? null :
             (isDec32 ? hostDecimalColumn.getInt(i) : hostDecimalColumn.getLong(i));
+        assertEquals(unscaledDecimal[i], actual);
+      }
+      assertColumnsAreEqual(expectedColumn, returnColumn);
+    }
+  }
+
+  private static void testCastDecimal128(DType.DTypeEnum sourceType, DType.DTypeEnum targetType, int scale,
+                                         Supplier<ColumnVector> sourceData,
+                                         Supplier<ColumnVector> returnData,
+                                         Object[] unscaledDecimal) {
+    DType decimalType = DType.create(targetType, scale);
+    try (ColumnVector sourceColumn = sourceData.get();
+         ColumnVector expectedColumn = returnData.get();
+         ColumnVector decimalColumn = sourceColumn.castTo(decimalType);
+         HostColumnVector hostDecimalColumn = decimalColumn.copyToHost();
+         ColumnVector returnColumn = decimalColumn.castTo(DType.create(decimalType.typeId, scale))) {
+      for (int i = 0; i < sourceColumn.rows; i++) {
+        Object actual = hostDecimalColumn.isNull(i) ? null :
+            (decimalType.typeId == DType.DTypeEnum.DECIMAL128 ? hostDecimalColumn.getBigDecimal(i).unscaledValue() :
+                ((decimalType.typeId == DType.DTypeEnum.DECIMAL64) ? hostDecimalColumn.getLong(i) : hostDecimalColumn.getInt(i)));
         assertEquals(unscaledDecimal[i], actual);
       }
       assertColumnsAreEqual(expectedColumn, returnColumn);
@@ -4835,6 +4916,20 @@ public class ColumnVectorTest extends CudfTestBase {
   }
 
   @Test
+  void testIsFixedPoint() {
+    String[] decimalStrings = {"A", "nan", "Inf", "-Inf", "Infinity", "infinity",
+        "2.1474", "112.383", "-2.14748", "NULL", "null", null, "1.2", "1.2e-4", "0.00012"};
+
+    DType dt = DType.create(DType.DTypeEnum.DECIMAL32, -3);
+    try (ColumnVector decStringCV = ColumnVector.fromStrings(decimalStrings);
+         ColumnVector isFixedPoint = decStringCV.isFixedPoint(dt);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, false, false
+             , false, true, true, true, false, false, null, true, true, true)) {
+      assertColumnsAreEqual(expected, isFixedPoint);
+    }
+  }
+
+  @Test
   void testIsFloat() {
     String[] floatStrings = {"A", "nan", "Inf", "-Inf", "Infinity", "infinity", "-0.0", "0.0",
         "3.4028235E38", "3.4028236E38", "-3.4028235E38", "-3.4028236E38", "1.2e-24", "NULL", "null",
@@ -4842,11 +4937,12 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector floatStringCV = ColumnVector.fromStrings(floatStrings);
          ColumnVector isFloat = floatStringCV.isFloat();
          ColumnVector floats = floatStringCV.asFloats();
-         ColumnVector expectedFloats = ColumnVector.fromBoxedFloats(0f, 0f, Float.POSITIVE_INFINITY,
-             Float.NEGATIVE_INFINITY, 0f, 0f, -0f, 0f, Float.MAX_VALUE, Float.POSITIVE_INFINITY,
-             -Float.MAX_VALUE, Float.NEGATIVE_INFINITY, 1.2e-24f, 0f, 0f, null, 423f);
-         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, true, true, false,
-             false, true, true, true, true, true, true, true, false, false, null, true)) {
+         ColumnVector expectedFloats = ColumnVector.fromBoxedFloats(0f, Float.NaN, Float.POSITIVE_INFINITY,
+             Float.NEGATIVE_INFINITY, Float.POSITIVE_INFINITY, Float.POSITIVE_INFINITY, -0f, 0f,
+             Float.MAX_VALUE, Float.POSITIVE_INFINITY, -Float.MAX_VALUE, Float.NEGATIVE_INFINITY,
+             1.2e-24f, 0f, 0f, null, 423f);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, true, true, true, true,
+             true, true, true, true, true, true, true, true, false, false, null, true)) {
       assertColumnsAreEqual(expected, isFloat);
       assertColumnsAreEqual(expectedFloats, floats);
     }
@@ -4867,12 +4963,12 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector doubleStringCV = ColumnVector.fromStrings(doubleStrings);
          ColumnVector isDouble = doubleStringCV.isFloat();
          ColumnVector doubles = doubleStringCV.asDoubles();
-         ColumnVector expectedDoubles = ColumnVector.fromBoxedDoubles(0d, 0d,
-             Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, 0d, 0d, -0d, 0d, Double.MAX_VALUE,
-             Double.POSITIVE_INFINITY, -Double.MAX_VALUE, Double.NEGATIVE_INFINITY, 1.2e-234d, 0d,
-             0d, null, 423d);
-         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, true, true, false,
-             false, true, true, true, true, true, true, true, false, false, null, true)) {
+         ColumnVector expectedDoubles = ColumnVector.fromBoxedDoubles(0d, Double.NaN,
+             Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY,
+             -0d, 0d, Double.MAX_VALUE, Double.POSITIVE_INFINITY, -Double.MAX_VALUE, Double.NEGATIVE_INFINITY,
+             1.2e-234d, 0d, 0d, null, 423d);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, true, true, true, true,
+             true, true, true, true, true, true, true, true, false, false, null, true)) {
       assertColumnsAreEqual(expected, isDouble);
       assertColumnsAreEqual(expectedDoubles, doubles);
     }

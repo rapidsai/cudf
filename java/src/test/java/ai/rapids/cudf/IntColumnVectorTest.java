@@ -117,8 +117,8 @@ public class IntColumnVectorTest extends CudfTestBase {
          ColumnVector expected1 = ColumnVector.fromInts(4, 3, 8);
          ColumnVector intColumnVector2 = shortColumnVector.asInts();
          ColumnVector expected2 = ColumnVector.fromInts(100)) {
-      TableTest.assertColumnsAreEqual(expected1, intColumnVector1);
-      TableTest.assertColumnsAreEqual(expected2, intColumnVector2);
+      AssertUtils.assertColumnsAreEqual(expected1, intColumnVector1);
+      AssertUtils.assertColumnsAreEqual(expected2, intColumnVector2);
     }
   }
 

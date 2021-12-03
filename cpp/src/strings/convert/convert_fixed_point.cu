@@ -37,6 +37,9 @@
 #include <thrust/optional.h>
 #include <thrust/transform.h>
 
+#include <cuda/std/limits>
+#include <cuda/std/type_traits>
+
 namespace cudf {
 namespace strings {
 namespace detail {
@@ -83,7 +86,7 @@ struct string_to_decimal_check_fn {
   int32_t const scale;
 
   string_to_decimal_check_fn(column_device_view const& d_strings, int32_t scale)
-    : d_strings(d_strings), scale(scale)
+    : d_strings{d_strings}, scale{scale}
   {
   }
 
@@ -97,7 +100,7 @@ struct string_to_decimal_check_fn {
 
     auto const iter_end = d_str.data() + d_str.size_bytes();
 
-    using UnsignedDecimalType = std::make_unsigned_t<DecimalType>;
+    using UnsignedDecimalType = cuda::std::make_unsigned_t<DecimalType>;
     auto [value, exp_offset]  = parse_integer<UnsignedDecimalType>(iter, iter_end);
 
     // only exponent notation is expected here
@@ -115,7 +118,7 @@ struct string_to_decimal_check_fn {
     // finally, check for overflow based on the exp_ten and scale values
     return (exp_ten < scale) or
            value <= static_cast<UnsignedDecimalType>(
-                      std::numeric_limits<DecimalType>::max() /
+                      cuda::std::numeric_limits<DecimalType>::max() /
                       static_cast<DecimalType>(exp10(static_cast<double>(exp_ten - scale))));
   }
 };
@@ -206,8 +209,8 @@ struct decimal_to_string_size_fn {
 
     if (scale >= 0) return count_digits(value) + scale;
 
-    auto const abs_value = std::abs(value);
-    auto const exp_ten   = static_cast<int64_t>(exp10(static_cast<double>(-scale)));
+    auto const abs_value = numeric::detail::abs(value);
+    auto const exp_ten   = numeric::detail::exp10<DecimalType>(-scale);
     auto const fraction  = count_digits(abs_value % exp_ten);
     auto const num_zeros = std::max(0, (-scale - fraction));
     return static_cast<int32_t>(value < 0) +    // sign if negative
@@ -247,9 +250,9 @@ struct decimal_to_string_fn {
     // write format:   [-]integer.fraction
     // where integer  = abs(value) / (10^abs(scale))
     //       fraction = abs(value) % (10^abs(scale))
-    auto const abs_value = std::abs(value);
     if (value < 0) *d_buffer++ = '-';  // add sign
-    auto const exp_ten   = static_cast<int64_t>(exp10(static_cast<double>(-scale)));
+    auto const abs_value = numeric::detail::abs(value);
+    auto const exp_ten   = numeric::detail::exp10<DecimalType>(-scale);
     auto const num_zeros = std::max(0, (-scale - count_digits(abs_value % exp_ten)));
 
     d_buffer += integer_to_string(abs_value / exp_ten, d_buffer);  // add the integer part
