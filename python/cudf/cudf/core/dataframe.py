@@ -2287,11 +2287,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         3    3  13.0
         4    4  14.0
         >>> df_new
-           key   val  sum
-        0    0  10.0  NaN
-        3    3  13.0  NaN
-        4    4  14.0  NaN
-        5   -1   NaN  NaN
+           key   val   sum
+        0     0  10.0  <NA>
+        3     3  13.0  <NA>
+        4     4  14.0  <NA>
+        5  <NA>  <NA>  <NA>
         """
 
         if labels is None and index is None and columns is None:
