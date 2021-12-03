@@ -20,6 +20,7 @@
 #include <arrow/ipc/api.h>
 #include <cudf/aggregation.hpp>
 #include <cudf/concatenate.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/hashing.hpp>
@@ -3147,4 +3148,18 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplitGroups(
   CATCH_STD(env, NULL);
 }
 
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_sample(JNIEnv *env, jclass, jlong j_input,
+                                                              jlong n, jboolean replacement,
+                                                              jlong seed) {
+  JNI_NULL_CHECK(env, j_input, "input table is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *input = reinterpret_cast<cudf::table_view *>(j_input);
+    auto sample_with_replacement =
+        replacement ? cudf::sample_with_replacement::TRUE : cudf::sample_with_replacement::FALSE;
+    std::unique_ptr<cudf::table> result = cudf::sample(*input, n, sample_with_replacement, seed);
+    return cudf::jni::convert_table_for_return(env, result);
+  }
+  CATCH_STD(env, 0);
+}
 } // extern "C"

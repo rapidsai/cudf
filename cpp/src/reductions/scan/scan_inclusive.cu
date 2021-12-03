@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 
-#include "scan.cuh"
+#include <reductions/arg_minmax_util.cuh>
+#include <reductions/scan/scan.cuh>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -22,6 +23,8 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/reduction.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -47,11 +50,10 @@ rmm::device_buffer mask_scan(column_view const& input_view,
   auto valid_itr = detail::make_validity_iterator(*d_input);
 
   auto first_null_position = [&] {
-    size_type const first_null = thrust::find_if_not(rmm::exec_policy(stream),
-                                                     valid_itr,
-                                                     valid_itr + input_view.size(),
-                                                     thrust::identity<bool>{}) -
-                                 valid_itr;
+    size_type const first_null =
+      thrust::find_if_not(
+        rmm::exec_policy(stream), valid_itr, valid_itr + input_view.size(), thrust::identity{}) -
+      valid_itr;
     size_type const exclusive_offset = (inclusive == scan_type::EXCLUSIVE) ? 1 : 0;
     return std::min(input_view.size(), first_null + exclusive_offset);
   }();
@@ -151,6 +153,72 @@ struct scan_functor<Op, cudf::string_view> {
   }
 };
 
+template <typename Op>
+struct scan_functor<Op, cudf::struct_view> {
+  static std::unique_ptr<column> invoke(column_view const& input,
+                                        rmm::cuda_stream_view stream,
+                                        rmm::mr::device_memory_resource* mr)
+  {
+    // Op is used only to determined if we want to find the min or max element.
+    auto constexpr is_min_op = std::is_same_v<Op, DeviceMin>;
+
+    // Build indices of the scan operation results (ARGMIN/ARGMAX).
+    // When finding ARGMIN, we need to consider nulls as larger than non-null elements, and the
+    // opposite for ARGMAX.
+    auto gather_map    = rmm::device_uvector<size_type>(input.size(), stream);
+    auto const do_scan = [&](auto const& binop) {
+      thrust::inclusive_scan(rmm::exec_policy(stream),
+                             thrust::counting_iterator<size_type>(0),
+                             thrust::counting_iterator<size_type>(input.size()),
+                             gather_map.begin(),
+                             binop);
+    };
+
+    auto constexpr null_precedence = is_min_op ? cudf::null_order::AFTER : cudf::null_order::BEFORE;
+    auto const flattened_input     = cudf::structs::detail::flatten_nested_columns(
+      table_view{{input}}, {}, std::vector<null_order>{null_precedence});
+    auto const d_flattened_input_ptr = table_device_view::create(flattened_input, stream);
+    auto const flattened_null_precedences =
+      is_min_op ? cudf::detail::make_device_uvector_async(flattened_input.null_orders(), stream)
+                : rmm::device_uvector<cudf::null_order>(0, stream);
+
+    if (input.has_nulls()) {
+      auto const binop = cudf::reduction::detail::row_arg_minmax_fn<true>(
+        input.size(), *d_flattened_input_ptr, flattened_null_precedences.data(), is_min_op);
+      do_scan(binop);
+    } else {
+      auto const binop = cudf::reduction::detail::row_arg_minmax_fn<false>(
+        input.size(), *d_flattened_input_ptr, flattened_null_precedences.data(), is_min_op);
+      do_scan(binop);
+    }
+
+    // Gather the children columns of the input column. Must use `get_sliced_child` to properly
+    // handle input in case it is a sliced view.
+    auto const input_children = [&] {
+      auto const it = cudf::detail::make_counting_transform_iterator(
+        0, [structs_view = structs_column_view{input}, stream](auto const child_idx) {
+          return structs_view.get_sliced_child(child_idx);
+        });
+      return std::vector<column_view>(it, it + input.num_children());
+    }();
+
+    // Gather the children elements of the prefix min/max struct elements for the output.
+    auto scanned_children = cudf::detail::gather(table_view{input_children},
+                                                 gather_map,
+                                                 out_of_bounds_policy::DONT_CHECK,
+                                                 negative_index_policy::NOT_ALLOWED,
+                                                 stream,
+                                                 mr)
+                              ->release();
+
+    // Don't need to set a null mask because that will be handled at the caller.
+    return make_structs_column(input.size(),
+                               std::move(scanned_children),
+                               UNKNOWN_NULL_COUNT,
+                               rmm::device_buffer{0, stream, mr});
+  }
+};
+
 /**
  * @brief Dispatcher for running a Scan operation on an input column
  *
@@ -162,7 +230,11 @@ struct scan_dispatcher {
   template <typename T>
   static constexpr bool is_supported()
   {
-    return std::is_invocable_v<Op, T, T> && !cudf::is_dictionary<T>();
+    if constexpr (std::is_same_v<T, cudf::struct_view>) {
+      return std::is_same_v<Op, DeviceMin> || std::is_same_v<Op, DeviceMax>;
+    } else {
+      return std::is_invocable_v<Op, T, T> && !cudf::is_dictionary<T>();
+    }
   }
 
  public:
@@ -210,6 +282,15 @@ std::unique_ptr<column> scan_inclusive(
     output->set_null_mask(detail::copy_bitmask(input, stream, mr), input.null_count());
   } else if (input.nullable()) {
     output->set_null_mask(mask_scan(input, scan_type::INCLUSIVE, stream, mr), UNKNOWN_NULL_COUNT);
+  }
+
+  // If the input is a structs column, we also need to push down nulls from the parent output column
+  // into the children columns.
+  if (input.type().id() == type_id::STRUCT && output->has_nulls()) {
+    for (size_type idx = 0; idx < output->num_children(); ++idx) {
+      structs::detail::superimpose_parent_nulls(
+        output->view().null_mask(), output->null_count(), output->child(idx), stream, mr);
+    }
   }
 
   return output;
