@@ -2659,6 +2659,26 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Examples
         --------
+        >>> import cudf
+        >>> gdf = cudf.DataFrame({'a': [1, 2, 3, 4, 5, 6],
+                                  'b': [1, 1, 2, 3, 5, 8],
+                                  'c': [1, 4, 9, 16, 25, 36]})
+        >>> gdf
+        a  b   c
+        0  1  1   1
+        1  2  1   4
+        2  3  2   9
+        3  4  3  16
+        4  5  5  25
+        5  6  8  36
+        >>> gdf.diff(periods=2)
+            a     b     c
+        0  <NA>  <NA>  <NA>
+        1  <NA>  <NA>  <NA>
+        2     2     1     8
+        3     2     2    12
+        4     2     3    16
+        5     2     5    20
 
         """
 
