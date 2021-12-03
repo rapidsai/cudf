@@ -3394,6 +3394,9 @@ public class ColumnVectorTest extends CudfTestBase {
     BigDecimal[] bigValues0 = {new BigDecimal("992983283728193827182918744829283742232")};
     try {
       ColumnVector cv = ColumnVector.fromDecimals(bigValues0);
+      if (cv != null) {
+        cv.close();
+      }
       fail("Precision check should've thrown an IllegalArgumentException");
     } catch (IllegalArgumentException iae) {
     }
