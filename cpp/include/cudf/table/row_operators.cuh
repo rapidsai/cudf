@@ -50,9 +50,9 @@ namespace detail {
 /**
  * @brief Compare the elements ordering with respect to `lhs`.
  *
- * @param[in] lhs first element
- * @param[in] rhs second element
- * @return weak_ordering Indicates the relationship between the elements in
+ * @param lhs first element
+ * @param rhs second element
+ * @return Indicates the relationship between the elements in
  * the `lhs` and `rhs` columns.
  */
 template <typename Element>
@@ -69,14 +69,15 @@ __device__ weak_ordering compare_elements(Element lhs, Element rhs)
 
 /**
  * @brief A specialization for floating-point `Element` type relational comparison
- * to derive the order of the elements with respect to `lhs`. Specialization is to
- * handle `nan` in the order shown below.
+ * to derive the order of the elements with respect to `lhs`.
+ *
+ * This Specialization handles `nan` in the following order:
  * `[-Inf, -ve, 0, -0, +ve, +Inf, NaN, NaN, null] (for null_order::AFTER)`
  * `[null, -Inf, -ve, 0, -0, +ve, +Inf, NaN, NaN] (for null_order::BEFORE)`
  *
- * @param[in] lhs first element
- * @param[in] rhs second element
- * @return weak_ordering Indicates the relationship between the elements in
+ * @param lhs first element
+ * @param rhs second element
+ * @return Indicates the relationship between the elements in
  * the `lhs` and `rhs` columns.
  */
 template <typename Element, std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
@@ -119,7 +120,7 @@ inline __device__ auto null_compare(bool lhs_is_null, bool rhs_is_null, null_ord
  *
  * @param[in] lhs first element
  * @param[in] rhs second element
- * @return weak_ordering Indicates the relationship between the elements in
+ * @return Indicates the relationship between the elements in
  * the `lhs` and `rhs` columns.
  */
 template <typename Element, std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
@@ -132,9 +133,9 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs)
  * @brief A specialization for floating-point `Element` type to check if
  * `lhs` is equivalent to `rhs`. `nan == nan`.
  *
- * @param[in] lhs first element
- * @param[in] rhs second element
- * @return bool `true` if `lhs` == `rhs` else `false`.
+ * @param lhs first element
+ * @param rhs second element
+ * @return `true` if `lhs` == `rhs` else `false`.
  */
 template <typename Element, std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
 __device__ bool equality_compare(Element lhs, Element rhs)
@@ -147,9 +148,9 @@ __device__ bool equality_compare(Element lhs, Element rhs)
  * @brief A specialization for non-floating-point `Element` type to check if
  * `lhs` is equivalent to `rhs`.
  *
- * @param[in] lhs first element
- * @param[in] rhs second element
- * @return bool `true` if `lhs` == `rhs` else `false`.
+ * @param lhs first element
+ * @param rhs second element
+ * @return `true` if `lhs` == `rhs` else `false`.
  */
 template <typename Element, std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
 __device__ bool equality_compare(Element const lhs, Element const rhs)
@@ -159,6 +160,8 @@ __device__ bool equality_compare(Element const lhs, Element const rhs)
 
 /**
  * @brief Performs an equality comparison between two elements in two columns.
+ *
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
 template <typename Nullate>
 class element_equality_comparator {
@@ -189,7 +192,6 @@ class element_equality_comparator {
    * @param lhs_element_index The index of the first element
    * @param rhs_element_index The index of the second element
    * @return True if both lhs and rhs element are both nulls and `nulls_are_equal` is true, or equal
-   *
    */
   template <typename Element,
             std::enable_if_t<cudf::is_equality_comparable<Element, Element>()>* = nullptr>
@@ -258,6 +260,8 @@ class row_equality_comparator {
 
 /**
  * @brief Performs a relational comparison between two elements in two columns.
+ *
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
 template <typename Nullate>
 class element_relational_comparator {
@@ -341,6 +345,8 @@ class element_relational_comparator {
  * two words, for example, `aac` would be *less* than (or precede) `abb`. The
  * second letter in both words is the first non-equal letter, and `a < b`, thus
  * `aac < abb`.
+ *
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
 template <typename Nullate>
 class row_lexicographic_comparator {
@@ -421,6 +427,7 @@ class row_lexicographic_comparator {
  * @brief Computes the hash value of an element in the given column.
  *
  * @tparam hash_function Hash functor to use for hashing elements.
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
 template <template <typename> class hash_function, typename Nullate>
 class element_hasher {
@@ -479,6 +486,7 @@ class element_hasher_with_seed {
  * @brief Computes the hash value of a row in the given table.
  *
  * @tparam hash_function Hash functor to use for hashing elements.
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
 template <template <typename> class hash_function, typename Nullate>
 class row_hasher {
@@ -536,6 +544,7 @@ class row_hasher {
  * initial hash value for each column.
  *
  * @tparam hash_function Hash functor to use for hashing elements.
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
 template <template <typename> class hash_function, typename Nullate>
 class row_hasher_initial_values {

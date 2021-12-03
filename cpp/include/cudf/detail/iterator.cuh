@@ -215,7 +215,7 @@ auto make_null_replacement_iterator(column_device_view const& column,
  * @throws cudf::logic_error if column datatype and Element type mismatch.
  *
  * @tparam Element The type of elements in the column.
- * @tparam Nullate Indicates how nulls can be checked at runtime.
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  *
  * @param column The column to iterate
  * @param has_nulls Indicates whether `column` is checked for nulls.
@@ -404,7 +404,7 @@ auto inline make_scalar_iterator(scalar const& scalar_value)
  * @throws `cudf::logic_error` if scalar datatype and Element type mismatch.
  *
  * @tparam Element The type of return type of functor
- * @tparam Nullate Indicates how nulls can be checked at runtime.
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
 template <typename Element, typename Nullate>
 struct scalar_optional_accessor : public scalar_value_accessor<Element> {
@@ -586,7 +586,7 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
  * @throws cudf::logic_error if scalar datatype and Element type mismatch.
  *
  * @tparam Element The type of elements in the scalar
- * @tparam Nullate Indicates how nulls can be checked at runtime.
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  *
  * @param scalar_value The scalar to be returned by the iterator.
  * @param has_nulls Indicates if the scalar value may be invalid.

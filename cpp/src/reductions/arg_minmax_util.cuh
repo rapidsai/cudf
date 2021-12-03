@@ -24,9 +24,6 @@ namespace detail {
 
 /**
  * @brief Binary operator ArgMin/ArgMax with index values into the input table.
- *
- * @tparam T Type of the underlying data. This is the fallback for the cases when T does not support
- * '<' operator.
  */
 struct row_arg_minmax_fn {
   size_type const num_rows;

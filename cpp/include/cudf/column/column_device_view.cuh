@@ -1132,7 +1132,7 @@ struct value_accessor {
  * @throws cudf::logic_error if the column is not nullable and `with_nulls` evaluates to true
  *
  * @tparam T The type of elements in the column
- * @tparam Nullate Indicates how nulls can be checked at runtime.
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
 template <typename T, typename Nullate>
 struct optional_accessor {
