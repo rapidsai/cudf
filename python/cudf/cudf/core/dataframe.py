@@ -61,7 +61,6 @@ from cudf.core.indexed_frame import (
 )
 from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
-from cudf.core.window import ExponentialMovingWindow, Rolling
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -3825,7 +3824,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 sort=sort,
             )
         )
-
 
     def query(self, expr, local_dict=None):
         """

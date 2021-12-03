@@ -48,7 +48,7 @@ from cudf.core.column import (
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import Merge, MergeSemi
 from cudf.core.udf.pipeline import compile_or_get, supported_cols_from_frame
-from cudf.core.window import Rolling, ExponentialMovingWindow
+from cudf.core.window import ExponentialMovingWindow, Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type, is_column_like
@@ -5252,15 +5252,15 @@ class Frame:
     @copy_docstring(ExponentialMovingWindow)
     def ewm(
         self,
-        com: Union[float,None] = None,
-        span: Union[float,None] = None,
+        com: Union[float, None] = None,
+        span: Union[float, None] = None,
         halflife: Union[float, None] = None,
-        alpha: Union[float,None] = None,
+        alpha: Union[float, None] = None,
         min_periods: Union[int, None] = 0,
         adjust: bool = True,
         ignore_na: bool = False,
         axis: int = 0,
-        times: Union[str, np.ndarray, None] = None
+        times: Union[str, np.ndarray, None] = None,
     ):
         return ExponentialMovingWindow(
             self,
@@ -5272,7 +5272,7 @@ class Frame:
             adjust=adjust,
             ignore_na=ignore_na,
             axis=axis,
-            times=times
+            times=times,
         )
 
     def nans_to_nulls(self):

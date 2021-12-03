@@ -285,7 +285,6 @@ class Rolling(GetAttrGetItemMixin, _RollingBase):
     def count(self):
         return self._apply_agg("count")
 
-
     def apply(self, func, *args, **kwargs):
         """
         Counterpart of `pandas.core.window.Rolling.apply

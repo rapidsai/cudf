@@ -1,19 +1,19 @@
+from typing import Union
+
+import numpy as np
 from pandas.core.window.ewm import get_center_of_mass
 
 from cudf._lib.reduce import scan
-from cudf.core.window.rolling import _RollingBase
 from cudf.api.types import is_numeric_dtype
-import numpy as np
-from cudf._lib.transform import nans_to_nulls
+from cudf.core.window.rolling import _RollingBase
 
-from typing import Union
 
 class ExponentialMovingWindow(_RollingBase):
-    """
+    r"""
     Provide exponential weighted (EW) functions.
     Available EW functions: ``mean()``
-    Exactly one parameter: ``com``, ``span``, ``halflife``, or ``alpha`` must be
-    provided.
+    Exactly one parameter: ``com``, ``span``, ``halflife``, or ``alpha``
+    must be provided.
     Parameters
     ----------
     com : float, optional
@@ -32,8 +32,8 @@ class ExponentialMovingWindow(_RollingBase):
     min_periods : int, default 0
         Not Supported
     adjust : bool, default True
-        Controls mathematical assumptions about the first value in the sequence.
-        See https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.ewm.html
+        Controls assumptions about the first value in the sequence.
+        https://pandas.pydata.org/docs/reference/api/pandas.DataFrame.ewm.html
         for details.
     ignore_na : bool, default False
         Not Supported
@@ -51,8 +51,8 @@ class ExponentialMovingWindow(_RollingBase):
     cuDF input data may contain both nulls and nan values. For the purposes
     of this method, they are taken to have the same meaning, meaning nulls
     in cuDF will affect the result the same way that nan values would using
-    the equivalent pandas method. 
-    
+    the equivalent pandas method.
+
     Currently only ``mean`` is supported.
 
     Examples
@@ -81,24 +81,25 @@ class ExponentialMovingWindow(_RollingBase):
     3  1.555556
     4  3.650794
     """
+
     def __init__(
         self,
         obj,
-        com: Union[float,None] = None,
-        span: Union[float,None] = None,
+        com: Union[float, None] = None,
+        span: Union[float, None] = None,
         halflife: Union[float, None] = None,
-        alpha: Union[float,None] = None,
+        alpha: Union[float, None] = None,
         min_periods: Union[int, None] = 0,
         adjust: bool = True,
         ignore_na: bool = False,
         axis: int = 0,
-        times: Union[str, np.ndarray, None] = None
+        times: Union[str, np.ndarray, None] = None,
     ):
 
         if (min_periods, ignore_na, axis, times) != (0, False, 0, None):
             raise NotImplementedError(
-                "The parameters `min_periods`, `ignore_na`, `axis`, and `times` "
-                "are not yet supported."
+                "The parameters `min_periods`, `ignore_na`, "
+                "`axis`, and `times` are not yet supported."
             )
 
         self.obj = obj
@@ -137,6 +138,6 @@ class ExponentialMovingWindow(_RollingBase):
         # pandas does nans in the same positions mathematically.
         # as such we need to convert the nans to nulls before
         # passing them in.
-        to_libcudf_column = sr._column.astype('float64').nans_to_nulls()
-        
+        to_libcudf_column = sr._column.astype("float64").nans_to_nulls()
+
         return scan(agg_name, to_libcudf_column, True, **kws)
