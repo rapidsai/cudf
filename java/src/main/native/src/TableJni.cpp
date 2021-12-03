@@ -2685,7 +2685,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_dropDuplicates(
     cudf::jni::auto_set_device(env);
     auto const input = reinterpret_cast<cudf::table_view const *>(input_jtable);
 
-    static_assert(sizeof(jint) == sizeof(cudf::size_type), "Type mismatched.");
+    static_assert(sizeof(jint) == sizeof(cudf::size_type), "Integer types mismatched.");
     auto const native_keys_indices = cudf::jni::native_jintArray(env, key_columns);
     auto const keys_indices =
         std::vector<cudf::size_type>(native_keys_indices.begin(), native_keys_indices.end());
