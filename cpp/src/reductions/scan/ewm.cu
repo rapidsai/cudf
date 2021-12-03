@@ -50,8 +50,7 @@ template <typename T>
 void compute_recurrence(rmm::device_uvector<thrust::pair<T, T>>& input,
                         rmm::cuda_stream_view stream)
 {
-  recurrence_functor<T> op;
-  thrust::inclusive_scan(rmm::exec_policy(stream), input.begin(), input.end(), input.begin(), op);
+  thrust::inclusive_scan(rmm::exec_policy(stream), input.begin(), input.end(), input.begin(), recurrence_functor<T>{});
 }
 
 /**
@@ -75,7 +74,7 @@ rmm::device_uvector<cudf::size_type> null_roll_up(column_view const& input,
                     valid_it,
                     valid_it + input.size(),
                     output.begin(),
-                    [=] __device__(bool valid) -> bool { return 1 - valid; });
+                    [] __device__(bool valid) -> bool { return 1 - valid; });
 
   // 0, 1, 0, 1, 1, 0 -> 0, 0, 1, 0, 0, 2
   thrust::inclusive_scan_by_key(
@@ -86,7 +85,7 @@ rmm::device_uvector<cudf::size_type> null_roll_up(column_view const& input,
 
 /**
 * @brief modify the source pairs that eventually yield the numerator
-* and denoninator to account for nan values. Pairs at nan indicies
+* and denominator to account for nan values. Pairs at nan indices
 * become the identity operator (1, 0). The first pair after a nan
 * value or sequence of nan values has its first element multiplied by
 * N factors of beta, where N is the number of preceeding NaNs.
@@ -115,9 +114,9 @@ void pair_beta_adjust(column_view const& input,
     valid_and_nullcnt + input.size(),
     pairs.begin(),
     pairs.begin(),
-    [=] __device__(thrust::tuple<bool, int> valid_and_nullcnt, pair_type pair) -> pair_type {
-      bool valid = thrust::get<0>(valid_and_nullcnt);
-      int exp    = thrust::get<1>(valid_and_nullcnt);
+    [] __device__(thrust::tuple<bool, int> valid_and_nullcnt, pair_type pair) -> pair_type {
+      bool const valid = thrust::get<0>(valid_and_nullcnt);
+      int const exp    = thrust::get<1>(valid_and_nullcnt);
       if (valid and (exp != 0)) {
         // The value is non-null, but nulls preceeded it
         // must adjust the second element of the pair
@@ -136,7 +135,7 @@ void pair_beta_adjust(column_view const& input,
 
 template <typename T>
 rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
-                                           T beta,
+                                           T const beta,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
@@ -179,7 +178,7 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
       pairs.end(),
       output.begin(),
       output.begin(),
-      [=] __device__(pair_type pair, T numerator) -> T { return numerator / pair.second; });
+      [] __device__(pair_type pair, T numerator) -> T { return numerator / pair.second; });
 
   } else {
     // Numerator
@@ -188,7 +187,7 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                       input.begin<T>(),
                       input.end<T>(),
                       pairs.begin(),
-                      [=] __device__(T input) -> pair_type {
+                      [] __device__(T input) -> pair_type {
                         return {beta, input};
                       });
     compute_recurrence(pairs, stream);
@@ -198,7 +197,7 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                       pairs.begin(),
                       pairs.end(),
                       output.begin(),
-                      [=] __device__(pair_type pair) -> T { return pair.second; });
+                      [] __device__(pair_type pair) -> T { return pair.second; });
 
     // Denominator
     // Fill with pairs
@@ -211,14 +210,14 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
       pairs.end(),
       output.begin(),
       output.begin(),
-      [=] __device__(pair_type pair, T numerator) -> T { return numerator / pair.second; });
+      [] __device__(pair_type pair, T numerator) -> T { return numerator / pair.second; });
   }
   return output;
 }
 
 template <typename T>
 rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
-                                             T beta,
+                                             T const beta,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
@@ -230,7 +229,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
                     input.begin<T>(),
                     input.end<T>(),
                     pairs.begin(),
-                    [=] __device__(T input) -> pair_type {
+                    [beta] __device__(T input) -> pair_type {
                       return {beta, (1.0 - beta) * input};
                     });
 
@@ -240,7 +239,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
                     input.begin<T>(),
                     std::next(input.begin<T>()),
                     pairs.begin(),
-                    [=] __device__(T input) -> pair_type {
+                    [beta] __device__(T input) -> pair_type {
                       return {beta, input};
                     });
 
@@ -288,12 +287,12 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
       null_and_null_count + input.size(),
       pairs.begin(),
       pairs.begin(),
-      [=] __device__(thrust::tuple<bool, T> null_and_null_count, pair_type pair) -> pair_type {
-        bool is_valid = thrust::get<0>(null_and_null_count);
-        T factor      = thrust::get<1>(null_and_null_count);
+      [] __device__(thrust::tuple<bool, T> null_and_null_count, pair_type pair) -> pair_type {
+        bool const is_valid = thrust::get<0>(null_and_null_count);
+        T const factor      = thrust::get<1>(null_and_null_count);
 
-        T ci = pair.first;
-        T cj = pair.second;
+        T const ci = pair.first;
+        T const cj = pair.second;
 
         if (is_valid and (factor != 0.0)) {
           return {ci / factor, cj / factor};
@@ -308,7 +307,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
                     pairs.begin(),
                     pairs.end(),
                     output.begin(),
-                    [=] __device__(pair_type pair) -> T { return pair.second; });
+                    [] __device__(pair_type pair) -> T { return pair.second; });
   return output;
 }
 
@@ -331,9 +330,8 @@ std::unique_ptr<column> ewma(std::unique_ptr<aggregation> const& agg,
   } else {
     data = compute_ewma_noadjust(input, beta, stream, mr);
   }
-  auto col = std::make_unique<column>(
+  return std::make_unique<column>(
     cudf::data_type(cudf::type_to_id<T>()), input.size(), std::move(data.release()));
-  return col;
 }
 
 struct ewma_functor {

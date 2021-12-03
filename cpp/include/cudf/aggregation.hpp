@@ -319,7 +319,7 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * @param adjust which assumption to make about the first value
  */
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_ewma_aggregation(double com, bool adjust);
+std::unique_ptr<Base> make_ewma_aggregation(double const com, bool const adjust);
 
 /**
  * @brief Factory to create a RANK aggregation

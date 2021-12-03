@@ -612,14 +612,10 @@ class row_number_aggregation final : public rolling_aggregation {
  */
 class ewma_aggregation final : public rolling_aggregation {
  public:
-  double com;
-  bool adjust;
+  double const com;
+  bool const adjust;
 
-  ewma_aggregation(double com, bool adjust) : aggregation{EWMA}
-  {
-    this->com    = com;
-    this->adjust = adjust;
-  }
+  ewma_aggregation(double const com, bool const adjust) : aggregation{EWMA}, com{com}, adjust{adjust} {}
 
   std::unique_ptr<aggregation> clone() const override
   {
