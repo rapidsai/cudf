@@ -679,3 +679,5 @@ TEST_F(BinaryOperationCompiledTest_NullOpsString, NullMin_Vector_Vector)
 }
 
 }  // namespace cudf::test::binop
+
+CUDF_TEST_PROGRAM_MAIN()
