@@ -62,12 +62,12 @@ The following instructions are for developers and contributors to cuDF OSS devel
 Compilers:
 
 * `gcc`     version 9.3+
-* `nvcc`    version 11.0+
+* `nvcc`    version 11.5+
 * `cmake`   version 3.20.1+
 
 CUDA/GPU:
 
-* CUDA 11.0+
+* CUDA 11.5+
 * NVIDIA driver 450.80.02+
 * Pascal architecture or better
 

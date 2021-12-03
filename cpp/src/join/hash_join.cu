@@ -266,7 +266,7 @@ std::size_t get_full_join_size(cudf::table_device_view build_table,
     left_join_complement_size = thrust::count_if(rmm::exec_policy(stream),
                                                  invalid_index_map->begin(),
                                                  invalid_index_map->end(),
-                                                 thrust::identity<size_type>());
+                                                 thrust::identity());
   }
   return join_size + left_join_complement_size;
 }

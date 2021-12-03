@@ -22,11 +22,12 @@ import ai.rapids.cudf.HostColumnVector.Builder;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.math.RoundingMode;
 import java.util.Arrays;
 import java.util.stream.IntStream;
 
-import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
+import static ai.rapids.cudf.AssertUtils.assertColumnsAreEqual;
 import static ai.rapids.cudf.TestUtils.*;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -54,7 +55,12 @@ public class BinaryOpTest extends CudfTestBase {
   private static final int[] DECIMAL32_1 = new int[]{1000, 2000, 3000, 4000, 5000};
   private static final int[] DECIMAL32_2 = new int[]{100, 200, 300, 400, 50};
   private static final long[] DECIMAL64_1 = new long[]{10L, 23L, 12L, 24L, 123456789L};
-  private static final long[] DECIMAL64_2 = new long[]{20L, 13L, 22L, 14L, 132457689L};
+  private static final long[] DECIMAL64_2 = new long[]{33041L, 97290L, 36438L, 25379L, 48473L};
+
+  private static final BigInteger[] DECIMAL128_1 = new BigInteger[]{new BigInteger("1234567891234567"), new BigInteger("1234567891234567"),
+      new BigInteger("1234567891234567"), new BigInteger("1234567891234567"), new BigInteger("1234567891234567")};
+  private static final BigInteger[] DECIMAL128_2 = new BigInteger[]{new BigInteger("234567891234567"), new BigInteger("234567891234567"),
+      new BigInteger("234567891234567"), new BigInteger("234567891234567"), new BigInteger("234567891234567")};
 
   private static final BigDecimal[] BIGDECIMAL32_1 = new BigDecimal[]{
           BigDecimal.valueOf(12, dec32Scale_1),
@@ -250,7 +256,9 @@ public class BinaryOpTest extends CudfTestBase {
          ColumnVector dec32cv1 = ColumnVector.fromDecimals(BIGDECIMAL32_1);
          ColumnVector dec32cv2 = ColumnVector.fromDecimals(BIGDECIMAL32_2);
          ColumnVector dec64cv1 = ColumnVector.decimalFromLongs(-dec64Scale_1, DECIMAL64_1);
-         ColumnVector dec64cv2 = ColumnVector.decimalFromLongs(-dec64Scale_2, DECIMAL64_2)) {
+         ColumnVector dec64cv2 = ColumnVector.decimalFromLongs(-dec64Scale_2, DECIMAL64_2);
+         ColumnVector dec128cv1 = ColumnVector.decimalFromBigInt(-dec64Scale_1, DECIMAL128_1);
+         ColumnVector dec128cv2 = ColumnVector.decimalFromBigInt(-dec64Scale_2, DECIMAL128_2)) {
       try (ColumnVector add = icv1.add(icv2);
            ColumnVector expected = forEach(DType.INT32, icv1, icv2,
                    (b, l, r, i) -> b.append(l.getInt(i) + r.getInt(i)))) {
@@ -331,6 +339,14 @@ public class BinaryOpTest extends CudfTestBase {
         }
       }
 
+      try (ColumnVector add = dec128cv1.add(dec128cv2)) {
+        try (ColumnVector expected = forEach(
+            DType.create(DType.DTypeEnum.DECIMAL128, -6), dec128cv1, dec128cv2,
+            (b, l, r, i) -> b.append(l.getBigDecimal(i).add(r.getBigDecimal(i))))) {
+          assertColumnsAreEqual(expected, add, "dec128");
+        }
+      }
+
       try (Scalar s = Scalar.fromDecimal(2, 100);
            ColumnVector add = dec32cv1.add(s)) {
         try (ColumnVector expected = forEachS(
@@ -381,7 +397,9 @@ public class BinaryOpTest extends CudfTestBase {
          ColumnVector dec32cv1 = ColumnVector.fromDecimals(BIGDECIMAL32_1);
          ColumnVector dec32cv2 = ColumnVector.fromDecimals(BIGDECIMAL32_2);
          ColumnVector dec64cv1 = ColumnVector.decimalFromLongs(-dec64Scale_1, DECIMAL64_1);
-         ColumnVector dec64cv2 = ColumnVector.decimalFromLongs(-dec64Scale_2, DECIMAL64_2)) {
+         ColumnVector dec64cv2 = ColumnVector.decimalFromLongs(-dec64Scale_2, DECIMAL64_2);
+         ColumnVector dec128cv1 = ColumnVector.decimalFromBigInt(-dec64Scale_1, DECIMAL128_1);
+         ColumnVector dec128cv2 = ColumnVector.decimalFromBigInt(-dec64Scale_2, DECIMAL128_2)) {
       try (ColumnVector sub = icv1.sub(icv2);
            ColumnVector expected = forEach(DType.INT32, icv1, icv2,
                    (b, l, r, i) -> b.append(l.getInt(i) - r.getInt(i)))) {
@@ -473,6 +491,14 @@ public class BinaryOpTest extends CudfTestBase {
         }
       }
 
+      try (ColumnVector sub = dec128cv1.sub(dec128cv2)) {
+        try (ColumnVector expected = forEach(
+            DType.create(DType.DTypeEnum.DECIMAL128, -6), dec128cv1, dec128cv2,
+            (b, l, r, i) -> b.append(l.getBigDecimal(i).subtract(r.getBigDecimal(i))))) {
+          assertColumnsAreEqual(expected, sub, "dec128");
+        }
+      }
+
       try (Scalar s = Scalar.fromFloat(1.1f);
            ColumnVector sub = lcv1.sub(s);
            ColumnVector expected = forEachS(DType.FLOAT32, lcv1, 1.1f,
@@ -507,7 +533,9 @@ public class BinaryOpTest extends CudfTestBase {
          ColumnVector dec32cv1 = ColumnVector.fromDecimals(BIGDECIMAL32_1);
          ColumnVector dec32cv2 = ColumnVector.fromDecimals(BIGDECIMAL32_2);
          ColumnVector dec64cv1 = ColumnVector.decimalFromLongs(-dec64Scale_1, DECIMAL64_1);
-         ColumnVector dec64cv2 = ColumnVector.decimalFromLongs(-dec64Scale_2, DECIMAL64_2)) {
+         ColumnVector dec64cv2 = ColumnVector.decimalFromLongs(-dec64Scale_2, DECIMAL64_2);
+         ColumnVector dec128cv1 = ColumnVector.decimalFromBigInt(-dec64Scale_1, DECIMAL128_1);
+         ColumnVector dec128cv2 = ColumnVector.decimalFromBigInt(-dec64Scale_2, DECIMAL128_2)) {
       try (ColumnVector answer = icv.mul(dcv);
            ColumnVector expected = forEach(DType.FLOAT64, icv, dcv,
                    (b, l, r, i) -> b.append(l.getInt(i) * r.getDouble(i)))) {
@@ -559,6 +587,14 @@ public class BinaryOpTest extends CudfTestBase {
            ColumnVector expected = forEachS(DType.UINT32, (short) 0x89ab,  uicv,
                    (b, l, r, i) -> b.append(Short.toUnsignedInt(l) * r.getInt(i)))) {
         assertColumnsAreEqual(expected, answer, "scalar uint16 * uint32");
+      }
+
+      try (ColumnVector mul = dec128cv1.mul(dec128cv2)) {
+        try (ColumnVector expected = forEach(
+            DType.create(DType.DTypeEnum.DECIMAL128, dec128cv1.type.getScale() + dec128cv2.type.getScale()), dec128cv1, dec128cv2,
+            (b, l, r, i) -> b.append(l.getBigDecimal(i).multiply(r.getBigDecimal(i))))) {
+          assertColumnsAreEqual(expected, mul, "dec128");
+        }
       }
     }
   }

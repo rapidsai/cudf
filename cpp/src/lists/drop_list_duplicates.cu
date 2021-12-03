@@ -67,7 +67,7 @@ struct has_negative_nans_fn {
  * @brief A structure to be used along with type_dispatcher to check if a column has any
  * negative NaN value.
  *
- * This functor is neccessary because when calling to segmented sort on the list entries, the
+ * This functor is necessary because when calling to segmented sort on the list entries, the
  * negative NaN and positive NaN values (if both exist) are separated to the two ends of the output
  * lists. We want to move all NaN values close together in order to call unique_copy later on.
  */
@@ -563,7 +563,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
                      values ? cudf::empty_like(values.value().parent()) : nullptr};
   }
 
-  // The child column conotaining list entries.
+  // The child column containing list entries.
   auto const keys_child = keys.get_sliced_child(stream);
 
   // Generate a mapping from list entries to their 1-based list indices for the keys column.

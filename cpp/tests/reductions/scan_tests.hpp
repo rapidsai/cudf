@@ -52,6 +52,11 @@ struct TypeParam_to_host_type<numeric::decimal64> {
   using type = numeric::decimal64::rep;
 };
 
+template <>
+struct TypeParam_to_host_type<numeric::decimal128> {
+  using type = numeric::decimal128::rep;
+};
+
 template <typename TypeParam, typename T>
 typename std::enable_if<std::is_same_v<TypeParam, cudf::string_view>,
                         thrust::host_vector<std::string>>::type

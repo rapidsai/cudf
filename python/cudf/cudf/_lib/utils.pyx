@@ -36,7 +36,6 @@ PARQUET_META_TYPE_MAP = {
     for cudf_dtype, pandas_dtype in np_dtypes_to_pandas_dtypes.items()
 }
 
-
 cdef table_view table_view_from_columns(columns) except*:
     """Create a cudf::table_view from an iterable of Columns."""
     cdef vector[column_view] column_views
@@ -221,6 +220,32 @@ def _index_level_name(index_name, level, column_names):
         return f"__index_level_{level}__"
 
 
+cdef columns_from_unique_ptr(
+    unique_ptr[table] c_tbl
+):
+    """Convert a libcudf table into list of columns.
+
+    Parameters
+    ----------
+    c_tbl : unique_ptr[cudf::table]
+        The libcudf table whose columns will be extracted
+
+    Returns
+    -------
+    list[Column]
+        A list of columns.
+    """
+    cdef vector[unique_ptr[column]] c_columns = move(c_tbl.get().release())
+    cdef vector[unique_ptr[column]].iterator it = c_columns.begin()
+
+    cdef size_t i
+
+    columns = [Column.from_unique_ptr(move(dereference(it+i)))
+               for i in range(c_columns.size())]
+
+    return columns
+
+
 cdef data_from_unique_ptr(
     unique_ptr[table] c_tbl, column_names, index_names=None
 ):
@@ -255,13 +280,8 @@ cdef data_from_unique_ptr(
     tuple(Dict[str, Column], Optional[Index])
         A dict of the columns in the output table.
     """
-    cdef vector[unique_ptr[column]] c_columns = move(c_tbl.get().release())
-    cdef vector[unique_ptr[column]].iterator it = c_columns.begin()
 
-    cdef size_t i
-
-    columns = [Column.from_unique_ptr(move(dereference(it+i)))
-               for i in range(c_columns.size())]
+    columns = columns_from_unique_ptr(move(c_tbl))
 
     # First construct the index, if any
     index = (

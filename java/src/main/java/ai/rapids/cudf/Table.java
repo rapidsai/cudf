@@ -27,6 +27,8 @@ import ai.rapids.cudf.ast.CompiledExpression;
 
 import java.io.File;
 import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.MathContext;
 import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.util.*;
@@ -329,10 +331,12 @@ public final class Table implements AutoCloseable {
    * @param usingNumPyTypes   whether the parser should implicitly promote TIMESTAMP
    *                          columns to TIMESTAMP_MILLISECONDS for compatibility with NumPy.
    * @param timeUnit          return type of TimeStamp in units
+   * @param decimal128Columns name of the columns which are read as Decimal128 rather than Decimal64
    */
   private static native long[] readORC(String[] filterColumnNames,
                                        String filePath, long address, long length,
-                                       boolean usingNumPyTypes, int timeUnit) throws CudfException;
+                                       boolean usingNumPyTypes, int timeUnit,
+                                       String[] decimal128Columns) throws CudfException;
 
   /**
    * Setup everything to write ORC formatted data to a file.
@@ -674,6 +678,8 @@ public final class Table implements AutoCloseable {
                                                                 boolean[] keysDescending,
                                                                 boolean[] keysNullSmallest);
 
+  private static native long[] sample(long tableHandle, long n, boolean replacement, long seed);
+
   /////////////////////////////////////////////////////////////////////////////
   // TABLE CREATION APIs
   /////////////////////////////////////////////////////////////////////////////
@@ -881,7 +887,9 @@ public final class Table implements AutoCloseable {
    */
   public static Table readORC(ORCOptions opts, File path) {
     return new Table(readORC(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0, opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId()));
+        path.getAbsolutePath(), 0, 0,
+        opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
+        opts.getDecimal128Columns()));
   }
 
   /**
@@ -941,8 +949,9 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(readORC(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len, opts.usingNumPyTypes(),
-        opts.timeUnit().typeId.getNativeId()));
+        null, buffer.getAddress() + offset, len,
+        opts.usingNumPyTypes(), opts.timeUnit().typeId.getNativeId(),
+        opts.getDecimal128Columns()));
   }
 
   private static class ParquetTableWriter implements TableWriter {
@@ -2794,6 +2803,34 @@ public final class Table implements AutoCloseable {
     return result;
   }
 
+
+  /**
+   * Gather `n` samples from table randomly
+   * Note: does not preserve the ordering
+   * Example:
+   * input: {col1: {1, 2, 3, 4, 5}, col2: {6, 7, 8, 9, 10}}
+   * n: 3
+   * replacement: false
+   *
+   * output:       {col1: {3, 1, 4}, col2: {8, 6, 9}}
+   *
+   * replacement: true
+   *
+   * output:       {col1: {3, 1, 1}, col2: {8, 6, 6}}
+   *
+   * throws "logic_error" if `n` > table rows and `replacement` == FALSE.
+   * throws "logic_error" if `n` < 0.
+   *
+   * @param n non-negative number of samples expected from table
+   * @param replacement Allow or disallow sampling of the same row more than once.
+   * @param seed Seed value to initiate random number generator.
+   *
+   * @return Table containing samples
+   */
+  public Table sample(long n, boolean replacement, long seed) {
+    return new Table(sample(nativeHandle, n, replacement, seed));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // HELPER CLASSES
   /////////////////////////////////////////////////////////////////////////////
@@ -3808,6 +3845,16 @@ public final class Table implements AutoCloseable {
       return this;
     }
 
+    public TestBuilder decimal128Column(int scale, RoundingMode mode, BigInteger... values) {
+      types.add(new BasicType(true, DType.create(DType.DTypeEnum.DECIMAL128, scale)));
+      BigDecimal[] data = Arrays.stream(values).map((x) -> {
+        if (x == null) return null;
+        return new BigDecimal(x, scale, new MathContext(38, mode));
+      }).toArray(BigDecimal[]::new);
+      typeErasedData.add(data);
+      return this;
+    }
+
     private static ColumnVector from(DType type, Object dataArray) {
       ColumnVector ret = null;
       switch (type.typeId) {
@@ -3852,6 +3899,7 @@ public final class Table implements AutoCloseable {
           break;
         case DECIMAL32:
         case DECIMAL64:
+        case DECIMAL128:
           int scale = type.getScale();
           if (dataArray instanceof Integer[]) {
             BigDecimal[] data = Arrays.stream(((Integer[]) dataArray))

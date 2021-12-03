@@ -156,12 +156,12 @@ TEST_F(groupby_count_scan_string_test, basic)
 }
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_SUITE(FixedPointTestBothReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
-TYPED_TEST(FixedPointTestBothReps, GroupByCountScan)
+TYPED_TEST(FixedPointTestAllReps, GroupByCountScan)
 {
   using namespace numeric;
   using decimalXX  = TypeParam;

@@ -117,7 +117,7 @@ void tie_break_ranks_transform(cudf::device_span<size_type const> dense_rank_sor
                         tie_iter,
                         thrust::make_discard_iterator(),
                         tie_sorted.begin(),
-                        thrust::equal_to<size_type>{},
+                        thrust::equal_to{},
                         tie_breaker);
   auto sorted_tied_rank = thrust::make_transform_iterator(
     dense_rank_sorted.begin(),
@@ -171,8 +171,8 @@ void rank_min(cudf::device_span<size_type const> group_keys,
                                        thrust::make_counting_iterator<size_type>(1),
                                        sorted_order_view,
                                        rank_mutable_view.begin<outputType>(),
-                                       thrust::minimum<size_type>{},
-                                       thrust::identity<outputType>{},
+                                       thrust::minimum{},
+                                       thrust::identity{},
                                        stream);
 }
 
@@ -189,10 +189,16 @@ void rank_max(cudf::device_span<size_type const> group_keys,
                                        thrust::make_counting_iterator<size_type>(1),
                                        sorted_order_view,
                                        rank_mutable_view.begin<outputType>(),
-                                       thrust::maximum<size_type>{},
-                                       thrust::identity<outputType>{},
+                                       thrust::maximum{},
+                                       thrust::identity{},
                                        stream);
 }
+
+// Returns index, count
+template <typename T>
+struct index_counter {
+  __device__ T operator()(size_type i) { return T{i, 1}; }
+};
 
 void rank_average(cudf::device_span<size_type const> group_keys,
                   column_view sorted_order_view,
@@ -208,10 +214,9 @@ void rank_average(cudf::device_span<size_type const> group_keys,
   using MinCount = thrust::pair<size_type, size_type>;
   tie_break_ranks_transform<MinCount>(
     group_keys,
-    cudf::detail::make_counting_transform_iterator(1,
-                                                   [] __device__(auto i) {
-                                                     return MinCount{i, 1};
-                                                   }),
+    // Use device functor with return type. Cannot use device lambda due to limitation.
+    // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#extended-lambda-restrictions
+    cudf::detail::make_counting_transform_iterator(1, index_counter<MinCount>{}),
     sorted_order_view,
     rank_mutable_view.begin<double>(),
     [] __device__(auto rank_count1, auto rank_count2) {
