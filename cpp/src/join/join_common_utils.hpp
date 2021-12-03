@@ -15,9 +15,13 @@
  */
 #pragma once
 
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
+
+#include <hash/hash_allocator.cuh>
+#include <hash/helper_functions.cuh>
 
 #include <rmm/mr/device/polymorphic_allocator.hpp>
 
