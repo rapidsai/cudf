@@ -1348,12 +1348,15 @@ def test_nullable_bool_dtype_series(data, bool_dtype):
     assert_eq(psr, gsr.to_pandas(nullable=True))
 
 
-@pytest.mark.parametrize("cudf_series", [(cudf.Series([0, 1, 2, 3]))])
-def test_series_transpose(cudf_series):
-    psr = cudf_series.to_pandas()
+@pytest.mark.parametrize("data", [([0, 1, 2, 3])])
+def test_series_transpose(data):
+    psr = pd.Series(data=data)
+    csr = cudf.Series(data=data)
 
-    cudf_transposed = cudf_series.transpose()
+    cudf_transposed = csr.transpose()
     pd_transposed = psr.transpose()
+    cudf_property = csr.T
 
-    assert_eq(pd_transposed, cudf_transposed)
-    assert_eq(cudf_transposed, cudf_series)
+    assert_eq(pd_transposed, cudf_transposed.to_pandas())
+    assert_eq(pd_transposed, cudf_property.to_pandas())
+    assert_eq(cudf_transposed, csr)
