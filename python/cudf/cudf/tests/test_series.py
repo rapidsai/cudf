@@ -1346,3 +1346,15 @@ def test_nullable_bool_dtype_series(data, bool_dtype):
     gsr = cudf.Series(data, dtype=bool_dtype)
 
     assert_eq(psr, gsr.to_pandas(nullable=True))
+
+
+@pytest.mark.parametrize(
+    "cudf_series", [(cudf.Series([0.25, 0.5, 0.2, -0.05]))]
+)
+def test_autocorr(cudf_series):
+    psr = cudf_series.to_pandas()
+
+    cudf_corr = cudf_series.autocorr()
+    pd_corr = psr.autocorr()
+
+    assert_eq(pd_corr, cudf_corr)
