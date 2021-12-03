@@ -187,7 +187,7 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                       input.begin<T>(),
                       input.end<T>(),
                       pairs.begin(),
-                      [] __device__(T input) -> pair_type {
+                      [beta] __device__(T input) -> pair_type {
                         return {beta, input};
                       });
     compute_recurrence(pairs, stream);
