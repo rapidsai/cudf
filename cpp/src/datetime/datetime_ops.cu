@@ -55,9 +55,9 @@ enum class datetime_component {
 };
 
 enum class rounding_kind {
-    CEIL,  ///< Rounds up to the next integer multiple of the provided frequency
-    FLOOR, ///< Rounds down to the next integer multiple of the provided frequency
-    ROUND  ///< Rounds to the nearest integer multiple of the provided frequency
+  CEIL,   ///< Rounds up to the next integer multiple of the provided frequency
+  FLOOR,  ///< Rounds down to the next integer multiple of the provided frequency
+  ROUND   ///< Rounds to the nearest integer multiple of the provided frequency
 };
 
 template <datetime_component Component>
