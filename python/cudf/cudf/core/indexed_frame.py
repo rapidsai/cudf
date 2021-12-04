@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import warnings
+from collections import Counter
 from typing import Type, TypeVar
 from uuid import uuid4
 
@@ -917,11 +918,12 @@ class IndexedFrame(Frame):
 def _check_duplicate_level_names(specified, level_names):
     if specified is None:
         return
-    if len(set(level_names)) != len(level_names):
+    if len(set(level_names)) == len(level_names):
         return
     duplicates = {key for key, val in Counter(level_names).items() if val > 1}
 
-    if any(x in duplicates for x in specified):
-        raise ValueError(
-            f"The name {x} occurs multiple times, use a level number"
-        )
+    for x in specified:
+        if x in duplicates:
+            raise ValueError(
+                f"The name {x} occurs multiple times, use a level number"
+            )

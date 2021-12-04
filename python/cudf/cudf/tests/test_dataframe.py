@@ -2610,10 +2610,18 @@ def test_reset_index_dup_level_name(level, drop, inplace):
     pdf = pd.DataFrame([[1, 2], [3, 4], [5, 6], [7, 8]], index=midx)
     gdf = cudf.from_pandas(pdf)
     if level == [None]:
-        with pytest.raises(
-            ValueError, match="occurs multiple times, use a level number$"
-        ):
-            gdf.reset_index(level=level, drop=drop, inplace=inplace)
+        assert_exceptions_equal(
+            lfunc=pdf.reset_index,
+            rfunc=gdf.reset_index,
+            lfunc_args_and_kwargs=(
+                [],
+                {"level": level, "drop": drop, "inplace": inplace},
+            ),
+            rfunc_args_and_kwargs=(
+                [],
+                {"level": level, "drop": drop, "inplace": inplace},
+            ),
+        )
         return
 
     expect = pdf.reset_index(level=level, drop=drop, inplace=inplace)
