@@ -917,14 +917,9 @@ class IndexedFrame(Frame):
 def _check_duplicate_level_names(specified, level_names):
     if specified is None:
         return
-    non_duplicates = set()
-    duplicates = set()
-
-    for x in level_names:
-        if x in non_duplicates:
-            duplicates.add(x)
-        else:
-            non_duplicates.add(x)
+    if len(set(level_names)) != len(level_names):
+        return
+    duplicates = {key for key, val in Counter(level_names).items() if val > 1}
 
     if any(x in duplicates for x in specified):
         raise ValueError(
