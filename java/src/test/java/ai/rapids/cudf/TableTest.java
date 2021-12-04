@@ -6882,8 +6882,8 @@ public class TableTest extends CudfTestBase {
          MyBufferConsumer consumer = new MyBufferConsumer()) {
       ParquetWriterOptions options = ParquetWriterOptions.builder()
           .withNonNullableColumns("_c0", "_c1", "_c2", "_c3", "_c4", "_c5", "_c6")
-          .withDecimalColumn("_c7", 5)
-          .withDecimalColumn("_c8", 15)
+          .withDecimalColumn("_c7", 15)
+          .withDecimalColumn("_c8", 5)
           .build();
 
       try (TableWriter writer = Table.writeParquetChunked(options, consumer)) {
