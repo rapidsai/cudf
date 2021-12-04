@@ -2486,12 +2486,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         df.index = idx
         return df if not inplace else None
 
-    @docutils.doc_apply(docutils.doc_reset_index_template.format(
-        klass="DataFrame",
-        argument="",
-        return_type="DataFrame or None",
-        return_doc="",
-        example="""
+    @docutils.doc_apply(
+        docutils.doc_reset_index_template.format(
+            klass="DataFrame",
+            argument="",
+            return_type="DataFrame or None",
+            return_doc="",
+            example="""
         >>> df = cudf.DataFrame([('bird', 389.0),
         ...                    ('bird', 24.0),
         ...                    ('mammal', 80.5),
@@ -2544,8 +2545,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         parrot    bird   24.0   fly
         lion    mammal   80.5   run
         monkey  mammal   <NA>  jump
-        """
-    ))
+        """,
+        )
+    )
     def reset_index(
         self, level=None, drop=False, inplace=False, col_level=0, col_fill=""
     ):

@@ -833,20 +833,20 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     @docutils.doc_apply(
         docutils.doc_reset_index_template.format(
-    klass="Series",
-    argument="""
+            klass="Series",
+            argument="""
         name : object, optional
             The name to use for the column containing the original Series
             values. Uses self.name by default. This argument is ignored when
             ``drop`` is True.""",
-    return_type="Series or DataFrame or None",
-    return_doc=""" For Series, When drop is False (the default), a DataFrame
+            return_type="Series or DataFrame or None",
+            return_doc=""" For Series, When drop is False (the default), a DataFrame
             is returned. The newly created columns will come first in the
             DataFrame, followed by the original Series values. When `drop` is
             True, a `Series` is returned. In either case, if ``inplace=True``,
             no value is returned.
 """,
-    example="""
+            example="""
         >>> series = cudf.Series(['a', 'b', 'c', 'd'], index=[10, 11, 12, 13])
         >>> series
         10    a

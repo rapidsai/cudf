@@ -67,11 +67,14 @@ def copy_docstring(other):
 
     return wrapper
 
+
 def doc_apply(doc):
     """Set `__doc__` attribute of `func` to `doc`."""
+
     def wrapper(func):
         func.__doc__ = doc
         return func
+
     return wrapper
 
 
