@@ -113,9 +113,6 @@ def _index_from_data(data: MutableMapping, name: Any = None):
         index_class_type = cudf.MultiIndex
     return index_class_type._from_data(data, None, name)
 
-def _index_from_column_list(columns: List[ColumnBase]):
-    """Construct an index from a list of unnamed columns."""
-    return _index_from_data(dict(zip(range(len(columns)), columns)))
 
 class RangeIndex(BaseIndex):
     """
