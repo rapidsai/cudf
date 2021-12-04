@@ -806,7 +806,7 @@ std::unique_ptr<column> reader::impl::create_empty_column(const size_type orc_co
       break;
 
     case orc::DECIMAL:
-      if (type == type_id::DECIMAL64 or type == type_id::DECIMAL128) {
+      if (type == type_id::DECIMAL32 or type == type_id::DECIMAL64 or type == type_id::DECIMAL128) {
         scale = -static_cast<int32_t>(_metadata.get_types()[orc_col_id].scale.value_or(0));
       }
       out_col = make_empty_column(data_type(type, scale));
@@ -967,7 +967,8 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         decimal_column_type(
           _decimal_cols_as_float, decimal128_columns, is_decimal128_enabled, _metadata, col.id));
       CUDF_EXPECTS(col_type != type_id::EMPTY, "Unknown type");
-      if (col_type == type_id::DECIMAL64 or col_type == type_id::DECIMAL128) {
+      if (col_type == type_id::DECIMAL32 or col_type == type_id::DECIMAL64 or
+          col_type == type_id::DECIMAL128) {
         // sign of the scale is changed since cuDF follows c++ libraries like CNL
         // which uses negative scaling, but liborc and other libraries
         // follow positive scaling.
