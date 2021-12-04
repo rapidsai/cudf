@@ -2486,11 +2486,69 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         df.index = idx
         return df if not inplace else None
 
-    @docutils.doc_dataframe_reset_index()
+    @docutils.doc_apply(docutils.doc_reset_index_template.format(
+        klass="DataFrame",
+        argument="",
+        return_type="DataFrame or None",
+        return_doc="",
+        example="""
+        >>> df = cudf.DataFrame([('bird', 389.0),
+        ...                    ('bird', 24.0),
+        ...                    ('mammal', 80.5),
+        ...                    ('mammal', np.nan)],
+        ...                   index=['falcon', 'parrot', 'lion', 'monkey'],
+        ...                   columns=('class', 'max_speed'))
+        >>> df
+                 class max_speed
+        falcon    bird     389.0
+        parrot    bird      24.0
+        lion    mammal      80.5
+        monkey  mammal      <NA>
+        >>> df.reset_index()
+            index   class max_speed
+        0  falcon    bird     389.0
+        1  parrot    bird      24.0
+        2    lion  mammal      80.5
+        3  monkey  mammal      <NA>
+        >>> df.reset_index(drop=True)
+            class max_speed
+        0    bird     389.0
+        1    bird      24.0
+        2  mammal      80.5
+        3  mammal      <NA>
+
+        You can also use ``reset_index`` with MultiIndex.
+
+        >>> index = cudf.MultiIndex.from_tuples([('bird', 'falcon'),
+        ...                                     ('bird', 'parrot'),
+        ...                                     ('mammal', 'lion'),
+        ...                                     ('mammal', 'monkey')],
+        ...                                     names=['class', 'name'])
+        >>> df = cudf.DataFrame([(389.0, 'fly'),
+        ...                      ( 24.0, 'fly'),
+        ...                      ( 80.5, 'run'),
+        ...                      (np.nan, 'jump')],
+        ...                      index=index,
+        ...                      columns=('speed', 'type'))
+        >>> df
+                       speed  type
+        class  name
+        bird   falcon  389.0   fly
+               parrot   24.0   fly
+        mammal lion     80.5   run
+               monkey   <NA>  jump
+        >>> df.reset_index(level='class')
+                 class  speed  type
+        name
+        falcon    bird  389.0   fly
+        parrot    bird   24.0   fly
+        lion    mammal   80.5   run
+        monkey  mammal   <NA>  jump
+        """
+    ))
     def reset_index(
         self, level=None, drop=False, inplace=False, col_level=0, col_fill=""
     ):
-        """{docstring}"""
         return self._mimic_inplace(
             DataFrame._from_data(
                 *self._reset_index(

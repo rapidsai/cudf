@@ -831,9 +831,69 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         series.name = self.name
         return series
 
-    @docutils.doc_series_reset_index()
+    @docutils.doc_apply(
+        docutils.doc_reset_index_template.format(
+    klass="Series",
+    argument="""
+        name : object, optional
+            The name to use for the column containing the original Series
+            values. Uses self.name by default. This argument is ignored when
+            ``drop`` is True.""",
+    return_type="Series or DataFrame or None",
+    return_doc=""" For Series, When drop is False (the default), a DataFrame
+            is returned. The newly created columns will come first in the
+            DataFrame, followed by the original Series values. When `drop` is
+            True, a `Series` is returned. In either case, if ``inplace=True``,
+            no value is returned.
+""",
+    example="""
+        >>> series = cudf.Series(['a', 'b', 'c', 'd'], index=[10, 11, 12, 13])
+        >>> series
+        10    a
+        11    b
+        12    c
+        13    d
+        dtype: object
+        >>> series.reset_index()
+        index  0
+        0     10  a
+        1     11  b
+        2     12  c
+        3     13  d
+        >>> series.reset_index(drop=True)
+        0    a
+        1    b
+        2    c
+        3    d
+        dtype: object
+
+        You can also use ``reset_index`` with MultiIndex.
+
+        >>> s2 = cudf.Series(
+        ...             range(4), name='foo',
+        ...             index=cudf.MultiIndex.from_tuples([
+        ...                     ('bar', 'one'), ('bar', 'two'),
+        ...                     ('baz', 'one'), ('baz', 'two')],
+        ...                     names=['a', 'b']
+        ...      ))
+        >>> s2
+        a    b
+        bar  one    0
+            two    1
+        baz  one    2
+            two    3
+        Name: foo, dtype: int64
+        >>> s2.reset_index(level='a')
+            a  foo
+        b
+        one  bar    0
+        two  bar    1
+        one  baz    2
+        two  baz    3
+""",
+        )
+    )
     def reset_index(self, level=None, drop=False, name=None, inplace=False):
-        """{docstring}"""
         data, index = self._reset_index(level=level, drop=drop)
         if not drop:
             if inplace is True:
