@@ -1739,15 +1739,23 @@ class MultiIndex(Frame, BaseIndex):
         # specified by indices, not name by ``levels``. E.g. [None, None] can
         # only be specified by 0, 1, not "None".
 
+        if levels is None:
+            return (
+                list(self._data.columns),
+                [],
+                [
+                    f"level_{i}" if name is None else name
+                    for i, name in enumerate(self.names)
+                ],
+                [],
+            )
+
         # Normalize named levels into indices
-        if levels is not None:
-            level_names = list(self.names)
-            level_indices = {
-                lv if isinstance(lv, int) else level_names.index(lv)
-                for lv in levels
-            }
-        else:
-            level_indices = range(len(self._data))
+        level_names = list(self.names)
+        level_indices = {
+            lv if isinstance(lv, int) else level_names.index(lv)
+            for lv in levels
+        }
 
         # Split the columns
         data_columns, index_columns = [], []
