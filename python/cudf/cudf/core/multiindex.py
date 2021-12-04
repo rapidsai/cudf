@@ -1742,19 +1742,22 @@ class MultiIndex(Frame, BaseIndex):
         # Normalize named levels into indices
         if levels is not None:
             level_names = list(self.names)
-            level_indices = {lv if isinstance(lv, int) else level_names.index(lv) for lv in levels}
+            level_indices = {
+                lv if isinstance(lv, int) else level_names.index(lv)
+                for lv in levels
+            }
         else:
             level_indices = range(len(self._data))
 
         # Split the columns
         data_columns, index_columns = [], []
-        column_names, index_names = [], []
+        data_names, index_names = [], []
         for i, (name, col) in enumerate(zip(self.names, self._data.columns)):
             if i in level_indices:
                 name = f"level_{i}" if name is None else name
                 data_columns.append(col)
-                column_names.append(name)
+                data_names.append(name)
             else:
                 index_columns.append(col)
                 index_names.append(name)
-        return data_columns, index_columns, column_names, index_names
+        return data_columns, index_columns, data_names, index_names
