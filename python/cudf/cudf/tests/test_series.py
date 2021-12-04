@@ -1384,10 +1384,18 @@ def test_reset_index_dup_level_name(level, drop, inplace, original_name, name):
     ps = pd.Series(range(4), index=midx, name=original_name)
     gs = cudf.from_pandas(ps)
     if level == [None]:
-        with pytest.raises(
-            ValueError, match="occurs multiple times, use a level number$"
-        ):
-            gs.reset_index(level=level, drop=drop, inplace=inplace)
+        assert_exceptions_equal(
+            lfunc=ps.reset_index,
+            rfunc=gs.reset_index,
+            lfunc_args_and_kwargs=(
+                [],
+                {"level": level, "drop": drop, "inplace": inplace},
+            ),
+            rfunc_args_and_kwargs=(
+                [],
+                {"level": level, "drop": drop, "inplace": inplace},
+            ),
+        )
         return
 
     expect = ps.reset_index(level=level, drop=drop, inplace=inplace, name=name)
