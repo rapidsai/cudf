@@ -775,10 +775,17 @@ class IndexedFrame(Frame):
         if len(self) == 0:
             return self.copy()
 
-        pd_offset = cudf.DateOffset._from_str(
-            offset
-        )._maybe_as_fast_pandas_offset()
+        pd_offset = pd.tseries.frequencies.to_offset(offset)
         to_search = op(pd.Timestamp(self._index._column[idx]), pd_offset)
+        if (
+            idx == 0
+            and not isinstance(pd_offset, pd.tseries.offsets.Tick)
+            and pd_offset.is_on_offset(pd.Timestamp(self._index[0]))
+        ):
+            # Special handle is required when the start time of the index
+            # is on the end of the offset. See pandas gh29623 for detail.
+            to_search = to_search - pd_offset.base
+            return self.loc[:to_search]
         end_point = int(
             self._index._column.searchsorted(to_search, side=side)[0]
         )
