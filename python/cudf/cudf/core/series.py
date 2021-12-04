@@ -894,13 +894,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         )
     )
     def reset_index(self, level=None, drop=False, name=None, inplace=False):
+        if not drop and inplace:
+            raise TypeError(
+                "Cannot reset_index inplace on a Series "
+                "to create a DataFrame"
+            )
         data, index = self._reset_index(level=level, drop=drop)
         if not drop:
-            if inplace is True:
-                raise TypeError(
-                    "Cannot reset_index inplace on a Series "
-                    "to create a DataFrame"
-                )
             if name is None:
                 name = 0 if self.name is None else self.name
             data[name] = data.pop(self.name)
