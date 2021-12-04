@@ -1741,13 +1741,8 @@ class MultiIndex(Frame, BaseIndex):
 
         # Normalize named levels into indices
         if levels is not None:
-            level_indices = set()
             level_names = list(self.names)
-            for lv in levels:
-                if isinstance(lv, int):
-                    level_indices.add(lv)
-                else:
-                    level_indices.add(level_names.index(lv))
+            level_indices = {lv if isinstance(lv, int) else level_names.index(lv) for lv in levels}
         else:
             level_indices = range(len(self._data))
 
