@@ -223,6 +223,7 @@ class reader::impl {
   bool _use_np_dtypes = true;
   std::vector<std::string> _decimal_cols_as_float;
   std::vector<std::string> decimal128_columns;
+  bool is_decimal128_enabled;
   data_type _timestamp_type{type_id::EMPTY};
   reader_column_meta _col_meta;
 };

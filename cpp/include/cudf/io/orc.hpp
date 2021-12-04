@@ -72,6 +72,7 @@ class orc_reader_options {
 
   // Columns that should be read as Decimal128
   std::vector<std::string> _decimal128_columns;
+  bool _enable_decimal128 = true;
 
   friend orc_reader_options_builder;
 
@@ -151,6 +152,11 @@ class orc_reader_options {
    */
   std::vector<std::string> const& get_decimal128_columns() const { return _decimal128_columns; }
 
+  /**
+   * @brief Whether to use row index to speed-up reading.
+   */
+  bool is_enabled_decimal128() const { return _enable_decimal128; }
+
   // Setters
 
   /**
@@ -224,6 +230,13 @@ class orc_reader_options {
   {
     _decimal_cols_as_float = std::move(val);
   }
+
+  /**
+   * @brief Enable/Disable the use of decimal128 type
+   *
+   * @param use Boolean value to enable/disable.
+   */
+  void enable_decimal128(bool enable) { _enable_decimal128 = enable; }
 
   /**
    * @brief Set columns that should be read as 128-bit Decimal
@@ -359,6 +372,17 @@ class orc_reader_options_builder {
   orc_reader_options_builder& decimal128_columns(std::vector<std::string> val)
   {
     options._decimal128_columns = std::move(val);
+    return *this;
+  }
+
+  /**
+   * @brief Enable/Disable use of decimal128 type
+   *
+   * @param use Boolean value to enable/disable.
+   */
+  orc_reader_options_builder& decimal128(bool enable)
+  {
+    options.enable_decimal128(enable);
     return *this;
   }
 

@@ -531,7 +531,7 @@ def test_orc_decimal_precision_fail(datadir):
     # Max precision supported is 18 (Decimal64Dtype limit)
     # and the data has the precision 19. This test should be removed
     # once Decimal128Dtype is introduced.
-    with pytest.raises(KeyError):
+    with pytest.raises(RuntimeError):
         cudf.read_orc(file_path)
 
     # Shouldn't cause failure if decimal column is not chosen to be read.
