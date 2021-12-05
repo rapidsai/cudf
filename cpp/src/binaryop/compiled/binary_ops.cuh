@@ -256,21 +256,23 @@ void for_each(rmm::cuda_stream_view stream, cudf::size_type size, Functor f)
   const int grid_size = util::div_rounding_up_safe(size, 2 * block_size);
   for_each_kernel<<<grid_size, block_size, 0, stream.value()>>>(size, std::forward<Functor&&>(f));
 }
-
+namespace detail {
+template <class T, class... Ts>
+inline constexpr bool is_any_v = std::disjunction<std::is_same<T, Ts>...>::value;
+}
 template <class BinaryOperator>
 void apply_binary_op(mutable_column_view& out,
                      column_view const& lhs,
                      column_view const& rhs,
                      bool is_lhs_scalar,
                      bool is_rhs_scalar,
-                     binary_operator op,
                      rmm::cuda_stream_view stream)
 {
   if (is_struct(lhs.type()) && is_struct(rhs.type())) {
-    auto op_order    = (binary_operator::GREATER == op || binary_operator::LESS_EQUAL == op)
+    auto op_order    = detail::is_any_v<BinaryOperator, ops::Greater, ops::LessEqual>
                          ? order::DESCENDING
                          : order::ASCENDING;
-    auto flip_output = (binary_operator::GREATER_EQUAL == op || binary_operator::LESS_EQUAL == op);
+    auto flip_output = detail::is_any_v<BinaryOperator, ops::GreaterEqual, ops::LessEqual>;
     auto const nullability =
       structs::detail::contains_null_structs(lhs) || structs::detail::contains_null_structs(rhs)
         ? structs::detail::column_nullability::FORCE
