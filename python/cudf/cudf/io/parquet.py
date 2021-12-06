@@ -39,6 +39,7 @@ def write_to_dataset(
     root_path,
     filename=None,
     partition_cols=None,
+    row_group_cols=None,
     fs=None,
     preserve_index=False,
     return_metadata=False,
@@ -72,6 +73,9 @@ def write_to_dataset(
         Preserve index values in each parquet file.
     partition_cols : list,
         Column names by which to partition the dataset
+        Columns are partitioned in the order they are given
+    row_group_cols : list,
+        Column names by which to partition row groups
         Columns are partitioned in the order they are given
     return_metadata : bool, default False
         Return parquet metadata for written data. Returned metadata will
@@ -120,12 +124,18 @@ def write_to_dataset(
                         write_df.to_parquet(
                             fil,
                             index=preserve_index,
+                            row_group_cols=row_group_cols,
                             metadata_file_path=fs.sep.join([subdir, filename]),
                             **kwargs,
                         )
                     )
                 else:
-                    write_df.to_parquet(fil, index=preserve_index, **kwargs)
+                    write_df.to_parquet(
+                        fil,
+                        index=preserve_index,
+                        row_group_cols=row_group_cols,
+                        **kwargs
+                    )
 
     else:
         filename = filename or uuid4().hex + ".parquet"
@@ -135,6 +145,7 @@ def write_to_dataset(
                 df.to_parquet(
                     full_path,
                     index=preserve_index,
+                    row_group_cols=row_group_cols,
                     metadata_file_path=filename,
                     **kwargs,
                 )
@@ -456,6 +467,7 @@ def to_parquet(
                 df,
                 filename=partition_file_name,
                 partition_cols=partition_cols,
+                row_group_cols=row_group_cols,
                 root_path=path,
                 preserve_index=index,
                 **kwargs,
