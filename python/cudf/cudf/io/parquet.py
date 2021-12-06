@@ -762,5 +762,5 @@ def _check_decimal128_type(arrow_type):
     if isinstance(arrow_type, pa.Decimal128Type):
         if arrow_type.precision > cudf.Decimal64Dtype.MAX_PRECISION:
             raise NotImplementedError(
-                "Decimal type greater than Decimal64 is not " "yet supported"
+                "Decimal type greater than Decimal64 is not yet supported"
             )
