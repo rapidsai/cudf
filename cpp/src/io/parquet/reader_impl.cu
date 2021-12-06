@@ -411,6 +411,9 @@ class aggregate_metadata {
     // walk upwards, skipping repeated fields
     while (schema_index > 0) {
       if (!pfm.schema[schema_index].is_stub()) { depth++; }
+      // schema of one-level encoding list doesn't contain nesting information, so we need to
+      // manually add an extra nesting level
+      if (pfm.schema[schema_index].is_one_level_list()) { depth++; }
       schema_index = pfm.schema[schema_index].parent_idx;
     }
     return depth;
@@ -596,7 +599,10 @@ class aggregate_metadata {
 
         // if we're at the root, this is a new output column
         auto const col_type =
-          to_type_id(schema_elem, strings_to_categorical, timestamp_type_id, strict_decimal_types);
+          schema_elem.is_one_level_list()
+            ? type_id::LIST
+            : to_type_id(
+                schema_elem, strings_to_categorical, timestamp_type_id, strict_decimal_types);
         auto const dtype = col_type == type_id::DECIMAL32 || col_type == type_id::DECIMAL64
                              ? data_type{col_type, numeric::scale_type{-schema_elem.decimal_scale}}
                              : data_type{col_type};
@@ -629,6 +635,26 @@ class aggregate_metadata {
         if (schema_elem.num_children == 0) {
           input_column_info& input_col =
             input_columns.emplace_back(input_column_info{schema_idx, schema_elem.name});
+
+          // set up child output column for one-level encoding list
+          if (schema_elem.is_one_level_list()) {
+            // determine the element data type
+            auto const element_type = to_type_id(
+              schema_elem, strings_to_categorical, timestamp_type_id, strict_decimal_types);
+            auto const element_dtype =
+              element_type == type_id::DECIMAL32 || element_type == type_id::DECIMAL64
+                ? data_type{element_type, numeric::scale_type{-schema_elem.decimal_scale}}
+                : data_type{element_type};
+
+            column_buffer element_col(element_dtype, schema_elem.repetition_type == OPTIONAL);
+            // store the index of this element
+            nesting.push_back(static_cast<int>(output_col.children.size()));
+            // TODO: not sure if we should assign a name or leave it blank
+            element_col.name = "elemenet";
+
+            output_col.children.push_back(std::move(element_col));
+          }
+
           std::copy(nesting.cbegin(), nesting.cend(), std::back_inserter(input_col.nesting));
           path_is_valid = true;  // If we're able to reach leaf then path is valid
         }
@@ -848,6 +874,10 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
         if (cur_schema.max_repetition_level == r) {
           // if this is a repeated field, map it one level deeper
           shallowest = cur_schema.is_stub() ? cur_depth + 1 : cur_depth;
+        }
+        // if it's one-level encoding list
+        else if (cur_schema.is_one_level_list()) {
+          shallowest = cur_depth - 1;
         }
         if (!cur_schema.is_stub()) { cur_depth--; }
         schema_idx = cur_schema.parent_idx;
