@@ -39,8 +39,7 @@ namespace cudf::lists {
  *
  *  - @p sizes must be a column of integer types.
  *  - If any row in the input columns is null then the corresponding output row will be null.
- *  - If any row of the @p sizes column contains non-positive values, the corresponding output list
- *    will be empty.
+ *  - If any row of the @p sizes column contains negative value, the output is undefined.
  *
  * @code{.pseudo}
  * starts = [0, 1, 2,    null, 4]
@@ -74,8 +73,7 @@ std::unique_ptr<column> sequences(
  *  - @p sizes must be a column of integer types.
  *  - @p starts and @p steps columns must have the same type.
  *  - If any row in the input columns is null then the corresponding output row will be null.
- *  - If any row of the @p sizes column contains non-positive values, the corresponding output list
- *    will be empty.
+ *  - If any row of the @p sizes column contains negative value, the output is undefined.
  *
  * @code{.pseudo}
  * starts = [0,  1, 2,    null, 4]

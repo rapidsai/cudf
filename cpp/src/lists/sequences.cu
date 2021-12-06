@@ -168,8 +168,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
           : cudf::detail::bitmask_and(table_view{{starts, sizes}}, stream, mr);
 
   // Normalize the input sizes:
-  // - Convert input integer type into size_type,
-  // - Clamp negative sizes to zero, and
+  // - Convert input integer type into size_type, and
   // - Set zero size for null output.
   auto const sizes_input_it = cudf::detail::indexalator_factory::make_input_iterator(sizes);
   auto const sizes_norm_it  = thrust::make_transform_iterator(
@@ -180,8 +179,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
       // Output list size is zero if output bitmask for that list is invalid.
       if (null_count && !cudf::bit_is_set(bitmask, idx)) { return 0; }
 
-      auto const size = sizes_input_it[idx];
-      return size < 0 ? 0 : size;
+      return sizes_input_it[idx];
     });
 
   CUDA_TRY(cudaMemsetAsync(offsets_begin, 0, sizeof(offset_type), stream.value()));

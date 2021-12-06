@@ -68,12 +68,12 @@ TYPED_TEST(NumericSequencesTypedTest, SimpleTestNoNull)
   }
 }
 
-TYPED_TEST(NumericSequencesTypedTest, ZeroAndNegativeSizesTest)
+TYPED_TEST(NumericSequencesTypedTest, ZeroSizesTest)
 {
   using T = TypeParam;
 
   auto const starts = FWDCol<T>{1, 2, 3};
-  auto const sizes  = IntsCol{-5, 3, 0};
+  auto const sizes  = IntsCol{0, 3, 0};
 
   // Sequences with step == 1.
   {
