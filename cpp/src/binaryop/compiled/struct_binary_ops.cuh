@@ -17,6 +17,20 @@
 #pragma once
 
 namespace cudf::binops::compiled::detail {
+/**
+ * @brief Generates comparison results for each row in the output column. Supports scalar columns
+ * and negation of comparison results to mimic !=, <=, and >= operators.
+ *
+ * @tparam Comparator comparator type
+ * @param out mutable column view of output column
+ * @param compare initialized comparator function
+ * @param is_lhs_scalar true if @p compare has a single element column representing a scalar on its
+ * lhs
+ * @param is_rhs_scalar true if @p compare has a single element column representing a scalar on its
+ * rhs
+ * @param flip_output true if the comparison results should be negated
+ * @param stream CUDA stream used for device memory operations
+ */
 template <typename Comparator>
 void struct_compare(mutable_column_view& out,
                     Comparator compare,
