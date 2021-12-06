@@ -1430,8 +1430,10 @@ class BaseIndex(Serializable):
         Drop duplicate rows in index.
 
         keep : ["first", "last", False]
-            "first" will keep first of duplicate, "last" will keep last of the
-            duplicate and "False" drop all duplicate.
+            - 'first' : Drop duplicates except for the first occurrence.
+            - 'last' : Drop duplicates except for the last occurrence.
+            - ``False`` : Drop all duplicates.
+
         nulls_are_equal: bool, default True
             Null elements are considered equal to other null elements.
         """
@@ -1495,7 +1497,7 @@ class BaseIndex(Serializable):
             raise IndexError("Gather map index is out of bounds.")
 
         result = self.__class__._from_columns(
-            gather(list(self._columns), gather_map, nullify=nullify,),
+            gather(list(self._columns), gather_map, nullify=nullify),
             self._column_names,
         )
 
@@ -1532,7 +1534,7 @@ class BaseIndex(Serializable):
             )
         if not allow_fill or fill_value is not None:
             raise NotImplementedError(
-                "`allow_fill` and `fill_value` is unsupported."
+                "`allow_fill` and `fill_value` are unsupported."
             )
 
         indices = cudf.core.column.as_column(indices)

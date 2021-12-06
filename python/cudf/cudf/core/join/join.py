@@ -334,7 +334,7 @@ class Merge:
             to_sort = cudf.DataFrame._from_data(dict(enumerate(by)))
             sort_order = to_sort.argsort()
             if isinstance(result, cudf.core._base_index.BaseIndex):
-                result = result._gather(sort_order, check_bounds=False,)
+                result = result._gather(sort_order, check_bounds=False)
             else:
                 result = cast(cudf.core.indexed_frame.IndexedFrame, result)
                 result = result._gather(
