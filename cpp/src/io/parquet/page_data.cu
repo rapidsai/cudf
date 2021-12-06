@@ -1643,10 +1643,10 @@ extern "C" __global__ void __launch_bounds__(block_size)
 
   bool has_repetition = s->col.max_level[level_type::REPETITION] > 0;
 
-  // optimization : it might be useful to have a version of gpuDecodeStream that could go
-  // wider than 1 warp.  Currently it only only uses 1 warp so that it can overlap work
-  // with the value decoding step when in the actual value decoding kernel.  however during
-  // this preprocess step we have no such limits -  we could go as wide as block_size
+  // optimization : it might be useful to have a version of gpuDecodeStream that could go wider than
+  // 1 warp.  Currently it only uses 1 warp so that it can overlap work with the value decoding step
+  // when in the actual value decoding kernel. However, during this preprocess step we have no such
+  // limits -  we could go as wide as block_size
   if (t < 32) {
     constexpr int batch_size = 32;
     int target_input_count   = batch_size;
