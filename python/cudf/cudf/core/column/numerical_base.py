@@ -81,13 +81,7 @@ class NumericalBaseColumn(ColumnBase):
         skipna = True if skipna is None else skipna
 
         if len(self) == 0 or (
-            not skipna
-            and (
-                self.has_nulls
-                or (
-                    self.dtype.kind == "f" and libcudf.unary.is_nan(self).any()
-                )
-            )
+            not skipna and (self.has_nulls or self.has_nans)
         ):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
@@ -114,13 +108,7 @@ class NumericalBaseColumn(ColumnBase):
         skipna = True if skipna is None else skipna
 
         if len(self) == 0 or (
-            not skipna
-            and (
-                self.has_nulls
-                or (
-                    self.dtype.kind == "f" and libcudf.unary.is_nan(self).any()
-                )
-            )
+            not skipna and (self.has_nulls or self.has_nans)
         ):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 

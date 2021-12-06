@@ -795,7 +795,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 }
 
         data, index = self._align_input_series_indices(data, index=index)
-        # import pdb;pdb.set_trace()
+
         if index is None:
             num_rows = 0
             if data:

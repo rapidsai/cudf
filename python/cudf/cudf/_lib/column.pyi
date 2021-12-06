@@ -75,6 +75,10 @@ class Column:
         ...
 
     @property
+    def has_nans(self) -> bool:
+        ...
+
+    @property
     def base_mask(self) -> Optional[Buffer]:
         ...
 

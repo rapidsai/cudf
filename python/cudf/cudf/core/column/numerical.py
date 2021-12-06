@@ -280,6 +280,16 @@ class NumericalColumn(NumericalBaseColumn):
             return self
         return libcudf.unary.cast(self, dtype)
 
+    @property
+    def nan_count(self):
+        if self.dtype.kind != "f":
+            return 0
+
+        if self._nan_count is None:
+            nan_col = libcudf.unary.is_nan(self)
+            self._nan_count = nan_col.sum()
+        return self._nan_count
+
     def _process_values_for_isin(
         self, values: Sequence
     ) -> Tuple[ColumnBase, ColumnBase]:
@@ -637,7 +647,7 @@ def _normalize_find_and_replace_input(
         col_to_normalize_dtype = col_to_normalize.dtype
     else:
         raise TypeError(f"Type {type(col_to_normalize)} not supported")
-    # import pdb;pdb.set_trace()
+
     if (
         col_to_normalize_dtype.kind == "f"
         and input_column_dtype.kind in {"i", "u"}

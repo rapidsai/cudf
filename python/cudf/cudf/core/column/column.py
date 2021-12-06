@@ -1219,9 +1219,7 @@ class ColumnBase(Column, Serializable):
             if result_col.has_nulls:
                 result_col = result_col.dropna()
         else:
-            if self.has_nulls or (
-                self.dtype.kind == "f" and libcudf.unary.is_nan(self).any()
-            ):
+            if self.has_nulls or self.has_nans:
                 return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
             result_col = self
