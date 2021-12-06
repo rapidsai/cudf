@@ -3692,10 +3692,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         item_3    4
         dtype: int64
         """
-        name = self.name or 0
         result = self.copy(deep=False)
         result = result.set_index(prefix + self._index.astype(str))
-        result.name = name
+        result.name = self.name
         return result
 
     def add_suffix(self, suffix):
@@ -3729,10 +3728,9 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         3_item    4
         dtype: int64
         """
-        name = self.name or 0
         result = self.copy(deep=False)
         result = result.set_index(self._index.astype(str) + suffix)
-        result.name = name
+        result.name = self.name
         return result
 
     def keys(self):
