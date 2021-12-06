@@ -178,10 +178,9 @@ else
     done
 
     # Copy libcudf build time results
-    echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.csv"
-    if [[ -f "$LIB_BUILD_DIR/ninja_log.csv" ]]; then
+    echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.html"
+    if [[ -f "$LIB_BUILD_DIR/ninja_log.html" ]]; then
         gpuci_logger "Copying build time results"
-        cp "$LIB_BUILD_DIR/ninja_log.csv" "$WORKSPACE/test-results/BuildTimes.csv"
         cp "$LIB_BUILD_DIR/ninja_log.xml" "$WORKSPACE/test-results/buildtimes-junit.xml"
         cp "$LIB_BUILD_DIR/ninja_log.html" "$WORKSPACE/test-results/BuildTimes.html"
     fi

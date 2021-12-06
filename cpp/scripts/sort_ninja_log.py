@@ -24,13 +24,12 @@ with open(log_file, "r") as log:
         if len(entry) > 4:
             elapsed = int(entry[1]) - int(entry[0])
             obj_file = entry[3]
-            if obj_file[:6] != "_deps/":
-                file_size = (
-                    os.path.getsize(os.path.join(log_path, obj_file))
-                    if os.path.exists(obj_file)
-                    else 0
-                )
-                entries[entry[3]] = (elapsed, file_size)
+            file_size = (
+                os.path.getsize(os.path.join(log_path, obj_file))
+                if os.path.exists(obj_file)
+                else 0
+            )
+            entries[entry[3]] = (elapsed, file_size)
 
 # check file could be loaded
 if len(entries) == 0:
@@ -75,7 +74,13 @@ elif output_fmt == "html":
     # output results in HTML format
     print("<html><head><title>Sorted Ninja Build Times</title>")
     print("<style>", "table, th, td { border:1px solid black; }", "</style>")
-    print("</head><body><table>")
+    print("</head><body>")
+    if len(sys.argv) > 3:
+        print("<p>")
+        for i in range(3, len(sys.argv)):
+            print(sys.argv[i], end=" ")
+        print("</p>")
+    print("<table>")
     print(
         "<tr><th>File</th>",
         "<th align='right'>Compile time (ms)</th>",

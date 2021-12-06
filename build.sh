@@ -172,6 +172,9 @@ if buildAll || hasArg libcudf; then
         echo "Building for *ALL* supported GPU architectures..."
     fi
 
+    # get the current count before the compile starts
+    FILES_IN_CCACHE=$(ccache -s | grep "files in cache")
+
     cmake -S $REPODIR/cpp -B ${LIB_BUILD_DIR} \
           -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           ${CUDF_CMAKE_CUDA_ARCHITECTURES} \
@@ -190,11 +193,8 @@ if buildAll || hasArg libcudf; then
     # Record build times
     if [[ -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
         echo "Formatting build times"
-        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log > ${LIB_BUILD_DIR}/ninja_log.csv
         python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --xml > ${LIB_BUILD_DIR}/ninja_log.xml
-        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --html > ${LIB_BUILD_DIR}/ninja_log.html
-        echo "===Top 50 build time offenders for this commit==="
-        cat ${LIB_BUILD_DIR}/ninja_log.csv | head -n 51
+        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --html $FILES_IN_CCACHE > ${LIB_BUILD_DIR}/ninja_log.html
     fi
 
     if [[ ${INSTALL_TARGET} != "" ]]; then
