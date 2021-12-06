@@ -63,8 +63,6 @@ conda config --set ssl_verify False
 ################################################################################
 # BUILD - Conda package builds
 ################################################################################
-echo "!!!! PROJECT_FLASH: ${PROJECT_FLASH}"
-PROJECT_FLASH="0"
 if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
   CONDA_BUILD_ARGS=""
   CONDA_CHANNEL=""

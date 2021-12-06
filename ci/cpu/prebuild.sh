@@ -29,10 +29,8 @@ else
     export UPLOAD_LIBCUDF_KAFKA=0
 fi
 
-PROJECT_FLASH="0"
 if [[ -z "$PROJECT_FLASH" || "$PROJECT_FLASH" == "0" ]]; then
     #If project flash is not activate, always build both
-    echo "!!!! PROJECT FLASH !!!!"
     export BUILD_LIBCUDF=1
     export BUILD_CUDF=1
 fi
