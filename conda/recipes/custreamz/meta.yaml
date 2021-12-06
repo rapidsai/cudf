@@ -24,16 +24,16 @@ build:
 
 requirements:
   host:
-    - python
-    - python-confluent-kafka
+    - python=3.8
+    - python-confluent-kafka >=1.7.0,<1.8.0a0=py38*
     - cudf_kafka {{ version }}
   run:
-    - python
+    - python=3.8
     - streamz 
     - cudf {{ version }}
     - dask>=2021.11.1,<=2021.11.2
     - distributed>=2021.11.1,<=2021.11.2
-    - python-confluent-kafka
+    - python-confluent-kafka >=1.7.0,<1.8.0a0=py38*
     - cudf_kafka {{ version }}
 
 test:                                   # [linux64]
