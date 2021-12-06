@@ -1448,7 +1448,7 @@ class BaseIndex(Serializable):
             ),
             self._column_names,
         )
-        result._copy_type_metadata(self)
+        result._copy_type_metadata(self, include_index=False)
         return result
 
     def dropna(self, how="any"):
@@ -1475,7 +1475,7 @@ class BaseIndex(Serializable):
             drop_nulls(data_columns, how=how, keys=range(len(data_columns)),),
             self._column_names,
         )
-        result._copy_type_metadata(self)
+        result._copy_type_metadata(self, include_index=False)
         return result
 
     def _gather(self, gather_map, nullify=False, check_bounds=True):
@@ -1501,7 +1501,7 @@ class BaseIndex(Serializable):
             self._column_names,
         )
 
-        result._copy_type_metadata(self)
+        result._copy_type_metadata(self, include_index=False)
         return result
 
     def take(self, indices, axis=0, allow_fill=True, fill_value=None):

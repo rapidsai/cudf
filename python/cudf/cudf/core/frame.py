@@ -69,6 +69,7 @@ class Frame:
     # TODO: Once all dependence on Frame having an index is removed, this
     # attribute should be moved to IndexedFrame.
     _index: Optional[cudf.core.index.BaseIndex]
+    _names: Optional[List]
 
     def __init__(self, data=None, index=None):
         if data is None:
