@@ -43,7 +43,7 @@ gpuci_logger "Activate conda env"
 conda activate rapids
 
 # TEMP COMMAND
-conda install -y "arrow-cpp=6.0.0" "pyarrow=6.0.0" 'arrow-cpp-proc=*=cuda'
+conda install -y "arrow-cpp=6.0.1" "pyarrow=6.0.1" 'arrow-cpp-proc=*=cuda'
 
 # Remove rapidsai-nightly channel if we are building main branch
 if [ "$SOURCE_BRANCH" = "main" ]; then
