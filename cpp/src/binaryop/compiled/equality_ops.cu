@@ -19,8 +19,6 @@
 
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/table/row_operators.cuh>
-#include "cudf/binaryop.hpp"
-#include "cudf/column/column_device_view.cuh"
 
 namespace cudf::binops::compiled {
 void dispatch_equality_op(mutable_column_view& out,
@@ -47,7 +45,9 @@ void dispatch_equality_op(mutable_column_view& out,
       detail::struct_compare(
         out,
         row_equality_comparator{
-          has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened), *d_lhs, *d_rhs},
+          nullate::DYNAMIC{has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)},
+          *d_lhs,
+          *d_rhs},
         is_lhs_scalar,
         is_rhs_scalar,
         op == binary_operator::NOT_EQUAL,
@@ -62,24 +62,24 @@ void dispatch_equality_op(mutable_column_view& out,
     if (common_dtype) {
       if (op == binary_operator::EQUAL) {
         for_each(stream,
-                 outd.size(),
+                 out.size(),
                  binary_op_device_dispatcher<ops::Equal>{
                    *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
       } else if (op == binary_operator::NOT_EQUAL) {
         for_each(stream,
-                 outd.size(),
+                 out.size(),
                  binary_op_device_dispatcher<ops::NotEqual>{
                    *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
       }
     } else {
       if (op == binary_operator::EQUAL) {
         for_each(stream,
-                 outd.size(),
+                 out.size(),
                  binary_op_double_device_dispatcher<ops::Equal>{
                    *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
       } else if (op == binary_operator::NOT_EQUAL) {
         for_each(stream,
-                 outd.size(),
+                 out.size(),
                  binary_op_double_device_dispatcher<ops::NotEqual>{
                    *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
       }

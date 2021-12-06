@@ -233,7 +233,7 @@ class row_equality_comparator {
   row_equality_comparator(Nullate has_nulls,
                           table_device_view lhs,
                           table_device_view rhs,
-                          null_equality nulls_are_equal = true)
+                          null_equality nulls_are_equal = null_equality::EQUAL)
     : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, nulls_are_equal{nulls_are_equal}
   {
     CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(), "Mismatched number of columns.");

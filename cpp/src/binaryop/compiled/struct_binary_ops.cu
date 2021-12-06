@@ -32,7 +32,7 @@ void struct_compare(mutable_column_view& out,
 {
   auto d_out = column_device_view::create(out, stream);
   auto optional_iter =
-    cudf::detail::make_optional_iterator<bool>(*d_out, contains_nulls::DYNAMIC{}, out.has_nulls());
+    cudf::detail::make_optional_iterator<bool>(*d_out, nullate::DYNAMIC{out.has_nulls()});
   thrust::tabulate(
     rmm::exec_policy(stream),
     out.begin<bool>(),
@@ -50,8 +50,6 @@ void struct_compare(mutable_column_view& out,
   template void binops::compiled::detail::struct_compare<comp_op>( \
     mutable_column_view&, comp_op, bool, bool, bool, rmm::cuda_stream_view);
 
-INSTANTIATE_STRUCT_COMPARE(row_equality_comparator<true>);
-INSTANTIATE_STRUCT_COMPARE(row_equality_comparator<false>);
-INSTANTIATE_STRUCT_COMPARE(row_lexicographic_comparator<true>);
-INSTANTIATE_STRUCT_COMPARE(row_lexicographic_comparator<false>);
+INSTANTIATE_STRUCT_COMPARE(row_equality_comparator<nullate::DYNAMIC>);
+INSTANTIATE_STRUCT_COMPARE(row_lexicographic_comparator<nullate::DYNAMIC>);
 }  //  namespace cudf
