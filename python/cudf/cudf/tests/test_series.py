@@ -1352,16 +1352,7 @@ def test_nullable_bool_dtype_series(data, bool_dtype):
     "data",
     [
         [0, 1, 2, 3],
-        [
-            "abc",
-            "a",
-            None,
-            "hello world",
-            "foo buzz",
-            "",
-            None,
-            "rapids ai",
-        ],
+        ["abc", "a", None, "hello world", "foo buzz", "", None, "rapids ai"],
     ],
 )
 def test_series_transpose(data):
