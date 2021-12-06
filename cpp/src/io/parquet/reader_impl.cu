@@ -1772,7 +1772,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 // Forward to implementation
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                parquet_reader_options const& options,
-               rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
   : _impl(std::make_unique<impl>(std::move(sources), options, mr))
 {
