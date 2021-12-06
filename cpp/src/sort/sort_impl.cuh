@@ -127,40 +127,25 @@ std::unique_ptr<column> sorted_order(table_view input,
   auto device_table = table_device_view::create(flattened, stream);
   auto const d_column_order = make_device_uvector_async(flattened.orders(), stream);
 
-  if (has_nulls(flattened)) {
-    auto const d_null_precedence = make_device_uvector_async(flattened.null_orders(), stream);
-    auto const comparator        = row_lexicographic_comparator<true>(
-      *device_table, *device_table, d_column_order.data(), d_null_precedence.data());
-    if (stable) {
-      thrust::stable_sort(rmm::exec_policy(stream),
-                          mutable_indices_view.begin<size_type>(),
-                          mutable_indices_view.end<size_type>(),
-                          comparator);
-    } else {
-      thrust::sort(rmm::exec_policy(stream),
-                   mutable_indices_view.begin<size_type>(),
-                   mutable_indices_view.end<size_type>(),
-                   comparator);
-    }
-    // protection for temporary d_column_order and d_null_precedence
-    stream.synchronize();
+  auto const d_null_precedence = make_device_uvector_async(flattened.null_orders(), stream);
+  auto const comparator = row_lexicographic_comparator(nullate::DYNAMIC{has_nulls(flattened)},
+                                                       *device_table,
+                                                       *device_table,
+                                                       d_column_order.data(),
+                                                       d_null_precedence.data());
+  if (stable) {
+    thrust::stable_sort(rmm::exec_policy(stream),
+                        mutable_indices_view.begin<size_type>(),
+                        mutable_indices_view.end<size_type>(),
+                        comparator);
   } else {
-    auto const comparator =
-      row_lexicographic_comparator<false>(*device_table, *device_table, d_column_order.data());
-    if (stable) {
-      thrust::stable_sort(rmm::exec_policy(stream),
-                          mutable_indices_view.begin<size_type>(),
-                          mutable_indices_view.end<size_type>(),
-                          comparator);
-    } else {
-      thrust::sort(rmm::exec_policy(stream),
-                   mutable_indices_view.begin<size_type>(),
-                   mutable_indices_view.end<size_type>(),
-                   comparator);
-    }
-    // protection for temporary d_column_order
-    stream.synchronize();
+    thrust::sort(rmm::exec_policy(stream),
+                 mutable_indices_view.begin<size_type>(),
+                 mutable_indices_view.end<size_type>(),
+                 comparator);
   }
+  // protection for temporary d_column_order and d_null_precedence
+  stream.synchronize();
 
   return sorted_indices;
 }

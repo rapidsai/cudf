@@ -3376,6 +3376,8 @@ public class ColumnVectorTest extends CudfTestBase {
   void testCastBigDecimalToString() {
     BigDecimal[] bigValues = {new BigDecimal("923121331938210123.321"),
         new BigDecimal("9223372036854775808.191"),
+        new BigDecimal("-9.223"),
+        new BigDecimal("0.000"),
         new BigDecimal("9328323982309091029831.002")
     };
 
@@ -3383,8 +3385,20 @@ public class ColumnVectorTest extends CudfTestBase {
          ColumnVector values = cv.castTo(DType.STRING);
          ColumnVector expected = ColumnVector.fromStrings("923121331938210123.321",
              "9223372036854775808.191",
-             "9328323982309091029831.002")) {
+             "-9.223",
+             "0.000",
+            "9328323982309091029831.002")) {
       assertColumnsAreEqual(expected, values);
+    }
+
+    BigDecimal[] bigValues0 = {new BigDecimal("992983283728193827182918744829283742232")};
+    try {
+      ColumnVector cv = ColumnVector.fromDecimals(bigValues0);
+      if (cv != null) {
+        cv.close();
+      }
+      fail("Precision check should've thrown an IllegalArgumentException");
+    } catch (IllegalArgumentException iae) {
     }
   }
 
