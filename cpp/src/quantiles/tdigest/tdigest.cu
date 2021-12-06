@@ -352,11 +352,8 @@ std::unique_ptr<column> percentile_approx(tdigest_column_view const& input,
     if (null_count == 0) {
       return std::pair<rmm::device_buffer, size_type>{rmm::device_buffer{}, null_count};
     }
-    return cudf::detail::valid_if(tdigest_is_empty,
-                                  tdigest_is_empty + tdv.size(),
-                                  thrust::logical_not<size_type>{},
-                                  stream,
-                                  mr);
+    return cudf::detail::valid_if(
+      tdigest_is_empty, tdigest_is_empty + tdv.size(), thrust::logical_not{}, stream, mr);
   }();
 
   return cudf::make_lists_column(

@@ -124,17 +124,13 @@ std::unique_ptr<column> search_ordered(table_view const& t,
     detail::make_device_uvector_async(null_precedence_flattened, stream);
 
   auto const count_it = thrust::make_counting_iterator<size_type>(0);
-  if (has_null_elements) {
-    auto const comp = row_lexicographic_comparator<true>(
-      lhs, rhs, column_order_dv.data(), null_precedence_dv.data());
-    launch_search(
-      count_it, count_it, t.num_rows(), values.num_rows(), result_out, comp, find_first, stream);
-  } else {
-    auto const comp = row_lexicographic_comparator<false>(
-      lhs, rhs, column_order_dv.data(), null_precedence_dv.data());
-    launch_search(
-      count_it, count_it, t.num_rows(), values.num_rows(), result_out, comp, find_first, stream);
-  }
+  auto const comp     = row_lexicographic_comparator(nullate::DYNAMIC{has_null_elements},
+                                                 lhs,
+                                                 rhs,
+                                                 column_order_dv.data(),
+                                                 null_precedence_dv.data());
+  launch_search(
+    count_it, count_it, t.num_rows(), values.num_rows(), result_out, comp, find_first, stream);
 
   return result;
 }

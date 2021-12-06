@@ -97,69 +97,6 @@ _timedelta_to_str_typecast_functions = {
     cudf.dtype("timedelta64[ns]"): str_cast.int2timedelta,
 }
 
-_NAN_INF_VARIATIONS = [
-    "nan",
-    "NAN",
-    "Nan",
-    "naN",
-    "nAN",
-    "NAn",
-    "nAn",
-    "-inf",
-    "-INF",
-    "-InF",
-    "-inF",
-    "-iNF",
-    "-INf",
-    "-iNf",
-    "+inf",
-    "+INF",
-    "+InF",
-    "+inF",
-    "+iNF",
-    "+INf",
-    "+Inf",
-    "+iNf",
-    "inf",
-    "INF",
-    "InF",
-    "inF",
-    "iNF",
-    "INf",
-    "iNf",
-]
-_LIBCUDF_SUPPORTED_NAN_INF_VARIATIONS = [
-    "NaN",
-    "NaN",
-    "NaN",
-    "NaN",
-    "NaN",
-    "NaN",
-    "NaN",
-    "-Inf",
-    "-Inf",
-    "-Inf",
-    "-Inf",
-    "-Inf",
-    "-Inf",
-    "-Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-]
-
 
 def _is_supported_regex_flags(flags):
     return flags == 0 or (
@@ -5309,16 +5246,6 @@ class StringColumn(column.ColumnBase):
                     "type due to presence of non-integer values."
                 )
         elif out_dtype.kind == "f":
-            # TODO: Replace this `replace` call with a
-            # case-insensitive method once following
-            # issue is fixed: https://github.com/rapidsai/cudf/issues/5217
-            old_values = cudf.core.column.as_column(_NAN_INF_VARIATIONS)
-            new_values = cudf.core.column.as_column(
-                _LIBCUDF_SUPPORTED_NAN_INF_VARIATIONS
-            )
-            string_col = libcudf.replace.replace(
-                string_col, old_values, new_values
-            )
             if not libstrings.is_float(string_col).all():
                 raise ValueError(
                     "Could not convert strings to float "

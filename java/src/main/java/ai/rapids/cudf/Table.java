@@ -645,6 +645,10 @@ public final class Table implements AutoCloseable {
 
   private static native long[] filter(long input, long mask);
 
+  private static native long[] dropDuplicates(long nativeHandle, int[] keyColumns,
+                                              boolean keepFirst, boolean nullsEqual,
+                                              boolean nullsBefore) throws CudfException;
+
   private static native long[] gather(long tableHandle, long gatherView, boolean checkBounds);
 
   private static native long[] convertToRows(long nativeHandle);
@@ -677,6 +681,8 @@ public final class Table implements AutoCloseable {
                                                                 boolean keySorted,
                                                                 boolean[] keysDescending,
                                                                 boolean[] keysNullSmallest);
+
+  private static native long[] sample(long tableHandle, long n, boolean replacement, long seed);
 
   /////////////////////////////////////////////////////////////////////////////
   // TABLE CREATION APIs
@@ -1819,6 +1825,30 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Copy rows of the current table to an output table such that duplicate rows in the key columns
+   * are ignored (i.e., only one row from the duplicate ones will be copied). These keys columns are
+   * a subset of the current table columns and their indices are specified by an input array.
+   *
+   * Currently, the output table is sorted by key columns, using stable sort. However, this is not
+   * guaranteed in the future.
+   *
+   * @param keyColumns Array of indices representing key columns from the current table.
+   * @param keepFirst If it is true, the first row with a duplicated key will be copied. Otherwise,
+   *                  copy the last row with a duplicated key.
+   * @param nullsEqual Flag to denote whether nulls are treated as equal when comparing rows of the
+   *                   key columns to check for uniqueness.
+   * @param nullsBefore Flag to specify whether nulls in the key columns will appear before or
+   *                    after non-null elements when sorting the table.
+   *
+   * @return Table with unique keys.
+   */
+  public Table dropDuplicates(int[] keyColumns, boolean keepFirst, boolean nullsEqual,
+                              boolean nullsBefore) {
+    assert keyColumns.length >= 1 : "Input keyColumns must contain indices of at least one column";
+    return new Table(dropDuplicates(nativeHandle, keyColumns, keepFirst, nullsEqual, nullsBefore));
+  }
+
+  /**
    * Split a table at given boundaries, but the result of each split has memory that is laid out
    * in a contiguous range of memory.  This allows for us to optimize copying the data in a single
    * operation.
@@ -2801,6 +2831,34 @@ public final class Table implements AutoCloseable {
     return result;
   }
 
+
+  /**
+   * Gather `n` samples from table randomly
+   * Note: does not preserve the ordering
+   * Example:
+   * input: {col1: {1, 2, 3, 4, 5}, col2: {6, 7, 8, 9, 10}}
+   * n: 3
+   * replacement: false
+   *
+   * output:       {col1: {3, 1, 4}, col2: {8, 6, 9}}
+   *
+   * replacement: true
+   *
+   * output:       {col1: {3, 1, 1}, col2: {8, 6, 6}}
+   *
+   * throws "logic_error" if `n` > table rows and `replacement` == FALSE.
+   * throws "logic_error" if `n` < 0.
+   *
+   * @param n non-negative number of samples expected from table
+   * @param replacement Allow or disallow sampling of the same row more than once.
+   * @param seed Seed value to initiate random number generator.
+   *
+   * @return Table containing samples
+   */
+  public Table sample(long n, boolean replacement, long seed) {
+    return new Table(sample(nativeHandle, n, replacement, seed));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // HELPER CLASSES
   /////////////////////////////////////////////////////////////////////////////
@@ -2975,27 +3033,27 @@ public final class Table implements AutoCloseable {
     }
 
     /**
-     * Computes row-based window aggregation functions on the Table/projection, 
+     * Computes row-based window aggregation functions on the Table/projection,
      * based on windows specified in the argument.
-     * 
+     *
      * This method enables queries such as the following SQL:
-     * 
-     *  SELECT user_id, 
-     *         MAX(sales_amt) OVER(PARTITION BY user_id ORDER BY date 
+     *
+     *  SELECT user_id,
+     *         MAX(sales_amt) OVER(PARTITION BY user_id ORDER BY date
      *                             ROWS BETWEEN 1 PRECEDING and 1 FOLLOWING)
      *  FROM my_sales_table WHERE ...
-     * 
+     *
      * Each window-aggregation is represented by a different {@link AggregationOverWindow} argument,
      * indicating:
      *  1. the {@link Aggregation.Kind},
      *  2. the number of rows preceding and following the current row, within a window,
      *  3. the minimum number of observations within the defined window
-     * 
+     *
      * This method returns a {@link Table} instance, with one result column for each specified
      * window aggregation.
-     * 
+     *
      * In this example, for the following input:
-     * 
+     *
      *  [ // user_id,  sales_amt
      *    { "user1",     10      },
      *    { "user2",     20      },
@@ -3007,19 +3065,19 @@ public final class Table implements AutoCloseable {
      *    { "user1",     60      },
      *    { "user2",     40      }
      *  ]
-     * 
-     * Partitioning (grouping) by `user_id` yields the following `sales_amt` vector 
+     *
+     * Partitioning (grouping) by `user_id` yields the following `sales_amt` vector
      * (with 2 groups, one for each distinct `user_id`):
-     * 
+     *
      *    [ 10,  20,  10,  50,  60,  20,  30,  80,  40 ]
      *      <-------user1-------->|<------user2------->
-     * 
+     *
      * The SUM aggregation is applied with 1 preceding and 1 following
      * row, with a minimum of 1 period. The aggregation window is thus 3 rows wide,
      * yielding the following column:
-     * 
+     *
      *    [ 30, 40,  80, 120, 110,  50, 130, 150, 120 ]
-     * 
+     *
      * @param windowAggregates the window-aggregations to be performed
      * @return Table instance, with each column containing the result of each aggregation.
      * @throws IllegalArgumentException if the window arguments are not of type
@@ -3038,7 +3096,7 @@ public final class Table implements AutoCloseable {
       for (int outputIndex = 0; outputIndex < windowAggregates.length; outputIndex++) {
         AggregationOverWindow agg = windowAggregates[outputIndex];
         if (agg.getWindowOptions().getFrameType() != WindowOptions.FrameType.ROWS) {
-          throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: " 
+          throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: "
                   + agg.getWindowOptions().getFrameType());
         }
         ColumnWindowOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnWindowOps());
@@ -3099,27 +3157,27 @@ public final class Table implements AutoCloseable {
     /**
      * Computes range-based window aggregation functions on the Table/projection,
      * based on windows specified in the argument.
-     * 
+     *
      * This method enables queries such as the following SQL:
-     * 
-     *  SELECT user_id, 
-     *         MAX(sales_amt) OVER(PARTITION BY user_id ORDER BY date 
+     *
+     *  SELECT user_id,
+     *         MAX(sales_amt) OVER(PARTITION BY user_id ORDER BY date
      *                             RANGE BETWEEN INTERVAL 1 DAY PRECEDING and CURRENT ROW)
      *  FROM my_sales_table WHERE ...
-     * 
+     *
      * Each window-aggregation is represented by a different {@link AggregationOverWindow} argument,
      * indicating:
      *  1. the {@link Aggregation.Kind},
      *  2. the index for the timestamp column to base the window definitions on
      *  2. the number of DAYS preceding and following the current row's date, to consider in the window
      *  3. the minimum number of observations within the defined window
-     * 
+     *
      * This method returns a {@link Table} instance, with one result column for each specified
      * window aggregation.
-     * 
+     *
      * In this example, for the following input:
-     * 
-     *  [ // user,  sales_amt,  YYYYMMDD (date)  
+     *
+     *  [ // user,  sales_amt,  YYYYMMDD (date)
      *    { "user1",   10,      20200101    },
      *    { "user2",   20,      20200101    },
      *    { "user1",   20,      20200102    },
@@ -3130,19 +3188,19 @@ public final class Table implements AutoCloseable {
      *    { "user1",   60,      20200107    },
      *    { "user2",   40,      20200104    }
      *  ]
-     * 
-     * Partitioning (grouping) by `user_id`, and ordering by `date` yields the following `sales_amt` vector 
+     *
+     * Partitioning (grouping) by `user_id`, and ordering by `date` yields the following `sales_amt` vector
      * (with 2 groups, one for each distinct `user_id`):
-     * 
+     *
      * Date :(202001-)  [ 01,  02,  03,  07,  07,    01,   01,   02,  04 ]
      * Input:           [ 10,  20,  10,  50,  60,    20,   30,   80,  40 ]
      *                    <-------user1-------->|<---------user2--------->
-     * 
-     * The SUM aggregation is applied, with 1 day preceding, and 1 day following, with a minimum of 1 period. 
+     *
+     * The SUM aggregation is applied, with 1 day preceding, and 1 day following, with a minimum of 1 period.
      * The aggregation window is thus 3 *days* wide, yielding the following output column:
-     * 
+     *
      *  Results:        [ 30,  40,  30,  110, 110,  130,  130,  130,  40 ]
-     * 
+     *
      * @param windowAggregates the window-aggregations to be performed
      * @return Table instance, with each column containing the result of each aggregation.
      * @throws IllegalArgumentException if the window arguments are not of type

@@ -179,6 +179,7 @@ class hostdevice_2dvector {
 
   auto size() const noexcept { return _size; }
   auto count() const noexcept { return _size.first * _size.second; }
+  auto is_empty() const noexcept { return count() == 0; }
 
   T* base_host_ptr(size_t offset = 0) { return _data.host_ptr(offset); }
   T* base_device_ptr(size_t offset = 0) { return _data.device_ptr(offset); }

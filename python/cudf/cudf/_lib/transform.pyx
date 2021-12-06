@@ -123,30 +123,6 @@ def transform(Column input, op):
     return Column.from_unique_ptr(move(c_output))
 
 
-def masked_udf(incols, op, output_type):
-    cdef table_view data_view = table_view_from_table(
-        incols, ignore_index=True)
-    cdef string c_str = op.encode("UTF-8")
-    cdef type_id c_tid
-    cdef data_type c_dtype
-
-    c_tid = <type_id> (
-        <underlying_type_t_type_id> SUPPORTED_NUMPY_TO_LIBCUDF_TYPES[
-            output_type
-        ]
-    )
-    c_dtype = data_type(c_tid)
-
-    with nogil:
-        c_output = move(libcudf_transform.generalized_masked_op(
-            data_view,
-            c_str,
-            c_dtype,
-        ))
-
-    return Column.from_unique_ptr(move(c_output))
-
-
 def table_encode(input):
     cdef table_view c_input = table_view_from_table(
         input, ignore_index=True)
