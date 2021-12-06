@@ -90,8 +90,8 @@ struct tagged_element_relational_comparator {
 
     column_device_view const* ptr_right_dview{r_side == side::LEFT ? &lhs : &rhs};
 
-    auto erl_comparator =
-      element_relational_comparator<has_nulls>(*ptr_left_dview, *ptr_right_dview, null_precedence);
+    auto erl_comparator = element_relational_comparator(
+      nullate::DYNAMIC{has_nulls}, *ptr_left_dview, *ptr_right_dview, null_precedence);
 
     return cudf::type_dispatcher(lhs.type(), erl_comparator, l_indx, r_indx);
   }
