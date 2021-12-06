@@ -463,13 +463,13 @@ dremel_data get_dremel_data(column_view h_col,
  * @param[in] col_desc Column description array [column_id]
  * @param[in] num_fragments Number of fragments per column
  * @param[in] num_columns Number of columns
- * @param[in] fragment_size Number of rows per fragment
+ * @param[in] fragment_size Number of rows per fragment, -1 if fragment sizes already specified
  * @param[in] num_rows Number of rows per column
  * @param[in] stream CUDA stream to use
  */
 void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
                        device_span<parquet_column_device_view const> col_desc,
-                       uint32_t fragment_size,
+                       int32_t fragment_size,
                        uint32_t num_rows,
                        rmm::cuda_stream_view stream);
 

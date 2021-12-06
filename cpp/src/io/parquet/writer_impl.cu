@@ -741,7 +741,7 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(
 void writer::impl::init_page_fragments(cudf::detail::hostdevice_2dvector<gpu::PageFragment>& frag,
                                        device_span<gpu::parquet_column_device_view const> col_desc,
                                        uint32_t num_rows,
-                                       uint32_t fragment_size)
+                                       int32_t fragment_size)
 {
   gpu::InitPageFragments(frag, col_desc, fragment_size, num_rows, stream);
   frag.device_to_host(stream, true);
@@ -1029,7 +1029,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     stream(stream),
     max_row_group_size{options.get_row_group_size_bytes()},
     max_row_group_rows{options.get_row_group_size_rows()},
-    row_group_sizes({options.get_row_group_sizes()},
+    row_group_sizes{options.get_row_group_sizes()},
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
@@ -1051,7 +1051,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     stream(stream),
     max_row_group_size{options.get_row_group_size_bytes()},
     max_row_group_rows{options.get_row_group_size_rows()},
-    row_group_sizes({options.get_row_group_sizes()},
+    row_group_sizes{options.get_row_group_sizes()},
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
@@ -1159,7 +1159,7 @@ void writer::impl::write(table_view const& table)
   size_type num_fragments = (num_rows + max_page_fragment_size - 1) / max_page_fragment_size;
   if (row_group_sizes_specified) {
     size_type num_fragments = 0;
-    for (size_type i = 0; i < row_group_sizes.size(); i++) {
+    for (std::size_t i = 0; i < row_group_sizes.size(); i++) {
       num_fragments += (row_group_sizes[i] + max_page_fragment_size - 1) / max_page_fragment_size;
     }
   }
@@ -1170,7 +1170,7 @@ void writer::impl::write(table_view const& table)
     std::vector<size_type> fragment_sizes (num_fragments);
     auto fragments_span = host_2dspan<gpu::PageFragment>{fragments};
     size_type i = 0;
-    for (size_type j = 0; j < row_group_sizes.size(); j++) {
+    for (std::size_t j = 0; j < row_group_sizes.size(); j++) {
       size_type start_row = 0;
       size_type const row_group_num_rows = row_group_sizes[j];
       size_type const row_group_num_fragments =
@@ -1178,7 +1178,7 @@ void writer::impl::write(table_view const& table)
       for (size_type k = 0; k < row_group_num_fragments; k++) {
         for (size_type col_idx = 0; col_idx < num_columns; col_idx++) {
           size_type const fragment_num_rows =
-            min(max_page_fragment_size, row_group_num_rows - min(start_row, row_group_num_rows))
+            min(max_page_fragment_size, row_group_num_rows - min(start_row, row_group_num_rows));
           start_row += fragment_num_rows;
           fragments_span[col_idx][i].num_rows = fragment_num_rows;
         }
@@ -1194,7 +1194,7 @@ void writer::impl::write(table_view const& table)
       col_desc, *parent_column_table_device_view, stream);
 
     init_page_fragments(
-      fragments, col_desc, num_rows, row_group_sizes_specified ? -1 : max_page_fragment_size);
+      fragments, col_desc, num_rows, row_group_sizes_specified ? -1 : static_cast<int32_t>(max_page_fragment_size));
   }
 
   auto const global_rowgroup_base = static_cast<size_type>(md.row_groups.size());
@@ -1208,11 +1208,10 @@ void writer::impl::write(table_view const& table)
     for (auto i = 0; i < num_columns; i++) {
       fragment_data_size += fragments[i][f].fragment_data_size;
     }
-    size_type extended_rowgroup_size = rowgroup_size + fragment_data_size;
     if (f > rowgroup_start &&
         (!row_group_sizes_specified ||
-          extended_rowgroup_size > row_group_sizes[rowgroup_start]) &&
-        (extended_rowgroup_size > max_row_group_size ||
+          rowgroup_size + fragment_data_size > static_cast<std::size_t>(row_group_sizes[rowgroup_start])) &&
+        (rowgroup_size + fragment_data_size > max_row_group_size ||
          (f + 1 - rowgroup_start) * max_page_fragment_size > max_row_group_rows)) {
       // update schema
       md.row_groups.resize(md.row_groups.size() + 1);

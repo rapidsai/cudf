@@ -112,7 +112,7 @@ template <int block_size>
 __global__ void __launch_bounds__(block_size)
   gpuInitPageFragments(device_2dspan<PageFragment> frag,
                        device_span<parquet_column_device_view const> col_desc,
-                       uint32_t fragment_size,
+                       int32_t fragment_size,
                        uint32_t max_num_rows)
 {
   __shared__ __align__(16) frag_init_state_s state_g;
@@ -1940,13 +1940,13 @@ dremel_data get_dremel_data(column_view h_col,
  *
  * @param[in,out] frag Fragment array [column_id][fragment_id]
  * @param[in] col_desc Column description array [column_id]
- * @param[in] num_fragments Number of fragments per column
+ * @param[in] num_fragments Number of fragments per column, -1 if fragment sizes already specified
  * @param[in] num_columns Number of columns
  * @param[in] stream CUDA stream to use, default 0
  */
 void InitPageFragments(device_2dspan<PageFragment> frag,
                        device_span<parquet_column_device_view const> col_desc,
-                       uint32_t fragment_size,
+                       int32_t fragment_size,
                        uint32_t num_rows,
                        rmm::cuda_stream_view stream)
 {

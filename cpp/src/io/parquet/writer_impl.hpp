@@ -121,12 +121,12 @@ class writer::impl {
    * @param frag Destination page fragments
    * @param col_desc column description array
    * @param num_rows Total number of rows
-   * @param fragment_size Number of rows per fragment
+   * @param fragment_size Number of rows per fragment, -1 if fragment sizes already specified
    */
   void init_page_fragments(hostdevice_2dvector<gpu::PageFragment>& frag,
                            device_span<gpu::parquet_column_device_view const> col_desc,
                            uint32_t num_rows,
-                           uint32_t fragment_size);
+                           int32_t fragment_size);
 
   /**
    * @brief Gather per-fragment statistics
