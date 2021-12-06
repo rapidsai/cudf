@@ -36,10 +36,10 @@
 namespace cudf::lists {
 namespace detail {
 namespace {
-template <typename T, typename StepsIterator>
+template <typename T>
 struct tabulator {
-  column_device_view const starts;
-  StepsIterator const steps_iter;
+  T const* const starts;
+  T const* const steps;
   offset_type const* const offsets;
   size_type const* const labels;
 
@@ -59,7 +59,8 @@ struct tabulator {
   {
     auto const list_idx    = labels[idx] - 1;  // labels are 1-based indices
     auto const list_offset = offsets[list_idx];
-    return starts.element<T>(list_idx) + multiply(steps_iter[list_idx], idx - list_offset);
+    auto const list_step   = steps ? steps[list_idx] : T{1};
+    return starts[list_idx] + multiply(list_step, idx - list_offset);
   }
 };
 
@@ -106,24 +107,16 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
       make_fixed_width_column(starts.type(), n_elements, mask_state::UNALLOCATED, stream, mr);
     if (starts.is_empty()) { return result; }
 
-    auto const result_begin  = result->mutable_view().template begin<T>();
-    auto const starts_dv_ptr = column_device_view::create(starts, stream);
+    auto const result_begin = result->mutable_view().template begin<T>();
 
-    auto const gen_sequences = [&](auto const& steps_iter) {
-      auto const op = tabulator<T, std::decay_t<decltype(steps_iter)>>{
-        *starts_dv_ptr, steps_iter, offsets, labels};
-      thrust::tabulate(rmm::exec_policy(stream), result_begin, result_begin + n_elements, op);
-    };
+    // Use pointers instead of column_device_view to access start and step values should be enough.
+    // This is because we don't need to check for nulls (results involving null elements will be
+    // finally nullified), and only support numeric and duration types.
+    auto const starts_begin = starts.template begin<T>();
+    auto const steps_begin  = steps ? steps.value().template begin<T>() : nullptr;
 
-    if (steps) {
-      auto const steps_dv_ptr = column_device_view::create(steps.value(), stream);
-      auto const steps_iter   = thrust::make_transform_iterator(
-        thrust::make_counting_iterator<size_type>(0),
-        [steps_dv = *steps_dv_ptr] __device__(auto idx) { return steps_dv.element<T>(idx); });
-      gen_sequences(steps_iter);
-    } else {
-      gen_sequences(thrust::make_constant_iterator<size_type>(1));
-    }
+    auto const op = tabulator<T>{starts_begin, steps_begin, offsets, labels};
+    thrust::tabulate(rmm::exec_policy(stream), result_begin, result_begin + n_elements, op);
 
     return result;
   }
