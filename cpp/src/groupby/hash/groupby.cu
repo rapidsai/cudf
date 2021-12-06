@@ -673,7 +673,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
       groupby_null_templated<false>(keys, requests, &cache, include_null_keys, stream, mr);
   }
 
-  return std::make_pair(std::move(unique_keys), extract_results(requests, cache));
+  return std::make_pair(std::move(unique_keys), extract_results(requests, cache, stream, mr));
 }
 }  // namespace hash
 }  // namespace detail

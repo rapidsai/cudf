@@ -103,7 +103,9 @@ std::unique_ptr<column> segmented_gather(lists_column_view const& value_column,
                            std::move(output_offset),
                            std::move(child),
                            null_count,
-                           std::move(null_mask));
+                           std::move(null_mask),
+                           stream,
+                           mr);
 }
 
 }  // namespace detail

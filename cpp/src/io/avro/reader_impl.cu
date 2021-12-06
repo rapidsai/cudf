@@ -278,7 +278,7 @@ rmm::device_buffer decompress_data(datasource& source,
                         0);
     uncompressed_data_offsets.host_to_device(stream);
 
-    thrust::tabulate(rmm::exec_policy(),
+    thrust::tabulate(rmm::exec_policy(stream),
                      uncompressed_data_ptrs.begin(),
                      uncompressed_data_ptrs.end(),
                      [off  = uncompressed_data_offsets.device_ptr(),

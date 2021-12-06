@@ -290,7 +290,8 @@ struct dispatch_unary_cast_to {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    if (input.type() == type) return std::make_unique<column>(input);  // TODO add test for this
+    if (input.type() == type)
+      return std::make_unique<column>(input, stream, mr);  // TODO add test for this
 
     return detail::rescale<TargetT>(input, numeric::scale_type{type.scale()}, stream, mr);
   }
