@@ -438,6 +438,7 @@ def to_parquet(
     index=None,
     partition_cols=None,
     partition_file_name=None,
+    row_group_cols=None,
     statistics="ROWGROUP",
     metadata_file_path=None,
     int96_timestamps=False,
@@ -457,6 +458,27 @@ def to_parquet(
                 partition_cols=partition_cols,
                 root_path=path,
                 preserve_index=index,
+                **kwargs,
+            )
+            return
+        elif row_group_cols:
+            _, offsets, _, grouped_df = df.groupby(row_group_cols)._grouped()
+            to_parquet(
+                grouped_df,
+                path,
+                engine=engine,
+                compression=compression,
+                index=index,
+                partition_cols=partition_cols,
+                partition_file_name=partition_file_name,
+                row_group_cols=None,
+                statistics=statistics,
+                metadata_file_path=metadata_file_path,
+                int96_timestamps=int96_timestamps,
+                row_group_size_bytes=row_group_size_bytes,
+                row_group_size_rows=row_group_size_rows,
+                row_group_sizes=offsets[1:],
+                *args,
                 **kwargs,
             )
             return
