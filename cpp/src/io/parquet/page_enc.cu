@@ -130,7 +130,9 @@ __global__ void __launch_bounds__(block_size)
   if (!t) {
     // frag.num_rows = fragment_size except for the last page fragment which can be smaller.
     // num_rows is fixed but fragment size could be larger if the data is strings or nested.
-    s->frag.num_rows           = min(fragment_size, max_num_rows - min(start_row, max_num_rows));
+    if (fragment_size != -1) {
+      s->frag.num_rows = min(fragment_size, max_num_rows - min(start_row, max_num_rows));
+    }
     s->frag.num_dict_vals      = 0;
     s->frag.fragment_data_size = 0;
     s->frag.dict_data_size     = 0;

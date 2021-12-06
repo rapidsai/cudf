@@ -32,6 +32,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
@@ -1154,9 +1155,37 @@ void writer::impl::write(table_view const& table)
   // compression/decompression performance).
   using cudf::io::parquet::gpu::max_page_fragment_size;
 
-  size_type const num_fragments = (num_rows + max_page_fragment_size - 1) / max_page_fragment_size;
+  bool row_group_sizes_specified = !row_group_sizes.empty();
+  size_type num_fragments = (num_rows + max_page_fragment_size - 1) / max_page_fragment_size;
+  if (row_group_sizes_specified) {
+    size_type num_fragments = 0;
+    for (size_type i = 0; i < row_group_sizes.size(); i++) {
+      num_fragments += (row_group_sizes[i] + max_page_fragment_size - 1) / max_page_fragment_size;
+    }
+  }
   cudf::detail::hostdevice_2dvector<gpu::PageFragment> fragments(
     num_columns, num_fragments, stream);
+
+  if (row_group_sizes_specified) {
+    std::vector<size_type> fragment_sizes (num_fragments);
+    auto fragments_span = host_2dspan<gpu::PageFragment>{fragments};
+    size_type i = 0;
+    for (size_type j = 0; j < row_group_sizes.size(); j++) {
+      size_type start_row = 0;
+      size_type const row_group_num_rows = row_group_sizes[j];
+      size_type const row_group_num_fragments =
+        (row_group_num_rows + max_page_fragment_size - 1) / max_page_fragment_size;
+      for (size_type k = 0; k < row_group_num_fragments; k++) {
+        for (size_type col_idx = 0; col_idx < num_columns; col_idx++) {
+          size_type const fragment_num_rows =
+            min(max_page_fragment_size, row_group_num_rows - min(start_row, row_group_num_rows))
+          start_row += fragment_num_rows;
+          fragments_span[col_idx][i].num_rows = fragment_num_rows;
+        }
+        i++;
+      }
+    }
+  }
 
   if (num_fragments != 0) {
     // Move column info to device
@@ -1164,7 +1193,8 @@ void writer::impl::write(table_view const& table)
     leaf_column_views = create_leaf_column_device_views<gpu::parquet_column_device_view>(
       col_desc, *parent_column_table_device_view, stream);
 
-    init_page_fragments(fragments, col_desc, num_rows, max_page_fragment_size);
+    init_page_fragments(
+      fragments, col_desc, num_rows, row_group_sizes_specified ? -1 : max_page_fragment_size);
   }
 
   auto const global_rowgroup_base = static_cast<size_type>(md.row_groups.size());
