@@ -19,6 +19,8 @@
 
 #include <cudf/detail/structs/utilities.hpp>
 #include <cudf/table/row_operators.cuh>
+#include "cudf/binaryop.hpp"
+#include "cudf/column/column_device_view.cuh"
 
 namespace cudf::binops::compiled {
 void dispatch_equality_op(mutable_column_view& out,
@@ -41,44 +43,48 @@ void dispatch_equality_op(mutable_column_view& out,
     auto d_lhs = table_device_view::create(lhs_flattened);
     auto d_rhs = table_device_view::create(rhs_flattened);
 
-    auto const do_compare = [&](auto const& comp) {
+    if (op == binary_operator::EQUAL || op == binary_operator::NOT_EQUAL)
       detail::struct_compare(
-        out, comp, is_lhs_scalar, is_rhs_scalar, op == binary_operator::NOT_EQUAL, stream);
-    };
-    switch (op) {
-      case binary_operator::EQUAL:
-      case binary_operator::NOT_EQUAL:
-        has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened)
-          ? do_compare(row_equality_comparator<true>{*d_lhs, *d_rhs})
-          : do_compare(row_equality_comparator<false>{*d_lhs, *d_rhs});
-        break;
-      default: CUDF_FAIL("Unsupported operator for these types");
-    }
+        out,
+        row_equality_comparator{
+          has_nested_nulls(lhs_flattened) || has_nested_nulls(rhs_flattened), *d_lhs, *d_rhs},
+        is_lhs_scalar,
+        is_rhs_scalar,
+        op == binary_operator::NOT_EQUAL,
+        stream);
+    else
+      CUDF_FAIL("Unsupported operator for these types");
   } else {
     auto common_dtype = get_common_type(out.type(), lhs.type(), rhs.type());
+    auto outd         = mutable_column_device_view::create(out, stream);
     auto lhsd         = column_device_view::create(lhs, stream);
     auto rhsd         = column_device_view::create(rhs, stream);
-    auto outd         = mutable_column_device_view::create(out, stream);
-    // Execute it on every element
-    for_each(stream,
-             out.size(),
-             [op,
-              outd = *outd,
-              lhsd = *lhsd,
-              rhsd = *rhsd,
-              is_lhs_scalar,
-              is_rhs_scalar,
-              common_dtype] __device__(size_type i) {
-               // clang-format off
-      // Similar enabled template types should go together (better performance)
-      switch (op) {
-      case binary_operator::EQUAL:         device_type_dispatcher<ops::Equal>{outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, common_dtype}(i); break;
-      case binary_operator::NOT_EQUAL:     device_type_dispatcher<ops::NotEqual>{outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, common_dtype}(i); break;
-      case binary_operator::NULL_EQUALS:   device_type_dispatcher<ops::NullEquals>{outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, common_dtype}(i); break;
-      default:;
+    if (common_dtype) {
+      if (op == binary_operator::EQUAL) {
+        for_each(stream,
+                 outd.size(),
+                 binary_op_device_dispatcher<ops::Equal>{
+                   *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
+      } else if (op == binary_operator::NOT_EQUAL) {
+        for_each(stream,
+                 outd.size(),
+                 binary_op_device_dispatcher<ops::NotEqual>{
+                   *common_dtype, *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
       }
-               // clang-format on
-             });
+    } else {
+      if (op == binary_operator::EQUAL) {
+        for_each(stream,
+                 outd.size(),
+                 binary_op_double_device_dispatcher<ops::Equal>{
+                   *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
+      } else if (op == binary_operator::NOT_EQUAL) {
+        for_each(stream,
+                 outd.size(),
+                 binary_op_double_device_dispatcher<ops::NotEqual>{
+                   *outd, *lhsd, *rhsd, is_lhs_scalar, is_rhs_scalar});
+      }
+    }
   }
 }
+
 }  // namespace cudf::binops::compiled
