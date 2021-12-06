@@ -198,6 +198,11 @@ struct SchemaElement {
   //  };
   // }
   bool is_stub() const { return repetition_type == REPEATED && num_children == 1; }
+
+  // One-level LIST encoding: Only allows required lists with required cells:
+  //   repeated value_type name
+  bool is_one_level_list() const { return repetition_type == REPEATED and num_children == 0; }
+
   // in parquet terms, a group is a level of nesting in the schema. a group
   // can be a struct or a list
   bool is_struct() const
