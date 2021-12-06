@@ -284,7 +284,8 @@ cpdef write_parquet(
         object metadata_file_path=None,
         object int96_timestamps=False,
         object row_group_size_bytes=None,
-        object row_group_size_rows=None):
+        object row_group_size_rows=None,
+        object row_group_sizes=None):
     """
     Cython function to call into libcudf API, see `write_parquet`.
 
@@ -356,6 +357,8 @@ cpdef write_parquet(
         args.set_row_group_size_bytes(row_group_size_bytes)
     if row_group_size_rows is not None:
         args.set_row_group_size_rows(row_group_size_rows)
+    if row_group_sizes is not None:
+        args.set_row_group_sizes(row_group_sizes)
 
     with nogil:
         out_metadata_c = move(parquet_writer(args))

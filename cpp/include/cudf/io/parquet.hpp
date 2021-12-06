@@ -405,6 +405,8 @@ class parquet_writer_options {
   size_t _row_group_size_bytes = default_row_group_size_bytes;
   // Maximum number of rows in row group (unless smaller than a single page)
   size_type _row_group_size_rows = default_row_group_size_rows;
+  // Number of rows in each row group
+  std::vector<size_type> _row_group_sizes;
 
   /**
    * @brief Constructor from sink and table.
@@ -490,6 +492,11 @@ class parquet_writer_options {
   auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
   /**
+   * @brief Returns size of each row group.
+   */
+  auto get_row_group_sizes() const { return _row_group_sizes; }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata.
@@ -548,6 +555,14 @@ class parquet_writer_options {
       size_rows >= 5000,
       "The maximum row group size cannot be smaller than the page size, which is 5000 rows.");
     _row_group_size_rows = size_rows;
+  }
+
+  /**
+   * @brief Sets the size of each row group.
+   */
+  void set_row_group_sizes(std::vector<size_type> sizes_rows)
+  {
+    _row_group_sizes = sizes_rows;
   }
 };
 
@@ -646,6 +661,18 @@ class parquet_writer_options_builder {
   }
 
   /**
+   * @brief Sets the number of rows in each output row group.
+   *
+   * @param val number of rows in each row group
+   * @return this for chaining.
+   */
+  parquet_writer_options_builder& row_group_sizes(std::vector<size_type> val)
+  {
+    options.set_row_group_sizes(val);
+    return *this;
+  }
+
+  /**
    * @brief Sets whether int96 timestamps are written or not in parquet_writer_options.
    *
    * @param enabled Boolean value to enable/disable int96 timestamps.
@@ -727,6 +754,8 @@ class chunked_parquet_writer_options {
   size_t _row_group_size_bytes = default_row_group_size_bytes;
   // Maximum number of rows in row group (unless smaller than a single page)
   size_type _row_group_size_rows = default_row_group_size_rows;
+  // Number of rows in each row group
+  std::vector<size_type> _row_group_sizes;
 
   /**
    * @brief Constructor from sink.
@@ -781,6 +810,11 @@ class chunked_parquet_writer_options {
   auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
   /**
+   * @brief Returns size of each row group.
+   */
+  auto get_row_group_sizes() const { return _row_group_sizes; }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata.
@@ -829,6 +863,14 @@ class chunked_parquet_writer_options {
       size_rows >= 5000,
       "The maximum row group size cannot be smaller than the page size, which is 5000 rows.");
     _row_group_size_rows = size_rows;
+  }
+
+  /**
+   * @brief Sets the size of each row group.
+   */
+  void set_row_group_sizes(std::vector<size_type> sizes_rows)
+  {
+    _row_group_sizes = sizes_rows;
   }
 
   /**
@@ -931,6 +973,18 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options_builder& row_group_size_rows(size_type val)
   {
     options.set_row_group_size_rows(val);
+    return *this;
+  }
+
+  /**
+   * @brief Sets the number of rows in each output row group.
+   *
+   * @param val number of rows in each row group
+   * @return this for chaining.
+   */
+  chunked_parquet_writer_options_builder& row_group_sizes(std::vector<size_type> val)
+  {
+    options.set_row_group_sizes(val);
     return *this;
   }
 

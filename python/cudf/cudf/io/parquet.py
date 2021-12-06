@@ -443,6 +443,7 @@ def to_parquet(
     int96_timestamps=False,
     row_group_size_bytes=None,
     row_group_size_rows=None,
+    row_group_sizes=None,
     *args,
     **kwargs,
 ):
@@ -484,6 +485,7 @@ def to_parquet(
                     int96_timestamps=int96_timestamps,
                     row_group_size_bytes=row_group_size_bytes,
                     row_group_size_rows=row_group_size_rows,
+                    row_group_sizes=row_group_sizes,
                 )
         else:
             write_parquet_res = libparquet.write_parquet(
@@ -496,6 +498,7 @@ def to_parquet(
                 int96_timestamps=int96_timestamps,
                 row_group_size_bytes=row_group_size_bytes,
                 row_group_size_rows=row_group_size_rows,
+                row_group_sizes=row_group_sizes,
             )
 
         return write_parquet_res
