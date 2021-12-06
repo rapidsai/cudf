@@ -9067,4 +9067,5 @@ def test_dataframe_constructor_nan_as_null(data, nan_as_null):
             .any()
         )
     else:
+        actual = actual.select_dtypes(exclude=["object"])
         assert (actual.replace(np.nan, -1) == -1).any().any()
