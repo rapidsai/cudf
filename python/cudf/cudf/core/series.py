@@ -3661,6 +3661,80 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return result
 
+    def add_prefix(self, prefix):
+        """
+        Prefix labels with string `prefix`.
+        For Series, the row labels are prefixed.
+        Parameters
+        ----------
+        prefix : str
+            The string to add before each label.
+        Returns
+        -------
+        Series
+            New Series with updated labels.
+        See Also
+        --------
+        Series.add_suffix: Suffix row labels with string `suffix`.
+        Examples
+        --------
+        >>> s = cudf.Series([1, 2, 3, 4])
+        >>> s
+        0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64
+        >>> s.add_prefix('item_')
+        item_0    1
+        item_1    2
+        item_2    3
+        item_3    4
+        dtype: int64
+        """
+        name = self.name or 0
+        result = self.copy(deep=False)
+        result = result.set_index(prefix + self._index.astype(str))
+        result.name = name
+        return result
+
+    def add_suffix(self, suffix):
+        """
+        Suffix labels with string `suffix`.
+        For Series, the row labels are suffixed.
+        Parameters
+        ----------
+        prefix : str
+            The string to add after each label.
+        Returns
+        -------
+        Series
+            New Series with updated labels.
+        See Also
+        --------
+        Series.add_prefix: prefix row labels with string `prefix`.
+        Examples
+        --------
+        >>> s = cudf.Series([1, 2, 3, 4])
+        >>> s
+        0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64
+        >>> s.add_suffix('_item')
+        0_item    1
+        1_item    2
+        2_item    3
+        3_item    4
+        dtype: int64
+        """
+        name = self.name or 0
+        result = self.copy(deep=False)
+        result = result.set_index(self._index.astype(str) + suffix)
+        result.name = name
+        return result
+
     def keys(self):
         """
         Return alias for index.
