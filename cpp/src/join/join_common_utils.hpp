@@ -45,9 +45,9 @@ using multimap_type =
                         default_allocator<char>,
                         cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, hash_type, hash_type>>;
 
-using row_hash = cudf::row_hasher<default_hash>;
+using row_hash = cudf::row_hasher<default_hash, cudf::nullate::YES>;
 
-using row_equality = cudf::row_equality_comparator<true>;
+using row_equality = cudf::row_equality_comparator<cudf::nullate::YES>;
 
 enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_ANTI_JOIN };
 

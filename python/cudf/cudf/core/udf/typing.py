@@ -67,7 +67,7 @@ class MaskedType(types.Type):
         """
         Often within a UDF an instance arises where a variable could
         be a `MaskedType`, an `NAType`, or a literal based off
-        the data at runtime, for examplem the variable `ret` here:
+        the data at runtime, for example the variable `ret` here:
 
         def f(x):
             if x == 1:
@@ -185,7 +185,7 @@ class NAType(types.Type):
     """
     A type for handling ops against nulls
     Exists so we can:
-    1. Teach numba that all occurances of `cudf.NA` are
+    1. Teach numba that all occurrences of `cudf.NA` are
        to be read as instances of this type instead
     2. Define ops like `if x is cudf.NA` where `x` is of
        type `Masked` to mean `if x.valid is False`

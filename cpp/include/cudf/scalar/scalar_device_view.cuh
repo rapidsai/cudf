@@ -91,6 +91,12 @@ class fixed_width_scalar_device_view_base : public detail::scalar_device_view_ba
     return *data<T>();
   }
 
+  /**
+   * @brief Stores the value in scalar
+   *
+   * @tparam T The desired type
+   * @param value The value to store in scalar
+   */
   template <typename T>
   __device__ void set_value(T value)
   {
@@ -159,6 +165,11 @@ class fixed_width_scalar_device_view : public detail::fixed_width_scalar_device_
     return fixed_width_scalar_device_view_base::value<T>();
   }
 
+  /**
+   * @brief Stores the value in scalar
+   *
+   * @param value The value to store in scalar
+   */
   __device__ void set_value(T value) { fixed_width_scalar_device_view_base::set_value<T>(value); }
 
   /**
@@ -218,6 +229,11 @@ class fixed_point_scalar_device_view : public detail::scalar_device_view_base {
   {
   }
 
+  /**
+   * @brief Stores the value in scalar
+   *
+   * @param value The value to store in scalar
+   */
   __device__ void set_value(rep_type value) { *_data = value; }
 
   /**

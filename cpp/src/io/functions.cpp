@@ -219,10 +219,14 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
   using namespace cudf::io::detail;
 
   auto sink = make_datasink(options.get_sink());
-  auto writer =
-    std::make_unique<csv::writer>(std::move(sink), options, rmm::cuda_stream_default, mr);
 
-  writer->write(options.get_table(), options.get_metadata());
+  return csv::write_csv(  //
+    sink.get(),
+    options.get_table(),
+    options.get_metadata(),
+    options,
+    rmm::cuda_stream_default,
+    mr);
 }
 
 namespace detail_orc = cudf::io::detail::orc;
@@ -405,13 +409,13 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
 }
 
 /**
- * @copydoc cudf::io::merge_rowgroup_metadata
+ * @copydoc cudf::io::merge_row_group_metadata
  */
-std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
+std::unique_ptr<std::vector<uint8_t>> merge_row_group_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list)
 {
   CUDF_FUNC_RANGE();
-  return detail_parquet::writer::merge_rowgroup_metadata(metadata_list);
+  return detail_parquet::writer::merge_row_group_metadata(metadata_list);
 }
 
 table_input_metadata::table_input_metadata(table_view const& table,

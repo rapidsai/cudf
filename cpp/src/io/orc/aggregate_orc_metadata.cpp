@@ -79,7 +79,7 @@ void add_nested_columns(std::map<size_type, std::vector<size_type>>& selected_co
  * @brief Adds the column with the given id to the mapping
  *
  * All nested columns and direct ancestors of column `id` are included.
- * Columns that are not on the direct path are excluded, which may result in prunning.
+ * Columns that are not on the direct path are excluded, which may result in pruning.
  */
 void add_column_to_mapping(std::map<size_type, std::vector<size_type>>& selected_columns,
                            metadata const& metadata,

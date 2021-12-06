@@ -171,7 +171,7 @@ def test_dt_ops(data):
     assert_eq(pd_data > pd_data, gdf_data > gdf_data)
 
 
-# libgdf doesn't respect timezones
+# libcudf doesn't respect timezones
 @pytest.mark.parametrize("data", [data1()])
 @pytest.mark.parametrize("field", fields)
 def test_dt_series(data, field):
@@ -1777,12 +1777,45 @@ def test_error_values():
     ],
 )
 @pytest.mark.parametrize("time_type", DATETIME_TYPES)
-@pytest.mark.parametrize("resolution", ["D", "H", "T", "S", "L", "U", "N"])
+@pytest.mark.parametrize(
+    "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
+)
 def test_ceil(data, time_type, resolution):
 
-    ps = pd.Series(data, dtype=time_type)
-    gs = cudf.from_pandas(ps)
+    gs = cudf.Series(data, dtype=time_type)
+    ps = gs.to_pandas()
 
     expect = ps.dt.ceil(resolution)
     got = gs.dt.ceil(resolution)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        (
+            [
+                "2020-05-31 08:00:00",
+                "1999-12-31 18:40:10",
+                "2000-12-31 04:00:05",
+                "1900-02-28 07:00:06",
+                "1800-03-14 07:30:20",
+                "2100-03-14 07:30:20",
+                "1970-01-01 00:00:09",
+                "1969-12-31 12:59:10",
+            ]
+        )
+    ],
+)
+@pytest.mark.parametrize("time_type", DATETIME_TYPES)
+@pytest.mark.parametrize(
+    "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
+)
+def test_floor(data, time_type, resolution):
+
+    gs = cudf.Series(data, dtype=time_type)
+    ps = gs.to_pandas()
+
+    expect = ps.dt.floor(resolution)
+    got = gs.dt.floor(resolution)
     assert_eq(expect, got)

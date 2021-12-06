@@ -28,8 +28,8 @@ namespace structs {
 namespace detail {
 
 enum class column_nullability {
-  MATCH_INCOMING,  // generate a null column if the incoming column has nulls
-  FORCE            // always generate a null column
+  MATCH_INCOMING,  ///< generate a null column if the incoming column has nulls
+  FORCE            ///< always generate a null column
 };
 
 /**

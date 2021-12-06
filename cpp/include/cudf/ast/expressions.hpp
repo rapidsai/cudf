@@ -122,9 +122,9 @@ enum class ast_operator {
  * This determines which table to use in cases with two tables (e.g. joins).
  */
 enum class table_reference {
-  LEFT,   // Column index in the left table
-  RIGHT,  // Column index in the right table
-  OUTPUT  // Column index in the output table
+  LEFT,   ///< Column index in the left table
+  RIGHT,  ///< Column index in the right table
+  OUTPUT  ///< Column index in the output table
 };
 
 /**
