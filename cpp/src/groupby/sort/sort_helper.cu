@@ -50,9 +50,8 @@ namespace {
  * @brief Compares two `table` rows for equality as if the table were
  * ordered according to a specified permutation map.
  */
-template <bool nullable = true>
 struct permuted_row_equality_comparator {
-  cudf::row_equality_comparator<nullable> _comparator;
+  cudf::row_equality_comparator<cudf::nullate::DYNAMIC> _comparator;
   cudf::size_type const* _map;
 
   /**
@@ -60,10 +59,12 @@ struct permuted_row_equality_comparator {
    *
    * @param t The `table` whose rows will be compared
    * @param map The permutation map that specifies the effective ordering of
-   *`t`. Must be the same size as `t.num_rows()`
+   * `t`. Must be the same size as `t.num_rows()`
    */
-  permuted_row_equality_comparator(cudf::table_device_view const& t, cudf::size_type const* map)
-    : _comparator(t, t, true), _map{map}
+  permuted_row_equality_comparator(cudf::table_device_view const& t,
+                                   cudf::size_type const* map,
+                                   bool nullable = true)
+    : _comparator(cudf::nullate::DYNAMIC{nullable}, t, t, cudf::null_equality::EQUAL), _map{map}
   {
   }
 
@@ -76,7 +77,7 @@ struct permuted_row_equality_comparator {
    *
    * @param lhs The index of the first row
    * @param rhs The index of the second row
-   * @returns if the two specified rows in the permuted order are equivalent
+   * @returns true if the two specified rows in the permuted order are equivalent
    */
   CUDA_DEVICE_CALLABLE
   bool operator()(cudf::size_type lhs, cudf::size_type rhs)
@@ -196,21 +197,12 @@ sort_groupby_helper::index_vector const& sort_groupby_helper::group_offsets(
   auto sorted_order       = key_sort_order(stream).data<size_type>();
   decltype(_group_offsets->begin()) result_end;
 
-  if (has_nulls(_keys)) {
-    result_end = thrust::unique_copy(
-      rmm::exec_policy(stream),
-      thrust::make_counting_iterator<size_type>(0),
-      thrust::make_counting_iterator<size_type>(num_keys(stream)),
-      _group_offsets->begin(),
-      permuted_row_equality_comparator<true>(*device_input_table, sorted_order));
-  } else {
-    result_end = thrust::unique_copy(
-      rmm::exec_policy(stream),
-      thrust::make_counting_iterator<size_type>(0),
-      thrust::make_counting_iterator<size_type>(num_keys(stream)),
-      _group_offsets->begin(),
-      permuted_row_equality_comparator<false>(*device_input_table, sorted_order));
-  }
+  result_end = thrust::unique_copy(
+    rmm::exec_policy(stream),
+    thrust::make_counting_iterator<size_type>(0),
+    thrust::make_counting_iterator<size_type>(num_keys(stream)),
+    _group_offsets->begin(),
+    permuted_row_equality_comparator(*device_input_table, sorted_order, has_nulls(_keys)));
 
   size_type num_groups = thrust::distance(_group_offsets->begin(), result_end);
   _group_offsets->set_element(num_groups, num_keys(stream), stream);

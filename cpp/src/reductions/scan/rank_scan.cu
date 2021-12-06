@@ -33,18 +33,19 @@ namespace {
 /**
  * @brief generate row ranks or dense ranks using a row comparison then scan the results
  *
- * @tparam has_nulls if the order_by column has nulls
  * @tparam value_resolver flag value resolver with boolean first and row number arguments
  * @tparam scan_operator scan function ran on the flag values
  * @param order_by input column to generate ranks for
+ * @param has_nulls if the order_by column has nested nulls
  * @param resolver flag value resolver
  * @param scan_op scan operation ran on the flag results
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> rank values
  */
-template <bool has_nulls, typename value_resolver, typename scan_operator>
+template <typename value_resolver, typename scan_operator>
 std::unique_ptr<column> rank_generator(column_view const& order_by,
+                                       bool has_nulls,
                                        value_resolver resolver,
                                        scan_operator scan_op,
                                        rmm::cuda_stream_view stream,
@@ -53,7 +54,8 @@ std::unique_ptr<column> rank_generator(column_view const& order_by,
   auto const flattened = cudf::structs::detail::flatten_nested_columns(
     table_view{{order_by}}, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
   auto const d_flat_order = table_device_view::create(flattened, stream);
-  row_equality_comparator<has_nulls> comparator(*d_flat_order, *d_flat_order, true);
+  row_equality_comparator comparator(
+    nullate::DYNAMIC{has_nulls}, *d_flat_order, *d_flat_order, null_equality::EQUAL);
   auto ranks         = make_fixed_width_column(data_type{type_to_id<size_type>()},
                                        flattened.flattened_columns().num_rows(),
                                        mask_state::UNALLOCATED,
@@ -85,16 +87,9 @@ std::unique_ptr<column> inclusive_dense_rank_scan(column_view const& order_by,
 {
   CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(order_by),
                "Unsupported list type in dense_rank scan.");
-  if (has_nested_nulls(table_view{{order_by}})) {
-    return rank_generator<true>(
-      order_by,
-      [] __device__(bool equality, auto row_index) { return equality; },
-      DeviceSum{},
-      stream,
-      mr);
-  }
-  return rank_generator<false>(
+  return rank_generator(
     order_by,
+    has_nested_nulls(table_view{{order_by}}),
     [] __device__(bool equality, auto row_index) { return equality; },
     DeviceSum{},
     stream,
@@ -107,16 +102,9 @@ std::unique_ptr<column> inclusive_rank_scan(column_view const& order_by,
 {
   CUDF_EXPECTS(!cudf::structs::detail::is_or_has_nested_lists(order_by),
                "Unsupported list type in rank scan.");
-  if (has_nested_nulls(table_view{{order_by}})) {
-    return rank_generator<true>(
-      order_by,
-      [] __device__(bool equality, auto row_index) { return equality ? row_index + 1 : 0; },
-      DeviceMax{},
-      stream,
-      mr);
-  }
-  return rank_generator<false>(
+  return rank_generator(
     order_by,
+    has_nested_nulls(table_view{{order_by}}),
     [] __device__(bool equality, auto row_index) { return equality ? row_index + 1 : 0; },
     DeviceMax{},
     stream,
