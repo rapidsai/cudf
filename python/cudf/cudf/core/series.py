@@ -4686,8 +4686,11 @@ class DatetimeProperties(object):
         Examples
         --------
         >>> import cudf
-        >>> dt_sr = cudf.Series(["2001-01-01 00:04:45", "2001-01-01 00:04:58",
-        ... "2001-01-01 00:05:04"], dtype="datetime64[ns]")
+        >>> dt_sr = cudf.Series([
+        ...     "2001-01-01 00:04:45",
+        ...     "2001-01-01 00:04:58",
+        ...     "2001-01-01 00:05:04",
+        ... ], dtype="datetime64[ns]")
         >>> dt_sr.dt.round("T")
         0   2001-01-01 00:05:00
         1   2001-01-01 00:05:00
