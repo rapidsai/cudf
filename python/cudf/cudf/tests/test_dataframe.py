@@ -9039,3 +9039,23 @@ def test_pearson_corr_multiindex_dataframe():
     expected = gdf.to_pandas().groupby(level="a").corr("pearson")
 
     assert_eq(expected, actual)
+
+
+def test_dataframe_add_prefix():
+    cd_s = cudf.DataFrame({"A": [1, 2, 3, 4], "B": [3, 4, 5, 6]})
+    pd_s = cd_s.to_pandas()
+
+    got = cd_s.add_prefix("item_")
+    expected = pd_s.add_prefix("item_")
+
+    assert_eq(got, expected)
+
+
+def test_dataframe_add_suffix():
+    cd_s = cudf.DataFrame({"A": [1, 2, 3, 4], "B": [3, 4, 5, 6]})
+    pd_s = cd_s.to_pandas()
+
+    got = cd_s.add_suffix("_item")
+    expected = pd_s.add_suffix("_item")
+
+    assert_eq(got, expected)
