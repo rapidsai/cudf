@@ -220,21 +220,12 @@ struct group_scan_functor<K,
 
     // Find the indices of the prefix min/max elements within each group.
     auto const count_iter = thrust::make_counting_iterator<size_type>(0);
-    if (values.has_nulls()) {
-      auto const binop =
-        cudf::reduction::detail::row_arg_minmax_fn<true>(values.size(),
-                                                         *d_flattened_values_ptr,
-                                                         flattened_null_precedences.data(),
-                                                         K == aggregation::MIN);
-      do_scan(count_iter, map_begin, binop);
-    } else {
-      auto const binop =
-        cudf::reduction::detail::row_arg_minmax_fn<false>(values.size(),
-                                                          *d_flattened_values_ptr,
-                                                          flattened_null_precedences.data(),
-                                                          K == aggregation::MIN);
-      do_scan(count_iter, map_begin, binop);
-    }
+    auto const binop      = cudf::reduction::detail::row_arg_minmax_fn(values.size(),
+                                                                  *d_flattened_values_ptr,
+                                                                  values.has_nulls(),
+                                                                  flattened_null_precedences.data(),
+                                                                  K == aggregation::MIN);
+    do_scan(count_iter, map_begin, binop);
 
     auto gather_map_view =
       column_view(data_type{type_to_id<offset_type>()}, gather_map.size(), gather_map.data());
