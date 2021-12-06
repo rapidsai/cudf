@@ -1208,8 +1208,11 @@ void writer::impl::write(table_view const& table)
     for (auto i = 0; i < num_columns; i++) {
       fragment_data_size += fragments[i][f].fragment_data_size;
     }
+    size_type extended_rowgroup_size = rowgroup_size + fragment_data_size;
     if (f > rowgroup_start &&
-        (rowgroup_size + fragment_data_size > max_row_group_size ||
+        (!row_group_sizes_specified ||
+          extended_rowgroup_size > row_group_sizes[rowgroup_start]) &&
+        (extended_rowgroup_size > max_row_group_size ||
          (f + 1 - rowgroup_start) * max_page_fragment_size > max_row_group_rows)) {
       // update schema
       md.row_groups.resize(md.row_groups.size() + 1);
