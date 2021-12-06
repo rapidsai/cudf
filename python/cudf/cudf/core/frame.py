@@ -2577,7 +2577,7 @@ class Frame:
                         replacements_per_column[name],
                         all_na_per_column[name],
                     )
-                except (KeyError, OverflowError):
+                except (KeyError, TypeError, OverflowError):
                     # We need to create a deep copy if:
                     # i. `find_and_replace` was not successful or any of
                     #    `to_replace_per_column`, `replacements_per_column`,

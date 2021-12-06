@@ -9042,3 +9042,29 @@ def test_pearson_corr_multiindex_dataframe():
     expected = gdf.to_pandas().groupby(level="a").corr("pearson")
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [np.nan, 1, 2], "b": [None, None, None]},
+        {"a": [1, 2, np.nan, 2], "b": [np.nan, np.nan, np.nan, np.nan]},
+    ],
+)
+@pytest.mark.parametrize("nan_as_null", [True, False])
+def test_dataframe_constructor_nan_as_null(data, nan_as_null):
+    actual = cudf.DataFrame(data, nan_as_null=nan_as_null)
+
+    if nan_as_null:
+        assert (
+            not (
+                actual.astype("float").replace(
+                    cudf.Series([np.nan], nan_as_null=False), cudf.Series([-1])
+                )
+                == -1
+            )
+            .any()
+            .any()
+        )
+    else:
+        assert (actual.replace(np.nan, -1) == -1).any().any()
