@@ -650,7 +650,7 @@ class aggregate_metadata {
             // store the index of this element
             nesting.push_back(static_cast<int>(output_col.children.size()));
             // TODO: not sure if we should assign a name or leave it blank
-            element_col.name = "elemenet";
+            element_col.name = "element";
 
             output_col.children.push_back(std::move(element_col));
           }
