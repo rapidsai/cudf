@@ -3520,8 +3520,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         result.columns = columns
         return result
 
-    T = property(transpose,
-        doc=transpose.__doc__)
+    T = property(transpose, doc=transpose.__doc__)
 
     def melt(self, **kwargs):
         """Unpivots a DataFrame from wide format to long format,

@@ -2794,8 +2794,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return self
 
-    T = property(transpose,
-        doc=transpose.__doc__)
+    T = property(transpose, doc=transpose.__doc__)
 
     def corr(self, other, method="pearson", min_periods=None):
         """Calculates the sample correlation between two Series,
