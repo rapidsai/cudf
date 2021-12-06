@@ -644,13 +644,14 @@ def test_parquet_reader_spark_decimals(datadir):
     # assert_eq(expect, got)
 
 
-def test_parquet_reader_decimal128_error_validation(datadir):
+@pytest.mark.parametrize("columns", [["a"], ["b", "a"], None])
+def test_parquet_reader_decimal128_error_validation(datadir, columns):
     fname = datadir / "nested_decimal128_file.parquet"
     with pytest.raises(
         NotImplementedError,
         match="Decimal type greater than Decimal64 is not yet supported",
     ):
-        cudf.read_parquet(fname)
+        cudf.read_parquet(fname, columns=columns)
 
 
 def test_parquet_reader_microsecond_timestamps(datadir):

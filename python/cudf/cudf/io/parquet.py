@@ -623,8 +623,13 @@ def _read_parquet(
             except TypeError:
                 pass
             else:
-                arrow_types = metadata.schema.to_arrow_schema().types
-                for arrow_type in arrow_types:
+                arrow_schema = metadata.schema.to_arrow_schema()
+                check_cols = arrow_schema.names if columns is None else columns
+                for col_name, arrow_type in zip(
+                    arrow_schema.names, arrow_schema.types
+                ):
+                    if col_name not in check_cols:
+                        continue
                     if isinstance(arrow_type, pa.ListType):
                         val_field_types = arrow_type.value_field.flatten()
                         for val_field_type in val_field_types:
