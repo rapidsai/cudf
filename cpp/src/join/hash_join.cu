@@ -81,7 +81,7 @@ void build_join_hash_table(cudf::table_view const& build,
   CUDF_EXPECTS(0 != build_table_ptr->num_columns(), "Selected build dataset is empty");
   CUDF_EXPECTS(0 != build_table_ptr->num_rows(), "Build side table has no rows");
 
-  row_hash hash_build{*build_table_ptr};
+  row_hash hash_build{nullate::YES{}, *build_table_ptr};
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   make_pair_function pair_func{hash_build, empty_key_sentinel};
 
@@ -147,9 +147,9 @@ probe_join_hash_table(cudf::table_device_view build_table,
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
 
-  pair_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
+  pair_equality equality{probe_table, build_table, compare_nulls};
 
-  row_hash hash_probe{probe_table};
+  row_hash hash_probe{nullate::YES{}, probe_table};
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
 
@@ -212,9 +212,9 @@ std::size_t get_full_join_size(cudf::table_device_view build_table,
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
 
-  pair_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
+  pair_equality equality{probe_table, build_table, compare_nulls};
 
-  row_hash hash_probe{probe_table};
+  row_hash hash_probe{nullate::YES{}, probe_table};
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
 
