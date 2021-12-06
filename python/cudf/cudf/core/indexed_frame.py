@@ -719,7 +719,7 @@ class IndexedFrame(Frame):
             ignored.
         how : str, optional
             Type of rounding. Can be either "half_even" (default)
-            of "half_up" rounding.
+            or "half_up" rounding.
 
         Returns
         -------

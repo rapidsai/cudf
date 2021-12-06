@@ -4680,17 +4680,18 @@ class DatetimeProperties(object):
         Returns
         -------
         Series
-            Series with all timestamps rounded up to the specified frequency.
+            Series with all timestamps rounded to the specified frequency.
             The index is preserved.
 
         Examples
         --------
-        >>> import cudf, pandas
-        >>> rng = pandas.date_range('1/1/2018 11:59:00', periods=3, freq='min')
-        >>> cudf.Series(rng).dt.round("H")
-        0   2018-01-01 12:00:00
-        1   2018-01-01 12:00:00
-        2   2018-01-01 12:00:00
+        >>> import cudf
+        >>> dt_sr = cudf.Series(["2001-01-01 00:04:45", "2001-01-01 00:04:58",
+        ... "2001-01-01 00:05:04"], dtype="datetime64[ns]")
+        >>> dt_sr.dt.round("T")
+        0   2001-01-01 00:05:00
+        1   2001-01-01 00:05:00
+        2   2001-01-01 00:05:00
         dtype: datetime64[ns]
         """
         out_column = self.series._column.round(freq)
