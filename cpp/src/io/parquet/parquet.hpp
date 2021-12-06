@@ -199,6 +199,7 @@ struct SchemaElement {
   // }
   bool is_stub() const { return repetition_type == REPEATED && num_children == 1; }
 
+  // https://github.com/apache/parquet-cpp/blob/master/src/parquet/schema.h
   // One-level LIST encoding: Only allows required lists with required cells:
   //   repeated value_type name
   bool is_one_level_list() const { return repetition_type == REPEATED and num_children == 0; }
