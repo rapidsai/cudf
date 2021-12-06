@@ -1357,6 +1357,6 @@ def test_series_transpose(data):
     pd_transposed = psr.transpose()
     cudf_property = csr.T
 
-    assert_eq(pd_transposed, cudf_transposed.to_pandas())
-    assert_eq(pd_transposed, cudf_property.to_pandas())
+    assert_eq(pd_transposed, cudf_transposed)
+    assert_eq(pd_transposed, cudf_property)
     assert_eq(cudf_transposed, csr)
