@@ -161,6 +161,8 @@ Reindexing / selection / label manipulation
 .. autosummary::
    :toctree: api/
 
+   Series.add_prefix
+   Series.add_suffix
    Series.drop
    Series.drop_duplicates
    Series.equals
