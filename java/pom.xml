@@ -297,9 +297,6 @@
                 <include>LICENSE</include>
               </includes>
             </resource>
-            <resource>
-                <directory>${project.build.directory}/native-deps/</directory>
-            </resource>
         </resources>
         <pluginManagement>
             <plugins>
@@ -499,14 +496,14 @@
                 <executions>
                     <execution>
                         <id>copy-native-libs</id>
-                        <phase>validate</phase>
+                        <phase>generate-resources</phase>
                         <goals>
                             <goal>copy-resources</goal>
                         </goals>
                         <configuration>
                             <overwrite>true</overwrite>
                             <skip>${skipNativeCopy}</skip>
-                            <outputDirectory>${project.build.directory}/native-deps/${os.arch}/${os.name}</outputDirectory>
+                            <outputDirectory>${project.build.outputDirectory}/${os.arch}/${os.name}</outputDirectory>
                             <resources>
                                 <resource>
                                     <directory>${native.build.path}</directory>

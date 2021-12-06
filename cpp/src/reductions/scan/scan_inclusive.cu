@@ -50,11 +50,10 @@ rmm::device_buffer mask_scan(column_view const& input_view,
   auto valid_itr = detail::make_validity_iterator(*d_input);
 
   auto first_null_position = [&] {
-    size_type const first_null = thrust::find_if_not(rmm::exec_policy(stream),
-                                                     valid_itr,
-                                                     valid_itr + input_view.size(),
-                                                     thrust::identity<bool>{}) -
-                                 valid_itr;
+    size_type const first_null =
+      thrust::find_if_not(
+        rmm::exec_policy(stream), valid_itr, valid_itr + input_view.size(), thrust::identity{}) -
+      valid_itr;
     size_type const exclusive_offset = (inclusive == scan_type::EXCLUSIVE) ? 1 : 0;
     return std::min(input_view.size(), first_null + exclusive_offset);
   }();
@@ -183,15 +182,12 @@ struct scan_functor<Op, cudf::struct_view> {
       is_min_op ? cudf::detail::make_device_uvector_async(flattened_input.null_orders(), stream)
                 : rmm::device_uvector<cudf::null_order>(0, stream);
 
-    if (input.has_nulls()) {
-      auto const binop = cudf::reduction::detail::row_arg_minmax_fn<true>(
-        input.size(), *d_flattened_input_ptr, flattened_null_precedences.data(), is_min_op);
-      do_scan(binop);
-    } else {
-      auto const binop = cudf::reduction::detail::row_arg_minmax_fn<false>(
-        input.size(), *d_flattened_input_ptr, flattened_null_precedences.data(), is_min_op);
-      do_scan(binop);
-    }
+    auto const binop = cudf::reduction::detail::row_arg_minmax_fn(input.size(),
+                                                                  *d_flattened_input_ptr,
+                                                                  input.has_nulls(),
+                                                                  flattened_null_precedences.data(),
+                                                                  is_min_op);
+    do_scan(binop);
 
     // Gather the children columns of the input column. Must use `get_sliced_child` to properly
     // handle input in case it is a sliced view.
