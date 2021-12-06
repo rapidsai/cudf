@@ -19,6 +19,7 @@
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/null_mask.hpp>
+#include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/filling.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.hpp>
@@ -35,21 +36,21 @@
 namespace cudf::lists {
 namespace detail {
 namespace {
-template <typename T>
+template <typename T, typename StepsIterator>
 struct tabulator {
   column_device_view const starts;
-  column_device_view const steps;
+  StepsIterator const steps_iter;
   offset_type const* const offsets;
   size_type const* const labels;
 
-  template <typename T_ = T>
-  static std::enable_if_t<!cudf::is_duration<T_>(), T> __device__ multiply(T x, size_type times)
+  template <typename U>
+  static std::enable_if_t<!cudf::is_duration<U>(), T> __device__ multiply(U x, size_type times)
   {
     return x * static_cast<T>(times);
   }
 
-  template <typename T_ = T>
-  static std::enable_if_t<cudf::is_duration<T_>(), T> __device__ multiply(T x, size_type times)
+  template <typename U>
+  static std::enable_if_t<cudf::is_duration<U>(), T> __device__ multiply(U x, size_type times)
   {
     return T{x.count() * times};
   }
@@ -58,21 +59,7 @@ struct tabulator {
   {
     auto const list_idx    = labels[idx] - 1;  // labels are 1-based indices
     auto const list_offset = offsets[list_idx];
-    return starts.element<T>(list_idx) + multiply(steps.element<T>(list_idx), idx - list_offset);
-  }
-};
-
-template <typename T>
-struct tabulator_fixed_step {
-  column_device_view const starts;
-  offset_type const* const offsets;
-  size_type const* const labels;
-
-  auto __device__ operator()(size_type idx) const
-  {
-    auto const list_idx    = labels[idx] - 1;  // labels are 1-based indices
-    auto const list_offset = offsets[list_idx];
-    return starts.element<T>(list_idx) + static_cast<T>(idx - list_offset);
+    return starts.element<T>(list_idx) + multiply(steps_iter[list_idx], idx - list_offset);
   }
 };
 
@@ -121,14 +108,21 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
 
     auto const result_begin  = result->mutable_view().template begin<T>();
     auto const starts_dv_ptr = column_device_view::create(starts, stream);
-    auto const steps_dv_ptr  = steps ? column_device_view::create(steps.value(), stream) : nullptr;
+
+    auto const gen_sequences = [&](auto const& steps_iter) {
+      auto const op = tabulator<T, std::decay_t<decltype(steps_iter)>>{
+        *starts_dv_ptr, steps_iter, offsets, labels};
+      thrust::tabulate(rmm::exec_policy(stream), result_begin, result_begin + n_elements, op);
+    };
 
     if (steps) {
-      auto const op = tabulator<T>{*starts_dv_ptr, *steps_dv_ptr, offsets, labels};
-      thrust::tabulate(rmm::exec_policy(stream), result_begin, result_begin + n_elements, op);
+      auto const steps_dv_ptr = column_device_view::create(steps.value(), stream);
+      auto const steps_iter   = thrust::make_transform_iterator(
+        thrust::make_counting_iterator<size_type>(0),
+        [steps_dv = *steps_dv_ptr] __device__(auto idx) { return steps_dv.element<T>(idx); });
+      gen_sequences(steps_iter);
     } else {
-      auto const op = tabulator_fixed_step<T>{*starts_dv_ptr, offsets, labels};
-      thrust::tabulate(rmm::exec_policy(stream), result_begin, result_begin + n_elements, op);
+      gen_sequences(thrust::make_constant_iterator<size_type>(1));
     }
 
     return result;
@@ -221,6 +215,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
                                   column_view const& sizes,
                                   rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::sequences(starts, std::nullopt, sizes, rmm::cuda_stream_default, mr);
 }
 
@@ -229,6 +224,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
                                   column_view const& sizes,
                                   rmm::mr::device_memory_resource* mr)
 {
+  CUDF_FUNC_RANGE();
   return detail::sequences(starts, steps, sizes, rmm::cuda_stream_default, mr);
 }
 
