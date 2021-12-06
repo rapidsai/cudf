@@ -40,7 +40,7 @@ from cudf.api.types import (
     is_string_dtype,
     is_struct_dtype,
 )
-from cudf.core import column, reshape
+from cudf.core import column, df_protocol, reshape
 from cudf.core.abc import Serializable
 from cudf.core.column import (
     as_column,
@@ -598,9 +598,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             if is_list_like(data):
                 if len(data) > 0 and is_scalar(data[0]):
-                    new_df = self._from_columns(
-                        [data], index=index, columns=columns
-                    )
+                    if columns is not None:
+                        data = dict(zip(columns, [data]))
+                    else:
+                        data = dict(enumerate([data]))
+                    new_df = DataFrame(data=data, index=index)
+
                     self._data = new_df._data
                     self.index = new_df._index
                     self.columns = new_df.columns
@@ -3760,11 +3763,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 FutureWarning,
             )
 
-        lhs = self
-        rhs = other
-
-        df = lhs.merge(
-            rhs,
+        df = self.merge(
+            other,
             left_index=True,
             right_index=True,
             how=how,
@@ -3772,7 +3772,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             sort=sort,
         )
         df.index.name = (
-            None if lhs.index.name != rhs.index.name else lhs.index.name
+            None if self.index.name != other.index.name else self.index.name
         )
         return df
 
@@ -5093,18 +5093,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             df._index = as_index(index)
         return df
 
-    @classmethod
-    def _from_columns(cls, cols, index=None, columns=None):
-        """
-        Construct a DataFrame from a list of Columns
-        """
-        if columns is not None:
-            data = dict(zip(columns, cols))
-        else:
-            data = dict(enumerate(cols))
-
-        return cls(data=data, index=index,)
-
     def interpolate(
         self,
         method="linear",
@@ -6341,6 +6329,17 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return super()._explode(column, ignore_index)
 
+    def __dataframe__(
+        self, nan_as_null: bool = False, allow_copy: bool = True
+    ):
+        return df_protocol.__dataframe__(
+            self, nan_as_null=nan_as_null, allow_copy=allow_copy
+        )
+
+
+def from_dataframe(df, allow_copy=False):
+    return df_protocol.from_dataframe(df, allow_copy=allow_copy)
+
 
 def make_binop_func(op, postprocess=None):
     # This function is used to wrap binary operations in Frame with an
@@ -6368,7 +6367,7 @@ def make_binop_func(op, postprocess=None):
     # __wrapped__ attributes to `wrapped_func`. Cpython looks up the signature
     # string of a function by recursively delving into __wrapped__ until
     # it hits the first function that has __signature__ attribute set. To make
-    # the signature stirng of `wrapper` matches with its actual parameter list,
+    # the signature string of `wrapper` matches with its actual parameter list,
     # we directly set the __signature__ attribute of `wrapper` below.
 
     new_sig = inspect.signature(

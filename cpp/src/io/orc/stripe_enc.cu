@@ -660,7 +660,7 @@ static __device__ void encode_null_mask(orcenc_state_s* s,
     auto const mask_byte = get_mask_byte(column.null_mask(), column.offset());
     auto dst_offset      = offset + s->nnz;
     auto vbuf_bit_idx    = [](int row) {
-      // valid_buf is a circular buffer with validitiy of 8 rows in each element
+      // valid_buf is a circular buffer with validity of 8 rows in each element
       return row % (encode_block_size * 8);
     };
     if (dst_offset % 8 == 0 and pd_set_cnt == 8) {
@@ -696,7 +696,7 @@ static __device__ void encode_null_mask(orcenc_state_s* s,
         ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, s->present_out / 8, nbytes_out, flush, t) * 8;
 
       if (!t) {
-        // Number of rows enocoded so far
+        // Number of rows encoded so far
         s->present_out += nrows_encoded;
         s->numvals -= min(s->numvals, nrows_encoded);
       }

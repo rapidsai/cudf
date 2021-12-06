@@ -53,7 +53,7 @@ std::unique_ptr<cudf::column> make_index_child(column_view const& indices,
   // `segmented_gather()` on a null index should produce a null row.
   if (not indices.nullable()) { return std::make_unique<column>(indices, stream); }
 
-  auto const d_indices = column_device_view::create(indices);
+  auto const d_indices = column_device_view::create(indices, stream);
   // Replace null indices with MAX_SIZE_TYPE, so that gather() returns null for them.
   auto const null_replaced_iter_begin =
     cudf::detail::make_null_replacement_iterator(*d_indices, std::numeric_limits<size_type>::max());

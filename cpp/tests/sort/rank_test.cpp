@@ -410,5 +410,19 @@ TYPED_TEST(Rank, min_desc_bottom_pct)
   this->run_all_tests(rank_method::MIN, desc_bottom, col1_rank, col2_rank, col3_rank, true);
 }
 
+struct RankLarge : public BaseFixture {
+};
+
+TEST_F(RankLarge, average_large)
+{
+  // testcase of https://github.com/rapidsai/cudf/issues/9703
+  auto iter = thrust::counting_iterator<int64_t>(0);
+  fixed_width_column_wrapper<int64_t> col1(iter, iter + 10558);
+  auto result =
+    cudf::rank(col1, rank_method::AVERAGE, {}, null_policy::EXCLUDE, null_order::AFTER, false);
+  fixed_width_column_wrapper<double, int> expected(iter + 1, iter + 10559);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(result->view(), expected);
+}
+
 }  // namespace test
 }  // namespace cudf

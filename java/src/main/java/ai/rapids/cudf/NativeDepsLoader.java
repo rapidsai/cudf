@@ -81,9 +81,7 @@ public class NativeDepsLoader {
 
   /**
    * Allows other libraries to reuse the same native deps loading logic. Libraries will be searched
-   * for under ${os.arch}/${os.name}/ in the class path using the class loader for this class. It
-   * will also look for the libraries under ./target/native-deps/${os.arch}/${os.name} to help
-   * facilitate testing while building.
+   * for under ${os.arch}/${os.name}/ in the class path using the class loader for this class.
    * <br/>
    * Because this just loads the libraries and loading the libraries themselves needs to be a
    * singleton operation it is recommended that any library using this provide their own wrapper
@@ -203,12 +201,7 @@ public class NativeDepsLoader {
     File loc;
     URL resource = loader.getResource(path);
     if (resource == null) {
-      // It looks like we are not running from the jar, or there are issues with the jar
-      File f = new File("./target/native-deps/" + path);
-      if (!f.exists()) {
-        throw new FileNotFoundException("Could not locate native dependency " + path);
-      }
-      resource = f.toURI().toURL();
+      throw new FileNotFoundException("Could not locate native dependency " + path);
     }
     try (InputStream in = resource.openStream()) {
       loc = File.createTempFile(baseName, ".so");

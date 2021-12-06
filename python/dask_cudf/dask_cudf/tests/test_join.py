@@ -245,8 +245,6 @@ def test_merge_should_fail():
         left.merge(right, how="left", on=["b"])
     with pytest.raises(KeyError):
         left.merge(right, how="left", on=["c"])
-    with pytest.raises(KeyError):
-        left.merge(right, how="left", on=["a"])
 
     # Same column names
     df2["b"] = np.random.randint(0, 12, 12)
@@ -254,8 +252,6 @@ def test_merge_should_fail():
 
     with pytest.raises(KeyError):
         left.merge(right, how="left", on="NonCol")
-    with pytest.raises(KeyError):
-        left.merge(right, how="left", on="a")
 
 
 @pytest.mark.parametrize("how", ["inner", "left"])

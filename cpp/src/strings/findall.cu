@@ -153,11 +153,8 @@ std::unique_ptr<table> findall_re(
 
   std::vector<std::unique_ptr<column>> results;
 
-  size_type const columns = thrust::reduce(rmm::exec_policy(stream),
-                                           find_counts.begin(),
-                                           find_counts.end(),
-                                           0,
-                                           thrust::maximum<size_type>{});
+  size_type const columns = thrust::reduce(
+    rmm::exec_policy(stream), find_counts.begin(), find_counts.end(), 0, thrust::maximum{});
   // boundary case: if no columns, return all nulls column (issue #119)
   if (columns == 0)
     results.emplace_back(std::make_unique<column>(
