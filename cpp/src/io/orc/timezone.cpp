@@ -15,6 +15,8 @@
  */
 #include "timezone.cuh"
 
+#include <cudf/detail/utilities/vector_factories.hpp>
+
 #include <algorithm>
 #include <fstream>
 
@@ -459,19 +461,9 @@ timezone_table build_timezone_transition_table(std::string const& timezone_name,
                         .count();
   }
 
-  rmm::device_uvector<int64_t> d_ttimes{ttimes.size(), stream};
-  CUDA_TRY(cudaMemcpyAsync(d_ttimes.data(),
-                           ttimes.data(),
-                           ttimes.size() * sizeof(int64_t),
-                           cudaMemcpyDefault,
-                           stream.value()));
-  rmm::device_uvector<int32_t> d_offsets{offsets.size(), stream};
-  CUDA_TRY(cudaMemcpyAsync(d_offsets.data(),
-                           offsets.data(),
-                           offsets.size() * sizeof(int32_t),
-                           cudaMemcpyDefault,
-                           stream.value()));
-  auto const gmt_offset = get_gmt_offset(ttimes, offsets, orc_utc_offset);
+  rmm::device_uvector<int64_t> d_ttimes  = cudf::detail::make_device_uvector_async(ttimes, stream);
+  rmm::device_uvector<int32_t> d_offsets = cudf::detail::make_device_uvector_async(offsets, stream);
+  auto const gmt_offset                  = get_gmt_offset(ttimes, offsets, orc_utc_offset);
   stream.synchronize();
 
   return {gmt_offset, std::move(d_ttimes), std::move(d_offsets)};
