@@ -206,7 +206,6 @@ Reshaping, sorting
    Series.scatter_by_map
    Series.searchsorted
    Series.repeat
-   Series.transpose
 
 Combining / comparing / joining / merging / encoding
 ----------------------------------------------------
