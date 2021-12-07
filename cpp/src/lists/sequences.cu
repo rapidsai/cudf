@@ -119,8 +119,6 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
   }
 };
 
-}  // anonymous namespace
-
 std::unique_ptr<column> sequences(column_view const& starts,
                                   std::optional<column_view> const& steps,
                                   column_view const& sizes,
@@ -183,6 +181,25 @@ std::unique_ptr<column> sequences(column_view const& starts,
                            mr);
 }
 
+}  // anonymous namespace
+
+std::unique_ptr<column> sequences(column_view const& starts,
+                                  column_view const& sizes,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
+{
+  return sequences(starts, std::nullopt, sizes, stream, mr);
+}
+
+std::unique_ptr<column> sequences(column_view const& starts,
+                                  column_view const& steps,
+                                  column_view const& sizes,
+                                  rmm::cuda_stream_view stream,
+                                  rmm::mr::device_memory_resource* mr)
+{
+  return sequences(starts, std::optional<column_view>{steps}, sizes, stream, mr);
+}
+
 }  // namespace detail
 
 std::unique_ptr<column> sequences(column_view const& starts,
@@ -190,7 +207,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
                                   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::sequences(starts, std::nullopt, sizes, rmm::cuda_stream_default, mr);
+  return detail::sequences(starts, sizes, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> sequences(column_view const& starts,
