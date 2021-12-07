@@ -1454,35 +1454,39 @@ TEST_F(OrcWriterTest, DecimalOptionsNested)
   auto const num_rows = 100;
 
   auto dec_vals  = random_values<int32_t>(num_rows);
-  auto keys_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+  auto dec1_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
     return numeric::decimal64{dec_vals[i], numeric::scale_type{2}};
   });
-  auto vals_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
+  auto dec2_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
     return numeric::decimal128{dec_vals[i], numeric::scale_type{2}};
   });
   auto validity  = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
-  column_wrapper<numeric::decimal64> keys_col{keys_data, keys_data + num_rows, validity};
-  column_wrapper<numeric::decimal128> vals_col{vals_data, vals_data + num_rows, validity};
+  column_wrapper<numeric::decimal64> dec1_col{dec1_data, dec1_data + num_rows, validity};
+  column_wrapper<numeric::decimal128> dec2_col{dec2_data, dec2_data + num_rows, validity};
+  auto child_struct_col = cudf::test::structs_column_wrapper{dec1_col, dec2_col};
 
-  auto struct_col = cudf::test::structs_column_wrapper({keys_col, vals_col}).release();
+  auto int_vals                   = random_values<int32_t>(num_rows);
+  column_wrapper<int32_t> int_col = {int_vals.begin(), int_vals.end(), validity};
+  auto map_struct_col = cudf::test::structs_column_wrapper({child_struct_col, int_col}).release();
 
   std::vector<int> row_offsets(num_rows + 1);
   std::iota(row_offsets.begin(), row_offsets.end(), 0);
   cudf::test::fixed_width_column_wrapper<int> offsets(row_offsets.begin(), row_offsets.end());
 
-  auto list_col =
+  auto map_list_col =
     cudf::make_lists_column(num_rows,
                             offsets.release(),
-                            std::move(struct_col),
+                            std::move(map_struct_col),
                             cudf::UNKNOWN_NULL_COUNT,
                             cudf::test::detail::make_null_mask(validity, validity + num_rows));
 
-  table_view expected({*list_col});
+  table_view expected({*map_list_col});
 
   cudf_io::table_input_metadata expected_metadata(expected);
-  expected_metadata.column_metadata[0].set_name("lists");
-  expected_metadata.column_metadata[0].child(1).child(0).set_name("dec64");
-  expected_metadata.column_metadata[0].child(1).child(1).set_name("dec128");
+  expected_metadata.column_metadata[0].set_name("maps");
+  expected_metadata.column_metadata[0].set_list_column_as_map();
+  expected_metadata.column_metadata[0].child(1).child(0).child(0).set_name("dec64");
+  expected_metadata.column_metadata[0].child(1).child(0).child(1).set_name("dec128");
 
   auto filepath = temp_env->get_temp_filepath("OrcMultiColumn.orc");
   cudf_io::orc_writer_options out_opts =
@@ -1493,7 +1497,8 @@ TEST_F(OrcWriterTest, DecimalOptionsNested)
   cudf_io::orc_reader_options in_opts =
     cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
       .use_index(false)
-      .decimal128_columns({"lists.1.dec128"});
+      // One less level of nesting because children of map columns are the child struct's children
+      .decimal128_columns({"maps.0.dec128"});
   auto result = cudf_io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
