@@ -280,6 +280,8 @@ Time-specific operations
    :toctree: api/
 
    DatetimeIndex.round
+   DatetimeIndex.ceil
+   DatetimeIndex.floor
 
 Conversion
 ~~~~~~~~~~

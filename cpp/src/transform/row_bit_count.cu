@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/structs/structs_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
@@ -205,7 +206,7 @@ struct flatten_functor {
                   thrust::optional<int> parent_index)
   {
     // track branch depth as we reach this list and after we pass it
-    size_type const branch_depth_start = cur_branch_depth;
+    auto const branch_depth_start = cur_branch_depth;
     auto const is_list_inside_struct =
       parent_index && out[parent_index.value()].type().id() == type_id::STRUCT;
     if (is_list_inside_struct) {
@@ -496,12 +497,7 @@ std::unique_ptr<column> row_bit_count(table_view const& t,
   auto d_cols = contiguous_copy_column_device_views<column_device_view>(cols, stream);
 
   // move stack info to the gpu
-  rmm::device_uvector<column_info> d_info(info.size(), stream);
-  CUDA_TRY(cudaMemcpyAsync(d_info.data(),
-                           info.data(),
-                           sizeof(column_info) * info.size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  rmm::device_uvector<column_info> d_info = cudf::detail::make_device_uvector_async(info, stream);
 
   // each thread needs to maintain a stack of row spans of size max_branch_depth. we will use
   // shared memory to do this rather than allocating a potentially gigantic temporary buffer

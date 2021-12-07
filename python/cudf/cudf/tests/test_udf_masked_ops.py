@@ -593,3 +593,22 @@ def test_masked_udf_scalar_args_binops_multiple(data, op):
         return y
 
     run_masked_udf_test(func, data, args=(1, 2), check_dtype=False)
+
+
+def test_masked_udf_caching():
+    # Make sure similar functions that differ
+    # by simple things like constants actually
+    # recompile
+
+    data = cudf.Series([1, 2, 3])
+    expect = data ** 2
+    got = data.applymap(lambda x: x ** 2)
+
+    assert_eq(expect, got, check_dtype=False)
+
+    # update the constant value being used and make sure
+    # it does not result in a cache hit
+
+    expect = data ** 3
+    got = data.applymap(lambda x: x ** 3)
+    assert_eq(expect, got, check_dtype=False)

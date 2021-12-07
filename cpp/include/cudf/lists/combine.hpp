@@ -26,7 +26,7 @@ namespace lists {
  * @file
  */
 
-/*
+/**
  * @brief Flag to specify whether a null list element will be ignored from concatenation, or the
  * entire concatenation result involving null list elements will be a null element.
  */

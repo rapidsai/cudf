@@ -19,26 +19,25 @@
 #include <cudf/table/row_operators.cuh>
 
 namespace cudf {
-namespace groupby {
+namespace reduction {
 namespace detail {
 
 /**
  * @brief Binary operator ArgMin/ArgMax with index values into the input table.
- *
- * @tparam T Type of the underlying data. This is the fallback for the cases when T does not support
- * '<' operator.
  */
-template <bool has_nulls>
 struct row_arg_minmax_fn {
   size_type const num_rows;
-  row_lexicographic_comparator<has_nulls> const comp;
+  row_lexicographic_comparator<nullate::DYNAMIC> const comp;
   bool const arg_min;
 
-  row_arg_minmax_fn(size_type const num_rows_,
-                    table_device_view const& table_,
-                    null_order const* null_precedence_,
-                    bool const arg_min_)
-    : num_rows(num_rows_), comp(table_, table_, nullptr, null_precedence_), arg_min(arg_min_)
+  row_arg_minmax_fn(size_type const num_rows,
+                    table_device_view const& table,
+                    bool has_nulls,
+                    null_order const* null_precedence,
+                    bool const arg_min)
+    : num_rows(num_rows),
+      comp(nullate::DYNAMIC{has_nulls}, table, table, nullptr, null_precedence),
+      arg_min(arg_min)
   {
   }
 
@@ -62,5 +61,5 @@ struct row_arg_minmax_fn {
 };
 
 }  // namespace detail
-}  // namespace groupby
+}  // namespace reduction
 }  // namespace cudf

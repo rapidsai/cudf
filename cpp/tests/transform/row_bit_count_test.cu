@@ -164,7 +164,6 @@ TYPED_TEST(RowBitCountTyped, ListsWithNulls)
     ((4 + 0) * CHAR_BIT) + (type_size * 0),
     ((4 + 4) * CHAR_BIT) + (type_size * 1) + 2,
     ((4 + 8) * CHAR_BIT) + (type_size * 3) + 5};
-
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, *result);
 }
 
@@ -229,7 +228,7 @@ TEST_F(RowBitCount, StructsWithLists_RowsExceedingASingleBlock)
   // Tests that `row_bit_count()` can handle struct<list<int32_t>> with more
   // than max_block_size (256) rows.
   // With a large number of rows, computation spills to multiple thread-blocks,
-  // thus exercising the branch-stack comptutation.
+  // thus exercising the branch-stack computation.
   // The contents of the input column aren't as pertinent to this test as the
   // column size. For what it's worth, it looks as follows:
   //   [ struct({0,1}), struct({2,3}), struct({4,5}), ... ]
@@ -240,10 +239,8 @@ TEST_F(RowBitCount, StructsWithLists_RowsExceedingASingleBlock)
   // List child column = {0, 1, 2, 3, 4, ..., 2*num_rows};
   auto ints      = make_numeric_column(data_type{type_id::INT32}, num_rows * 2);
   auto ints_view = ints->mutable_view();
-  thrust::tabulate(thrust::device,
-                   ints_view.begin<int32_t>(),
-                   ints_view.end<int32_t>(),
-                   thrust::identity<int32_t>());
+  thrust::tabulate(
+    thrust::device, ints_view.begin<int32_t>(), ints_view.end<int32_t>(), thrust::identity{});
 
   // List offsets = {0, 2, 4, 6, 8, ..., num_rows*2};
   auto list_offsets      = make_numeric_column(data_type{type_id::INT32}, num_rows + 1);
@@ -363,7 +360,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> build_nested_and_exp
   // Inner list column
   // clang-format off
   cudf::test::lists_column_wrapper<int> list{
-    {1, 2, 3, 4, 5},     
+    {1, 2, 3, 4, 5},
     {6, 7, 8},
     {33, 34, 35, 36, 37, 38, 39},
     {-1, -2},
@@ -409,7 +406,7 @@ std::unique_ptr<column> build_nested_column(std::vector<bool> const& struct_vali
 
   // Inner list column
   // clang-format off
-  cudf::test::lists_column_wrapper<int> list{    
+  cudf::test::lists_column_wrapper<int> list{
      {{1, 2, 3, 4, 5}, {2, 3}},
      {{6, 7, 8}, {8, 9}},
      {{1, 2}, {3, 4, 5}, {33, 34, 35, 36, 37, 38, 39}}};

@@ -342,6 +342,8 @@ struct leaf_schema_fn {
     } else if (std::is_same_v<T, numeric::decimal64>) {
       col_schema.type        = Type::INT64;
       col_schema.stats_dtype = statistics_dtype::dtype_decimal64;
+    } else if (std::is_same_v<T, numeric::decimal128>) {
+      CUDF_FAIL("decimal128 currently not supported for parquet writer");
     } else {
       CUDF_FAIL("Unsupported fixed point type for parquet writer");
     }
@@ -671,12 +673,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
   _nullability = std::vector<uint8_t>(r_nullability.crbegin(), r_nullability.crend());
   // TODO(cp): Explore doing this for all columns in a single go outside this ctor. Maybe using
   // hostdevice_vector. Currently this involves a cudaMemcpyAsync for each column.
-  _d_nullability = rmm::device_uvector<uint8_t>(_nullability.size(), stream);
-  CUDA_TRY(cudaMemcpyAsync(_d_nullability.data(),
-                           _nullability.data(),
-                           _nullability.size() * sizeof(uint8_t),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  _d_nullability = cudf::detail::make_device_uvector_async(_nullability, stream);
 
   _is_list = (_max_rep_level > 0);
 
@@ -1024,6 +1021,8 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
                    rmm::mr::device_memory_resource* mr)
   : _mr(mr),
     stream(stream),
+    max_row_group_size{options.get_row_group_size_bytes()},
+    max_row_group_rows{options.get_row_group_size_rows()},
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
@@ -1043,6 +1042,8 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
                    rmm::mr::device_memory_resource* mr)
   : _mr(mr),
     stream(stream),
+    max_row_group_size{options.get_row_group_size_bytes()},
+    max_row_group_rows{options.get_row_group_size_rows()},
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
@@ -1146,8 +1147,7 @@ void writer::impl::write(table_view const& table)
   // compression/decompression performance).
   using cudf::io::parquet::gpu::max_page_fragment_size;
 
-  uint32_t num_fragments =
-    (uint32_t)((num_rows + max_page_fragment_size - 1) / max_page_fragment_size);
+  size_type const num_fragments = (num_rows + max_page_fragment_size - 1) / max_page_fragment_size;
   cudf::detail::hostdevice_2dvector<gpu::PageFragment> fragments(
     num_columns, num_fragments, stream);
 
@@ -1160,21 +1160,20 @@ void writer::impl::write(table_view const& table)
     init_page_fragments(fragments, col_desc, num_rows, max_page_fragment_size);
   }
 
-  size_t global_rowgroup_base = md.row_groups.size();
+  auto const global_rowgroup_base = static_cast<size_type>(md.row_groups.size());
 
   // Decide row group boundaries based on uncompressed data size
-  size_t rowgroup_size   = 0;
-  uint32_t num_rowgroups = 0;
-  for (uint32_t f = 0, global_r = global_rowgroup_base, rowgroup_start = 0; f < num_fragments;
-       f++) {
-    size_t fragment_data_size = 0;
+  auto rowgroup_size = 0ul;
+  auto num_rowgroups = 0;
+  for (auto f = 0, global_r = global_rowgroup_base, rowgroup_start = 0; f < num_fragments; f++) {
+    auto fragment_data_size = 0ul;
     // Replace with STL algorithm to transform and sum
     for (auto i = 0; i < num_columns; i++) {
       fragment_data_size += fragments[i][f].fragment_data_size;
     }
     if (f > rowgroup_start &&
-        (rowgroup_size + fragment_data_size > max_rowgroup_size_ ||
-         (f + 1 - rowgroup_start) * max_page_fragment_size > max_rowgroup_rows_)) {
+        (rowgroup_size + fragment_data_size > max_row_group_size ||
+         (f + 1 - rowgroup_start) * max_page_fragment_size > max_row_group_rows)) {
       // update schema
       md.row_groups.resize(md.row_groups.size() + 1);
       md.row_groups[global_r++].num_rows = (f - rowgroup_start) * max_page_fragment_size;
@@ -1202,15 +1201,15 @@ void writer::impl::write(table_view const& table)
     }
   }
   // Initialize row groups and column chunks
-  uint32_t num_chunks = num_rowgroups * num_columns;
+  auto const num_chunks = num_rowgroups * num_columns;
   hostdevice_2dvector<gpu::EncColumnChunk> chunks(num_rowgroups, num_columns, stream);
-  for (uint32_t r = 0, global_r = global_rowgroup_base, f = 0, start_row = 0; r < num_rowgroups;
+  for (auto r = 0, global_r = global_rowgroup_base, f = 0, start_row = 0; r < num_rowgroups;
        r++, global_r++) {
-    uint32_t fragments_in_chunk = (uint32_t)(
-      (md.row_groups[global_r].num_rows + max_page_fragment_size - 1) / max_page_fragment_size);
+    size_type const fragments_in_chunk =
+      (md.row_groups[global_r].num_rows + max_page_fragment_size - 1) / max_page_fragment_size;
     md.row_groups[global_r].total_byte_size = 0;
     md.row_groups[global_r].columns.resize(num_columns);
-    for (int i = 0; i < num_columns; i++) {
+    for (auto i = 0; i < num_columns; i++) {
       gpu::EncColumnChunk* ck = &chunks[r][i];
 
       *ck             = {};
@@ -1242,8 +1241,8 @@ void writer::impl::write(table_view const& table)
   }
 
   auto dict_info_owner = build_chunk_dictionaries(chunks, col_desc, num_rows, stream);
-  for (uint32_t rg = 0, global_rg = global_rowgroup_base; rg < num_rowgroups; rg++, global_rg++) {
-    for (int col = 0; col < num_columns; col++) {
+  for (auto rg = 0, global_rg = global_rowgroup_base; rg < num_rowgroups; rg++, global_rg++) {
+    for (auto col = 0; col < num_columns; col++) {
       if (chunks.host_view()[rg][col].use_dictionary) {
         md.row_groups[global_rg].columns[col].meta_data.encodings.push_back(
           Encoding::PLAIN_DICTIONARY);
@@ -1272,16 +1271,16 @@ void writer::impl::write(table_view const& table)
   }
 
   // Initialize batches of rowgroups to encode (mainly to limit peak memory usage)
-  std::vector<uint32_t> batch_list;
-  uint32_t num_pages          = 0;
-  size_t max_bytes_in_batch   = 1024 * 1024 * 1024;  // 1GB - TBD: Tune this
-  size_t max_uncomp_bfr_size  = 0;
-  size_t max_comp_bfr_size    = 0;
-  size_t max_chunk_bfr_size   = 0;
-  uint32_t max_pages_in_batch = 0;
-  size_t bytes_in_batch       = 0;
-  size_t comp_bytes_in_batch  = 0;
-  for (uint32_t r = 0, groups_in_batch = 0, pages_in_batch = 0; r <= num_rowgroups; r++) {
+  std::vector<size_type> batch_list;
+  size_type num_pages          = 0;
+  size_t max_bytes_in_batch    = 1024 * 1024 * 1024;  // 1GB - TODO: Tune this
+  size_t max_uncomp_bfr_size   = 0;
+  size_t max_comp_bfr_size     = 0;
+  size_t max_chunk_bfr_size    = 0;
+  size_type max_pages_in_batch = 0;
+  size_t bytes_in_batch        = 0;
+  size_t comp_bytes_in_batch   = 0;
+  for (size_type r = 0, groups_in_batch = 0, pages_in_batch = 0; r <= num_rowgroups; r++) {
     size_t rowgroup_size      = 0;
     size_t comp_rowgroup_size = 0;
     if (r < num_rowgroups) {
@@ -1329,11 +1328,11 @@ void writer::impl::write(table_view const& table)
 
   // This contains stats for both the pages and the rowgroups. TODO: make them separate.
   rmm::device_uvector<statistics_chunk> page_stats(num_stats_bfr, stream);
-  for (uint32_t b = 0, r = 0; b < (uint32_t)batch_list.size(); b++) {
-    uint8_t* bfr   = static_cast<uint8_t*>(uncomp_bfr.data());
-    uint8_t* bfr_c = static_cast<uint8_t*>(comp_bfr.data());
-    for (uint32_t j = 0; j < batch_list[b]; j++, r++) {
-      for (int i = 0; i < num_columns; i++) {
+  for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
+    auto bfr   = static_cast<uint8_t*>(uncomp_bfr.data());
+    auto bfr_c = static_cast<uint8_t*>(comp_bfr.data());
+    for (auto j = 0; j < batch_list[b]; j++, r++) {
+      for (auto i = 0; i < num_columns; i++) {
         gpu::EncColumnChunk* ck = &chunks[r][i];
         ck->uncompressed_bfr    = bfr;
         ck->compressed_bfr      = bfr_c;
@@ -1358,14 +1357,15 @@ void writer::impl::write(table_view const& table)
   pinned_buffer<uint8_t> host_bfr{nullptr, cudaFreeHost};
 
   // Encode row groups in batches
-  for (uint32_t b = 0, r = 0, global_r = global_rowgroup_base; b < (uint32_t)batch_list.size();
+  for (auto b = 0, r = 0, global_r = global_rowgroup_base;
+       b < static_cast<size_type>(batch_list.size());
        b++) {
     // Count pages in this batch
-    uint32_t rnext               = r + batch_list[b];
-    uint32_t first_page_in_batch = chunks[r][0].first_page;
-    uint32_t first_page_in_next_batch =
+    auto const rnext               = r + batch_list[b];
+    auto const first_page_in_batch = chunks[r][0].first_page;
+    auto const first_page_in_next_batch =
       (rnext < num_rowgroups) ? chunks[rnext][0].first_page : num_pages;
-    uint32_t pages_in_batch = first_page_in_next_batch - first_page_in_batch;
+    auto const pages_in_batch = first_page_in_next_batch - first_page_in_batch;
     // device_span<gpu::EncPage> batch_pages{pages.data() + first_page_in_batch, }
     encode_pages(
       chunks,
@@ -1512,7 +1512,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::close(std::string const& column_ch
   return _impl->close(column_chunks_file_path);
 }
 
-std::unique_ptr<std::vector<uint8_t>> writer::merge_rowgroup_metadata(
+std::unique_ptr<std::vector<uint8_t>> writer::merge_row_group_metadata(
   const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list)
 {
   std::vector<uint8_t> output;
