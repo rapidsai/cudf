@@ -147,14 +147,14 @@ std::unique_ptr<column> segmented_shift(column_view const& segmented_values,
   if (segmented_values.is_empty()) { return empty_like(segmented_values); }
   if (offset == 0) { return std::make_unique<column>(segmented_values); };
 
-  return type_dispatcher<dispatch_storage_width>(segmented_values.type(),
-                                                 segmented_shift_functor_forwarder{},
-                                                 segmented_values,
-                                                 segment_offsets,
-                                                 offset,
-                                                 fill_value,
-                                                 stream,
-                                                 mr);
+  return type_dispatcher<dispatch_storage_width_type>(segmented_values.type(),
+                                                      segmented_shift_functor_forwarder{},
+                                                      segmented_values,
+                                                      segment_offsets,
+                                                      offset,
+                                                      fill_value,
+                                                      stream,
+                                                      mr);
 }
 
 }  // namespace detail

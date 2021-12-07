@@ -353,7 +353,7 @@ struct list_child_constructor {
     auto child_offsets = cudf::strings::detail::make_offsets_child_column(
       begin, begin + child_list_views.size(), stream, mr);
 
-    auto child_column = cudf::type_dispatcher<dispatch_storage_width>(
+    auto child_column = cudf::type_dispatcher<dispatch_storage_width_type>(
       source_lists_column_view.child().child(1).type(),
       list_child_constructor{},
       child_list_views,
@@ -448,7 +448,7 @@ struct list_child_constructor {
                    iter_target_member_as_list,
                    std::back_inserter(child_columns),
                    [&](auto source_struct_member_list_view, auto target_struct_member_list_view) {
-                     return cudf::type_dispatcher<dispatch_storage_width>(
+                     return cudf::type_dispatcher<dispatch_storage_width_type>(
                        source_struct_member_list_view.child().type(),
                        list_child_constructor{},
                        list_vector,
@@ -483,14 +483,14 @@ std::unique_ptr<column> build_lists_child_column_recursive(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  return cudf::type_dispatcher<dispatch_storage_width>(child_column_type,
-                                                       list_child_constructor{},
-                                                       list_vector,
-                                                       list_offsets,
-                                                       source_lists_column_view,
-                                                       target_lists_column_view,
-                                                       stream,
-                                                       mr);
+  return cudf::type_dispatcher<dispatch_storage_width_type>(child_column_type,
+                                                            list_child_constructor{},
+                                                            list_vector,
+                                                            list_offsets,
+                                                            source_lists_column_view,
+                                                            target_lists_column_view,
+                                                            stream,
+                                                            mr);
 }
 
 }  // namespace detail

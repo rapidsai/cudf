@@ -311,16 +311,16 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
     return (!has_nulls || bool_mask_device.is_valid_nocheck(i)) and
            bool_mask_device.element<bool>(i);
   };
-  return cudf::type_dispatcher<dispatch_storage_width>(lhs.type(),
-                                                       copy_if_else_functor{},
-                                                       lhs,
-                                                       rhs,
-                                                       boolean_mask.size(),
-                                                       left_nullable,
-                                                       right_nullable,
-                                                       filter,
-                                                       stream,
-                                                       mr);
+  return cudf::type_dispatcher<dispatch_storage_width_type>(lhs.type(),
+                                                            copy_if_else_functor{},
+                                                            lhs,
+                                                            rhs,
+                                                            boolean_mask.size(),
+                                                            left_nullable,
+                                                            right_nullable,
+                                                            filter,
+                                                            stream,
+                                                            mr);
 }
 
 };  // namespace

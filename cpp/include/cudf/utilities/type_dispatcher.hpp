@@ -127,7 +127,7 @@ using device_storage_type_t =
  */
 // clang-format off
 template <typename T>
-using device_storage_width_t =
+using device_storage_width_type =
   std::conditional_t<std::is_same_v<numeric::decimal32, T> or
                      std::is_same_v<timestamp_D, T> or
                      std::is_same_v<duration_D, T> or
@@ -288,12 +288,12 @@ struct dispatch_storage_type {
  * @brief Use this specialization on `type_dispatcher` whenever you only need to operate on the
  * underlying stored type by width.
  *
- * For example, `cudf::gather` only needs `type_dispatcher<dispatch_storage_width>(...)` since
+ * For example, `cudf::gather` only needs `type_dispatcher<dispatch_storage_width_type>(...)` since
  * it only needs to copy the elements and does not need process the values themselves.
  */
 template <cudf::type_id Id>
-struct dispatch_storage_width {
-  using type = device_storage_width_t<typename id_to_type_impl<Id>::type>;
+struct dispatch_storage_width_type {
+  using type = device_storage_width_type<typename id_to_type_impl<Id>::type>;
 };
 
 template <typename T>

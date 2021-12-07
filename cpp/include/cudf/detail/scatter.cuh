@@ -284,14 +284,14 @@ struct column_scatterer_impl<struct_view> {
                    output_struct_members.begin(),
                    [&scatter_map_begin, &scatter_map_end, stream, mr](auto const& source_col,
                                                                       auto const& target_col) {
-                     return type_dispatcher<dispatch_storage_width>(source_col.type(),
-                                                                    column_scatterer{},
-                                                                    source_col,
-                                                                    scatter_map_begin,
-                                                                    scatter_map_end,
-                                                                    target_col,
-                                                                    stream,
-                                                                    mr);
+                     return type_dispatcher<dispatch_storage_width_type>(source_col.type(),
+                                                                         column_scatterer{},
+                                                                         source_col,
+                                                                         scatter_map_begin,
+                                                                         scatter_map_end,
+                                                                         target_col,
+                                                                         stream,
+                                                                         mr);
                    });
 
     // We still need to call `gather_bitmask` even when the source's children are not nullable,
@@ -414,14 +414,14 @@ std::unique_ptr<table> scatter(
                  target.begin(),
                  result.begin(),
                  [=](auto const& source_col, auto const& target_col) {
-                   return type_dispatcher<dispatch_storage_width>(source_col.type(),
-                                                                  column_scatterer{},
-                                                                  source_col,
-                                                                  updated_scatter_map_begin,
-                                                                  updated_scatter_map_end,
-                                                                  target_col,
-                                                                  stream,
-                                                                  mr);
+                   return type_dispatcher<dispatch_storage_width_type>(source_col.type(),
+                                                                       column_scatterer{},
+                                                                       source_col,
+                                                                       updated_scatter_map_begin,
+                                                                       updated_scatter_map_end,
+                                                                       target_col,
+                                                                       stream,
+                                                                       mr);
                  });
 
   // We still need to call `gather_bitmask` even when the source columns are not nullable,

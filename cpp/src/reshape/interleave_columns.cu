@@ -102,12 +102,12 @@ struct interleave_columns_impl<T, typename std::enable_if_t<std::is_same_v<T, cu
       auto const children_nullable = std::any_of(
         children.cbegin(), children.cend(), [](auto const& col) { return col.nullable(); });
       output_struct_members.emplace_back(
-        type_dispatcher<dispatch_storage_width>(child_type,
-                                                interleave_columns_functor{},
-                                                table_view{std::move(children)},
-                                                children_nullable,
-                                                stream,
-                                                mr));
+        type_dispatcher<dispatch_storage_width_type>(child_type,
+                                                     interleave_columns_functor{},
+                                                     table_view{std::move(children)},
+                                                     children_nullable,
+                                                     stream,
+                                                     mr));
     }
 
     auto const create_mask_fn = [&] {
@@ -281,7 +281,7 @@ std::unique_ptr<column> interleave_columns(table_view const& input,
   auto const output_needs_mask = std::any_of(
     std::cbegin(input), std::cend(input), [](auto const& col) { return col.nullable(); });
 
-  return type_dispatcher<dispatch_storage_width>(
+  return type_dispatcher<dispatch_storage_width_type>(
     dtype, detail::interleave_columns_functor{}, input, output_needs_mask, stream, mr);
 }
 
