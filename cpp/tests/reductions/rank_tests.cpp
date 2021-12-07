@@ -62,9 +62,9 @@ TYPED_TEST(TypedRankScanTest, Rank)
   auto const expected_rank_vals =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{1, 1, 1, 4, 4, 6, 7, 7, 7, 7, 11, 12};
   this->test_ungrouped_rank_scan(
-    *col, expected_dense_vals, cudf::make_dense_rank_aggregation(), null_policy::INCLUDE);
+    *col, expected_dense_vals, cudf::make_rank_aggregation(cudf::rank_method::DENSE), null_policy::INCLUDE);
   this->test_ungrouped_rank_scan(
-    *col, expected_rank_vals, cudf::make_rank_aggregation(), null_policy::INCLUDE);
+    *col, expected_rank_vals, cudf::make_rank_aggregation(cudf::rank_method::MIN), null_policy::INCLUDE);
 }
 
 TYPED_TEST(TypedRankScanTest, RankWithNulls)
@@ -82,9 +82,9 @@ TYPED_TEST(TypedRankScanTest, RankWithNulls)
   auto const expected_rank_vals =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{1, 1, 1, 4, 5, 6, 7, 7, 9, 9, 11, 12};
   this->test_ungrouped_rank_scan(
-    *col, expected_dense_vals, cudf::make_dense_rank_aggregation(), null_policy::INCLUDE);
+    *col, expected_dense_vals, cudf::make_rank_aggregation(cudf::rank_method::DENSE), null_policy::INCLUDE);
   this->test_ungrouped_rank_scan(
-    *col, expected_rank_vals, cudf::make_rank_aggregation(), null_policy::INCLUDE);
+    *col, expected_rank_vals, cudf::make_rank_aggregation(cudf::rank_method::MIN), null_policy::INCLUDE);
 }
 
 TYPED_TEST(TypedRankScanTest, MixedStructs)
@@ -109,9 +109,9 @@ TYPED_TEST(TypedRankScanTest, MixedStructs)
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{1, 1, 3, 3, 5, 6, 7, 7, 9, 10, 10, 12};
 
   this->test_ungrouped_rank_scan(
-    *struct_col, expected_dense_vals, cudf::make_dense_rank_aggregation(), null_policy::INCLUDE);
+    *struct_col, expected_dense_vals, cudf::make_rank_aggregation(cudf::rank_method::DENSE), null_policy::INCLUDE);
   this->test_ungrouped_rank_scan(
-    *struct_col, expected_rank_vals, cudf::make_rank_aggregation(), null_policy::INCLUDE);
+    *struct_col, expected_rank_vals, cudf::make_rank_aggregation(cudf::rank_method::MIN), null_policy::INCLUDE);
 }
 
 TYPED_TEST(TypedRankScanTest, NestedStructs)
@@ -146,13 +146,13 @@ TYPED_TEST(TypedRankScanTest, NestedStructs)
   auto flat_col = cudf::test::structs_column_wrapper{std::move(flat_columns)};
 
   auto dense_out = cudf::scan(
-    nested_col, cudf::make_dense_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+    nested_col, cudf::make_rank_aggregation(cudf::rank_method::DENSE), scan_type::INCLUSIVE, null_policy::INCLUDE);
   auto dense_expected = cudf::scan(
-    flat_col, cudf::make_dense_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+    flat_col, cudf::make_rank_aggregation(cudf::rank_method::DENSE), scan_type::INCLUSIVE, null_policy::INCLUDE);
   auto rank_out = cudf::scan(
-    nested_col, cudf::make_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+    nested_col, cudf::make_rank_aggregation(cudf::rank_method::MIN), scan_type::INCLUSIVE, null_policy::INCLUDE);
   auto rank_expected =
-    cudf::scan(flat_col, cudf::make_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+    cudf::scan(flat_col, cudf::make_rank_aggregation(cudf::rank_method::MIN), scan_type::INCLUSIVE, null_policy::INCLUDE);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(dense_out->view(), dense_expected->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(rank_out->view(), rank_expected->view());
@@ -180,9 +180,9 @@ TYPED_TEST(TypedRankScanTest, structsWithNullPushdown)
   auto expected_null_result =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
   auto dense_null_out = cudf::scan(
-    *struct_col, cudf::make_dense_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+    *struct_col, cudf::make_rank_aggregation(cudf::rank_method::DENSE), scan_type::INCLUSIVE, null_policy::INCLUDE);
   auto rank_null_out = cudf::scan(
-    *struct_col, cudf::make_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+    *struct_col, cudf::make_rank_aggregation(cudf::rank_method::MIN), scan_type::INCLUSIVE, null_policy::INCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(dense_null_out->view(), expected_null_result);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(rank_null_out->view(), expected_null_result);
 
@@ -195,9 +195,9 @@ TYPED_TEST(TypedRankScanTest, structsWithNullPushdown)
   auto expected_rank_vals =
     cudf::test::fixed_width_column_wrapper<cudf::size_type>{1, 2, 2, 4, 5, 6, 7, 7, 9, 10, 10, 12};
   auto dense_out = cudf::scan(
-    *struct_col, cudf::make_dense_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+    *struct_col, cudf::make_rank_aggregation(cudf::rank_method::DENSE), scan_type::INCLUSIVE, null_policy::INCLUDE);
   auto rank_out = cudf::scan(
-    *struct_col, cudf::make_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+    *struct_col, cudf::make_rank_aggregation(cudf::rank_method::MIN), scan_type::INCLUSIVE, null_policy::INCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(dense_out->view(), expected_dense_vals);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(rank_out->view(), expected_rank_vals);
 }
@@ -214,9 +214,9 @@ TEST(RankScanTest, BoolRank)
     1, 1, 1, 4, 4, 4, 4, 4, 4, 4, 4, 4};
 
   auto dense_out = cudf::scan(
-    vals, cudf::make_dense_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+    vals, cudf::make_rank_aggregation(cudf::rank_method::DENSE), scan_type::INCLUSIVE, null_policy::INCLUDE);
   auto rank_out =
-    cudf::scan(vals, cudf::make_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+    cudf::scan(vals, cudf::make_rank_aggregation(cudf::rank_method::MIN), scan_type::INCLUSIVE, null_policy::INCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_dense_vals, dense_out->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_rank_vals, rank_out->view());
 }
@@ -232,9 +232,9 @@ TEST(RankScanTest, BoolRankWithNull)
     1, 1, 1, 4, 4, 4, 4, 4, 9, 9, 9, 9};
 
   auto nullable_dense_out = cudf::scan(
-    vals, cudf::make_dense_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+    vals, cudf::make_rank_aggregation(cudf::rank_method::DENSE), scan_type::INCLUSIVE, null_policy::INCLUDE);
   auto nullable_rank_out =
-    cudf::scan(vals, cudf::make_rank_aggregation(), scan_type::INCLUSIVE, null_policy::INCLUDE);
+    cudf::scan(vals, cudf::make_rank_aggregation(cudf::rank_method::MIN), scan_type::INCLUSIVE, null_policy::INCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_dense_vals, nullable_dense_out->view());
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_rank_vals, nullable_rank_out->view());
 }
@@ -247,9 +247,9 @@ TEST(RankScanTest, ExclusiveScan)
 
   CUDF_EXPECT_THROW_MESSAGE(
     cudf::scan(
-      vals, cudf::make_dense_rank_aggregation(), scan_type::EXCLUSIVE, null_policy::INCLUDE),
+      vals, cudf::make_rank_aggregation(cudf::rank_method::DENSE), scan_type::EXCLUSIVE, null_policy::INCLUDE),
     "Unsupported dense rank aggregation operator for exclusive scan");
   CUDF_EXPECT_THROW_MESSAGE(
-    cudf::scan(vals, cudf::make_rank_aggregation(), scan_type::EXCLUSIVE, null_policy::INCLUDE),
+    cudf::scan(vals, cudf::make_rank_aggregation(cudf::rank_method::MIN), scan_type::EXCLUSIVE, null_policy::INCLUDE),
     "Unsupported rank aggregation operator for exclusive scan");
 }
