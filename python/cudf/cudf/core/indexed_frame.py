@@ -19,7 +19,11 @@ from cudf._typing import ColumnLike
 from cudf.api.types import is_categorical_dtype, is_integer_dtype, is_list_like
 from cudf.core.column import arange
 from cudf.core.frame import Frame
-from cudf.core.index import Index, RangeIndex, _index_from_data
+from cudf.core.index import (
+    Index,
+    RangeIndex,
+    _index_from_columns,
+)
 from cudf.core.multiindex import MultiIndex
 from cudf.utils.utils import _gather_map_is_valid, cached_property
 
@@ -893,10 +897,7 @@ class IndexedFrame(Frame):
             index_names,
         ) = self._index._split_columns_by_levels(level)
         if index_columns:
-            index = _index_from_data(
-                dict(zip(range(len(index_columns)), index_columns)),
-                name=self._index.name,
-            )
+            index = _index_from_columns(index_columns, name=self._index.name,)
             if isinstance(index, MultiIndex):
                 index.names = index_names
             else:
