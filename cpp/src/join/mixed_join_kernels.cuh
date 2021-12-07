@@ -73,7 +73,8 @@ __global__ void compute_mixed_join_output_size(
   using multimap_value_type = cudf::detail::mixed_multimap_type::device_view::value_type;
   constexpr auto buffer_size =
     cuco::detail::is_packable<multimap_value_type>() ? (32 * 3u) : (1 * 3u);
-  __shared__ multimap_value_type output_buffer[num_flushing_cgs][buffer_size];
+  // TODO: Originally this was shared memory, but it's been removed due to excessive shmem usage.
+  multimap_value_type output_buffer[buffer_size];
 
   // The (required) extern storage of the shared memory array leads to
   // conflicting declarations between different templates. The easiest
@@ -112,11 +113,10 @@ __global__ void compute_mixed_join_output_size(
                                           this_thread,
                                           casted_outer_row_index,
                                           &flushing_cg_counter[flushing_cg_id],
-                                          output_buffer[flushing_cg_id],
+                                          output_buffer,
                                           &num_matches_atomic,
                                           inner_row_indices,
                                           equality);
-
     for (size_type i(0); i < num_matches; ++i) {
       auto output_dest           = cudf::ast::detail::value_expression_result<bool, has_nulls>();
       auto inner_row_index       = inner_row_indices[i].second;
@@ -194,10 +194,10 @@ __global__ void mixed_join(table_device_view left_table,
   constexpr uint32_t num_flushing_cgs = block_size / flushing_cg_size;
   __shared__ uint32_t flushing_cg_counter[num_flushing_cgs];
   using multimap_value_type = cudf::detail::mixed_multimap_type::device_view::value_type;
-  namespace cucodetail      = cuco::detail;
   constexpr auto buffer_size =
-    cucodetail::is_packable<multimap_value_type>() ? (32 * 3u) : (1 * 3u);
-  __shared__ multimap_value_type output_buffer[num_flushing_cgs][buffer_size];
+    cuco::detail::is_packable<multimap_value_type>() ? (32 * 3u) : (1 * 3u);
+  // TODO: Originally this was shared memory, but it's been removed due to excessive shmem usage.
+  multimap_value_type output_buffer[buffer_size];
 
   // Normally the casting of a shared memory array is used to create multiple
   // arrays of different types from the shared memory buffer, but here it is
@@ -241,7 +241,7 @@ __global__ void mixed_join(table_device_view left_table,
                                             this_thread,
                                             casted_outer_row_index,
                                             &flushing_cg_counter[flushing_cg_id],
-                                            output_buffer[flushing_cg_id],
+                                            output_buffer,
                                             &num_matches_atomic,
                                             inner_row_indices,
                                             equality);

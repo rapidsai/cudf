@@ -304,7 +304,7 @@ std::size_t compute_mixed_join_output_size(table_view const& left,
   // need to do the same).
   auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
   auto probe       = swap_tables ? right.select(right_on) : left.select(left_on);
-  auto build       = swap_tables ? left.select(right_on) : right.select(left_on);
+  auto build       = swap_tables ? left.select(left_on) : right.select(right_on);
   auto probe_view  = table_device_view::create(probe, stream);
   auto build_view  = table_device_view::create(build, stream);
 
@@ -318,7 +318,7 @@ std::size_t compute_mixed_join_output_size(table_view const& left,
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
   // TODO: Decide how to handle null equality when mixing AST operators with hash joins.
-  if ((build.num_columns() == 0) && (build.num_rows() != 0)) {
+  if ((build.num_columns() != 0) && (build.num_rows() != 0)) {
     build_join_hash_table(build, hash_table, null_equality::EQUAL, stream);
   }
   row_equality equality{*probe_view, *build_view, true};
