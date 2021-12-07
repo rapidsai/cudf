@@ -634,7 +634,7 @@ def test_parquet_reader_spark_decimals(datadir):
         NotImplementedError,
         match="Decimal type greater than Decimal64 is not yet supported",
     ):
-        _ = cudf.read_parquet(fname)
+        cudf.read_parquet(fname)
 
     # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
     # This is because cuDF returns as float64 as it lacks an equivalent dtype
