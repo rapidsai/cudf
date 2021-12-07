@@ -32,7 +32,7 @@ requirements:
     - numba >=0.54
     - dlpack>=0.5,<0.6.0a0
     - pyarrow 5.0.0 *cuda
-    - libcudf={{ version }}
+    - libcudf {{ version }}
     - rmm {{ minor_version }}
     - cudatoolkit {{ cuda_version }}
   run:
@@ -44,6 +44,7 @@ requirements:
     - numba >=0.54
     - numpy
     - {{ pin_compatible('pyarrow', max_pin='x.x.x') }} *cuda
+    - libcudf {{ version }}
     - fastavro >=0.22.0
     - {{ pin_compatible('rmm', max_pin='x.x') }}
     - fsspec>=0.6.0
