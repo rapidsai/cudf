@@ -251,7 +251,7 @@ struct group_reduction_functor<
       table_view{{values}}, {}, std::vector<null_order>{null_precedence});
     auto const d_flattened_values_ptr = table_device_view::create(flattened_values, stream);
 
-    auto constexpr is_min_op = K == aggregation::MIN;
+    auto constexpr is_min_op = K == aggregation::ARGMIN;
     auto const null_orders   = [&] {
       if (is_min_op) {
         auto null_orders = flattened_values.null_orders();
