@@ -19,12 +19,7 @@ except ImportError:
 import numpy as np
 from cython.operator import dereference
 
-from cudf.api.types import (
-    is_categorical_dtype,
-    is_decimal_dtype,
-    is_list_dtype,
-    is_struct_dtype,
-)
+from cudf.api.types import is_decimal_dtype, is_list_dtype, is_struct_dtype
 from cudf.utils.dtypes import np_to_pa_dtype
 
 from cudf._lib.utils cimport data_from_unique_ptr, get_column_names

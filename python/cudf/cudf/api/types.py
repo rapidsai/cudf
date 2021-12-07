@@ -6,7 +6,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from functools import wraps
 from inspect import isclass
-from typing import List, Union
+from typing import List, Union, cast
 
 import cupy as cp
 import numpy as np
@@ -213,8 +213,9 @@ def _union_categoricals(
     if ignore_order:
         raise TypeError("ignore_order is not yet implemented")
 
-    result_col = cudf.core.column.CategoricalColumn._concat(
-        [obj._column for obj in to_union]
+    result_col = cast(
+        cudf.core.column.CategoricalColumn,
+        cudf.core.column.concat_columns([obj._column for obj in to_union]),
     )
     if sort_categories:
         sorted_categories = result_col.categories.sort_by_values(
