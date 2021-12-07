@@ -2,7 +2,7 @@
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
-{% set py_version=environ.get('PYTHON', 3.8) %}
+{% set py_version='.'.join([char for char in environ.get('CONDA_PY', 36)]) %}
 
 package:
   name: libcudf_kafka
