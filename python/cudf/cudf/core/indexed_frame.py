@@ -658,8 +658,8 @@ class IndexedFrame(Frame):
         3       4       6
         """
         raise NotImplementedError(
-            "`IndexedFrame.add_prefix` not currently implemented. \
-                Use `Series.add_prefix` or `DataFrame.add_prefix`"
+            "`IndexedFrame.add_suffix` not currently implemented. \
+                Use `Series.add_suffix` or `DataFrame.add_suffix`"
         )
 
     def sort_values(
