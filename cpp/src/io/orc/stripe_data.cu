@@ -45,11 +45,6 @@ inline __device__ uint8_t is_dictionary(uint8_t encoding_mode) { return encoding
 static __device__ __constant__ int64_t kORCTimeToUTC =
   1420070400;  // Seconds from January 1st, 1970 to January 1st, 2015
 
-struct int128_s {
-  uint64_t lo;
-  int64_t hi;
-};
-
 struct orc_bytestream_s {
   const uint8_t* base;
   uint32_t pos;
@@ -127,14 +122,14 @@ struct orcdec_state_s {
     orc_rowdec_state_s rowdec;
   } u;
   union values {
-    uint8_t u8[block_size * 8];
-    uint32_t u32[block_size * 2];
-    int32_t i32[block_size * 2];
-    uint64_t u64[block_size];
-    int64_t i64[block_size];
-    double f64[block_size];
-    __int128_t i128[block_size];   // TMP
-    __uint128_t u128[block_size];  // TMP
+    uint8_t u8[block_size * 16];
+    uint32_t u32[block_size * 4];
+    int32_t i32[block_size * 4];
+    uint64_t u64[block_size * 2];
+    int64_t i64[block_size * 2];
+    double f64[block_size * 2];
+    __int128_t i128[block_size];
+    __uint128_t u128[block_size];
   } vals;
 };
 
@@ -455,16 +450,16 @@ inline __device__ int decode_base128_varint(volatile orc_bytestream_s* bs, int p
  */
 inline __device__ __int128_t decode_varint128(volatile orc_bytestream_s* bs, int pos)
 {
-  uint32_t b           = bytestream_readbyte(bs, pos++);
-  __int128_t sign_mask = -(int32_t)(b & 1);
-  __int128_t v         = (b >> 1) & 0x3f;
-  uint32_t bitpos      = 6;
-  while (b > 0x7f && bitpos < 128) {
-    b = bytestream_readbyte(bs, pos++);
-    v |= ((uint64_t)(b & 0x7f)) << (bitpos & 0x3f);
+  auto byte                  = bytestream_readbyte(bs, pos++);
+  __int128_t const sign_mask = -(int32_t)(byte & 1);
+  __int128_t value           = (byte >> 1) & 0x3f;
+  uint32_t bitpos            = 6;
+  while (byte & 0x80 && bitpos < 128) {
+    byte = bytestream_readbyte(bs, pos++);
+    value |= ((__uint128_t)(byte & 0x7f)) << bitpos;
     bitpos += 7;
   }
-  return v ^ sign_mask;
+  return value ^ sign_mask;
 }
 
 /**
@@ -1022,6 +1017,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
                                       volatile orcdec_state_s::values& vals,
                                       int val_scale,
                                       int numvals,
+                                      type_id dtype_id,
                                       int col_scale,
                                       int t)
 {
@@ -1049,7 +1045,7 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
       auto const pos = static_cast<int>(vals.i64[2 * t]);
       __int128_t v   = decode_varint128(bs, pos);
 
-      if (col_scale & orc_decimal2float64_scale) {
+      if (dtype_id == type_id::FLOAT64) {
         double f      = v;
         int32_t scale = (t < numvals) ? val_scale : 0;
         if (scale >= 0)
@@ -1057,17 +1053,25 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
         else
           vals.f64[t] = f * kPow10[min(-scale, 39)];
       } else {
-        // Since cuDF column stores just one scale, value needs to
-        // be adjusted to col_scale from val_scale. So the difference
-        // of them will be used to add 0s or remove digits.
-        int32_t scale = (t < numvals) ? col_scale - val_scale : 0;
-        if (scale >= 0) {
-          scale        = min(scale, 27);
-          vals.i128[t] = (v * kPow5i[scale]) << scale;
-        } else  // if (scale < 0)
-        {
-          scale        = min(-scale, 27);  // should be irrelevant
-          vals.i128[t] = (v / kPow5i[scale]) >> scale;
+        auto const scaled_value = [&]() {
+          // Since cuDF column stores just one scale, value needs to be adjusted to col_scale from
+          // val_scale. So the difference of them will be used to add 0s or remove digits.
+          int32_t scale = (t < numvals) ? col_scale - val_scale : 0;
+          if (scale >= 0) {
+            scale = min(scale, 27);
+            return (v * kPow5i[scale]) << scale;
+          } else  // if (scale < 0)
+          {
+            scale = min(-scale, 27);
+            return (v / kPow5i[scale]) >> scale;
+          }
+        }();
+        if (dtype_id == type_id::DECIMAL64) {
+          vals.i64[t] = scaled_value;
+        } else {
+          {
+            vals.i128[t] = scaled_value;
+          }
         }
       }
     }
@@ -1629,8 +1633,14 @@ __global__ void __launch_bounds__(block_size)
           }
           val_scale = (t < numvals) ? (int)s->vals.i64[skip + t] : 0;
           __syncthreads();
-          numvals = Decode_Decimals(
-            &s->bs, &s->u.rle8, s->vals, val_scale, numvals, s->chunk.decimal_scale, t);
+          numvals = Decode_Decimals(&s->bs,
+                                    &s->u.rle8,
+                                    s->vals,
+                                    val_scale,
+                                    numvals,
+                                    s->chunk.dtype_id,
+                                    s->chunk.decimal_scale,
+                                    t);
         }
         __syncthreads();
       } else if (s->chunk.type_kind == FLOAT) {
@@ -1698,7 +1708,13 @@ __global__ void __launch_bounds__(block_size)
             case DOUBLE:
             case LONG: static_cast<uint64_t*>(data_out)[row] = s->vals.u64[t + vals_skipped]; break;
             case DECIMAL:
-              static_cast<__uint128_t*>(data_out)[row] = s->vals.u128[t + vals_skipped];
+              if (s->chunk.dtype_id == type_id::FLOAT64 or
+                  s->chunk.dtype_id == type_id::DECIMAL64) {
+                static_cast<uint64_t*>(data_out)[row] = s->vals.u64[t + vals_skipped];
+              } else {
+                // decimal128
+                static_cast<__uint128_t*>(data_out)[row] = s->vals.u128[t + vals_skipped];
+              }
               break;
             case MAP:
             case LIST: {

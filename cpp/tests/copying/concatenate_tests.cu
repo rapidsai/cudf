@@ -79,7 +79,7 @@ struct TypedColumnTest : public cudf::test::BaseFixture {
   rmm::device_buffer all_null_mask{create_null_mask(num_elements(), cudf::mask_state::ALL_NULL)};
 };
 
-TYPED_TEST_CASE(TypedColumnTest, cudf::test::Types<int32_t>);
+TYPED_TEST_SUITE(TypedColumnTest, cudf::test::Types<int32_t>);
 
 TYPED_TEST(TypedColumnTest, ConcatenateEmptyColumns)
 {
@@ -1555,7 +1555,7 @@ struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 struct FixedPointTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTestAllReps, FixedPointConcatentate)
 {
@@ -1632,7 +1632,7 @@ template <typename T>
 struct DictionaryConcatTestFW : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(DictionaryConcatTestFW, cudf::test::FixedWidthTypes);
+TYPED_TEST_SUITE(DictionaryConcatTestFW, cudf::test::FixedWidthTypes);
 
 TYPED_TEST(DictionaryConcatTestFW, FixedWidthKeys)
 {

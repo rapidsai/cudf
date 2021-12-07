@@ -36,7 +36,7 @@ using supported_types =
   cudf::test::Concat<cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>,
                      cudf::test::DurationTypes>;
 
-TYPED_TEST_CASE(groupby_sum_test, supported_types);
+TYPED_TEST_SUITE(groupby_sum_test, supported_types);
 
 TYPED_TEST(groupby_sum_test, basic)
 {
@@ -160,7 +160,7 @@ template <typename T>
 struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTestAllReps, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTestAllReps, GroupBySortSumDecimalAsValue)
 {
@@ -168,9 +168,7 @@ TYPED_TEST(FixedPointTestAllReps, GroupBySortSumDecimalAsValue)
   using decimalXX  = TypeParam;
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
-  using SumType    = std::conditional_t<std::is_same_v<decimal128, TypeParam>, __int128_t, int64_t>;
-  using fp64_wrapper = cudf::test::fixed_point_column_wrapper<SumType>;
-  using K            = int32_t;
+  using K          = int32_t;
 
   for (auto const i : {2, 1, 0, -1, -2}) {
     auto const scale = scale_type{i};
@@ -180,7 +178,7 @@ TYPED_TEST(FixedPointTestAllReps, GroupBySortSumDecimalAsValue)
     // clang-format on
 
     auto const expect_keys     = fixed_width_column_wrapper<K>{1, 2, 3};
-    auto const expect_vals_sum = fp64_wrapper{{9, 19, 17}, scale};
+    auto const expect_vals_sum = fp_wrapper{{9, 19, 17}, scale};
 
     auto agg1 = cudf::make_sum_aggregation<groupby_aggregation>();
     test_single_agg(
@@ -199,9 +197,7 @@ TYPED_TEST(FixedPointTestAllReps, GroupByHashSumDecimalAsValue)
   using decimalXX  = TypeParam;
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
-  using SumType    = std::conditional_t<std::is_same_v<decimal128, TypeParam>, __int128_t, int64_t>;
-  using fp64_wrapper = cudf::test::fixed_point_column_wrapper<SumType>;
-  using K            = int32_t;
+  using K          = int32_t;
 
   for (auto const i : {2, 1, 0, -1, -2}) {
     auto const scale = scale_type{i};
@@ -211,7 +207,7 @@ TYPED_TEST(FixedPointTestAllReps, GroupByHashSumDecimalAsValue)
     // clang-format on
 
     auto const expect_keys     = fixed_width_column_wrapper<K>{1, 2, 3};
-    auto const expect_vals_sum = fp64_wrapper{{9, 19, 17}, scale};
+    auto const expect_vals_sum = fp_wrapper{{9, 19, 17}, scale};
 
     auto agg5 = cudf::make_sum_aggregation<groupby_aggregation>();
     test_single_agg(keys, vals, expect_keys, expect_vals_sum, std::move(agg5));

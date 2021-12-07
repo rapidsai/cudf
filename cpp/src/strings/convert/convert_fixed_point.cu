@@ -210,8 +210,7 @@ struct decimal_to_string_size_fn {
     if (scale >= 0) return count_digits(value) + scale;
 
     auto const abs_value = numeric::detail::abs(value);
-    auto const exp_ten   = static_cast<int64_t>(exp10(
-      static_cast<double>(-scale)));  // TODO probably broken (might need numeric::detail::exp10)
+    auto const exp_ten   = numeric::detail::exp10<DecimalType>(-scale);
     auto const fraction  = count_digits(abs_value % exp_ten);
     auto const num_zeros = std::max(0, (-scale - fraction));
     return static_cast<int32_t>(value < 0) +    // sign if negative
@@ -253,7 +252,7 @@ struct decimal_to_string_fn {
     //       fraction = abs(value) % (10^abs(scale))
     if (value < 0) *d_buffer++ = '-';  // add sign
     auto const abs_value = numeric::detail::abs(value);
-    auto const exp_ten   = static_cast<int64_t>(exp10(static_cast<double>(-scale)));
+    auto const exp_ten   = numeric::detail::exp10<DecimalType>(-scale);
     auto const num_zeros = std::max(0, (-scale - count_digits(abs_value % exp_ten)));
 
     d_buffer += integer_to_string(abs_value / exp_ten, d_buffer);  // add the integer part
@@ -318,7 +317,7 @@ std::unique_ptr<column> from_fixed_point(column_view const& input,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) return make_empty_column(data_type{type_id::STRING});
+  if (input.is_empty()) return make_empty_column(type_id::STRING);
   return type_dispatcher(input.type(), dispatch_from_fixed_point_fn{}, input, stream, mr);
 }
 
@@ -383,7 +382,7 @@ std::unique_ptr<column> is_fixed_point(strings_column_view const& input,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
-  if (input.is_empty()) return cudf::make_empty_column(data_type{type_id::BOOL8});
+  if (input.is_empty()) return cudf::make_empty_column(type_id::BOOL8);
   return type_dispatcher(
     decimal_type, dispatch_is_fixed_point_fn{}, input, decimal_type, stream, mr);
 }

@@ -1,6 +1,6 @@
 # Regex Features
 
-This page specifies which regex features are currently supported by libcudf strings column APIs that accept regex patterns:
+This page specifies which regular expression (regex) features are currently supported by libcudf strings column APIs that accept regex patterns:
 
 - cudf::strings::contains_re()
 - cudf::strings::matches_re()
@@ -13,6 +13,13 @@ This page specifies which regex features are currently supported by libcudf stri
 The details are based on features documented at https://www.regular-expressions.info/reference.html
 
 **Note:** The alternation character is the pipe character `|` and not the character included in the tables on this page. There is an issue including the pipe character inside the table markdown that is rendered by doxygen.
+
+**Invalid regex patterns will result in undefined behavior**. This includes but is not limited to the following:
+- Unescaped special characters (listed in the third row of the Characters table below) when they are intended to match as literals.
+- Unmatched paired special characters like `()`, `[]`, and `{}`.
+- Empty groups, classes, or quantifiers. That is, `()` and `[]` without an enclosing expression and `{}` without a valid integer.
+- Incomplete ranges in character classes like `[-z]`, `[a-]`, and `[-]`.
+- Unqualified quantifiers. That is, a quantifier with no preceding item to match like `*a`, `a⎮?`, `(+)`, `{2}a`, etc.
 
 ## Features Supported
 

@@ -407,7 +407,7 @@ template <typename T>
 class RollingVarStdTest : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(RollingVarStdTest, cudf::test::FixedWidthTypesWithoutChrono);
+TYPED_TEST_SUITE(RollingVarStdTest, cudf::test::FixedWidthTypesWithoutChrono);
 
 class RollingtVarStdTestUntyped : public cudf::test::BaseFixture {
 };
@@ -600,7 +600,7 @@ TEST_F(RollingErrorTest, MeanTimestampNotSupported)
                cudf::logic_error);
 }
 
-TYPED_TEST_CASE(RollingTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(RollingTest, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 // simple example from Pandas docs
 TYPED_TEST(RollingTest, SimpleStatic)
@@ -1143,7 +1143,7 @@ template <typename T>
 struct FixedPointTests : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTests, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTests, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTests, MinMaxCountLagLead)
 {
@@ -1203,13 +1203,11 @@ TYPED_TEST(FixedPointTests, MinMaxCountLagLeadNulls)
   using decimalXX  = TypeParam;
   using RepType    = cudf::device_storage_type_t<decimalXX>;
   using fp_wrapper = cudf::test::fixed_point_column_wrapper<RepType>;
-  using sum_type   = std::conditional_t<std::is_same_v<RepType, __int128_t>, __int128_t, int64_t>;
-  using fpsum_wrapper = cudf::test::fixed_point_column_wrapper<sum_type>;
-  using fw_wrapper    = cudf::test::fixed_width_column_wrapper<size_type>;
+  using fw_wrapper = cudf::test::fixed_width_column_wrapper<size_type>;
 
   auto const scale              = scale_type{-1};
   auto const input              = fp_wrapper{{42, 1729, 55, 343, 1, 2}, {1, 0, 1, 0, 1, 1}, scale};
-  auto const expected_sum       = fpsum_wrapper{{42, 97, 55, 56, 3, 3}, {1, 1, 1, 1, 1, 1}, scale};
+  auto const expected_sum       = fp_wrapper{{42, 97, 55, 56, 3, 3}, {1, 1, 1, 1, 1, 1}, scale};
   auto const expected_min       = fp_wrapper{{42, 42, 55, 1, 1, 1}, {1, 1, 1, 1, 1, 1}, scale};
   auto const expected_max       = fp_wrapper{{42, 55, 55, 55, 2, 2}, {1, 1, 1, 1, 1, 1}, scale};
   auto const expected_lag       = fp_wrapper{{0, 42, 1729, 55, 343, 1}, {0, 1, 0, 1, 0, 1}, scale};

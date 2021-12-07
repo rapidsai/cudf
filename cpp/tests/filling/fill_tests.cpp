@@ -95,7 +95,7 @@ class FillTypedTestFixture : public cudf::test::BaseFixture {
   }
 };
 
-TYPED_TEST_CASE(FillTypedTestFixture, cudf::test::FixedWidthTypesWithoutFixedPoint);
+TYPED_TEST_SUITE(FillTypedTestFixture, cudf::test::FixedWidthTypesWithoutFixedPoint);
 
 TYPED_TEST(FillTypedTestFixture, SetSingle)
 {
@@ -367,7 +367,7 @@ template <typename T>
 class FixedPointAllReps : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointAllReps, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointAllReps, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointAllReps, OutOfPlaceFill)
 {

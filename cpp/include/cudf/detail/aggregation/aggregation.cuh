@@ -23,6 +23,7 @@
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/traits.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -131,7 +132,8 @@ struct update_target_element<
   aggregation::MIN,
   target_has_nulls,
   source_has_nulls,
-  std::enable_if_t<is_fixed_width<Source>() && !is_fixed_point<Source>()>> {
+  std::enable_if_t<is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
+                   !is_fixed_point<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -150,11 +152,13 @@ struct update_target_element<
 };
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
-struct update_target_element<Source,
-                             aggregation::MIN,
-                             target_has_nulls,
-                             source_has_nulls,
-                             std::enable_if_t<is_fixed_point<Source>()>> {
+struct update_target_element<
+  Source,
+  aggregation::MIN,
+  target_has_nulls,
+  source_has_nulls,
+  std::enable_if_t<is_fixed_point<Source>() &&
+                   cudf::has_atomic_support<device_storage_type_t<Source>>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -181,7 +185,8 @@ struct update_target_element<
   aggregation::MAX,
   target_has_nulls,
   source_has_nulls,
-  std::enable_if_t<is_fixed_width<Source>() && !is_fixed_point<Source>()>> {
+  std::enable_if_t<is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
+                   !is_fixed_point<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -200,11 +205,13 @@ struct update_target_element<
 };
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
-struct update_target_element<Source,
-                             aggregation::MAX,
-                             target_has_nulls,
-                             source_has_nulls,
-                             std::enable_if_t<is_fixed_point<Source>()>> {
+struct update_target_element<
+  Source,
+  aggregation::MAX,
+  target_has_nulls,
+  source_has_nulls,
+  std::enable_if_t<is_fixed_point<Source>() &&
+                   cudf::has_atomic_support<device_storage_type_t<Source>>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -231,7 +238,8 @@ struct update_target_element<
   aggregation::SUM,
   target_has_nulls,
   source_has_nulls,
-  std::enable_if_t<is_fixed_width<Source>() && !is_fixed_point<Source>()>> {
+  std::enable_if_t<is_fixed_width<Source>() && cudf::has_atomic_support<Source>() &&
+                   !is_fixed_point<Source>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -250,11 +258,13 @@ struct update_target_element<
 };
 
 template <typename Source, bool target_has_nulls, bool source_has_nulls>
-struct update_target_element<Source,
-                             aggregation::SUM,
-                             target_has_nulls,
-                             source_has_nulls,
-                             std::enable_if_t<is_fixed_point<Source>()>> {
+struct update_target_element<
+  Source,
+  aggregation::SUM,
+  target_has_nulls,
+  source_has_nulls,
+  std::enable_if_t<is_fixed_point<Source>() &&
+                   cudf::has_atomic_support<device_storage_type_t<Source>>()>> {
   __device__ void operator()(mutable_column_device_view target,
                              size_type target_index,
                              column_device_view source,
@@ -279,7 +289,8 @@ struct update_target_element<Source,
  * @brief Function object to update a single element in a target column using
  * the dictionary key addressed by the specific index.
  *
- * SFINAE is used to prevent recursion for dictionary type. Dictionary keys cannot be a dictionary.
+ * SFINAE is used to prevent recursion for dictionary type. Dictionary keys cannot be a
+ * dictionary.
  *
  */
 template <bool target_has_nulls = true>

@@ -72,7 +72,15 @@ public class CudaMemoryBuffer extends BaseDeviceMemoryBuffer {
     }
   }
 
-  CudaMemoryBuffer(long address, long lengthInBytes, Cuda.Stream stream) {
+  /**
+   * Wrap an existing CUDA allocation in a device memory buffer. The CUDA allocation will be freed
+   * when the resulting device memory buffer instance frees its memory resource (i.e.: when its
+   * reference count goes to zero).
+   * @param address device address of the CUDA memory allocation
+   * @param lengthInBytes length of the CUDA allocation in bytes
+   * @param stream CUDA stream to use for synchronization when freeing the allocation
+   */
+  public CudaMemoryBuffer(long address, long lengthInBytes, Cuda.Stream stream) {
     super(address, lengthInBytes, new CudaBufferCleaner(address, lengthInBytes, stream));
   }
 

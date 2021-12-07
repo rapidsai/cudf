@@ -268,7 +268,7 @@ std::unique_ptr<column> dispatch_to_cudf_column::operator()<cudf::string_view>(
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  if (array.length() == 0) { return make_empty_column(data_type{type_id::STRING}); }
+  if (array.length() == 0) { return make_empty_column(type_id::STRING); }
   auto str_array    = static_cast<arrow::StringArray const*>(&array);
   auto offset_array = std::make_unique<arrow::Int32Array>(
     str_array->value_offsets()->size() / sizeof(int32_t), str_array->value_offsets(), nullptr);

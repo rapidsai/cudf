@@ -222,8 +222,11 @@ class DatetimeColumn(column.ColumnBase):
     def get_dt_field(self, field: str) -> ColumnBase:
         return libcudf.datetime.extract_datetime_component(self, field)
 
-    def ceil(self, field: str) -> ColumnBase:
-        return libcudf.datetime.ceil_datetime(self, field)
+    def ceil(self, freq: str) -> ColumnBase:
+        return libcudf.datetime.ceil_datetime(self, freq)
+
+    def floor(self, freq: str) -> ColumnBase:
+        return libcudf.datetime.floor_datetime(self, freq)
 
     def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarLike:
         if isinstance(other, cudf.Scalar):
@@ -540,7 +543,7 @@ def infer_format(element: str, **kwargs) -> str:
     if len(second_parts) > 1:
         # "Z" indicates Zulu time(widely used in aviation) - Which is
         # UTC timezone that currently cudf only supports. Having any other
-        # unsuppported timezone will let the code fail below
+        # unsupported timezone will let the code fail below
         # with a ValueError.
         second_parts.remove("Z")
         second_part = "".join(second_parts[1:])

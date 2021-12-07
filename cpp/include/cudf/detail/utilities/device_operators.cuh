@@ -17,8 +17,8 @@
 #pragma once
 
 /**
- * @brief definition of the device operators
- * @file device_operators.cuh
+ * @brief Definition of the device operators
+ * @file
  */
 
 #include <cudf/fixed_point/fixed_point.hpp>
@@ -32,12 +32,37 @@
 #include <type_traits>
 
 namespace cudf {
-// ------------------------------------------------------------------------
-// Binary operators
-/* @brief binary `sum` operator */
+namespace detail {
+
+/**
+ * @brief SFINAE enabled min function suitable for std::is_invocable
+ */
+template <typename LHS,
+          typename RHS,
+          std::enable_if_t<cudf::is_relationally_comparable<LHS, RHS>()>* = nullptr>
+CUDA_HOST_DEVICE_CALLABLE auto min(LHS const& lhs, RHS const& rhs)
+{
+  return std::min(lhs, rhs);
+}
+
+/**
+ * @brief SFINAE enabled max function suitable for std::is_invocable
+ */
+template <typename LHS,
+          typename RHS,
+          std::enable_if_t<cudf::is_relationally_comparable<LHS, RHS>()>* = nullptr>
+CUDA_HOST_DEVICE_CALLABLE auto max(LHS const& lhs, RHS const& rhs)
+{
+  return std::max(lhs, rhs);
+}
+}  // namespace detail
+
+/**
+ * @brief Binary `sum` operator
+ */
 struct DeviceSum {
   template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(const T& lhs, const T& rhs) -> decltype(lhs + rhs)
   {
     return lhs + rhs;
   }
@@ -64,7 +89,9 @@ struct DeviceSum {
   }
 };
 
-/* @brief `count` operator - used in rolling windows */
+/**
+ * @brief `count` operator - used in rolling windows
+ */
 struct DeviceCount {
   template <typename T, typename std::enable_if_t<cudf::is_timestamp<T>()>* = nullptr>
   CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
@@ -85,10 +112,13 @@ struct DeviceCount {
   }
 };
 
-/* @brief binary `min` operator */
+/**
+ * @brief binary `min` operator
+ */
 struct DeviceMin {
   template <typename T>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(const T& lhs, const T& rhs)
+    -> decltype(cudf::detail::min(lhs, rhs))
   {
     return numeric::detail::min(lhs, rhs);
   }
@@ -99,7 +129,7 @@ struct DeviceMin {
                               !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
-    if constexpr (cudf::is_chrono<T>()) return std::numeric_limits<T>::max();
+    if constexpr (cudf::is_chrono<T>()) return T::max();
     return cuda::std::numeric_limits<T>::max();
   }
 
@@ -124,10 +154,13 @@ struct DeviceMin {
   }
 };
 
-/* @brief binary `max` operator */
+/**
+ * @brief binary `max` operator
+ */
 struct DeviceMax {
   template <typename T>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(const T& lhs, const T& rhs)
+    -> decltype(cudf::detail::max(lhs, rhs))
   {
     return numeric::detail::max(lhs, rhs);
   }
@@ -138,7 +171,7 @@ struct DeviceMax {
                               !cudf::is_fixed_point<T>()>* = nullptr>
   static constexpr T identity()
   {
-    if constexpr (cudf::is_chrono<T>()) return std::numeric_limits<T>::lowest();
+    if constexpr (cudf::is_chrono<T>()) return T::min();
     return cuda::std::numeric_limits<T>::lowest();
   }
 
@@ -162,10 +195,12 @@ struct DeviceMax {
   }
 };
 
-/* @brief binary `product` operator */
+/**
+ * @brief binary `product` operator
+ */
 struct DeviceProduct {
   template <typename T, typename std::enable_if_t<!cudf::is_timestamp<T>()>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(const T& lhs, const T& rhs) -> decltype(lhs * rhs)
   {
     return lhs * rhs;
   }
@@ -184,28 +219,34 @@ struct DeviceProduct {
   }
 };
 
-/* @brief binary `and` operator */
+/**
+ * @brief binary `and` operator
+ */
 struct DeviceAnd {
   template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(const T& lhs, const T& rhs) -> decltype(lhs & rhs)
   {
     return (lhs & rhs);
   }
 };
 
-/* @brief binary `or` operator */
+/**
+ * @brief binary `or` operator
+ */
 struct DeviceOr {
   template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(const T& lhs, const T& rhs) -> decltype(lhs | rhs)
   {
     return (lhs | rhs);
   }
 };
 
-/* @brief binary `xor` operator */
+/**
+ * @brief binary `xor` operator
+ */
 struct DeviceXor {
   template <typename T, typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
-  CUDA_HOST_DEVICE_CALLABLE T operator()(const T& lhs, const T& rhs)
+  CUDA_HOST_DEVICE_CALLABLE auto operator()(const T& lhs, const T& rhs) -> decltype(lhs ^ rhs)
   {
     return (lhs ^ rhs);
   }

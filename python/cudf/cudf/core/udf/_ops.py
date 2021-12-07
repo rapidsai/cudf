@@ -11,6 +11,8 @@ arith_ops = [
     operator.pow,
 ]
 
+bitwise_ops = [operator.and_, operator.or_, operator.xor]
+
 unary_ops = [
     math.acos,
     math.acosh,

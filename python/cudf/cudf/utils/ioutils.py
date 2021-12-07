@@ -154,6 +154,9 @@ num_rows : int, default None
 strings_to_categorical : boolean, default False
     If True, return string columns as GDF_CATEGORY dtype; if False, return a
     as GDF_STRING dtype.
+categorical_partitions : boolean, default True
+    Whether directory-partitioned columns should be interpreted as categorical
+    or raw dtypes.
 use_pandas_metadata : boolean, default True
     If True and dataset has custom PANDAS schema metadata, ensure that index
     columns are also loaded.
@@ -221,6 +224,12 @@ int96_timestamps : bool, default False
     timestamp[us] to the int96 format, which is the number of Julian
     days and the number of nanoseconds since midnight. If ``False``,
     timestamps will not be altered.
+row_group_size_bytes: integer or None, default None
+    Maximum size of each stripe of the output.
+    If None, 13369344 (128MB) will be used.
+row_group_size_rows: integer or None, default None
+    Maximum number of rows of each stripe of the output.
+    If None, 1000000 will be used.
 
 
 See Also
@@ -404,10 +413,10 @@ enable_statistics: boolean, default True
 stripe_size_bytes: integer or None, default None
     Maximum size of each stripe of the output.
     If None, 67108864 (64MB) will be used.
-stripe_size_rows: integer or None, default None 1000000
+stripe_size_rows: integer or None, default None
     Maximum number of rows of each stripe of the output.
     If None, 1000000 will be used.
-row_index_stride: integer or None, default None 10000
+row_index_stride: integer or None, default None
     Row index stride (maximum number of rows in each row group).
     If None, 10000 will be used.
 
@@ -1032,7 +1041,7 @@ partition : int,
     should consume messages from. Valid values are 0 - (N-1)
 start_offset : int, Kafka Topic/Partition offset that consumption
     should begin at. Inclusive.
-end_offset : int, Kafka Topic/Parition offset that consumption
+end_offset : int, Kafka Topic/Partition offset that consumption
     should end at. Inclusive.
 batch_timeout : int, default 10000
     Maximum number of milliseconds that will be spent trying to
@@ -1055,7 +1064,7 @@ filepath_or_buffer : str, path object, or file-like object
     or any object with a `read()` method (such as builtin `open()` file handler
     function or `StringIO`).
 delimiter : string, default None, The delimiter that should be used
-    for splitting text chunks into seperate cudf column rows. Currently
+    for splitting text chunks into separate cudf column rows. Currently
     only a single delimiter is supported.
 
 Returns
@@ -1123,7 +1132,7 @@ def ensure_single_filepath_or_buffer(path_or_data, **kwargs):
         storage_options = kwargs.get("storage_options")
         path_or_data = os.path.expanduser(path_or_data)
         try:
-            fs, _, paths = fsspec.get_fs_token_paths(
+            fs, _, paths = get_fs_token_paths(
                 path_or_data, mode="rb", storage_options=storage_options
             )
         except ValueError as e:
@@ -1147,9 +1156,9 @@ def is_directory(path_or_data, **kwargs):
         storage_options = kwargs.get("storage_options")
         path_or_data = os.path.expanduser(path_or_data)
         try:
-            fs, _, paths = fsspec.get_fs_token_paths(
+            fs = get_fs_token_paths(
                 path_or_data, mode="rb", storage_options=storage_options
-            )
+            )[0]
         except ValueError as e:
             if str(e).startswith("Protocol not known"):
                 return False
@@ -1183,10 +1192,8 @@ def _get_filesystem_and_paths(path_or_data, **kwargs):
         else:
             path_or_data = [path_or_data]
 
-        # Pyarrow did not support the protocol or storage options.
-        # Fall back to fsspec
         try:
-            fs, _, fs_paths = fsspec.get_fs_token_paths(
+            fs, _, fs_paths = get_fs_token_paths(
                 path_or_data, mode="rb", storage_options=storage_options
             )
             return_paths = fs_paths
@@ -1316,9 +1323,9 @@ def get_writer_filepath_or_buffer(path_or_data, mode, **kwargs):
     if isinstance(path_or_data, str):
         storage_options = kwargs.get("storage_options", {})
         path_or_data = os.path.expanduser(path_or_data)
-        fs, _, _ = fsspec.get_fs_token_paths(
+        fs = get_fs_token_paths(
             path_or_data, mode=mode or "w", storage_options=storage_options
-        )
+        )[0]
 
         if not _is_local_filesystem(fs):
             filepath_or_buffer = fsspec.open(
@@ -1507,11 +1514,12 @@ def _prepare_filters(filters):
     return filters
 
 
-def _ensure_filesystem(passed_filesystem, path):
+def _ensure_filesystem(passed_filesystem, path, **kwargs):
     if passed_filesystem is None:
-        return get_fs_token_paths(path[0] if isinstance(path, list) else path)[
-            0
-        ]
+        return get_fs_token_paths(
+            path[0] if isinstance(path, list) else path,
+            storage_options=kwargs.get("storage_options", {}),
+        )[0]
     return passed_filesystem
 
 

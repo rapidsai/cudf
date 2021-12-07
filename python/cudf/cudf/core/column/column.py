@@ -34,7 +34,11 @@ from cudf._lib.null_mask import (
     create_null_mask,
 )
 from cudf._lib.scalar import as_device_scalar
-from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
+from cudf._lib.stream_compaction import (
+    distinct_count as cpp_distinct_count,
+    drop_duplicates,
+    drop_nulls,
+)
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
@@ -72,7 +76,7 @@ from cudf.utils.dtypes import (
     pandas_dtypes_alias_to_cudf_alias,
     pandas_dtypes_to_np_dtypes,
 )
-from cudf.utils.utils import mask_dtype
+from cudf.utils.utils import _gather_map_is_valid, mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
 
@@ -200,20 +204,9 @@ class ColumnBase(Column, Serializable):
 
         return result_col
 
-    def __sizeof__(self) -> int:
-        n = 0
-        if self.data is not None:
-            n += self.data.size
-        if self.nullable:
-            n += bitmask_allocation_size_bytes(self.size)
-        return n
-
     def dropna(self, drop_nan: bool = False) -> ColumnBase:
-        if drop_nan:
-            col = self.nans_to_nulls()
-        else:
-            col = self
-        return col.as_frame()._drop_na_rows(drop_nan=drop_nan)._as_column()
+        col = self.nans_to_nulls() if drop_nan else self
+        return drop_nulls([col])[0]
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
@@ -314,13 +307,18 @@ class ColumnBase(Column, Serializable):
             self.base_mask, self.offset, self.offset + len(self)
         )
 
-    def _memory_usage(self, **kwargs) -> int:
-        return self.__sizeof__()
+    def memory_usage(self) -> int:
+        n = 0
+        if self.data is not None:
+            n += self.data.size
+        if self.nullable:
+            n += bitmask_allocation_size_bytes(self.size)
+        return n
 
     def _default_na_value(self) -> Any:
         raise NotImplementedError()
 
-    # TODO: This method is decpreated and can be removed when the associated
+    # TODO: This method is deprecated and can be removed when the associated
     # Frame methods are removed.
     def to_gpu_array(self, fillna=None) -> "cuda.devicearray.DeviceNDArray":
         """Get a dense numba device array for the data.
@@ -341,7 +339,7 @@ class ColumnBase(Column, Serializable):
         else:
             return self.dropna(drop_nan=False).data_array_view
 
-    # TODO: This method is decpreated and can be removed when the associated
+    # TODO: This method is deprecated and can be removed when the associated
     # Frame methods are removed.
     def to_array(self, fillna=None) -> np.ndarray:
         """Get a dense numpy array for the data.
@@ -690,28 +688,27 @@ class ColumnBase(Column, Serializable):
         raise TypeError(f"cannot perform median with type {self.dtype}")
 
     def take(
-        self: T,
-        indices: ColumnBase,
-        keep_index: bool = True,
-        nullify: bool = False,
+        self: T, indices: ColumnBase, nullify: bool = False, check_bounds=True
     ) -> T:
-        """Return Column by taking values from the corresponding *indices*."""
+        """Return Column by taking values from the corresponding *indices*.
+
+        Skip bounds checking if check_bounds is False.
+        Set rows to null for all out of bound indices if nullify is `True`.
+        """
         # Handle zero size
         if indices.size == 0:
             return cast(T, column_empty_like(self, newsize=0))
-        try:
-            return (
-                self.as_frame()
-                ._gather(indices, keep_index=keep_index, nullify=nullify)
-                ._as_column()
-                ._with_type_metadata(self.dtype)
-            )
-        except RuntimeError as e:
-            if "out of bounds" in str(e):
-                raise IndexError(
-                    f"index out of bounds for column of size {len(self)}"
-                ) from e
-            raise
+
+        # TODO: For performance, the check and conversion of gather map should
+        # be done by the caller. This check will be removed in future release.
+        if not is_integer_dtype(indices.dtype):
+            indices = indices.astype("int32")
+        if not _gather_map_is_valid(indices, len(self), check_bounds, nullify):
+            raise IndexError("Gather map index is out of bounds.")
+
+        return libcudf.copying.gather([self], indices, nullify=nullify)[
+            0
+        ]._with_type_metadata(self.dtype)
 
     def isin(self, values: Sequence) -> ColumnBase:
         """Check whether values are contained in the Column.
@@ -925,7 +922,7 @@ class ColumnBase(Column, Serializable):
 
         # Re-label self w.r.t. the provided categories
         if isinstance(dtype, (cudf.CategoricalDtype, pd.CategoricalDtype)):
-            labels = sr.label_encoding(cats=dtype.categories)
+            labels = sr._label_encoding(cats=dtype.categories)
             if "ordered" in kwargs:
                 warnings.warn(
                     "Ignoring the `ordered` parameter passed in `**kwargs`, "
@@ -941,7 +938,9 @@ class ColumnBase(Column, Serializable):
 
         cats = sr.unique().astype(sr.dtype)
         label_dtype = min_unsigned_type(len(cats))
-        labels = sr.label_encoding(cats=cats, dtype=label_dtype, na_sentinel=1)
+        labels = sr._label_encoding(
+            cats=cats, dtype=label_dtype, na_sentinel=1
+        )
 
         # columns include null index in factorization; remove:
         if self.has_nulls:
@@ -1100,11 +1099,7 @@ class ColumnBase(Column, Serializable):
         # the following issue resolved:
         # https://github.com/rapidsai/cudf/issues/5286
 
-        return (
-            self.as_frame()
-            .drop_duplicates(keep="first", ignore_index=True)
-            ._as_column()
-        )
+        return drop_duplicates([self], keep="first")[0]
 
     def serialize(self) -> Tuple[dict, list]:
         header: Dict[Any, Any] = {}
@@ -1153,6 +1148,12 @@ class ColumnBase(Column, Serializable):
         self, other: ScalarLike
     ) -> Union[ColumnBase, ScalarLike]:
         raise NotImplementedError
+
+    def _minmax(self, skipna: bool = None):
+        result_col = self._process_for_reduction(skipna=skipna)
+        if isinstance(result_col, ColumnBase):
+            return libcudf.reduce.minmax(result_col)
+        return result_col
 
     def min(self, skipna: bool = None, dtype: Dtype = None):
         result_col = self._process_for_reduction(skipna=skipna)
@@ -1859,7 +1860,7 @@ def as_column(
 
         arbitrary = np.asarray(arbitrary)
 
-        # Handle case that `arbitary` elements are cupy arrays
+        # Handle case that `arbitrary` elements are cupy arrays
         if (
             shape
             and shape[0]
@@ -2076,6 +2077,11 @@ def as_column(
                         return cudf.core.column.Decimal32Column.from_arrow(
                             data
                         )
+                    if is_bool_dtype(dtype):
+                        # Need this special case handling for bool dtypes,
+                        # since 'boolean' & 'pd.BooleanDtype' are not
+                        # understood by np.dtype below.
+                        dtype = "bool"
                     np_type = np.dtype(dtype).type
                     pa_type = np_to_pa_dtype(np.dtype(dtype))
                 data = as_column(

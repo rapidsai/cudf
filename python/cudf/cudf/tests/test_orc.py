@@ -502,7 +502,7 @@ def test_orc_writer_sliced(tmpdir):
         "TestOrcFile.decimal.orc",
         "TestOrcFile.decimal.same.values.orc",
         "TestOrcFile.decimal.multiple.values.orc",
-        # For addional information take look at PR 7034
+        # For additional information take look at PR 7034
         "TestOrcFile.decimal.runpos.issue.orc",
     ],
 )
@@ -541,7 +541,7 @@ def test_orc_decimal_precision_fail(datadir):
     assert_eq(pdf, gdf)
 
 
-# For addional information take look at PR 6636 and 6702
+# For additional information take look at PR 6636 and 6702
 @pytest.mark.parametrize(
     "orc_file",
     [
@@ -1492,3 +1492,52 @@ def test_empty_statistics():
         assert stats[0]["i"].get("minimum") == 1
         assert stats[0]["i"].get("maximum") == 1
         assert stats[0]["i"].get("sum") == 1
+
+
+@pytest.mark.filterwarnings("ignore:.*struct.*experimental")
+@pytest.mark.parametrize(
+    "equivalent_columns",
+    [
+        (["lvl1_struct.a", "lvl1_struct.b"], ["lvl1_struct"]),
+        (["lvl1_struct", "lvl1_struct.a"], ["lvl1_struct"]),
+        (["lvl1_struct.a", "lvl1_struct"], ["lvl1_struct"]),
+        (["lvl1_struct.b", "lvl1_struct.a"], ["lvl1_struct.b", "lvl1_struct"]),
+        (["lvl2_struct.lvl1_struct", "lvl2_struct"], ["lvl2_struct"]),
+        (
+            ["lvl2_struct.a", "lvl2_struct.lvl1_struct.c", "lvl2_struct"],
+            ["lvl2_struct"],
+        ),
+    ],
+)
+def test_select_nested(list_struct_buff, equivalent_columns):
+    # The two column selections should be equivalent
+    df_cols1 = cudf.read_orc(list_struct_buff, columns=equivalent_columns[0])
+    df_cols2 = cudf.read_orc(list_struct_buff, columns=equivalent_columns[1])
+    assert_eq(df_cols1, df_cols2)
+
+
+def test_orc_writer_rle_stream_size(datadir, tmpdir):
+    original = datadir / "TestOrcFile.int16.rle.size.orc"
+    reencoded = tmpdir.join("int16_map.orc")
+
+    df = cudf.read_orc(original)
+    df.to_orc(reencoded)
+
+    # Segfaults when RLE stream sizes don't account for varint length
+    pa_out = pa.orc.ORCFile(reencoded).read()
+    assert_eq(df.to_pandas(), pa_out)
+
+
+def test_empty_columns():
+    buffer = BytesIO()
+    # string and decimal columns have additional steps that need to be skipped
+    expected = cudf.DataFrame(
+        {
+            "string": cudf.Series([], dtype="str"),
+            "decimal": cudf.Series([], dtype=cudf.Decimal64Dtype(10, 1)),
+        }
+    )
+    expected.to_orc(buffer, compression="snappy")
+
+    got_df = cudf.read_orc(buffer)
+    assert_eq(expected, got_df)

@@ -36,6 +36,7 @@ cdef extern from "cudf/io/orc.hpp" \
         void enable_use_np_dtypes(bool val) except+
         void set_timestamp_type(data_type type) except+
         void set_decimal_cols_as_float(vector[string] val) except+
+        void set_decimal128_columns(vector[string] val) except+
 
         @staticmethod
         orc_reader_options_builder builder(
@@ -57,6 +58,9 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_reader_options_builder& decimal_cols_as_float(
             vector[string] val
         ) except+
+        orc_reader_options_builder& decimal128_columns(
+            vector[string] val
+        ) except+
 
         orc_reader_options build() except+
 
@@ -68,10 +72,10 @@ cdef extern from "cudf/io/orc.hpp" \
         orc_writer_options()
         cudf_io_types.sink_info get_sink() except+
         cudf_io_types.compression_type get_compression() except+
-        bool enable_statistics() except+
-        size_t stripe_size_bytes() except+
-        size_type stripe_size_rows() except+
-        size_type row_index_stride() except+
+        bool is_enabled_statistics() except+
+        size_t get_stripe_size_bytes() except+
+        size_type get_stripe_size_rows() except+
+        size_type get_row_index_stride() except+
         cudf_table_view.table_view get_table() except+
         const cudf_io_types.table_input_metadata *get_metadata() except+
 

@@ -274,7 +274,7 @@ template <typename T>
 struct CastChronosTyped : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(CastChronosTyped, cudf::test::ChronoTypes);
+TYPED_TEST_SUITE(CastChronosTyped, cudf::test::ChronoTypes);
 
 // Return a list of chrono type ids whose precision is greater than or equal
 // to the input type id
@@ -446,7 +446,7 @@ template <typename T>
 struct CastToDurations : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(CastToDurations, cudf::test::IntegralTypes);
+TYPED_TEST_SUITE(CastToDurations, cudf::test::IntegralTypes);
 
 TYPED_TEST(CastToDurations, AllValid)
 {
@@ -479,7 +479,7 @@ template <typename T>
 struct CastFromDurations : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(CastFromDurations, cudf::test::NumericTypes);
+TYPED_TEST_SUITE(CastFromDurations, cudf::test::NumericTypes);
 
 TYPED_TEST(CastFromDurations, AllValid)
 {
@@ -554,7 +554,7 @@ template <typename T>
 struct FixedPointTests : public cudf::test::BaseFixture {
 };
 
-TYPED_TEST_CASE(FixedPointTests, cudf::test::FixedPointTypes);
+TYPED_TEST_SUITE(FixedPointTests, cudf::test::FixedPointTypes);
 
 TYPED_TEST(FixedPointTests, CastToDouble)
 {
@@ -1000,6 +1000,19 @@ TYPED_TEST(FixedPointTests, Decimal128ToDecimalXXWithLargerScaleAndNullMask)
   auto const input    = fp_wrapperFrom{vec.cbegin(), vec.cend(), {1, 1, 1, 0}, scale_type{-3}};
   auto const expected = fp_wrapperTo{{1, 17, 172, 1729000}, {1, 1, 1, 0}, scale_type{0}};
   auto const result   = cudf::cast(input, make_fixed_point_data_type<decimalXX>(0));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}
+
+TEST_F(FixedPointTestSingleType, Int32ToInt64Convert)
+{
+  using namespace numeric;
+  using fp_wrapperA = cudf::test::fixed_point_column_wrapper<int32_t>;
+  using fp_wrapperB = cudf::test::fixed_point_column_wrapper<int64_t>;
+
+  auto const input    = fp_wrapperB{{141230900000L}, scale_type{-10}};
+  auto const expected = fp_wrapperA{{14123}, scale_type{-3}};
+  auto const result   = cudf::cast(input, make_fixed_point_data_type<decimal32>(-3));
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }

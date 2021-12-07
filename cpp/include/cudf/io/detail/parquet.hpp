@@ -148,7 +148,7 @@ class writer {
    * @param[in] metadata_list List of input file metadata
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list
    */
-  static std::unique_ptr<std::vector<uint8_t>> merge_rowgroup_metadata(
+  static std::unique_ptr<std::vector<uint8_t>> merge_row_group_metadata(
     const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list);
 };
 

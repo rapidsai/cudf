@@ -141,7 +141,7 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
                                        rmm::mr::device_memory_resource* mr)
 {
   auto const strings_count = input.size();
-  if (strings_count == 0) { return make_empty_column(data_type{type_id::STRING}); }
+  if (strings_count == 0) { return make_empty_column(type_id::STRING); }
 
   if (repeat_times <= 0) {
     // If the number of repetitions is not positive, each row of the output strings column will be
@@ -302,7 +302,7 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
   }
 
   auto const strings_count = input.size();
-  if (strings_count == 0) { return make_empty_column(data_type{type_id::STRING}); }
+  if (strings_count == 0) { return make_empty_column(type_id::STRING); }
 
   auto const strings_dv_ptr      = column_device_view::create(input.parent(), stream);
   auto const repeat_times_dv_ptr = column_device_view::create(repeat_times, stream);
@@ -319,13 +319,13 @@ std::unique_ptr<column> repeat_strings(strings_column_view const& input,
   // We generate new bitmask by AND of the input columns' bitmasks.
   // Note that if the input columns are nullable, the output column will also be nullable (which may
   // not have nulls).
-  auto null_mask =
+  auto [null_mask, null_count] =
     cudf::detail::bitmask_and(table_view{{input.parent(), repeat_times}}, stream, mr);
 
   return make_strings_column(strings_count,
                              std::move(offsets_column),
                              std::move(chars_column),
-                             UNKNOWN_NULL_COUNT,
+                             null_count,
                              std::move(null_mask));
 }
 
@@ -342,7 +342,7 @@ std::pair<std::unique_ptr<column>, int64_t> repeat_strings_output_sizes(
 
   auto const strings_count = input.size();
   if (strings_count == 0) {
-    return std::make_pair(make_empty_column(data_type{type_to_id<size_type>()}), int64_t{0});
+    return std::make_pair(make_empty_column(type_to_id<size_type>()), int64_t{0});
   }
 
   auto output_sizes = make_numeric_column(
@@ -369,7 +369,7 @@ std::pair<std::unique_ptr<column>, int64_t> repeat_strings_output_sizes(
                              thrust::make_counting_iterator<size_type>(strings_count),
                              fn,
                              int64_t{0},
-                             thrust::plus<int64_t>{});
+                             thrust::plus{});
 
   return std::make_pair(std::move(output_sizes), total_bytes);
 }

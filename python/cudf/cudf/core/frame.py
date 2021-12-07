@@ -30,6 +30,7 @@ from cudf import _lib as libcudf
 from cudf._typing import ColumnLike, DataFrameOrSeries, Dtype
 from cudf.api.types import (
     _is_non_decimal_numeric_dtype,
+    is_bool_dtype,
     is_decimal_dtype,
     is_dict_like,
     is_integer_dtype,
@@ -45,12 +46,13 @@ from cudf.core.column import (
     serialize_columns,
 )
 from cudf.core.column_accessor import ColumnAccessor
-from cudf.core.join import merge
-from cudf.core.udf.pipeline import compile_or_get
+from cudf.core.join import Merge, MergeSemi
+from cudf.core.udf.pipeline import compile_or_get, supported_cols_from_frame
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type, is_column_like
+from cudf.utils.utils import _gather_map_is_valid
 
 T = TypeVar("T", bound="Frame")
 
@@ -138,6 +140,37 @@ class Frame:
         obj = cls.__new__(cls)
         Frame.__init__(obj, data, index)
         return obj
+
+    @classmethod
+    def _from_columns(
+        cls,
+        columns: List[ColumnBase],
+        column_names: List[str],
+        index_names: Optional[List[str]] = None,
+    ):
+        """Construct a `Frame` object from a list of columns.
+
+        If `index_names` is set, the first `len(index_names)` columns are
+        used to construct the index of the frame.
+        """
+        index = None
+        n_index_columns = 0
+        if index_names is not None:
+            n_index_columns = len(index_names)
+            index = cudf.core.index._index_from_data(
+                dict(zip(range(n_index_columns), columns))
+            )
+            if isinstance(index, cudf.MultiIndex):
+                index.names = index_names
+            else:
+                index.name = index_names[0]
+
+        data = {
+            name: columns[i + n_index_columns]
+            for i, name in enumerate(column_names)
+        }
+
+        return cls._from_data(data, index)
 
     def _mimic_inplace(
         self: T, result: Frame, inplace: bool = False
@@ -516,21 +549,35 @@ class Frame:
             data, columns=data.to_pandas_index(), index=self.index
         )
 
-    def _gather(self, gather_map, keep_index=True, nullify=False):
+    def _gather(
+        self, gather_map, keep_index=True, nullify=False, check_bounds=True
+    ):
+        """Gather rows of frame specified by indices in `gather_map`.
+
+        Skip bounds checking if check_bounds is False.
+        Set rows to null for all out of bound indices if nullify is `True`.
+        """
+        # TODO: `keep_index` argument is to be removed.
+        gather_map = cudf.core.column.as_column(gather_map)
+
+        # TODO: For performance, the check and conversion of gather map should
+        # be done by the caller. This check will be removed in future release.
         if not is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
-        result = self.__class__._from_data(
-            *libcudf.copying.gather(
-                self,
-                as_column(gather_map),
-                keep_index=keep_index,
-                nullify=nullify,
-            )
+
+        if not _gather_map_is_valid(
+            gather_map, len(self), check_bounds, nullify
+        ):
+            raise IndexError("Gather map index is out of bounds.")
+
+        result = self.__class__._from_columns(
+            libcudf.copying.gather(
+                list(self._columns), gather_map, nullify=nullify,
+            ),
+            self._column_names,
         )
 
-        result._copy_type_metadata(self, include_index=keep_index)
-        if keep_index and self._index is not None:
-            result._index.names = self._index.names
+        result._copy_type_metadata(self)
         return result
 
     def _hash(self, method, initial_hash=None):
@@ -629,14 +676,18 @@ class Frame:
         # Early exit for an empty Frame.
         ncol = self._num_columns
         if ncol == 0:
-            return make_empty_matrix(shape=(0, 0), dtype=np.dtype("float64"))
+            return make_empty_matrix(
+                shape=(0, 0), dtype=np.dtype("float64"), order="F"
+            )
 
         if dtype is None:
             dtype = find_common_type(
                 [col.dtype for col in self._data.values()]
             )
 
-        matrix = make_empty_matrix(shape=(len(self), ncol), dtype=dtype)
+        matrix = make_empty_matrix(
+            shape=(len(self), ncol), dtype=dtype, order="F"
+        )
         for i, col in enumerate(self._data.values()):
             # TODO: col.values may fail if there is nullable data or an
             # unsupported dtype. We may want to catch and provide a more
@@ -1352,6 +1403,12 @@ class Frame:
 
         return self._mimic_inplace(result, inplace=inplace)
 
+    def ffill(self):
+        return self.fillna(method="ffill")
+
+    def bfill(self):
+        return self.fillna(method="bfill")
+
     def _drop_na_rows(
         self, how="any", subset=None, thresh=None, drop_nan=False
     ):
@@ -1381,10 +1438,8 @@ class Frame:
         diff = set(subset) - set(self._data)
         if len(diff) != 0:
             raise KeyError(f"columns {diff} do not exist")
-        subset_cols = [
-            name for name, col in self._data.items() if name in subset
-        ]
-        if len(subset_cols) == 0:
+
+        if len(subset) == 0:
             return self.copy(deep=True)
 
         frame = self.copy(deep=False)
@@ -1397,16 +1452,19 @@ class Frame:
                 else:
                     frame._data[name] = col
 
-        result = self.__class__._from_data(
-            *libcudf.stream_compaction.drop_nulls(
-                frame, how=how, keys=subset, thresh=thresh
-            )
+        result = self.__class__._from_columns(
+            libcudf.stream_compaction.drop_nulls(
+                list(self._index._data.columns + frame._columns),
+                how=how,
+                keys=self._positions_from_column_names(
+                    subset, offset_by_index_columns=True
+                ),
+                thresh=thresh,
+            ),
+            self._column_names,
+            self._index.names,
         )
         result._copy_type_metadata(frame)
-        if self._index is not None:
-            result._index.name = self._index.name
-            if isinstance(self._index, cudf.MultiIndex):
-                result._index.names = self._index.names
         return result
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
@@ -1553,18 +1611,21 @@ class Frame:
         return result
 
     @annotate("APPLY", color="purple", domain="cudf_python")
-    def _apply(self, func):
+    def _apply(self, func, *args):
         """
         Apply `func` across the rows of the frame.
         """
-        kernel, retty = compile_or_get(self, func)
+        kernel, retty = compile_or_get(self, func, args)
 
         # Mask and data column preallocated
         ans_col = cupy.empty(len(self), dtype=retty)
         ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
-        launch_args = [(ans_col, ans_mask)]
+        launch_args = [(ans_col, ans_mask), len(self)]
         offsets = []
-        for col in self._data.values():
+
+        # if compile_or_get succeeds, it is safe to create a kernel that only
+        # consumes the columns that are of supported dtype
+        for col in supported_cols_from_frame(self).values():
             data = col.data
             mask = col.mask
             if mask is None:
@@ -1573,12 +1634,12 @@ class Frame:
                 launch_args.append((data, mask))
             offsets.append(col.offset)
         launch_args += offsets
-        launch_args.append(len(self))  # size
+        launch_args += list(args)
         kernel.forall(len(self))(*launch_args)
 
-        result = cudf.Series(ans_col).set_mask(
-            libcudf.transform.bools_to_mask(ans_mask)
-        )
+        col = as_column(ans_col)
+        col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
+        result = cudf.Series._from_data({None: col}, self._index)
 
         return result
 
@@ -2244,54 +2305,44 @@ class Frame:
         )
 
     def drop_duplicates(
-        self,
-        subset=None,
-        keep="first",
-        nulls_are_equal=True,
-        ignore_index=False,
+        self, keep="first", nulls_are_equal=True,
     ):
         """
-        Drops rows in frame as per duplicate rows in `subset` columns from
-        self.
+        Drop duplicate rows in frame.
 
-        subset : list, optional
-            List of columns to consider when dropping rows.
-        keep : ["first", "last", False] first will keep first of duplicate,
-            last will keep last of the duplicate and False drop all
-            duplicate
-        nulls_are_equal: null elements are considered equal to other null
-            elements
-        ignore_index: bool, default False
-            If True, the resulting axis will be labeled 0, 1, …, n - 1.
+        keep : ["first", "last", False], default "first"
+            "first" will keep the first duplicate entry, "last" will keep the
+            last duplicate entry, and False will drop all duplicates.
+        nulls_are_equal: bool, default True
+            Null elements are considered equal to other null elements.
         """
-        if subset is None:
-            subset = self._column_names
-        elif (
-            not np.iterable(subset)
-            or isinstance(subset, str)
-            or isinstance(subset, tuple)
-            and subset in self._data.names
-        ):
-            subset = (subset,)
-        diff = set(subset) - set(self._data)
-        if len(diff) != 0:
-            raise KeyError(f"columns {diff} do not exist")
-        subset_cols = [name for name in self._column_names if name in subset]
-        if len(subset_cols) == 0:
-            return self.copy(deep=True)
 
-        result = self.__class__._from_data(
-            *libcudf.stream_compaction.drop_duplicates(
-                self,
-                keys=subset,
+        result = self.__class__._from_columns(
+            libcudf.stream_compaction.drop_duplicates(
+                list(self._columns),
+                keys=range(len(self._columns)),
                 keep=keep,
                 nulls_are_equal=nulls_are_equal,
-                ignore_index=ignore_index,
-            )
+            ),
+            self._column_names,
         )
-
+        # TODO: _copy_type_metadata is a common pattern to apply after the
+        # roundtrip from libcudf. We should build this into a factory function
+        # to increase reusability.
         result._copy_type_metadata(self)
         return result
+
+    def _positions_from_column_names(self, column_names):
+        """Map each column name into their positions in the frame.
+
+        The order of indices returned corresponds to the column order in this
+        Frame.
+        """
+        return [
+            i
+            for i, name in enumerate(self._column_names)
+            if name in set(column_names)
+        ]
 
     def replace(
         self,
@@ -2571,7 +2622,10 @@ class Frame:
                     self._index, cudf.core.index.CategoricalIndex
                 ):
                     self._index = cudf.Index(
-                        cast(cudf.core.index.NumericIndex, self._index)._column
+                        cast(
+                            cudf.core.index.NumericIndex, self._index
+                        )._column,
+                        name=self._index.name,
                     )
 
         return self
@@ -2878,6 +2932,9 @@ class Frame:
         """
         # Call libcudf++ search_sorted primitive
 
+        if na_position not in {"first", "last"}:
+            raise ValueError(f"invalid na_position: {na_position}")
+
         scalar_flag = None
         if is_scalar(values):
             scalar_flag = True
@@ -2899,34 +2956,101 @@ class Frame:
         else:
             return result
 
-    def _get_sorted_inds(self, by=None, ascending=True, na_position="last"):
-        """
-        Sort by the values.
+    @annotate("ARGSORT", color="yellow", domain="cudf_python")
+    def argsort(
+        self,
+        by=None,
+        axis=0,
+        kind="quicksort",
+        order=None,
+        ascending=True,
+        na_position="last",
+    ):
+        """Return the integer indices that would sort the Series values.
 
         Parameters
         ----------
-        by: list, optional
-            Labels specifying columns to sort by. By default,
-            sort by all columns of `self`
+        by : str or list of str, default None
+            Name or list of names to sort by. If None, sort by all columns.
+        axis : {0 or "index"}
+            Has no effect but is accepted for compatibility with numpy.
+        kind : {'mergesort', 'quicksort', 'heapsort', 'stable'}, default 'quicksort'
+            Choice of sorting algorithm. See :func:`numpy.sort` for more
+            information. 'mergesort' and 'stable' are the only stable
+            algorithms. Only quicksort is supported in cuDF.
+        order : None
+            Has no effect but is accepted for compatibility with numpy.
         ascending : bool or list of bool, default True
             If True, sort values in ascending order, otherwise descending.
         na_position : {‘first’ or ‘last’}, default ‘last’
             Argument ‘first’ puts NaNs at the beginning, ‘last’ puts NaNs
             at the end.
+
         Returns
         -------
-        out_column_inds : cuDF Column of indices sorted based on input
+        cupy.ndarray: The indices sorted based on input.
 
-        Difference from pandas:
-        * Support axis='index' only.
-        * Not supporting: inplace, kind
-        * Ascending can be a list of bools to control per column
-        """
+        Examples
+        --------
+        **Series**
+
+        >>> import cudf
+        >>> s = cudf.Series([3, 1, 2])
+        >>> s
+        0    3
+        1    1
+        2    2
+        dtype: int64
+        >>> s.argsort()
+        0    1
+        1    2
+        2    0
+        dtype: int32
+        >>> s[s.argsort()]
+        1    1
+        2    2
+        0    3
+        dtype: int64
+
+        **DataFrame**
+        >>> import cudf
+        >>> df = cudf.DataFrame({'foo': [3, 1, 2]})
+        >>> df.argsort()
+        array([1, 2, 0], dtype=int32)
+
+        **Index**
+        >>> import cudf
+        >>> idx = cudf.Index([3, 1, 2])
+        >>> idx.argsort()
+        array([1, 2, 0], dtype=int32)
+        """  # noqa: E501
+        if na_position not in {"first", "last"}:
+            raise ValueError(f"invalid na_position: {na_position}")
+        if kind != "quicksort":
+            if kind not in {"mergesort", "heapsort", "stable"}:
+                raise AttributeError(
+                    f"{kind} is not a valid sorting algorithm for "
+                    f"'DataFrame' object"
+                )
+            warnings.warn(
+                f"GPU-accelerated {kind} is currently not supported, "
+                "defaulting to quicksort."
+            )
+
+        if isinstance(by, str):
+            by = [by]
+        return self._get_sorted_inds(
+            by=by, ascending=ascending, na_position=na_position
+        ).values
+
+    def _get_sorted_inds(self, by=None, ascending=True, na_position="last"):
+        # Get an int64 column consisting of the indices required to sort self
+        # according to the columns specified in by.
 
         to_sort = (
             self
             if by is None
-            else self._get_columns_by_label(by, downcast=False)
+            else self._get_columns_by_label(list(by), downcast=False)
         )
 
         # If given a scalar need to construct a sequence of length # of columns
@@ -2934,6 +3058,74 @@ class Frame:
             ascending = [ascending] * to_sort._num_columns
 
         return libcudf.sort.order_by(to_sort, ascending, na_position)
+
+    def take(self, indices, keep_index=None):
+        """Return a new object containing the rows specified by *positions*
+
+        Parameters
+        ----------
+        indices : array-like
+            Array of ints indicating which positions to take.
+        keep_index : bool, default True
+            Whether to retain the index in result or not.
+
+        Returns
+        -------
+        out : Series or DataFrame or Index
+            New object with desired subset of rows.
+
+        Examples
+        --------
+        **Series**
+        >>> s = cudf.Series(['a', 'b', 'c', 'd', 'e'])
+        >>> s.take([2, 0, 4, 3])
+        2    c
+        0    a
+        4    e
+        3    d
+        dtype: object
+
+        **DataFrame**
+
+        >>> a = cudf.DataFrame({'a': [1.0, 2.0, 3.0],
+        ...                    'b': cudf.Series(['a', 'b', 'c'])})
+        >>> a.take([0, 2, 2])
+             a  b
+        0  1.0  a
+        2  3.0  c
+        2  3.0  c
+        >>> a.take([True, False, True])
+             a  b
+        0  1.0  a
+        2  3.0  c
+
+        **Index**
+
+        >>> idx = cudf.Index(['a', 'b', 'c', 'd', 'e'])
+        >>> idx.take([2, 0, 4, 3])
+        StringIndex(['c' 'a' 'e' 'd'], dtype='object')
+        """
+        # TODO: When we remove keep_index we should introduce the axis
+        # parameter. We could also introduce is_copy, but that's already
+        # deprecated in pandas so it's probably unnecessary. We also need to
+        # introduce Index.take's allow_fill and fill_value parameters.
+        if keep_index is not None:
+            warnings.warn(
+                "keep_index is deprecated and will be removed in the future.",
+                FutureWarning,
+            )
+        else:
+            keep_index = True
+
+        indices = as_column(indices)
+        if is_bool_dtype(indices):
+            warnings.warn(
+                "Calling take with a boolean array is deprecated and will be "
+                "removed in the future.",
+                FutureWarning,
+            )
+            return self._apply_boolean_mask(indices)
+        return self._gather(indices, keep_index=keep_index)
 
     def sin(self):
         """
@@ -3517,6 +3709,13 @@ class Frame:
         3    5.0
         dtype: float64
         """
+
+        warnings.warn(
+            "Series.ceil and DataFrame.ceil are deprecated and will be \
+                removed in the future",
+            DeprecationWarning,
+        )
+
         return self._unaryop("ceil")
 
     def floor(self):
@@ -3549,6 +3748,13 @@ class Frame:
         5    3.0
         dtype: float64
         """
+
+        warnings.warn(
+            "Series.ceil and DataFrame.ceil are deprecated and will be \
+                removed in the future",
+            DeprecationWarning,
+        )
+
         return self._unaryop("floor")
 
     def scale(self):
@@ -3599,6 +3805,7 @@ class Frame:
         suffixes=("_x", "_y"),
     ):
         lhs, rhs = self, right
+        merge_cls = Merge
         if how == "right":
             # Merge doesn't support right, so just swap
             how = "left"
@@ -3606,8 +3813,10 @@ class Frame:
             left_on, right_on = right_on, left_on
             left_index, right_index = right_index, left_index
             suffixes = (suffixes[1], suffixes[0])
+        elif how in {"leftsemi", "leftanti"}:
+            merge_cls = MergeSemi
 
-        return merge(
+        return merge_cls(
             lhs,
             rhs,
             on=on,
@@ -3619,7 +3828,7 @@ class Frame:
             sort=sort,
             indicator=indicator,
             suffixes=suffixes,
-        )
+        ).perform_merge()
 
     def _is_sorted(self, ascending=None, null_position=None):
         """
@@ -6157,6 +6366,7 @@ class Frame:
 
     # Alias for truediv
     div = truediv
+    divide = truediv
 
     def rtruediv(self, other, axis, level=None, fill_value=None):
         """
@@ -6249,6 +6459,456 @@ class Frame:
 
     # Alias for rtruediv
     rdiv = rtruediv
+
+    def eq(self, other, axis="columns", level=None, fill_value=None):
+        """Equal to, element-wise (binary operator eq).
+
+        Parameters
+        ----------
+        other : Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Frame
+            The result of the operation.
+
+        Examples
+        --------
+        **DataFrame**
+
+        >>> left = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'c': [7, 8, 9]}
+        ... )
+        >>> right = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'd': [10, 12, 12]}
+        ... )
+        >>> left.eq(right)
+        a     b     c     d
+        0  True  True  <NA>  <NA>
+        1  True  True  <NA>  <NA>
+        2  True  True  <NA>  <NA>
+        >>> left.eq(right, fill_value=7)
+        a     b      c      d
+        0  True  True   True  False
+        1  True  True  False  False
+        2  True  True  False  False
+
+        **Series**
+
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20],
+        ...                 index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None],
+        ...                 index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.eq(b, fill_value=2)
+        a    False
+        b    False
+        c    False
+        d    False
+        e     <NA>
+        f    False
+        g    False
+        dtype: bool
+        """
+        return self._binaryop(
+            other=other, fn="eq", fill_value=fill_value, can_reindex=True
+        )
+
+    def ne(self, other, axis="columns", level=None, fill_value=None):
+        """Not equal to, element-wise (binary operator ne).
+
+        Parameters
+        ----------
+        other : Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Frame
+            The result of the operation.
+
+        Examples
+        --------
+        **DataFrame**
+
+        >>> left = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'c': [7, 8, 9]}
+        ... )
+        >>> right = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'd': [10, 12, 12]}
+        ... )
+        >>> left.ne(right)
+        a      b     c     d
+        0  False  False  <NA>  <NA>
+        1  False  False  <NA>  <NA>
+        2  False  False  <NA>  <NA>
+        >>> left.ne(right, fill_value=7)
+        a      b      c     d
+        0  False  False  False  True
+        1  False  False   True  True
+        2  False  False   True  True
+
+        **Series**
+
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20],
+        ...                 index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None],
+        ...                 index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.ne(b, fill_value=2)
+        a    True
+        b    True
+        c    True
+        d    True
+        e    <NA>
+        f    True
+        g    True
+        dtype: bool
+        """  # noqa: E501
+        return self._binaryop(
+            other=other, fn="ne", fill_value=fill_value, can_reindex=True
+        )
+
+    def lt(self, other, axis="columns", level=None, fill_value=None):
+        """Less than, element-wise (binary operator lt).
+
+        Parameters
+        ----------
+        other : Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Frame
+            The result of the operation.
+
+        Examples
+        --------
+        **DataFrame**
+
+        >>> left = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'c': [7, 8, 9]}
+        ... )
+        >>> right = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'd': [10, 12, 12]}
+        ... )
+        >>> left.lt(right)
+        a      b     c     d
+        0  False  False  <NA>  <NA>
+        1  False  False  <NA>  <NA>
+        2  False  False  <NA>  <NA>
+        >>> left.lt(right, fill_value=7)
+        a      b      c     d
+        0  False  False  False  True
+        1  False  False  False  True
+        2  False  False  False  True
+
+        **Series**
+
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20],
+        ...                 index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None],
+        ...                 index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.lt(b, fill_value=-10)
+        a    False
+        b     True
+        c    False
+        d    False
+        e     <NA>
+        f    False
+        g    False
+        dtype: bool
+        """  # noqa: E501
+        return self._binaryop(
+            other=other, fn="lt", fill_value=fill_value, can_reindex=True
+        )
+
+    def le(self, other, axis="columns", level=None, fill_value=None):
+        """Less than or equal, element-wise (binary operator le).
+
+        Parameters
+        ----------
+        other : Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Frame
+            The result of the operation.
+
+        Examples
+        --------
+        **DataFrame**
+
+        >>> left = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'c': [7, 8, 9]}
+        ... )
+        >>> right = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'd': [10, 12, 12]}
+        ... )
+        >>> left.le(right)
+        a     b     c     d
+        0  True  True  <NA>  <NA>
+        1  True  True  <NA>  <NA>
+        2  True  True  <NA>  <NA>
+        >>> left.le(right, fill_value=7)
+        a     b      c     d
+        0  True  True   True  True
+        1  True  True  False  True
+        2  True  True  False  True
+
+        **Series**
+
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20],
+        ...                 index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None],
+        ...                 index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.le(b, fill_value=-10)
+        a    False
+        b     True
+        c    False
+        d    False
+        e     <NA>
+        f    False
+        g    False
+        dtype: bool
+        """  # noqa: E501
+        return self._binaryop(
+            other=other, fn="le", fill_value=fill_value, can_reindex=True
+        )
+
+    def gt(self, other, axis="columns", level=None, fill_value=None):
+        """Greater than, element-wise (binary operator gt).
+
+        Parameters
+        ----------
+        other : Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Frame
+            The result of the operation.
+
+        Examples
+        --------
+        **DataFrame**
+
+        >>> left = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'c': [7, 8, 9]}
+        ... )
+        >>> right = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'd': [10, 12, 12]}
+        ... )
+        >>> left.gt(right)
+        a      b     c     d
+        0  False  False  <NA>  <NA>
+        1  False  False  <NA>  <NA>
+        2  False  False  <NA>  <NA>
+        >>> left.gt(right, fill_value=7)
+        a      b      c      d
+        0  False  False  False  False
+        1  False  False   True  False
+        2  False  False   True  False
+
+        **Series**
+
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20],
+        ...                 index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None],
+        ...                 index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.gt(b)
+        a     True
+        b    False
+        c     True
+        d    False
+        e    False
+        f    False
+        g    False
+        dtype: bool
+        """  # noqa: E501
+        return self._binaryop(
+            other=other, fn="gt", fill_value=fill_value, can_reindex=True
+        )
+
+    def ge(self, other, axis="columns", level=None, fill_value=None):
+        """Greater than or equal, element-wise (binary operator ge).
+
+        Parameters
+        ----------
+        other : Series or scalar value
+        fill_value : None or value
+            Value to fill nulls with before computation. If data in both
+            corresponding Series locations is null the result will be null
+
+        Returns
+        -------
+        Frame
+            The result of the operation.
+
+        Examples
+        --------
+        **DataFrame**
+
+        >>> left = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'c': [7, 8, 9]}
+        ... )
+        >>> right = cudf.DataFrame({
+        ...     'a': [1, 2, 3],
+        ...     'b': [4, 5, 6],
+        ...     'd': [10, 12, 12]}
+        ... )
+        >>> left.ge(right)
+        a     b     c     d
+        0  True  True  <NA>  <NA>
+        1  True  True  <NA>  <NA>
+        2  True  True  <NA>  <NA>
+        >>> left.ge(right, fill_value=7)
+        a     b     c      d
+        0  True  True  True  False
+        1  True  True  True  False
+        2  True  True  True  False
+
+        **Series**
+
+        >>> a = cudf.Series([1, 2, 3, None, 10, 20],
+        ...                 index=['a', 'c', 'd', 'e', 'f', 'g'])
+        >>> a
+        a       1
+        c       2
+        d       3
+        e    <NA>
+        f      10
+        g      20
+        dtype: int64
+        >>> b = cudf.Series([-10, 23, -1, None, None],
+        ...                 index=['a', 'b', 'c', 'd', 'e'])
+        >>> b
+        a     -10
+        b      23
+        c      -1
+        d    <NA>
+        e    <NA>
+        dtype: int64
+        >>> a.ge(b)
+        a     True
+        b    False
+        c     True
+        d    False
+        e    False
+        f    False
+        g    False
+        dtype: bool
+        """  # noqa: E501
+        return self._binaryop(
+            other=other, fn="ge", fill_value=fill_value, can_reindex=True
+        )
 
 
 def _get_replacement_values_for_columns(

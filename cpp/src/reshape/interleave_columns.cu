@@ -143,7 +143,7 @@ struct interleave_columns_impl<T, typename std::enable_if_t<std::is_same_v<T, cu
 
     auto strings_count = strings_columns.num_rows();
     if (strings_count == 0)  // All columns have 0 rows
-      return make_empty_column(data_type{type_id::STRING});
+      return make_empty_column(type_id::STRING);
 
     // Create device views from the strings columns.
     auto table       = table_device_view::create(strings_columns, stream);

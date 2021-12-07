@@ -1118,9 +1118,8 @@ template <typename Source, aggregation::Kind k>
 struct target_type_impl<
   Source,
   k,
-  std::enable_if_t<cudf::is_fixed_point<Source>() &&
-                   not std::is_same_v<Source, numeric::decimal128> && (k == aggregation::SUM)>> {
-  using type = numeric::decimal64;
+  std::enable_if_t<cudf::is_fixed_point<Source>() && (k == aggregation::SUM)>> {
+  using type = Source;
 };
 
 template <typename Source, aggregation::Kind k>
