@@ -172,6 +172,10 @@ if buildAll || hasArg libcudf; then
         echo "Building for *ALL* supported GPU architectures..."
     fi
 
+    ccache -C
+    # get the current count before the compile starts
+    FILES_IN_CCACHE=$(ccache -s | grep "files in cache")
+
     cmake -S $REPODIR/cpp -B ${LIB_BUILD_DIR} \
           -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           ${CUDF_CMAKE_CUDA_ARCHITECTURES} \
@@ -186,6 +190,13 @@ if buildAll || hasArg libcudf; then
     cd ${LIB_BUILD_DIR}
 
     cmake --build . -j${PARALLEL_LEVEL} ${VERBOSE_FLAG}
+
+    # Record build times
+    if [[ -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
+        echo "Formatting build times"
+        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --xml > ${LIB_BUILD_DIR}/ninja_log.xml
+        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --html $FILES_IN_CCACHE > ${LIB_BUILD_DIR}/ninja_log.html
+    fi
 
     if [[ ${INSTALL_TARGET} != "" ]]; then
         cmake --build . -j${PARALLEL_LEVEL} --target install ${VERBOSE_FLAG}
