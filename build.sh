@@ -193,8 +193,8 @@ if buildAll || hasArg libcudf; then
     # Record build times
     if [[ -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
         echo "Formatting build times"
-        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --xml > ${LIB_BUILD_DIR}/ninja_log.xml
-        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --html $FILES_IN_CCACHE > ${LIB_BUILD_DIR}/ninja_log.html
+        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt xml > ${LIB_BUILD_DIR}/ninja_log.xml
+        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt html --msg "$FILES_IN_CCACHE" > ${LIB_BUILD_DIR}/ninja_log.html
     fi
 
     if [[ ${INSTALL_TARGET} != "" ]]; then

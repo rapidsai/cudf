@@ -1,20 +1,31 @@
 #
 # Copyright (c) 2021, NVIDIA CORPORATION.
 #
+import argparse
 import os
 import sys
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 
-log_file = ".ninja_log"
-if len(sys.argv) > 1:
-    log_file = sys.argv[1]
+parser = argparse.ArgumentParser()
+parser.add_argument(
+    "log_file", type=str, default=".ninja_log", help=".ninja_log file"
+)
+parser.add_argument(
+    "--fmt", type=str, default="csv", help="output format (csv, xml, html)"
+)
+parser.add_argument(
+    "--msg",
+    type=str,
+    default=None,
+    help="optional message to include in html output",
+)
+args = parser.parse_args()
 
+log_file = args.log_file
 log_path = os.path.dirname(os.path.abspath(log_file))
 
-output_fmt = "csv"
-if len(sys.argv) > 2:
-    output_fmt = sys.argv[2][2:]
+output_fmt = args.fmt
 
 # build a map of the log entries
 entries = {}
@@ -75,11 +86,8 @@ elif output_fmt == "html":
     print("<html><head><title>Sorted Ninja Build Times</title>")
     print("<style>", "table, th, td { border:1px solid black; }", "</style>")
     print("</head><body>")
-    if len(sys.argv) > 3:
-        print("<p>")
-        for i in range(3, len(sys.argv)):
-            print(sys.argv[i], end=" ")
-        print("</p>")
+    if args.msg is not None:
+        print("<p>", args.msg, "</p>")
     print("<table>")
     print(
         "<tr><th>File</th>",
