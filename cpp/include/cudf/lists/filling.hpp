@@ -38,17 +38,18 @@ namespace cudf::lists {
  * @p sizes columns.
  *
  *  - @p sizes must be a column of integer types.
- *  - If any row in the input columns is null then the corresponding output row will be null.
+ *  - All the input columns must not have nulls.
  *  - If any row of the @p sizes column contains negative value, the output is undefined.
  *
  * @code{.pseudo}
- * starts = [0, 1, 2,    null, 4]
- * sizes  = [0, 2, null, 2,    3]
+ * starts = [0, 1, 2, 3, 4]
+ * sizes  = [0, 2, 2, 1, 3]
  *
- * output = [ [], [1, 2], null, null, [4, 5, 6] ]
+ * output = [ [], [1, 2], [2, 3], [3], [4, 5, 6] ]
  * @endcode
  *
  * @throws cudf::logic_error if @p sizes column is not of integer types.
+ * @throws cudf::logic_error if any input column has nulls.
  * @throws cudf::logic_error if @p starts and @p sizes columns do not have the same size.
  *
  * @param starts First values in the result sequences.
@@ -72,7 +73,7 @@ std::unique_ptr<column> sequences(
  *
  *  - @p sizes must be a column of integer types.
  *  - @p starts and @p steps columns must have the same type.
- *  - If any row in the input columns is null then the corresponding output row will be null.
+ *  - All the input columns must not have nulls.
  *  - If any row of the @p sizes column contains negative value, the output is undefined.
  *
  * @code{.pseudo}
@@ -84,6 +85,7 @@ std::unique_ptr<column> sequences(
  * @endcode
  *
  * @throws cudf::logic_error if @p sizes column is not of integer types.
+ * @throws cudf::logic_error if any input column has nulls.
  * @throws cudf::logic_error if @p starts and @p steps columns have different types.
  * @throws cudf::logic_error if @p starts, @p steps, and @p sizes columns do not have the same size.
  *

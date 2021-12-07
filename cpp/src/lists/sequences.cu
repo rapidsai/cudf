@@ -18,11 +18,9 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/indexalator.cuh>
-#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/filling.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -110,8 +108,7 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
     auto const result_begin = result->mutable_view().template begin<T>();
 
     // Use pointers instead of column_device_view to access start and step values should be enough.
-    // This is because we don't need to check for nulls (results involving null elements will be
-    // finally nullified), and only support numeric and duration types.
+    // This is because we don't need to check for nulls and only support numeric and duration types.
     auto const starts_begin = starts.template begin<T>();
     auto const steps_begin  = steps ? steps.value().template begin<T>() : nullptr;
 
@@ -130,15 +127,19 @@ std::unique_ptr<column> sequences(column_view const& starts,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
+  CUDF_EXPECTS(!starts.has_nulls() && !sizes.has_nulls(),
+               "starts and sizes input columns must not have nulls.");
+  CUDF_EXPECTS(starts.size() == sizes.size(),
+               "starts and sizes input columns must have the same number of rows.");
   CUDF_EXPECTS(cudf::is_index_type(sizes.type()), "Input sizes column must be of integer types.");
+
   if (steps) {
-    CUDF_EXPECTS(starts.size() == steps.value().size() && starts.size() == sizes.size(),
-                 "starts, steps, and sizes input columns must have the same number of rows.");
-    CUDF_EXPECTS(starts.type() == steps.value().type(),
+    auto const& steps_cv = steps.value();
+    CUDF_EXPECTS(!steps_cv.has_nulls(), "steps input column must not have nulls.");
+    CUDF_EXPECTS(starts.size() == steps_cv.size(),
+                 "starts and steps input columns must have the same number of rows.");
+    CUDF_EXPECTS(starts.type() == steps_cv.type(),
                  "starts and steps input columns must have the same type.");
-  } else {
-    CUDF_EXPECTS(starts.size() == sizes.size(),
-                 "starts and sizes input columns must have the same number of rows.");
   }
 
   auto const n_lists = starts.size();
@@ -146,32 +147,12 @@ std::unique_ptr<column> sequences(column_view const& starts,
   // Generate list offsets for the output.
   auto list_offsets = make_numeric_column(
     data_type(type_to_id<offset_type>()), n_lists + 1, mask_state::UNALLOCATED, stream, mr);
-  auto const offsets_begin = list_offsets->mutable_view().template begin<offset_type>();
-
-  // Any null of the input columns will result in a null in the output lists column.
-  // We need the output null mask early here to normalize the input list sizes.
-  auto [null_mask, null_count] =
-    steps ? cudf::detail::bitmask_and(table_view{{starts, steps.value(), sizes}}, stream, mr)
-          : cudf::detail::bitmask_and(table_view{{starts, sizes}}, stream, mr);
-
-  // Normalize the input sizes:
-  // - Convert input integer type into size_type, and
-  // - Set zero size for null output.
+  auto const offsets_begin  = list_offsets->mutable_view().template begin<offset_type>();
   auto const sizes_input_it = cudf::detail::indexalator_factory::make_input_iterator(sizes);
-  auto const sizes_norm_it  = thrust::make_transform_iterator(
-    thrust::make_counting_iterator<size_type>(0),
-    [sizes_input_it,
-     null_count = null_count,
-     bitmask    = static_cast<bitmask_type*>(null_mask.data())] __device__(size_type idx) {
-      // Output list size is zero if output bitmask for that list is invalid.
-      if (null_count && !cudf::bit_is_set(bitmask, idx)) { return 0; }
-
-      return sizes_input_it[idx];
-    });
 
   CUDA_TRY(cudaMemsetAsync(offsets_begin, 0, sizeof(offset_type), stream.value()));
   thrust::inclusive_scan(
-    rmm::exec_policy(stream), sizes_norm_it, sizes_norm_it + n_lists, offsets_begin + 1);
+    rmm::exec_policy(stream), sizes_input_it, sizes_input_it + n_lists, offsets_begin + 1);
   auto const n_elements = cudf::detail::get_value<size_type>(list_offsets->view(), n_lists, stream);
 
   // Generate (temporary) list labels (1-based list indices) for all elements.
@@ -196,8 +177,8 @@ std::unique_ptr<column> sequences(column_view const& starts,
   return make_lists_column(n_lists,
                            std::move(list_offsets),
                            std::move(child),
-                           null_count,
-                           std::move(null_mask),
+                           0,
+                           rmm::device_buffer(0, stream),
                            stream,
                            mr);
 }
