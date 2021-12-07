@@ -35,10 +35,12 @@ namespace detail {
 namespace {
 template <typename T>
 struct tabulator {
+  size_type const n_lists;
+  size_type const n_elements;
+
   T const* const starts;
   T const* const steps;
   offset_type const* const offsets;
-  size_type const* const labels;
 
   template <typename U>
   static std::enable_if_t<!cudf::is_duration<U>(), T> __device__ multiply(U x, size_type times)
@@ -54,9 +56,10 @@ struct tabulator {
 
   auto __device__ operator()(size_type idx) const
   {
-    auto const list_idx    = labels[idx] - 1;  // labels are 1-based indices
-    auto const list_offset = offsets[list_idx];
-    auto const list_step   = steps ? steps[list_idx] : T{1};
+    auto const list_idx_end = thrust::upper_bound(thrust::seq, offsets, offsets + n_lists, idx);
+    auto const list_idx     = thrust::distance(offsets, list_idx_end) - 1;
+    auto const list_offset  = offsets[list_idx];
+    auto const list_step    = steps ? steps[list_idx] : T{1};
     return starts[list_idx] + multiply(list_step, idx - list_offset);
   }
 };
@@ -72,15 +75,15 @@ struct sequences_functor {
 
 struct sequences_dispatcher {
   template <typename T>
-  std::unique_ptr<column> operator()(size_type n_elements,
+  std::unique_ptr<column> operator()(size_type n_lists,
+                                     size_type n_elements,
                                      column_view const& starts,
                                      std::optional<column_view> const& steps,
                                      offset_type const* offsets,
-                                     size_type const* labels,
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    return sequences_functor<T>::invoke(n_elements, starts, steps, offsets, labels, stream, mr);
+    return sequences_functor<T>::invoke(n_lists, n_elements, starts, steps, offsets, stream, mr);
   }
 };
 
@@ -92,11 +95,11 @@ static constexpr bool is_supported()
 
 template <typename T>
 struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
-  static std::unique_ptr<column> invoke(size_type n_elements,
+  static std::unique_ptr<column> invoke(size_type n_lists,
+                                        size_type n_elements,
                                         column_view const& starts,
                                         std::optional<column_view> const& steps,
                                         offset_type const* offsets,
-                                        size_type const* labels,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
   {
@@ -111,7 +114,7 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
     auto const starts_begin = starts.template begin<T>();
     auto const steps_begin  = steps ? steps.value().template begin<T>() : nullptr;
 
-    auto const op = tabulator<T>{starts_begin, steps_begin, offsets, labels};
+    auto const op = tabulator<T>{n_lists, n_elements, starts_begin, steps_begin, offsets};
     thrust::tabulate(rmm::exec_policy(stream), result_begin, result_begin + n_elements, op);
 
     return result;
@@ -154,22 +157,13 @@ std::unique_ptr<column> sequences(column_view const& starts,
   auto const n_elements =
     n_lists == 0 ? 0 : cudf::detail::get_value<size_type>(list_offsets->view(), n_lists, stream);
 
-  // Generate (temporary) list labels (1-based list indices) for all elements.
-  auto labels = rmm::device_uvector<size_type>(n_elements, stream);
-  thrust::upper_bound(rmm::exec_policy(stream),
-                      offsets_begin,
-                      offsets_begin + n_lists,
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(n_elements),
-                      labels.begin());
-
   auto child = type_dispatcher(starts.type(),
                                sequences_dispatcher{},
+                               n_lists,
                                n_elements,
                                starts,
                                steps,
                                offsets_begin,
-                               labels.begin(),
                                stream,
                                mr);
 
