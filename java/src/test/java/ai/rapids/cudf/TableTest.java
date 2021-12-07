@@ -7178,19 +7178,6 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testORCWriteToFile() throws IOException {
-    File tempFile = File.createTempFile("test", ".orc");
-    try (Table table0 = getExpectedFileTable(WriteUtils.getNonNestedColumns(false))) {
-      table0.writeORC(tempFile.getAbsoluteFile());
-      try (Table table1 = Table.readORC(tempFile.getAbsoluteFile())) {
-        assertTablesAreEqual(table0, table1);
-      }
-    } finally {
-      tempFile.delete();
-    }
-  }
-
-  @Test
   void testORCWriteToFileWithColNames() throws IOException {
     File tempFile = File.createTempFile("test", ".orc");
     String[] colNames = WriteUtils.getNonNestedColumns(false);
@@ -7198,7 +7185,9 @@ public class TableTest extends CudfTestBase {
       ORCWriterOptions.Builder optBuilder = ORCWriterOptions.builder();
       WriteUtils.buildWriterOptions(optBuilder, colNames);
       ORCWriterOptions options = optBuilder.build();
-      table0.writeORC(options, tempFile.getAbsoluteFile());
+      try (TableWriter writer = Table.writeORCChunked(options, tempFile.getAbsoluteFile())) {
+        writer.write(table0);
+      }
       ORCOptions opts = ORCOptions.builder().includeColumn(colNames).build();
       try (Table table1 = Table.readORC(opts, tempFile.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table1);
@@ -7217,7 +7206,9 @@ public class TableTest extends CudfTestBase {
       ORCWriterOptions.Builder optBuilder = ORCWriterOptions.builder();
       WriteUtils.buildWriterOptions(optBuilder, colNames);
       ORCWriterOptions options = optBuilder.build();
-      table0.writeORC(options, tempFile.getAbsoluteFile());
+      try (TableWriter writer = Table.writeORCChunked(options, tempFile.getAbsoluteFile())) {
+        writer.write(table0);
+      }
       ORCOptions opts = ORCOptions.builder()
           .includeColumn(colNames)
           .decimal128Column(Columns.DECIMAL128.name,
@@ -7236,13 +7227,15 @@ public class TableTest extends CudfTestBase {
   void testORCWriteToFileUncompressed() throws IOException {
     File tempFileUncompressed = File.createTempFile("test-uncompressed", ".orc");
     try (Table table0 = getExpectedFileTable(WriteUtils.getNonNestedColumns(false))) {
-      String[] colNames = new String[table0.getNumberOfColumns()];
-      Arrays.fill(colNames, "");
-      ORCWriterOptions opts = ORCWriterOptions.builder()
-              .withColumns(true, colNames)
-              .withCompressionType(CompressionType.NONE)
-              .build();
-      table0.writeORC(opts, tempFileUncompressed.getAbsoluteFile());
+      String[] colNames = WriteUtils.getNonNestedColumns(false);
+      ORCWriterOptions.Builder optsBuilder = ORCWriterOptions.builder();
+      WriteUtils.buildWriterOptions(optsBuilder, colNames);
+      optsBuilder.withCompressionType(CompressionType.NONE);
+      ORCWriterOptions opts = optsBuilder.build();
+      try (TableWriter writer =
+               Table.writeORCChunked(opts,tempFileUncompressed.getAbsoluteFile())) {
+        writer.write(table0);
+      }
       try (Table table2 = Table.readORC(tempFileUncompressed.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table2);
       }
