@@ -3678,13 +3678,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         ----------
         prefix : str
             The string to add before each label.
+
         Returns
         -------
         Series
             New Series with updated labels.
+
         See Also
         --------
         Series.add_suffix: Suffix row labels with string `suffix`.
+
         Examples
         --------
         >>> s = cudf.Series([1, 2, 3, 4])
