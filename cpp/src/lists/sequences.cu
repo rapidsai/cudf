@@ -21,7 +21,6 @@
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/lists/filling.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/error.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -148,10 +147,12 @@ std::unique_ptr<column> sequences(column_view const& starts,
   auto const offsets_begin  = list_offsets->mutable_view().template begin<offset_type>();
   auto const sizes_input_it = cudf::detail::indexalator_factory::make_input_iterator(sizes);
 
-  CUDA_TRY(cudaMemsetAsync(offsets_begin, 0, sizeof(offset_type), stream.value()));
-  thrust::inclusive_scan(
-    rmm::exec_policy(stream), sizes_input_it, sizes_input_it + n_lists, offsets_begin + 1);
-  auto const n_elements = cudf::detail::get_value<size_type>(list_offsets->view(), n_lists, stream);
+  if (n_lists > 0) {
+    thrust::exclusive_scan(
+      rmm::exec_policy(stream), sizes_input_it, sizes_input_it + n_lists + 1, offsets_begin);
+  }
+  auto const n_elements =
+    n_lists == 0 ? 0 : cudf::detail::get_value<size_type>(list_offsets->view(), n_lists, stream);
 
   // Generate (temporary) list labels (1-based list indices) for all elements.
   auto labels = rmm::device_uvector<size_type>(n_elements, stream);
