@@ -13,6 +13,32 @@ from cudf.core.dtypes import Decimal64Dtype
 from cudf.testing._utils import assert_eq, assert_exceptions_equal
 
 
+def assert_res_eq_with_string_categorical_input(expected, actual):
+    for key, col in actual[actual.columns].iteritems():
+        if is_categorical_dtype(col.dtype):
+            if not is_categorical_dtype(expected[key].dtype):
+                # TODO: Pandas bug:
+                # https://github.com/pandas-dev/pandas/issues/42840
+                expected[key] = expected[key].fillna("-1").astype("str")
+            else:
+                expected[key] = (
+                    expected[key]
+                    .cat.add_categories(["-1"])
+                    .fillna("-1")
+                    .astype("str")
+                )
+            actual[key] = col.astype("str").fillna("-1")
+        else:
+            expected[key] = expected[key].fillna(-1)
+            actual[key] = col.fillna(-1)
+    assert_eq(
+        expected,
+        actual,
+        check_dtype=False,
+        check_index_type=False if len(expected) == 0 or actual.empty else True,
+    )
+
+
 def make_frames(index=None, nulls="none"):
     df = pd.DataFrame(
         {
@@ -574,24 +600,7 @@ def test_concat_empty_dataframes(df, other, ignore_index):
     expected = pd.concat(other_pd, ignore_index=ignore_index)
     actual = gd.concat(other_gd, ignore_index=ignore_index)
     if expected.shape != df.shape:
-        for key, col in actual[actual.columns].iteritems():
-            if is_categorical_dtype(col.dtype):
-                if not is_categorical_dtype(expected[key].dtype):
-                    # TODO: Pandas bug:
-                    # https://github.com/pandas-dev/pandas/issues/42840
-                    expected[key] = expected[key].fillna("-1").astype("str")
-                else:
-                    expected[key] = (
-                        expected[key]
-                        .cat.add_categories(["-1"])
-                        .fillna("-1")
-                        .astype("str")
-                    )
-                actual[key] = col.astype("str").fillna("-1")
-            else:
-                expected[key] = expected[key].fillna(-1)
-                actual[key] = col.fillna(-1)
-        assert_eq(expected, actual, check_dtype=False, check_index_type=True)
+        assert_res_eq_with_string_categorical_input(expected, actual)
     else:
         assert_eq(
             expected, actual, check_index_type=False if gdf.empty else True
@@ -1184,35 +1193,7 @@ def test_concat_join_empty_dataframes(
     )
     if expected.shape != df.shape:
         if axis == 0:
-            for key, col in actual[actual.columns].iteritems():
-                if is_categorical_dtype(col.dtype):
-                    if not is_categorical_dtype(expected[key].dtype):
-                        # TODO: Pandas bug:
-                        # https://github.com/pandas-dev/pandas/issues/42840
-                        expected[key] = (
-                            expected[key].fillna("-1").astype("str")
-                        )
-                    else:
-                        expected[key] = (
-                            expected[key]
-                            .cat.add_categories(["-1"])
-                            .fillna("-1")
-                            .astype("str")
-                        )
-                    actual[key] = col.astype("str").fillna("-1")
-                else:
-                    expected[key] = expected[key].fillna(-1)
-                    actual[key] = col.fillna(-1)
-
-            assert_eq(
-                expected.fillna(-1),
-                actual.fillna(-1),
-                check_dtype=False,
-                check_index_type=False
-                if len(expected) == 0 or actual.empty
-                else True,
-                check_column_type=False,
-            )
+            assert_res_eq_with_string_categorical_input(expected, actual)
         else:
             # no need to fill in if axis=1
             assert_eq(
@@ -1681,3 +1662,130 @@ def test_concat_decimal_non_numeric(s1, s2, expected):
 def test_concat_struct_column(s1, s2, expected):
     s = gd.concat([s1, s2])
     assert_eq(s, expected, check_index_type=True)
+
+
+# A set of categorical tests for easy debugging
+
+
+def test_concat_df_categories_same_categories():
+    pdf = pd.DataFrame({"x": pd.Series([1, 2, 3], dtype="category")})
+    gdf = gd.from_pandas(pdf)
+
+    expect = pd.concat([pdf, pdf])
+    got = gd.concat([gdf, gdf])
+
+    assert_eq(expect, got)
+
+    pdf = pd.DataFrame({"x": pd.Series(["one", "two"], dtype="category")})
+    gdf = gd.from_pandas(pdf)
+
+    expect = pd.concat([pdf, pdf])
+    got = gd.concat([gdf, gdf])
+
+    assert_eq(expect, got)
+
+
+def test_concat_df_categories_same_categories_diff_dtype():
+    pdf1 = pd.DataFrame({"x": pd.Series([1, 2, 3], dtype="category")})
+    pdf2 = pd.DataFrame({"x": pd.Series([1.0, 2.0, 3.0], dtype="category")})
+
+    gdf1 = gd.from_pandas(pdf1)
+    gdf2 = gd.from_pandas(pdf2)
+
+    expect = pd.concat([pdf1, pdf2])
+    got = gd.concat([gdf1, gdf2])
+
+    assert_eq(expect, got)
+
+
+def test_concat_df_categories_diff_categories():
+    pdf1 = pd.DataFrame({"x": pd.Series([1, 2, 3], dtype="category")})
+    pdf2 = pd.DataFrame({"x": pd.Series([1], dtype="category")})
+
+    gdf1 = gd.from_pandas(pdf1)
+    gdf2 = gd.from_pandas(pdf2)
+
+    expect = pd.concat([pdf1, pdf2])
+    got = gd.concat([gdf1, gdf2])
+
+    assert_eq(expect, got)
+
+    pdf1 = pd.DataFrame({"x": pd.Series(["one", "two"], dtype="category")})
+    pdf2 = pd.DataFrame({"x": pd.Series(["three"], dtype="category")})
+
+    gdf1 = gd.from_pandas(pdf1)
+    gdf2 = gd.from_pandas(pdf2)
+
+    expect = pd.concat([pdf1, pdf2])
+    got = gd.concat([gdf1, gdf2])
+
+    assert_res_eq_with_string_categorical_input(expect, got)
+
+
+def test_concat_df_categories_with_compatable_dtypes_int():
+    pdf1 = pd.DataFrame({"x": pd.Series([1, 2, 3], dtype="category")})
+    pdf2 = pd.DataFrame({"x": pd.Series([1, 2])})
+
+    gdf1 = gd.from_pandas(pdf1)
+    gdf2 = gd.from_pandas(pdf2)
+
+    # cat + int
+    expect = pd.concat([pdf1, pdf2])
+    got = gd.concat([gdf1, gdf2])
+
+    assert_eq(expect, got)
+
+    # int + cat
+    expect = pd.concat([pdf2, pdf1])
+    got = gd.concat([gdf2, gdf1])
+
+    assert_eq(expect, got)
+
+
+def test_concat_df_categories_with_compatable_dtypes_float():
+    pdf1 = pd.DataFrame({"x": pd.Series([1, 2, 3], dtype="category")})
+    pdf2 = pd.DataFrame({"x": pd.Series([1.0, 3.14])})
+
+    gdf1 = gd.from_pandas(pdf1)
+    gdf2 = gd.from_pandas(pdf2)
+
+    # cat + float
+    expect = pd.concat([pdf1, pdf2])
+    got = gd.concat([gdf1, gdf2])
+
+    assert_eq(expect, got)
+
+    # float + cat
+    expect = pd.concat([pdf2, pdf1])
+    got = gd.concat([gdf2, gdf1])
+
+    assert_eq(expect, got)
+
+
+def test_concat_df_categories_with_compatable_dtypes_str():
+    pdf1 = pd.DataFrame({"x": pd.Series(["one", "one"], dtype="category")})
+    pdf2 = pd.DataFrame({"x": pd.Series(["two", "two"])})
+
+    gdf1 = gd.from_pandas(pdf1)
+    gdf2 = gd.from_pandas(pdf2)
+
+    # cat + str TODO: require libcudf support
+    # expect = pd.concat([pdf1, pdf2])
+    # got = gd.concat([gdf1, gdf2])
+
+    # assert_eq(expect, got)
+
+    # str + cat
+    expect = pd.concat([pdf2, pdf1])
+    got = gd.concat([gdf2, gdf1])
+
+    assert_eq(expect, got)
+
+
+def test_concat_df_categories_incompatable_dtypes():
+    gdf1 = gd.DataFrame({"x": gd.Series([1, 2, 3], dtype="category")})
+    gdf2 = gd.DataFrame({"x": gd.Series(["x", "y"])})
+
+    with pytest.raises(ValueError, match="All columns must be the same type"):
+        # cuDF doesn't support mixed dtypes columns, so this is unsupported.
+        gd.concat([gdf1, gdf2])
