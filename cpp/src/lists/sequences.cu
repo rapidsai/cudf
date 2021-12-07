@@ -121,14 +121,14 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
   }
 };
 
-std::unique_ptr<column> empty_list_column(data_type child_type,
-                                   rmm::cuda_stream_view stream,
-                                   rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> make_empty_lists_column(data_type child_type,
+                                                rmm::cuda_stream_view stream,
+                                                rmm::mr::device_memory_resource* mr)
 {
   auto offsets = make_empty_column(data_type(type_to_id<offset_type>()));
   auto child   = make_empty_column(child_type);
   return make_lists_column(
-    0, std::move(offsets), std::move(child), 0, rmm::device_buffer{0, stream}, stream, mr);
+    0, std::move(offsets), std::move(child), 0, rmm::device_buffer(0, stream, mr), stream, mr);
 }
 
 std::unique_ptr<column> sequences(column_view const& starts,
@@ -153,7 +153,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
   }
 
   auto const n_lists = starts.size();
-  if (n_lists == 0) { return empty_list_column(starts.type(), stream, mr); }
+  if (n_lists == 0) { return make_empty_lists_column(starts.type(), stream, mr); }
 
   // Generate list offsets for the output.
   auto list_offsets = make_numeric_column(
@@ -179,7 +179,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
                            std::move(list_offsets),
                            std::move(child),
                            0,
-                           rmm::device_buffer(0, stream),
+                           rmm::device_buffer(0, stream, mr),
                            stream,
                            mr);
 }
