@@ -19,6 +19,7 @@
 #include <cudf/detail/indexalator.cuh>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/stream_compaction.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/detail/concatenate.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/dictionary/dictionary_factories.hpp>
@@ -104,14 +105,7 @@ struct compute_children_offsets_fn {
       [](auto lhs, auto rhs) {
         return offsets_pair{lhs.first + rhs.first, lhs.second + rhs.second};
       });
-    auto d_offsets = rmm::device_uvector<offsets_pair>(offsets.size(), stream);
-    CUDA_TRY(cudaMemcpyAsync(d_offsets.data(),
-                             offsets.data(),
-                             offsets.size() * sizeof(offsets_pair),
-                             cudaMemcpyHostToDevice,
-                             stream.value()));
-    stream.synchronize();
-    return d_offsets;
+    return cudf::detail::make_device_uvector_sync(offsets, stream);
   }
 
  private:
