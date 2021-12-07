@@ -621,6 +621,10 @@ def _read_parquet(
             try:
                 metadata = pq.read_metadata(filepaths_or_buffers[0])
             except TypeError:
+                # pq.read_metadata only supports reading metadata from
+                # certain types of file inputs, like str-filepath or file-like
+                # objects, and errors for the rest of inputs. Hence this is
+                # to avoid failing on other types of file inputs.
                 pass
             else:
                 arrow_schema = metadata.schema.to_arrow_schema()
