@@ -1178,11 +1178,13 @@ TEST_F(ParquetWriterTest, PartitionedWrite)
   auto filepath1 = temp_env->get_temp_filepath("PartitionedWrite1.parquet");
   auto filepath2 = temp_env->get_temp_filepath("PartitionedWrite2.parquet");
 
-  auto partition1 = std::make_pair(10, 1024 * 1024);
-  auto partition2 = std::make_pair(20 * 1024 + 7, 3 * 1024 * 1024);
+  auto partition1 = cudf::io::partition_info{10, 1024 * 1024};
+  auto partition2 = cudf::io::partition_info{20 * 1024 + 7, 3 * 1024 * 1024};
 
-  auto expected1 = cudf::slice(*source, {partition1.first, partition1.first + partition1.second});
-  auto expected2 = cudf::slice(*source, {partition2.first, partition2.first + partition2.second});
+  auto expected1 =
+    cudf::slice(*source, {partition1.start_row, partition1.start_row + partition1.num_rows});
+  auto expected2 =
+    cudf::slice(*source, {partition2.start_row, partition2.start_row + partition2.num_rows});
 
   cudf_io::parquet_writer_options args =
     cudf_io::parquet_writer_options::builder(

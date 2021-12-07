@@ -492,8 +492,8 @@ parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options co
 /**
  * @copydoc cudf::io::parquet_chunked_writer::write
  */
-parquet_chunked_writer& parquet_chunked_writer::write(
-  table_view const& table, std::vector<std::pair<size_type, size_type>> const& partitions)
+parquet_chunked_writer& parquet_chunked_writer::write(table_view const& table,
+                                                      std::vector<partition_info> const& partitions)
 {
   CUDF_FUNC_RANGE();
 

@@ -250,11 +250,6 @@ struct parquet_column_device_view : stats_column_desc {
                                //!< col.nullable() in case of chunked writing.
 };
 
-struct partition_info {
-  size_type start_row;
-  size_type num_rows;
-};
-
 constexpr int max_page_fragment_size = 5000;  //!< Max number of rows in a page fragment
 
 struct EncColumnChunk;
@@ -501,7 +496,7 @@ dremel_data get_dremel_data(column_view h_col,
  */
 void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
                        device_span<parquet_column_device_view const> col_desc,
-                       device_span<gpu::partition_info const> partitions,
+                       device_span<partition_info const> partitions,
                        device_span<int const> first_frag_in_part,
                        uint32_t fragment_size,
                        rmm::cuda_stream_view stream);

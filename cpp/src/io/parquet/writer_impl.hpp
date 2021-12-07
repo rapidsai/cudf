@@ -104,7 +104,7 @@ class writer::impl {
    *
    * @param[in] table The table information to be written
    */
-  void write(table_view const& table, std::vector<std::pair<size_type, size_type>> partitions);
+  void write(table_view const& table, std::vector<partition_info> partitions);
 
   /**
    * @brief Finishes the chunked/streamed write process.
@@ -128,7 +128,7 @@ class writer::impl {
    */
   void init_page_fragments(hostdevice_2dvector<gpu::PageFragment>& frag,
                            device_span<gpu::parquet_column_device_view const> col_desc,
-                           std::vector<std::pair<size_type, size_type>> partitions,
+                           std::vector<partition_info> partitions,
                            device_span<int const> part_frag_offset,
                            uint32_t fragment_size);
 

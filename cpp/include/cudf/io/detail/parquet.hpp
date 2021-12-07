@@ -132,8 +132,7 @@ class writer {
    * @param[in] partitions Optional partitions to divide the table into. If specified, must be same
    * size as number of sinks.
    */
-  void write(table_view const& table,
-             std::vector<std::pair<size_type, size_type>> const& partitions = {});
+  void write(table_view const& table, std::vector<partition_info> const& partitions = {});
 
   /**
    * @brief Finishes the chunked/streamed write process.

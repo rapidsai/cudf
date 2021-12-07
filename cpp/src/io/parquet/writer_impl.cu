@@ -765,21 +765,11 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(
 
 void writer::impl::init_page_fragments(cudf::detail::hostdevice_2dvector<gpu::PageFragment>& frag,
                                        device_span<gpu::parquet_column_device_view const> col_desc,
-                                       std::vector<std::pair<size_type, size_type>> partitions,
+                                       std::vector<partition_info> partitions,
                                        device_span<int const> part_frag_offset,
                                        uint32_t fragment_size)
 {
-  // TODO: partitions as pairs aren't convertible to device_uvector because device_uvector does not
-  // allow non-trivially-copyable types and std::pair has a copy constructor. Find a way to expose
-  // gpu::partition_info in public header and accept the partitions as that. OR at least make this
-  // conversion early on in the write() call so that we don't have to do part.first and part.second
-  // everywhere
-  std::vector<gpu::partition_info> h_partitions;
-  std::transform(
-    partitions.begin(), partitions.end(), std::back_inserter(h_partitions), [](auto const& part) {
-      return gpu::partition_info{part.first, part.second};
-    });
-  auto d_partitions = cudf::detail::make_device_uvector_async(h_partitions, stream);
+  auto d_partitions = cudf::detail::make_device_uvector_async(partitions, stream);
   gpu::InitPageFragments(frag, col_desc, d_partitions, part_frag_offset, fragment_size, stream);
   frag.device_to_host(stream, true);
 }
@@ -1113,8 +1103,7 @@ void writer::impl::init_state()
   }
 }
 
-void writer::impl::write(table_view const& table,
-                         std::vector<std::pair<size_type, size_type>> partitions)
+void writer::impl::write(table_view const& table, std::vector<partition_info> partitions)
 {
   last_write_successful = false;
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
@@ -1158,7 +1147,7 @@ void writer::impl::write(table_view const& table,
     md          = std::make_unique<per_file_metadata>(partitions.size());
     md->version = 1;
     for (size_t i = 0; i < partitions.size(); ++i) {
-      md->files[i].num_rows = partitions[i].second;
+      md->files[i].num_rows = partitions[i].num_rows;
     }
     md->column_order_listsize =
       (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_columns : 0;
@@ -1179,7 +1168,7 @@ void writer::impl::write(table_view const& table,
 
     // increment num rows
     for (size_t i = 0; i < partitions.size(); ++i) {
-      md->files[i].num_rows += partitions[i].second;
+      md->files[i].num_rows += partitions[i].num_rows;
     }
   }
   // Create table_device_view so that corresponding column_device_view data
@@ -1207,7 +1196,7 @@ void writer::impl::write(table_view const& table,
                  partitions.end(),
                  std::back_inserter(num_frag_in_part),
                  [](auto const& part) {
-                   return util::div_rounding_up_unsafe(part.second, max_page_fragment_size);
+                   return util::div_rounding_up_unsafe(part.num_rows, max_page_fragment_size);
                  });
 
   size_type num_fragments = std::reduce(num_frag_in_part.begin(), num_frag_in_part.end());
@@ -1300,7 +1289,7 @@ void writer::impl::write(table_view const& table,
 
   for (size_t p = 0; p < partitions.size(); ++p) {
     int f               = part_frag_offset[p];
-    size_type start_row = partitions[p].first;
+    size_type start_row = partitions[p].start_row;
     for (int r = 0; r < num_rg_in_part[p]; r++) {
       size_t global_r = global_rowgroup_base[p] + r;  // Number of rowgroups already in file/part
       uint32_t fragments_in_chunk = util::div_rounding_up_unsafe(
@@ -1653,8 +1642,7 @@ writer::writer(std::vector<std::unique_ptr<data_sink>> sinks,
 writer::~writer() = default;
 
 // Forward to implementation
-void writer::write(table_view const& table,
-                   std::vector<std::pair<size_type, size_type>> const& partitions)
+void writer::write(table_view const& table, std::vector<partition_info> const& partitions)
 {
   _impl->write(table, partitions);
 }

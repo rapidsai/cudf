@@ -395,7 +395,7 @@ class parquet_writer_options {
   // Sets of columns to output
   table_view _table;
   // Partitions described as {start_row, num_rows} pairs
-  std::vector<std::pair<size_type, size_type>> _partitions;
+  std::vector<partition_info> _partitions;
   // Optional associated metadata
   table_input_metadata const* _metadata = nullptr;
   // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
@@ -469,7 +469,7 @@ class parquet_writer_options {
   /**
    * @brief Returns partitions.
    */
-  std::vector<std::pair<size_type, size_type>> get_partitions() const { return _partitions; }
+  std::vector<partition_info> const& get_partitions() const { return _partitions; }
 
   /**
    * @brief Returns associated metadata.
@@ -484,7 +484,7 @@ class parquet_writer_options {
   /**
    * @brief Returns Column chunks file paths to be set in the raw output metadata.
    */
-  std::vector<std::string> get_column_chunks_file_paths() const
+  std::vector<std::string> const& get_column_chunks_file_paths() const
   {
     return _column_chunks_file_paths;
   }
@@ -505,9 +505,9 @@ class parquet_writer_options {
    * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
    * be same size as number of sinks in sink_info
    */
-  void set_partitions(std::vector<std::pair<size_type, size_type>> const& partitions)
+  void set_partitions(std::vector<partition_info> const& partitions)
   {
-    _partitions = partitions;
+    _partitions = std::move(partitions);
   }
 
   /**
@@ -542,11 +542,12 @@ class parquet_writer_options {
   /**
    * @brief Sets column chunks file path to be set in the raw output metadata.
    *
-   * @param file_paths Vector of Strings which indicates file path.
+   * @param file_paths Vector of Strings which indicates file path. Must be same size as partitions
+   * if partitions are specified
    */
-  void set_column_chunks_file_paths(std::vector<std::string> const& file_paths)
+  void set_column_chunks_file_paths(std::vector<std::string> file_paths)
   {
-    _column_chunks_file_paths = file_paths;
+    _column_chunks_file_paths = std::move(file_paths);
   }
 
   /**
@@ -601,10 +602,9 @@ class parquet_writer_options_builder {
    * be same size as number of sinks in sink_info
    * @return this for chaining.
    */
-  parquet_writer_options_builder& partitions(
-    std::vector<std::pair<size_type, size_type>> partitions)
+  parquet_writer_options_builder& partitions(std::vector<partition_info> partitions)
   {
-    options._partitions = partitions;
+    options._partitions = std::move(partitions);
     return *this;
   }
 
@@ -647,7 +647,8 @@ class parquet_writer_options_builder {
   /**
    * @brief Sets column chunks file path to be set in the raw output metadata.
    *
-   * @param file_paths Vector of Strings which indicates file path.
+   * @param file_paths Vector of Strings which indicates file path. Must be same size as partitions
+   * if partitions are specified
    * @return this for chaining.
    */
   parquet_writer_options_builder& column_chunks_file_paths(
@@ -1028,8 +1029,8 @@ class parquet_chunked_writer {
    * size as number of sinks.
    * @return returns reference of the class object
    */
-  parquet_chunked_writer& write(
-    table_view const& table, std::vector<std::pair<size_type, size_type>> const& partitions = {});
+  parquet_chunked_writer& write(table_view const& table,
+                                std::vector<partition_info> const& partitions = {});
 
   /**
    * @brief Finishes the chunked/streamed write process.

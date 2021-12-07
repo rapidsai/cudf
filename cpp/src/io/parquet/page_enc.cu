@@ -102,7 +102,7 @@ template <int block_size>
 __global__ void __launch_bounds__(block_size)
   gpuInitPageFragments(device_2dspan<PageFragment> frag,
                        device_span<parquet_column_device_view const> col_desc,
-                       device_span<gpu::partition_info const> partitions,
+                       device_span<partition_info const> partitions,
                        device_span<int const> part_frag_offset,
                        uint32_t fragment_size)
 {
@@ -1881,7 +1881,7 @@ dremel_data get_dremel_data(column_view h_col,
 
 void InitPageFragments(device_2dspan<PageFragment> frag,
                        device_span<parquet_column_device_view const> col_desc,
-                       device_span<gpu::partition_info const> partitions,
+                       device_span<partition_info const> partitions,
                        device_span<int const> part_frag_offset,
                        uint32_t fragment_size,
                        rmm::cuda_stream_view stream)

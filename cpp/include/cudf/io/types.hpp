@@ -414,5 +414,10 @@ class table_input_metadata {
     user_data;  //!< Format-dependent metadata as key-values pairs. One per output file
 };
 
+struct partition_info {
+  size_type start_row;
+  size_type num_rows;
+};
+
 }  // namespace io
 }  // namespace cudf
