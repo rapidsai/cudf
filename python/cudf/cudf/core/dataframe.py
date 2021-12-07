@@ -3057,7 +3057,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         DataFrame.add_suffix: Suffix column labels with string `suffix`.
         Examples
         --------
-        >>> df = pd.DataFrame({'A': [1, 2, 3, 4], 'B': [3, 4, 5, 6]})
+        >>> df = cudf.DataFrame({'A': [1, 2, 3, 4], 'B': [3, 4, 5, 6]})
         >>> df
            A  B
         0  1  3
@@ -3093,7 +3093,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         DataFrame.add_prefix: prefix column labels with string `prefix`.
         Examples
         --------
-        >>> df = pd.DataFrame({'A': [1, 2, 3, 4], 'B': [3, 4, 5, 6]})
+        >>> df = cudf.DataFrame({'A': [1, 2, 3, 4], 'B': [3, 4, 5, 6]})
         >>> df
            A  B
         0  1  3

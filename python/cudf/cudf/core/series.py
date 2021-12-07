@@ -3701,7 +3701,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
         """
         result = self.copy(deep=False)
-        result = result.set_index(prefix + self._index.astype(str))
+        result.index = prefix + self.index.astype(str)
         result.name = self.name
         return result
 
@@ -3737,7 +3737,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
         """
         result = self.copy(deep=False)
-        result = result.set_index(self._index.astype(str) + suffix)
+        result.index = suffix + self.index.astype(str)
         result.name = self.name
         return result
 
