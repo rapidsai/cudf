@@ -65,9 +65,9 @@ class FunctionTemplateBenchmark : public Fixture {
   virtual void BenchmarkCase(::benchmark::State& st) { func_(st); }
 };
 
-#define TEMPLATED_BENCHMARK_F(BaseClass, n, ...)                                                \
-  BENCHMARK_PRIVATE_DECLARE(n) =                                                                \
-    (::benchmark::internal::RegisterBenchmarkInternal(new FunctionTemplateBenchmark<BaseClass>( \
-      #BaseClass "/" #n "<" #__VA_ARGS__ ">", n<__VA_ARGS__>)))
+#define TEMPLATED_BENCHMARK_F(BaseClass, n, ...)                                           \
+  BENCHMARK_PRIVATE_DECLARE(n) = (::benchmark::internal::RegisterBenchmarkInternal(        \
+    new cudf::FunctionTemplateBenchmark<BaseClass>(#BaseClass "/" #n "<" #__VA_ARGS__ ">", \
+                                                   n<__VA_ARGS__>)))
 
 }  // namespace cudf
