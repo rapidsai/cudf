@@ -1770,10 +1770,15 @@ def as_column(
         if isinstance(arbitrary, pa.NullArray):
             new_dtype = cudf.dtype(arbitrary.type.to_pandas_dtype())
             if dtype is not None:
+                # Cast the column to the `dtype` if specified.
                 col = col.astype(dtype)
             elif len(arbitrary) == 0:
+                # If the column is empty, it has to be
+                # a `float64` dtype.
                 col = col.astype("float64")
             else:
+                # If the null column is not empty, it has to
+                # be of `object` dtype.
                 col = col.astype(new_dtype)
 
         return col

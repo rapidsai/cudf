@@ -1073,7 +1073,6 @@ def test_dataframe_setitem_from_masked_object():
 
 def test_dataframe_append_to_empty():
     pdf = pd.DataFrame()
-    # Inconsistency in pandas with empty constructor and assignment
     pdf["a"] = []
     pdf["b"] = [1, 2, 3]
 

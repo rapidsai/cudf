@@ -76,7 +76,7 @@ def test_leaves(data):
     pa_array = pa.array(data)
     while hasattr(pa_array, "flatten"):
         pa_array = pa_array.flatten()
-    # dtype = "int8" if isinstance(pa_array, pa.NullArray) else None
+
     expect = cudf.Series(pa_array)
     got = cudf.Series(data).list.leaves
     assert_eq(

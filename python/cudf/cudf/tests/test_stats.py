@@ -461,7 +461,7 @@ def test_df_corr():
 def test_nans_stats(data, ops, skipna):
     psr = cudf.utils.utils._create_pandas_series(data=data)
     gsr = cudf.Series(data, nan_as_null=False)
-    # import pdb;pdb.set_trace()
+
     assert_eq(
         getattr(psr, ops)(skipna=skipna), getattr(gsr, ops)(skipna=skipna)
     )

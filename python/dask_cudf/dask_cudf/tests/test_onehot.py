@@ -27,7 +27,6 @@ def test_get_dummies_cat():
     dd.assert_eq(dd.get_dummies(ddf).compute(), pd.get_dummies(df))
     gdf = cudf.from_pandas(df)
     gddf = dask_cudf.from_cudf(gdf, npartitions=10)
-
     dd.assert_eq(
         dd.get_dummies(ddf).compute(),
         dd.get_dummies(gddf).compute(),
