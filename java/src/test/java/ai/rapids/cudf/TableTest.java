@@ -6592,6 +6592,32 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+  @Test
+  void testDropDuplicates() {
+    int[] keyColumns = new int[]{ 1 };
+
+    try (ColumnVector col1 = ColumnVector.fromBoxedInts(5, null, 3, 5, 8, 1);
+         ColumnVector col2 = ColumnVector.fromBoxedInts(20, null, null, 19, 21, 19);
+         Table input = new Table(col1, col2)) {
+
+      // Keep the first duplicate element.
+      try (Table result = input.dropDuplicates(keyColumns, true, true, true);
+           ColumnVector expectedCol1 = ColumnVector.fromBoxedInts(null, 5, 5, 8);
+           ColumnVector expectedCol2 = ColumnVector.fromBoxedInts(null, 19, 20, 21);
+           Table expected = new Table(expectedCol1, expectedCol2)) {
+        assertTablesAreEqual(expected, result);
+      }
+
+      // Keep the last duplicate element.
+      try (Table result = input.dropDuplicates(keyColumns, false, true, true);
+           ColumnVector expectedCol1 = ColumnVector.fromBoxedInts(3, 1, 5, 8);
+           ColumnVector expectedCol2 = ColumnVector.fromBoxedInts(null, 19, 20, 21);
+           Table expected = new Table(expectedCol1, expectedCol2)) {
+        assertTablesAreEqual(expected, result);
+      }
+    }
+  }
+
   private enum Columns {
     BOOL("BOOL"),
     INT("INT"),

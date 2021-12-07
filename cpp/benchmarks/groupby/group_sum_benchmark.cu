@@ -44,7 +44,6 @@ void BM_basic_sum(benchmark::State& state)
 {
   using wrapper = cudf::test::fixed_width_column_wrapper<int64_t>;
 
-  // const cudf::size_type num_columns{(cudf::size_type)state.range(0)};
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
 
   auto data_it = cudf::detail::make_counting_transform_iterator(
@@ -53,7 +52,7 @@ void BM_basic_sum(benchmark::State& state)
   wrapper keys(data_it, data_it + column_size);
   wrapper vals(data_it, data_it + column_size);
 
-  cudf::groupby::groupby gb_obj(cudf::table_view({keys}));
+  cudf::groupby::groupby gb_obj(cudf::table_view({keys, keys, keys}));
 
   std::vector<cudf::groupby::aggregation_request> requests;
   requests.emplace_back(cudf::groupby::aggregation_request());
@@ -73,7 +72,9 @@ BENCHMARK_REGISTER_F(Groupby, Basic)
   ->UseManualTime()
   ->Unit(benchmark::kMillisecond)
   ->Arg(10000)
-  ->Arg(10000000);
+  ->Arg(1000000)
+  ->Arg(10000000)
+  ->Arg(100000000);
 
 void BM_pre_sorted_sum(benchmark::State& state)
 {
