@@ -1949,18 +1949,31 @@ class DatetimeIndex(GenericIndex):
         Returns
         -------
         DatetimeIndex
-            Index of the same type for a DatetimeIndex
+            Index containing rounded datetimes.
 
         Examples
         --------
         >>> import cudf
-        >>> import pandas as pd
-        >>> rng = cudf.Index(pd.date_range('1/1/2018 11:59:00',
-        ... periods=3, freq='min'))
-        >>> rng.round('H')
-        DatetimeIndex(['2018-01-01 12:00:00', '2018-01-01 12:00:00',
-               '2018-01-01 12:00:00'],
-              dtype='datetime64[ns]', freq=None)
+        >>> dt_idx = cudf.Index([
+        ...     "2001-01-01 00:04:45",
+        ...     "2001-01-01 00:04:58",
+        ...     "2001-01-01 00:05:04",
+        ... ], dtype="datetime64[ns]")
+        >>> dt_idx
+        DatetimeIndex(['2001-01-01 00:04:45',
+                '2001-01-01 00:05:04',
+                '2001-01-01 00:04:58'],
+                dtype='datetime64[ns]', freq=None)
+        >>> dt_idx.round('H')
+        DatetimeIndex(['2001-01-01',
+                    '2001-01-01',
+                    '2001-01-01'],
+                    dtype='datetime64[ns]', freq=None)
+        >>> dt_idx.round('T')
+        DatetimeIndex(['2001-01-01 00:05:00',
+                    '2001-01-01 00:05:00',
+                    '2001-01-01 00:05:00'],
+                    dtype='datetime64[ns]', freq=None)
         """
         out_column = self._values.round(freq)
 
