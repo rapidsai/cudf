@@ -374,6 +374,50 @@ struct SparkMurmurHash3_32 {
     return h1;
   }
 
+  result_type CUDA_DEVICE_CALLABLE compute_bytes(int8_t const* data,
+                                                 cudf::size_type const len) const
+  {
+    int const nblocks     = len / 4;
+    result_type h1        = m_seed;
+    constexpr uint32_t c1 = 0xcc9e2d51;
+    constexpr uint32_t c2 = 0x1b873593;
+    auto getblock32       = [] __device__(uint32_t const* p, int i) -> uint32_t {
+      // Individual byte reads for unaligned accesses (very likely)
+      auto q = (const uint8_t*)(p + i);
+      // return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
+      return q[3] | (q[2] << 8) | (q[1] << 16) | (q[0] << 24);
+    };
+
+    //----------
+    // body
+    uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data + nblocks * 4);
+    for (int i = -nblocks; i; i++) {
+      uint32_t k1 = getblock32(blocks, i);
+      k1 *= c1;
+      k1 = rotl32(k1, 15);
+      k1 *= c2;
+      h1 ^= k1;
+      h1 = rotl32(h1, 13);
+      h1 = h1 * 5 + 0xe6546b64;
+    }
+    //----------
+    // Spark's byte by byte tail processing
+    for (int i = nblocks * 4; i < len; i++) {
+      int32_t k1 = data[i];
+      k1 *= c1;
+      k1 = rotl32(k1, 15);
+      k1 *= c2;
+      h1 ^= k1;
+      h1 = rotl32(h1, 13);
+      h1 = h1 * 5 + 0xe6546b64;
+    }
+    //----------
+    // finalization
+    h1 ^= len;
+    h1 = fmix32(h1);
+    return h1;
+  }
+
  private:
   uint32_t m_seed{cudf::DEFAULT_HASH_SEED};
 };
@@ -430,7 +474,28 @@ template <>
 hash_value_type CUDA_DEVICE_CALLABLE
 SparkMurmurHash3_32<numeric::decimal128>::operator()(numeric::decimal128 const& key) const
 {
-  return this->compute<__int128_t>(key.value());
+  __int128_t val     = key.value();
+  int8_t const* data = reinterpret_cast<int8_t const*>(&val);
+  __int128_t flipped = 0;
+  int8_t* dflipped   = reinterpret_cast<int8_t*>(&flipped);
+  int32_t length     = 15;
+  int8_t sign_bit    = data[15] & (int8_t)0x80;
+  int8_t zero_value  = sign_bit ? (int8_t)0xff : (int8_t)0x00;
+
+  while (length >= 0 && data[length] == zero_value)
+    length--;
+
+  if (length == -1) {
+    return this->compute<uint8_t>(0);
+  } else if (sign_bit ^ (data[length] & (int8_t)0x80)) {
+    ++length;
+  }
+
+  for (int i = 0; i <= length; i++) {
+    dflipped[i] = data[length - i];
+  }
+
+  return this->compute_bytes(dflipped, length + 1);
 }
 
 template <>
