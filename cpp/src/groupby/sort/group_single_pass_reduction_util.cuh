@@ -244,17 +244,30 @@ struct group_reduction_functor<
 
     if (values.is_empty()) { return result; }
 
-    // When finding ARGMIN, we need to consider nulls as larger than non-null elements.
-    // Thing is opposite for ARGMAX.
-    auto const null_precedence =
-      (K == aggregation::ARGMIN) ? null_order::AFTER : null_order::BEFORE;
+    // Currently support only the default null order.
+    auto constexpr null_precedence = cudf::null_order::BEFORE;
+
     auto const flattened_values = structs::detail::flatten_nested_columns(
       table_view{{values}}, {}, std::vector<null_order>{null_precedence});
     auto const d_flattened_values_ptr = table_device_view::create(flattened_values, stream);
-    auto const flattened_null_precedences =
-      (K == aggregation::ARGMIN)
-        ? cudf::detail::make_device_uvector_async(flattened_values.null_orders(), stream)
-        : rmm::device_uvector<null_order>(0, stream);
+
+    auto constexpr is_min_op = K == aggregation::MIN;
+    auto const null_orders   = [&] {
+      if (is_min_op) {
+        auto null_orders = flattened_values.null_orders();
+        // When finding ARGMIN, we need to consider nulls as larger than non-null STRUCT elements,
+        // and the opposite for ARGMAX. Thus, we need to set a separate null order for the top level
+        // structs column (stored at the first position in the null_orders array).
+        null_orders.front() = cudf::null_order::AFTER;
+        return null_orders;
+      }
+
+      // Don't need to copy nulls order to device memory if we have all null orders are BEFORE
+      // (that happens when K != aggregation::MIN).
+      return std::vector<null_order>{};
+    }();
+
+    auto const flattened_null_orders = cudf::detail::make_device_uvector_async(null_orders, stream);
 
     // Perform segmented reduction to find ARGMIN/ARGMAX.
     auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
@@ -273,8 +286,8 @@ struct group_reduction_functor<
     auto const binop        = cudf::reduction::detail::row_arg_minmax_fn(values.size(),
                                                                   *d_flattened_values_ptr,
                                                                   values.has_nulls(),
-                                                                  flattened_null_precedences.data(),
-                                                                  K == aggregation::ARGMIN);
+                                                                  flattened_null_orders.data(),
+                                                                  is_min_op);
     do_reduction(count_iter, result_begin, binop);
 
     if (values.has_nulls()) {

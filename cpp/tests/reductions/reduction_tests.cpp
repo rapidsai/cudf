@@ -2301,6 +2301,7 @@ TEST_F(StructReductionTest, StructReductionMinMaxWithNulls)
   using INTS_CW    = cudf::test::fixed_width_column_wrapper<int>;
   using STRINGS_CW = cudf::test::strings_column_wrapper;
   using STRUCTS_CW = cudf::test::structs_column_wrapper;
+  using cudf::test::iterators::null_at;
   using cudf::test::iterators::nulls_at;
 
   auto const input = [] {
@@ -2321,8 +2322,9 @@ TEST_F(StructReductionTest, StructReductionMinMaxWithNulls)
   }();
 
   {
-    auto const expected_child1 = STRINGS_CW{"aab"};
-    auto const expected_child2 = INTS_CW{7};
+    // In the structs column, the min struct is {null, null}.
+    auto const expected_child1 = STRINGS_CW{{""}, null_at(0)};
+    auto const expected_child2 = INTS_CW{{8}, null_at(0)};
     this->reduction_test(input,
                          cudf::table_view{{expected_child1, expected_child2}},
                          true,

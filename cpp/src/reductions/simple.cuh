@@ -294,37 +294,42 @@ struct same_element_type_dispatcher {
   {
     if (input.is_empty()) { return cudf::make_empty_scalar_like(input, stream, mr); }
 
-    auto constexpr is_min_op = std::is_same_v<Op, cudf::reduction::op::min>;
+    // Currently support only the default null order.
+    auto constexpr null_precedence = cudf::null_order::BEFORE;
 
-    // We will do reduction to find the ARGMIN/ARGMAX index, then return the element at that index.
-    // When finding ARGMIN, we need to consider nulls as larger than non-null elements, and the
-    // opposite for ARGMAX.
-    auto constexpr null_precedence = is_min_op ? cudf::null_order::AFTER : cudf::null_order::BEFORE;
-    auto const flattened_input     = cudf::structs::detail::flatten_nested_columns(
+    auto const flattened_input = cudf::structs::detail::flatten_nested_columns(
       table_view{{input}}, {}, std::vector<null_order>{null_precedence});
     auto const d_flattened_input_ptr = table_device_view::create(flattened_input, stream);
-    auto const flattened_null_precedences =
-      is_min_op ? cudf::detail::make_device_uvector_async(flattened_input.null_orders(), stream)
-                : rmm::device_uvector<cudf::null_order>(0, stream);
 
-    // Perform reduction to find ARGMIN/ARGMAX.
-    auto const do_reduction = [&](auto const& binop) {
-      return thrust::reduce(rmm::exec_policy(stream),
-                            thrust::make_counting_iterator(0),
-                            thrust::make_counting_iterator(input.size()),
-                            size_type{0},
-                            binop);
-    };
+    auto constexpr is_min_op = std::is_same_v<Op, cudf::reduction::op::min>;
+    auto const null_orders   = [&] {
+      if (is_min_op) {
+        auto null_orders = flattened_input.null_orders();
+        // When finding ARGMIN, we need to consider nulls as larger than non-null STRUCT elements,
+        // and the opposite for ARGMAX. Thus, we need to set a separate null order for the top level
+        // structs column (stored at the first position in the null_orders array).
+        null_orders.front() = cudf::null_order::AFTER;
+        return null_orders;
+      }
 
-    auto const minmax_idx = [&] {
-      auto const binop =
-        cudf::reduction::detail::row_arg_minmax_fn(input.size(),
-                                                   *d_flattened_input_ptr,
-                                                   input.has_nulls(),
-                                                   flattened_null_precedences.data(),
-                                                   is_min_op);
-      return do_reduction(binop);
+      // Don't need to copy nulls order to device memory if we have all null orders are BEFORE
+      // (that happens when K != aggregation::MIN).
+      return std::vector<null_order>{};
     }();
+
+    auto const flattened_null_orders = cudf::detail::make_device_uvector_async(null_orders, stream);
+
+    // We will do reduction to find the ARGMIN/ARGMAX index, then return the element at that index.
+    auto const binop      = cudf::reduction::detail::row_arg_minmax_fn(input.size(),
+                                                                  *d_flattened_input_ptr,
+                                                                  input.has_nulls(),
+                                                                  flattened_null_orders.data(),
+                                                                  is_min_op);
+    auto const minmax_idx = thrust::reduce(rmm::exec_policy(stream),
+                                           thrust::make_counting_iterator(0),
+                                           thrust::make_counting_iterator(input.size()),
+                                           size_type{0},
+                                           binop);
 
     return cudf::detail::get_element(input, minmax_idx, stream, mr);
   }
