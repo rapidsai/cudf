@@ -3744,7 +3744,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: int64
         """
         result = self.copy(deep=True)
-        result.index = suffix + self.index.astype(str)
+        result.index = self.index.astype(str) + suffix
         return result
 
     def keys(self):
