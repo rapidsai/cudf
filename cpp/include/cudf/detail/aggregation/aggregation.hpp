@@ -1122,14 +1122,6 @@ struct target_type_impl<
   using type = Source;
 };
 
-template <typename Source, aggregation::Kind k>
-struct target_type_impl<
-  Source,
-  k,
-  std::enable_if_t<std::is_same_v<Source, numeric::decimal128> && (k == aggregation::SUM)>> {
-  using type = numeric::decimal128;
-};
-
 // Summing/Multiplying float/doubles, use same type accumulator
 template <typename Source, aggregation::Kind k>
 struct target_type_impl<

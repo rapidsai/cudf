@@ -408,7 +408,7 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls)
   auto col5_data = random_values<double>(num_rows);
   auto col6_vals = random_values<int32_t>(num_rows);
   auto col6_data = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return numeric::decimal128{col6_vals[i], numeric::scale_type{2}};
+    return numeric::decimal64{col6_vals[i], numeric::scale_type{2}};
   });
   auto col0_mask =
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 2); });
@@ -430,7 +430,7 @@ TEST_F(OrcWriterTest, MultiColumnWithNulls)
   column_wrapper<int32_t> col3{col3_data.begin(), col3_data.end(), col3_mask};
   column_wrapper<float> col4{col4_data.begin(), col4_data.end(), col4_mask};
   column_wrapper<double> col5{col5_data.begin(), col5_data.end(), col5_mask};
-  column_wrapper<numeric::decimal128> col6{col6_data, col6_data + num_rows, col6_mask};
+  column_wrapper<numeric::decimal64> col6{col6_data, col6_data + num_rows, col6_mask};
   cudf::test::lists_column_wrapper<int32_t> col7{
     {{9, 8}, {7, 6, 5}, {}, {4}, {3, 2, 1, 0}, {20, 21, 22, 23, 24}, {}, {66, 666}, {}, {-1, -2}},
     col0_mask};
@@ -1145,10 +1145,10 @@ TEST_P(OrcWriterTestDecimal, Decimal64)
   // Using int16_t because scale causes values to overflow if they already require 32 bits
   auto const vals = random_values<int32_t>(num_rows);
   auto data       = cudf::detail::make_counting_transform_iterator(0, [&](auto i) {
-    return numeric::decimal128{vals[i], numeric::scale_type{scale}};
+    return numeric::decimal64{vals[i], numeric::scale_type{scale}};
   });
   auto mask = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 7 == 0; });
-  column_wrapper<numeric::decimal128> col{data, data + num_rows, mask};
+  column_wrapper<numeric::decimal64> col{data, data + num_rows, mask};
   cudf::table_view tbl({static_cast<cudf::column_view>(col)});
 
   auto filepath = temp_env->get_temp_filepath("Decimal64.orc");
@@ -1195,9 +1195,9 @@ TEST_F(OrcWriterTest, Decimal32)
   auto data64 = cudf::detail::make_counting_transform_iterator(0, [&vals](auto i) {
     return numeric::decimal64{vals[i], numeric::scale_type{2}};
   });
-  column_wrapper<numeric::decimal128> col128{data128, data128 + num_rows, mask};
+  column_wrapper<numeric::decimal64> col64{data64, data64 + num_rows, mask};
 
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(col128, result.tbl->view().column(0));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(col64, result.tbl->view().column(0));
 }
 
 TEST_F(OrcStatisticsTest, Overflow)

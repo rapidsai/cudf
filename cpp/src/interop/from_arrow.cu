@@ -79,7 +79,7 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type)
     case arrow::Type::LIST: return data_type(type_id::LIST);
     case arrow::Type::DECIMAL: {
       auto const type = static_cast<arrow::Decimal128Type const*>(&arrow_type);
-      return data_type{type_id::DECIMAL128, -type->scale()};
+      return data_type{type_id::DECIMAL64, -type->scale()};
     }
     case arrow::Type::STRUCT: return data_type(type_id::STRUCT);
     default: CUDF_FAIL("Unsupported type_id conversion to cudf");

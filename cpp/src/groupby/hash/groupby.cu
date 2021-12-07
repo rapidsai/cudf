@@ -624,25 +624,6 @@ std::unique_ptr<table> groupby(table_view const& keys,
 
 }  // namespace
 
-struct has_atomic_support_type_dispatcher {
-  template <typename T>
-  bool operator()()
-  {
-    return cuda::std::atomic<T>::is_always_lock_free;
-  }
-};
-
-/**
- * @brief Indicates whether `type` has support for atomics
- *
- * @param type  The `data_type` that is being checked
- * @return      `true` if `type` has support for atomics, `false` otherwise
- */
-bool has_atomic_support(cudf::data_type const& type)
-{
-  return type_dispatcher(type, has_atomic_support_type_dispatcher{});
-}
-
 /**
  * @brief Indicates if a set of aggregation requests can be satisfied with a
  * hash-based groupby implementation.

@@ -234,6 +234,7 @@ using TrueDiv_types = cudf::test::Types<cudf::test::Types<int16_t, u_int64_t, u_
                                         cudf::test::Types<double, int8_t, int64_t>,
                                         cudf::test::Types<int8_t, bool, u_int32_t>,
                                         cudf::test::Types<u_int64_t, float, int16_t>>;
+
 template <typename T>
 struct BinaryOperationCompiledTest_TrueDiv : public BinaryOperationCompiledTest<T> {
 };
