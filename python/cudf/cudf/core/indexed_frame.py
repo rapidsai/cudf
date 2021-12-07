@@ -19,11 +19,7 @@ from cudf._typing import ColumnLike
 from cudf.api.types import is_categorical_dtype, is_integer_dtype, is_list_like
 from cudf.core.column import arange
 from cudf.core.frame import Frame
-from cudf.core.index import (
-    Index,
-    RangeIndex,
-    _index_from_columns,
-)
+from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
 from cudf.utils.utils import _gather_map_is_valid, cached_property
 
@@ -913,6 +909,8 @@ class IndexedFrame(Frame):
             if name == "index" and "index" in self._data:
                 name = "level_0"
             new_column_data[name] = col
+        # This is to match pandas where the new data columns are always
+        # inserted to the left of existing data columns.
         return {**new_column_data, **self._data}, index
 
 
