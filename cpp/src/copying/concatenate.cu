@@ -484,7 +484,7 @@ std::unique_ptr<column> concatenate(host_span<column_view const> columns_to_conc
     return empty_like(columns_to_concat.front());
   }
 
-  return type_dispatcher<dispatch_storage_type>(
+  return type_dispatcher<dispatch_on_same_width>(
     columns_to_concat.front().type(), concatenate_dispatch{columns_to_concat, stream, mr});
 }
 

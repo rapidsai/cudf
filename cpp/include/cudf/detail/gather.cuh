@@ -468,14 +468,14 @@ struct column_gatherer_impl<struct_view> {
                    sliced_children.end(),
                    std::back_inserter(output_struct_members),
                    [&](auto const& col) {
-                     return cudf::type_dispatcher<dispatch_storage_type>(col.type(),
-                                                                         column_gatherer{},
-                                                                         col,
-                                                                         gather_map_begin,
-                                                                         gather_map_end,
-                                                                         nullify_out_of_bounds,
-                                                                         stream,
-                                                                         mr);
+                     return cudf::type_dispatcher<dispatch_on_same_width>(col.type(),
+                                                                          column_gatherer{},
+                                                                          col,
+                                                                          gather_map_begin,
+                                                                          gather_map_end,
+                                                                          nullify_out_of_bounds,
+                                                                          stream,
+                                                                          mr);
                    });
 
     auto const nullable =
@@ -660,14 +660,14 @@ std::unique_ptr<table> gather(
   for (auto const& source_column : source_table) {
     // The data gather for n columns will be put on the first n streams
     destination_columns.push_back(
-      cudf::type_dispatcher<dispatch_storage_type>(source_column.type(),
-                                                   column_gatherer{},
-                                                   source_column,
-                                                   gather_map_begin,
-                                                   gather_map_end,
-                                                   bounds_policy == out_of_bounds_policy::NULLIFY,
-                                                   stream,
-                                                   mr));
+      cudf::type_dispatcher<dispatch_on_same_width>(source_column.type(),
+                                                    column_gatherer{},
+                                                    source_column,
+                                                    gather_map_begin,
+                                                    gather_map_end,
+                                                    bounds_policy == out_of_bounds_policy::NULLIFY,
+                                                    stream,
+                                                    mr));
   }
 
   auto const nullable = bounds_policy == out_of_bounds_policy::NULLIFY ||

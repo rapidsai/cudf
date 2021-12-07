@@ -161,7 +161,7 @@ std::unique_ptr<column> shift(column_view const& input,
 
   if (input.is_empty()) { return empty_like(input); }
 
-  return type_dispatcher<dispatch_storage_type>(
+  return type_dispatcher<dispatch_on_same_width>(
     input.type(), shift_functor{}, input, offset, fill_value, stream, mr);
 }
 
