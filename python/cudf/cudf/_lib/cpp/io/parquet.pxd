@@ -188,7 +188,7 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
             size_type val
         ) except+
         parquet_writer_options_builder& row_group_sizes(
-            vectpr[size_type] val
+            vector[size_type] val
         ) except+
 
         chunked_parquet_writer_options build() except +
