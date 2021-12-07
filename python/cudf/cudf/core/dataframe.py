@@ -3044,17 +3044,21 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         Prefix labels with string `prefix`.
         For DataFrame, the column labels are prefixed.
+
         Parameters
         ----------
         prefix : str
             The string to add before each label.
+
         Returns
         -------
         DataFrame
             New DataFrame with updated labels.
+
         See Also
         --------
         DataFrame.add_suffix: Suffix column labels with string `suffix`.
+
         Examples
         --------
         >>> df = pd.DataFrame({'A': [1, 2, 3, 4], 'B': [3, 4, 5, 6]})
@@ -3080,17 +3084,21 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         """
         Suffix labels with string `suffix`.
         For DataFrame, the column labels are suffixed.
+
         Parameters
         ----------
         prefix : str
             The string to add after each label.
+
         Returns
         -------
         DataFrame
             New DataFrame with updated labels.
+
         See Also
         --------
         DataFrame.add_prefix: prefix column labels with string `prefix`.
+
         Examples
         --------
         >>> df = pd.DataFrame({'A': [1, 2, 3, 4], 'B': [3, 4, 5, 6]})

@@ -3673,6 +3673,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         Prefix labels with string `prefix`.
         For Series, the row labels are prefixed.
+
         Parameters
         ----------
         prefix : str
@@ -3709,17 +3710,21 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         """
         Suffix labels with string `suffix`.
         For Series, the row labels are suffixed.
+
         Parameters
         ----------
         prefix : str
             The string to add after each label.
+
         Returns
         -------
         Series
             New Series with updated labels.
+
         See Also
         --------
         Series.add_prefix: prefix row labels with string `prefix`.
+
         Examples
         --------
         >>> s = cudf.Series([1, 2, 3, 4])
