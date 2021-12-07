@@ -440,6 +440,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Data type to force. Only a single dtype is allowed.
         If None, infer.
 
+    nan_as_null : bool, Default True
+        If ``None``/``True``, converts ``np.nan`` values to
+        ``null`` values.
+        If ``False``, leaves ``np.nan`` values as is.
+
     Examples
     --------
 
