@@ -1489,6 +1489,7 @@ TEST_F(OrcWriterTest, DecimalOptionsNested)
       .decimal128_columns({"lists.1.dec64"});
   auto result = cudf_io::read_orc(in_opts);
 
+  // Both columns should be read as decimal128
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(0).child(1).child(0),
                                       result.tbl->view().column(0).child(1).child(1));
 }

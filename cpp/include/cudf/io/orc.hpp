@@ -236,7 +236,7 @@ class orc_reader_options {
    *
    * @param use Boolean value to enable/disable.
    */
-  void enable_decimal128(bool enable) { _enable_decimal128 = enable; }
+  void enable_decimal128(bool use) { _enable_decimal128 = use; }
 
   /**
    * @brief Set columns that should be read as 128-bit Decimal
@@ -380,9 +380,9 @@ class orc_reader_options_builder {
    *
    * @param use Boolean value to enable/disable.
    */
-  orc_reader_options_builder& decimal128(bool enable)
+  orc_reader_options_builder& decimal128(bool use)
   {
-    options.enable_decimal128(enable);
+    options.enable_decimal128(use);
     return *this;
   }
 
