@@ -121,6 +121,16 @@ struct sequences_functor<T, std::enable_if_t<is_supported<T>()>> {
   }
 };
 
+std::unique_ptr<column> empty_list_column(data_type child_type,
+                                   rmm::cuda_stream_view stream,
+                                   rmm::mr::device_memory_resource* mr)
+{
+  auto offsets = make_empty_column(data_type(type_to_id<offset_type>()));
+  auto child   = make_empty_column(child_type);
+  return make_lists_column(
+    0, std::move(offsets), std::move(child), 0, rmm::device_buffer{0, stream}, stream, mr);
+}
+
 std::unique_ptr<column> sequences(column_view const& starts,
                                   std::optional<column_view> const& steps,
                                   column_view const& sizes,
@@ -143,6 +153,7 @@ std::unique_ptr<column> sequences(column_view const& starts,
   }
 
   auto const n_lists = starts.size();
+  if (n_lists == 0) { return empty_list_column(starts.type(), stream, mr); }
 
   // Generate list offsets for the output.
   auto list_offsets = make_numeric_column(
@@ -150,12 +161,9 @@ std::unique_ptr<column> sequences(column_view const& starts,
   auto const offsets_begin  = list_offsets->mutable_view().template begin<offset_type>();
   auto const sizes_input_it = cudf::detail::indexalator_factory::make_input_iterator(sizes);
 
-  if (n_lists > 0) {
-    thrust::exclusive_scan(
-      rmm::exec_policy(stream), sizes_input_it, sizes_input_it + n_lists + 1, offsets_begin);
-  }
-  auto const n_elements =
-    n_lists == 0 ? 0 : cudf::detail::get_value<size_type>(list_offsets->view(), n_lists, stream);
+  thrust::exclusive_scan(
+    rmm::exec_policy(stream), sizes_input_it, sizes_input_it + n_lists + 1, offsets_begin);
+  auto const n_elements = cudf::detail::get_value<size_type>(list_offsets->view(), n_lists, stream);
 
   auto child = type_dispatcher(starts.type(),
                                sequences_dispatcher{},
