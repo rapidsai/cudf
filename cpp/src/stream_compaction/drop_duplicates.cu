@@ -83,35 +83,18 @@ column_view get_unique_ordered_indices(cudf::table_view const& keys,
   // extract unique indices
   auto device_input_table = cudf::table_device_view::create(keys, stream);
 
-  if (cudf::has_nulls(keys)) {
-    auto comp = row_equality_comparator<true>(
-      *device_input_table, *device_input_table, nulls_equal == null_equality::EQUAL);
-    auto result_end = unique_copy(sorted_indices->view().begin<cudf::size_type>(),
-                                  sorted_indices->view().end<cudf::size_type>(),
-                                  unique_indices.begin<cudf::size_type>(),
-                                  comp,
-                                  keep,
-                                  stream);
+  auto comp = row_equality_comparator(
+    nullate::DYNAMIC{cudf::has_nulls(keys)}, *device_input_table, *device_input_table, nulls_equal);
+  auto result_end = unique_copy(sorted_indices->view().begin<cudf::size_type>(),
+                                sorted_indices->view().end<cudf::size_type>(),
+                                unique_indices.begin<cudf::size_type>(),
+                                comp,
+                                keep,
+                                stream);
 
-    return cudf::detail::slice(
-      column_view(unique_indices),
-      0,
-      thrust::distance(unique_indices.begin<cudf::size_type>(), result_end));
-  } else {
-    auto comp = row_equality_comparator<false>(
-      *device_input_table, *device_input_table, nulls_equal == null_equality::EQUAL);
-    auto result_end = unique_copy(sorted_indices->view().begin<cudf::size_type>(),
-                                  sorted_indices->view().end<cudf::size_type>(),
-                                  unique_indices.begin<cudf::size_type>(),
-                                  comp,
-                                  keep,
-                                  stream);
-
-    return cudf::detail::slice(
-      column_view(unique_indices),
-      0,
-      thrust::distance(unique_indices.begin<cudf::size_type>(), result_end));
-  }
+  return cudf::detail::slice(column_view(unique_indices),
+                             0,
+                             thrust::distance(unique_indices.begin<cudf::size_type>(), result_end));
 }
 }  // namespace
 
