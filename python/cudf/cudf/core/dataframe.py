@@ -3075,8 +3075,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         2       3       5
         3       4       6
         """
-        out = DataFrame(index=self.index)
-        out._data = self._data.copy(deep=False)
+        out = self.copy(deep=True)
         out.columns = prefix + self.columns.astype(str)
         return out
 
@@ -3115,8 +3114,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         2       3       5
         3       4       6
         """
-        out = DataFrame(index=self.index)
-        out._data = self._data.copy(deep=False)
+        out = self.copy(deep=True)
         out.columns = self.columns.astype(str) + suffix
         return out
 
