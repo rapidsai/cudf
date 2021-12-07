@@ -2,8 +2,8 @@
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
-{% set cuda_version='.'.join(environ.get('CUDA', '10.1').split('.')[:2]) %}
-{% set py_version=environ.get('PYTHON', 3.8) %}
+{% set cuda_version = '.'.join(environ.get('CUDA', '10.1').split('.')[:2]) %}
+{% set py_version = environ.get('python', 3.8) %}
 
 package:
   name: custreamz
@@ -25,7 +25,7 @@ build:
 requirements:
   host:
     - python {{ py_version }}
-    - python-confluent-kafka >=1.7.0,<1.8.0a0=py38*
+    - python-confluent-kafka >=1.7.0,<1.8.0a0=py{{ py_version.replace('.', '') }}*
     - cudf_kafka {{ version }}
   run:
     - python {{ py_version }}
@@ -33,7 +33,7 @@ requirements:
     - cudf {{ version }}
     - dask>=2021.11.1,<=2021.11.2
     - distributed>=2021.11.1,<=2021.11.2
-    - python-confluent-kafka >=1.7.0,<1.8.0a0=py38*
+    - python-confluent-kafka >=1.7.0,<1.8.0a0=py{{ py_version.replace('.', '') }}*
     - cudf_kafka {{ version }}
 
 test:                                   # [linux64]
