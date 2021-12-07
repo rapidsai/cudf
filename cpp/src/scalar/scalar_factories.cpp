@@ -21,6 +21,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cudf/detail/copy.hpp>
+#include <cudf/lists/lists_column_view.hpp>
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
@@ -184,10 +185,12 @@ std::unique_ptr<scalar> make_empty_scalar_like(column_view const& column,
 {
   std::unique_ptr<scalar> result;
   switch (column.type().id()) {
-    case type_id::LIST:
-      result = make_list_scalar(empty_like(column)->view(), stream, mr);
+    case type_id::LIST: {
+      auto const empty_child = empty_like(lists_column_view(column).child());
+      result                 = make_list_scalar(empty_child->view(), stream, mr);
       result->set_valid_async(false, stream);
       break;
+    }
     case type_id::STRUCT:
       // The input column must have at least 1 row to extract a scalar (row) from it.
       result = detail::get_element(column, 0, stream, mr);

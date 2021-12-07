@@ -20,6 +20,7 @@
 #include <arrow/ipc/api.h>
 #include <cudf/aggregation.hpp>
 #include <cudf/concatenate.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/hashing.hpp>
@@ -2676,6 +2677,32 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_filter(JNIEnv *env, jclas
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_dropDuplicates(
+    JNIEnv *env, jclass, jlong input_jtable, jintArray key_columns, jboolean keep_first,
+    jboolean nulls_equal, jboolean nulls_before) {
+  JNI_NULL_CHECK(env, input_jtable, "input table is null", 0);
+  JNI_NULL_CHECK(env, key_columns, "input key_columns is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const input = reinterpret_cast<cudf::table_view const *>(input_jtable);
+
+    static_assert(sizeof(jint) == sizeof(cudf::size_type), "Integer types mismatched.");
+    auto const native_keys_indices = cudf::jni::native_jintArray(env, key_columns);
+    auto const keys_indices =
+        std::vector<cudf::size_type>(native_keys_indices.begin(), native_keys_indices.end());
+
+    auto result = cudf::drop_duplicates(
+        *input, keys_indices,
+        keep_first ? cudf::duplicate_keep_option::KEEP_FIRST :
+                     cudf::duplicate_keep_option::KEEP_LAST,
+        nulls_equal ? cudf::null_equality::EQUAL : cudf::null_equality::UNEQUAL,
+        nulls_before ? cudf::null_order::BEFORE : cudf::null_order::AFTER,
+        rmm::mr::get_current_device_resource());
+    return cudf::jni::convert_table_for_return(env, result);
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gather(JNIEnv *env, jclass, jlong j_input,
                                                               jlong j_map, jboolean check_bounds) {
   JNI_NULL_CHECK(env, j_input, "input table is null", 0);
@@ -3148,4 +3175,18 @@ JNIEXPORT jobjectArray JNICALL Java_ai_rapids_cudf_Table_contiguousSplitGroups(
   CATCH_STD(env, NULL);
 }
 
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_sample(JNIEnv *env, jclass, jlong j_input,
+                                                              jlong n, jboolean replacement,
+                                                              jlong seed) {
+  JNI_NULL_CHECK(env, j_input, "input table is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::table_view *input = reinterpret_cast<cudf::table_view *>(j_input);
+    auto sample_with_replacement =
+        replacement ? cudf::sample_with_replacement::TRUE : cudf::sample_with_replacement::FALSE;
+    std::unique_ptr<cudf::table> result = cudf::sample(*input, n, sample_with_replacement, seed);
+    return cudf::jni::convert_table_for_return(env, result);
+  }
+  CATCH_STD(env, 0);
+}
 } // extern "C"

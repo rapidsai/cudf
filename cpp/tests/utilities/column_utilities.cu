@@ -18,6 +18,7 @@
 #include <cudf/detail/copy.hpp>
 #include <cudf/detail/get_value.cuh>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/strings/convert/convert_datetime.hpp>
@@ -35,16 +36,17 @@
 
 #include <jit/type.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/equal.h>
+#include <thrust/execution_policy.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>
+#include <thrust/sequence.h>
 
 #include <numeric>
 #include <sstream>
-#include "cudf/detail/utilities/vector_factories.hpp"
-#include "rmm/cuda_stream_view.hpp"
 
 namespace cudf {
 
@@ -325,11 +327,13 @@ class corresponding_rows_unequal {
                              column_device_view lhs_row_indices_,
                              column_device_view rhs_row_indices_,
                              size_type /*fp_ulps*/)
-    : comp(d_lhs, d_rhs), lhs_row_indices(lhs_row_indices_), rhs_row_indices(rhs_row_indices_)
+    : comp(cudf::nullate::YES{}, d_lhs, d_rhs, cudf::null_equality::EQUAL),
+      lhs_row_indices(lhs_row_indices_),
+      rhs_row_indices(rhs_row_indices_)
   {
   }
 
-  cudf::row_equality_comparator<true> comp;
+  cudf::row_equality_comparator<cudf::nullate::YES> comp;
 
   __device__ bool operator()(size_type index)
   {
@@ -358,7 +362,7 @@ class corresponding_rows_not_equivalent {
                                     size_type fp_ulps_)
     : d_lhs(d_lhs),
       d_rhs(d_rhs),
-      comp(d_lhs, d_rhs),
+      comp(cudf::nullate::YES{}, d_lhs, d_rhs, null_equality::EQUAL),
       lhs_row_indices(lhs_row_indices_),
       rhs_row_indices(rhs_row_indices_),
       fp_ulps(fp_ulps_)
@@ -404,7 +408,7 @@ class corresponding_rows_not_equivalent {
     }
   };
 
-  cudf::row_equality_comparator<true> comp;
+  cudf::row_equality_comparator<cudf::nullate::YES> comp;
 
   __device__ bool operator()(size_type index)
   {

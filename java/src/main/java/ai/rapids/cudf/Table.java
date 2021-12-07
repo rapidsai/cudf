@@ -643,6 +643,10 @@ public final class Table implements AutoCloseable {
 
   private static native long[] filter(long input, long mask);
 
+  private static native long[] dropDuplicates(long nativeHandle, int[] keyColumns,
+                                              boolean keepFirst, boolean nullsEqual,
+                                              boolean nullsBefore) throws CudfException;
+
   private static native long[] gather(long tableHandle, long gatherView, boolean checkBounds);
 
   private static native long[] convertToRows(long nativeHandle);
@@ -675,6 +679,8 @@ public final class Table implements AutoCloseable {
                                                                 boolean keySorted,
                                                                 boolean[] keysDescending,
                                                                 boolean[] keysNullSmallest);
+
+  private static native long[] sample(long tableHandle, long n, boolean replacement, long seed);
 
   /////////////////////////////////////////////////////////////////////////////
   // TABLE CREATION APIs
@@ -1081,20 +1087,6 @@ public final class Table implements AutoCloseable {
     }
   }
 
-  /**
-   * Writes this table to a Parquet file on the host
-   *
-   * @param options parameters for the writer
-   * @param outputFile file to write the table to
-   * @deprecated please use writeParquetChunked instead
-   */
-  @Deprecated
-  public void writeParquet(ParquetWriterOptions options, File outputFile) {
-    try (TableWriter writer = writeParquetChunked(options, outputFile)) {
-      writer.write(this);
-    }
-  }
-
   private static class ORCTableWriter implements TableWriter {
     private long handle;
     HostBufferConsumer consumer;
@@ -1167,33 +1159,6 @@ public final class Table implements AutoCloseable {
    */
   public static TableWriter writeORCChunked(ORCWriterOptions options, HostBufferConsumer consumer) {
     return new ORCTableWriter(options, consumer);
-  }
-
-  /**
-   * Writes this table to a file on the host.
-   * @param outputFile - File to write the table to
-   * @deprecated please use writeORCChunked instead
-   */
-  @Deprecated
-  public void writeORC(File outputFile) {
-    // Need to specify the number of columns but leave all column names undefined
-    String[] names = new String[getNumberOfColumns()];
-    Arrays.fill(names, "");
-    ORCWriterOptions opts = ORCWriterOptions.builder().withColumns(true, names).build();
-    writeORC(opts, outputFile);
-  }
-
-  /**
-   * Writes this table to a file on the host.
-   * @param outputFile - File to write the table to
-   * @deprecated please use writeORCChunked instead
-   */
-  @Deprecated
-  public void writeORC(ORCWriterOptions options, File outputFile) {
-    assert options.getTopLevelChildren() == getNumberOfColumns() : "must specify names for all columns";
-    try (TableWriter writer = Table.writeORCChunked(options, outputFile)) {
-      writer.write(this);
-    }
   }
 
   private static class ArrowIPCTableWriter implements TableWriter {
@@ -1815,6 +1780,30 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Copy rows of the current table to an output table such that duplicate rows in the key columns
+   * are ignored (i.e., only one row from the duplicate ones will be copied). These keys columns are
+   * a subset of the current table columns and their indices are specified by an input array.
+   *
+   * Currently, the output table is sorted by key columns, using stable sort. However, this is not
+   * guaranteed in the future.
+   *
+   * @param keyColumns Array of indices representing key columns from the current table.
+   * @param keepFirst If it is true, the first row with a duplicated key will be copied. Otherwise,
+   *                  copy the last row with a duplicated key.
+   * @param nullsEqual Flag to denote whether nulls are treated as equal when comparing rows of the
+   *                   key columns to check for uniqueness.
+   * @param nullsBefore Flag to specify whether nulls in the key columns will appear before or
+   *                    after non-null elements when sorting the table.
+   *
+   * @return Table with unique keys.
+   */
+  public Table dropDuplicates(int[] keyColumns, boolean keepFirst, boolean nullsEqual,
+                              boolean nullsBefore) {
+    assert keyColumns.length >= 1 : "Input keyColumns must contain indices of at least one column";
+    return new Table(dropDuplicates(nativeHandle, keyColumns, keepFirst, nullsEqual, nullsBefore));
+  }
+
+  /**
    * Split a table at given boundaries, but the result of each split has memory that is laid out
    * in a contiguous range of memory.  This allows for us to optimize copying the data in a single
    * operation.
@@ -2057,26 +2046,6 @@ public final class Table implements AutoCloseable {
    * A negative value `i` in the `gatherMap` is interpreted as `i+n`, where
    * `n` is the number of rows in this table.
    *
-   * @deprecated Use {@link #gather(ColumnView, OutOfBoundsPolicy)}
-   * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
-   * @param checkBounds if true bounds checking is performed on the value. Be very careful
-   *                    when setting this to false.
-   * @return the resulting Table.
-   */
-  @Deprecated
-  public Table gather(ColumnView gatherMap, boolean checkBounds) {
-    return new Table(gather(nativeHandle, gatherMap.getNativeView(), checkBounds));
-  }
-
-  /**
-   * Gathers the rows of this table according to `gatherMap` such that row "i"
-   * in the resulting table's columns will contain row "gatherMap[i]" from this table.
-   * The number of rows in the result table will be equal to the number of elements in
-   * `gatherMap`.
-   *
-   * A negative value `i` in the `gatherMap` is interpreted as `i+n`, where
-   * `n` is the number of rows in this table.
-   *
    * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
    * @param outOfBoundsPolicy policy to use when an out-of-range value is in `gatherMap`
    * @return the resulting Table.
@@ -2222,7 +2191,7 @@ public final class Table implements AutoCloseable {
    * the left and right tables, respectively, to produce the result of the left join.
    * It is the responsibility of the caller to close the resulting gather map instances.
    * This interface allows passing an output row count that was previously computed from
-   * {@link #conditionalLeftJoinRowCount(Table, CompiledExpression, boolean)}.
+   * {@link #conditionalLeftJoinRowCount(Table, CompiledExpression)}.
    * WARNING: Passing a row count that is smaller than the actual row count will result
    * in undefined behavior.
    * @param rightTable the right side table of the join in the join
@@ -2362,7 +2331,7 @@ public final class Table implements AutoCloseable {
    * the left and right tables, respectively, to produce the result of the inner join.
    * It is the responsibility of the caller to close the resulting gather map instances.
    * This interface allows passing an output row count that was previously computed from
-   * {@link #conditionalInnerJoinRowCount(Table, CompiledExpression, boolean)}.
+   * {@link #conditionalInnerJoinRowCount(Table, CompiledExpression)}.
    * WARNING: Passing a row count that is smaller than the actual row count will result
    * in undefined behavior.
    * @param rightTable the right side table of the join in the join
@@ -2554,7 +2523,7 @@ public final class Table implements AutoCloseable {
    * to produce the result of the left semi join.
    * It is the responsibility of the caller to close the resulting gather map instance.
    * This interface allows passing an output row count that was previously computed from
-   * {@link #conditionalLeftSemiJoinRowCount(Table, CompiledExpression, boolean)}.
+   * {@link #conditionalLeftSemiJoinRowCount(Table, CompiledExpression)}.
    * WARNING: Passing a row count that is smaller than the actual row count will result
    * in undefined behavior.
    * @param rightTable the right side table of the join
@@ -2633,7 +2602,7 @@ public final class Table implements AutoCloseable {
    * to produce the result of the left anti join.
    * It is the responsibility of the caller to close the resulting gather map instance.
    * This interface allows passing an output row count that was previously computed from
-   * {@link #conditionalLeftAntiJoinRowCount(Table, CompiledExpression, boolean)}.
+   * {@link #conditionalLeftAntiJoinRowCount(Table, CompiledExpression)}.
    * WARNING: Passing a row count that is smaller than the actual row count will result
    * in undefined behavior.
    * @param rightTable the right side table of the join
@@ -2795,6 +2764,34 @@ public final class Table implements AutoCloseable {
     }
 
     return result;
+  }
+
+
+  /**
+   * Gather `n` samples from table randomly
+   * Note: does not preserve the ordering
+   * Example:
+   * input: {col1: {1, 2, 3, 4, 5}, col2: {6, 7, 8, 9, 10}}
+   * n: 3
+   * replacement: false
+   *
+   * output:       {col1: {3, 1, 4}, col2: {8, 6, 9}}
+   *
+   * replacement: true
+   *
+   * output:       {col1: {3, 1, 1}, col2: {8, 6, 6}}
+   *
+   * throws "logic_error" if `n` > table rows and `replacement` == FALSE.
+   * throws "logic_error" if `n` < 0.
+   *
+   * @param n non-negative number of samples expected from table
+   * @param replacement Allow or disallow sampling of the same row more than once.
+   * @param seed Seed value to initiate random number generator.
+   *
+   * @return Table containing samples
+   */
+  public Table sample(long n, boolean replacement, long seed) {
+    return new Table(sample(nativeHandle, n, replacement, seed));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -2971,27 +2968,27 @@ public final class Table implements AutoCloseable {
     }
 
     /**
-     * Computes row-based window aggregation functions on the Table/projection, 
+     * Computes row-based window aggregation functions on the Table/projection,
      * based on windows specified in the argument.
-     * 
+     *
      * This method enables queries such as the following SQL:
-     * 
-     *  SELECT user_id, 
-     *         MAX(sales_amt) OVER(PARTITION BY user_id ORDER BY date 
+     *
+     *  SELECT user_id,
+     *         MAX(sales_amt) OVER(PARTITION BY user_id ORDER BY date
      *                             ROWS BETWEEN 1 PRECEDING and 1 FOLLOWING)
      *  FROM my_sales_table WHERE ...
-     * 
+     *
      * Each window-aggregation is represented by a different {@link AggregationOverWindow} argument,
      * indicating:
      *  1. the {@link Aggregation.Kind},
      *  2. the number of rows preceding and following the current row, within a window,
      *  3. the minimum number of observations within the defined window
-     * 
+     *
      * This method returns a {@link Table} instance, with one result column for each specified
      * window aggregation.
-     * 
+     *
      * In this example, for the following input:
-     * 
+     *
      *  [ // user_id,  sales_amt
      *    { "user1",     10      },
      *    { "user2",     20      },
@@ -3003,19 +3000,19 @@ public final class Table implements AutoCloseable {
      *    { "user1",     60      },
      *    { "user2",     40      }
      *  ]
-     * 
-     * Partitioning (grouping) by `user_id` yields the following `sales_amt` vector 
+     *
+     * Partitioning (grouping) by `user_id` yields the following `sales_amt` vector
      * (with 2 groups, one for each distinct `user_id`):
-     * 
+     *
      *    [ 10,  20,  10,  50,  60,  20,  30,  80,  40 ]
      *      <-------user1-------->|<------user2------->
-     * 
+     *
      * The SUM aggregation is applied with 1 preceding and 1 following
      * row, with a minimum of 1 period. The aggregation window is thus 3 rows wide,
      * yielding the following column:
-     * 
+     *
      *    [ 30, 40,  80, 120, 110,  50, 130, 150, 120 ]
-     * 
+     *
      * @param windowAggregates the window-aggregations to be performed
      * @return Table instance, with each column containing the result of each aggregation.
      * @throws IllegalArgumentException if the window arguments are not of type
@@ -3034,7 +3031,7 @@ public final class Table implements AutoCloseable {
       for (int outputIndex = 0; outputIndex < windowAggregates.length; outputIndex++) {
         AggregationOverWindow agg = windowAggregates[outputIndex];
         if (agg.getWindowOptions().getFrameType() != WindowOptions.FrameType.ROWS) {
-          throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: " 
+          throw new IllegalArgumentException("Expected ROWS-based window specification. Unexpected window type: "
                   + agg.getWindowOptions().getFrameType());
         }
         ColumnWindowOps ops = groupedOps.computeIfAbsent(agg.getColumnIndex(), (idx) -> new ColumnWindowOps());
@@ -3095,27 +3092,27 @@ public final class Table implements AutoCloseable {
     /**
      * Computes range-based window aggregation functions on the Table/projection,
      * based on windows specified in the argument.
-     * 
+     *
      * This method enables queries such as the following SQL:
-     * 
-     *  SELECT user_id, 
-     *         MAX(sales_amt) OVER(PARTITION BY user_id ORDER BY date 
+     *
+     *  SELECT user_id,
+     *         MAX(sales_amt) OVER(PARTITION BY user_id ORDER BY date
      *                             RANGE BETWEEN INTERVAL 1 DAY PRECEDING and CURRENT ROW)
      *  FROM my_sales_table WHERE ...
-     * 
+     *
      * Each window-aggregation is represented by a different {@link AggregationOverWindow} argument,
      * indicating:
      *  1. the {@link Aggregation.Kind},
      *  2. the index for the timestamp column to base the window definitions on
      *  2. the number of DAYS preceding and following the current row's date, to consider in the window
      *  3. the minimum number of observations within the defined window
-     * 
+     *
      * This method returns a {@link Table} instance, with one result column for each specified
      * window aggregation.
-     * 
+     *
      * In this example, for the following input:
-     * 
-     *  [ // user,  sales_amt,  YYYYMMDD (date)  
+     *
+     *  [ // user,  sales_amt,  YYYYMMDD (date)
      *    { "user1",   10,      20200101    },
      *    { "user2",   20,      20200101    },
      *    { "user1",   20,      20200102    },
@@ -3126,19 +3123,19 @@ public final class Table implements AutoCloseable {
      *    { "user1",   60,      20200107    },
      *    { "user2",   40,      20200104    }
      *  ]
-     * 
-     * Partitioning (grouping) by `user_id`, and ordering by `date` yields the following `sales_amt` vector 
+     *
+     * Partitioning (grouping) by `user_id`, and ordering by `date` yields the following `sales_amt` vector
      * (with 2 groups, one for each distinct `user_id`):
-     * 
+     *
      * Date :(202001-)  [ 01,  02,  03,  07,  07,    01,   01,   02,  04 ]
      * Input:           [ 10,  20,  10,  50,  60,    20,   30,   80,  40 ]
      *                    <-------user1-------->|<---------user2--------->
-     * 
-     * The SUM aggregation is applied, with 1 day preceding, and 1 day following, with a minimum of 1 period. 
+     *
+     * The SUM aggregation is applied, with 1 day preceding, and 1 day following, with a minimum of 1 period.
      * The aggregation window is thus 3 *days* wide, yielding the following output column:
-     * 
+     *
      *  Results:        [ 30,  40,  30,  110, 110,  130,  130,  130,  40 ]
-     * 
+     *
      * @param windowAggregates the window-aggregations to be performed
      * @return Table instance, with each column containing the result of each aggregation.
      * @throws IllegalArgumentException if the window arguments are not of type
@@ -3387,14 +3384,6 @@ public final class Table implements AutoCloseable {
           groupByOptions.getKeysDescending(),
           groupByOptions.getKeysNullSmallest());
     }
-
-    /**
-     * @deprecated use aggregateWindowsOverRanges
-     */
-    @Deprecated
-    public Table aggregateWindowsOverTimeRanges(AggregationOverWindow... windowAggregates) {
-      return aggregateWindowsOverRanges(windowAggregates);
-    }
   }
 
   public static final class TableOperation {
@@ -3588,18 +3577,6 @@ public final class Table implements AutoCloseable {
           type.nativeId,
           partitionOffsets.length,
           partitionOffsets)), partitionOffsets);
-    }
-
-    /**
-     * Hash partition a table into the specified number of partitions.
-     * @deprecated Use {@link #hashPartition(int)}
-     * @param numberOfPartitions - number of partitions to use
-     * @return - {@link PartitionedTable} - Table that exposes a limited functionality of the
-     * {@link Table} class
-     */
-    @Deprecated
-    public PartitionedTable partition(int numberOfPartitions) {
-      return hashPartition(numberOfPartitions);
     }
   }
 

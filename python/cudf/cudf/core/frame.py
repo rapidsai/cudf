@@ -1919,7 +1919,6 @@ class Frame:
         2   0.7   0.0
         3   0.2   0.0
         """
-
         if isinstance(decimals, cudf.Series):
             decimals = decimals.to_pandas()
 

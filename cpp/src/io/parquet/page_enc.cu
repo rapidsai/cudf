@@ -18,6 +18,7 @@
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
+#include <cudf/detail/utilities/vector_factories.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -1735,19 +1736,10 @@ dremel_data get_dremel_data(column_view h_col,
     },
     stream);
 
-  thrust::host_vector<size_type> column_offsets(d_column_offsets.size());
-  CUDA_TRY(cudaMemcpyAsync(column_offsets.data(),
-                           d_column_offsets.data(),
-                           d_column_offsets.size() * sizeof(size_type),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
-  thrust::host_vector<size_type> column_ends(d_column_ends.size());
-  CUDA_TRY(cudaMemcpyAsync(column_ends.data(),
-                           d_column_ends.data(),
-                           d_column_ends.size() * sizeof(size_type),
-                           cudaMemcpyDeviceToHost,
-                           stream.value()));
-
+  thrust::host_vector<size_type> column_offsets =
+    cudf::detail::make_host_vector_async(d_column_offsets, stream);
+  thrust::host_vector<size_type> column_ends =
+    cudf::detail::make_host_vector_async(d_column_ends, stream);
   stream.synchronize();
 
   size_t max_vals_size = 0;
