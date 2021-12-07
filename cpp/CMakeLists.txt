@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 21.12.00
+  VERSION 22.02.00
   LANGUAGES C CXX CUDA
 )
 
@@ -185,6 +185,7 @@ add_library(
   src/binaryop/compiled/LogicalOr.cu
   src/binaryop/compiled/Mod.cu
   src/binaryop/compiled/Mul.cu
+  src/binaryop/compiled/NullEquals.cu
   src/binaryop/compiled/NullMax.cu
   src/binaryop/compiled/NullMin.cu
   src/binaryop/compiled/PMod.cu

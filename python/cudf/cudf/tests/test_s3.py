@@ -346,12 +346,17 @@ def test_read_parquet_filters(s3_base, s3so, pdf, python_file):
     assert_eq(pdf.iloc[:0], got.reset_index(drop=True))
 
 
-def test_write_parquet(s3_base, s3so, pdf):
+@pytest.mark.parametrize("partition_cols", [None, ["String"]])
+def test_write_parquet(s3_base, s3so, pdf, partition_cols):
     fname = "test_parquet_writer.parquet"
     bname = "parquet"
     gdf = cudf.from_pandas(pdf)
     with s3_context(s3_base=s3_base, bucket=bname) as s3fs:
-        gdf.to_parquet("s3://{}/{}".format(bname, fname), storage_options=s3so)
+        gdf.to_parquet(
+            "s3://{}/{}".format(bname, fname),
+            partition_cols=partition_cols,
+            storage_options=s3so,
+        )
         assert s3fs.exists("s3://{}/{}".format(bname, fname))
 
         got = pd.read_parquet(s3fs.open("s3://{}/{}".format(bname, fname)))
