@@ -916,7 +916,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
         case cudf::type_id::INT64:
         case cudf::type_id::UINT64: result = cudf::strings::from_integers(*column); break;
         case cudf::type_id::DECIMAL32:
-        case cudf::type_id::DECIMAL64: result = cudf::strings::from_fixed_point(*column); break;
+        case cudf::type_id::DECIMAL64:
+        case cudf::type_id::DECIMAL128: result = cudf::strings::from_fixed_point(*column); break;
         default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);
       }
     } else if (column->type().id() == cudf::type_id::STRING) {
@@ -936,6 +937,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_castTo(JNIEnv *env, jclas
           break;
         case cudf::type_id::DECIMAL32:
         case cudf::type_id::DECIMAL64:
+        case cudf::type_id::DECIMAL128:
           result = cudf::strings::to_fixed_point(*column, n_data_type);
           break;
         default: JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "Invalid data type", 0);

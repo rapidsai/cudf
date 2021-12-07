@@ -704,12 +704,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
   _nullability = std::vector<uint8_t>(r_nullability.crbegin(), r_nullability.crend());
   // TODO(cp): Explore doing this for all columns in a single go outside this ctor. Maybe using
   // hostdevice_vector. Currently this involves a cudaMemcpyAsync for each column.
-  _d_nullability = rmm::device_uvector<uint8_t>(_nullability.size(), stream);
-  CUDA_TRY(cudaMemcpyAsync(_d_nullability.data(),
-                           _nullability.data(),
-                           _nullability.size() * sizeof(uint8_t),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  _d_nullability = cudf::detail::make_device_uvector_async(_nullability, stream);
 
   _is_list = (_max_rep_level > 0);
 
