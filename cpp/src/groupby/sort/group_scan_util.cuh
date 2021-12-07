@@ -217,7 +217,7 @@ struct group_scan_functor<K,
 
     auto const flattened_null_orders = cudf::detail::make_device_uvector_async(null_orders, stream);
 
-    // Create a gather map contaning indices of the prefix min/max elements.
+    // Create a gather map contaning indices of the prefix min/max elements within each group.
     auto gather_map = rmm::device_uvector<size_type>(values.size(), stream);
 
     // Find the indices of the prefix min/max elements within each group.
