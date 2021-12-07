@@ -3042,80 +3042,24 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
     def add_prefix(self, prefix):
         """
-        Prefix labels with string `prefix`.
+        Prefix labels with string 'prefix'.
         For DataFrame, the column labels are prefixed.
-
-        Parameters
-        ----------
-        prefix : str
-            The string to add before each label.
-
-        Returns
-        -------
-        DataFrame
-            New DataFrame with updated labels.
-
-        See Also
-        --------
-        DataFrame.add_suffix: Suffix column labels with string `suffix`.
-
-        Examples
-        --------
-        >>> df = cudf.DataFrame({'A': [1, 2, 3, 4], 'B': [3, 4, 5, 6]})
-        >>> df
-           A  B
-        0  1  3
-        1  2  4
-        2  3  5
-        3  4  6
-        >>> df.add_prefix('col_')
-             col_A  col_B
-        0       1       3
-        1       2       4
-        2       3       5
-        3       4       6
         """
         out = self.copy(deep=True)
-        out.columns = prefix + self.columns.astype(str)
+        out.columns = [
+            prefix + col_name for col_name in list(self._data.keys())
+        ]
         return out
 
     def add_suffix(self, suffix):
         """
-        Suffix labels with string `suffix`.
+        Suffix labels with string 'suffix'.
         For DataFrame, the column labels are suffixed.
-
-        Parameters
-        ----------
-        prefix : str
-            The string to add after each label.
-
-        Returns
-        -------
-        DataFrame
-            New DataFrame with updated labels.
-
-        See Also
-        --------
-        DataFrame.add_prefix: prefix column labels with string `prefix`.
-
-        Examples
-        --------
-        >>> df = cudf.DataFrame({'A': [1, 2, 3, 4], 'B': [3, 4, 5, 6]})
-        >>> df
-           A  B
-        0  1  3
-        1  2  4
-        2  3  5
-        3  4  6
-        >>> df.add_suffix('_col')
-             A_col  B_col
-        0       1       3
-        1       2       4
-        2       3       5
-        3       4       6
         """
         out = self.copy(deep=True)
-        out.columns = self.columns.astype(str) + suffix
+        out.columns = [
+            col_name + suffix for col_name in list(self._data.keys())
+        ]
         return out
 
     def as_gpu_matrix(self, columns=None, order="F"):
