@@ -37,10 +37,11 @@ namespace cudf {
 namespace detail {
 namespace {
 // Functor to identify unique elements in a sorted order table/column
-template <bool has_nulls, typename ReturnType, typename Iterator>
+template <typename ReturnType, typename Iterator>
 struct unique_comparator {
-  unique_comparator(table_device_view device_table, Iterator const sorted_order)
-    : comparator(device_table, device_table, true), permute(sorted_order)
+  unique_comparator(table_device_view device_table, Iterator const sorted_order, bool has_nulls)
+    : comparator(nullate::DYNAMIC{has_nulls}, device_table, device_table, null_equality::EQUAL),
+      permute(sorted_order)
   {
   }
   __device__ ReturnType operator()(size_type index) const noexcept
@@ -49,7 +50,7 @@ struct unique_comparator {
   };
 
  private:
-  row_equality_comparator<has_nulls> comparator;
+  row_equality_comparator<nullate::DYNAMIC> comparator;
   Iterator const permute;
 };
 
@@ -63,21 +64,12 @@ rmm::device_uvector<size_type> sorted_dense_rank(column_view input_col,
   rmm::device_uvector<size_type> dense_rank_sorted(input_size, stream);
   auto sorted_index_order = thrust::make_permutation_iterator(
     sorted_order_view.begin<size_type>(), thrust::make_counting_iterator<size_type>(0));
-  if (input_col.has_nulls()) {
-    auto conv = unique_comparator<true, size_type, decltype(sorted_index_order)>(
-      *device_table, sorted_index_order);
-    auto unique_it = cudf::detail::make_counting_transform_iterator(0, conv);
+  auto conv = unique_comparator<size_type, decltype(sorted_index_order)>(
+    *device_table, sorted_index_order, input_col.has_nulls());
+  auto unique_it = cudf::detail::make_counting_transform_iterator(0, conv);
 
-    thrust::inclusive_scan(
-      rmm::exec_policy(stream), unique_it, unique_it + input_size, dense_rank_sorted.data());
-  } else {
-    auto conv = unique_comparator<false, size_type, decltype(sorted_index_order)>(
-      *device_table, sorted_index_order);
-    auto unique_it = cudf::detail::make_counting_transform_iterator(0, conv);
-
-    thrust::inclusive_scan(
-      rmm::exec_policy(stream), unique_it, unique_it + input_size, dense_rank_sorted.data());
-  }
+  thrust::inclusive_scan(
+    rmm::exec_policy(stream), unique_it, unique_it + input_size, dense_rank_sorted.data());
   return dense_rank_sorted;
 }
 

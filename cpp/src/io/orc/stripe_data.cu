@@ -1066,12 +1066,12 @@ static __device__ int Decode_Decimals(orc_bytestream_s* bs,
             return (v / kPow5i[scale]) >> scale;
           }
         }();
-        if (dtype_id == type_id::DECIMAL64) {
+        if (dtype_id == type_id::DECIMAL32) {
+          vals.i32[t] = scaled_value;
+        } else if (dtype_id == type_id::DECIMAL64) {
           vals.i64[t] = scaled_value;
         } else {
-          {
-            vals.i128[t] = scaled_value;
-          }
+          vals.i128[t] = scaled_value;
         }
       }
     }
@@ -1708,8 +1708,10 @@ __global__ void __launch_bounds__(block_size)
             case DOUBLE:
             case LONG: static_cast<uint64_t*>(data_out)[row] = s->vals.u64[t + vals_skipped]; break;
             case DECIMAL:
-              if (s->chunk.dtype_id == type_id::FLOAT64 or
-                  s->chunk.dtype_id == type_id::DECIMAL64) {
+              if (s->chunk.dtype_id == type_id::DECIMAL32) {
+                static_cast<uint32_t*>(data_out)[row] = s->vals.u32[t + vals_skipped];
+              } else if (s->chunk.dtype_id == type_id::FLOAT64 or
+                         s->chunk.dtype_id == type_id::DECIMAL64) {
                 static_cast<uint64_t*>(data_out)[row] = s->vals.u64[t + vals_skipped];
               } else {
                 // decimal128
