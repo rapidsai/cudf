@@ -191,17 +191,17 @@ struct source_info {
  * @brief Destination information for write interfaces
  */
 struct sink_info {
-  io_type type          = io_type::VOID;
-  size_t num_void_sinks = 1;
+  io_type type = io_type::VOID;
   std::vector<std::string> filepaths;
   std::vector<std::vector<char>*> buffers;  // TODO: perhaps we can repurpose host_buffer. ask VM
   std::vector<cudf::io::data_sink*> user_sinks;
+  size_t num_sinks = 1;
 
   sink_info() = default;
-  sink_info(size_t num_void_sinks) : type(io_type::VOID), num_void_sinks(num_void_sinks) {}
+  sink_info(size_t num_sinks) : type(io_type::VOID), num_sinks(num_sinks) {}
 
   explicit sink_info(std::vector<std::string> const& file_paths)
-    : type(io_type::FILEPATH), filepaths(file_paths)
+    : type(io_type::FILEPATH), filepaths(file_paths), num_sinks(file_paths.size())
   {
   }
   explicit sink_info(std::string const& file_path) : type(io_type::FILEPATH), filepaths({file_path})
@@ -209,13 +209,13 @@ struct sink_info {
   }
 
   explicit sink_info(std::vector<std::vector<char>*> const& buffers)
-    : type(io_type::HOST_BUFFER), buffers(buffers)
+    : type(io_type::HOST_BUFFER), buffers(buffers), num_sinks(buffers.size())
   {
   }
   explicit sink_info(std::vector<char>* buffer) : type(io_type::HOST_BUFFER), buffers({buffer}) {}
 
   explicit sink_info(std::vector<cudf::io::data_sink*> const& user_sinks)
-    : type(io_type::USER_IMPLEMENTED), user_sinks(user_sinks)
+    : type(io_type::USER_IMPLEMENTED), user_sinks(user_sinks), num_sinks(user_sinks.size())
   {
   }
   explicit sink_info(class cudf::io::data_sink* user_sink)

@@ -517,6 +517,8 @@ class parquet_writer_options {
    */
   void set_partitions(std::vector<partition_info> const& partitions)
   {
+    CUDF_EXPECTS(partitions.size() == _sink.num_sinks,
+                 "Mismatch between number of sinks and number of partitions");
     _partitions = std::move(partitions);
   }
 
@@ -534,6 +536,8 @@ class parquet_writer_options {
    */
   void set_key_value_metadata(std::vector<std::map<std::string, std::string>> metadata)
   {
+    CUDF_EXPECTS(metadata.size() == _sink.num_sinks,
+                 "Mismatch between number of sinks and number of metadata maps");
     _user_data = std::move(metadata);
   }
 
@@ -562,11 +566,13 @@ class parquet_writer_options {
   /**
    * @brief Sets column chunks file path to be set in the raw output metadata.
    *
-   * @param file_paths Vector of Strings which indicates file path. Must be same size as partitions
-   * if partitions are specified
+   * @param file_paths Vector of Strings which indicates file path. Must be same size as number of
+   * data sinks in sink info
    */
   void set_column_chunks_file_paths(std::vector<std::string> file_paths)
   {
+    CUDF_EXPECTS(file_paths.size() == _sink.num_sinks,
+                 "Mismatch between number of sinks and number of chunk paths to set");
     _column_chunks_file_paths = std::move(file_paths);
   }
 
@@ -624,6 +630,8 @@ class parquet_writer_options_builder {
    */
   parquet_writer_options_builder& partitions(std::vector<partition_info> partitions)
   {
+    CUDF_EXPECTS(partitions.size() == options._sink.num_sinks,
+                 "Mismatch between number of sinks and number of partitions");
     options._partitions = std::move(partitions);
     return *this;
   }
@@ -649,6 +657,8 @@ class parquet_writer_options_builder {
   parquet_writer_options_builder& key_value_metadata(
     std::vector<std::map<std::string, std::string>> metadata)
   {
+    CUDF_EXPECTS(metadata.size() == options._sink.num_sinks,
+                 "Mismatch between number of sinks and number of metadata maps");
     options._user_data = std::move(metadata);
     return *this;
   }
@@ -680,13 +690,15 @@ class parquet_writer_options_builder {
   /**
    * @brief Sets column chunks file path to be set in the raw output metadata.
    *
-   * @param file_paths Vector of Strings which indicates file path. Must be same size as partitions
-   * if partitions are specified
+   * @param file_paths Vector of Strings which indicates file path. Must be same size as number of
+   * data sinks
    * @return this for chaining.
    */
   parquet_writer_options_builder& column_chunks_file_paths(
     std::vector<std::string> const& file_paths)
   {
+    CUDF_EXPECTS(file_paths.size() == options._sink.num_sinks,
+                 "Mismatch between number of sinks and number of chunk paths to set");
     options._column_chunks_file_paths = file_paths;
     return *this;
   }
@@ -874,6 +886,8 @@ class chunked_parquet_writer_options {
    */
   void set_key_value_metadata(std::vector<std::map<std::string, std::string>> metadata)
   {
+    CUDF_EXPECTS(metadata.size() == _sink.num_sinks,
+                 "Mismatch between number of sinks and number of metadata maps");
     _user_data = std::move(metadata);
   }
 
@@ -970,6 +984,8 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options_builder& key_value_metadata(
     std::vector<std::map<std::string, std::string>> metadata)
   {
+    CUDF_EXPECTS(metadata.size() == options._sink.num_sinks,
+                 "Mismatch between number of sinks and number of metadata maps");
     options._user_data = std::move(metadata);
     return *this;
   }
@@ -1093,6 +1109,8 @@ class parquet_chunked_writer {
    * @param[in] table Table that needs to be written
    * @param[in] partitions Optional partitions to divide the table into. If specified, must be same
    * size as number of sinks.
+   *
+   * @throws cudf::logic_error If the number of partitions is not the smae as number of sinks
    * @return returns reference of the class object
    */
   parquet_chunked_writer& write(table_view const& table,

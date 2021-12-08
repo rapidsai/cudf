@@ -132,7 +132,7 @@ std::vector<std::unique_ptr<data_sink>> make_datasinks(sink_info const& info)
     case io_type::HOST_BUFFER: return cudf::io::data_sink::create(info.buffers);
     case io_type::VOID: {
       std::vector<std::unique_ptr<data_sink>> sinks;
-      for (size_t i = 0; i < info.num_void_sinks; ++i) {
+      for (size_t i = 0; i < info.num_sinks; ++i) {
         sinks.push_back(cudf::io::data_sink::create());
       }
       return sinks;
