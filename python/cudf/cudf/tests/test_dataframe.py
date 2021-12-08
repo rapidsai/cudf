@@ -9048,6 +9048,11 @@ def test_pearson_corr_multiindex_dataframe():
     [
         {"a": [np.nan, 1, 2], "b": [None, None, None]},
         {"a": [1, 2, np.nan, 2], "b": [np.nan, np.nan, np.nan, np.nan]},
+        {
+            "a": [1, 2, np.nan, 2, None],
+            "b": [np.nan, np.nan, None, np.nan, np.nan],
+        },
+        {"a": [1, 2, 2, None, 1.1], "b": [1, 2.2, 3, None, 5]},
     ],
 )
 @pytest.mark.parametrize("nan_as_null", [True, False])
