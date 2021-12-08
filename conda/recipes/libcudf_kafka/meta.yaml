@@ -28,6 +28,7 @@ requirements:
     - libcudf {{version}}
     - librdkafka >=1.6.0,<1.7.0a0
   run:
+    - libcudf {{version}}
     - {{ pin_compatible('librdkafka', max_pin='x.x') }} #TODO: librdkafka should be automatically included here by run_exports but is not
 
 test:
