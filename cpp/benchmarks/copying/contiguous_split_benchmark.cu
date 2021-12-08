@@ -15,14 +15,21 @@
  */
 
 #include <benchmark/benchmark.h>
-
-#include <cudf/column/column.hpp>
-
-#include <cudf/copying.hpp>
-
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
+
 #include <cudf_test/column_wrapper.hpp>
+
+#include <cudf/column/column.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
+
+#include <rmm/cuda_stream_view.hpp>
+#include <rmm/device_uvector.hpp>
+
+#include <thrust/gather.h>
+#include <thrust/random.h>
+#include <thrust/tabulate.h>
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
 
@@ -70,18 +77,22 @@ void BM_contiguous_split(benchmark::State& state)
   int64_t num_rows        = total_desired_bytes / (num_cols * el_size);
 
   // generate input table
-  srand(31337);
-  auto valids = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return true; });
+  auto valids = cudf::detail::make_counting_transform_iterator(
+    0, [] __device__(cudf::size_type i) { return true; });
   std::vector<cudf::test::fixed_width_column_wrapper<int>> src_cols(num_cols);
   for (int idx = 0; idx < num_cols; idx++) {
-    auto rand_elements =
-      cudf::detail::make_counting_transform_iterator(0, [](int i) { return rand(); });
+    auto rand_elements = cudf::detail::make_counting_transform_iterator(0, [idx] __device__(int i) {
+      thrust::default_random_engine rng(31337 + idx);
+      thrust::uniform_int_distribution<cudf::size_type> dist;
+      rng.discard(i);
+      return dist(rng);
+    });
     if (include_validity) {
       src_cols[idx] = cudf::test::fixed_width_column_wrapper<int>(
-        rand_elements, rand_elements + num_rows, valids);
+        thrust::input_device_iterator_tag{}, rand_elements, rand_elements + num_rows, valids);
     } else {
-      src_cols[idx] =
-        cudf::test::fixed_width_column_wrapper<int>(rand_elements, rand_elements + num_rows);
+      src_cols[idx] = cudf::test::fixed_width_column_wrapper<int>(
+        thrust::input_device_iterator_tag{}, rand_elements, rand_elements + num_rows);
     }
   }
 
@@ -106,31 +117,46 @@ void BM_contiguous_split_strings(benchmark::State& state)
   cudf::size_type num_cols    = state.range(1);
   cudf::size_type num_splits  = state.range(2);
   bool include_validity       = state.range(3) == 0 ? false : true;
+  using string_pair           = thrust::pair<const char*, cudf::size_type>;
 
   const int64_t string_len = 8;
   std::vector<const char*> h_strings{
     "aaaaaaaa", "bbbbbbbb", "cccccccc", "dddddddd", "eeeeeeee", "ffffffff", "gggggggg", "hhhhhhhh"};
+  auto [chars, offsets] = cudf::test::detail::make_chars_and_offsets(
+    h_strings.begin(), h_strings.end(), thrust::make_constant_iterator(true));
+  auto d_chars = cudf::detail::make_device_uvector_sync(chars);
+  rmm::device_uvector<string_pair> d_strings(h_strings.size(), rmm::cuda_stream_default);
+  thrust::tabulate(thrust::device,
+                   d_strings.begin(),
+                   d_strings.end(),
+                   [data = d_chars.data()] __device__(size_t i) {
+                     return string_pair{data + i * string_len, string_len};
+                   });
 
   int64_t col_len_bytes = total_desired_bytes / num_cols;
   int64_t num_rows      = col_len_bytes / string_len;
 
   // generate input table
-  srand(31337);
   auto valids = cudf::detail::make_counting_transform_iterator(
-    0, [](auto i) { return i % 2 == 0 ? true : false; });
+    0, [include_validity] __device__(int i) { return include_validity ? i % 2 == 0 : true; });
   std::vector<cudf::test::strings_column_wrapper> src_cols;
-  std::vector<const char*> one_col(num_rows);
+  rmm::device_vector<string_pair> d_col(num_rows, string_pair{nullptr, 0});
   for (int64_t idx = 0; idx < num_cols; idx++) {
     // fill in a random set of strings
-    for (int64_t s_idx = 0; s_idx < num_rows; s_idx++) {
-      one_col[s_idx] = h_strings[rand_range(h_strings.size())];
-    }
-    if (include_validity) {
-      src_cols.push_back(
-        cudf::test::strings_column_wrapper(one_col.begin(), one_col.end(), valids));
-    } else {
-      src_cols.push_back(cudf::test::strings_column_wrapper(one_col.begin(), one_col.end()));
-    }
+    auto rand_elements = cudf::detail::make_counting_transform_iterator(
+      0, [idx, sz = d_strings.size()] __device__(int i) {
+        thrust::default_random_engine rng(31337 + idx);
+        thrust::uniform_int_distribution<size_t> dist{0, sz - 1};
+        rng.discard(i);
+        return dist(rng);
+      });
+    thrust::gather_if(thrust::device,
+                      rand_elements,
+                      rand_elements + num_rows,
+                      valids,
+                      d_strings.begin(),
+                      d_col.begin());
+    src_cols.push_back(cudf::test::strings_column_wrapper(d_col));
   }
 
   size_t total_bytes = total_desired_bytes + (num_rows * sizeof(cudf::size_type));
