@@ -103,6 +103,14 @@ mixed_join(table_view const& left,
   auto build      = swap_tables ? left.select(right_on) : right.select(left_on);
   auto build_view = table_device_view::create(build, stream);
   auto probe_view = table_device_view::create(probe, stream);
+  // TODO: Introducing this as an output is a fundamental change because
+  // calling code that wants to pass the size calculation to multiple join
+  // calculations as an optimization must now also pass this vector. Since this
+  // vector's nature changes depending on whether or not swapping occurs, we're
+  // effectively exposing an implementation detail. I don't know if there's any
+  // way to avoid this.
+  auto matches_per_row = std::make_unique<rmm::device_uvector<size_type>>(
+    swap_tables ? right.num_rows() : left.num_rows(), stream, mr);
 
   // Don't use multimap_type because we want a CG size of 1.
   mixed_multimap_type hash_table{compute_hash_table_size(build.num_rows()),
@@ -165,7 +173,8 @@ mixed_join(table_view const& left,
           hash_table_view,
           parser.device_expression_data,
           swap_tables,
-          size.data());
+          size.data(),
+          matches_per_row->data());
     } else {
       compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -177,7 +186,8 @@ mixed_join(table_view const& left,
           hash_table_view,
           parser.device_expression_data,
           swap_tables,
-          size.data());
+          size.data(),
+          matches_per_row->data());
     }
     CHECK_CUDA(stream.value());
     join_size = size.value(stream);
@@ -307,6 +317,14 @@ std::size_t compute_mixed_join_output_size(table_view const& left,
   auto build       = swap_tables ? left.select(left_on) : right.select(right_on);
   auto probe_view  = table_device_view::create(probe, stream);
   auto build_view  = table_device_view::create(build, stream);
+  // TODO: Introducing this as an output is a fundamental change because
+  // calling code that wants to pass the size calculation to multiple join
+  // calculations as an optimization must now also pass this vector. Since this
+  // vector's nature changes depending on whether or not swapping occurs, we're
+  // effectively exposing an implementation detail. I don't know if there's any
+  // way to avoid this.
+  auto matches_per_row = std::make_unique<rmm::device_uvector<size_type>>(
+    swap_tables ? right.num_rows() : left.num_rows(), stream, mr);
 
   // Don't use multimap_type because we want a CG size of 1.
   mixed_multimap_type hash_table{compute_hash_table_size(build.num_rows()),
@@ -352,7 +370,8 @@ std::size_t compute_mixed_join_output_size(table_view const& left,
         hash_table_view,
         parser.device_expression_data,
         swap_tables,
-        size.data());
+        size.data(),
+        matches_per_row->data());
   } else {
     compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -364,7 +383,8 @@ std::size_t compute_mixed_join_output_size(table_view const& left,
         hash_table_view,
         parser.device_expression_data,
         swap_tables,
-        size.data());
+        size.data(),
+        matches_per_row->data());
   }
   CHECK_CUDA(stream.value());
 

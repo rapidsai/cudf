@@ -23,15 +23,84 @@
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cooperative_groups.h>
 
+#include <thrust/equal.h>
 #include <cub/cub.cuh>
 #include <cuco/detail/pair.cuh>
 
 namespace cudf {
 namespace detail {
 namespace cg = cooperative_groups;
+
+/**
+ * @brief Device functor to determine if two pairs are identical.
+ *
+ * This equality comparator is designed for use with cuco::static_multimap's
+ * pair* APIs, which will compare equality based on comparing (key, value)
+ * pairs. In the context of joins, these pairs are of the form
+ * (row_hash, row_id). A hash probe hit indicates that hash of a probe row's hash is
+ * equal to the hash of the hash of some row in the multimap, at which point we need an
+ * equality comparator that will check whether the contents of the rows are
+ * identical. This comparator does so by verifying key equality (i.e. that
+ * probe_row_hash == build_row_hash) and then using a row_equality_comparator
+ * to compare the contents of the row indices that are stored as the payload in
+ * the hash map.
+ *
+ * This particular comparator is a specialized version of the pair_equality used in hash joins. This
+ * version also checks the expression_evaluator.
+ */
+template <bool has_nulls>
+class pair_expression_equality {
+ public:
+  __device__ pair_expression_equality(
+    table_device_view lhs,
+    table_device_view rhs,
+    cudf::ast::detail::expression_evaluator<has_nulls> evaluator,
+    cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage,
+    bool nulls_are_equal = true)
+    : lhs(lhs),
+      rhs{rhs},
+      nulls_are_equal{nulls_are_equal},
+      evaluator{evaluator},
+      thread_intermediate_storage{thread_intermediate_storage}
+  {
+  }
+
+  __device__ __forceinline__ bool operator()(const pair_type& lhs_row,
+                                             const pair_type& rhs_row) const noexcept
+  {
+    auto equal_elements = [=](column_device_view l, column_device_view r) {
+      return cudf::type_dispatcher(l.type(),
+                                   element_equality_comparator<has_nulls>{l, r, nulls_are_equal},
+                                   lhs_row.second,
+                                   rhs_row.second);
+    };
+
+    auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
+    // Three levels of checks:
+    // 1. Row hashes of the columns involved in the equality condition are equal.
+    // 2. The contents of the columns involved in the equality condition are equal.
+    // 3. The predicate evaluated on the relevant columns (already encoded in the evaluator)
+    // evaluates to true.
+    if ((lhs_row.first == rhs_row.first) &&
+        (thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(), equal_elements))) {
+      evaluator.evaluate(
+        output_dest, lhs_row.second, rhs_row.second, 0, thread_intermediate_storage);
+      return (output_dest.is_valid() && output_dest.value());
+    }
+    return false;
+  }
+
+ private:
+  table_device_view const lhs;
+  table_device_view const rhs;
+  bool const nulls_are_equal;
+  cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage;
+  cudf::ast::detail::expression_evaluator<has_nulls> const evaluator;
+};
 
 /**
  * @brief Computes the output size of joining the left table to the right table.
@@ -61,7 +130,8 @@ __global__ void compute_mixed_join_output_size(
   cudf::detail::mixed_multimap_type::device_view hash_table_view,
   ast::detail::expression_device_view device_expression_data,
   bool const swap_tables,
-  std::size_t* output_size)
+  std::size_t* output_size,
+  cudf::size_type* matches_per_row)
 {
   constexpr uint32_t flushing_cg_size = 1;
   const uint32_t flushing_cg_id       = threadIdx.x / flushing_cg_size;
