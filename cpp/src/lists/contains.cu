@@ -336,9 +336,14 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
     index_of(lists, search_keys, duplicate_find_option::FIND_FIRST, stream), stream, mr);
 }
 
-std::unique_ptr<column> contains_null_elements(cudf::lists_column_view const& input_lists,
-                                               rmm::cuda_stream_view stream,
-                                               rmm::mr::device_memory_resource* mr)
+/**
+ * @copydoc cudf::lists::contain_nulls(cudf::lists_column_view const&,
+ *                                     rmm::mr::device_memory_resource*)
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ */
+std::unique_ptr<column> contains_nulls(cudf::lists_column_view const& input_lists,
+                                       rmm::cuda_stream_view stream,
+                                       rmm::mr::device_memory_resource* mr)
 {
   auto const num_rows   = input_lists.size();
   auto const d_lists    = column_device_view::create(input_lists.parent());
@@ -385,11 +390,11 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
   return detail::contains(lists, search_keys, rmm::cuda_stream_default, mr);
 }
 
-std::unique_ptr<column> contains_null_elements(cudf::lists_column_view const& input_lists,
-                                               rmm::mr::device_memory_resource* mr)
+std::unique_ptr<column> contains_nulls(cudf::lists_column_view const& input_lists,
+                                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::contains_null_elements(input_lists, rmm::cuda_stream_default, mr);
+  return detail::contains_nulls(input_lists, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
