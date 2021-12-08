@@ -234,11 +234,11 @@ add_library(
 )
 
 if(CUDF_JNI_LIBCUDF_STATIC)
-  # When linking against libcudf.a, the JNI library will include the old libcudf.so.
-  # For backwards-compatibility for software that expects to find libcudf.so in the JVM
-  # environment after cudf has loaded, the JNI code and libcudf.a will be combined into libcudf.so.
-  # A stub library will be created for libcudfjni.so that will simply require libcudf.so for
-  # backwards compatibility with software that expects to find libcudfjni.so at runtime.
+  # When linking against libcudf.a, the JNI library will include the old libcudf.so. For
+  # backwards-compatibility for software that expects to find libcudf.so in the JVM environment
+  # after cudf has loaded, the JNI code and libcudf.a will be combined into libcudf.so. A stub
+  # library will be created for libcudfjni.so that will simply require libcudf.so for backwards
+  # compatibility with software that expects to find libcudfjni.so at runtime.
   set_target_properties(cudfjni PROPERTIES OUTPUT_NAME "cudf")
   add_library(cudfjnistub SHARED src/emptyfile.cpp)
   set_target_properties(cudfjnistub PROPERTIES OUTPUT_NAME "cudfjni")
@@ -272,8 +272,12 @@ target_include_directories(
 # Override RPATH for cudfjni
 set_target_properties(
   cudfjni
-  PROPERTIES BUILD_RPATH "\$ORIGIN" INSTALL_RPATH "\$ORIGIN" # set target compile options
-             CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CUDA_STANDARD 17 CUDA_STANDARD_REQUIRED ON
+  PROPERTIES BUILD_RPATH "\$ORIGIN"
+             INSTALL_RPATH "\$ORIGIN" # set target compile options
+             CXX_STANDARD 17
+             CXX_STANDARD_REQUIRED ON
+             CUDA_STANDARD 17
+             CUDA_STANDARD_REQUIRED ON
 )
 
 target_compile_options(
@@ -290,8 +294,10 @@ if(USE_GDS)
   add_library(cufilejni SHARED src/CuFileJni.cpp)
   set_target_properties(
     cufilejni
-    PROPERTIES BUILD_RPATH "\$ORIGIN" INSTALL_RPATH "\$ORIGIN" # set target compile options
-               CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    PROPERTIES BUILD_RPATH "\$ORIGIN"
+               INSTALL_RPATH "\$ORIGIN" # set target compile options
+               CXX_STANDARD 17
+               CXX_STANDARD_REQUIRED ON
   )
   target_include_directories(
     cufilejni
@@ -321,14 +327,12 @@ target_compile_definitions(cudfjni PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM
 
 set(CUDF_LINK ${CUDF_LIB})
 if(CUDF_JNI_LIBCUDF_STATIC)
-  set(CUDF_LINK
-      -Wl,--whole-archive
-      ${CUDF_LIB}
-      -Wl,--no-whole-archive)
+  set(CUDF_LINK -Wl,--whole-archive ${CUDF_LIB} -Wl,--no-whole-archive)
 endif()
 
-target_link_libraries(cudfjni
-  PRIVATE ${CUDF_LINK} ${NVCOMP_LIBRARY} ${ARROW_LIBRARY} CUDA::cuda_driver)
+target_link_libraries(
+  cudfjni PRIVATE ${CUDF_LINK} ${NVCOMP_LIBRARY} ${ARROW_LIBRARY} CUDA::cuda_driver
+)
 
 # ##################################################################################################
 # * cudart options --------------------------------------------------------------------------------
