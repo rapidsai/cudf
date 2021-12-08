@@ -3670,19 +3670,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return result
 
     def add_prefix(self, prefix):
-        """
-        Prefix labels with string 'prefix'.
-        For Series, the row labels are prefixed.
-        """
         result = self.copy(deep=True)
         result.index = prefix + self.index.astype(str)
         return result
 
     def add_suffix(self, suffix):
-        """
-        Suffix labels with string 'suffix'.
-        For Series, the row labels are suffixed.
-        """
         result = self.copy(deep=True)
         result.index = self.index.astype(str) + suffix
         return result

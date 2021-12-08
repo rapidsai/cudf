@@ -3041,10 +3041,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             return out.copy(deep=copy)
 
     def add_prefix(self, prefix):
-        """
-        Prefix labels with string 'prefix'.
-        For DataFrame, the column labels are prefixed.
-        """
         out = self.copy(deep=True)
         out.columns = [
             prefix + col_name for col_name in list(self._data.keys())
@@ -3052,10 +3048,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return out
 
     def add_suffix(self, suffix):
-        """
-        Suffix labels with string 'suffix'.
-        For DataFrame, the column labels are suffixed.
-        """
         out = self.copy(deep=True)
         out.columns = [
             col_name + suffix for col_name in list(self._data.keys())

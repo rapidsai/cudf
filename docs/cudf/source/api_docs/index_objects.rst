@@ -42,8 +42,6 @@ Modifying and computations
 .. autosummary::
    :toctree: api/
 
-   Index.add_prefix
-   Index.add_suffix
    Index.any
    Index.copy
    Index.drop_duplicates

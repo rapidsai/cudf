@@ -558,7 +558,7 @@ class IndexedFrame(Frame):
 
         Returns
         -------
-        Series
+        Series or DataFrame
             New Series with updated labels or DataFrame with updated labels.
 
         See Also
@@ -617,7 +617,7 @@ class IndexedFrame(Frame):
 
         Returns
         -------
-        Series
+        Series or DataFrame
             New Series with updated labels or DataFrame with updated labels.
 
         See Also
