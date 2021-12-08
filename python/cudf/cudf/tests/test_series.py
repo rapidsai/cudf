@@ -1454,6 +1454,26 @@ def test_reset_index_named(drop, inplace, original_name, name):
     assert_eq(expect, got)
 
 
+def test_series_add_prefix():
+    cd_s = cudf.Series([1, 2, 3, 4])
+    pd_s = cd_s.to_pandas()
+
+    got = cd_s.add_prefix("item_")
+    expected = pd_s.add_prefix("item_")
+
+    assert_eq(got, expected)
+
+
+def test_series_add_suffix():
+    cd_s = cudf.Series([1, 2, 3, 4])
+    pd_s = cd_s.to_pandas()
+
+    got = cd_s.add_suffix("_item")
+    expected = pd_s.add_suffix("_item")
+
+    assert_eq(got, expected)
+
+
 @pytest.mark.parametrize(
     "cudf_series",
     [

@@ -570,6 +570,124 @@ class IndexedFrame(Frame):
         result._copy_type_metadata(self)
         return result
 
+    def add_prefix(self, prefix):
+        """
+        Prefix labels with string `prefix`.
+
+        For Series, the row labels are prefixed.
+        For DataFrame, the column labels are prefixed.
+
+        Parameters
+        ----------
+        prefix : str
+            The string to add before each label.
+
+        Returns
+        -------
+        Series or DataFrame
+            New Series with updated labels or DataFrame with updated labels.
+
+        See Also
+        --------
+        Series.add_suffix: Suffix row labels with string 'suffix'.
+        DataFrame.add_suffix: Suffix column labels with string 'suffix'.
+
+        Examples
+        --------
+        **Series**
+        >>> s = cudf.Series([1, 2, 3, 4])
+        >>> s
+        0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64
+        >>> s.add_prefix('item_')
+        item_0    1
+        item_1    2
+        item_2    3
+        item_3    4
+        dtype: int64
+
+        **DataFrame**
+        >>> df = cudf.DataFrame({'A': [1, 2, 3, 4], 'B': [3, 4, 5, 6]})
+        >>> df
+           A  B
+        0  1  3
+        1  2  4
+        2  3  5
+        3  4  6
+        >>> df.add_prefix('col_')
+             col_A  col_B
+        0       1       3
+        1       2       4
+        2       3       5
+        3       4       6
+        """
+        raise NotImplementedError(
+            "`IndexedFrame.add_prefix` not currently implemented. \
+                Use `Series.add_prefix` or `DataFrame.add_prefix`"
+        )
+
+    def add_suffix(self, suffix):
+        """
+        Suffix labels with string `suffix`.
+
+        For Series, the row labels are suffixed.
+        For DataFrame, the column labels are suffixed.
+
+        Parameters
+        ----------
+        prefix : str
+            The string to add after each label.
+
+        Returns
+        -------
+        Series or DataFrame
+            New Series with updated labels or DataFrame with updated labels.
+
+        See Also
+        --------
+        Series.add_prefix: prefix row labels with string 'prefix'.
+        DataFrame.add_prefix: Prefix column labels with string 'prefix'.
+
+        Examples
+        --------
+        **Series**
+        >>> s = cudf.Series([1, 2, 3, 4])
+        >>> s
+        0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64
+        >>> s.add_suffix('_item')
+        0_item    1
+        1_item    2
+        2_item    3
+        3_item    4
+        dtype: int64
+
+        **DataFrame**
+        >>> df = cudf.DataFrame({'A': [1, 2, 3, 4], 'B': [3, 4, 5, 6]})
+        >>> df
+           A  B
+        0  1  3
+        1  2  4
+        2  3  5
+        3  4  6
+        >>> df.add_suffix('_col')
+             A_col  B_col
+        0       1       3
+        1       2       4
+        2       3       5
+        3       4       6
+        """
+        raise NotImplementedError(
+            "`IndexedFrame.add_suffix` not currently implemented. \
+                Use `Series.add_suffix` or `DataFrame.add_suffix`"
+        )
+
     def sort_values(
         self,
         by,
