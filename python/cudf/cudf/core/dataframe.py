@@ -58,6 +58,7 @@ from cudf.core.indexed_frame import (
     _FrameIndexer,
     _get_label_range_or_mask,
     _indices_from_labels,
+    doc_reset_index_template,
 )
 from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
@@ -2487,7 +2488,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return df if not inplace else None
 
     @docutils.doc_apply(
-        docutils.doc_reset_index_template.format(
+        doc_reset_index_template.format(
             klass="DataFrame",
             argument="",
             return_type="DataFrame or None",

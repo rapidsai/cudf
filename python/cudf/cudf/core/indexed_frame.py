@@ -23,6 +23,31 @@ from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
 from cudf.utils.utils import _gather_map_is_valid, cached_property
 
+doc_reset_index_template = """
+        Reset the index of the {klass}, or a level of it.
+
+        Parameters
+        ----------
+        level : int, str, tuple, or list, default None
+            Only remove the given levels from the index. Removes all levels by
+            default.
+        drop : bool, default False
+            Do not try to insert index into dataframe columns. This resets
+            the index to the default integer index.
+{argument}
+        inplace : bool, default False
+            Modify the DataFrame in place (do not create a new object).
+
+        Returns
+        -------
+        {return_type}
+            {klass} with the new index or None if ``inplace=True``.{return_doc}
+
+        Examples
+        --------
+        {example}
+"""
+
 
 def _indices_from_labels(obj, labels):
     from cudf.core.column import column

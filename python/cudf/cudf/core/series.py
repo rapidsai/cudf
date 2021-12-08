@@ -65,6 +65,7 @@ from cudf.core.indexed_frame import (
     _FrameIndexer,
     _get_label_range_or_mask,
     _indices_from_labels,
+    doc_reset_index_template,
 )
 from cudf.core.single_column_frame import SingleColumnFrame
 from cudf.utils import cudautils, docutils
@@ -832,7 +833,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return series
 
     @docutils.doc_apply(
-        docutils.doc_reset_index_template.format(
+        doc_reset_index_template.format(
             klass="Series",
             argument="""
         name : object, optional
