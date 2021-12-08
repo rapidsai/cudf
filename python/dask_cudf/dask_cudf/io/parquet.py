@@ -126,11 +126,8 @@ class CudfEngine(ArrowDatasetEngine):
 
                 # Build the column from `codes` directly
                 # (since the category is often a larger dtype)
-                codes = (
-                    as_column(partitions[i].keys.index(index2))
-                    .as_frame()
-                    .repeat(len(df))
-                    ._data[None]
+                codes = as_column(
+                    partitions[i].keys.index(index2), length=len(df),
                 )
                 df[name] = build_categorical_column(
                     categories=partitions[i].keys,
