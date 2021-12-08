@@ -78,8 +78,8 @@ trie create_serialized_trie(const std::vector<std::string>& keys, rmm::cuda_stre
  *
  * @return Boolean value; true if string is found, false otherwise
  */
-CUDF_HDI bool serialized_trie_contains(device_span<serial_trie_node const> trie,
-                                       device_span<char const> key)
+__host__ __device__ inline bool serialized_trie_contains(device_span<serial_trie_node const> trie,
+                                                         device_span<char const> key)
 {
   if (trie.data() == nullptr || trie.empty()) return false;
   if (key.empty()) return trie.front().is_leaf;
