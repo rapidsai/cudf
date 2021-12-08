@@ -9069,10 +9069,12 @@ def test_dataframe_add_suffix():
         np.random.random_sample((4, 4)),
         np.random.uniform(10.5, 75.5, (10, 6)),
         np.array([1.123, 2.343, 5.890, 0.0]),
+        [np.nan, None, np.nan, None],
+        {"a": [1.123, 2.343, np.nan, np.nan], "b": [None, 3, 9.08, None]},
     ],
 )
 @pytest.mark.parametrize("periods", range(-4, 5))
-def test_diff_dataframe_valid(data, periods):
+def test_diff_dataframe(data, periods):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
@@ -9088,15 +9090,6 @@ def test_diff_dataframe_invalid_axis():
     with pytest.raises(NotImplementedError, match="Only axis=0 is supported."):
         gdf = cudf.DataFrame(np.random.random_sample((4, 4)))
         gdf.diff(periods=1, axis=1)
-
-
-def test_diff_dataframe_null_columns():
-    with pytest.raises(
-        AssertionError,
-        match="Diff currently requires columns with no null values",
-    ):
-        gdf = cudf.DataFrame([1.123, 2.343, np.nan, None, 6.072, None])
-        gdf.diff(periods=4, axis=0)
 
 
 def test_diff_dataframe_non_numeric_dtypes():

@@ -2685,7 +2685,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if not axis == 0:
             raise NotImplementedError("Only axis=0 is supported.")
 
-        if self.isna().any().any():
+        if (self[col].has_nulls for col in self._data) is True:
             raise AssertionError(
                 "Diff currently requires columns with no null values"
             )
@@ -2698,12 +2698,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         try:
             result = self - self.shift(periods=periods)
         except TypeError as e:
-            if (
-                "sub operator not supported between\
-                    <class 'cudf.core.column.string.StringColumn'> \
-                    and <class 'cudf.core.column.string.StringColumn'>"
-                in str(e)
-            ):
+            if "sub operator not supported" in str(e):
                 raise NotImplementedError(
                     "Diff currently only supports numeric dtypes"
                 )
