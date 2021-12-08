@@ -194,7 +194,9 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
     if (value_shift || bit_shift) {
       std::size_t idx = (num_bytes - remainder) / 4;
       uint32_t v = remainder > 0 ? (reinterpret_cast<uint32_t const*>(src)[idx] - value_shift) : 0;
-      auto const have_trailing_bits = ((num_elements * 32) - num_rows) < bit_shift;
+
+      constexpr size_type rows_per_element = 32;
+      auto const have_trailing_bits = ((num_elements * rows_per_element) - num_rows) < bit_shift;
       while (remainder) {
         // if we're at the very last word of a validity copy, we do not always need to read the next
         // word to get the final trailing bits.
