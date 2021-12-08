@@ -2824,6 +2824,31 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return lhs._column.corr(rhs._column)
 
+    def autocorr(self, lag=1):
+        """Compute the lag-N autocorrelation. This method computes the Pearson
+        correlation between the Series and its shifted self.
+
+        Parameters
+        ----------
+        lag : int, default 1
+            Number of lags to apply before performing autocorrelation.
+
+        Returns
+        -------
+        result : float
+            The Pearson correlation between self and self.shift(lag).
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([0.25, 0.5, 0.2, -0.05])
+        >>> s.autocorr()
+        0.10355263309024071
+        >>> s.autocorr(lag=2)
+        -0.9999999999999999
+        """
+        return self.corr(self.shift(lag))
+
     def isin(self, values):
         """Check whether values are contained in Series.
 
@@ -3667,6 +3692,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             suffixes=suffixes,
         )
 
+        return result
+
+    def add_prefix(self, prefix):
+        result = self.copy(deep=True)
+        result.index = prefix + self.index.astype(str)
+        return result
+
+    def add_suffix(self, suffix):
+        result = self.copy(deep=True)
+        result.index = self.index.astype(str) + suffix
         return result
 
     def keys(self):

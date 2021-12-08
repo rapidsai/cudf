@@ -9073,3 +9073,23 @@ def test_dataframe_constructor_nan_as_null(data, nan_as_null):
     else:
         actual = actual.select_dtypes(exclude=["object"])
         assert (actual.replace(np.nan, -1) == -1).any().any()
+
+
+def test_dataframe_add_prefix():
+    cdf = cudf.DataFrame({"A": [1, 2, 3, 4], "B": [3, 4, 5, 6]})
+    pdf = cdf.to_pandas()
+
+    got = cdf.add_prefix("item_")
+    expected = pdf.add_prefix("item_")
+
+    assert_eq(got, expected)
+
+
+def test_dataframe_add_suffix():
+    cdf = cudf.DataFrame({"A": [1, 2, 3, 4], "B": [3, 4, 5, 6]})
+    pdf = cdf.to_pandas()
+
+    got = cdf.add_suffix("_item")
+    expected = pdf.add_suffix("_item")
+
+    assert_eq(got, expected)
