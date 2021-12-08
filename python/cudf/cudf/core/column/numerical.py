@@ -283,9 +283,8 @@ class NumericalColumn(NumericalBaseColumn):
     @property
     def nan_count(self):
         if self.dtype.kind != "f":
-            return 0
-
-        if self._nan_count is None:
+            self._nan_count = 0
+        elif self._nan_count is None:
             nan_col = libcudf.unary.is_nan(self)
             self._nan_count = nan_col.sum()
         return self._nan_count
@@ -329,20 +328,18 @@ class NumericalColumn(NumericalBaseColumn):
         """
         Return col with *to_replace* replaced with *value*.
         """
+
+        # If all of `to_replace`/`replacement` are `None`,
+        # dtype of `to_replace_col`/`replacement_col`
+        # is inferred as `string`, but this is a valid
+        # float64 column too, Hence we will need to type-cast
+        # to self.dtype.
         to_replace_col = column.as_column(to_replace)
         if to_replace_col.null_count == len(to_replace_col):
-            # If all of `to_replace` are `None`, dtype of `to_replace_col`
-            # is inferred as `string`, but this is a valid
-            # float64 column too, Hence we will need to type-cast
-            # to self.dtype.
             to_replace_col = to_replace_col.astype(self.dtype)
 
         replacement_col = column.as_column(replacement)
         if replacement_col.null_count == len(replacement_col):
-            # If all of `replacement` are `None`, dtype of `replacement_col`
-            # is inferred as `string`, but this is a valid
-            # float64 column too, Hence we will need to type-cast
-            # to self.dtype.
             replacement_col = replacement_col.astype(self.dtype)
 
         if type(to_replace_col) != type(replacement_col):
