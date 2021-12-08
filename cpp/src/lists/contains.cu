@@ -53,11 +53,6 @@ auto get_search_keys_device_iterable_view(cudf::scalar const& search_key, rmm::c
 }
 
 /**
- * @brief Enum to indicate whether the `search_key` scalar/column contains nulls.
- */
-enum search_key_nulls : bool { NO_NULLS = false, HAS_NULLS = true };
-
-/**
  * @brief __device__ functor to search for a key in a `list_device_view`.
  */
 template <duplicate_find_option = duplicate_find_option::FIND_FIRST>
@@ -97,7 +92,7 @@ struct finder<duplicate_find_option::FIND_LAST> {
 /**
  * @brief Functor to search each list row for the specified search keys.
  */
-template <search_key_nulls search_keys_have_nulls>
+template <bool search_keys_have_nulls>
 struct lookup_functor {
   template <typename ElementType>
   struct is_supported {
@@ -259,14 +254,14 @@ std::unique_ptr<column> index_of(
 {
   return search_key.is_valid(stream)
            ? cudf::type_dispatcher(search_key.type(),
-                                   lookup_functor<search_key_nulls::NO_NULLS>{},
+                                   lookup_functor<false>{},  // No nulls in search key
                                    lists,
                                    search_key,
                                    find_option,
                                    stream,
                                    mr)
            : cudf::type_dispatcher(search_key.type(),
-                                   lookup_functor<search_key_nulls::HAS_NULLS>{},
+                                   lookup_functor<true>{},  // Nulls in search key
                                    lists,
                                    search_key,
                                    find_option,
@@ -293,14 +288,14 @@ std::unique_ptr<column> index_of(
 
   return search_keys.has_nulls()
            ? cudf::type_dispatcher(search_keys.type(),
-                                   lookup_functor<search_key_nulls::HAS_NULLS>{},
+                                   lookup_functor<true>{},  // Nulls in search keys
                                    lists,
                                    search_keys,
                                    find_option,
                                    stream,
                                    mr)
            : cudf::type_dispatcher(search_keys.type(),
-                                   lookup_functor<search_key_nulls::NO_NULLS>{},
+                                   lookup_functor<false>{},  // No nulls in search keys
                                    lists,
                                    search_keys,
                                    find_option,
@@ -341,31 +336,10 @@ std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
     index_of(lists, search_keys, duplicate_find_option::FIND_FIRST, stream), stream, mr);
 }
 
-}  // namespace detail
-
-std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
-                                 cudf::scalar const& search_key,
-                                 rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::contains(lists, search_key, rmm::cuda_stream_default, mr);
-}
-
-std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
-                                 cudf::column_view const& search_keys,
-                                 rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::contains(lists, search_keys, rmm::cuda_stream_default, mr);
-}
-
 std::unique_ptr<column> contains_null_elements(cudf::lists_column_view const& input_lists,
+                                               rmm::cuda_stream_view stream,
                                                rmm::mr::device_memory_resource* mr)
 {
-  CUDF_FUNC_RANGE();
-
-  auto stream = rmm::cuda_stream_default;
-
   auto const num_rows   = input_lists.size();
   auto const d_lists    = column_device_view::create(input_lists.parent());
   auto has_nulls_output = make_numeric_column(
@@ -391,6 +365,31 @@ std::unique_ptr<column> contains_null_elements(cudf::lists_column_view const& in
     validity_begin, validity_begin + num_rows, thrust::identity<bool>{}, stream, mr);
   has_nulls_output->set_null_mask(std::move(null_mask), num_nulls);
   return has_nulls_output;
+}
+
+}  // namespace detail
+
+std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
+                                 cudf::scalar const& search_key,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::contains(lists, search_key, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> contains(cudf::lists_column_view const& lists,
+                                 cudf::column_view const& search_keys,
+                                 rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::contains(lists, search_keys, rmm::cuda_stream_default, mr);
+}
+
+std::unique_ptr<column> contains_null_elements(cudf::lists_column_view const& input_lists,
+                                               rmm::mr::device_memory_resource* mr)
+{
+  CUDF_FUNC_RANGE();
+  return detail::contains_null_elements(input_lists, rmm::cuda_stream_default, mr);
 }
 
 std::unique_ptr<column> index_of(cudf::lists_column_view const& lists,
