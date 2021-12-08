@@ -27,7 +27,7 @@ namespace parquet {
 /**
  * @brief Basic data types in Parquet, determines how data is physically stored
  */
-enum Type {
+enum Type : int8_t {
   UNDEFINED_TYPE       = -1,  // Undefined for non-leaf nodes
   BOOLEAN              = 0,
   INT32                = 1,

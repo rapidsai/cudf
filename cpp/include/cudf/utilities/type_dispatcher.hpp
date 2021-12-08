@@ -531,7 +531,7 @@ template <typename T1>
 struct double_type_dispatcher_second_type {
 #pragma nv_exec_check_disable
   template <typename T2, typename F, typename... Ts>
-  CUDF_HDI decltype(auto) operator()(F&& f, Ts&&... args) const
+  CUDF_HDFI decltype(auto) operator()(F&& f, Ts&&... args) const
   {
     return f.template operator()<T1, T2>(std::forward<Ts>(args)...);
   }
@@ -541,7 +541,7 @@ template <template <cudf::type_id> typename IdTypeMap>
 struct double_type_dispatcher_first_type {
 #pragma nv_exec_check_disable
   template <typename T1, typename F, typename... Ts>
-  CUDF_HDI decltype(auto) operator()(cudf::data_type type2, F&& f, Ts&&... args) const
+  CUDF_HDFI decltype(auto) operator()(cudf::data_type type2, F&& f, Ts&&... args) const
   {
     return type_dispatcher<IdTypeMap>(type2,
                                       detail::double_type_dispatcher_second_type<T1>{},
@@ -566,10 +566,10 @@ struct double_type_dispatcher_first_type {
  */
 #pragma nv_exec_check_disable
 template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl, typename F, typename... Ts>
-CUDF_HDI constexpr decltype(auto) double_type_dispatcher(cudf::data_type type1,
-                                                         cudf::data_type type2,
-                                                         F&& f,
-                                                         Ts&&... args)
+CUDF_HDFI constexpr decltype(auto) double_type_dispatcher(cudf::data_type type1,
+                                                          cudf::data_type type2,
+                                                          F&& f,
+                                                          Ts&&... args)
 {
   return type_dispatcher<IdTypeMap>(type1,
                                     detail::double_type_dispatcher_first_type<IdTypeMap>{},
