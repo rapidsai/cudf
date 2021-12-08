@@ -3585,22 +3585,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         result.columns = columns
         return result
 
-    @property
-    def T(self):
-        """
-        Transpose index and columns.
-
-        Reflect the DataFrame over its main diagonal by writing rows
-        as columns and vice-versa. The property T is an accessor to
-        the method transpose().
-
-        Returns
-        -------
-        out : DataFrame
-            The transposed DataFrame.
-        """
-
-        return self.transpose()
+    T = property(transpose, doc=transpose.__doc__)
 
     def melt(self, **kwargs):
         """Unpivots a DataFrame from wide format to long format,

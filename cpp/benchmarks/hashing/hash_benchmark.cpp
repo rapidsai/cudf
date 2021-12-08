@@ -25,10 +25,14 @@
 class HashBenchmark : public cudf::benchmark {
 };
 
-static void BM_hash(benchmark::State& state, cudf::hash_id hid)
+enum contains_nulls { no_nulls, nulls };
+
+static void BM_hash(benchmark::State& state, cudf::hash_id hid, contains_nulls has_nulls)
 {
   cudf::size_type const n_rows{(cudf::size_type)state.range(0)};
   auto const data = create_random_table({cudf::type_id::INT64}, 1, row_count{n_rows});
+  if (has_nulls == contains_nulls::no_nulls)
+    data->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
 
   for (auto _ : state) {
     cuda_event_timer raii(state, true, rmm::cuda_stream_default);
@@ -36,16 +40,25 @@ static void BM_hash(benchmark::State& state, cudf::hash_id hid)
   }
 }
 
-#define HASH_BENCHMARK_DEFINE(name)                               \
-  BENCHMARK_DEFINE_F(HashBenchmark, name)                         \
-  (::benchmark::State & st) { BM_hash(st, cudf::hash_id::name); } \
-  BENCHMARK_REGISTER_F(HashBenchmark, name)                       \
-    ->RangeMultiplier(4)                                          \
-    ->Ranges({{1 << 14, 1 << 24}})                                \
-    ->UseManualTime()                                             \
+#define concat(a, b, c) a##b##c
+
+#define H_BENCHMARK_DEFINE(name, hid, n)                                            \
+  BENCHMARK_DEFINE_F(HashBenchmark, name)                                           \
+  (::benchmark::State & st) { BM_hash(st, cudf::hash_id::hid, contains_nulls::n); } \
+  BENCHMARK_REGISTER_F(HashBenchmark, name)                                         \
+    ->RangeMultiplier(4)                                                            \
+    ->Ranges({{1 << 14, 1 << 24}})                                                  \
+    ->UseManualTime()                                                               \
     ->Unit(benchmark::kMillisecond);
 
-HASH_BENCHMARK_DEFINE(HASH_MURMUR3)
-HASH_BENCHMARK_DEFINE(HASH_MD5)
-HASH_BENCHMARK_DEFINE(HASH_SERIAL_MURMUR3)
-HASH_BENCHMARK_DEFINE(HASH_SPARK_MURMUR3)
+#define HASH_BENCHMARK_DEFINE(hid, n) H_BENCHMARK_DEFINE(concat(hid, _, n), hid, n)
+
+HASH_BENCHMARK_DEFINE(HASH_MURMUR3, nulls)
+HASH_BENCHMARK_DEFINE(HASH_MD5, nulls)
+HASH_BENCHMARK_DEFINE(HASH_SERIAL_MURMUR3, nulls)
+HASH_BENCHMARK_DEFINE(HASH_SPARK_MURMUR3, nulls)
+
+HASH_BENCHMARK_DEFINE(HASH_MURMUR3, no_nulls)
+HASH_BENCHMARK_DEFINE(HASH_MD5, no_nulls)
+HASH_BENCHMARK_DEFINE(HASH_SERIAL_MURMUR3, no_nulls)
+HASH_BENCHMARK_DEFINE(HASH_SPARK_MURMUR3, no_nulls)
