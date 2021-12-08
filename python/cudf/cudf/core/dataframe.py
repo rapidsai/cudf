@@ -1517,15 +1517,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 [o._index for o in objs]
             )
 
-        # Reassign the categories for any categorical index cols
-        if not isinstance(out._index, cudf.RangeIndex):
-            if not isinstance(
-                out._index, cudf.MultiIndex
-            ) and is_categorical_dtype(out._index._values.dtype):
-                out = out.set_index(
-                    cudf.core.index.as_index(out.index._values)
-                )
-
         # Reassign precision for any decimal cols
         for name, col in out._data.items():
             if isinstance(col, cudf.core.column.Decimal64Column):
