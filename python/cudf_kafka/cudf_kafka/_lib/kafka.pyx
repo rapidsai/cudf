@@ -25,12 +25,12 @@ cdef class KafkaDatasource(Datasource):
                   string delimiter=b"",):
 
         cdef map[string, string] configs
-        cdef PyObject* (*cb)()
+        cdef void *cb
 
         for key in kafka_configs:
             if key == 'oauth_cb':
                 if callable(kafka_configs[key]):
-                    print("oauth_cb type: " + str(type(kafka_configs[key])))
+                    cb = <void *>kafka_configs[key]
                 else:
                     raise TypeError("'oauth_cb' configuration must \
                                       be a Python callable object")

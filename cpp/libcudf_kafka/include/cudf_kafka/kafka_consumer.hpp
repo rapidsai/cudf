@@ -15,9 +15,6 @@
  */
 #pragma once
 
-#define PY_SSIZE_T_CLEAN
-#include <Python.h>
-
 #include "kafka_callback.hpp"
 
 #include <cudf/io/datasource.hpp>

@@ -15,9 +15,6 @@
  */
 #pragma once
 
-#define PY_SSIZE_T_CLEAN
-#include <Python.h>
-
 #include <librdkafka/rdkafkacpp.h>
 #include <cudf/io/datasource.hpp>
 #include <map>
@@ -47,7 +44,7 @@ namespace kafka {
  * time is retrieved from an external service by the callback.
  * Ex: [token, token_expiration_in_epoch]
  */
-using kafka_oauth_callback_type = std::function<PyObject*()>;
+using kafka_oauth_callback_type = void*;
 
 /**
  * @brief Callback to retrieve OAuth token from external source. Invoked when
