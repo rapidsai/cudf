@@ -213,6 +213,8 @@ class writer::impl {
   bool int96_timestamps              = false;
   // Overall file metadata.  Filled in during the process and written during write_chunked_end()
   std::unique_ptr<per_file_metadata> md;
+  // File footer key-value metadata. Written during write_chunked_end()
+  std::vector<std::map<std::string, std::string>> kv_md;
   // optional user metadata
   std::unique_ptr<table_input_metadata> table_meta;
   // to track if the output has been written to sink

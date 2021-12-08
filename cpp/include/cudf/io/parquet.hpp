@@ -398,6 +398,8 @@ class parquet_writer_options {
   std::vector<partition_info> _partitions;
   // Optional associated metadata
   table_input_metadata const* _metadata = nullptr;
+  // Optional footer key_value_metadata
+  std::vector<std::map<std::string, std::string>> _user_data;
   // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
   // If true then overrides any per-column setting in _metadata.
   bool _write_timestamps_as_int96 = false;
@@ -477,6 +479,14 @@ class parquet_writer_options {
   table_input_metadata const* get_metadata() const { return _metadata; }
 
   /**
+   * @brief Returns Key-Value footer metadata information.
+   */
+  std::vector<std::map<std::string, std::string>> const& get_key_value_metadata() const
+  {
+    return _user_data;
+  }
+
+  /**
    * @brief Returns `true` if timestamps will be written as INT96
    */
   bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
@@ -516,6 +526,16 @@ class parquet_writer_options {
    * @param metadata Associated metadata.
    */
   void set_metadata(table_input_metadata const* metadata) { _metadata = metadata; }
+
+  /**
+   * @brief Sets metadata.
+   *
+   * @param metadata Key-Value footer metadata
+   */
+  void set_key_value_metadata(std::vector<std::map<std::string, std::string>> metadata)
+  {
+    _user_data = std::move(metadata);
+  }
 
   /**
    * @brief Sets the level of statistics.
@@ -617,6 +637,19 @@ class parquet_writer_options_builder {
   parquet_writer_options_builder& metadata(table_input_metadata const* metadata)
   {
     options._metadata = metadata;
+    return *this;
+  }
+
+  /**
+   * @brief Sets Key-Value footer metadata in parquet_writer_options.
+   *
+   * @param metadata Key-Value footer metadata
+   * @return this for chaining.
+   */
+  parquet_writer_options_builder& key_value_metadata(
+    std::vector<std::map<std::string, std::string>> metadata)
+  {
+    options._user_data = std::move(metadata);
     return *this;
   }
 
@@ -757,6 +790,8 @@ class chunked_parquet_writer_options {
   statistics_freq _stats_level = statistics_freq::STATISTICS_ROWGROUP;
   // Optional associated metadata.
   table_input_metadata const* _metadata = nullptr;
+  // Optional footer key_value_metadata
+  std::vector<std::map<std::string, std::string>> _user_data;
   // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
   // If true then overrides any per-column setting in _metadata.
   bool _write_timestamps_as_int96 = false;
@@ -803,6 +838,14 @@ class chunked_parquet_writer_options {
   table_input_metadata const* get_metadata() const { return _metadata; }
 
   /**
+   * @brief Returns Key-Value footer metadata information.
+   */
+  std::vector<std::map<std::string, std::string>> const& get_key_value_metadata() const
+  {
+    return _user_data;
+  }
+
+  /**
    * @brief Returns `true` if timestamps will be written as INT96
    */
   bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
@@ -823,6 +866,16 @@ class chunked_parquet_writer_options {
    * @param metadata Associated metadata.
    */
   void set_metadata(table_input_metadata const* metadata) { _metadata = metadata; }
+
+  /**
+   * @brief Sets Key-Value footer metadata.
+   *
+   * @param metadata Key-Value footer metadata
+   */
+  void set_key_value_metadata(std::vector<std::map<std::string, std::string>> metadata)
+  {
+    _user_data = std::move(metadata);
+  }
 
   /**
    * @brief Sets the level of statistics in parquet_writer_options.
@@ -905,6 +958,19 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options_builder& metadata(table_input_metadata const* metadata)
   {
     options._metadata = metadata;
+    return *this;
+  }
+
+  /**
+   * @brief Sets Key-Value footer metadata in parquet_writer_options.
+   *
+   * @param metadata Key-Value footer metadata
+   * @return this for chaining.
+   */
+  chunked_parquet_writer_options_builder& key_value_metadata(
+    std::vector<std::map<std::string, std::string>> metadata)
+  {
+    options._user_data = std::move(metadata);
     return *this;
   }
 

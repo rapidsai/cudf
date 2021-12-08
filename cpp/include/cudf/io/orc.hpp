@@ -430,6 +430,8 @@ class orc_writer_options {
   table_view _table;
   // Optional associated metadata
   const table_input_metadata* _metadata = nullptr;
+  // Optional footer key_value_metadata
+  std::map<std::string, std::string> _user_data;
 
   friend orc_writer_options_builder;
 
@@ -506,6 +508,11 @@ class orc_writer_options {
    */
   table_input_metadata const* get_metadata() const { return _metadata; }
 
+  /**
+   * @brief Returns Key-Value footer metadata information.
+   */
+  std::map<std::string, std::string> const& get_key_value_metadata() const { return _user_data; }
+
   // Setters
 
   /**
@@ -567,6 +574,16 @@ class orc_writer_options {
    * @param meta Associated metadata.
    */
   void set_metadata(table_input_metadata const* meta) { _metadata = meta; }
+
+  /**
+   * @brief Sets metadata.
+   *
+   * @param metadata Key-Value footer metadata
+   */
+  void set_key_value_metadata(std::map<std::string, std::string> metadata)
+  {
+    _user_data = std::move(metadata);
+  }
 };
 
 class orc_writer_options_builder {
@@ -675,6 +692,18 @@ class orc_writer_options_builder {
   }
 
   /**
+   * @brief Sets Key-Value footer metadata.
+   *
+   * @param metadata Key-Value footer metadata
+   * @return this for chaining.
+   */
+  orc_writer_options_builder& key_value_metadata(std::map<std::string, std::string> metadata)
+  {
+    options._user_data = std::move(metadata);
+    return *this;
+  }
+
+  /**
    * @brief move orc_writer_options member once it's built.
    */
   operator orc_writer_options&&() { return std::move(options); }
@@ -729,6 +758,8 @@ class chunked_orc_writer_options {
   size_type _row_index_stride = default_row_index_stride;
   // Optional associated metadata
   const table_input_metadata* _metadata = nullptr;
+  // Optional footer key_value_metadata
+  std::map<std::string, std::string> _user_data;
 
   friend chunked_orc_writer_options_builder;
 
@@ -795,6 +826,11 @@ class chunked_orc_writer_options {
    */
   table_input_metadata const* get_metadata() const { return _metadata; }
 
+  /**
+   * @brief Returns Key-Value footer metadata information.
+   */
+  std::map<std::string, std::string> const& get_key_value_metadata() const { return _user_data; }
+
   // Setters
 
   /**
@@ -849,6 +885,16 @@ class chunked_orc_writer_options {
    * @param meta Associated metadata.
    */
   void metadata(table_input_metadata const* meta) { _metadata = meta; }
+
+  /**
+   * @brief Sets Key-Value footer metadata.
+   *
+   * @param metadata Key-Value footer metadata
+   */
+  void set_key_value_metadata(std::map<std::string, std::string> metadata)
+  {
+    _user_data = std::move(metadata);
+  }
 };
 
 class chunked_orc_writer_options_builder {
@@ -938,6 +984,19 @@ class chunked_orc_writer_options_builder {
   chunked_orc_writer_options_builder& metadata(table_input_metadata const* meta)
   {
     options._metadata = meta;
+    return *this;
+  }
+
+  /**
+   * @brief Sets Key-Value footer metadata.
+   *
+   * @param metadata Key-Value footer metadata
+   * @return this for chaining.
+   */
+  chunked_orc_writer_options_builder& key_value_metadata(
+    std::map<std::string, std::string> metadata)
+  {
+    options._user_data = std::move(metadata);
     return *this;
   }
 

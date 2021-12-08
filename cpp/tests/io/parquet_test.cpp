@@ -834,13 +834,13 @@ TEST_F(ParquetWriterTest, MultiIndex)
   expected_metadata.column_metadata[2].set_name("int32s");
   expected_metadata.column_metadata[3].set_name("floats");
   expected_metadata.column_metadata[4].set_name("doubles");
-  expected_metadata.user_data[0].insert(
-    {"pandas", "\"index_columns\": [\"int8s\", \"int16s\"], \"column1\": [\"int32s\"]"});
 
   auto filepath = temp_env->get_temp_filepath("MultiIndex.parquet");
   cudf_io::parquet_writer_options out_opts =
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
-      .metadata(&expected_metadata);
+      .metadata(&expected_metadata)
+      .key_value_metadata(
+        {{"pandas", "\"index_columns\": [\"int8s\", \"int16s\"], \"column1\": [\"int32s\"]"}});
   cudf_io::write_parquet(out_opts);
 
   cudf_io::parquet_reader_options in_opts =

@@ -1059,6 +1059,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
+    kv_md(options.get_key_value_metadata()),
     single_write_mode(mode == SingleWriteMode::YES),
     out_sink_(std::move(sinks))
 {
@@ -1080,6 +1081,7 @@ writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
+    kv_md(options.get_key_value_metadata()),
     single_write_mode(mode == SingleWriteMode::YES),
     out_sink_(std::move(sinks))
 {
@@ -1152,9 +1154,9 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> pa
     md->column_order_listsize =
       (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_columns : 0;
 
-    for (size_t p = 0; p < table_meta->user_data.size(); ++p) {
-      std::transform(table_meta->user_data[p].begin(),
-                     table_meta->user_data[p].end(),
+    for (size_t p = 0; p < kv_md.size(); ++p) {
+      std::transform(kv_md[p].begin(),
+                     kv_md[p].end(),
                      std::back_inserter(md->files[p].key_value_metadata),
                      [](auto const& kv) {
                        return KeyValue{kv.first, kv.second};

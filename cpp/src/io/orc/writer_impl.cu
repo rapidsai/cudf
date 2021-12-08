@@ -1311,6 +1311,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     compression_kind_(to_orc_compression(options.get_compression())),
     enable_statistics_(options.is_enabled_statistics()),
     single_write_mode(mode == SingleWriteMode::YES),
+    kv_meta(options.get_key_value_metadata()),
     out_sink_(std::move(sink))
 {
   if (options.get_metadata()) {
@@ -1331,6 +1332,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     compression_kind_(to_orc_compression(options.get_compression())),
     enable_statistics_(options.is_enabled_statistics()),
     single_write_mode(mode == SingleWriteMode::YES),
+    kv_meta(options.get_key_value_metadata()),
     out_sink_(std::move(sink))
 {
   if (options.get_metadata()) {
@@ -2067,15 +2069,10 @@ void writer::impl::close()
   PostScript ps;
 
   ff.contentLength = out_sink_->bytes_written();
-  if (not table_meta->user_data.empty()) {
-    // ORC writer currently does not support multiple file writing
-    std::transform(table_meta->user_data[0].begin(),
-                   table_meta->user_data[0].end(),
-                   std::back_inserter(ff.metadata),
-                   [&](auto const& udata) {
-                     return UserMetadataItem{udata.first, udata.second};
-                   });
-  }
+  std::transform(
+    kv_meta.begin(), kv_meta.end(), std::back_inserter(ff.metadata), [&](auto const& udata) {
+      return UserMetadataItem{udata.first, udata.second};
+    });
 
   // Write statistics metadata
   if (md.stripeStats.size() != 0) {

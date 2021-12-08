@@ -429,20 +429,6 @@ std::unique_ptr<std::vector<uint8_t>> merge_row_group_metadata(
 }
 
 table_input_metadata::table_input_metadata(table_view const& table)
-  : table_input_metadata(table, std::map<std::string, std::string>{})
-{
-}
-
-table_input_metadata::table_input_metadata(table_view const& table,
-                                           std::map<std::string, std::string> user_data)
-  : table_input_metadata(table,
-                         std::vector<std::map<std::string, std::string>>{std::move(user_data)})
-{
-}
-
-table_input_metadata::table_input_metadata(
-  table_view const& table, std::vector<std::map<std::string, std::string>> user_data)
-  : user_data{std::move(user_data)}
 {
   // Create a metadata hierarchy using `table`
   std::function<column_in_metadata(column_view const&)> get_children = [&](column_view const& col) {
