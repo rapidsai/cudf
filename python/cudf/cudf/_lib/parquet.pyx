@@ -296,7 +296,7 @@ cpdef write_parquet(
     # Create the write options
     cdef unique_ptr[table_input_metadata] tbl_meta
 
-    cdef map[string, string] user_data
+    cdef vector[map[string, string]] user_data
     cdef table_view tv
     cdef unique_ptr[cudf_io_types.data_sink] _data_sink
     cdef cudf_io_types.sink_info sink = make_sink_info(path, _data_sink)
@@ -328,10 +328,8 @@ cpdef write_parquet(
         )
 
     pandas_metadata = generate_pandas_metadata(table, index)
-    user_data[str.encode("pandas")] = str.encode(pandas_metadata)
-
-    # Set the table_metadata
-    tbl_meta.get().user_data[0] = move(user_data)
+    user_data.resize(1)
+    user_data.back()[str.encode("pandas")] = str.encode(pandas_metadata)
 
     cdef cudf_io_types.compression_type comp_type = _get_comp_type(compression)
     cdef cudf_io_types.statistics_freq stat_freq = _get_stat_freq(statistics)
@@ -346,6 +344,7 @@ cpdef write_parquet(
     cdef parquet_writer_options args = move(
         parquet_writer_options.builder(sink, tv)
         .metadata(tbl_meta.get())
+        .key_value_metadata(move(user_data))
         .compression(comp_type)
         .stats_level(stat_freq)
         .column_chunks_file_paths(c_column_chunks_file_paths)
@@ -471,14 +470,16 @@ cdef class ParquetWriter:
             )
 
         pandas_metadata = generate_pandas_metadata(table, self.index)
-        self.tbl_meta.get().user_data[0][str.encode("pandas")] = \
-            str.encode(pandas_metadata)
+        cdef vector[map[string, string]] user_data
+        user_data.resize(1)
+        user_data.back()[str.encode("pandas")] = str.encode(pandas_metadata)
 
         cdef chunked_parquet_writer_options args
         with nogil:
             args = move(
                 chunked_parquet_writer_options.builder(self.sink)
                 .metadata(self.tbl_meta.get())
+                .key_value_metadata(move(user_data))
                 .compression(self.comp_type)
                 .stats_level(self.stat_freq)
                 .build()

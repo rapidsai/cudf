@@ -70,13 +70,8 @@ cdef extern from "cudf/io/types.hpp" \
     cdef cppclass table_input_metadata:
         table_input_metadata() except +
         table_input_metadata(const cudf_table_view.table_view& table) except +
-        table_input_metadata(
-            const cudf_table_view.table_view& table,
-            map[string, string] user_data
-        ) except +
 
         vector[column_in_metadata] column_metadata
-        vector[map[string, string]] user_data
 
     cdef cppclass host_buffer:
         const char* data
