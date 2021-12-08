@@ -160,7 +160,7 @@ struct device_cast {
  * @brief Takes a `fixed_point` column_view as @p input and returns a `fixed_point` column with new
  * @p scale
  *
- * @tparam T     Type of the `fixed_point` column_view (`decimal32` or `decimal64`)
+ * @tparam T     Type of the `fixed_point` column_view (`decimal32`, `decimal64` or `decimal128`)
  * @param input  Input `column_view`
  * @param scale  `scale` of the returned `column`
  * @param stream CUDA stream used for device memory operations and kernel launches
@@ -176,7 +176,7 @@ std::unique_ptr<column> rescale(column_view input,
 {
   using namespace numeric;
 
-  if (input.type().scale() > scale) {
+  if (input.type().scale() >= scale) {
     auto const scalar = make_fixed_point_scalar<T>(0, scale_type{scale});
     auto const type   = cudf::data_type{cudf::type_to_id<T>(), scale};
     return detail::binary_operation(input, *scalar, binary_operator::ADD, type, stream, mr);
@@ -338,9 +338,9 @@ struct dispatch_unary_cast_to {
 
   {
     if (!cudf::is_fixed_width<TargetT>())
-      CUDF_FAIL("Column type must be numeric or chrono or decimal32/64");
+      CUDF_FAIL("Column type must be numeric or chrono or decimal32/64/128");
     else if (cudf::is_fixed_point<SourceT>())
-      CUDF_FAIL("Currently only decimal32/64 to floating point/integral is supported");
+      CUDF_FAIL("Currently only decimal32/64/128 to floating point/integral is supported");
     else if (cudf::is_timestamp<SourceT>() && is_numeric<TargetT>())
       CUDF_FAIL("Timestamps can be created only from duration");
     else
@@ -364,7 +364,7 @@ struct dispatch_unary_cast_from {
   template <typename T, typename... Args>
   std::enable_if_t<!cudf::is_fixed_width<T>(), std::unique_ptr<column>> operator()(Args&&...)
   {
-    CUDF_FAIL("Column type must be numeric or chrono or decimal32/64");
+    CUDF_FAIL("Column type must be numeric or chrono or decimal32/64/128");
   }
 };
 }  // anonymous namespace

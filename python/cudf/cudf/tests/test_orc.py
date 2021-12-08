@@ -1526,3 +1526,18 @@ def test_orc_writer_rle_stream_size(datadir, tmpdir):
     # Segfaults when RLE stream sizes don't account for varint length
     pa_out = pa.orc.ORCFile(reencoded).read()
     assert_eq(df.to_pandas(), pa_out)
+
+
+def test_empty_columns():
+    buffer = BytesIO()
+    # string and decimal columns have additional steps that need to be skipped
+    expected = cudf.DataFrame(
+        {
+            "string": cudf.Series([], dtype="str"),
+            "decimal": cudf.Series([], dtype=cudf.Decimal64Dtype(10, 1)),
+        }
+    )
+    expected.to_orc(buffer, compression="snappy")
+
+    got_df = cudf.read_orc(buffer)
+    assert_eq(expected, got_df)
