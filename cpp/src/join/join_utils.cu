@@ -136,7 +136,7 @@ get_left_join_indices_complement(std::unique_ptr<rmm::device_uvector<size_type>>
                                               thrust::make_counting_iterator(end_counter),
                                               invalid_index_map->begin(),
                                               right_indices_complement->begin(),
-                                              thrust::identity<size_type>()) -
+                                              thrust::identity{}) -
                               right_indices_complement->begin();
     right_indices_complement->resize(indices_count, stream);
   }

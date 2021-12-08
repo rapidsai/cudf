@@ -24,6 +24,10 @@
 
 #include <cudf/utilities/error.hpp>
 
+/**
+ * @brief RAII class for creating a temporary directory.
+ *
+ */
 class temp_directory {
   std::string _path;
 
@@ -49,5 +53,10 @@ class temp_directory {
     nftw(_path.c_str(), rm_files, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS);
   }
 
+  /**
+   * @brief Returns the path of the temporary directory
+   *
+   * @return string path of the temporary directory
+   */
   const std::string& path() const { return _path; }
 };
