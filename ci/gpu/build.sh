@@ -182,8 +182,8 @@ else
     if [[ -f "$LIB_BUILD_DIR/ninja_log.html" ]]; then
         gpuci_logger "Copying build time results"
         cp "$LIB_BUILD_DIR/ninja_log.xml" "$WORKSPACE/test-results/buildtimes-junit.xml"
-        mkdir -p "$WORKSPACE/build-time-results"
-        cp "$LIB_BUILD_DIR/ninja_log.html" "$WORKSPACE/build-time-results/BuildTimes.html"
+        mkdir -p "$WORKSPACE/build-metrics"
+        cp "$LIB_BUILD_DIR/ninja_log.html" "$WORKSPACE/build-metrics/BuildMetrics.html"
     fi
 
     ################################################################################
