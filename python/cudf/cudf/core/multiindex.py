@@ -739,7 +739,7 @@ class MultiIndex(Frame, BaseIndex):
             and len(result) == 1  # only downcast if we have a single row
             and not slice_access  # never downcast if we sliced
             and (
-                size == 0  # ??? what case does this correspond to?
+                size == 0  # index_key was an integer
                 # we indexed into a single row directly, using its label:
                 or len(index_key) == self.nlevels
             )
