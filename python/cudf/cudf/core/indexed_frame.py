@@ -15,7 +15,7 @@ from nvtx import annotate
 import cudf
 import cudf._lib as libcudf
 from cudf._typing import ColumnLike
-from cudf.api.types import is_categorical_dtype, is_integer_dtype, is_list_like
+from cudf.api.types import is_integer_dtype, is_list_like
 from cudf.core.column import arange
 from cudf.core.frame import Frame
 from cudf.core.index import Index
@@ -27,19 +27,7 @@ def _indices_from_labels(obj, labels):
     from cudf.core.column import column
 
     if not isinstance(labels, cudf.MultiIndex):
-        labels = column.as_column(labels)
-
-        if is_categorical_dtype(obj.index):
-            labels = labels.astype("category")
-            codes = labels.codes.astype(obj.index._values.codes.dtype)
-            labels = column.build_categorical_column(
-                categories=labels.dtype.categories._values,
-                codes=codes,
-                ordered=labels.dtype.ordered,
-            )
-        else:
-            labels = labels.astype(obj.index.dtype)
-
+        labels = column.as_column(labels, dtype=obj.index.dtype)
     # join is not guaranteed to maintain the index ordering
     # so we will sort it with its initial ordering which is stored
     # in column "__"
