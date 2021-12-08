@@ -272,12 +272,8 @@ target_include_directories(
 # Override RPATH for cudfjni
 set_target_properties(
   cudfjni
-  PROPERTIES BUILD_RPATH "\$ORIGIN"
-             INSTALL_RPATH "\$ORIGIN" # set target compile options
-             CXX_STANDARD 17
-             CXX_STANDARD_REQUIRED ON
-             CUDA_STANDARD 17
-             CUDA_STANDARD_REQUIRED ON
+  PROPERTIES BUILD_RPATH "\$ORIGIN" INSTALL_RPATH "\$ORIGIN" # set target compile options
+             CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON CUDA_STANDARD 17 CUDA_STANDARD_REQUIRED ON
 )
 
 target_compile_options(
@@ -294,10 +290,8 @@ if(USE_GDS)
   add_library(cufilejni SHARED src/CuFileJni.cpp)
   set_target_properties(
     cufilejni
-    PROPERTIES BUILD_RPATH "\$ORIGIN"
-               INSTALL_RPATH "\$ORIGIN" # set target compile options
-               CXX_STANDARD 17
-               CXX_STANDARD_REQUIRED ON
+    PROPERTIES BUILD_RPATH "\$ORIGIN" INSTALL_RPATH "\$ORIGIN" # set target compile options
+               CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
   )
   target_include_directories(
     cufilejni
