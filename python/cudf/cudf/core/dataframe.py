@@ -6766,9 +6766,10 @@ def _cast_cols_to_common_dtypes(col_idxs, list_of_columns, dtypes):
             if idx >= len(cols) or cols[idx] is None:
                 n = len(next(x for x in cols if x is not None))
                 cols[idx] = column_empty(row_count=n, dtype=dtype, masked=True)
-            elif not is_categorical_dtype(
-                dtype
-            ):  # ??? Did libcudf cast the columns for us? Verify.
+            elif not is_categorical_dtype(dtype):
+                # When result type is categorical, the only case for this is
+                # when all columns have the same categorical dtype. Avoid
+                # casting in this case.
                 cols[idx] = cols[idx].astype(dtype)
 
 
