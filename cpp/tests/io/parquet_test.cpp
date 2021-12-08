@@ -847,7 +847,7 @@ TEST_F(ParquetWriterTest, MultiIndex)
     cudf_io::parquet_writer_options::builder(cudf_io::sink_info{filepath}, expected->view())
       .metadata(&expected_metadata)
       .key_value_metadata(
-        {{"pandas", "\"index_columns\": [\"int8s\", \"int16s\"], \"column1\": [\"int32s\"]"}});
+        {{{"pandas", "\"index_columns\": [\"int8s\", \"int16s\"], \"column1\": [\"int32s\"]"}}});
   cudf_io::write_parquet(out_opts);
 
   cudf_io::parquet_reader_options in_opts =
