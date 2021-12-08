@@ -2132,17 +2132,17 @@ class CategoricalIndex(GenericIndex):
             is_categorical_dtype(data.dtype)
         ):
             codes_data = column.as_column(data.cat.codes.values)
+            cats_data = column.as_column(data.cat.categories)
             data = column.build_categorical_column(
-                categories=data.cat.categories,
+                categories=cats_data,
                 codes=codes_data,
                 ordered=data.cat.ordered,
             )
         elif isinstance(data, (pd.Categorical, pd.CategoricalIndex)):
             codes_data = column.as_column(data.codes)
+            cats_data = column.as_column(data.categories._values)
             data = column.build_categorical_column(
-                categories=column.as_column(data.categories._values),
-                codes=codes_data,
-                ordered=data.ordered,
+                categories=cats_data, codes=codes_data, ordered=data.ordered,
             )
         else:
             data = column.as_column(
