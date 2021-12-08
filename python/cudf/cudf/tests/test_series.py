@@ -446,6 +446,9 @@ def test_series_describe_timedelta(dtype):
         pd.Series([True, False, True, True, False]),
         pd.Series([], dtype="str"),
         pd.Series(["a", "b", "c", "a"], dtype="category"),
+        pd.Series(["d", "e", "f"], dtype="category"),
+        pd.Series(["e", "d", "f"], dtype="category"),
+        pd.Series(["f", "e", "d"], dtype="category"),
     ],
 )
 def test_series_describe_other_types(ps):

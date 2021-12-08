@@ -3370,7 +3370,10 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             data = [self.count(), self.unique().size]
 
             if data[1] > 0:
-                top, freq = val_counts.index[0], val_counts.iloc[0]
+                # In case there's a tie, break the tie by sorting the index
+                # and take the top.
+                tied_val_counts = val_counts[val_counts == val_counts[0]].sort_index()
+                top, freq = tied_val_counts.index[0], tied_val_counts.iloc[0]
                 data += [str(top), freq]
             # If the DataFrame is empty, set 'top' and 'freq' to None
             # to maintain output shape consistency
