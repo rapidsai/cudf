@@ -33,7 +33,8 @@ SEPARATOR = "-" * 16
 def parse_args():
     argparser = argparse.ArgumentParser("Runs clang-tidy on a project")
     argparser.add_argument("-cdb", type=str,
-                           default="cpp/build/compile_commands.json",
+                           # TODO This is a hack, needs to be fixed
+                           default="cpp/build/cuda-11.5.0/clang-tidy/release/compile_commands.clangd.json",
                            help="Path to cmake-generated compilation database"
                            " file. It is always found inside the root of the "
                            "cmake build folder. So make sure that `cmake` has "
@@ -239,7 +240,8 @@ def main():
     if not os.path.exists(".git"):
         raise Exception("This needs to always be run from the root of repo")
     # Check whether clang-tidy exists
-    if shutil.which("clang-tidy") is not None:
+    # print(args)
+    if "exe" not in args and shutil.which("clang-tidy") is not None:
         print("clang-tidy not found. Exiting...")
         return
     all_files = get_all_commands(args.cdb)
