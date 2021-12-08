@@ -347,6 +347,34 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
   return d_bit_counts;
 }
 
+/**
+ * @brief Given two iterators, validate that the iterators represent valid ranges of
+ * indices and return the number of ranges.
+ *
+ * @throws cudf::logic_error if `std::distance(indices_begin, indices_end) % 2 != 0`
+ * @throws cudf::logic_error if `indices_begin[2*i] < 0 or indices_begin[2*i] >
+ * indices_begin[(2*i)+1]`
+ *
+ * @param indices_begin An iterator representing the beginning of the ranges of indices
+ * @param indices_end An iterator representing the end of the ranges of indices
+ *
+ * @return The number of segments specified by the input iterators.
+ */
+template <typename IndexIterator>
+size_type validate_segmented_indices(IndexIterator indices_begin, IndexIterator indices_end)
+{
+  auto const num_indices = static_cast<size_type>(std::distance(indices_begin, indices_end));
+  CUDF_EXPECTS(num_indices % 2 == 0, "Array of indices needs to have an even number of elements.");
+  size_type const num_segments = num_indices / 2;
+  for (size_type i = 0; i < num_segments; i++) {
+    auto begin = indices_begin[2 * i];
+    auto end   = indices_begin[2 * i + 1];
+    CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.");
+    CUDF_EXPECTS(end >= begin, "End index cannot be smaller than the starting index.");
+  }
+  return num_segments;
+}
+
 struct index_alternator {
   CUDA_DEVICE_CALLABLE size_type operator()(const size_type& i) const
   {
@@ -365,17 +393,18 @@ struct index_alternator {
  * If `bitmask == nullptr`, this function returns a vector containing the
  * segment lengths, or a vector of zeros if counting unset bits.
  *
- * @throws cudf::logic_error if `std::distance(indices_begin, indices_end) % 2 != 0`
+ * @throws cudf::logic_error if `bitmask == nullptr`.
+ * @throws cudf::logic_error if `std::distance(indices_begin, indices_end) % 2 != 0`.
  * @throws cudf::logic_error if `indices_begin[2*i] < 0 or indices_begin[2*i] >
- * indices_begin[(2*i)+1]`
+ * indices_begin[(2*i)+1]`.
  *
- * @param bitmask Bitmask residing in device memory whose bits will be counted
+ * @param bitmask Bitmask residing in device memory whose bits will be counted.
  * @param indices_begin An iterator representing the beginning of the range of indices specifying
- * ranges to count the number of set/unset bits within
+ * ranges to count the number of set/unset bits within.
  * @param indices_end An iterator representing the end of the range of indices specifying ranges to
- * count the number of set/unset bits within
- * @param count_bits If SET_BITS, count set (1) bits. If UNSET_BITS, count unset (0) bits
- * @param stream CUDA stream used for device memory operations and kernel launches
+ * count the number of set/unset bits within.
+ * @param count_bits If SET_BITS, count set (1) bits. If UNSET_BITS, count unset (0) bits.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
  *
  * @return A vector storing the number of non-zero bits in the specified ranges
  */
@@ -386,22 +415,11 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
                                             count_bits_policy count_bits,
                                             rmm::cuda_stream_view stream)
 {
-  auto const num_indices = static_cast<size_type>(std::distance(indices_begin, indices_end));
-  CUDF_EXPECTS(num_indices % 2 == 0, "Array of indices needs to have an even number of elements.");
-  size_type const num_ranges = num_indices / 2;
+  CUDF_EXPECTS(bitmask != nullptr, "Invalid bitmask.");
+  auto const num_segments = validate_segmented_indices(indices_begin, indices_end);
 
-  for (size_type i = 0; i < num_ranges; i++) {
-    auto begin = indices_begin[i * 2];
-    auto end   = indices_begin[i * 2 + 1];
-    CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.");
-    CUDF_EXPECTS(end >= begin, "End index cannot be smaller than the starting index.");
-  }
-
-  if (num_ranges == 0) {
-    return std::vector<size_type>{};
-  } else if (bitmask == nullptr) {
-    return std::vector<size_type>(num_ranges, 0);
-  }
+  // Return an empty vector if there are zero segments.
+  if (num_segments == 0) { return std::vector<size_type>{}; }
 
   // Construct a contiguous host buffer of indices and copy to device.
   auto const h_indices = std::vector<size_type>(indices_begin, indices_end);
@@ -410,7 +428,7 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
   // Compute the bit counts over each segment.
   auto first_bit_indices_begin = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0), index_alternator{false, d_indices.data()});
-  auto const first_bit_indices_end = first_bit_indices_begin + num_ranges;
+  auto const first_bit_indices_end = first_bit_indices_begin + num_segments;
   auto last_bit_indices_begin      = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0), index_alternator{true, d_indices.data()});
   rmm::device_uvector<size_type> d_bit_counts =
@@ -425,38 +443,7 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
   return make_std_vector_sync(d_bit_counts, stream);
 }
 
-/**
- * @brief Given two iterators, validate that the iterators represent ranges of
- * indices and return the number of ranges.
- *
- * @throws cudf::logic_error if `std::distance(indices_begin, indices_end) % 2 != 0`
- * @throws cudf::logic_error if `indices_begin[2*i] < 0 or indices_begin[2*i] >
- * indices_begin[(2*i)+1]`
- *
- * @param indices_begin An iterator representing the beginning of the range of indices specifying
- * ranges to count the number of set/unset bits within
- * @param indices_end An iterator representing the end of the range of indices specifying ranges to
- * count the number of set/unset bits within
- *
- * @return The number of segments specified by the input iterators.
- */
-template <typename IndexIterator>
-size_type validate_segmented_indices(IndexIterator indices_begin, IndexIterator indices_end)
-{
-  auto const num_indices = static_cast<size_type>(std::distance(indices_begin, indices_end));
-  CUDF_EXPECTS(num_indices % 2 == 0, "Array of indices needs to have an even number of elements.");
-  size_type const num_segments = num_indices / 2;
-
-  for (size_type i = 0; i < num_segments; i++) {
-    auto begin = indices_begin[i * 2];
-    auto end   = indices_begin[i * 2 + 1];
-    CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.");
-    CUDF_EXPECTS(end >= begin, "End index cannot be smaller than the starting index.");
-  }
-  return num_segments;
-}
-
-// Count non-zero bits in the specified ranges
+// Count non-zero bits in the specified ranges.
 template <typename IndexIterator>
 std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
                                                 IndexIterator indices_begin,
@@ -467,7 +454,7 @@ std::vector<size_type> segmented_count_set_bits(bitmask_type const* bitmask,
     bitmask, indices_begin, indices_end, count_bits_policy::SET_BITS, stream);
 }
 
-// Count zero bits in the specified ranges
+// Count zero bits in the specified ranges.
 template <typename IndexIterator>
 std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
                                                   IndexIterator indices_begin,
@@ -478,37 +465,39 @@ std::vector<size_type> segmented_count_unset_bits(bitmask_type const* bitmask,
     bitmask, indices_begin, indices_end, count_bits_policy::UNSET_BITS, stream);
 }
 
-// Count set bits in the specified ranges, returning segment lengths if bitmask==nullptr
+// Count valid elements in the specified ranges of a validity bitmask.
 template <typename IndexIterator>
 std::vector<size_type> segmented_valid_count(bitmask_type const* bitmask,
                                              IndexIterator indices_begin,
                                              IndexIterator indices_end,
                                              rmm::cuda_stream_view stream)
 {
-  if (num_ranges == 0) {
-    return std::vector<size_type>{};
-  } else if (bitmask == nullptr) {
-    // Return a vector of segment lengths
-    std::vector<size_type> ret(num_ranges, 0);
-    for (size_type i = 0; i < num_ranges; i++) {
+  if (bitmask == nullptr) {
+    // Return a vector of segment lengths.
+    auto const num_segments = validate_segmented_indices(indices_begin, indices_end);
+    auto ret                = std::vector<size_type>{num_segments, 0};
+    for (size_type i = 0; i < num_segments; i++) {
       ret[i] = indices_begin[2 * i + 1] - indices_begin[2 * i];
     }
     return ret;
   }
 
-  return detail::segmented_count_bits(
-    bitmask, indices_begin, indices_end, count_bits_policy::SET_BITS, stream);
+  return detail::segmented_count_set_bits(bitmask, indices_begin, indices_end, stream);
 }
 
-// Count unset bits in the specified ranges, returning a vector of zeros if bitmask==nullptr
+// Count null elements in the specified ranges of a validity bitmask.
 template <typename IndexIterator>
 std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
                                             IndexIterator indices_begin,
                                             IndexIterator indices_end,
                                             rmm::cuda_stream_view stream)
 {
-  return detail::segmented_count_bits(
-    bitmask, indices_begin, indices_end, count_bits_policy::UNSET_BITS, stream);
+  if (bitmask == nullptr) {
+    // Return a vector of zeros.
+    auto const num_segments = validate_segmented_indices(indices_begin, indices_end);
+    return std::vector<size_type>{num_segments, 0};
+  }
+  return detail::segmented_count_unset_bits(bitmask, indices_begin, indices_end, stream);
 }
 
 }  // namespace detail
