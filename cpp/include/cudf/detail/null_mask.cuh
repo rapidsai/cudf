@@ -426,41 +426,34 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
 }
 
 /**
- * @brief Given a bitmask, counts the number of set (1) or unset (0) bits in every range
- * `[indices_begin[2*i], indices_begin[(2*i)+1])` (where 0 <= i < std::distance(indices_begin,
- * indices_end) / 2).
- *
- * If `bitmask == nullptr`, this function returns a vector containing the
- * segment lengths, or a vector of zeros if counting unset bits.
+ * @brief Given two iterators, validate that the iterators represent ranges of
+ * indices and return the number of ranges.
  *
  * @throws cudf::logic_error if `std::distance(indices_begin, indices_end) % 2 != 0`
  * @throws cudf::logic_error if `indices_begin[2*i] < 0 or indices_begin[2*i] >
  * indices_begin[(2*i)+1]`
  *
- * @param bitmask Bitmask residing in device memory whose bits will be counted
  * @param indices_begin An iterator representing the beginning of the range of indices specifying
  * ranges to count the number of set/unset bits within
  * @param indices_end An iterator representing the end of the range of indices specifying ranges to
  * count the number of set/unset bits within
- * @param count_bits If SET_BITS, count set (1) bits. If UNSET_BITS, count unset (0) bits
- * @param stream CUDA stream used for device memory operations and kernel launches
  *
- * @return A vector storing the number of non-zero bits in the specified ranges
+ * @return The number of segments specified by the input iterators.
  */
-template <typename IndexIterato>
+template <typename IndexIterator>
 size_type validate_segmented_indices(IndexIterator indices_begin, IndexIterator indices_end)
 {
   auto const num_indices = static_cast<size_type>(std::distance(indices_begin, indices_end));
   CUDF_EXPECTS(num_indices % 2 == 0, "Array of indices needs to have an even number of elements.");
-  size_type const num_ranges = num_indices / 2;
+  size_type const num_segments = num_indices / 2;
 
-  for (size_type i = 0; i < num_ranges; i++) {
+  for (size_type i = 0; i < num_segments; i++) {
     auto begin = indices_begin[i * 2];
     auto end   = indices_begin[i * 2 + 1];
     CUDF_EXPECTS(begin >= 0, "Starting index cannot be negative.");
     CUDF_EXPECTS(end >= begin, "End index cannot be smaller than the starting index.");
   }
-  return num_ranges;
+  return num_segments;
 }
 
 // Count non-zero bits in the specified ranges

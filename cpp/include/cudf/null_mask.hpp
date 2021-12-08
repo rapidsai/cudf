@@ -102,10 +102,9 @@ void set_null_mask(bitmask_type* bitmask, size_type begin_bit, size_type end_bit
 
 /**
  * @brief Given a bitmask, counts the number of set (1) bits in the range
- * `[start, stop)`
+ * `[start, stop)`.
  *
- * Returns `0` if `bitmask == nullptr`.
- *
+ * @throws cudf::logic_error if `bitmask == nullptr`
  * @throws cudf::logic_error if `start > stop`
  * @throws cudf::logic_error if `start < 0`
  *
@@ -122,6 +121,7 @@ cudf::size_type count_set_bits(bitmask_type const* bitmask, size_type start, siz
  *
  * Returns `0` if `bitmask == nullptr`.
  *
+ * @throws cudf::logic_error if `bitmask == nullptr`
  * @throws cudf::logic_error if `start > stop`
  * @throws cudf::logic_error if `start < 0`
  *
@@ -131,6 +131,38 @@ cudf::size_type count_set_bits(bitmask_type const* bitmask, size_type start, siz
  * @return The number of zero bits in the specified range
  */
 cudf::size_type count_unset_bits(bitmask_type const* bitmask, size_type start, size_type stop);
+
+/**
+ * @brief Given a validity bitmask, counts the number of valid elements (set bits)
+ * in the range `[start, stop)`.
+ *
+ * Returns `stop-start` if `bitmask == nullptr`.
+ *
+ * @throws cudf::logic_error if `start > stop`
+ * @throws cudf::logic_error if `start < 0`
+ *
+ * @param bitmask Bitmask residing in device memory whose bits will be counted
+ * @param start Index of the first bit to count (inclusive)
+ * @param stop Index of the last bit to count (exclusive)
+ * @return The number of non-zero bits in the specified range
+ */
+cudf::size_type valid_count(bitmask_type const* bitmask, size_type start, size_type stop);
+
+/**
+ * @brief Given a validity bitmask, counts the number of null elements (unset bits)
+ * in the range `[start, stop)`.
+ *
+ * Returns `0` if `bitmask == nullptr`.
+ *
+ * @throws cudf::logic_error if `start > stop`
+ * @throws cudf::logic_error if `start < 0`
+ *
+ * @param bitmask Bitmask residing in device memory whose bits will be counted
+ * @param start Index of the first bit to count (inclusive)
+ * @param stop Index of the last bit to count (exclusive)
+ * @return The number of zero bits in the specified range
+ */
+cudf::size_type null_count(bitmask_type const* bitmask, size_type start, size_type stop);
 
 /**
  * @brief Given a bitmask, counts the number of set (1) bits in every range
