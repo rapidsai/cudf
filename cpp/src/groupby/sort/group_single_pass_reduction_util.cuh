@@ -16,15 +16,13 @@
 
 #pragma once
 
-#include <reductions/arg_minmax_util.cuh>
+#include <reductions/struct_minmax_util.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/aggregation/aggregation.cuh>
 #include <cudf/detail/iterator.cuh>
-#include <cudf/detail/structs/utilities.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/detail/valid_if.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/types.hpp>
@@ -244,30 +242,20 @@ struct group_reduction_functor<
 
     if (values.is_empty()) { return result; }
 
-    // Currently support only the default null order.
-    auto constexpr null_precedence = cudf::null_order::BEFORE;
+    auto constexpr is_min_op = K == aggregation::ARGMIN;
 
     auto const flattened_values = structs::detail::flatten_nested_columns(
-      table_view{{values}}, {}, std::vector<null_order>{null_precedence});
+      table_view{{values}},
+      {},
+      std::vector<null_order>{cudf::reduction::detail::DEFAULT_NULL_ORDER});
     auto const d_flattened_values_ptr = table_device_view::create(flattened_values, stream);
-
-    auto constexpr is_min_op = K == aggregation::ARGMIN;
-    auto const null_orders   = [&] {
-      if (is_min_op) {
-        auto null_orders = flattened_values.null_orders();
-        // When finding ARGMIN, we need to consider nulls as larger than non-null STRUCT elements,
-        // and the opposite for ARGMAX. Thus, we need to set a separate null order for the top level
-        // structs column (stored at the first position in the null_orders array).
-        null_orders.front() = cudf::null_order::AFTER;
-        return null_orders;
-      }
-
-      // Don't need to copy nulls order to device memory if we have all null orders are BEFORE
-      // (that happens when K != aggregation::MIN).
-      return std::vector<null_order>{};
-    }();
-
-    auto const flattened_null_orders = cudf::detail::make_device_uvector_async(null_orders, stream);
+    auto const binop_generator =
+      cudf::reduction::detail::comparison_binop_generator(flattened_values,
+                                                          *d_flattened_values_ptr,
+                                                          is_min_op,
+                                                          values.size(),
+                                                          values.has_nulls(),
+                                                          stream);
 
     // Perform segmented reduction to find ARGMIN/ARGMAX.
     auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
@@ -283,12 +271,7 @@ struct group_reduction_functor<
 
     auto const count_iter   = thrust::make_counting_iterator<ResultType>(0);
     auto const result_begin = result->mutable_view().template begin<ResultType>();
-    auto const binop        = cudf::reduction::detail::row_arg_minmax_fn(values.size(),
-                                                                  *d_flattened_values_ptr,
-                                                                  values.has_nulls(),
-                                                                  flattened_null_orders.data(),
-                                                                  is_min_op);
-    do_reduction(count_iter, result_begin, binop);
+    do_reduction(count_iter, result_begin, binop_generator.binop());
 
     if (values.has_nulls()) {
       // Generate bitmask for the output by segmented reduction of the input bitmask.

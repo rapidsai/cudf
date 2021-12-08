@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <reductions/arg_minmax_util.cuh>
 #include <reductions/scan/scan.cuh>
+#include <reductions/struct_minmax_util.cuh>
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
@@ -23,8 +23,6 @@
 #include <cudf/detail/gather.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/null_mask.hpp>
-#include <cudf/detail/structs/utilities.hpp>
-#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/reduction.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
@@ -159,46 +157,23 @@ struct scan_functor<Op, cudf::struct_view> {
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
   {
-    // Currently support only the default null order.
-    auto constexpr null_precedence = cudf::null_order::BEFORE;
+    auto constexpr is_min_op = std::is_same_v<Op, DeviceMin>;
 
     auto const flattened_input = cudf::structs::detail::flatten_nested_columns(
-      table_view{{input}}, {}, std::vector<null_order>{null_precedence});
+      table_view{{input}},
+      {},
+      std::vector<null_order>{cudf::reduction::detail::DEFAULT_NULL_ORDER});
     auto const d_flattened_input_ptr = table_device_view::create(flattened_input, stream);
-
-    // Op is used only to determined if we want to find the min or max element.
-    auto constexpr is_min_op = std::is_same_v<Op, DeviceMin>;
-    auto const null_orders   = [&] {
-      if (is_min_op) {
-        auto null_orders = flattened_input.null_orders();
-        // When finding ARGMIN, we need to consider nulls as larger than non-null STRUCT elements,
-        // and the opposite for ARGMAX. Thus, we need to set a separate null order for the top level
-        // structs column (stored at the first position in the null_orders array).
-        null_orders.front() = cudf::null_order::AFTER;
-        return null_orders;
-      }
-
-      // Don't need to copy nulls order to device memory if we have all null orders are BEFORE
-      // (that happens when K != aggregation::MIN).
-      return std::vector<null_order>{};
-    }();
-
-    auto const flattened_null_orders = cudf::detail::make_device_uvector_async(null_orders, stream);
+    auto const binop_generator       = cudf::reduction::detail::comparison_binop_generator(
+      flattened_input, *d_flattened_input_ptr, is_min_op, input.size(), input.has_nulls(), stream);
 
     // Create a gather map contaning indices of the prefix min/max elements.
     auto gather_map = rmm::device_uvector<size_type>(input.size(), stream);
-
-    // Find the indices of the prefix min/max elements.
-    auto const binop = cudf::reduction::detail::row_arg_minmax_fn(input.size(),
-                                                                  *d_flattened_input_ptr,
-                                                                  input.has_nulls(),
-                                                                  flattened_null_orders.data(),
-                                                                  is_min_op);
     thrust::inclusive_scan(rmm::exec_policy(stream),
                            thrust::counting_iterator<size_type>(0),
                            thrust::counting_iterator<size_type>(input.size()),
                            gather_map.begin(),
-                           binop);
+                           binop_generator.binop());
 
     // Gather the children columns of the input column. Must use `get_sliced_child` to properly
     // handle input in case it is a sliced view.
