@@ -735,7 +735,8 @@ class MultiIndex(Frame, BaseIndex):
 
         # determine if we should downcast from a DataFrame to a Series
         need_downcast = (
-            len(result) == 1  # only downcast if we have a single row
+            isinstance(result, cudf.DataFrame)
+            and len(result) == 1  # only downcast if we have a single row
             and not slice_access  # never downcast if we sliced
             and (
                 size == 0  # ??? what case does this correspond to?
