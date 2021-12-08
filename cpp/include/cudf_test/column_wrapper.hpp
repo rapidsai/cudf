@@ -30,15 +30,21 @@
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#ifdef __CUDACC__
+#include <cudf/detail/valid_if.cuh>
+#endif
 
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 
 #include <thrust/copy.h>
+#include <thrust/functional.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/iterator_categories.h>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
@@ -149,6 +155,24 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   return rmm::device_buffer{elements.data(), size * sizeof(ElementTo), rmm::cuda_stream_default};
 }
 
+#ifdef __CUDACC__
+template <typename ElementTo,
+          typename ElementFrom,
+          typename InputIterator,
+          typename std::enable_if_t<not cudf::is_fixed_point<ElementTo>()>* = nullptr>
+rmm::device_buffer make_device_elements(InputIterator begin, InputIterator end)
+{
+  static_assert(cudf::is_fixed_width<ElementTo>(), "Unexpected non-fixed width type.");
+  using RepType        = ElementTo;
+  auto transformer     = fixed_width_type_converter<ElementFrom, ElementTo>{};
+  auto transform_begin = thrust::make_transform_iterator(begin, transformer);
+  auto const size      = cudf::distance(begin, end);
+  rmm::device_uvector<RepType> elements(size, rmm::cuda_stream_default);
+  thrust::copy(thrust::device, transform_begin, transform_begin + size, elements.begin());
+  return elements.release();
+}
+#endif
+
 /**
  * @brief Creates a `device_buffer` containing the elements in the range `[begin,end)`.
  *
@@ -174,6 +198,24 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto const elements  = thrust::host_vector<RepType>(transform_begin, transform_begin + size);
   return rmm::device_buffer{elements.data(), size * sizeof(RepType), rmm::cuda_stream_default};
 }
+
+#ifdef __CUDACC__
+template <typename ElementTo,
+          typename ElementFrom,
+          typename InputIterator,
+          typename std::enable_if_t<not cudf::is_fixed_point<ElementFrom>() and
+                                    cudf::is_fixed_point<ElementTo>()>* = nullptr>
+rmm::device_buffer make_device_elements(InputIterator begin, InputIterator end)
+{
+  using RepType        = typename ElementTo::rep;
+  auto transformer     = fixed_width_type_converter<ElementFrom, RepType>{};
+  auto transform_begin = thrust::make_transform_iterator(begin, transformer);
+  auto const size      = cudf::distance(begin, end);
+  rmm::device_uvector<RepType> elements(size, rmm::cuda_stream_default);
+  thrust::copy(thrust::device, transform_begin, transform_begin + size, elements.begin());
+  return elements.release();
+}
+#endif
 
 /**
  * @brief Creates a `device_buffer` containing the elements in the range `[begin,end)`.
@@ -201,6 +243,33 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
   auto const elements = thrust::host_vector<RepType>(transformer_begin, transformer_begin + size);
   return rmm::device_buffer{elements.data(), size * sizeof(RepType), rmm::cuda_stream_default};
 }
+
+#ifdef __CUDACC__
+struct to_rep {
+  template <typename T>
+  __host__ __device__ typename T::rep operator()(T fp)
+  {
+    return fp.value();
+  }
+};
+
+template <typename ElementTo,
+          typename ElementFrom,
+          typename InputIterator,
+          typename std::enable_if_t<cudf::is_fixed_point<ElementFrom>() and
+                                    cudf::is_fixed_point<ElementTo>()>* = nullptr>
+rmm::device_buffer make_device_elements(InputIterator begin, InputIterator end)
+{
+  using namespace numeric;
+  using RepType = typename ElementTo::rep;
+
+  auto transform_begin = thrust::make_transform_iterator(begin, to_rep{});
+  auto const size      = cudf::distance(begin, end);
+  rmm::device_uvector<RepType> elements(size, rmm::cuda_stream_default);
+  thrust::copy(thrust::device, transform_begin, transform_begin + size, elements.begin());
+  return elements.release();
+}
+#endif
 
 /**
  * @brief Create a `std::vector` containing a validity indicator bitmask using
@@ -250,6 +319,14 @@ rmm::device_buffer make_null_mask(ValidityIterator begin, ValidityIterator end)
                             rmm::cuda_stream_default};
 }
 
+#ifdef __CUDACC__
+template <typename ValidityIterator>
+rmm::device_buffer make_device_null_mask(ValidityIterator begin, ValidityIterator end)
+{
+  return cudf::detail::valid_if(begin, end, thrust::identity<bool>{}, rmm::cuda_stream_default)
+    .first;
+}
+#endif
 /**
  * @brief Given the range `[begin,end)`, converts each value to a string and
  * then creates a packed vector of characters for each string and a vector of
@@ -328,6 +405,21 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
                                    detail::make_elements<ElementTo, SourceElementT>(begin, end)});
   }
 
+#ifdef __CUDACC__
+  template <typename InputIterator>
+  fixed_width_column_wrapper(thrust::input_device_iterator_tag,
+                             InputIterator begin,
+                             InputIterator end)
+    : column_wrapper{}
+  {
+    auto const size = cudf::distance(begin, end);
+    wrapped.reset(
+      new cudf::column{cudf::data_type{cudf::type_to_id<ElementTo>()},
+                       size,
+                       detail::make_device_elements<ElementTo, SourceElementT>(begin, end)});
+  }
+#endif
+
   /**
    * @brief Construct a nullable column of the fixed-width elements in the range
    * `[begin,end)` using the range `[v, v + distance(begin,end))` interpreted
@@ -362,6 +454,33 @@ class fixed_width_column_wrapper : public detail::column_wrapper {
                                    detail::make_null_mask(v, v + size),
                                    cudf::UNKNOWN_NULL_COUNT});
   }
+
+  template <typename InputIterator, typename ValidityIterator>
+  fixed_width_column_wrapper(thrust::input_host_iterator_tag,
+                             InputIterator begin,
+                             InputIterator end,
+                             ValidityIterator v)
+    : fixed_width_column_wrapper(begin, end, v)
+  {
+  }
+
+#ifdef __CUDACC__
+  template <typename InputIterator, typename ValidityIterator>
+  fixed_width_column_wrapper(thrust::input_device_iterator_tag,
+                             InputIterator begin,
+                             InputIterator end,
+                             ValidityIterator v)
+    : column_wrapper{}
+  {
+    auto const size = cudf::distance(begin, end);
+    wrapped.reset(
+      new cudf::column{cudf::data_type{cudf::type_to_id<ElementTo>()},
+                       size,
+                       detail::make_device_elements<ElementTo, SourceElementT>(begin, end),
+                       detail::make_device_null_mask(v, v + size),
+                       cudf::UNKNOWN_NULL_COUNT});
+  }
+#endif
 
   /**
    * @brief Construct a non-nullable column of fixed-width elements from an
@@ -708,6 +827,12 @@ class strings_column_wrapper : public detail::column_wrapper {
     auto d_chars             = cudf::detail::make_device_uvector_sync(chars);
     auto d_offsets           = cudf::detail::make_device_uvector_sync(offsets);
     wrapped                  = cudf::make_strings_column(d_chars, d_offsets);
+  }
+
+  strings_column_wrapper(device_span<thrust::pair<const char*, size_type> const> d_strings)
+    : column_wrapper{}
+  {
+    wrapped = cudf::make_strings_column(d_strings);
   }
 
   /**
