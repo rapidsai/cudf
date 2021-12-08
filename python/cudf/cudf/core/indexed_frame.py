@@ -921,8 +921,10 @@ def _check_duplicate_level_names(specified, level_names):
         return
     duplicates = {key for key, val in Counter(level_names).items() if val > 1}
 
-    for x in specified:
-        if x in duplicates:
-            raise ValueError(
-                f"The name {x} occurs multiple times, use a level number"
-            )
+    duplicates_specified = [spec for spec in specified if spec in duplicates]
+    if not len(duplicates_specified) == 0:
+        # Note: pandas raises first encountered duplicates, cuDF raises all.
+        raise ValueError(
+            f"The names {duplicates_specified} occurs multiple times, use a"
+            " level number"
+        )
