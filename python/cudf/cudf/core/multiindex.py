@@ -733,18 +733,21 @@ class MultiIndex(Frame, BaseIndex):
                 cudf.Series._from_data({None: index._data.columns[k]}),
             )
 
+        # determine if we should downcast from a DataFrame to a Series
         need_downcast = (
-            len(result) == 1
-            and not slice_access
+            len(result) == 1  # only downcast if we have a single row
+            and not slice_access  # never downcast if we sliced
             and (
                 size == 0  # ??? what case does this correspond to?
+                # we indexed into a single row directly, using its label:
                 or len(index_key) == self.nlevels
             )
         )
         if need_downcast:
             result = result.T
             return result[result._data.names[0]]
-        elif len(result) == 0 and not slice_access:
+
+        if len(result) == 0 and not slice_access:
             # Pandas returns an empty Series with a tuple as name
             # the one expected result column
             result = cudf.Series._from_data(
