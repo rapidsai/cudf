@@ -2654,8 +2654,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Notes
         -----
-        Diff currently only supports float and integer dtype columns with
-        no null values.
+        Diff currently only supports float and integer dtype columns
 
         Examples
         --------
@@ -2684,11 +2683,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if not axis == 0:
             raise NotImplementedError("Only axis=0 is supported.")
-
-        if (self[col].has_nulls for col in self._data) is True:
-            raise AssertionError(
-                "Diff currently requires columns with no null values"
-            )
 
         if not (np.issubdtype(i, np.number) for i in self.dtypes):
             raise NotImplementedError(
