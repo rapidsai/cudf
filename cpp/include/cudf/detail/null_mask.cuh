@@ -475,7 +475,7 @@ std::vector<size_type> segmented_valid_count(bitmask_type const* bitmask,
   if (bitmask == nullptr) {
     // Return a vector of segment lengths.
     auto const num_segments = validate_segmented_indices(indices_begin, indices_end);
-    auto ret                = std::vector<size_type>{num_segments, 0};
+    auto ret                = std::vector<size_type>(num_segments, 0);
     for (size_type i = 0; i < num_segments; i++) {
       ret[i] = indices_begin[2 * i + 1] - indices_begin[2 * i];
     }
@@ -495,7 +495,7 @@ std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
   if (bitmask == nullptr) {
     // Return a vector of zeros.
     auto const num_segments = validate_segmented_indices(indices_begin, indices_end);
-    return std::vector<size_type>{num_segments, 0};
+    return std::vector<size_type>(num_segments, 0);
   }
   return detail::segmented_count_unset_bits(bitmask, indices_begin, indices_end, stream);
 }
