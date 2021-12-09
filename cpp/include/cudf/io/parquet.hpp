@@ -738,7 +738,7 @@ class parquet_writer_options_builder {
  *         requested in parquet_writer_options (empty blob otherwise).
  */
 
-std::optional<std::vector<uint8_t>> write_parquet(
+std::unique_ptr<std::vector<uint8_t>> write_parquet(
   parquet_writer_options const& options,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -1093,7 +1093,7 @@ class parquet_chunked_writer {
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list only if
    * `column_chunks_file_paths` is provided, else null.
    */
-  std::optional<std::vector<uint8_t>> close(
+  std::unique_ptr<std::vector<uint8_t>> close(
     std::vector<std::string> const& column_chunks_file_paths = {});
 
   // Unique pointer to impl writer class

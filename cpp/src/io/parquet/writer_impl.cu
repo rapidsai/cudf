@@ -1564,12 +1564,12 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> pa
   last_write_successful = true;
 }
 
-std::optional<std::vector<uint8_t>> writer::impl::close(
+std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
   std::vector<std::string> const& column_chunks_file_path)
 {
-  if (closed) { return std::nullopt; }
+  if (closed) { return nullptr; }
   closed = true;
-  if (not last_write_successful) { return std::nullopt; }
+  if (not last_write_successful) { return nullptr; }
   for (size_t p = 0; p < out_sink_.size(); p++) {
     std::vector<uint8_t> buffer;
     CompactProtocolWriter cpw(&buffer);
@@ -1616,11 +1616,11 @@ std::optional<std::vector<uint8_t>> writer::impl::close(
     buffer.insert(buffer.end(),
                   reinterpret_cast<const uint8_t*>(&fendr),
                   reinterpret_cast<const uint8_t*>(&fendr) + sizeof(fendr));
-    return buffer;
+    return std::make_unique<std::vector<uint8_t>>(std::move(buffer));
   } else {
-    return std::nullopt;
+    return {nullptr};
   }
-  return std::nullopt;
+  return nullptr;
 }
 
 // Forward to implementation
@@ -1652,7 +1652,7 @@ void writer::write(table_view const& table, std::vector<partition_info> const& p
 }
 
 // Forward to implementation
-std::optional<std::vector<uint8_t>> writer::close(
+std::unique_ptr<std::vector<uint8_t>> writer::close(
   std::vector<std::string> const& column_chunks_file_path)
 {
   return _impl->close(column_chunks_file_path);

@@ -445,8 +445,8 @@ table_input_metadata::table_input_metadata(table_view const& table)
 /**
  * @copydoc cudf::io::write_parquet
  */
-std::optional<std::vector<uint8_t>> write_parquet(parquet_writer_options const& options,
-                                                  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const& options,
+                                                    rmm::mr::device_memory_resource* mr)
 {
   namespace io_detail = cudf::io::detail;
 
@@ -491,7 +491,7 @@ parquet_chunked_writer& parquet_chunked_writer::write(table_view const& table,
 /**
  * @copydoc cudf::io::parquet_chunked_writer::close
  */
-std::optional<std::vector<uint8_t>> parquet_chunked_writer::close(
+std::unique_ptr<std::vector<uint8_t>> parquet_chunked_writer::close(
   std::vector<std::string> const& column_chunks_file_path)
 {
   CUDF_FUNC_RANGE();
