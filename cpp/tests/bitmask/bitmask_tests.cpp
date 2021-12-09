@@ -510,9 +510,12 @@ TEST_F(CountUnsetBitsTest, MultipleWordsSingleBit)
   EXPECT_EQ(1, cudf::detail::null_count(mask.data(), 67, 68, rmm::cuda_stream_default));
 
   std::vector<cudf::size_type> indices = {67, 68, 31, 32, 192, 193};
-  auto counts =
+  auto unset_counts =
     cudf::detail::segmented_count_unset_bits(mask.data(), indices, rmm::cuda_stream_default);
-  EXPECT_THAT(counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{1, 1, 1}));
+  EXPECT_THAT(unset_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{1, 1, 1}));
+  auto null_counts =
+    cudf::detail::segmented_null_count(mask.data(), indices, rmm::cuda_stream_default);
+  EXPECT_THAT(null_counts, ::testing::ElementsAreArray(std::vector<cudf::size_type>{1, 1, 1}));
 }
 
 struct CopyBitmaskTest : public cudf::test::BaseFixture, cudf::test::UniformRandomGenerator<int> {
