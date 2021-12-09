@@ -266,7 +266,9 @@ std::unique_ptr<column> sort_lists(lists_column_view const& input,
                            std::move(output_offset),
                            std::move(output_child),
                            input.null_count(),
-                           std::move(null_mask));
+                           std::move(null_mask),
+                           stream,
+                           mr);
 }
 
 std::unique_ptr<column> stable_sort_lists(lists_column_view const& input,
@@ -300,7 +302,9 @@ std::unique_ptr<column> stable_sort_lists(lists_column_view const& input,
                            std::move(output_offset),
                            std::move(sorted_child_table->release().front()),
                            input.null_count(),
-                           cudf::detail::copy_bitmask(input.parent(), stream, mr));
+                           cudf::detail::copy_bitmask(input.parent(), stream, mr),
+                           stream,
+                           mr);
 }
 }  // namespace detail
 

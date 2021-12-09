@@ -308,13 +308,13 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
     column_view sum_result   = sparse_results->get_result(col, *sum_agg);
     column_view count_result = sparse_results->get_result(col, *count_agg);
 
-    auto values_view = column_device_view::create(col);
-    auto sum_view    = column_device_view::create(sum_result);
-    auto count_view  = column_device_view::create(count_result);
+    auto values_view = column_device_view::create(col, stream);
+    auto sum_view    = column_device_view::create(sum_result, stream);
+    auto count_view  = column_device_view::create(count_result, stream);
 
     auto var_result = make_fixed_width_column(
       cudf::detail::target_type(result_type, agg.kind), col.size(), mask_state::ALL_NULL, stream);
-    auto var_result_view = mutable_column_device_view::create(var_result->mutable_view());
+    auto var_result_view = mutable_column_device_view::create(var_result->mutable_view(), stream);
     mutable_table_view var_table_view{{var_result->mutable_view()}};
     cudf::detail::initialize_with_identity(var_table_view, {agg.kind}, stream);
 
@@ -668,7 +668,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   std::unique_ptr<table> unique_keys =
     groupby(keys, requests, &cache, has_nulls(keys), include_null_keys, stream, mr);
 
-  return std::make_pair(std::move(unique_keys), extract_results(requests, cache));
+  return std::make_pair(std::move(unique_keys), extract_results(requests, cache, stream, mr));
 }
 }  // namespace hash
 }  // namespace detail
