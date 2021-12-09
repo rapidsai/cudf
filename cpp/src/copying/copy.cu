@@ -75,10 +75,8 @@ struct copy_if_else_functor_impl<T, std::enable_if_t<is_rep_layout_compatible<T>
     auto const& lhs = *p_lhs;
     auto const& rhs = *p_rhs;
 
-    auto lhs_iter =
-      cudf::detail::make_optional_iterator<T>(lhs, contains_nulls::DYNAMIC{}, left_nullable);
-    auto rhs_iter =
-      cudf::detail::make_optional_iterator<T>(rhs, contains_nulls::DYNAMIC{}, right_nullable);
+    auto lhs_iter = cudf::detail::make_optional_iterator<T>(lhs, nullate::DYNAMIC{left_nullable});
+    auto rhs_iter = cudf::detail::make_optional_iterator<T>(rhs, nullate::DYNAMIC{right_nullable});
     return detail::copy_if_else(left_nullable || right_nullable,
                                 lhs_iter,
                                 lhs_iter + size,
@@ -112,10 +110,8 @@ struct copy_if_else_functor_impl<string_view> {
     auto const& lhs = *p_lhs;
     auto const& rhs = *p_rhs;
 
-    auto lhs_iter =
-      cudf::detail::make_optional_iterator<T>(lhs, contains_nulls::DYNAMIC{}, left_nullable);
-    auto rhs_iter =
-      cudf::detail::make_optional_iterator<T>(rhs, contains_nulls::DYNAMIC{}, right_nullable);
+    auto lhs_iter = cudf::detail::make_optional_iterator<T>(lhs, nullate::DYNAMIC{left_nullable});
+    auto rhs_iter = cudf::detail::make_optional_iterator<T>(rhs, nullate::DYNAMIC{right_nullable});
     return strings::detail::copy_if_else(lhs_iter, lhs_iter + size, rhs_iter, filter, stream, mr);
   }
 };
@@ -307,7 +303,7 @@ std::unique_ptr<column> copy_if_else(Left const& lhs,
 
   if (boolean_mask.is_empty()) { return cudf::empty_like(lhs); }
 
-  auto bool_mask_device_p             = column_device_view::create(boolean_mask);
+  auto bool_mask_device_p             = column_device_view::create(boolean_mask, stream);
   column_device_view bool_mask_device = *bool_mask_device_p;
 
   auto const has_nulls = boolean_mask.has_nulls();

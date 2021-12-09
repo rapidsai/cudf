@@ -17,6 +17,7 @@
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/copying.hpp>
@@ -28,7 +29,6 @@
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-#include <cudf_test/table_utilities.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 
@@ -1961,7 +1961,11 @@ struct ListReductionTest : public cudf::test::BaseFixture {
         cudf::reduce(input_data, agg, cudf::data_type(cudf::type_id::LIST));
       auto list_result = dynamic_cast<cudf::list_scalar*>(result.get());
       EXPECT_EQ(is_valid, list_result->is_valid());
-      if (is_valid) { CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_value, list_result->view()); }
+      if (is_valid) {
+        CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_value, list_result->view());
+      } else {
+        CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected_value, list_result->view());
+      }
     };
 
     if (succeeded_condition) {
@@ -2047,7 +2051,7 @@ TEST_F(ListReductionTest, NonValidListReductionNthElement)
 
   // test against empty input
   this->reduction_test(LCW{},
-                       ElementCol{{0}, {0}},  // expected_value,
+                       ElementCol{},  // expected_value,
                        true,
                        false,
                        cudf::make_nth_element_aggregation(0, cudf::null_policy::INCLUDE));

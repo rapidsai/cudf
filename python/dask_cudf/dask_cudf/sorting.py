@@ -225,6 +225,8 @@ def sort_values(
     sort_function_kwargs=None,
 ):
     """Sort by the given list/tuple of column names."""
+    if not isinstance(ascending, bool):
+        raise ValueError("ascending must be either True or False")
     if na_position not in ("first", "last"):
         raise ValueError("na_position must be either 'first' or 'last'")
 
