@@ -118,6 +118,7 @@ Computations / descriptive stats
    Series.abs
    Series.all
    Series.any
+   Series.autocorr
    Series.ceil
    Series.clip
    Series.corr
@@ -161,6 +162,8 @@ Reindexing / selection / label manipulation
 .. autosummary::
    :toctree: api/
 
+   Series.add_prefix
+   Series.add_suffix
    Series.drop
    Series.drop_duplicates
    Series.equals

@@ -192,7 +192,9 @@ struct scan_functor<Op, cudf::struct_view> {
     return make_structs_column(input.size(),
                                std::move(scanned_children),
                                UNKNOWN_NULL_COUNT,
-                               rmm::device_buffer{0, stream, mr});
+                               rmm::device_buffer{0, stream, mr},
+                               stream,
+                               mr);
   }
 };
 

@@ -121,7 +121,7 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
   }();
 
   auto const val = static_cast<cudf::scalar_type_t<Type>*>(result.get());
-  return cudf::make_fixed_point_scalar<DecimalXX>(val->value(stream), scale);
+  return cudf::make_fixed_point_scalar<DecimalXX>(val->value(stream), scale, stream, mr);
 }
 
 /**
