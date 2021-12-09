@@ -52,7 +52,7 @@ struct replace_regex_fn {
   column_device_view const d_strings;
   reprog_device prog;
   string_view const d_repl;
-  size_type maxrepl;
+  size_type const maxrepl;
   int32_t* d_offsets{};
   char* d_chars{};
 
@@ -65,7 +65,7 @@ struct replace_regex_fn {
     auto const d_str  = d_strings.element<string_view>(idx);
     auto const nchars = d_str.length();                  // number of characters in input string
     auto nbytes       = d_str.size_bytes();              // number of bytes in input string
-    auto mxn          = maxrepl < 0 ? nchars : maxrepl;  // max possible replaces for this string
+    auto mxn          = maxrepl > 0 ? maxrepl : nchars;  // max possible replaces for this string
     auto in_ptr       = d_str.data();                    // input pointer (i)
     auto out_ptr      = d_chars ? d_chars + d_offsets[idx] : nullptr;  // output pointer (o)
     size_type lpos    = 0;
@@ -102,27 +102,30 @@ struct replace_regex_fn {
 std::unique_ptr<column> replace_re(
   strings_column_view const& strings,
   std::string const& pattern,
-  string_scalar const& repl           = string_scalar(""),
-  size_type maxrepl                   = -1,
+  string_scalar const& replacement,
+  std::optional<size_type> max_replace_count,
+  regex_flags const flags,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto strings_count = strings.size();
   if (strings_count == 0) return make_empty_column(type_id::STRING);
 
-  CUDF_EXPECTS(repl.is_valid(stream), "Parameter repl must be valid");
-  string_view d_repl(repl.data(), repl.size());
+  CUDF_EXPECTS(replacement.is_valid(stream), "Parameter replacement must be valid");
+  string_view d_repl(replacement.data(), replacement.size());
 
   auto strings_column = column_device_view::create(strings.parent(), stream);
   auto d_strings      = *strings_column;
   // compile regex into device object
-  auto prog   = reprog_device::create(pattern, get_character_flags_table(), strings_count, stream);
-  auto d_prog = *prog;
-  auto regex_insts = d_prog.insts_counts();
+  auto prog =
+    reprog_device::create(pattern, flags, get_character_flags_table(), strings_count, stream);
+  auto d_prog            = *prog;
+  auto const regex_insts = d_prog.insts_counts();
 
   // copy null mask
-  auto null_mask  = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
-  auto null_count = strings.null_count();
+  auto null_mask        = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
+  auto const null_count = strings.null_count();
+  auto const maxrepl    = max_replace_count.value_or(0);
 
   // create child columns
   auto children = [&] {
@@ -167,12 +170,14 @@ std::unique_ptr<column> replace_re(
 
 std::unique_ptr<column> replace_re(strings_column_view const& strings,
                                    std::string const& pattern,
-                                   string_scalar const& repl,
-                                   size_type maxrepl,
+                                   string_scalar const& replacement,
+                                   std::optional<size_type> max_replace_count,
+                                   regex_flags const flags,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_re(strings, pattern, repl, maxrepl, rmm::cuda_stream_default, mr);
+  return detail::replace_re(
+    strings, pattern, replacement, max_replace_count, flags, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings
