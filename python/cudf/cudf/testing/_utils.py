@@ -310,3 +310,22 @@ def does_not_raise():
 
 def xfail_param(param, **kwargs):
     return pytest.param(param, marks=pytest.mark.xfail(**kwargs))
+
+
+def assert_column_memory_eq(
+    lhs: cudf.core.column.ColumnBase, rhs: cudf.core.column.ColumnBase
+):
+    assert lhs.base_data_ptr == rhs.base_data_ptr
+    assert lhs.base_mask_ptr == rhs.base_mask_ptr
+    for lhs_child, rhs_child in zip(lhs.base_children, rhs.base_children):
+        assert_column_memory_eq(lhs_child, rhs_child)
+
+
+def assert_column_memory_ne(
+    lhs: cudf.core.column.ColumnBase, rhs: cudf.core.column.ColumnBase
+):
+    try:
+        assert_column_memory_eq(lhs, rhs)
+    except AssertionError:
+        return
+    raise AssertionError("lhs and rhs holds the same memory.")
