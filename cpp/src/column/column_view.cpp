@@ -77,7 +77,8 @@ size_type column_view_base::null_count(size_type begin, size_type end) const
   CUDF_EXPECTS((begin >= 0) && (end <= size()) && (begin <= end), "Range is out of bounds.");
   return (null_count() == 0)
            ? 0
-           : cudf::detail::null_count(null_mask(), offset() + begin, offset() + end, rmm::cuda_stream_default);
+           : cudf::detail::null_count(
+               null_mask(), offset() + begin, offset() + end, rmm::cuda_stream_default);
 }
 
 // Struct to use custom hash combine and fold expression
