@@ -18,6 +18,8 @@
 
 #include <cudf/filling.hpp>
 
+#include <rmm/device_uvector.hpp>
+
 namespace cudf {
 namespace detail {
 
@@ -37,9 +39,10 @@ namespace detail {
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  *
+ * @return An array in device memory containing the complement indices.
  */
 template <typename InputIterator, typename OutputIterator>
-std::unique_ptr<cudf::column> complement(
+rmm::device_uvector<size_type> complement(
   host_span<std::pair<InputIterator, OutputIterator> const> input_ranges,
   size_type size,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
