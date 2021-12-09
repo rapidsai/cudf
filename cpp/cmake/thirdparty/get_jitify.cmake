@@ -20,7 +20,8 @@ function(find_and_configure_jitify)
     jitify 2.0.0
     GIT_REPOSITORY https://github.com/rapidsai/jitify.git
     GIT_TAG cudf_0.19
-    GIT_SHALLOW TRUE DOWNLOAD_ONLY TRUE
+    GIT_SHALLOW TRUE
+    DOWNLOAD_ONLY TRUE
   )
   set(JITIFY_INCLUDE_DIR
       "${jitify_SOURCE_DIR}"
