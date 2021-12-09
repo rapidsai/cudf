@@ -4441,7 +4441,7 @@ public class ColumnVectorTest extends CudfTestBase {
     List<String> list4 = Arrays.asList(null, "FOO", "", "ARé some", "test");
     List<String> list5 = null;
     try (ColumnVector input = makeListsColumn(DType.STRING, list0, list1, list2, list3, list4, list5);
-         ColumnVector result = input.listContainsNullElements();
+         ColumnVector result = input.listContainsNulls();
          ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, true, true, null)) {
       assertColumnsAreEqual(expected, result);
     }

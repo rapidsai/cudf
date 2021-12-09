@@ -3179,9 +3179,9 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * Output `column[i]` is set to null iff the input list row is null.
    * @return a Boolean ColumnVector with the result of the lookup
    */
-  public final ColumnVector listContainsNullElements() {
+  public final ColumnVector listContainsNulls() {
     assert type.equals(DType.LIST) : "column type must be a LIST";
-    return new ColumnVector(listContainsNullElements(getNativeView()));
+    return new ColumnVector(listContainsNulls(getNativeView()));
   }
 
   /**
@@ -3651,7 +3651,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param nativeView the column view handle of the list
    * @return column handle of the resultant boolean column 
    */
-  private static native long listContainsNullElements(long nativeView);
+  private static native long listContainsNulls(long nativeView);
 
   /**
    * Native method to find the first (or last) index of a specified scalar key,
