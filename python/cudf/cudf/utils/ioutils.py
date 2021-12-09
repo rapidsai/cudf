@@ -154,6 +154,9 @@ num_rows : int, default None
 strings_to_categorical : boolean, default False
     If True, return string columns as GDF_CATEGORY dtype; if False, return a
     as GDF_STRING dtype.
+categorical_partitions : boolean, default True
+    Whether directory-partitioned columns should be interpreted as categorical
+    or raw dtypes.
 use_pandas_metadata : boolean, default True
     If True and dataset has custom PANDAS schema metadata, ensure that index
     columns are also loaded.
@@ -1129,7 +1132,7 @@ def ensure_single_filepath_or_buffer(path_or_data, **kwargs):
         storage_options = kwargs.get("storage_options")
         path_or_data = os.path.expanduser(path_or_data)
         try:
-            fs, _, paths = fsspec.get_fs_token_paths(
+            fs, _, paths = get_fs_token_paths(
                 path_or_data, mode="rb", storage_options=storage_options
             )
         except ValueError as e:
@@ -1153,9 +1156,9 @@ def is_directory(path_or_data, **kwargs):
         storage_options = kwargs.get("storage_options")
         path_or_data = os.path.expanduser(path_or_data)
         try:
-            fs, _, paths = fsspec.get_fs_token_paths(
+            fs = get_fs_token_paths(
                 path_or_data, mode="rb", storage_options=storage_options
-            )
+            )[0]
         except ValueError as e:
             if str(e).startswith("Protocol not known"):
                 return False
@@ -1189,10 +1192,8 @@ def _get_filesystem_and_paths(path_or_data, **kwargs):
         else:
             path_or_data = [path_or_data]
 
-        # Pyarrow did not support the protocol or storage options.
-        # Fall back to fsspec
         try:
-            fs, _, fs_paths = fsspec.get_fs_token_paths(
+            fs, _, fs_paths = get_fs_token_paths(
                 path_or_data, mode="rb", storage_options=storage_options
             )
             return_paths = fs_paths
@@ -1322,9 +1323,9 @@ def get_writer_filepath_or_buffer(path_or_data, mode, **kwargs):
     if isinstance(path_or_data, str):
         storage_options = kwargs.get("storage_options", {})
         path_or_data = os.path.expanduser(path_or_data)
-        fs, _, _ = fsspec.get_fs_token_paths(
+        fs = get_fs_token_paths(
             path_or_data, mode=mode or "w", storage_options=storage_options
-        )
+        )[0]
 
         if not _is_local_filesystem(fs):
             filepath_or_buffer = fsspec.open(
@@ -1513,11 +1514,12 @@ def _prepare_filters(filters):
     return filters
 
 
-def _ensure_filesystem(passed_filesystem, path):
+def _ensure_filesystem(passed_filesystem, path, **kwargs):
     if passed_filesystem is None:
-        return get_fs_token_paths(path[0] if isinstance(path, list) else path)[
-            0
-        ]
+        return get_fs_token_paths(
+            path[0] if isinstance(path, list) else path,
+            storage_options=kwargs.get("storage_options", {}),
+        )[0]
     return passed_filesystem
 
 

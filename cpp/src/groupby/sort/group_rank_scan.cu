@@ -31,7 +31,6 @@ namespace {
 /**
  * @brief generate grouped row ranks or dense ranks using a row comparison then scan the results
  *
- * @tparam has_nulls if the order_by column has nulls
  * @tparam value_resolver flag value resolver function with boolean first and row number arguments
  * @tparam scan_operator scan function ran on the flag values
  * @param order_by input column to generate ranks for
@@ -39,23 +38,26 @@ namespace {
  * @param group_offsets group index offsets with group ID indices
  * @param resolver flag value resolver
  * @param scan_op scan operation ran on the flag results
+ * @param has_nulls true if nulls are included in the `order_by` column
  * @param stream CUDA stream used for device memory operations and kernel launches
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return std::unique_ptr<column> rank values
  */
-template <bool has_nulls, typename value_resolver, typename scan_operator>
+template <typename value_resolver, typename scan_operator>
 std::unique_ptr<column> rank_generator(column_view const& order_by,
                                        device_span<size_type const> group_labels,
                                        device_span<size_type const> group_offsets,
                                        value_resolver resolver,
                                        scan_operator scan_op,
+                                       bool has_nulls,
                                        rmm::cuda_stream_view stream,
                                        rmm::mr::device_memory_resource* mr)
 {
   auto const flattened = cudf::structs::detail::flatten_nested_columns(
     table_view{{order_by}}, {}, {}, structs::detail::column_nullability::MATCH_INCOMING);
   auto const d_flat_order = table_device_view::create(flattened, stream);
-  row_equality_comparator<has_nulls> comparator(*d_flat_order, *d_flat_order, true);
+  row_equality_comparator comparator(
+    nullate::DYNAMIC{has_nulls}, *d_flat_order, *d_flat_order, null_equality::EQUAL);
   auto ranks         = make_fixed_width_column(data_type{type_to_id<size_type>()},
                                        flattened.flattened_columns().num_rows(),
                                        mask_state::UNALLOCATED,
@@ -92,22 +94,13 @@ std::unique_ptr<column> rank_scan(column_view const& order_by,
                                   rmm::cuda_stream_view stream,
                                   rmm::mr::device_memory_resource* mr)
 {
-  if (has_nested_nulls(table_view{{order_by}})) {
-    return rank_generator<true>(
-      order_by,
-      group_labels,
-      group_offsets,
-      [] __device__(bool equality, auto row_index) { return equality ? row_index + 1 : 0; },
-      DeviceMax{},
-      stream,
-      mr);
-  }
-  return rank_generator<false>(
+  return rank_generator(
     order_by,
     group_labels,
     group_offsets,
     [] __device__(bool equality, auto row_index) { return equality ? row_index + 1 : 0; },
     DeviceMax{},
+    has_nested_nulls(table_view{{order_by}}),
     stream,
     mr);
 }
@@ -118,22 +111,13 @@ std::unique_ptr<column> dense_rank_scan(column_view const& order_by,
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
 {
-  if (has_nested_nulls(table_view{{order_by}})) {
-    return rank_generator<true>(
-      order_by,
-      group_labels,
-      group_offsets,
-      [] __device__(bool equality, auto row_index) { return equality; },
-      DeviceSum{},
-      stream,
-      mr);
-  }
-  return rank_generator<false>(
+  return rank_generator(
     order_by,
     group_labels,
     group_offsets,
     [] __device__(bool equality, auto row_index) { return equality; },
     DeviceSum{},
+    has_nested_nulls(table_view{{order_by}}),
     stream,
     mr);
 }
