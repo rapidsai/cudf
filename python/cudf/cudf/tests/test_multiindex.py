@@ -830,6 +830,19 @@ def test_multiindex_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
         assert_eq(presult, gresult, check_index_type=False, check_dtype=False)
 
 
+def test_multiindex_iloc_scalar():
+    arrays = [["a", "a", "b", "b"], [1, 2, 3, 4]]
+    tuples = list(zip(*arrays))
+    idx = cudf.MultiIndex.from_tuples(tuples)
+    gdf = cudf.DataFrame(
+        {"first": cp.random.rand(4), "second": cp.random.rand(4)}
+    )
+    gdf.index = idx
+
+    pdf = gdf.to_pandas()
+    assert_eq(pdf.iloc[3], gdf.iloc[3])
+
+
 @pytest.mark.parametrize(
     "iloc_rows",
     [
@@ -1742,3 +1755,15 @@ def test_multiIndex_type_methods(pidx, func):
         assert_eq(False, actual)
     else:
         assert_eq(expected, actual)
+
+
+def test_multiindex_index_single_row():
+    arrays = [["a", "a", "b", "b"], [1, 2, 3, 4]]
+    tuples = list(zip(*arrays))
+    idx = cudf.MultiIndex.from_tuples(tuples)
+    gdf = cudf.DataFrame(
+        {"first": cp.random.rand(4), "second": cp.random.rand(4)}
+    )
+    gdf.index = idx
+    pdf = gdf.to_pandas()
+    assert_eq(pdf.loc[("b", 3)], gdf.loc[("b", 3)])
