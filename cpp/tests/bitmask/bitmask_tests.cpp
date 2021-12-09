@@ -68,10 +68,14 @@ struct CountBitmaskTest : public cudf::test::BaseFixture {
 
 TEST_F(CountBitmaskTest, NullMask)
 {
-  EXPECT_EQ(0, cudf::detail::count_set_bits(nullptr, 0, 32, rmm::cuda_stream_default));
+  EXPECT_THROW(cudf::detail::count_set_bits(nullptr, 0, 32, rmm::cuda_stream_default),
+               cudf::logic_error);
+  EXPECT_EQ(32, cudf::detail::valid_count(nullptr, 0, 32, rmm::cuda_stream_default));
 
   std::vector<cudf::size_type> indices = {0, 32, 7, 25};
-  auto counts = cudf::detail::segmented_count_set_bits(nullptr, indices, rmm::cuda_stream_default);
+  EXPECT_THROW(cudf::detail::segmented_count_set_bits(nullptr, indices, rmm::cuda_stream_default),
+               cudf::logic_error);
+  auto counts = cudf::detail::segmented_valid_count(nullptr, indices, rmm::cuda_stream_default);
   EXPECT_EQ(indices.size(), counts.size() * 2);
   for (size_t i = 0; i < counts.size(); i++) {
     EXPECT_EQ(indices[2 * i + 1] - indices[2 * i], counts[i]);
@@ -287,11 +291,14 @@ TEST_F(CountUnsetBitsTest, SingleBitAllSet)
 
 TEST_F(CountUnsetBitsTest, NullMask)
 {
-  EXPECT_EQ(0, cudf::detail::count_unset_bits(nullptr, 0, 32, rmm::cuda_stream_default));
+  EXPECT_THROW(cudf::detail::count_unset_bits(nullptr, 0, 32, rmm::cuda_stream_default),
+               cudf::logic_error);
+  EXPECT_EQ(0, cudf::detail::null_count(nullptr, 0, 32, rmm::cuda_stream_default));
 
   std::vector<cudf::size_type> indices = {0, 32, 7, 25};
-  auto counts =
-    cudf::detail::segmented_count_unset_bits(nullptr, indices, rmm::cuda_stream_default);
+  EXPECT_THROW(cudf::detail::segmented_count_unset_bits(nullptr, indices, rmm::cuda_stream_default),
+               cudf::logic_error);
+  auto counts = cudf::detail::segmented_null_count(nullptr, indices, rmm::cuda_stream_default);
   EXPECT_EQ(indices.size(), counts.size() * 2);
   for (size_t i = 0; i < counts.size(); i++) {
     EXPECT_EQ(0, counts[i]);
