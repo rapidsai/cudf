@@ -686,13 +686,15 @@ class hash_join {
  */
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-mixed_inner_join(table_view const& left,
-                 table_view const& right,
-                 std::vector<cudf::size_type> const& left_on,
-                 std::vector<cudf::size_type> const& right_on,
-                 ast::expression const& binary_predicate,
-                 std::optional<std::size_t> output_size = {},
-                 rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
+mixed_inner_join(
+  table_view const& left,
+  table_view const& right,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  ast::expression const& binary_predicate,
+  std::optional<std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>>>
+    output_size_data                  = {},
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to all pairs
