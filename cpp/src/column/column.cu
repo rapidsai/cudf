@@ -125,7 +125,7 @@ mutable_column_view column::mutable_view()
 
   // The elements of a column could be changed through a `mutable_column_view`, therefore the
   // existing `null_count` is no longer valid. Reset it to `UNKNOWN_NULL_COUNT` forcing it to be
-  // recomputed on the next invocation of `null_count()`.
+  // recomputed on the next invocation of `this->null_count()`.
   set_null_count(cudf::UNKNOWN_NULL_COUNT);
 
   return mutable_column_view{type(),

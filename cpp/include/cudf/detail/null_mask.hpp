@@ -67,10 +67,8 @@ cudf::size_type count_set_bits(bitmask_type const* bitmask,
                                rmm::cuda_stream_view stream);
 
 /**
- * @brief Given a bitmask, counts the number of unset (0) bits  in the range
- *`[start, stop)`.
- *
- * Returns `0` if `bitmask == nullptr`.
+ * @brief Given a bitmask, counts the number of unset (0) bits in the range
+ * `[start, stop)`.
  *
  * @throws cudf::logic_error if `bitmask == nullptr`
  * @throws cudf::logic_error if `start > stop`
