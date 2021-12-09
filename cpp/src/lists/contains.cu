@@ -52,40 +52,59 @@ auto get_search_keys_device_iterable_view(cudf::scalar const& search_key, rmm::c
   return &search_key;
 }
 
+template <typename ElementType, duplicate_find_option find_option>
+auto __device__ find_begin(list_device_view const& list)
+{
+  if constexpr (find_option == duplicate_find_option::FIND_FIRST) {
+    return list.pair_rep_begin<ElementType>();
+  } else {
+    return thrust::make_reverse_iterator(list.pair_rep_end<ElementType>());
+  }
+}
+
+template <typename ElementType, duplicate_find_option find_option>
+auto __device__ find_end(list_device_view const& list)
+{
+  if constexpr (find_option == duplicate_find_option::FIND_FIRST) {
+    return list.pair_rep_end<ElementType>();
+  } else {
+    return thrust::make_reverse_iterator(list.pair_rep_begin<ElementType>());
+  }
+}
+
+template <duplicate_find_option find_option, typename Iterator>
+size_type __device__ distance([[maybe_unused]] Iterator begin, Iterator end, Iterator find_iter)
+{
+  if (find_iter == end) {
+    // Not found.
+    return absent_index;
+  }
+
+  if constexpr (find_option == duplicate_find_option::FIND_FIRST) {
+    // Distance of find_position from begin.
+    return find_iter - begin;
+  } else {
+    // Distance of find_position from end.
+    return end - find_iter - 1;
+  }
+}
+
 /**
  * @brief __device__ functor to search for a key in a `list_device_view`.
  */
-template <duplicate_find_option = duplicate_find_option::FIND_FIRST>
+template <duplicate_find_option find_option>
 struct finder {
   template <typename ElementType>
   __device__ size_type operator()(list_device_view const& list, ElementType const& search_key) const
   {
-    auto const list_begin = list.pair_rep_begin<ElementType>();
-    auto const list_end   = list.pair_rep_end<ElementType>();
+    auto const list_begin = find_begin<ElementType, find_option>(list);
+    auto const list_end   = find_end<ElementType, find_option>(list);
     auto const find_iter  = thrust::find_if(
       thrust::seq, list_begin, list_end, [search_key] __device__(auto element_and_validity) {
         return element_and_validity.second &&
                cudf::equality_compare(element_and_validity.first, search_key);
       });
-    auto const is_found = find_iter != list_end;
-    return is_found ? (find_iter - list_begin) : absent_index;
-  };
-};
-
-template <>
-struct finder<duplicate_find_option::FIND_LAST> {
-  template <typename ElementType>
-  __device__ size_type operator()(list_device_view const& list, ElementType const& search_key) const
-  {
-    auto const begin = thrust::make_reverse_iterator(list.pair_rep_end<ElementType>());
-    auto const end   = thrust::make_reverse_iterator(list.pair_rep_begin<ElementType>());
-    auto const find_iter =
-      thrust::find_if(thrust::seq, begin, end, [search_key] __device__(auto element_and_validity) {
-        return element_and_validity.second &&
-               cudf::equality_compare(element_and_validity.first, search_key);
-      });
-    auto const is_found = find_iter != end;
-    return is_found ? (end - find_iter - 1) : absent_index;
+    return distance<find_option>(list_begin, list_end, find_iter);
   };
 };
 
