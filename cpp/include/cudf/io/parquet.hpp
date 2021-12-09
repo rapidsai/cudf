@@ -485,7 +485,7 @@ class parquet_writer_options {
    * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
    * be same size as number of sinks in sink_info
    */
-  void set_partitions(std::vector<partition_info> const& partitions)
+  void set_partitions(std::vector<partition_info> partitions)
   {
     CUDF_EXPECTS(partitions.size() == _sink.num_sinks,
                  "Mismatch between number of sinks and number of partitions");
@@ -602,7 +602,7 @@ class parquet_writer_options_builder {
   {
     CUDF_EXPECTS(partitions.size() == options._sink.num_sinks,
                  "Mismatch between number of sinks and number of partitions");
-    options._partitions = std::move(partitions);
+    options.set_partitions(std::move(partitions));
     return *this;
   }
 
@@ -664,12 +664,11 @@ class parquet_writer_options_builder {
    * data sinks
    * @return this for chaining.
    */
-  parquet_writer_options_builder& column_chunks_file_paths(
-    std::vector<std::string> const& file_paths)
+  parquet_writer_options_builder& column_chunks_file_paths(std::vector<std::string> file_paths)
   {
     CUDF_EXPECTS(file_paths.size() == options._sink.num_sinks,
                  "Mismatch between number of sinks and number of chunk paths to set");
-    options._column_chunks_file_paths = file_paths;
+    options.set_column_chunks_file_paths(std::move(file_paths));
     return *this;
   }
 
@@ -956,7 +955,7 @@ class chunked_parquet_writer_options_builder {
   {
     CUDF_EXPECTS(metadata.size() == options._sink.num_sinks,
                  "Mismatch between number of sinks and number of metadata maps");
-    options._user_data = std::move(metadata);
+    options.set_key_value_metadata(std::move(metadata));
     return *this;
   }
 

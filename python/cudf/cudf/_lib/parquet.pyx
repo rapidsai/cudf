@@ -337,8 +337,6 @@ cpdef write_parquet(
     cdef unique_ptr[vector[uint8_t]] out_metadata_c
     cdef vector[string] c_column_chunks_file_paths
     cdef bool _int96_timestamps = int96_timestamps
-    if metadata_file_path is not None:
-        c_column_chunks_file_paths.push_back(str.encode(metadata_file_path))
 
     # Perform write
     cdef parquet_writer_options args = move(
@@ -347,10 +345,12 @@ cpdef write_parquet(
         .key_value_metadata(move(user_data))
         .compression(comp_type)
         .stats_level(stat_freq)
-        .column_chunks_file_paths(c_column_chunks_file_paths)
         .int96_timestamps(_int96_timestamps)
         .build()
     )
+    if metadata_file_path is not None:
+        c_column_chunks_file_paths.push_back(str.encode(metadata_file_path))
+        args.set_column_chunks_file_paths(move(c_column_chunks_file_paths))
     if row_group_size_bytes is not None:
         args.set_row_group_size_bytes(row_group_size_bytes)
     if row_group_size_rows is not None:
