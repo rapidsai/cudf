@@ -128,8 +128,8 @@ std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info 
 std::vector<std::unique_ptr<data_sink>> make_datasinks(sink_info const& info)
 {
   switch (info.type) {
-    case io_type::FILEPATH: return cudf::io::data_sink::create(info.filepaths);
-    case io_type::HOST_BUFFER: return cudf::io::data_sink::create(info.buffers);
+    case io_type::FILEPATH: return cudf::io::data_sink::create(info.get_filepaths());
+    case io_type::HOST_BUFFER: return cudf::io::data_sink::create(info.get_buffers());
     case io_type::VOID: {
       std::vector<std::unique_ptr<data_sink>> sinks;
       for (size_t i = 0; i < info.num_sinks; ++i) {
@@ -137,7 +137,7 @@ std::vector<std::unique_ptr<data_sink>> make_datasinks(sink_info const& info)
       }
       return sinks;
     }
-    case io_type::USER_IMPLEMENTED: return cudf::io::data_sink::create(info.user_sinks);
+    case io_type::USER_IMPLEMENTED: return cudf::io::data_sink::create(info.get_user_sinks());
     default: CUDF_FAIL("Unsupported sink type");
   }
 }

@@ -191,17 +191,11 @@ struct source_info {
  * @brief Destination information for write interfaces
  */
 struct sink_info {
-  io_type type = io_type::VOID;
-  std::vector<std::string> filepaths;
-  std::vector<std::vector<char>*> buffers;  // TODO: perhaps we can repurpose host_buffer. ask VM
-  std::vector<cudf::io::data_sink*> user_sinks;
-  size_t num_sinks = 1;
-
   sink_info() = default;
   sink_info(size_t num_sinks) : type(io_type::VOID), num_sinks(num_sinks) {}
 
   explicit sink_info(std::vector<std::string> const& file_paths)
-    : type(io_type::FILEPATH), filepaths(file_paths), num_sinks(file_paths.size())
+    : type(io_type::FILEPATH), num_sinks(file_paths.size()), filepaths(file_paths)
   {
   }
   explicit sink_info(std::string const& file_path) : type(io_type::FILEPATH), filepaths({file_path})
@@ -209,19 +203,30 @@ struct sink_info {
   }
 
   explicit sink_info(std::vector<std::vector<char>*> const& buffers)
-    : type(io_type::HOST_BUFFER), buffers(buffers), num_sinks(buffers.size())
+    : type(io_type::HOST_BUFFER), num_sinks(buffers.size()), buffers(buffers)
   {
   }
   explicit sink_info(std::vector<char>* buffer) : type(io_type::HOST_BUFFER), buffers({buffer}) {}
 
   explicit sink_info(std::vector<cudf::io::data_sink*> const& user_sinks)
-    : type(io_type::USER_IMPLEMENTED), user_sinks(user_sinks), num_sinks(user_sinks.size())
+    : type(io_type::USER_IMPLEMENTED), num_sinks(user_sinks.size()), user_sinks(user_sinks)
   {
   }
   explicit sink_info(class cudf::io::data_sink* user_sink)
     : type(io_type::USER_IMPLEMENTED), user_sinks({user_sink})
   {
   }
+
+  auto const& get_filepaths() const { return filepaths; }
+  auto const& get_buffers() const { return buffers; }
+  auto const& get_user_sinks() const { return user_sinks; }
+  io_type type     = io_type::VOID;
+  size_t num_sinks = 1;
+
+ private:
+  std::vector<std::string> filepaths;
+  std::vector<std::vector<char>*> buffers;  // TODO: perhaps we can repurpose host_buffer. ask VM
+  std::vector<cudf::io::data_sink*> user_sinks;
 };
 
 class table_input_metadata;
