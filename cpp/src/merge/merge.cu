@@ -499,7 +499,9 @@ table_ptr_type merge(std::vector<table_view> const& tables_to_merge,
   });
 
   // If there is only one non-empty table_view, return its copy
-  if (merge_queue.size() == 1) { return std::make_unique<cudf::table>(merge_queue.top().view); }
+  if (merge_queue.size() == 1) {
+    return std::make_unique<cudf::table>(merge_queue.top().view, stream, mr);
+  }
   // No inputs have rows, return a table with same columns as the first one
   if (merge_queue.empty()) { return empty_like(first_table); }
 

@@ -136,7 +136,8 @@ def test_read_csv_chunksize_none(tmp_path, compression, size):
     dd.assert_eq(df, df2)
 
 
-def test_csv_reader_usecols(tmp_path):
+@pytest.mark.parametrize("dtype", [{"b": str, "c": int}, None])
+def test_csv_reader_usecols(tmp_path, dtype):
     df = cudf.DataFrame(
         {
             "a": [1, 2, 3, 4] * 100,
@@ -147,6 +148,6 @@ def test_csv_reader_usecols(tmp_path):
     csv_path = str(tmp_path / "usecols_data.csv")
     df.to_csv(csv_path, index=False)
     ddf = dask_cudf.from_cudf(df[["b", "c"]], npartitions=5)
-    ddf2 = dask_cudf.read_csv(csv_path, usecols=["b", "c"])
+    ddf2 = dask_cudf.read_csv(csv_path, usecols=["b", "c"], dtype=dtype)
 
     dd.assert_eq(ddf, ddf2, check_divisions=False, check_index=False)

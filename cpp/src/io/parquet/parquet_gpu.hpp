@@ -233,7 +233,7 @@ struct ColumnChunkDesc {
  * @brief Struct describing an encoder column
  */
 struct parquet_column_device_view : stats_column_desc {
-  uint8_t physical_type;   //!< physical data type
+  Type physical_type;      //!< physical data type
   uint8_t converted_type;  //!< logical data type
   uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
                        //!< levels
@@ -273,9 +273,9 @@ constexpr size_t kDictScratchSize    = (1 << kDictHashBits) * sizeof(uint32_t);
 /**
  * @brief Return the byte length of parquet dtypes that are physically represented by INT32
  */
-inline uint32_t __device__ GetDtypeLogicalLen(column_device_view const* col)
+inline uint32_t __device__ int32_logical_len(type_id id)
 {
-  switch (col->type().id()) {
+  switch (id) {
     case cudf::type_id::INT8:
     case cudf::type_id::UINT8: return 1;
     case cudf::type_id::INT16:

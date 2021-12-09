@@ -122,7 +122,7 @@ std::unique_ptr<scalar> fixed_point_reduction(column_view const& col,
   }();
 
   auto const val = static_cast<cudf::scalar_type_t<Type>*>(result.get());
-  return cudf::make_fixed_point_scalar<DecimalXX>(val->value(stream), scale);
+  return cudf::make_fixed_point_scalar<DecimalXX>(val->value(stream), scale, stream, mr);
 }
 
 /**
@@ -317,15 +317,13 @@ struct same_element_type_dispatcher {
     };
 
     auto const minmax_idx = [&] {
-      if (input.has_nulls()) {
-        auto const binop = cudf::reduction::detail::row_arg_minmax_fn<true>(
-          input.size(), *d_flattened_input_ptr, flattened_null_precedences.data(), is_min_op);
-        return do_reduction(binop);
-      } else {
-        auto const binop = cudf::reduction::detail::row_arg_minmax_fn<false>(
-          input.size(), *d_flattened_input_ptr, flattened_null_precedences.data(), is_min_op);
-        return do_reduction(binop);
-      }
+      auto const binop =
+        cudf::reduction::detail::row_arg_minmax_fn(input.size(),
+                                                   *d_flattened_input_ptr,
+                                                   input.has_nulls(),
+                                                   flattened_null_precedences.data(),
+                                                   is_min_op);
+      return do_reduction(binop);
     }();
 
     return cudf::detail::get_element(input, minmax_idx, stream, mr);
