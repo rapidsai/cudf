@@ -186,6 +186,16 @@ type_id to_type_id(SchemaElement const& schema,
 }
 
 /**
+ * @brief Converts cuDF type enum to column logical type
+ */
+data_type to_data_type(type_id t_id, SchemaElement const& schema)
+{
+  return t_id == type_id::DECIMAL32 || t_id == type_id::DECIMAL64 || t_id == type_id::DECIMAL128
+           ? data_type{t_id, numeric::scale_type{-schema.decimal_scale}}
+           : data_type{t_id};
+}
+
+/**
  * @brief Function that returns the required the number of bits to store a value
  */
 template <typename T = uint8_t>
@@ -602,12 +612,8 @@ class aggregate_metadata {
         auto const col_type =
           schema_elem.is_one_level_list()
             ? type_id::LIST
-            : to_type_id(
-                schema_elem, strings_to_categorical, timestamp_type_id, strict_decimal_types);
-        auto const dtype = col_type == type_id::DECIMAL32 || col_type == type_id::DECIMAL64 ||
-                               col_type == type_id::DECIMAL128
-                             ? data_type{col_type, numeric::scale_type{-schema_elem.decimal_scale}}
-                             : data_type{col_type};
+            : to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
+        auto const dtype = to_data_type(col_type, schema_elem);
 
         column_buffer output_col(dtype, schema_elem.repetition_type == OPTIONAL);
         // store the index of this element if inserted in out_col_array
@@ -641,13 +647,9 @@ class aggregate_metadata {
           // set up child output column for one-level encoding list
           if (schema_elem.is_one_level_list()) {
             // determine the element data type
-            auto const element_type = to_type_id(
-              schema_elem, strings_to_categorical, timestamp_type_id, strict_decimal_types);
-            auto const element_dtype =
-              element_type == type_id::DECIMAL32 || element_type == type_id::DECIMAL64 ||
-                  element_type == type_id::DECIMAL128
-                ? data_type{element_type, numeric::scale_type{-schema_elem.decimal_scale}}
-                : data_type{element_type};
+            auto const element_type =
+              to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
+            auto const element_dtype = to_data_type(element_type, schema_elem);
 
             column_buffer element_col(element_dtype, schema_elem.repetition_type == OPTIONAL);
             // store the index of this element
