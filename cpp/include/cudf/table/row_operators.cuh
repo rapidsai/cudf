@@ -50,9 +50,9 @@ namespace detail {
 /**
  * @brief Compare the elements ordering with respect to `lhs`.
  *
- * @param[in] lhs first element
- * @param[in] rhs second element
- * @return weak_ordering Indicates the relationship between the elements in
+ * @param lhs first element
+ * @param rhs second element
+ * @return Indicates the relationship between the elements in
  * the `lhs` and `rhs` columns.
  */
 template <typename Element>
@@ -67,16 +67,17 @@ __device__ weak_ordering compare_elements(Element lhs, Element rhs)
 }
 }  // namespace detail
 
-/*
+/**
  * @brief A specialization for floating-point `Element` type relational comparison
- * to derive the order of the elements with respect to `lhs`. Specialization is to
- * handle `nan` in the order shown below.
+ * to derive the order of the elements with respect to `lhs`.
+ *
+ * This Specialization handles `nan` in the following order:
  * `[-Inf, -ve, 0, -0, +ve, +Inf, NaN, NaN, null] (for null_order::AFTER)`
  * `[null, -Inf, -ve, 0, -0, +ve, +Inf, NaN, NaN] (for null_order::BEFORE)`
  *
- * @param[in] lhs first element
- * @param[in] rhs second element
- * @return weak_ordering Indicates the relationship between the elements in
+ * @param lhs first element
+ * @param rhs second element
+ * @return Indicates the relationship between the elements in
  * the `lhs` and `rhs` columns.
  */
 template <typename Element, std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
@@ -119,7 +120,7 @@ inline __device__ auto null_compare(bool lhs_is_null, bool rhs_is_null, null_ord
  *
  * @param[in] lhs first element
  * @param[in] rhs second element
- * @return weak_ordering Indicates the relationship between the elements in
+ * @return Indicates the relationship between the elements in
  * the `lhs` and `rhs` columns.
  */
 template <typename Element, std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
@@ -132,9 +133,9 @@ __device__ weak_ordering relational_compare(Element lhs, Element rhs)
  * @brief A specialization for floating-point `Element` type to check if
  * `lhs` is equivalent to `rhs`. `nan == nan`.
  *
- * @param[in] lhs first element
- * @param[in] rhs second element
- * @return bool `true` if `lhs` == `rhs` else `false`.
+ * @param lhs first element
+ * @param rhs second element
+ * @return `true` if `lhs` == `rhs` else `false`.
  */
 template <typename Element, std::enable_if_t<std::is_floating_point<Element>::value>* = nullptr>
 __device__ bool equality_compare(Element lhs, Element rhs)
@@ -147,9 +148,9 @@ __device__ bool equality_compare(Element lhs, Element rhs)
  * @brief A specialization for non-floating-point `Element` type to check if
  * `lhs` is equivalent to `rhs`.
  *
- * @param[in] lhs first element
- * @param[in] rhs second element
- * @return bool `true` if `lhs` == `rhs` else `false`.
+ * @param lhs first element
+ * @param rhs second element
+ * @return `true` if `lhs` == `rhs` else `false`.
  */
 template <typename Element, std::enable_if_t<not std::is_floating_point<Element>::value>* = nullptr>
 __device__ bool equality_compare(Element const lhs, Element const rhs)
@@ -160,9 +161,9 @@ __device__ bool equality_compare(Element const lhs, Element const rhs)
 /**
  * @brief Performs an equality comparison between two elements in two columns.
  *
- * @tparam has_nulls Indicates the potential for null values in either column.
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
-template <bool has_nulls = true>
+template <typename Nullate>
 class element_equality_comparator {
  public:
   /**
@@ -171,14 +172,17 @@ class element_equality_comparator {
    *
    * @note `lhs` and `rhs` may be the same.
    *
+   * @param has_nulls Indicates if either input column contains nulls.
    * @param lhs The column containing the first element
    * @param rhs The column containing the second element (may be the same as lhs)
    * @param nulls_are_equal Indicates if two null elements are treated as equivalent
    */
-  __host__ __device__ element_equality_comparator(column_device_view lhs,
-                                                  column_device_view rhs,
-                                                  bool nulls_are_equal = true)
-    : lhs{lhs}, rhs{rhs}, nulls_are_equal{nulls_are_equal}
+  __host__ __device__
+  element_equality_comparator(Nullate has_nulls,
+                              column_device_view lhs,
+                              column_device_view rhs,
+                              null_equality nulls_are_equal = null_equality::EQUAL)
+    : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, nulls_are_equal{nulls_are_equal}
   {
   }
 
@@ -187,18 +191,18 @@ class element_equality_comparator {
    *
    * @param lhs_element_index The index of the first element
    * @param rhs_element_index The index of the second element
-   *
+   * @return True if both lhs and rhs element are both nulls and `nulls_are_equal` is true, or equal
    */
   template <typename Element,
             std::enable_if_t<cudf::is_equality_comparable<Element, Element>()>* = nullptr>
   __device__ bool operator()(size_type lhs_element_index,
                              size_type rhs_element_index) const noexcept
   {
-    if (has_nulls) {
+    if (nulls) {
       bool const lhs_is_null{lhs.is_null(lhs_element_index)};
       bool const rhs_is_null{rhs.is_null(rhs_element_index)};
       if (lhs_is_null and rhs_is_null) {
-        return nulls_are_equal;
+        return nulls_are_equal == null_equality::EQUAL;
       } else if (lhs_is_null != rhs_is_null) {
         return false;
       }
@@ -219,14 +223,18 @@ class element_equality_comparator {
  private:
   column_device_view lhs;
   column_device_view rhs;
-  bool nulls_are_equal;
+  Nullate nulls;
+  null_equality nulls_are_equal;
 };
 
-template <bool has_nulls = true>
+template <typename Nullate>
 class row_equality_comparator {
  public:
-  row_equality_comparator(table_device_view lhs, table_device_view rhs, bool nulls_are_equal = true)
-    : lhs{lhs}, rhs{rhs}, nulls_are_equal{nulls_are_equal}
+  row_equality_comparator(Nullate has_nulls,
+                          table_device_view lhs,
+                          table_device_view rhs,
+                          null_equality nulls_are_equal = true)
+    : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, nulls_are_equal{nulls_are_equal}
   {
     CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(), "Mismatched number of columns.");
   }
@@ -235,7 +243,7 @@ class row_equality_comparator {
   {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
       return cudf::type_dispatcher(l.type(),
-                                   element_equality_comparator<has_nulls>{l, r, nulls_are_equal},
+                                   element_equality_comparator{nulls, l, r, nulls_are_equal},
                                    lhs_row_index,
                                    rhs_row_index);
     };
@@ -246,15 +254,16 @@ class row_equality_comparator {
  private:
   table_device_view lhs;
   table_device_view rhs;
-  bool nulls_are_equal;
+  Nullate nulls;
+  null_equality nulls_are_equal;
 };
 
 /**
  * @brief Performs a relational comparison between two elements in two columns.
  *
- * @tparam has_nulls Indicates the potential for null values in either column.
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
-template <bool has_nulls = true>
+template <typename Nullate>
 class element_relational_comparator {
  public:
   /**
@@ -265,13 +274,21 @@ class element_relational_comparator {
    *
    * @param lhs The column containing the first element
    * @param rhs The column containing the second element (may be the same as lhs)
-   * @param null_precedence Indicates how null values are ordered with other
-   * values
+   * @param has_nulls Indicates if either input column contains nulls.
+   * @param null_precedence Indicates how null values are ordered with other values
    */
-  __host__ __device__ element_relational_comparator(column_device_view lhs,
+  __host__ __device__ element_relational_comparator(Nullate has_nulls,
+                                                    column_device_view lhs,
                                                     column_device_view rhs,
                                                     null_order null_precedence)
-    : lhs{lhs}, rhs{rhs}, null_precedence{null_precedence}
+    : lhs{lhs}, rhs{rhs}, nulls{has_nulls}, null_precedence{null_precedence}
+  {
+  }
+
+  __host__ __device__ element_relational_comparator(Nullate has_nulls,
+                                                    column_device_view lhs,
+                                                    column_device_view rhs)
+    : lhs{lhs}, rhs{rhs}, nulls{has_nulls}
   {
   }
 
@@ -280,7 +297,7 @@ class element_relational_comparator {
    *
    * @param lhs_element_index The index of the first element
    * @param rhs_element_index The index of the second element
-   * @return weak_ordering Indicates the relationship between the elements in
+   * @return Indicates the relationship between the elements in
    * the `lhs` and `rhs` columns.
    */
   template <typename Element,
@@ -288,11 +305,11 @@ class element_relational_comparator {
   __device__ weak_ordering operator()(size_type lhs_element_index,
                                       size_type rhs_element_index) const noexcept
   {
-    if (has_nulls) {
+    if (nulls) {
       bool const lhs_is_null{lhs.is_null(lhs_element_index)};
       bool const rhs_is_null{rhs.is_null(rhs_element_index)};
 
-      if (lhs_is_null or rhs_is_null) {  // atleast one is null
+      if (lhs_is_null or rhs_is_null) {  // at least one is null
         return null_compare(lhs_is_null, rhs_is_null, null_precedence);
       }
     }
@@ -312,7 +329,8 @@ class element_relational_comparator {
  private:
   column_device_view lhs;
   column_device_view rhs;
-  null_order null_precedence;
+  Nullate nulls;
+  null_order null_precedence{};
 };
 
 /**
@@ -328,9 +346,9 @@ class element_relational_comparator {
  * second letter in both words is the first non-equal letter, and `a < b`, thus
  * `aac < abb`.
  *
- * @tparam has_nulls Indicates the potential for null values in either row.
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
-template <bool has_nulls = true>
+template <typename Nullate>
 class row_lexicographic_comparator {
  public:
   /**
@@ -342,6 +360,7 @@ class row_lexicographic_comparator {
    *
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
+   * @param has_nulls Indicates if either input table contains columns with nulls.
    * @param column_order Optional, device array the same length as a row that
    * indicates the desired ascending/descending order of each column in a row.
    * If `nullptr`, it is assumed all columns are sorted in ascending order.
@@ -350,11 +369,16 @@ class row_lexicographic_comparator {
    * it is nullptr, then null precedence would be `null_order::BEFORE` for all
    * columns.
    */
-  row_lexicographic_comparator(table_device_view lhs,
+  row_lexicographic_comparator(Nullate has_nulls,
+                               table_device_view lhs,
                                table_device_view rhs,
                                order const* column_order         = nullptr,
                                null_order const* null_precedence = nullptr)
-    : _lhs{lhs}, _rhs{rhs}, _column_order{column_order}, _null_precedence{null_precedence}
+    : _lhs{lhs},
+      _rhs{rhs},
+      _nulls{has_nulls},
+      _column_order{column_order},
+      _null_precedence{null_precedence}
   {
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(), "Mismatched number of columns.");
     CUDF_EXPECTS(detail::is_relationally_comparable(_lhs, _rhs),
@@ -375,14 +399,14 @@ class row_lexicographic_comparator {
     for (size_type i = 0; i < _lhs.num_columns(); ++i) {
       bool ascending = (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
 
-      weak_ordering state{weak_ordering::EQUIVALENT};
       null_order null_precedence =
         _null_precedence == nullptr ? null_order::BEFORE : _null_precedence[i];
 
       auto comparator =
-        element_relational_comparator<has_nulls>{_lhs.column(i), _rhs.column(i), null_precedence};
+        element_relational_comparator{_nulls, _lhs.column(i), _rhs.column(i), null_precedence};
 
-      state = cudf::type_dispatcher(_lhs.column(i).type(), comparator, lhs_index, rhs_index);
+      weak_ordering state =
+        cudf::type_dispatcher(_lhs.column(i).type(), comparator, lhs_index, rhs_index);
 
       if (state == weak_ordering::EQUIVALENT) { continue; }
 
@@ -394,6 +418,7 @@ class row_lexicographic_comparator {
  private:
   table_device_view _lhs;
   table_device_view _rhs;
+  Nullate _nulls{};
   null_order const* _null_precedence{};
   order const* _column_order{};
 };  // class row_lexicographic_comparator
@@ -402,9 +427,9 @@ class row_lexicographic_comparator {
  * @brief Computes the hash value of an element in the given column.
  *
  * @tparam hash_function Hash functor to use for hashing elements.
- * @tparam has_nulls Indicates the potential for null values in the column.
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
-template <template <typename> class hash_function, bool has_nulls = true>
+template <template <typename> class hash_function, typename Nullate>
 class element_hasher {
  public:
   template <typename T, CUDF_ENABLE_IF(column_device_view::has_element_accessor<T>())>
@@ -420,15 +445,20 @@ class element_hasher {
     cudf_assert(false && "Unsupported type in hash.");
     return {};
   }
+
+  Nullate has_nulls;
 };
 
-template <template <typename> class hash_function, bool has_nulls = true>
+template <template <typename> class hash_function, typename Nullate>
 class element_hasher_with_seed {
  public:
-  element_hasher_with_seed() = default;
-  __device__ element_hasher_with_seed(uint32_t seed) : _seed{seed} {}
-  __device__ element_hasher_with_seed(uint32_t seed, hash_value_type null_hash)
-    : _seed{seed}, _null_hash(null_hash)
+  __device__ element_hasher_with_seed(Nullate has_nulls, uint32_t seed)
+    : _seed{seed}, _has_nulls{has_nulls}
+  {
+  }
+
+  __device__ element_hasher_with_seed(Nullate has_nulls, uint32_t seed, hash_value_type null_hash)
+    : _seed{seed}, _null_hash{null_hash}, _has_nulls{has_nulls}
   {
   }
 
@@ -449,20 +479,24 @@ class element_hasher_with_seed {
  private:
   uint32_t _seed{DEFAULT_HASH_SEED};
   hash_value_type _null_hash{std::numeric_limits<hash_value_type>::max()};
+  Nullate _has_nulls;
 };
 
 /**
  * @brief Computes the hash value of a row in the given table.
  *
  * @tparam hash_function Hash functor to use for hashing elements.
- * @tparam has_nulls Indicates the potential for null values in the table.
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
-template <template <typename> class hash_function, bool has_nulls = true>
+template <template <typename> class hash_function, typename Nullate>
 class row_hasher {
  public:
   row_hasher() = delete;
-  row_hasher(table_device_view t) : _table{t} {}
-  row_hasher(table_device_view t, uint32_t seed) : _table{t}, _seed(seed) {}
+  row_hasher(Nullate has_nulls, table_device_view t) : _table{t}, _has_nulls{has_nulls} {}
+  row_hasher(Nullate has_nulls, table_device_view t, uint32_t seed)
+    : _table{t}, _seed(seed), _has_nulls{has_nulls}
+  {
+  }
 
   __device__ auto operator()(size_type row_index) const
   {
@@ -475,7 +509,7 @@ class row_hasher {
       hash_combiner(hash_value_type{0},
                     type_dispatcher<dispatch_storage_type>(
                       _table.column(0).type(),
-                      element_hasher_with_seed<hash_function, has_nulls>{_seed},
+                      element_hasher_with_seed<hash_function, Nullate>{_has_nulls, _seed},
                       _table.column(0),
                       row_index));
 
@@ -483,7 +517,7 @@ class row_hasher {
     auto hasher = [=](size_type column_index) {
       return cudf::type_dispatcher<dispatch_storage_type>(
         _table.column(column_index).type(),
-        element_hasher<hash_function, has_nulls>{},
+        element_hasher<hash_function, Nullate>{_has_nulls},
         _table.column(column_index),
         row_index);
     };
@@ -501,6 +535,7 @@ class row_hasher {
 
  private:
   table_device_view _table;
+  Nullate _has_nulls;
   uint32_t _seed{DEFAULT_HASH_SEED};
 };
 
@@ -509,14 +544,14 @@ class row_hasher {
  * initial hash value for each column.
  *
  * @tparam hash_function Hash functor to use for hashing elements.
- * @tparam has_nulls Indicates the potential for null values in the table.
+ * @tparam Nullate A cudf::nullate type describing how to check for nulls.
  */
-template <template <typename> class hash_function, bool has_nulls = true>
+template <template <typename> class hash_function, typename Nullate>
 class row_hasher_initial_values {
  public:
   row_hasher_initial_values() = delete;
-  row_hasher_initial_values(table_device_view t, hash_value_type* initial_hash)
-    : _table{t}, _initial_hash(initial_hash)
+  row_hasher_initial_values(Nullate has_nulls, table_device_view t, hash_value_type* initial_hash)
+    : _table{t}, _initial_hash(initial_hash), _has_nulls{has_nulls}
   {
   }
 
@@ -528,11 +563,11 @@ class row_hasher_initial_values {
 
     // Hashes an element in a column and combines with an initial value
     auto hasher = [=](size_type column_index) {
-      auto hash_value =
-        cudf::type_dispatcher<dispatch_storage_type>(_table.column(column_index).type(),
-                                                     element_hasher<hash_function, has_nulls>{},
-                                                     _table.column(column_index),
-                                                     row_index);
+      auto hash_value = cudf::type_dispatcher<dispatch_storage_type>(
+        _table.column(column_index).type(),
+        element_hasher<hash_function, Nullate>{_has_nulls},
+        _table.column(column_index),
+        row_index);
 
       return hash_combiner(_initial_hash[column_index], hash_value);
     };
@@ -549,6 +584,7 @@ class row_hasher_initial_values {
  private:
   table_device_view _table;
   hash_value_type* _initial_hash;
+  Nullate _has_nulls;
 };
 
 }  // namespace cudf

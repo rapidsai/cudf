@@ -30,6 +30,10 @@ import static ai.rapids.cudf.HostColumnVector.OFFSET_SIZE;
  */
 public class ColumnView implements AutoCloseable, BinaryOperable {
 
+  static {
+    NativeDepsLoader.loadNativeDeps();
+  }
+
   public static final long UNKNOWN_NULL_COUNT = -1;
 
   protected long viewHandle;
