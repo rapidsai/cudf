@@ -25,9 +25,9 @@
 #include <io/utilities/column_utils.cuh>
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/span.hpp>
@@ -900,7 +900,9 @@ encoded_data encode_columns(orc_table_view const& orc_table,
     }
   }
   for (auto& cnt_in : validity_check_inputs) {
-    auto const valid_counts = segmented_count_set_bits(cnt_in.second.mask, cnt_in.second.indices);
+    auto const& indices     = cnt_in.second.indices;
+    auto const valid_counts = cudf::detail::segmented_valid_count(
+      cnt_in.second.mask, indices.begin(), indices.end(), stream);
     CUDF_EXPECTS(
       std::none_of(valid_counts.cbegin(),
                    valid_counts.cend(),
