@@ -391,6 +391,12 @@ class table_input_metadata {
   std::vector<column_in_metadata> column_metadata;
 };
 
+/**
+ * @brief Information used while writing partitioned datasets
+ *
+ * This information defines the slice of an input table to write to file. In partitioned dataset
+ * writing, one partition_info struct defines one partition and corresponds to one output file
+ */
 struct partition_info {
   size_type start_row;
   size_type num_rows;
