@@ -9092,10 +9092,21 @@ def test_diff_dataframe_invalid_axis():
         gdf.diff(periods=1, axis=1)
 
 
-def test_diff_dataframe_non_numeric_dtypes():
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "int_col": [1, 2, 3, 4, 5],
+            "float_col": [1.0, 2.0, 3.0, 4.0, 5.0],
+            "string_col": ["a", "b", "c", "d", "e"],
+        },
+        ["a", "b", "c", "d", "e"],
+    ],
+)
+def test_diff_dataframe_numeric_and_non_numeric_dypes(data):
     with pytest.raises(
         NotImplementedError,
         match="Diff currently only supports numeric dtypes",
     ):
-        gdf = cudf.DataFrame(["a", "b", "c", "d", "e"])
+        gdf = cudf.DataFrame(data)
         gdf.diff(periods=2, axis=0)
