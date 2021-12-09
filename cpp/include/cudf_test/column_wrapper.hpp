@@ -806,12 +806,6 @@ class strings_column_wrapper : public detail::column_wrapper {
     wrapped                  = cudf::make_strings_column(d_chars, d_offsets);
   }
 
-  strings_column_wrapper(device_span<thrust::pair<const char*, size_type> const> d_strings)
-    : column_wrapper{}
-  {
-    wrapped = cudf::make_strings_column(d_strings);
-  }
-
   /**
    * @brief Construct a nullable column of strings from the range
    * `[begin,end)` using the range `[v, v + distance(begin,end))` interpreted
