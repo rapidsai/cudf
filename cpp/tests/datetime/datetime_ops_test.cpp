@@ -927,7 +927,7 @@ TYPED_TEST(TypedDatetimeOpsTest, TestRoundDatetime)
   auto input = generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop));
 
   auto host_val                     = to_host<T>(input);
-  thrust::host_vector<T> timestamps = host_val.first;
+  auto timestamps = host_val.first;
 
   std::vector<T> rounded_day(timestamps.size());
   std::transform(timestamps.begin(), timestamps.end(), rounded_day.begin(), [](auto i) {
