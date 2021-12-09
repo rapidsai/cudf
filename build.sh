@@ -188,13 +188,18 @@ if buildAll || hasArg libcudf; then
 
     cd ${LIB_BUILD_DIR}
 
+    compile_start=$(date +%s)
     cmake --build . -j${PARALLEL_LEVEL} ${VERBOSE_FLAG}
+    compile_end=$(data +%s)
+    compile_total=$(( compile_end - compile_start ))
 
     # Record build times
     if [[ -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
         echo "Formatting build times"
         python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt xml > ${LIB_BUILD_DIR}/ninja_log.xml
-        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt html --msg "$FILES_IN_CCACHE" > ${LIB_BUILD_DIR}/ninja_log.html
+        message="$FILES_IN_CACHE <p>CI build time = $compile_total"
+        echo $message
+        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt html --msg "$message" > ${LIB_BUILD_DIR}/ninja_log.html
     fi
 
     if [[ ${INSTALL_TARGET} != "" ]]; then
