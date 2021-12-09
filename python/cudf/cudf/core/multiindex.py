@@ -729,7 +729,7 @@ class MultiIndex(Frame, BaseIndex):
         for k in range(size, len(index._data)):
             out_index.insert(
                 out_index._num_columns,
-                k if index.names is None else index.names[k],
+                k,
                 cudf.Series._from_data({None: index._data.columns[k]}),
             )
 
