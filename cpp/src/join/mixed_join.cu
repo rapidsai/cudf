@@ -126,7 +126,8 @@ mixed_join(table_view const& left,
     build_join_hash_table(build, hash_table, null_equality::EQUAL, stream);
   }
   // TODO: Should this be a pair_equality?
-  row_equality equality{*probe_view, *build_view, true};
+  // row_equality equality{cudf::nullate::YES{}, *probe_view, *build_view, null_equality::EQUAL};
+
   // row_equality equality{*probe_view, *build_view, compare_nulls == null_equality::EQUAL};
   auto hash_table_view = hash_table.get_device_view();
 
@@ -168,7 +169,7 @@ mixed_join(table_view const& left,
           *left_table,
           *right_table,
           *probe_view,
-          equality,
+          *build_view,
           kernel_join_type,
           hash_table_view,
           parser.device_expression_data,
@@ -181,7 +182,7 @@ mixed_join(table_view const& left,
           *left_table,
           *right_table,
           *probe_view,
-          equality,
+          *build_view,
           kernel_join_type,
           hash_table_view,
           parser.device_expression_data,
@@ -217,7 +218,7 @@ mixed_join(table_view const& left,
         *left_table,
         *right_table,
         *probe_view,
-        equality,
+        *build_view,
         kernel_join_type,
         hash_table_view,
         join_output_l,
@@ -232,7 +233,7 @@ mixed_join(table_view const& left,
         *left_table,
         *right_table,
         *probe_view,
-        equality,
+        *build_view,
         kernel_join_type,
         hash_table_view,
         join_output_l,
@@ -339,7 +340,7 @@ std::size_t compute_mixed_join_output_size(table_view const& left,
   if ((build.num_columns() != 0) && (build.num_rows() != 0)) {
     build_join_hash_table(build, hash_table, null_equality::EQUAL, stream);
   }
-  row_equality equality{*probe_view, *build_view, true};
+  // row_equality equality{cudf::nullate::YES{}, *probe_view, *build_view, true};
   // row_equality equality{*probe_view, *build_view, compare_nulls == null_equality::EQUAL};
   auto hash_table_view = hash_table.get_device_view();
 
@@ -365,7 +366,7 @@ std::size_t compute_mixed_join_output_size(table_view const& left,
         *left_table,
         *right_table,
         *probe_view,
-        equality,
+        *build_view,
         join_type,
         hash_table_view,
         parser.device_expression_data,
@@ -378,7 +379,7 @@ std::size_t compute_mixed_join_output_size(table_view const& left,
         *left_table,
         *right_table,
         *probe_view,
-        equality,
+        *build_view,
         join_type,
         hash_table_view,
         parser.device_expression_data,

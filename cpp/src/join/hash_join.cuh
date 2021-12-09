@@ -74,7 +74,8 @@ constexpr auto remap_sentinel_hash(H hash, S sentinel)
  */
 class make_pair_function {
  public:
-  make_pair_function(row_hash const& hash, hash_value_type const empty_key_sentinel)
+  CUDA_HOST_DEVICE_CALLABLE make_pair_function(row_hash const& hash,
+                                               hash_value_type const empty_key_sentinel)
     : _hash{hash}, _empty_key_sentinel{empty_key_sentinel}
   {
   }

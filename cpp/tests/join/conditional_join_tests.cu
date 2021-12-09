@@ -30,6 +30,7 @@
 #include <thrust/sort.h>
 
 #include <algorithm>
+#include <iostream>
 #include <random>
 #include <stdexcept>
 #include <tuple>
@@ -872,7 +873,8 @@ TYPED_TEST(MixedJoinTest, Basic)
     this->parse_input(left_inputs, right_inputs);
 
   auto scalar    = cudf::numeric_scalar<unsigned int>(1);
-  auto predicate = cudf::ast::literal(scalar);
+  auto literal   = cudf::ast::literal(scalar);
+  auto predicate = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, literal, literal);
   std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs{{0, 0}, {1, 1}};
   // The left join output:
   // std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs{{0, 0}, {1, 1}, {2,
@@ -882,19 +884,21 @@ TYPED_TEST(MixedJoinTest, Basic)
   std::vector<cudf::size_type> const right_on{0};
 
   auto result_size = cudf::mixed_inner_join_size(left, right, left_on, right_on, predicate);
+  std::cout << "The result size is " << result_size << std::endl;
   EXPECT_TRUE(result_size == expected_outputs.size());
 
-  auto result = cudf::mixed_inner_join(left, right, left_on, right_on, predicate);
-  std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
-  for (size_t i = 0; i < result.first->size(); ++i) {
-    // Note: Not trying to be terribly efficient here since these tests are
-    // small, otherwise a batch copy to host before constructing the tuples
-    // would be important.
-    result_pairs.push_back({result.first->element(i, rmm::cuda_stream_default),
-                            result.second->element(i, rmm::cuda_stream_default)});
-  }
-  std::sort(result_pairs.begin(), result_pairs.end());
-  std::sort(expected_outputs.begin(), expected_outputs.end());
-
-  EXPECT_TRUE(std::equal(expected_outputs.begin(), expected_outputs.end(), result_pairs.begin()));
+  // auto result = cudf::mixed_inner_join(left, right, left_on, right_on, predicate);
+  // std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
+  // for (size_t i = 0; i < result.first->size(); ++i) {
+  //  // Note: Not trying to be terribly efficient here since these tests are
+  //  // small, otherwise a batch copy to host before constructing the tuples
+  //  // would be important.
+  //  result_pairs.push_back({result.first->element(i, rmm::cuda_stream_default),
+  //                          result.second->element(i, rmm::cuda_stream_default)});
+  //}
+  // std::sort(result_pairs.begin(), result_pairs.end());
+  // std::sort(expected_outputs.begin(), expected_outputs.end());
+  //
+  // EXPECT_TRUE(std::equal(expected_outputs.begin(), expected_outputs.end(),
+  // result_pairs.begin()));
 }

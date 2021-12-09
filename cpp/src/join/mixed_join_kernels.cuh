@@ -60,7 +60,7 @@ class pair_expression_equality {
     table_device_view rhs,
     cudf::ast::detail::expression_evaluator<has_nulls> evaluator,
     cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage,
-    bool nulls_are_equal = true)
+    null_equality nulls_are_equal = null_equality::EQUAL)
     : lhs(lhs),
       rhs{rhs},
       nulls_are_equal{nulls_are_equal},
@@ -73,10 +73,19 @@ class pair_expression_equality {
                                              const pair_type& rhs_row) const noexcept
   {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
-      return cudf::type_dispatcher(l.type(),
-                                   element_equality_comparator<has_nulls>{l, r, nulls_are_equal},
-                                   lhs_row.second,
-                                   rhs_row.second);
+      if constexpr (has_nulls) {
+        return cudf::type_dispatcher(
+          l.type(),
+          element_equality_comparator{cudf::nullate::YES{}, l, r, nulls_are_equal},
+          lhs_row.second,
+          rhs_row.second);
+      } else {
+        return cudf::type_dispatcher(
+          l.type(),
+          element_equality_comparator{cudf::nullate::NO{}, l, r, nulls_are_equal},
+          lhs_row.second,
+          rhs_row.second);
+      }
     };
 
     auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
@@ -97,7 +106,7 @@ class pair_expression_equality {
  private:
   table_device_view const lhs;
   table_device_view const rhs;
-  bool const nulls_are_equal;
+  null_equality const nulls_are_equal;
   cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage;
   cudf::ast::detail::expression_evaluator<has_nulls> const evaluator;
 };
@@ -125,7 +134,7 @@ __global__ void compute_mixed_join_output_size(
   table_device_view left_table,
   table_device_view right_table,
   table_device_view probe,
-  row_equality equality,
+  table_device_view build,
   join_kind join_type,
   cudf::detail::mixed_multimap_type::device_view hash_table_view,
   ast::detail::expression_device_view device_expression_data,
@@ -133,19 +142,6 @@ __global__ void compute_mixed_join_output_size(
   std::size_t* output_size,
   cudf::size_type* matches_per_row)
 {
-  constexpr uint32_t flushing_cg_size = 1;
-  const uint32_t flushing_cg_id       = threadIdx.x / flushing_cg_size;
-  constexpr uint32_t num_flushing_cgs = block_size / flushing_cg_size;
-  __shared__ uint32_t flushing_cg_counter[num_flushing_cgs];
-  // constexpr auto buffer_size =
-  // cuco::detail::is_packable<cudf::detail::mixed_multimap::type::device_view::value_type>()() ?
-  // (warp_size() * 3u) : (cg_size() * 3u);
-  using multimap_value_type = cudf::detail::mixed_multimap_type::device_view::value_type;
-  constexpr auto buffer_size =
-    cuco::detail::is_packable<multimap_value_type>() ? (32 * 3u) : (1 * 3u);
-  // TODO: Originally this was shared memory, but it's been removed due to excessive shmem usage.
-  multimap_value_type output_buffer[buffer_size];
-
   // The (required) extern storage of the shared memory array leads to
   // conflicting declarations between different templates. The easiest
   // workaround is to declare an arbitrary (here char) array type then cast it
@@ -154,7 +150,7 @@ __global__ void compute_mixed_join_output_size(
   cudf::ast::detail::IntermediateDataType<has_nulls>* intermediate_storage =
     reinterpret_cast<cudf::ast::detail::IntermediateDataType<has_nulls>*>(raw_intermediate_storage);
   auto thread_intermediate_storage =
-    &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
+    intermediate_storage + (threadIdx.x * device_expression_data.num_intermediates);
 
   std::size_t thread_counter{0};
   cudf::size_type const start_idx      = threadIdx.x + blockIdx.x * blockDim.x;
@@ -166,46 +162,27 @@ __global__ void compute_mixed_join_output_size(
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
 
+  row_hash hash_probe{nullate::YES{}, probe};
+  auto const empty_key_sentinel = hash_table_view.get_empty_key_sentinel();
+  make_pair_function pair_func{hash_probe, empty_key_sentinel};
+
   for (cudf::size_type outer_row_index = start_idx; outer_row_index < outer_num_rows;
        outer_row_index += stride) {
-    bool found_match = false;
-
     // Figure out the number of elements for this key.
     cg::thread_block_tile<1> this_thread = cg::this_thread();
-    auto casted_outer_row_index          = static_cast<uint32_t>(outer_row_index);
-    auto const num_matches = hash_table_view.count(this_thread, casted_outer_row_index);
-    if (!num_matches) continue;
-
-    mixed_multimap_type::value_type* inner_row_indices = (mixed_multimap_type::value_type*)malloc(
-      sizeof(mixed_multimap_type::value_type) * num_matches);
-    cuda::atomic<std::size_t, cuda::thread_scope_device> num_matches_atomic;
-    hash_table_view.retrieve<buffer_size>(this_thread,
-                                          this_thread,
-                                          casted_outer_row_index,
-                                          &flushing_cg_counter[flushing_cg_id],
-                                          output_buffer,
-                                          &num_matches_atomic,
-                                          inner_row_indices,
-                                          equality);
-    for (size_type i(0); i < num_matches; ++i) {
-      auto output_dest           = cudf::ast::detail::value_expression_result<bool, has_nulls>();
-      auto inner_row_index       = inner_row_indices[i].second;
-      auto const left_row_index  = swap_tables ? inner_row_index : outer_row_index;
-      auto const right_row_index = swap_tables ? outer_row_index : inner_row_index;
-      evaluator.evaluate(
-        output_dest, left_row_index, right_row_index, 0, thread_intermediate_storage);
-      if (output_dest.is_valid() && output_dest.value()) {
-        if ((join_type != join_kind::LEFT_ANTI_JOIN) &&
-            !(join_type == join_kind::LEFT_SEMI_JOIN && found_match)) {
-          ++thread_counter;
-        }
-        found_match = true;
-      }
-    }
-    if ((join_type == join_kind::LEFT_JOIN || join_type == join_kind::LEFT_ANTI_JOIN ||
-         join_type == join_kind::FULL_JOIN) &&
-        (!found_match)) {
-      ++thread_counter;
+    auto query_pair                      = pair_func(outer_row_index);
+    // TODO: Figure out how to handle the nullability of this comparator.
+    // TODO: Make sure that the probe/build order here is correct (it
+    // definitely matters because of which order the indices are passed to this
+    // by the static_multimap::device_view::pair_count API.
+    // TODO: Address asymmetry in operator.
+    auto count_equality =
+      pair_expression_equality<has_nulls>{build, probe, evaluator, thread_intermediate_storage};
+    if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::LEFT_ANTI_JOIN ||
+        join_type == join_kind::FULL_JOIN) {
+      thread_counter += hash_table_view.pair_count_outer(this_thread, query_pair, count_equality);
+    } else {
+      thread_counter += hash_table_view.pair_count(this_thread, query_pair, count_equality);
     }
   }
 
@@ -244,7 +221,7 @@ template <cudf::size_type block_size, cudf::size_type output_cache_size, bool ha
 __global__ void mixed_join(table_device_view left_table,
                            table_device_view right_table,
                            table_device_view probe,
-                           row_equality equality,
+                           table_device_view build,
                            join_kind join_type,
                            cudf::detail::mixed_multimap_type::device_view hash_table_view,
                            cudf::size_type* join_output_l,
@@ -313,8 +290,7 @@ __global__ void mixed_join(table_device_view left_table,
                                             &flushing_cg_counter[flushing_cg_id],
                                             output_buffer,
                                             &num_matches_atomic,
-                                            inner_row_indices,
-                                            equality);
+                                            inner_row_indices);
 
       for (size_type i(0); i < num_matches; ++i) {
         auto output_dest           = cudf::ast::detail::value_expression_result<bool, has_nulls>();
