@@ -103,8 +103,7 @@ parquet::ConvertedType logical_type_to_converted_type(parquet::LogicalType const
  */
 type_id to_type_id(SchemaElement const& schema,
                    bool strings_to_categorical,
-                   type_id timestamp_type_id,
-                   bool strict_decimal_types)
+                   type_id timestamp_type_id)
 {
   parquet::Type physical                = schema.type;
   parquet::ConvertedType converted_type = schema.converted_type;
@@ -138,16 +137,20 @@ type_id to_type_id(SchemaElement const& schema,
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::TIMESTAMP_MILLISECONDS;
     case parquet::DECIMAL:
-      if (physical == parquet::INT32)
-        return type_id::DECIMAL32;
-      else if (physical == parquet::INT64)
-        return type_id::DECIMAL64;
-      else if (physical == parquet::FIXED_LEN_BYTE_ARRAY && schema.type_length <= 8) {
-        return type_id::DECIMAL64;
-      } else {
-        CUDF_EXPECTS(strict_decimal_types == false, "Unsupported decimal type read!");
-        return type_id::FLOAT64;
+      if (physical == parquet::INT32) { return type_id::DECIMAL32; }
+      if (physical == parquet::INT64) { return type_id::DECIMAL64; }
+      if (physical == parquet::FIXED_LEN_BYTE_ARRAY) {
+        if (schema.type_length <= static_cast<int32_t>(sizeof(int32_t))) {
+          return type_id::DECIMAL32;
+        }
+        if (schema.type_length <= static_cast<int32_t>(sizeof(int64_t))) {
+          return type_id::DECIMAL64;
+        }
+        if (schema.type_length <= static_cast<int32_t>(sizeof(__int128_t))) {
+          return type_id::DECIMAL128;
+        }
       }
+      CUDF_FAIL("Invalid representation of decimal type");
       break;
 
     // maps are just List<Struct<>>.
@@ -553,7 +556,6 @@ class aggregate_metadata {
    * @param include_index Whether to always include the PANDAS index column(s)
    * @param strings_to_categorical Type conversion parameter
    * @param timestamp_type_id Type conversion parameter
-   * @param strict_decimal_types Type conversion parameter
    *
    * @return input column information, output column information, list of output column schema
    * indices
@@ -561,8 +563,7 @@ class aggregate_metadata {
   auto select_columns(std::vector<std::string> const& use_names,
                       bool include_index,
                       bool strings_to_categorical,
-                      type_id timestamp_type_id,
-                      bool strict_decimal_types) const
+                      type_id timestamp_type_id) const
   {
     auto find_schema_child = [&](SchemaElement const& schema_elem, std::string const& name) {
       auto const& col_schema_idx = std::find_if(
@@ -603,7 +604,8 @@ class aggregate_metadata {
             ? type_id::LIST
             : to_type_id(
                 schema_elem, strings_to_categorical, timestamp_type_id, strict_decimal_types);
-        auto const dtype = col_type == type_id::DECIMAL32 || col_type == type_id::DECIMAL64
+        auto const dtype = col_type == type_id::DECIMAL32 || col_type == type_id::DECIMAL64 ||
+                               col_type == type_id::DECIMAL128
                              ? data_type{col_type, numeric::scale_type{-schema_elem.decimal_scale}}
                              : data_type{col_type};
 
@@ -642,7 +644,8 @@ class aggregate_metadata {
             auto const element_type = to_type_id(
               schema_elem, strings_to_categorical, timestamp_type_id, strict_decimal_types);
             auto const element_dtype =
-              element_type == type_id::DECIMAL32 || element_type == type_id::DECIMAL64
+              element_type == type_id::DECIMAL32 || element_type == type_id::DECIMAL64 ||
+                  element_type == type_id::DECIMAL128
                 ? data_type{element_type, numeric::scale_type{-schema_elem.decimal_scale}}
                 : data_type{element_type};
 
@@ -1589,8 +1592,6 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
     _timestamp_type = options.get_timestamp_type();
   }
 
-  _strict_decimal_types = options.is_enabled_strict_decimal_types();
-
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
 
@@ -1599,8 +1600,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
     _metadata->select_columns(options.get_columns(),
                               options.is_enabled_use_pandas_metadata(),
                               _strings_to_categorical,
-                              _timestamp_type.id(),
-                              _strict_decimal_types);
+                              _timestamp_type.id());
 }
 
 table_with_metadata reader::impl::read(size_type skip_rows,
@@ -1668,12 +1668,12 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         int32_t clock_rate;
         int8_t converted_type;
 
-        std::tie(type_width, clock_rate, converted_type) = conversion_info(
-          to_type_id(schema, _strings_to_categorical, _timestamp_type.id(), _strict_decimal_types),
-          _timestamp_type.id(),
-          schema.type,
-          schema.converted_type,
-          schema.type_length);
+        std::tie(type_width, clock_rate, converted_type) =
+          conversion_info(to_type_id(schema, _strings_to_categorical, _timestamp_type.id()),
+                          _timestamp_type.id(),
+                          schema.type,
+                          schema.converted_type,
+                          schema.type_length);
 
         column_chunk_offsets[chunks.size()] =
           (col_meta.dictionary_page_offset != 0)
