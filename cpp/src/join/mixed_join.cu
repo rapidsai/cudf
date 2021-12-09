@@ -32,6 +32,8 @@
 #include <optional>
 #include <utility>
 
+#include <cstdio>
+
 namespace cudf {
 namespace detail {
 
@@ -54,6 +56,13 @@ mixed_join(
   // null index for the right table; in others, we return an empty output.
   auto right_num_rows{right.num_rows()};
   auto left_num_rows{left.num_rows()};
+  auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
+
+  // TODO: Always allocating for now for simplicity in debugging, but this
+  // shouldn't be allocated if output_size_data is provided.
+  auto matches_per_row = std::make_unique<rmm::device_uvector<size_type>>(
+    swap_tables ? right.num_rows() : left.num_rows(), stream, mr);
+
   if (right_num_rows == 0) {
     switch (join_type) {
       // Left, left anti, and full all return all the row indices from left
@@ -99,13 +108,12 @@ mixed_join(
   // TODO: The non-conditional join impls start with a dictionary matching,
   // figure out what that is and what it's needed for (and if conditional joins
   // need to do the same).
-  auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
   CUDF_EXPECTS(left_on.size() > 0 && right_on.size() > 0,
                "Need to equality join on at least one column.");
   auto probe      = swap_tables ? right.select(right_on) : left.select(left_on);
   auto build      = swap_tables ? left.select(right_on) : right.select(left_on);
-  auto build_view = table_device_view::create(build, stream);
   auto probe_view = table_device_view::create(probe, stream);
+  auto build_view = table_device_view::create(build, stream);
 
   // Don't use multimap_type because we want a CG size of 1.
   mixed_multimap_type hash_table{compute_hash_table_size(build.num_rows()),
@@ -117,13 +125,9 @@ mixed_join(
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
   // TODO: Decide how to handle null equality when mixing AST operators with hash joins.
-  if ((build.num_columns() == 0) && (build.num_rows() != 0)) {
+  if ((build.num_columns() != 0) && (build.num_rows() != 0)) {
     build_join_hash_table(build, hash_table, null_equality::EQUAL, stream);
   }
-  // TODO: Should this be a pair_equality?
-  // row_equality equality{cudf::nullate::YES{}, *probe_view, *build_view, null_equality::EQUAL};
-
-  // row_equality equality{*probe_view, *build_view, compare_nulls == null_equality::EQUAL};
   auto hash_table_view = hash_table.get_device_view();
 
   auto left_table  = table_device_view::create(left, stream);
@@ -144,8 +148,7 @@ mixed_join(
   // effectively exposing an implementation detail. I don't know if there's any
   // way to avoid this, though. We may just have to document it appropriately.
   std::size_t join_size;
-  std::unique_ptr<rmm::device_uvector<size_type>> matches_per_row;
-  size_type* matches_per_row_ptr;
+  auto matches_per_row_ptr = matches_per_row->data();
 
   if (output_size_data.has_value()) {
     join_size           = (*output_size_data).first;
@@ -153,9 +156,6 @@ mixed_join(
   } else {
     // Allocate storage for the counter used to get the size of the join output
     rmm::device_scalar<std::size_t> size(0, stream, mr);
-    matches_per_row = std::make_unique<rmm::device_uvector<size_type>>(
-      swap_tables ? right.num_rows() : left.num_rows(), stream, mr);
-    matches_per_row_ptr = matches_per_row->data();
     CHECK_CUDA(stream.value());
     if (has_nulls) {
       compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
@@ -318,13 +318,11 @@ compute_mixed_join_output_size(table_view const& left,
     }
   }
 
-  // Prepare output column. Whether or not the output column is nullable is
-  // determined by whether any of the columns in the input table are nullable.
-  // If none of the input columns actually contain nulls, we can still use the
-  // non-nullable version of the expression evaluation code path for
-  // performance, so we capture that information as well.
-  auto const nullable  = cudf::nullable(left) || cudf::nullable(right);
-  auto const has_nulls = nullable && (cudf::has_nulls(left) || cudf::has_nulls(right));
+  // If evaluating the expression may produce null outputs we create a nullable
+  // output column and follow the null-supporting expression evaluation code
+  // path.
+  // TODO: The conditional_join function is still using the old check, we should switch that.
+  auto const has_nulls = binary_predicate.may_evaluate_null(left, right, stream);
 
   auto const parser =
     ast::detail::expression_parser{binary_predicate, left, right, has_nulls, stream, mr};
@@ -334,6 +332,8 @@ compute_mixed_join_output_size(table_view const& left,
   // TODO: The non-conditional join impls start with a dictionary matching,
   // figure out what that is and what it's needed for (and if conditional joins
   // need to do the same).
+  CUDF_EXPECTS(left_on.size() > 0 && right_on.size() > 0,
+               "Need to equality join on at least one column.");
   auto probe      = swap_tables ? right.select(right_on) : left.select(left_on);
   auto build      = swap_tables ? left.select(left_on) : right.select(right_on);
   auto probe_view = table_device_view::create(probe, stream);
@@ -352,8 +352,6 @@ compute_mixed_join_output_size(table_view const& left,
   if ((build.num_columns() != 0) && (build.num_rows() != 0)) {
     build_join_hash_table(build, hash_table, null_equality::EQUAL, stream);
   }
-  // row_equality equality{cudf::nullate::YES{}, *probe_view, *build_view, true};
-  // row_equality equality{*probe_view, *build_view, compare_nulls == null_equality::EQUAL};
   auto hash_table_view = hash_table.get_device_view();
 
   auto left_table  = table_device_view::create(left, stream);
