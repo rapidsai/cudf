@@ -667,35 +667,29 @@ def test_categorical_dtype(categories, ordered):
 
 
 @pytest.mark.parametrize(
-    ("data", "expected"),
+    "ps",
     [
-        (cudf.Series([1]), np.uint8),
-        (cudf.Series([1, None]), np.uint8),
-        (cudf.Series(np.arange(np.iinfo(np.int8).max)), np.uint8),
-        (
-            cudf.Series(np.append(np.arange(np.iinfo(np.int8).max), [None])),
-            np.uint8,
-        ),
-        (cudf.Series(np.arange(np.iinfo(np.int16).max)), np.uint16),
-        (
-            cudf.Series(np.append(np.arange(np.iinfo(np.int16).max), [None])),
-            np.uint16,
-        ),
-        (cudf.Series(np.arange(np.iinfo(np.uint8).max)), np.uint8),
-        (
-            cudf.Series(np.append(np.arange(np.iinfo(np.uint8).max), [None])),
-            np.uint8,
-        ),
-        (cudf.Series(np.arange(np.iinfo(np.uint16).max)), np.uint16),
-        (
-            cudf.Series(np.append(np.arange(np.iinfo(np.uint16).max), [None])),
-            np.uint16,
-        ),
+        pd.Series([1]),
+        pd.Series([1, None]),
+        pd.Series(np.arange(np.iinfo(np.int8).max)),
+        pd.Series(np.append(np.arange(np.iinfo(np.int8).max), [None])),
+        pd.Series(np.arange(np.iinfo(np.int16).max)),
+        pd.Series(np.append(np.arange(np.iinfo(np.int16).max), [None])),
+        pd.Series(np.arange(np.iinfo(np.uint8).max)),
+        pd.Series(np.append(np.arange(np.iinfo(np.uint8).max), [None])),
+        pd.Series(np.arange(np.iinfo(np.uint16).max)),
+        pd.Series(np.append(np.arange(np.iinfo(np.uint16).max), [None])),
     ],
 )
-def test_astype_dtype(data, expected):
-    expected = data.to_pandas().astype("category").cat.codes.dtype
-    got = data.astype("category").cat.codes.dtype
+def test_astype_dtype(ps):
+    # This tests the dtype returned by categorical methods matches with pandas
+    # respectively. Note that cudf stores the codes at uint32 unconditionally,
+    # the type match here happens as a post-processing to the internal codes.
+    ps = ps.astype("category")
+    gs = cudf.from_pandas(ps)
+
+    expected = ps.cat.codes.dtype
+    got = gs.cat.codes.dtype
     np.testing.assert_equal(got, expected)
 
 

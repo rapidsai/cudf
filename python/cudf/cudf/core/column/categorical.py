@@ -133,8 +133,11 @@ class CategoricalAccessor(ColumnMethods):
             if isinstance(self._parent, cudf.Series)
             else None
         )
+        # The +1 below is to match pandas behavior, which stores codes of array
+        # `np.arange(np.iinfo(np.int8).max)` with int16 dtype. Maybe pandas
+        # bug?
         codes = self._column.codes.astype(
-            min_signed_type(len(self._column.categories))
+            min_signed_type(len(self._column.categories) + 1)
         )
         codes = codes.fillna(-1)
         return cudf.Series(codes, index=index)
@@ -1314,7 +1317,7 @@ class CategoricalColumn(column.ColumnBase):
                 size=self.size,
                 offset=self.offset,
                 null_count=self.null_count,
-                dtype=dtype
+                dtype=dtype,
             )
         return self
 
