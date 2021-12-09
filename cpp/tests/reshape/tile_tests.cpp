@@ -20,7 +20,7 @@
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include "cudf/utilities/error.hpp"
+#include <cudf/utilities/error.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/table/table.hpp>
 
