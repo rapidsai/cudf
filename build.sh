@@ -197,7 +197,7 @@ if buildAll || hasArg libcudf; then
     if [[ -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
         echo "Formatting build times"
         python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt xml > ${LIB_BUILD_DIR}/ninja_log.xml
-        message="$FILES_IN_CACHE <p>CI build time = $compile_total"
+        message="$FILES_IN_CCACHE <p>CI build time = $compile_total"
         echo $message
         python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt html --msg "$message" > ${LIB_BUILD_DIR}/ninja_log.html
     fi
