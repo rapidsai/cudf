@@ -3694,6 +3694,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return result
 
+    def add_prefix(self, prefix):
+        result = self.copy(deep=True)
+        result.index = prefix + self.index.astype(str)
+        return result
+
+    def add_suffix(self, suffix):
+        result = self.copy(deep=True)
+        result.index = self.index.astype(str) + suffix
+        return result
+
     def keys(self):
         """
         Return alias for index.
