@@ -190,7 +190,7 @@ if buildAll || hasArg libcudf; then
 
     compile_start=$(date +%s)
     cmake --build . -j${PARALLEL_LEVEL} ${VERBOSE_FLAG}
-    compile_end=$(data +%s)
+    compile_end=$(date +%s)
     compile_total=$(( compile_end - compile_start ))
 
     # Record build times
