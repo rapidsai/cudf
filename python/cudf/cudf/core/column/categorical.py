@@ -811,7 +811,7 @@ class CategoricalColumn(column.ColumnBase):
     @property
     def codes(self) -> NumericalColumn:
         if self.base_children:
-            category_order = self.dtype.categories._values.argsort()
+            category_order = self.dtype.categories._values.argsort().argsort()
             codes = category_order.take(self.children[0], nullify=True)
             codes = codes.set_mask(self.mask)
         else:
@@ -927,11 +927,6 @@ class CategoricalColumn(column.ColumnBase):
         )
 
     def to_pandas(self, index: pd.Index = None, **kwargs) -> pd.Series:
-        if "__DEBUG__" in kwargs:
-            import pdb
-
-            pdb.set_trace()
-
         if self.categories.dtype.kind == "f":
             new_mask = bools_to_mask(self.notnull())
             col = self.__class__(
@@ -1296,23 +1291,20 @@ class CategoricalColumn(column.ColumnBase):
     ) -> CategoricalColumn:
         if isinstance(dtype, CategoricalDtype):
             if len(self.base_children) == 0:
+                # If the categorical column is ill-formed, then it's an 0-len
+                # column. The categories is determined by dtype._categories if
+                # it exists, otherwise an 0-len int32 column.
+                codes = column.column_empty(0, "uint32", masked=False)
                 if dtype._categories is not None:
                     categories = dtype._categories
                 else:
                     categories = column.column_empty(0, "int32", masked=False)
-                codes = column.column_empty(0, "uint32", masked=False)
+                    dtype = CategoricalDtype(categories, ordered=dtype.ordered)
             else:
-                if dtype._categories is not None and dtype.ordered:
-                    # Restore original order
-                    categories = dtype._categories
-                    category_order = categories.argsort().argsort()
-                    codes = category_order.take(self.children[0], nullify=True)
-                else:
-                    codes = self.base_children[0]
-                    if len(codes) > 0:
-                        categories = self.base_children[1]
-                    else:
-                        categories = dtype._categories
+                codes = self.base_children[0]
+                categories = self.base_children[1]
+                if dtype._categories is None:
+                    dtype = CategoricalDtype(categories, ordered=dtype.ordered)
 
             return column.build_categorical_column(
                 categories=categories,
@@ -1322,6 +1314,7 @@ class CategoricalColumn(column.ColumnBase):
                 size=self.size,
                 offset=self.offset,
                 null_count=self.null_count,
+                dtype=dtype
             )
         return self
 

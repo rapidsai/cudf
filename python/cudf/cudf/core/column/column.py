@@ -1463,6 +1463,7 @@ def build_categorical_column(
     offset: int = 0,
     null_count: int = None,
     ordered: bool = None,
+    dtype: CategoricalDtype = None,
 ) -> "cudf.core.column.CategoricalColumn":
     """
     Build a CategoricalColumn
@@ -1479,23 +1480,41 @@ def build_categorical_column(
     offset : int, optional
     ordered : bool
         Indicates whether the categories are ordered
+    dtype : CategoricalDtype
+        If None, the dtype of the columns is constructed from `categories` and
+        `ordered`. Otherwise, use this argument.
+    
+    Notes
+    -----
+    In cudf, categories are always stored as sorted. However this function
+    does not assume `categories` argument to be sorted, user can pass in
+    `categories` in any order, but should make sure `codes` matches.
+
+    In theory, `codes` should not be nullable, nulls in the columns are to
+    be specified by `mask`. It remains a TODO to enforce that throughout the
+    code base.
     """
 
     if codes.nullable:
+        # Assumes the nulls are specified in ``mask``
         codes = codes.fillna(0)
     if categories.nullable:
-        raise ValueError
+        raise ValueError("Cannot contain nulls in categories.")
 
     category_order = categories.argsort()
     category_sorted = categories.take(category_order)
+
+    # Note that `nullify==True`, by default pandas codes places -1 for null
+    # locations. Gathering these places will result in nulls.
     codes = (
-        category_order.argsort()
+        category_order
         .take(codes, nullify=True)
         .astype("uint32")
         .fillna(0)
     )
 
-    dtype = CategoricalDtype(categories=categories, ordered=ordered)
+    if not dtype:
+        dtype = CategoricalDtype(categories=categories, ordered=ordered)
 
     result = build_column(
         data=None,
