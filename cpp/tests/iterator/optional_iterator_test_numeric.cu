@@ -52,7 +52,7 @@ struct transformer_optional_meanvar {
 
 template <typename T>
 struct optional_to_meanvar {
-  CUDA_HDI T operator()(const thrust::optional<T>& v) { return v.value_or(T{0}); }
+  CUDF_HDI T operator()(const thrust::optional<T>& v) { return v.value_or(T{0}); }
 };
 
 // TODO: enable this test also at __CUDACC_DEBUG__
