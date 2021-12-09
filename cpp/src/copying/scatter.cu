@@ -270,7 +270,7 @@ struct column_scalar_scatterer_impl<struct_view, MapIterator> {
 
     // Null mask pushdown inside factory method
     return make_structs_column(
-      target.size(), std::move(fields), null_count, std::move(*contents.null_mask));
+      target.size(), std::move(fields), null_count, std::move(*contents.null_mask), stream, mr);
   }
 };
 
