@@ -866,16 +866,17 @@ TYPED_TEST(MixedJoinTest, Basic)
 {
   // Note that we need to maintain the column wrappers otherwise the
   // resulting column views will be referencing potentially invalid memory.
-  ColumnVector<TypeParam> left_inputs{{0, 1, 2}, {10, 20, 30}};
-  ColumnVector<TypeParam> right_inputs{{0, 1, 3}, {30, 40, 50}};
+  ColumnVector<TypeParam> left_inputs{{0, 1, 2}, {3, 4, 5}, {10, 20, 30}};
+  ColumnVector<TypeParam> right_inputs{{0, 1, 3}, {5, 4, 5}, {30, 40, 50}};
 
   auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
     this->parse_input(left_inputs, right_inputs);
 
-  auto scalar    = cudf::numeric_scalar<unsigned int>(1);
-  auto literal   = cudf::ast::literal(scalar);
-  auto predicate = cudf::ast::operation(cudf::ast::ast_operator::EQUAL, literal, literal);
-  std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs{{0, 0}, {1, 1}};
+  const auto col_ref_left_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
+  const auto col_ref_right_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
+  auto predicate =
+    cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_1, col_ref_right_1);
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs{{1, 1}};
   // The left join output:
   // std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs{{0, 0}, {1, 1}, {2,
   // JoinNoneValue}};
@@ -883,9 +884,16 @@ TYPED_TEST(MixedJoinTest, Basic)
   std::vector<cudf::size_type> const left_on{0};
   std::vector<cudf::size_type> const right_on{0};
 
-  auto result_size = cudf::mixed_inner_join_size(left, right, left_on, right_on, predicate);
+  auto [result_size, matches_per_row] =
+    cudf::mixed_inner_join_size(left, right, left_on, right_on, predicate);
   std::cout << "The result size is " << result_size << std::endl;
   EXPECT_TRUE(result_size == expected_outputs.size());
+
+  auto actual_counts = cudf::column_view{cudf::data_type{cudf::type_to_id<cudf::size_type>()},
+                                         static_cast<cudf::size_type>(matches_per_row->size()),
+                                         matches_per_row->data()};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_counts{0, 1, 0};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_counts, actual_counts);
 
   // auto result = cudf::mixed_inner_join(left, right, left_on, right_on, predicate);
   // std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;

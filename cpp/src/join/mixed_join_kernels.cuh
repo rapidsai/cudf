@@ -180,10 +180,13 @@ __global__ void compute_mixed_join_output_size(
       pair_expression_equality<has_nulls>{build, probe, evaluator, thread_intermediate_storage};
     if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::LEFT_ANTI_JOIN ||
         join_type == join_kind::FULL_JOIN) {
-      thread_counter += hash_table_view.pair_count_outer(this_thread, query_pair, count_equality);
+      matches_per_row[outer_row_index] +=
+        hash_table_view.pair_count_outer(this_thread, query_pair, count_equality);
     } else {
-      thread_counter += hash_table_view.pair_count(this_thread, query_pair, count_equality);
+      matches_per_row[outer_row_index] +=
+        hash_table_view.pair_count(this_thread, query_pair, count_equality);
     }
+    thread_counter += matches_per_row[outer_row_index];
   }
 
   using BlockReduce = cub::BlockReduce<cudf::size_type, block_size>;

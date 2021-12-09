@@ -920,7 +920,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
  *
  * @return The size that would result from performing the requested join.
  */
-std::size_t mixed_inner_join_size(
+std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_inner_join_size(
   table_view const& left,
   table_view const& right,
   std::vector<cudf::size_type> const& left_on,

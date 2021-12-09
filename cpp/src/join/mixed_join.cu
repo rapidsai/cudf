@@ -30,6 +30,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 #include <optional>
+#include <utility>
 
 namespace cudf {
 namespace detail {
@@ -258,30 +259,44 @@ mixed_join(table_view const& left,
   return join_indices;
 }
 
-std::size_t compute_mixed_join_output_size(table_view const& left,
-                                           table_view const& right,
-                                           std::vector<cudf::size_type> const& left_on,
-                                           std::vector<cudf::size_type> const& right_on,
-                                           ast::expression const& binary_predicate,
-                                           join_kind join_type,
-                                           rmm::cuda_stream_view stream,
-                                           rmm::mr::device_memory_resource* mr)
+std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>>
+compute_mixed_join_output_size(table_view const& left,
+                               table_view const& right,
+                               std::vector<cudf::size_type> const& left_on,
+                               std::vector<cudf::size_type> const& right_on,
+                               ast::expression const& binary_predicate,
+                               join_kind join_type,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   // We can immediately filter out cases where one table is empty. In
   // some cases, we return all the rows of the other table with a corresponding
   // null index for the empty table; in others, we return an empty output.
   auto right_num_rows{right.num_rows()};
   auto left_num_rows{left.num_rows()};
+  auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
+
+  // TODO: Introducing this as an output is a fundamental change because
+  // calling code that wants to pass the size calculation to multiple join
+  // calculations as an optimization must now also pass this vector. Since this
+  // vector's nature changes depending on whether or not swapping occurs, we're
+  // effectively exposing an implementation detail. I don't know if there's any
+  // way to avoid this.
+  // TODO: In the degenerate cases this is being returned as unintialized
+  // memory, it should be zeroed out appropriately.
+  auto matches_per_row = std::make_unique<rmm::device_uvector<size_type>>(
+    swap_tables ? right.num_rows() : left.num_rows(), stream, mr);
+
   if (right_num_rows == 0) {
     switch (join_type) {
       // Left, left anti, and full all return all the row indices from left
       // with a corresponding NULL from the right.
       case join_kind::LEFT_JOIN:
       case join_kind::LEFT_ANTI_JOIN:
-      case join_kind::FULL_JOIN: return left_num_rows;
+      case join_kind::FULL_JOIN: return {left_num_rows, std::move(matches_per_row)};
       // Inner and left semi joins return empty output because no matches can exist.
       case join_kind::INNER_JOIN:
-      case join_kind::LEFT_SEMI_JOIN: return 0;
+      case join_kind::LEFT_SEMI_JOIN: return {0, std::move(matches_per_row)};
       default: CUDF_FAIL("Invalid join kind."); break;
     }
   } else if (left_num_rows == 0) {
@@ -290,9 +305,9 @@ std::size_t compute_mixed_join_output_size(table_view const& left,
       case join_kind::LEFT_JOIN:
       case join_kind::LEFT_ANTI_JOIN:
       case join_kind::INNER_JOIN:
-      case join_kind::LEFT_SEMI_JOIN: return 0;
+      case join_kind::LEFT_SEMI_JOIN: return {0, std::move(matches_per_row)};
       // Full joins need to return the trivial complement.
-      case join_kind::FULL_JOIN: return right_num_rows;
+      case join_kind::FULL_JOIN: return {right_num_rows, std::move(matches_per_row)};
       default: CUDF_FAIL("Invalid join kind."); break;
     }
   }
@@ -313,19 +328,10 @@ std::size_t compute_mixed_join_output_size(table_view const& left,
   // TODO: The non-conditional join impls start with a dictionary matching,
   // figure out what that is and what it's needed for (and if conditional joins
   // need to do the same).
-  auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
-  auto probe       = swap_tables ? right.select(right_on) : left.select(left_on);
-  auto build       = swap_tables ? left.select(left_on) : right.select(right_on);
-  auto probe_view  = table_device_view::create(probe, stream);
-  auto build_view  = table_device_view::create(build, stream);
-  // TODO: Introducing this as an output is a fundamental change because
-  // calling code that wants to pass the size calculation to multiple join
-  // calculations as an optimization must now also pass this vector. Since this
-  // vector's nature changes depending on whether or not swapping occurs, we're
-  // effectively exposing an implementation detail. I don't know if there's any
-  // way to avoid this.
-  auto matches_per_row = std::make_unique<rmm::device_uvector<size_type>>(
-    swap_tables ? right.num_rows() : left.num_rows(), stream, mr);
+  auto probe      = swap_tables ? right.select(right_on) : left.select(left_on);
+  auto build      = swap_tables ? left.select(left_on) : right.select(right_on);
+  auto probe_view = table_device_view::create(probe, stream);
+  auto build_view = table_device_view::create(build, stream);
 
   // Don't use multimap_type because we want a CG size of 1.
   mixed_multimap_type hash_table{compute_hash_table_size(build.num_rows()),
@@ -389,7 +395,7 @@ std::size_t compute_mixed_join_output_size(table_view const& left,
   }
   CHECK_CUDA(stream.value());
 
-  return size.value(stream);
+  return {size.value(stream), std::move(matches_per_row)};
 }
 
 }  // namespace detail
@@ -416,12 +422,13 @@ mixed_inner_join(table_view const& left,
                             mr);
 }
 
-std::size_t mixed_inner_join_size(table_view const& left,
-                                  table_view const& right,
-                                  std::vector<cudf::size_type> const& left_on,
-                                  std::vector<cudf::size_type> const& right_on,
-                                  ast::expression const& binary_predicate,
-                                  rmm::mr::device_memory_resource* mr)
+std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_inner_join_size(
+  table_view const& left,
+  table_view const& right,
+  std::vector<cudf::size_type> const& left_on,
+  std::vector<cudf::size_type> const& right_on,
+  ast::expression const& binary_predicate,
+  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::compute_mixed_join_output_size(left,
