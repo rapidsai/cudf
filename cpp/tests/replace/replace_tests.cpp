@@ -31,8 +31,8 @@
 
 #include <thrust/iterator/transform_iterator.h>
 
-#include <cudf/types.hpp>
 #include <cstdlib>
+#include <cudf/types.hpp>
 #include <gtest/gtest.h>
 #include <iostream>
 #include <vector>
