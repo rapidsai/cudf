@@ -158,14 +158,8 @@ struct scan_functor<Op, cudf::struct_view> {
                                         rmm::mr::device_memory_resource* mr)
   {
     auto constexpr is_min_op = std::is_same_v<Op, DeviceMin>;
-
-    auto const flattened_input = cudf::structs::detail::flatten_nested_columns(
-      table_view{{input}},
-      {},
-      std::vector<null_order>{cudf::reduction::detail::DEFAULT_NULL_ORDER});
-    auto const d_flattened_input_ptr = table_device_view::create(flattened_input, stream);
-    auto const binop_generator       = cudf::reduction::detail::comparison_binop_generator(
-      flattened_input, *d_flattened_input_ptr, is_min_op, input.size(), input.has_nulls(), stream);
+    auto const binop_generator =
+      cudf::reduction::detail::comparison_binop_generator(input, is_min_op, stream);
 
     // Create a gather map contaning indices of the prefix min/max elements.
     auto gather_map = rmm::device_uvector<size_type>(input.size(), stream);

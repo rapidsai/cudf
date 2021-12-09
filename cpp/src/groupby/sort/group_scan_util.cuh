@@ -191,19 +191,8 @@ struct group_scan_functor<K,
     if (values.is_empty()) { return cudf::empty_like(values); }
 
     auto constexpr is_min_op = K == aggregation::MIN;
-
-    auto const flattened_values = structs::detail::flatten_nested_columns(
-      table_view{{values}},
-      {},
-      std::vector<null_order>{cudf::reduction::detail::DEFAULT_NULL_ORDER});
-    auto const d_flattened_values_ptr = table_device_view::create(flattened_values, stream);
     auto const binop_generator =
-      cudf::reduction::detail::comparison_binop_generator(flattened_values,
-                                                          *d_flattened_values_ptr,
-                                                          is_min_op,
-                                                          values.size(),
-                                                          values.has_nulls(),
-                                                          stream);
+      cudf::reduction::detail::comparison_binop_generator(values, is_min_op, stream);
 
     // Create a gather map contaning indices of the prefix min/max elements within each group.
     auto gather_map = rmm::device_uvector<size_type>(values.size(), stream);

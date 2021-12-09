@@ -243,19 +243,8 @@ struct group_reduction_functor<
     if (values.is_empty()) { return result; }
 
     auto constexpr is_min_op = K == aggregation::ARGMIN;
-
-    auto const flattened_values = structs::detail::flatten_nested_columns(
-      table_view{{values}},
-      {},
-      std::vector<null_order>{cudf::reduction::detail::DEFAULT_NULL_ORDER});
-    auto const d_flattened_values_ptr = table_device_view::create(flattened_values, stream);
     auto const binop_generator =
-      cudf::reduction::detail::comparison_binop_generator(flattened_values,
-                                                          *d_flattened_values_ptr,
-                                                          is_min_op,
-                                                          values.size(),
-                                                          values.has_nulls(),
-                                                          stream);
+      cudf::reduction::detail::comparison_binop_generator(values, is_min_op, stream);
 
     // Perform segmented reduction to find ARGMIN/ARGMAX.
     auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
