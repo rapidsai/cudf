@@ -199,6 +199,15 @@ mixed_join(
                           std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
+  // Given the number of matches per row, we need to compute the offsets for insertion.
+  // TODO: Try to reduce the number of places where swap_tables is used.
+  auto join_result_offsets = std::make_unique<rmm::device_uvector<size_type>>(
+    swap_tables ? right.num_rows() : left.num_rows(), stream, mr);
+  thrust::exclusive_scan(rmm::exec_policy{stream},
+                         matches_per_row->begin(),
+                         matches_per_row->end(),
+                         join_result_offsets->begin());
+
   rmm::device_scalar<size_type> write_index(0, stream);
 
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
@@ -220,6 +229,8 @@ mixed_join(
         write_index.data(),
         parser.device_expression_data,
         join_size,
+        matches_per_row_ptr,
+        join_result_offsets->data(),
         swap_tables);
   } else {
     mixed_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, false>
@@ -235,6 +246,8 @@ mixed_join(
         write_index.data(),
         parser.device_expression_data,
         join_size,
+        matches_per_row_ptr,
+        join_result_offsets->data(),
         swap_tables);
   }
 

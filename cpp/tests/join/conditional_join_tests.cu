@@ -895,18 +895,17 @@ TYPED_TEST(MixedJoinTest, Basic)
   cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_counts{0, 1, 0};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_counts, actual_counts);
 
-  // auto result = cudf::mixed_inner_join(left, right, left_on, right_on, predicate);
-  // std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
-  // for (size_t i = 0; i < result.first->size(); ++i) {
-  //  // Note: Not trying to be terribly efficient here since these tests are
-  //  // small, otherwise a batch copy to host before constructing the tuples
-  //  // would be important.
-  //  result_pairs.push_back({result.first->element(i, rmm::cuda_stream_default),
-  //                          result.second->element(i, rmm::cuda_stream_default)});
-  //}
-  // std::sort(result_pairs.begin(), result_pairs.end());
-  // std::sort(expected_outputs.begin(), expected_outputs.end());
-  //
-  // EXPECT_TRUE(std::equal(expected_outputs.begin(), expected_outputs.end(),
-  // result_pairs.begin()));
+  auto result = cudf::mixed_inner_join(left, right, left_on, right_on, predicate);
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
+  for (size_t i = 0; i < result.first->size(); ++i) {
+    // Note: Not trying to be terribly efficient here since these tests are
+    // small, otherwise a batch copy to host before constructing the tuples
+    // would be important.
+    result_pairs.push_back({result.first->element(i, rmm::cuda_stream_default),
+                            result.second->element(i, rmm::cuda_stream_default)});
+  }
+  std::sort(result_pairs.begin(), result_pairs.end());
+  std::sort(expected_outputs.begin(), expected_outputs.end());
+
+  EXPECT_TRUE(std::equal(expected_outputs.begin(), expected_outputs.end(), result_pairs.begin()));
 }
