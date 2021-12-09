@@ -28,6 +28,8 @@ from cudf.testing._utils import (
     SIGNED_INTEGER_TYPES,
     SIGNED_TYPES,
     UNSIGNED_TYPES,
+    assert_column_memory_eq,
+    assert_column_memory_ne,
     assert_eq,
     assert_exceptions_equal,
 )
@@ -391,63 +393,12 @@ def test_index_copy_category(name, dtype, deep=True):
     ],
 )
 def test_index_copy_deep(idx, deep):
-    """Test if deep copy creates a new instance for device data.
-    The general criterion is to compare `Buffer.ptr` between two data objects.
-    Specifically for:
-        - CategoricalIndex, this applies to both `children` (notice .codes and
-        - .categories are now derived properties)
-        - StringIndex, to every element in `._base_children`
-        - Others, to `.base_data`
-    No test is defined for RangeIndex.
-    """
+    """Test if deep copy creates a new instance for device data."""
     idx_copy = idx.copy(deep=deep)
-    same_ref = not deep
-    if isinstance(idx, cudf.CategoricalIndex):
-        assert (
-            idx._values.children[0].base_data.ptr
-            == idx_copy._values.children[0].base_data.ptr
-        ) == same_ref
-        if isinstance(
-            idx._values.categories, cudf.core.column.string.StringColumn
-        ):
-            children = idx._values.categories._base_children
-            copy_children = idx_copy._values.categories._base_children
-            assert all(
-                [
-                    (
-                        children[i].base_data.ptr
-                        == copy_children[i].base_data.ptr
-                    )
-                    == same_ref
-                    for i in range(len(children))
-                ]
-            )
-        elif isinstance(
-            idx._values.categories, cudf.core.column.numerical.NumericalColumn
-        ):
-            assert (
-                idx._values.categories.base_data.ptr
-                == idx_copy._values.categories.base_data.ptr
-            ) == same_ref
-    elif isinstance(idx, cudf.StringIndex):
-        children = idx._values._base_children
-        copy_children = idx_copy._values._base_children
-        assert all(
-            [
-                (
-                    (
-                        children[i].base_data.ptr
-                        == copy_children[i].base_data.ptr
-                    )
-                    == same_ref
-                )
-                for i in range(len(children))
-            ]
-        )
+    if not deep:
+        assert_column_memory_eq(idx._values, idx_copy._values)
     else:
-        assert (
-            idx._values.base_data.ptr == idx_copy._values.base_data.ptr
-        ) == same_ref
+        assert_column_memory_ne(idx._values, idx_copy._values)
 
 
 @pytest.mark.parametrize("idx", [[1, None, 3, None, 5]])
