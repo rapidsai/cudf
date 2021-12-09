@@ -20,7 +20,7 @@ except ImportError:
 import cudf
 from cudf.core.column import as_column, build_categorical_column
 from cudf.io import write_to_dataset
-from cudf.utils import ioutils
+from cudf.io.parquet import _get_remote_open_func
 from cudf.utils.dtypes import cudf_dtype_from_pa_type
 
 
@@ -65,41 +65,27 @@ class CudfEngine(ArrowDatasetEngine):
         partitions=None,
         partitioning=None,
         partition_keys=None,
-        use_python_file_object=None,
-        use_fsspec_parquet=True,
+        open_options=None,
         **kwargs,
     ):
-
-        # Check `use_fsspec_parquet` kwarg
-        (
-            use_fsspec_parquet,
-            use_fsspec_parquet_kwargs,
-            use_python_file_object,
-        ) = ioutils._handle_fsspec_parquet(
-            use_fsspec_parquet, use_python_file_object, fs
-        )
 
         # Simplify row_groups if all None
         if row_groups == [None for path in paths]:
             row_groups = None
 
+        # Check for a remote-open function
+        remote_open = _get_remote_open_func(
+            fs=fs,
+            columns=columns,
+            row_groups=row_groups,
+            **(open_options or {}),
+        )
+
         with ExitStack() as stack:
 
             # Non-local filesystem handling
             paths_or_fobs = paths
-            if not cudf.utils.ioutils._is_local_filesystem(fs):
-
-                # Define remote_open
-                remote_open = partial(
-                    ioutils._open_parquet_file,
-                    mode="rb",
-                    fs=fs,
-                    columns=columns,
-                    row_groups=row_groups,
-                    engine="pyarrow",
-                    use_fsspec_parquet=use_fsspec_parquet,
-                    **(use_fsspec_parquet_kwargs or {}),
-                )
+            if remote_open:
 
                 # Convert paths to file objects for remote data
                 paths_or_fobs = [
@@ -113,7 +99,6 @@ class CudfEngine(ArrowDatasetEngine):
                 columns=columns,
                 row_groups=row_groups if row_groups else None,
                 strings_to_categorical=strings_to_categorical,
-                use_python_file_object=use_python_file_object,
                 **kwargs,
             )
 
@@ -172,6 +157,7 @@ class CudfEngine(ArrowDatasetEngine):
         partitions=(),
         partitioning=None,
         schema=None,
+        open_options=None,
         **kwargs,
     ):
 
@@ -192,8 +178,8 @@ class CudfEngine(ArrowDatasetEngine):
 
         # Extract supported kwargs from `kwargs`
         strings_to_cats = kwargs.get("strings_to_categorical", False)
-        use_fsspec_parquet = kwargs.get("use_fsspec_parquet", True)
         read_kwargs = kwargs.get("read", {})
+        read_kwargs.update(open_options or {})
 
         # Assume multi-piece read
         paths = []
@@ -217,7 +203,6 @@ class CudfEngine(ArrowDatasetEngine):
                         partitions=partitions,
                         partitioning=partitioning,
                         partition_keys=last_partition_keys,
-                        use_fsspec_parquet=use_fsspec_parquet,
                         **read_kwargs,
                     )
                 )
@@ -241,7 +226,6 @@ class CudfEngine(ArrowDatasetEngine):
                 partitions=partitions,
                 partitioning=partitioning,
                 partition_keys=last_partition_keys,
-                use_fsspec_parquet=use_fsspec_parquet,
                 **read_kwargs,
             )
         )

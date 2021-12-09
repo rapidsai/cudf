@@ -1,7 +1,5 @@
 # Copyright (c) 2019-2020, NVIDIA CORPORATION.
 
-import io
-import json
 import warnings
 from collections import defaultdict
 from functools import partial
@@ -9,7 +7,15 @@ from uuid import uuid4
 
 import fsspec
 import pyarrow as pa
+from packaging.version import parse as parse_version
 from pyarrow import dataset as ds, parquet as pq
+
+if parse_version(fsspec.__version__) > parse_version("2021.11.0"):
+    # For new-enough versions of fsspec, we can use
+    # the fsspec.parquet module to open remote files
+    import fsspec.parquet as fsspec_parquet
+else:
+    fsspec_parquet = None
 
 import cudf
 from cudf._lib import parquet as libparquet
@@ -300,101 +306,66 @@ def _process_dataset(
     )
 
 
-def _get_byte_ranges(file_list, row_groups, columns, fs, **kwargs):
+def _get_remote_open_func(
+    use_fsspec_parquet=True,
+    fs=None,
+    columns=None,
+    row_groups=None,
+    mode="rb",
+    open_cb=None,
+    engine="pyarrow",
+    **kwargs,
+):
 
-    # This utility is used to collect the footer metadata
-    # from a parquet file. This metadata is used to define
-    # the exact byte-ranges that will be needed to read the
-    # target column-chunks from the file.
-    #
-    # This utility is only used for remote storage.
-    #
-    # The calculated byte-range information is used within
-    # cudf.io.ioutils.get_filepath_or_buffer (which uses
-    # _fsspec_data_transfer to convert non-local fsspec file
-    # objects into local byte buffers).
+    # Return None if this is not a remote fs
+    if fs is None or ioutils._is_local_filesystem(fs):
+        return None
 
-    if row_groups is None:
-        if columns is None:
-            return None, None, None  # No reason to construct this
-        row_groups = [None for path in file_list]
+    # Use call-back function if one was specified
+    if open_cb is not None:
+        return open_cb
 
-    # Construct a list of required byte-ranges for every file
-    all_byte_ranges, all_footers, all_sizes = [], [], []
-    for path, rgs in zip(file_list, row_groups):
+    # Check if fsspec.parquet is available
+    use_fsspec_parquet = bool(use_fsspec_parquet)
+    if use_fsspec_parquet and not bool(fsspec_parquet):
+        use_kwargs = {}  # Clear kwargs
+        use_fsspec_parquet = False
 
-        # Step 0 - Get size of file
-        if fs is None:
-            file_size = path.size
-        else:
-            file_size = fs.size(path)
+    # Older versions of s3fs may not work properly with
+    # `fsspec.parquet.open_parquet_file`. To be safe,
+    # we should check if fs is based on s3fs, and
+    # set `use_fsspec_parquet=False` if the version is
+    # too old
+    use_kwargs = kwargs.copy()
+    if use_fsspec_parquet and "s3" in fs.protocol:
+        try:
+            import s3fs
 
-        # Step 1 - Get 32 KB from tail of file.
-        #
-        # This "sample size" can be tunable, but should
-        # always be >= 8 bytes (so we can read the footer size)
-        tail_size = min(kwargs.get("footer_sample_size", 32_000), file_size,)
-        if fs is None:
-            path.seek(file_size - tail_size)
-            footer_sample = path.read(tail_size)
-        else:
-            footer_sample = fs.tail(path, tail_size)
-
-        # Step 2 - Read the footer size and re-read a larger
-        #          tail if necessary
-        footer_size = int.from_bytes(footer_sample[-8:-4], "little")
-        if tail_size < (footer_size + 8):
-            if fs is None:
-                path.seek(file_size - (footer_size + 8))
-                footer_sample = path.read(footer_size + 8)
-            else:
-                footer_sample = fs.tail(path, footer_size + 8)
-
-        # Step 3 - Collect required byte ranges
-        byte_ranges = []
-        md = pq.ParquetFile(io.BytesIO(footer_sample)).metadata
-        column_set = None if columns is None else set(columns)
-        if column_set is not None:
-            schema = md.schema.to_arrow_schema()
-            has_pandas_metadata = (
-                schema.metadata is not None and b"pandas" in schema.metadata
+            use_fsspec_parquet = parse_version(
+                s3fs.__version__
+            ) > parse_version("2021.11.0")
+        except ImportError:
+            pass
+        if not use_fsspec_parquet:
+            use_kwargs = {}  # Clear kwargs
+            warnings.warn(
+                f"This version of s3fs ({s3fs.__version__}) does not "
+                f"support optimized parquet-file opening. Please update "
+                f"to the latest s3fs version for better performance."
             )
-            if has_pandas_metadata:
-                md_index = [
-                    ind
-                    for ind in json.loads(
-                        schema.metadata[b"pandas"].decode("utf8")
-                    ).get("index_columns", [])
-                    # Ignore RangeIndex information
-                    if not isinstance(ind, dict)
-                ]
-                column_set |= set(md_index)
-        for r in range(md.num_row_groups):
-            # Skip this row-group if we are targetting
-            # specific row-groups
-            if rgs is None or r in rgs:
-                row_group = md.row_group(r)
-                for c in range(row_group.num_columns):
-                    column = row_group.column(c)
-                    name = column.path_in_schema
-                    # Skip this column if we are targetting a
-                    # specific columns
-                    split_name = name.split(".")[0]
-                    if (
-                        column_set is None
-                        or name in column_set
-                        or split_name in column_set
-                    ):
-                        file_offset0 = column.dictionary_page_offset
-                        if file_offset0 is None:
-                            file_offset0 = column.data_page_offset
-                        num_bytes = column.total_compressed_size
-                        byte_ranges.append((file_offset0, num_bytes))
 
-        all_byte_ranges.append(byte_ranges)
-        all_footers.append(footer_sample)
-        all_sizes.append(file_size)
-    return all_byte_ranges, all_footers, all_sizes
+    # Return the appropriate open function
+    if use_fsspec_parquet:
+        return partial(
+            fsspec_parquet.open_parquet_file,
+            mode=mode,
+            fs=fs,
+            columns=columns,
+            row_groups=row_groups,
+            engine=engine,
+            **use_kwargs,
+        )
+    return partial(fs.open, mode=mode, **use_kwargs)
 
 
 @ioutils.doc_read_parquet()
@@ -408,9 +379,8 @@ def read_parquet(
     num_rows=None,
     strings_to_categorical=False,
     use_pandas_metadata=True,
-    use_python_file_object=None,
-    use_fsspec_parquet=True,
     categorical_partitions=True,
+    open_options=None,
     *args,
     **kwargs,
 ):
@@ -438,15 +408,6 @@ def read_parquet(
     # can apply filters on remote file-systems
     fs, paths = ioutils._get_filesystem_and_paths(filepath_or_buffer, **kwargs)
 
-    # Check `use_fsspec_parquet` kwarg
-    (
-        use_fsspec_parquet,
-        use_fsspec_parquet_kwargs,
-        use_python_file_object,
-    ) = ioutils._handle_fsspec_parquet(
-        use_fsspec_parquet, use_python_file_object, fs
-    )
-
     # Use pyarrow dataset to detect/process directory-partitioned
     # data and apply filters. Note that we can only support partitioned
     # data and filtering if the input is a single directory or list of
@@ -470,50 +431,26 @@ def read_parquet(
         raise ValueError("cudf cannot apply filters to open file objects.")
     filepath_or_buffer = paths if paths else filepath_or_buffer
 
-    # Check if we should calculate the specific byte-ranges
-    # needed for each parquet file. We always do this when we
-    # have a file-system object to work with and it is not a
-    # local filesystem object. We can also do it without a
-    # file-system object for `AbstractBufferedFile` buffers
-    byte_ranges, footers, file_sizes = None, None, None
-    if not use_python_file_object:
-        need_byte_ranges = fs is not None and not ioutils._is_local_filesystem(
-            fs
+    # Check for a remote-open function
+    remote_open = (
+        _get_remote_open_func(
+            fs=fs,
+            columns=columns,
+            row_groups=row_groups,
+            **(open_options or {}),
         )
-        if need_byte_ranges or (
-            filepath_or_buffer
-            and isinstance(
-                filepath_or_buffer[0], fsspec.spec.AbstractBufferedFile,
-            )
-        ):
-            byte_ranges, footers, file_sizes = _get_byte_ranges(
-                filepath_or_buffer, row_groups, columns, fs, **kwargs
-            )
+        if paths
+        else None
+    )
 
     filepaths_or_buffers = []
     for i, source in enumerate(filepath_or_buffer):
-
-        # Use fsspec.parquet.open_parquet_file to transfer
-        # the required column-chunks more efficiently
-        remote_open = partial(
-            ioutils._open_parquet_file,
-            fs=fs,
-            columns=columns,
-            row_groups=None if row_groups is None else row_groups[i],
-            engine="pyarrow",
-            use_fsspec_parquet=use_fsspec_parquet,
-            **use_fsspec_parquet_kwargs,
-        )
 
         tmp_source, compression = ioutils.get_filepath_or_buffer(
             path_or_data=source,
             compression=None,
             fs=fs,
-            byte_ranges=byte_ranges[i] if byte_ranges else None,
-            footer=footers[i] if footers else None,
-            file_size=file_sizes[i] if file_sizes else None,
-            add_par1_magic=True,
-            use_python_file_object=use_python_file_object,
+            use_python_file_object=True,
             remote_open=remote_open,
             **kwargs,
         )

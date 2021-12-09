@@ -127,7 +127,7 @@ def test_read_parquet(s3_base, s3so, use_fsspec_parquet):
         df = dask_cudf.read_parquet(
             "s3://daskparquet/*.parq",
             storage_options=s3so,
-            use_fsspec_parquet=use_fsspec_parquet,
+            open_options={"use_fsspec_parquet": use_fsspec_parquet},
         )
         assert df.a.sum().compute() == 10
         assert df.b.sum().compute() == 9

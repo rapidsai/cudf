@@ -754,22 +754,6 @@ def test_parquet_reader_arrow_nativefile(parquet_path_or_buf):
     assert_eq(expect, got)
 
 
-def test_parquet_reader_use_python_file_object(parquet_path_or_buf):
-    # Check that the non-default `use_python_file_object=True`
-    # option works as expected
-    expect = cudf.read_parquet(parquet_path_or_buf("filepath"))
-    fs, _, paths = get_fs_token_paths(parquet_path_or_buf("filepath"))
-
-    # Pass open fsspec file
-    with fs.open(paths[0], mode="rb") as fil:
-        got1 = cudf.read_parquet(fil, use_python_file_object=True)
-    assert_eq(expect, got1)
-
-    # Pass path only
-    got2 = cudf.read_parquet(paths[0], use_python_file_object=True)
-    assert_eq(expect, got2)
-
-
 def create_parquet_source(df, src_type, fname):
     if src_type == "filepath":
         df.to_parquet(fname, engine="pyarrow")

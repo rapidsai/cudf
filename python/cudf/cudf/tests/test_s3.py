@@ -142,23 +142,11 @@ def test_read_csv(s3_base, s3so, pdf, bytes_per_thread):
     bname = "csv"
     buffer = pdf.to_csv(index=False)
 
-    # Use fsspec file object
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         got = cudf.read_csv(
             "s3://{}/{}".format(bname, fname),
             storage_options=s3so,
             bytes_per_thread=bytes_per_thread,
-            use_python_file_object=False,
-        )
-    assert_eq(pdf, got)
-
-    # Use Arrow PythonFile object
-    with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
-        got = cudf.read_csv(
-            "s3://{}/{}".format(bname, fname),
-            storage_options=s3so,
-            bytes_per_thread=bytes_per_thread,
-            use_python_file_object=True,
         )
     assert_eq(pdf, got)
 
@@ -179,10 +167,7 @@ def test_read_csv_arrow_nativefile(s3_base, s3so, pdf):
 
 
 @pytest.mark.parametrize("bytes_per_thread", [32, 1024])
-@pytest.mark.parametrize("use_python_file_object", [True, False])
-def test_read_csv_byte_range(
-    s3_base, s3so, pdf, bytes_per_thread, use_python_file_object
-):
+def test_read_csv_byte_range(s3_base, s3so, pdf, bytes_per_thread):
     # Write to buffer
     fname = "test_csv_reader_byte_range.csv"
     bname = "csv"
@@ -197,7 +182,6 @@ def test_read_csv_byte_range(
             bytes_per_thread=bytes_per_thread,
             header=None,
             names=["Integer", "Float", "Integer2", "String", "Boolean"],
-            use_python_file_object=use_python_file_object,
         )
 
     assert_eq(pdf.iloc[-2:].reset_index(drop=True), got)
@@ -226,16 +210,9 @@ def test_write_csv(s3_base, s3so, pdf, chunksize):
 
 @pytest.mark.parametrize("bytes_per_thread", [32, 1024])
 @pytest.mark.parametrize("columns", [None, ["Float", "String"]])
-@pytest.mark.parametrize("use_python_file_object", [False, True])
 @pytest.mark.parametrize("use_fsspec_parquet", [False, True])
 def test_read_parquet(
-    s3_base,
-    s3so,
-    pdf,
-    bytes_per_thread,
-    columns,
-    use_python_file_object,
-    use_fsspec_parquet,
+    s3_base, s3so, pdf, bytes_per_thread, columns, use_fsspec_parquet,
 ):
     fname = "test_parquet_reader.parquet"
     bname = "parquet"
@@ -247,8 +224,7 @@ def test_read_parquet(
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         got1 = cudf.read_parquet(
             "s3://{}/{}".format(bname, fname),
-            use_python_file_object=use_python_file_object,
-            use_fsspec_parquet=use_fsspec_parquet,
+            open_options={"use_fsspec_parquet": use_fsspec_parquet},
             storage_options=s3so,
             bytes_per_thread=bytes_per_thread,
             columns=columns,
@@ -264,26 +240,16 @@ def test_read_parquet(
         )[0]
         with fs.open("s3://{}/{}".format(bname, fname), mode="rb") as f:
             got2 = cudf.read_parquet(
-                f,
-                use_python_file_object=use_python_file_object,
-                bytes_per_thread=bytes_per_thread,
-                columns=columns,
+                f, bytes_per_thread=bytes_per_thread, columns=columns,
             )
     assert_eq(expect, got2)
 
 
 @pytest.mark.parametrize("bytes_per_thread", [32, 1024])
 @pytest.mark.parametrize("columns", [None, ["List", "Struct"]])
-@pytest.mark.parametrize("use_python_file_object", [False, True])
 @pytest.mark.parametrize("index", [None, "Integer"])
 def test_read_parquet_ext(
-    s3_base,
-    s3so,
-    pdf_ext,
-    bytes_per_thread,
-    columns,
-    use_python_file_object,
-    index,
+    s3_base, s3so, pdf_ext, bytes_per_thread, columns, index,
 ):
     fname = "test_parquet_reader_ext.parquet"
     bname = "parquet"
@@ -299,7 +265,6 @@ def test_read_parquet_ext(
     with s3_context(s3_base=s3_base, bucket=bname, files={fname: buffer}):
         got1 = cudf.read_parquet(
             "s3://{}/{}".format(bname, fname),
-            use_python_file_object=use_python_file_object,
             storage_options=s3so,
             bytes_per_thread=bytes_per_thread,
             footer_sample_size=3200,
@@ -335,11 +300,8 @@ def test_read_parquet_arrow_nativefile(s3_base, s3so, pdf, columns):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("python_file", [True, False])
 @pytest.mark.parametrize("fsspec_parquet", [True, False])
-def test_read_parquet_filters(
-    s3_base, s3so, pdf_ext, python_file, fsspec_parquet
-):
+def test_read_parquet_filters(s3_base, s3so, pdf_ext, fsspec_parquet):
     fname = "test_parquet_reader_filters.parquet"
     bname = "parquet"
     buffer = BytesIO()
@@ -351,8 +313,7 @@ def test_read_parquet_filters(
             "s3://{}/{}".format(bname, fname),
             storage_options=s3so,
             filters=filters,
-            use_python_file_object=python_file,
-            use_fsspec_parquet=fsspec_parquet,
+            open_options={"use_fsspec_parquet": fsspec_parquet},
         )
 
     # All row-groups should be filtered out
@@ -400,9 +361,8 @@ def test_read_json(s3_base, s3so):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("use_python_file_object", [False, True])
 @pytest.mark.parametrize("columns", [None, ["string1"]])
-def test_read_orc(s3_base, s3so, datadir, use_python_file_object, columns):
+def test_read_orc(s3_base, s3so, datadir, columns):
     source_file = str(datadir / "orc" / "TestOrcFile.testSnappy.orc")
     fname = "test_orc_reader.orc"
     bname = "orc"
@@ -416,7 +376,6 @@ def test_read_orc(s3_base, s3so, datadir, use_python_file_object, columns):
             "s3://{}/{}".format(bname, fname),
             columns=columns,
             storage_options=s3so,
-            use_python_file_object=use_python_file_object,
         )
 
     if columns:

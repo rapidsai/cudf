@@ -3,7 +3,6 @@
 import datetime
 import os
 import urllib
-import warnings
 from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 from threading import Thread
 
@@ -12,17 +11,9 @@ import fsspec.implementations.local
 import numpy as np
 import pandas as pd
 from fsspec.core import get_fs_token_paths
-from packaging.version import parse as parse_version
 from pyarrow import PythonFile as ArrowPythonFile
 from pyarrow.fs import FSSpecHandler, PyFileSystem
 from pyarrow.lib import NativeFile
-
-if parse_version(fsspec.__version__) > parse_version("2021.11.0"):
-    # For new-enough versions of fsspec, we can use
-    # the fsspec.parquet module to open remote files
-    import fsspec.parquet as fsspec_parquet
-else:
-    fsspec_parquet = None
 
 from cudf.utils.docutils import docfmt_partial
 
@@ -169,19 +160,11 @@ categorical_partitions : boolean, default True
 use_pandas_metadata : boolean, default True
     If True and dataset has custom PANDAS schema metadata, ensure that index
     columns are also loaded.
-use_python_file_object : boolean, default None
-    Relevant for remote storage only. If False, fsspec AbstractBufferedFile
-    objects will be converted to bytes before being passed to the libcudf
-    backend. If True, AbstractBufferedFile objects will be converted to
-    Arrow-backed PythonFile objects instead. By default, this argument
-    will be set equal to `bool(use_fsspec_parquet)` (or to False if the
-    fsspec version is too old to support `use_fsspec_parquet=True`).
-use_fsspec_parquet : boolean or dict, default True
-    If True, or a non-empty dictionary of key-word arguments is passed, the
-    optimized `fsspec.parquet.open_parquet_file` function will be used to open
-    remote parquet files. If False, the file-opening behavior depends on the
-    `use_python_file_object` setting. For newer versions of fsspec, the default
-    value of True is expected to give optimal performance.
+open_options : dict, optional
+    Dictionary of key-value pairs to pass to the function used to open remote
+    files. By default, this will be `fsspec.parquet.open_parquet_file`. If
+    `use_fsspec_parquet=False` is included in `open_options`, the fsspec
+    filesystem's `open` method will be use instead.
 
 Returns
 -------
@@ -384,10 +367,6 @@ use_index : bool, default True
 decimal_cols_as_float: list, default None
     If specified, names of the columns that should be converted from
     Decimal to Float64 in the resulting dataframe.
-use_python_file_object : boolean, default True
-    If True, Arrow-backed PythonFile objects will be used in place of fsspec
-    AbstractBufferedFile objects at IO time. This option is likely to improve
-    performance when making small reads from larger ORC files.
 kwargs are passed to the engine
 
 Returns
@@ -924,10 +903,6 @@ prefix : str, default None
 index_col : int, string or False, default None
     Column to use as the row labels of the DataFrame. Passing `index_col=False`
     explicitly disables index column inference and discards the last column.
-use_python_file_object : boolean, default True
-    If True, Arrow-backed PythonFile objects will be used in place of fsspec
-    AbstractBufferedFile objects at IO time. This option is likely to improve
-    performance when making small reads from larger CSV files.
 
 Returns
 -------
@@ -1305,11 +1280,7 @@ def get_filepath_or_buffer(
                 path_or_data = [
                     BytesIO(
                         _fsspec_data_transfer(
-                            fpath,
-                            fs=fs,
-                            mode=mode,
-                            byte_ranges=byte_ranges,
-                            **kwargs,
+                            fpath, fs=fs, mode=mode, **kwargs,
                         )
                     )
                     for fpath in paths
@@ -1324,9 +1295,7 @@ def get_filepath_or_buffer(
             path_or_data = ArrowPythonFile(path_or_data)
         else:
             path_or_data = BytesIO(
-                _fsspec_data_transfer(
-                    path_or_data, mode=mode, byte_ranges=byte_ranges, **kwargs
-                )
+                _fsspec_data_transfer(path_or_data, mode=mode, **kwargs)
             )
 
     return path_or_data, compression
@@ -1560,10 +1529,7 @@ def _ensure_filesystem(passed_filesystem, path, **kwargs):
 def _fsspec_data_transfer(
     path_or_fob,
     fs=None,
-    byte_ranges=None,
-    footer=None,
     file_size=None,
-    add_par1_magic=None,
     bytes_per_thread=256_000_000,
     max_gap=64_000,
     mode="rb",
@@ -1583,48 +1549,22 @@ def _fsspec_data_transfer(
     file_size = file_size or fs.size(path_or_fob)
 
     # Check if a direct read makes the most sense
-    if not byte_ranges and bytes_per_thread >= file_size:
+    if bytes_per_thread >= file_size:
         if file_like:
             return path_or_fob.read()
         else:
-            return fs.open(path_or_fob, mode=mode, cache_type="none").read()
+            return fs.open(path_or_fob, mode=mode, cache_type="all").read()
 
     # Threaded read into "local" buffer
     buf = np.zeros(file_size, dtype="b")
-    if byte_ranges:
 
-        # Optimize/merge the ranges
-        byte_ranges = _merge_ranges(
-            byte_ranges, max_block=bytes_per_thread, max_gap=max_gap,
-        )
-
-        # Call multi-threaded data transfer of
-        # remote byte-ranges to local buffer
-        _read_byte_ranges(
-            path_or_fob, byte_ranges, buf, fs=fs, **kwargs,
-        )
-
-        # Add Header & Footer bytes
-        if footer is not None:
-            footer_size = len(footer)
-            buf[-footer_size:] = np.frombuffer(
-                footer[-footer_size:], dtype="b"
-            )
-
-        # Add parquet magic bytes (optional)
-        if add_par1_magic:
-            buf[:4] = np.frombuffer(b"PAR1", dtype="b")
-            if footer is None:
-                buf[-4:] = np.frombuffer(b"PAR1", dtype="b")
-
-    else:
-        byte_ranges = [
-            (b, min(bytes_per_thread, file_size - b))
-            for b in range(0, file_size, bytes_per_thread)
-        ]
-        _read_byte_ranges(
-            path_or_fob, byte_ranges, buf, fs=fs, **kwargs,
-        )
+    byte_ranges = [
+        (b, min(bytes_per_thread, file_size - b))
+        for b in range(0, file_size, bytes_per_thread)
+    ]
+    _read_byte_ranges(
+        path_or_fob, byte_ranges, buf, fs=fs, **kwargs,
+    )
 
     return buf.tobytes()
 
@@ -1686,61 +1626,3 @@ def _read_byte_ranges(
 
     for worker in workers:
         worker.join()
-
-
-def _handle_fsspec_parquet(use_fsspec_parquet, use_python_file_object, fs):
-    # Convert `use_fsspec_parquet` to bool and define
-    # separate `use_fsspec_parquet_kwargs`
-    use_fsspec_parquet_kwargs = (
-        use_fsspec_parquet if isinstance(use_fsspec_parquet, dict) else {}
-    )
-    use_fsspec_parquet = bool(use_fsspec_parquet) and bool(fsspec_parquet)
-
-    # Check if this is a local filesystem
-    if use_fsspec_parquet and (fs is None or _is_local_filesystem(fs)):
-        use_fsspec_parquet = False
-
-    # Older versions of s3fs may not work properly with
-    # `fsspec.parquet.open_parquet_file`. To be safe,
-    # we should check if fs is based on s3fs, and
-    # set `use_fsspec_parquet=False` if the version is
-    # too old
-    if use_fsspec_parquet and fs and "s3" in fs.protocol:
-        try:
-            import s3fs
-
-            use_fsspec_parquet = parse_version(
-                s3fs.__version__
-            ) > parse_version("2021.11.0")
-        except ImportError:
-            pass
-        if not use_fsspec_parquet:
-            warnings.warn(
-                f"This version of s3fs ({s3fs.__version__}) does not "
-                f"support optimized parquet-file opening. Please update "
-                f"to the latest s3fs version for better performance."
-            )
-
-    # Default use_python_file_object setting depends on use_fsspec_parquet
-    if use_python_file_object is None:
-        use_python_file_object = use_fsspec_parquet
-
-    return (
-        use_fsspec_parquet,
-        use_fsspec_parquet_kwargs,
-        use_python_file_object,
-    )
-
-
-def _open_parquet_file(
-    path, mode="rb", fs=None, use_fsspec_parquet=False, **kwargs
-):
-    # Redirect `open` to `fs.open` or `fsspec.open_parquet_file`,
-    # depending on `use_fsspec_parquet` and `fs`
-    if use_fsspec_parquet:
-        return fsspec_parquet.open_parquet_file(
-            path, fs=fs, mode=mode, **kwargs,
-        )
-    if fs is None:
-        return open(path, mode=mode)
-    return fs.open(path, mode=mode)
