@@ -1896,7 +1896,7 @@ def as_column(
             mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = build_column(buffer, dtype=arbitrary.dtype)
-                data = data._make_copy_with_na_as_null()
+                data = data._make_copy_with_na_as_null()  #
                 mask = data.mask
 
             data = cudf.core.column.timedelta.TimeDeltaColumn(
