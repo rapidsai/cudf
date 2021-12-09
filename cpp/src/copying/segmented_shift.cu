@@ -145,7 +145,7 @@ std::unique_ptr<column> segmented_shift(column_view const& segmented_values,
                                         rmm::mr::device_memory_resource* mr)
 {
   if (segmented_values.is_empty()) { return empty_like(segmented_values); }
-  if (offset == 0) { return std::make_unique<column>(segmented_values); };
+  if (offset == 0) { return std::make_unique<column>(segmented_values, stream, mr); };
 
   return type_dispatcher<dispatch_storage_type>(segmented_values.type(),
                                                 segmented_shift_functor_forwarder{},
