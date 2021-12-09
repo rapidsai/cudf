@@ -25,7 +25,7 @@
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include "rmm/cuda_stream_view.hpp"
+#include <rmm/cuda_stream_view.hpp>
 #include <random>
 #include <thrust/sequence.h>
 
