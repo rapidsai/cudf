@@ -26,11 +26,12 @@
 #include <rmm/device_scalar.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cub/block/block_reduce.cuh>
+#include <cub/device/device_segmented_reduce.cuh>
+
 #include <thrust/for_each.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/transform_iterator.h>
-#include <cub/block/block_reduce.cuh>
-#include <cub/device/device_segmented_reduce.cuh>
 
 #include <algorithm>
 #include <iterator>
