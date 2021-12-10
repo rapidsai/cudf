@@ -23,10 +23,15 @@ from cudf.api.types import (
     is_list_like,
 )
 from cudf.core.column import arange
+from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
-from cudf.utils.utils import _gather_map_is_valid, cached_property
+from cudf.utils.utils import (
+    _gather_map_is_valid,
+    _make_column_name,
+    cached_property,
+)
 
 doc_reset_index_template = """
         Reset the index of the {klass}, or a level of it.
@@ -1132,16 +1137,6 @@ class IndexedFrame(Frame):
 
     def _reset_index(self, level, drop, col_level=0, col_fill=""):
         """Shared path for DataFrame.reset_index and Series.reset_index."""
-        if col_level != 0:
-            raise NotImplementedError(
-                "col_level parameter is not supported yet."
-            )
-
-        if col_fill != "":
-            raise NotImplementedError(
-                "col_fill parameter is not supported yet."
-            )
-
         if level is not None and not isinstance(level, (tuple, list)):
             level = (level,)
         _check_duplicate_level_names(level, self._index.names)
@@ -1169,13 +1164,26 @@ class IndexedFrame(Frame):
         for name, col in zip(data_names, data_columns):
             if name == "index" and "index" in self._data:
                 name = "level_0"
+            name = _make_column_name(
+                name,
+                self._data.multiindex,
+                col_level,
+                col_fill,
+                self._data.nlevels,
+            )
             new_column_data[name] = col
         # This is to match pandas where the new data columns are always
         # inserted to the left of existing data columns.
-        return {**new_column_data, **self._data}, index
+        return (
+            ColumnAccessor(
+                {**new_column_data, **self._data}, self._data.multiindex
+            ),
+            index,
+        )
 
 
 def _check_duplicate_level_names(specified, level_names):
+    """Raise if any of `specified` has duplicates in `level_names`."""
     if specified is None:
         return
     if len(set(level_names)) == len(level_names):

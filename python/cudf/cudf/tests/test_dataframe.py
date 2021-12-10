@@ -2581,9 +2581,18 @@ def test_tail_for_string():
 
 @pytest.mark.parametrize("level", [None, 0, "l0", 1, ["l0", 1]])
 @pytest.mark.parametrize("drop", [True, False])
-@pytest.mark.parametrize("column_names", [["v0", "v1"], ["v0", "index"]])
+@pytest.mark.parametrize(
+    "column_names",
+    [
+        ["v0", "v1"],
+        ["v0", "index"],
+        pd.MultiIndex.from_tuples([("x0", "x1"), ("y0", "y1")]),
+    ],
+)
 @pytest.mark.parametrize("inplace", [True, False])
-def test_reset_index(level, drop, column_names, inplace):
+@pytest.mark.parametrize("col_level", [0, 1])
+@pytest.mark.parametrize("col_fill", ["", "some_lv"])
+def test_reset_index(level, drop, column_names, inplace, col_level, col_fill):
     midx = pd.MultiIndex.from_tuples(
         [("a", 1), ("a", 2), ("b", 1), ("b", 2)], names=["l0", None]
     )
@@ -2592,8 +2601,20 @@ def test_reset_index(level, drop, column_names, inplace):
     )
     gdf = cudf.from_pandas(pdf)
 
-    expect = pdf.reset_index(level=level, drop=drop, inplace=inplace)
-    got = gdf.reset_index(level=level, drop=drop, inplace=inplace)
+    expect = pdf.reset_index(
+        level=level,
+        drop=drop,
+        inplace=inplace,
+        col_level=col_level,
+        col_fill=col_fill,
+    )
+    got = gdf.reset_index(
+        level=level,
+        drop=drop,
+        inplace=inplace,
+        col_level=col_level,
+        col_fill=col_fill,
+    )
     if inplace:
         expect = pdf
         got = gdf
@@ -2604,7 +2625,9 @@ def test_reset_index(level, drop, column_names, inplace):
 @pytest.mark.parametrize("level", [None, 0, 1, [None]])
 @pytest.mark.parametrize("drop", [False, True])
 @pytest.mark.parametrize("inplace", [False, True])
-def test_reset_index_dup_level_name(level, drop, inplace):
+@pytest.mark.parametrize("col_level", [0, 1])
+@pytest.mark.parametrize("col_fill", ["", "some_lv"])
+def test_reset_index_dup_level_name(level, drop, inplace, col_level, col_fill):
     # midx levels are named [None, None]
     midx = pd.MultiIndex.from_tuples([("a", 1), ("a", 2), ("b", 1), ("b", 2)])
     pdf = pd.DataFrame([[1, 2], [3, 4], [5, 6], [7, 8]], index=midx)
@@ -2625,8 +2648,20 @@ def test_reset_index_dup_level_name(level, drop, inplace):
         )
         return
 
-    expect = pdf.reset_index(level=level, drop=drop, inplace=inplace)
-    got = gdf.reset_index(level=level, drop=drop, inplace=inplace)
+    expect = pdf.reset_index(
+        level=level,
+        drop=drop,
+        inplace=inplace,
+        col_level=col_level,
+        col_fill=col_fill,
+    )
+    got = gdf.reset_index(
+        level=level,
+        drop=drop,
+        inplace=inplace,
+        col_level=col_level,
+        col_fill=col_fill,
+    )
     if inplace:
         expect = pdf
         got = gdf
@@ -2636,12 +2671,18 @@ def test_reset_index_dup_level_name(level, drop, inplace):
 
 @pytest.mark.parametrize("drop", [True, False])
 @pytest.mark.parametrize("inplace", [False, True])
-def test_reset_index_named(pdf, gdf, drop, inplace):
+@pytest.mark.parametrize("col_level", [0, 1])
+@pytest.mark.parametrize("col_fill", ["", "some_lv"])
+def test_reset_index_named(pdf, gdf, drop, inplace, col_level, col_fill):
     pdf.index.name = "cudf"
     gdf.index.name = "cudf"
 
-    expect = pdf.reset_index(drop=drop, inplace=inplace)
-    got = gdf.reset_index(drop=drop, inplace=inplace)
+    expect = pdf.reset_index(
+        drop=drop, inplace=inplace, col_level=col_level, col_fill=col_fill
+    )
+    got = gdf.reset_index(
+        drop=drop, inplace=inplace, col_level=col_level, col_fill=col_fill
+    )
     if inplace:
         expect = pdf
         got = gdf
@@ -2651,12 +2692,20 @@ def test_reset_index_named(pdf, gdf, drop, inplace):
 @pytest.mark.parametrize("drop", [True, False])
 @pytest.mark.parametrize("inplace", [False, True])
 @pytest.mark.parametrize("column_names", [["x", "y"], ["index", "y"]])
-def test_reset_index_unnamed(pdf, gdf, drop, inplace, column_names):
+@pytest.mark.parametrize("col_level", [0, 1])
+@pytest.mark.parametrize("col_fill", ["", "some_lv"])
+def test_reset_index_unnamed(
+    pdf, gdf, drop, inplace, column_names, col_level, col_fill
+):
     pdf.columns = column_names
     gdf.columns = column_names
 
-    expect = pdf.reset_index(drop=drop, inplace=inplace)
-    got = gdf.reset_index(drop=drop, inplace=inplace)
+    expect = pdf.reset_index(
+        drop=drop, inplace=inplace, col_level=col_level, col_fill=col_fill
+    )
+    got = gdf.reset_index(
+        drop=drop, inplace=inplace, col_level=col_level, col_fill=col_fill
+    )
     if inplace:
         expect = pdf
         got = gdf
