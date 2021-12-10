@@ -287,16 +287,14 @@ class data_profile {
   template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
   distribution_params<typename T::rep> get_distribution_params() const
   {
-    auto it = decimal_params.find(cudf::type_to_id<T>());
+    using rep = typename T::rep;
+    auto it   = decimal_params.find(cudf::type_to_id<T>());
     if (it == decimal_params.end()) {
-      auto const range = default_range<typename T::rep>();
-      return distribution_params<typename T::rep>{
-        default_distribution_id<typename T::rep>(), range.first, range.second};
+      auto const range = default_range<rep>();
+      return distribution_params<rep>{default_distribution_id<rep>(), range.first, range.second};
     } else {
       auto& desc = it->second;
-      return {desc.id,
-              static_cast<typename T::rep>(desc.lower_bound),
-              static_cast<typename T::rep>(desc.upper_bound)};
+      return {desc.id, static_cast<rep>(desc.lower_bound), static_cast<rep>(desc.upper_bound)};
     }
   }
 
