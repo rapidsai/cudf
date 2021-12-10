@@ -2269,6 +2269,15 @@ def test_parquet_reader_brotli(datadir):
     assert_eq(expect, got)
 
 
+def test_parquet_reader_one_level_list(datadir):
+    fname = datadir / "one_level_list.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname).to_pandas(nullable=True)
+
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize("size_bytes", [4_000_000, 1_000_000, 600_000])
 @pytest.mark.parametrize("size_rows", [1_000_000, 100_000, 10_000])
 def test_parquet_writer_row_group_size(
