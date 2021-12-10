@@ -288,6 +288,65 @@ std::unique_ptr<cudf::column> extract_quarter(
 /** @} */  // end of group
 
 /**
+ * @brief Fixed frequencies supported by datetime rounding functions ceil, floor, round.
+ *
+ */
+enum class rounding_frequency : int32_t {
+  DAY,
+  HOUR,
+  MINUTE,
+  SECOND,
+  MILLISECOND,
+  MICROSECOND,
+  NANOSECOND
+};
+
+/**
+ * @brief Round datetimes up to the nearest multiple of the given frequency.
+ *
+ * @param column cudf::column_view of the input datetime values.
+ * @param freq rounding_frequency indicating the frequency to round up to.
+ * @param mr Device memory resource used to allocate device memory of the returned column.
+ *
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP.
+ * @return cudf::column of the same datetime resolution as the input column.
+ */
+std::unique_ptr<cudf::column> ceil_datetimes(
+  cudf::column_view const& column,
+  rounding_frequency freq,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Round datetimes down to the nearest multiple of the given frequency.
+ *
+ * @param column cudf::column_view of the input datetime values.
+ * @param freq rounding_frequency indicating the frequency to round down to.
+ * @param mr Device memory resource used to allocate device memory of the returned column.
+ *
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP.
+ * @return cudf::column of the same datetime resolution as the input column.
+ */
+std::unique_ptr<cudf::column> floor_datetimes(
+  cudf::column_view const& column,
+  rounding_frequency freq,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Round datetimes to the nearest multiple of the given frequency.
+ *
+ * @param column cudf::column_view of the input datetime values.
+ * @param freq rounding_frequency indicating the frequency to round to.
+ * @param mr Device memory resource used to allocate device memory of the returned column.
+ *
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP.
+ * @return cudf::column of the same datetime resolution as the input column.
+ */
+std::unique_ptr<cudf::column> round_datetimes(
+  cudf::column_view const& column,
+  rounding_frequency freq,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Round up to the nearest day
  *
  * @param column cudf::column_view of the input datetime values
