@@ -44,7 +44,7 @@ namespace kafka {
  * time is retrieved from an external service by the callback.
  * Ex: [token, token_expiration_in_epoch]
  */
-using kafka_oauth_callback_type = void*;
+using kafka_oauth_callback_type = std::map<std::string, std::string> (*)(void*);
 
 /**
  * @brief Callback to retrieve OAuth token from external source. Invoked when
@@ -52,12 +52,13 @@ using kafka_oauth_callback_type = void*;
  */
 class python_oauth_refresh_callback : public RdKafka::OAuthBearerTokenRefreshCb {
  public:
-  python_oauth_refresh_callback(kafka_oauth_callback_type cb);
+  python_oauth_refresh_callback(kafka_oauth_callback_type cb, void* python_callable);
 
   void oauthbearer_token_refresh_cb(RdKafka::Handle* handle, const std::string& oauthbearer_config);
 
  private:
   kafka_oauth_callback_type oauth_callback_;
+  void* python_callable_;
 };
 
 }  // namespace kafka

@@ -58,6 +58,7 @@ class kafka_consumer : public cudf::io::datasource {
    *                token when it expireskafka_oauth_callback_t
    */
   kafka_consumer(std::map<std::string, std::string> configs,
+                 void* python_callable,
                  kafka_oauth_callback_type oauth_callback);
 
   /**
@@ -80,6 +81,7 @@ class kafka_consumer : public cudf::io::datasource {
    * @param delimiter optional delimiter to insert into the output between kafka messages, Ex: "\n"
    */
   kafka_consumer(std::map<std::string, std::string> configs,
+                 void* python_callable,
                  kafka_oauth_callback_type oauth_callback,
                  std::string const& topic_name,
                  int partition,
@@ -193,6 +195,7 @@ class kafka_consumer : public cudf::io::datasource {
   std::unique_ptr<RdKafka::KafkaConsumer> consumer;
 
   std::map<std::string, std::string> configs;
+  void* python_callable_;
   kafka_oauth_callback_type oauth_callback_;
 
   std::string topic_name;

@@ -1,7 +1,6 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
 cimport cpython
-from cpython.ref cimport PyObject
 from libc.stdint cimport int32_t, int64_t
 from libcpp cimport bool
 from libcpp.map cimport map
@@ -11,6 +10,21 @@ from libcpp.string cimport string
 from cudf._lib.cpp.io.types cimport datasource
 
 from cudf_kafka._lib.kafka cimport kafka_consumer
+
+import functools
+
+
+cdef map[string, string] oauth_callback_wrapper(void *ctx):
+    print("Entering oauth_callback_wrapper")
+
+    # ctx is a functools.partial
+    func, args = <object>(ctx)
+
+    # Never makes it here, ^^
+    print("Func: " + str(func))
+    print("Args: " + str(args))
+    ret = func(*args)
+    return ret
 
 
 cdef class KafkaDatasource(Datasource):
@@ -25,12 +39,14 @@ cdef class KafkaDatasource(Datasource):
                   string delimiter=b"",):
 
         cdef map[string, string] configs
-        cdef void *cb
+        cdef void* python_callable
+        cdef map[string, string] (*cb)(void *)
 
         for key in kafka_configs:
             if key == 'oauth_cb':
                 if callable(kafka_configs[key]):
-                    cb = <void *>kafka_configs[key]
+                    python_callable = <void *>kafka_configs[key]
+                    cb = &oauth_callback_wrapper
                 else:
                     raise TypeError("'oauth_cb' configuration must \
                                       be a Python callable object")
@@ -40,6 +56,7 @@ cdef class KafkaDatasource(Datasource):
         if topic != b"" and partition != -1:
             self.c_datasource = <unique_ptr[datasource]> \
                 make_unique[kafka_consumer](configs,
+                                            python_callable,
                                             cb,
                                             topic,
                                             partition,
@@ -49,7 +66,7 @@ cdef class KafkaDatasource(Datasource):
                                             delimiter)
         else:
             self.c_datasource = <unique_ptr[datasource]> \
-                make_unique[kafka_consumer](configs, cb)
+                make_unique[kafka_consumer](configs, python_callable, cb)
 
     cdef datasource* get_datasource(self) nogil:
         return <datasource *> self.c_datasource.get()

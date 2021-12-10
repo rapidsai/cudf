@@ -26,8 +26,10 @@ namespace external {
 namespace kafka {
 
 kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
+                               void* python_callable,
                                kafka_oauth_callback_type oauth_callback)
   : configs(configs),
+    python_callable_(python_callable),
     oauth_callback_(oauth_callback),
     kafka_conf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL))
 {
@@ -40,7 +42,7 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
 
   // TODO: Just for testing ... want to make sure this works
   std::string error_string;
-  python_oauth_refresh_callback cb(oauth_callback);
+  python_oauth_refresh_callback cb(oauth_callback, python_callable_);
   kafka_conf->set("oauthbearer_token_refresh_cb", &cb, error_string);
 
   // Kafka 0.9 > requires group.id in the configuration
@@ -54,6 +56,7 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
 }
 
 kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
+                               void* python_callable,
                                kafka_oauth_callback_type oauth_callback,
                                std::string const& topic_name,
                                int partition,
@@ -62,6 +65,7 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
                                int batch_timeout,
                                std::string const& delimiter)
   : configs(configs),
+    python_callable_(python_callable),
     oauth_callback_(oauth_callback),
     topic_name(topic_name),
     partition(partition),
@@ -80,7 +84,7 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
 
   // TODO: Just for testing ... want to make sure this works
   std::string error_string;
-  python_oauth_refresh_callback cb(oauth_callback);
+  python_oauth_refresh_callback cb(oauth_callback, python_callable_);
   CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
                  kafka_conf->set("oauthbearer_token_refresh_cb", &cb, error_string),
                "Failed to set Kafka oauth callback");
