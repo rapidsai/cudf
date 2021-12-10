@@ -80,7 +80,6 @@ cdef class Column:
 
         self._size = size
         self._cached_sizeof = None
-        self._nan_count = None
         self._distinct_count = {}
         self._dtype = dtype
         self._offset = offset
@@ -152,10 +151,6 @@ cdef class Column:
         return self.null_count != 0
 
     @property
-    def has_nans(self):
-        return self.nan_count != 0
-
-    @property
     def base_mask(self):
         return self._base_mask
 
@@ -217,7 +212,6 @@ cdef class Column:
         self._distinct_count = {}
         self._cached_sizeof = None
         self._null_count = None
-        self._nan_count = None
 
     def set_mask(self, value):
         """
@@ -280,10 +274,6 @@ cdef class Column:
         if self._null_count is None:
             self._null_count = self.compute_null_count()
         return self._null_count
-
-    @property
-    def nan_count(self):
-        return 0
 
     @property
     def offset(self):

@@ -62,7 +62,7 @@ class NumericalColumn(NumericalBaseColumn):
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
             size = (data.size // dtype.itemsize) - offset
-
+        self._nan_count = None
         super().__init__(
             data,
             size=size,
@@ -71,6 +71,10 @@ class NumericalColumn(NumericalBaseColumn):
             offset=offset,
             null_count=null_count,
         )
+
+    def _clear_cache(self):
+        super()._clear_cache()
+        self._nan_count = None
 
     def __contains__(self, item: ScalarLike) -> bool:
         """
@@ -89,6 +93,10 @@ class NumericalColumn(NumericalBaseColumn):
         return libcudf.search.contains(
             self, column.as_column([item], dtype=self.dtype)
         ).any()
+
+    @property
+    def has_nans(self):
+        return self.nan_count != 0
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
@@ -304,6 +312,17 @@ class NumericalColumn(NumericalBaseColumn):
             rhs = rhs.astype(lhs.dtype)
 
         return lhs, rhs
+
+    def _process_for_reduction(
+        self, skipna: bool = None, min_count: int = 0
+    ) -> Union[ColumnBase, ScalarLike]:
+        skipna = True if skipna is None else skipna
+
+        if not skipna and (self.has_nulls or self.has_nans):
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+        return super()._process_for_reduction(
+            skipna=skipna, min_count=min_count
+        )
 
     def _default_na_value(self) -> ScalarLike:
         """Returns the default NA value for this column"""
