@@ -169,6 +169,7 @@
         <USE_GDS>OFF</USE_GDS>
         <GPU_ARCHS>ALL</GPU_ARCHS>
         <CUDF_JNI_ARROW_STATIC>ON</CUDF_JNI_ARROW_STATIC>
+        <CUDF_JNI_LIBCUDF_STATIC>OFF</CUDF_JNI_LIBCUDF_STATIC>
         <native.build.path>${project.build.directory}/cmake-build</native.build.path>
         <slf4j.version>1.7.30</slf4j.version>
         <arrow.version>0.15.1</arrow.version>
@@ -390,6 +391,7 @@
                                     <arg value="-DCUDF_CPP_BUILD_DIR=${CUDF_CPP_BUILD_DIR}"/>
                                     <arg value="-DGPU_ARCHS=${GPU_ARCHS}"/>
                                     <arg value="-DCUDF_JNI_ARROW_STATIC=${CUDF_JNI_ARROW_STATIC}"/>
+                                    <arg value="-DCUDF_JNI_LIBCUDF_STATIC=${CUDF_JNI_LIBCUDF_STATIC}"/>
                                 </exec>
                                 <exec dir="${native.build.path}"
                                       failonerror="true"
@@ -434,26 +436,17 @@
                                 fail("Could not find cudf as a dependency of libcudfjni out> $sout err> $serr")
                             }
 
-                            def libcudart = ~/libcudart\\.so\\.(.*)\\s+=>.*/
-                            def cm = libcudart.matcher(sout)
+                            def nvccout = new StringBuffer(), nvccerr = new StringBuffer()
+                            def nvccproc = 'nvcc --version'.execute()
+                            nvccproc.consumeProcessOutput(nvccout, nvccerr)
+                            nvccproc.waitForOrKill(10000)
+                            def cudaPattern = ~/Cuda compilation tools, release ([0-9]+)/
+                            def cm = cudaPattern.matcher(nvccout)
                             if (cm.find()) {
-                                if (pom.properties['CUDA_STATIC_RUNTIME'] == 'ON') {
-                                    fail("found libcudart when we expect to be statically linked to it")
-                                }
                                 def classifier = 'cuda' + cm.group(1)
-                                  .replaceFirst(/\\./, '-') // First . becomes a -
-                                  .replaceAll(/\\..*$/, '') // Drop all of the subversions from cuda
-                                  .replaceAll(/-0$/, '') // If it is a X.0 version, like 10.0 drop the .0
                                 pom.properties['cuda.classifier'] = classifier
-                                println 'WARNING FOUND libcudart this means your jar will only work against a single version of the cuda runtime ' + classifier
-                            } else if (pom.properties['CUDA_STATIC_RUNTIME'] == 'OFF') {
-                                fail('could not find libcudart when we expect to be dynamically linked to it')
                             } else {
-                                pom.properties['cuda.classifier'] = ''
-                            }
-
-                            if (pom.properties['CUDA_STATIC_RUNTIME'] == 'ON') {
-                                println 'WARNING RUNNING WITH STATIC LINKING DOES NOT FULLY WORK. USE WITH CAUTION.'
+                                fail('could not find CUDA version')
                             }
                             </source>
                         </configuration>
