@@ -114,13 +114,13 @@ std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info 
   switch (info.type) {
     case io_type::FILEPATH: {
       auto sources = std::vector<std::unique_ptr<cudf::io::datasource>>();
-      for (auto const& filepath : info.filepaths) {
+      for (auto const& filepath : info.get_filepaths()) {
         sources.emplace_back(cudf::io::datasource::create(filepath, range_offset, range_size));
       }
       return sources;
     }
-    case io_type::HOST_BUFFER: return cudf::io::datasource::create(info.buffers);
-    case io_type::USER_IMPLEMENTED: return cudf::io::datasource::create(info.user_sources);
+    case io_type::HOST_BUFFER: return cudf::io::datasource::create(info.get_buffers());
+    case io_type::USER_IMPLEMENTED: return cudf::io::datasource::create(info.get_user_sources());
     default: CUDF_FAIL("Unsupported source type");
   }
 }
@@ -164,7 +164,7 @@ compression_type infer_compression_type(compression_type compression, source_inf
 
   if (info.type != io_type::FILEPATH) { return compression_type::NONE; }
 
-  auto filepath = info.filepaths[0];
+  auto filepath = info.get_filepaths()[0];
 
   // Attempt to infer from the file extension
   const auto pos = filepath.find_last_of('.');
@@ -243,14 +243,17 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
   // Get source to read statistics from
   std::unique_ptr<datasource> source;
   if (src_info.type == io_type::FILEPATH) {
-    CUDF_EXPECTS(src_info.filepaths.size() == 1, "Only a single source is currently supported.");
-    source = cudf::io::datasource::create(src_info.filepaths[0]);
+    CUDF_EXPECTS(src_info.get_filepaths().size() == 1,
+                 "Only a single source is currently supported.");
+    source = cudf::io::datasource::create(src_info.get_filepaths()[0]);
   } else if (src_info.type == io_type::HOST_BUFFER) {
-    CUDF_EXPECTS(src_info.buffers.size() == 1, "Only a single source is currently supported.");
-    source = cudf::io::datasource::create(src_info.buffers[0]);
+    CUDF_EXPECTS(src_info.get_buffers().size() == 1,
+                 "Only a single source is currently supported.");
+    source = cudf::io::datasource::create(src_info.get_buffers()[0]);
   } else if (src_info.type == io_type::USER_IMPLEMENTED) {
-    CUDF_EXPECTS(src_info.user_sources.size() == 1, "Only a single source is currently supported.");
-    source = cudf::io::datasource::create(src_info.user_sources[0]);
+    CUDF_EXPECTS(src_info.get_user_sources().size() == 1,
+                 "Only a single source is currently supported.");
+    source = cudf::io::datasource::create(src_info.get_user_sources()[0]);
   } else {
     CUDF_FAIL("Unsupported source type");
   }

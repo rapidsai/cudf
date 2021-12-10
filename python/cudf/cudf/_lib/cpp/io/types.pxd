@@ -82,8 +82,8 @@ cdef extern from "cudf/io/types.hpp" \
 
     cdef cppclass source_info:
         io_type type
-        vector[string] filepaths
-        vector[host_buffer] buffers
+        const vector[string]& get_filepaths() except +
+        const vector[host_buffer]& get_buffers() except +
         vector[shared_ptr[CRandomAccessFile]] files
 
         source_info() except +
@@ -93,9 +93,9 @@ cdef extern from "cudf/io/types.hpp" \
 
     cdef cppclass sink_info:
         io_type type
-        string filepath
-        vector[char] * buffer
-        data_sink * user_sink
+        const vector[string]& get_filepaths()
+        const vector[vector[char] *]& get_buffers()
+        const vector[data_sink *]& get_user_sinks()
 
         sink_info() except +
         sink_info(string file_path) except +

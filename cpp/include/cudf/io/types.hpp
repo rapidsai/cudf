@@ -152,10 +152,7 @@ struct host_buffer {
  */
 struct source_info {
   io_type type = io_type::FILEPATH;
-  std::vector<std::string> filepaths;
-  std::vector<host_buffer> buffers;
   std::vector<std::shared_ptr<arrow::io::RandomAccessFile>> files;
-  std::vector<cudf::io::datasource*> user_sources;
 
   source_info() = default;
 
@@ -185,6 +182,16 @@ struct source_info {
     : type(io_type::USER_IMPLEMENTED), user_sources({source})
   {
   }
+
+  auto const& get_filepaths() const { return filepaths; }
+  auto const& get_buffers() const { return buffers; }
+  auto const& get_files() const { return files; }
+  auto const& get_user_sources() const { return user_sources; }
+
+ private:
+  std::vector<std::string> filepaths;
+  std::vector<host_buffer> buffers;
+  std::vector<cudf::io::datasource*> user_sources;
 };
 
 /**
@@ -396,6 +403,12 @@ class table_input_metadata {
   std::vector<column_in_metadata> column_metadata;
 };
 
+/**
+ * @brief Information used while writing partitioned datasets
+ *
+ * This information defines the slice of an input table to write to file. In partitioned dataset
+ * writing, one partition_info struct defines one partition and corresponds to one output file
+ */
 struct partition_info {
   size_type start_row;
   size_type num_rows;
