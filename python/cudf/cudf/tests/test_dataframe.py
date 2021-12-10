@@ -2621,6 +2621,7 @@ def test_reset_index_dup_level_name(level, drop, inplace):
                 [],
                 {"level": level, "drop": drop, "inplace": inplace},
             ),
+            expected_error_message="occurs multiple times, use a level number",
         )
         return
 
