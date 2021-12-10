@@ -4732,6 +4732,45 @@ class DatetimeProperties(object):
             data={self.series.name: out_column}, index=self.series._index
         )
 
+    def round(self, freq):
+        """
+        Perform round operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        freq : str
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
+            for more details on these aliases.
+
+        Returns
+        -------
+        Series
+            Series with all timestamps rounded to the specified frequency.
+            The index is preserved.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> dt_sr = cudf.Series([
+        ...     "2001-01-01 00:04:45",
+        ...     "2001-01-01 00:04:58",
+        ...     "2001-01-01 00:05:04",
+        ... ], dtype="datetime64[ns]")
+        >>> dt_sr.dt.round("T")
+        0   2001-01-01 00:05:00
+        1   2001-01-01 00:05:00
+        2   2001-01-01 00:05:00
+        dtype: datetime64[ns]
+        """
+        out_column = self.series._column.round(freq)
+
+        return Series._from_data(
+            data={self.series.name: out_column}, index=self.series._index
+        )
+
     def strftime(self, date_format, *args, **kwargs):
         """
         Convert to Series using specified ``date_format``.

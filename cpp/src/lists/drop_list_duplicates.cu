@@ -634,17 +634,21 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
   // If the values lists column is not given, its corresponding output will be nullptr.
   auto out_values =
     values ? make_lists_column(keys.size(),
-                               std::make_unique<column>(output_offsets->view()),
+                               std::make_unique<column>(output_offsets->view(), stream, mr),
                                std::move(unique_entries_and_list_indices[1]),
                                values.value().null_count(),
-                               cudf::detail::copy_bitmask(values.value().parent(), stream, mr))
+                               cudf::detail::copy_bitmask(values.value().parent(), stream, mr),
+                               stream,
+                               mr)
            : nullptr;
 
   auto out_keys = make_lists_column(keys.size(),
                                     std::move(output_offsets),
                                     std::move(unique_entries_and_list_indices[0]),
                                     keys.null_count(),
-                                    cudf::detail::copy_bitmask(keys.parent(), stream, mr));
+                                    cudf::detail::copy_bitmask(keys.parent(), stream, mr),
+                                    stream,
+                                    mr);
 
   return std::pair{std::move(out_keys), std::move(out_values)};
 }

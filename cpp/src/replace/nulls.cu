@@ -180,9 +180,9 @@ struct replace_nulls_column_kernel_forwarder {
     auto replace = replace_nulls<col_type, false>;
     if (output_view.nullable()) replace = replace_nulls<col_type, true>;
 
-    auto device_in          = cudf::column_device_view::create(input);
-    auto device_out         = cudf::mutable_column_device_view::create(output_view);
-    auto device_replacement = cudf::column_device_view::create(replacement);
+    auto device_in          = cudf::column_device_view::create(input, stream);
+    auto device_out         = cudf::mutable_column_device_view::create(output_view, stream);
+    auto device_replacement = cudf::column_device_view::create(replacement, stream);
 
     rmm::device_scalar<cudf::size_type> valid_counter(0, stream);
     cudf::size_type* valid_count = valid_counter.data();
@@ -311,7 +311,7 @@ struct replace_nulls_scalar_kernel_forwarder {
 
     using ScalarType = cudf::scalar_type_t<col_type>;
     auto& s1         = static_cast<ScalarType const&>(replacement);
-    auto device_in   = cudf::column_device_view::create(input);
+    auto device_in   = cudf::column_device_view::create(input, stream);
 
     auto func = replace_nulls_functor<col_type>{s1.data()};
     thrust::transform(rmm::exec_policy(stream),
@@ -366,7 +366,7 @@ std::unique_ptr<cudf::column> replace_nulls_policy_impl(cudf::column_view const&
                                                         rmm::cuda_stream_view stream,
                                                         rmm::mr::device_memory_resource* mr)
 {
-  auto device_in = cudf::column_device_view::create(input);
+  auto device_in = cudf::column_device_view::create(input, stream);
   auto index     = thrust::make_counting_iterator<cudf::size_type>(0);
   auto valid_it  = cudf::detail::make_validity_iterator(*device_in);
   auto in_begin  = thrust::make_zip_iterator(thrust::make_tuple(index, valid_it));
