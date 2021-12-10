@@ -14,19 +14,18 @@
  * limitations under the License.
  */
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/iterator_utilities.hpp>
-#include <cudf_test/timestamp_utilities.cuh>
-#include <cudf_test/type_lists.hpp>
-
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/timestamp_utilities.cuh>
+#include <cudf_test/type_lists.hpp>
 
 #define XXX false  // stub for null values
 
@@ -926,7 +925,7 @@ TYPED_TEST(TypedDatetimeOpsTest, TestRoundDatetime)
 
   auto input = generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop));
 
-  auto host_val                     = to_host<T>(input);
+  auto host_val   = to_host<T>(input);
   auto timestamps = host_val.first;
 
   std::vector<T> rounded_day(timestamps.size());
