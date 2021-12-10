@@ -34,10 +34,13 @@ TEST_F(KafkaDatasourceTest, MissingGroupID)
   std::map<std::string, std::string> kafka_configs;
   kafka_configs["bootstrap.servers"] = "localhost:9092";
 
-  kafka::kafka_oauth_callback_type callback;
+  kafka::python_callable_type python_callable;
+  kafka::kafka_oauth_callback_wrapper_type callback_wrapper;
 
-  EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, callback, "csv-topic", 0, 0, 3, 5000, "\n"),
-               cudf::logic_error);
+  EXPECT_THROW(
+    kafka::kafka_consumer kc(
+      kafka_configs, python_callable, callback_wrapper, "csv-topic", 0, 0, 3, 5000, "\n"),
+    cudf::logic_error);
 }
 
 TEST_F(KafkaDatasourceTest, InvalidConfigValues)
@@ -46,15 +49,20 @@ TEST_F(KafkaDatasourceTest, InvalidConfigValues)
   std::map<std::string, std::string> kafka_configs;
   kafka_configs["completely_made_up_config"] = "wrong";
 
-  kafka::kafka_oauth_callback_type callback;
+  kafka::python_callable_type python_callable;
+  kafka::kafka_oauth_callback_wrapper_type callback_wrapper;
 
-  EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, callback, "csv-topic", 0, 0, 3, 5000, "\n"),
-               cudf::logic_error);
+  EXPECT_THROW(
+    kafka::kafka_consumer kc(
+      kafka_configs, python_callable, callback_wrapper, "csv-topic", 0, 0, 3, 5000, "\n"),
+    cudf::logic_error);
 
   // Give a good config property with a bad value
   kafka_configs.clear();
   kafka_configs["message.max.bytes"] = "this should be a number not text";
 
-  EXPECT_THROW(kafka::kafka_consumer kc(kafka_configs, callback, "csv-topic", 0, 0, 3, 5000, "\n"),
-               cudf::logic_error);
+  EXPECT_THROW(
+    kafka::kafka_consumer kc(
+      kafka_configs, python_callable, callback_wrapper, "csv-topic", 0, 0, 3, 5000, "\n"),
+    cudf::logic_error);
 }
