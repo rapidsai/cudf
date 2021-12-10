@@ -1282,14 +1282,17 @@ def open_remote_files(
         # Use fsspec.parquet module.
         # TODO: Use `cat_ranges` to collect "known"
         # parts for all files at once.
+        row_groups = kwargs.pop("row_groups", None) or ([None] * len(paths))
         return [
             ArrowPythonFile(
                 _set_context(
-                    fsspec.parquet.open_parquet_file(path, fs=fs, **kwargs,),
+                    fsspec.parquet.open_parquet_file(
+                        path, fs=fs, row_groups=rgs, **kwargs,
+                    ),
                     context_stack,
                 )
             )
-            for path in paths
+            for path, rgs in zip(paths, row_groups)
         ]
 
     # Default open - Use pyarrow filesystem API
