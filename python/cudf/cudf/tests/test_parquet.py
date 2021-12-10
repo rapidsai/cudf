@@ -449,6 +449,27 @@ def test_parquet_row_group_sizes(tmpdir, row_group_sizes):
         assert a == b
 
 
+@pytest.mark.parametrize(
+    "row_group_cols",
+    ["a", "b", "c"],
+)
+def test_parquet_row_group_cols(tmpdir, row_group_cols):
+    df = cudf.DataFrame(
+        [(1, "aaa", 9.0), (2, "bbb", 8.0), (3, "ccc", 7.0), (1, "aaa", 9.0)],
+        columns=pd.Index(list("abc")),
+    )
+
+    fname = tmpdir.join("row_group_sizes.parquet")
+    df.to_parquet(fname, compression="snappy", row_group_cols=row_group_cols)
+
+    num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
+
+    assert num_rows == len(df.index)
+    assert row_groups == 3
+    for a, b in zip(col_names[1:], df.columns):
+        assert a == b
+
+
 def test_parquet_read_filtered(tmpdir, rdg_seed):
     # Generate data
     fname = tmpdir.join("filtered.parquet")

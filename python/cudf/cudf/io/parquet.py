@@ -475,6 +475,10 @@ def to_parquet(
             return
         elif row_group_cols:
             _, offsets, _, grouped_df = df.groupby(row_group_cols)._grouped()
+            row_group_sizes = [
+                offsets[i + 1] - offsets[i]
+                for i in range(len(offsets) - 1)
+            ]
             to_parquet(
                 grouped_df,
                 path,
@@ -489,7 +493,7 @@ def to_parquet(
                 int96_timestamps=int96_timestamps,
                 row_group_size_bytes=row_group_size_bytes,
                 row_group_size_rows=row_group_size_rows,
-                row_group_sizes=offsets[1:],
+                row_group_sizes=row_group_sizes,
                 *args,
                 **kwargs,
             )
