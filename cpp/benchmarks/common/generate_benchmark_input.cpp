@@ -161,22 +161,23 @@ struct random_value_fn<T, typename std::enable_if_t<cudf::is_chrono<T>()>> {
  */
 template <typename T>
 struct random_value_fn<T, typename std::enable_if_t<cudf::is_fixed_point<T>()>> {
-  typename T::rep const lower_bound;
-  typename T::rep const upper_bound;
-  distribution_fn<typename T::rep> dist;
+  using rep = typename T::rep;
+  rep const lower_bound;
+  rep const upper_bound;
+  distribution_fn<rep> dist;
   std::optional<numeric::scale_type> scale;
 
-  random_value_fn(distribution_params<typename T::rep> const& desc)
+  random_value_fn(distribution_params<rep> const& desc)
     : lower_bound{desc.lower_bound},
       upper_bound{desc.upper_bound},
-      dist{make_distribution<typename T::rep>(desc.id, desc.lower_bound, desc.upper_bound)}
+      dist{make_distribution<rep>(desc.id, desc.lower_bound, desc.upper_bound)}
   {
   }
 
   T operator()(std::mt19937& engine)
   {
     if (not scale.has_value()) {
-      int const max_scale = 9 * sizeof(typename T::rep) / 4;
+      int const max_scale = std::numeric_limits<rep>::digits10;
       auto scale_dist     = make_distribution<int>(distribution_id::NORMAL, -max_scale, max_scale);
       scale = numeric::scale_type{std::max(std::min(scale_dist(engine), max_scale), -max_scale)};
     }
