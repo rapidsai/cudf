@@ -40,6 +40,7 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
             PTX 'cudf::aggregation::PTX'
             CUDA 'cudf::aggregation::CUDA'
             CORRELATION 'cudf::aggregation::CORRELATION'
+            COVARIANCE 'cudf::aggregation::COVARIANCE'
 
         Kind kind
 
@@ -117,3 +118,6 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
 
     cdef unique_ptr[T] make_correlation_aggregation[T](
         correlation_type type, size_type min_periods) except +
+
+    cdef unique_ptr[T] make_covariance_aggregation[T](
+        size_type min_periods, size_type ddof) except +

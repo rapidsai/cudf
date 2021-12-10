@@ -896,6 +896,59 @@ class GroupBy(Serializable):
 
         return res
 
+    def cov(self, min_periods=None, ddof=1):
+
+        # create expanded dataframe consisting all combinations of the
+        # struct columns-pairs to be correlated
+        # i.e (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
+        _cols = self.grouping.values.columns.tolist()
+        len_cols = len(_cols)
+
+        new_df_data = {}
+        for x, y in itertools.combinations_with_replacement(_cols, 2):
+            new_df_data[(x, y)] = cudf.DataFrame._from_data(
+                {"x": self.obj._data[x], "y": self.obj._data[y]}
+            ).to_struct()
+        new_gb = cudf.DataFrame._from_data(new_df_data).groupby(
+            by=self.grouping.keys
+        )
+
+        gb_cov = new_gb.agg(lambda x: x.cov(min_periods, ddof))
+
+        # ensure that column-pair labels are arranged in ascending order
+        cols_list = [
+            (y, x) if i > j else (x, y)
+            for j, y in enumerate(_cols)
+            for i, x in enumerate(_cols)
+        ]
+        cols_split = [
+            cols_list[i : i + len_cols]
+            for i in range(0, len(cols_list), len_cols)
+        ]
+
+        # interleave: combine the correlation results for each column-pair
+        # into a single column
+        res = cudf.DataFrame._from_data(
+            {
+                x: gb_cov.loc[:, i].interleave_columns()
+                for i, x in zip(cols_split, _cols)
+            }
+        )
+
+        # create a multiindex for the groupby correlated dataframe,
+        # to match pandas behavior
+        unsorted_idx = gb_cov.index.repeat(len_cols)
+        idx_sort_order = unsorted_idx._get_sorted_inds()
+        sorted_idx = unsorted_idx._gather(idx_sort_order)
+        if len(gb_cov):
+            # TO-DO: Should the operation below be done on the CPU instead?
+            sorted_idx._data[None] = as_column(
+                cudf.Series(_cols).tile(len(gb_cov.index))
+            )
+        res.index = MultiIndex._from_data(sorted_idx._data)
+
+        return res
+
     def var(self, ddof=1):
         """Compute the column-wise variance of the values in each group.
 

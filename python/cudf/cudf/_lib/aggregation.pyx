@@ -59,6 +59,7 @@ class AggregationKind(Enum):
     PTX = libcudf_aggregation.aggregation.Kind.PTX
     CUDA = libcudf_aggregation.aggregation.Kind.CUDA
     CORRELATION = libcudf_aggregation.aggregation.Kind.CORRELATION
+    COVARIANCE = libcudf_aggregation.aggregation.Kind.COVARIANCE
 
 
 class CorrelationType(IntEnum):
@@ -351,6 +352,15 @@ cdef class Aggregation:
         agg.c_obj = move(
             libcudf_aggregation.make_correlation_aggregation[aggregation](
                 c_method, min_periods
+            ))
+        return agg
+
+    @classmethod
+    def cov(cls, libcudf_types.size_type min_periods, ddof=1):
+        cdef Aggregation agg = cls()
+        agg.c_obj = move(
+            libcudf_aggregation.make_covariance_aggregation[aggregation](
+                min_periods, ddof
             ))
         return agg
 
@@ -739,6 +749,16 @@ cdef class GroupbyAggregation:
             libcudf_aggregation.
             make_correlation_aggregation[groupby_aggregation](
                 c_method, min_periods
+            ))
+        return agg
+
+    @classmethod
+    def cov(cls, libcudf_types.size_type min_periods, ddof=1):
+        cdef GroupbyAggregation agg = cls()
+        agg.c_obj = move(
+            libcudf_aggregation.
+            make_covariance_aggregation[groupby_aggregation](
+                min_periods, ddof
             ))
         return agg
 
