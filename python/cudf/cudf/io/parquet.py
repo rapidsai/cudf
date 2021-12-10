@@ -326,7 +326,7 @@ def read_parquet(
     # Since use_python_file_object=False is not longer
     # supported, throw a deprecation warning if the
     # parameter is used
-    use_python_file_object = kwargs.pop("use_python_file_object", None,)
+    use_python_file_object = kwargs.pop("use_python_file_object", None)
     if use_python_file_object is not None:
         py_obj_msg = (
             "The use_python_file_object argument is now "

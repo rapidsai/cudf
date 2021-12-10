@@ -1235,14 +1235,6 @@ def open_remote_files(
     **kwargs :
         Key-word arguments to be passed to format-specific
         open functions.
-
-    Returns
-    -------
-    filepath_or_buffer : str, bytes, BytesIO, list
-        Filepath string or in-memory buffer of data or a
-        list of Filepath strings or in-memory buffers of data.
-    compression : str
-        Type of compression algorithm for the content
     """
 
     # Just use call-back function if one was specified
@@ -1339,7 +1331,7 @@ def get_filepath_or_buffer(
         If True, Arrow-backed PythonFile objects will be used in place
         of fsspec AbstractBufferedFile objects.
     format_options : dict, optional
-        Optional dictionary of key-word argumentst to pass to
+        Optional dictionary of key-word arguments to pass to
         `open_remote_files` (used for remote storage only).
 
     Returns
