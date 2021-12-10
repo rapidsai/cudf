@@ -103,8 +103,10 @@ class writer::impl {
    * normally used for chunked writing.
    *
    * @param[in] table The table information to be written
+   * @param[in] partitions Optional partitions to divide the table into. If specified, must be same
+   * size as number of sinks.
    */
-  void write(table_view const& table, std::vector<partition_info> partitions);
+  void write(table_view const& table, std::vector<partition_info> const& partitions);
 
   /**
    * @brief Finishes the chunked/streamed write process.

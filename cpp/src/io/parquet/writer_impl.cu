@@ -1169,11 +1169,10 @@ void writer::impl::init_state()
   }
 }
 
-void writer::impl::write(table_view const& table, std::vector<partition_info> partitions)
+void writer::impl::write(table_view const& table, std::vector<partition_info> const& partitions)
 {
   last_write_successful = false;
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
-  if (partitions.empty()) { partitions.push_back({0, table.num_rows()}); }
 
   if (not table_meta) { table_meta = std::make_unique<table_input_metadata>(table); }
 
@@ -1419,14 +1418,10 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> pa
   }
 
   // Find which partition a rg belongs to
-  std::vector<int> part_end_rg;
-  std::inclusive_scan(
-    num_rg_in_part.begin(), num_rg_in_part.end(), std::back_inserter(part_end_rg));
   std::vector<int> rg_to_part;
-  auto it = thrust::make_counting_iterator(0);
-  std::transform(it, it + num_rowgroups, std::back_inserter(rg_to_part), [&](auto i) {
-    return std::upper_bound(part_end_rg.begin(), part_end_rg.end(), i) - part_end_rg.begin();
-  });
+  for (size_t p = 0; p < num_rg_in_part.size(); ++p) {
+    std::fill_n(std::back_inserter(rg_to_part), num_rg_in_part[p], p);
+  }
 
   // Initialize batches of rowgroups to encode (mainly to limit peak memory usage)
   std::vector<size_type> batch_list;
@@ -1675,7 +1670,8 @@ writer::~writer() = default;
 // Forward to implementation
 void writer::write(table_view const& table, std::vector<partition_info> const& partitions)
 {
-  _impl->write(table, partitions);
+  _impl->write(
+    table, partitions.empty() ? std::vector<partition_info>{{0, table.num_rows()}} : partitions);
 }
 
 // Forward to implementation

@@ -232,7 +232,7 @@ struct sink_info {
 
  private:
   std::vector<std::string> filepaths;
-  std::vector<std::vector<char>*> buffers;  // TODO: perhaps we can repurpose host_buffer. ask VM
+  std::vector<std::vector<char>*> buffers;
   std::vector<cudf::io::data_sink*> user_sinks;
 };
 
