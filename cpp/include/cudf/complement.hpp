@@ -26,29 +26,28 @@ namespace cudf {
  * @addtogroup complement_generation
  * @{
  * @file
- * @brief APIs for generating complement values of the input
+ * @brief APIs for generating complement values of the input.
  */
 
 /**
- * @brief Generate an array containing complement of the values given from the input.
+ * @brief Generate an array containing complement of the values given in the input.
  *
- * For a number of given columns containing indices in the range of [0, @p size) that represent some
- * gather/scatter maps, generate an output column containing the indices in the same range which do
- * not appear in any of the given maps.
+ * For a given input array of integer values, generate an output array containing the values in the
+ * range of [0, size) such that they do not appear in the input.
  *
- * Duplicates indices have no affect on the outcome. Invalid indices (i.e., the indices that are
- * outside of the given range [0, @p size)) are ignored during generating the output.
+ * The input array is allowed to have duplicates values, which will not affect the result.
+ * In addition, values that are outside of the given range [0, @p size) will be ignored from the
+ * operation.
  *
- * @throws cudf::logic_error if any of the given @p maps column is not of integer types.
  * @throws cudf::logic_error if @p size is < 0.
  *
- * @param maps The columns containing input indices.
- * @param size Size that defines the range of indices in both input and output.
+ * @param input The input values to find complement.
+ * @param size Size that defines the range for output values.
  * @param mr Device memory resource used to allocate the returned column's device memory.
- * @return The result column containing the generated complement indices.
+ * @return Array containing the generated complement values.
  */
 rmm::device_uvector<size_type> complement(
-  std::vector<device_span<size_type>> const& maps,
+  device_span<size_type const> const& input,
   size_type size,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
