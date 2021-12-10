@@ -315,7 +315,7 @@ std::unique_ptr<cudf::column> gather(
     d_out_offsets + output_count,
     [] __device__(auto size) { return static_cast<size_t>(size); },
     size_t{0},
-    thrust::plus<size_t>{});
+    thrust::plus{});
   CUDF_EXPECTS(total_bytes < static_cast<std::size_t>(std::numeric_limits<size_type>::max()),
                "total size of output strings is too large for a cudf column");
 

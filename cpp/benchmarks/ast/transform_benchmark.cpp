@@ -25,6 +25,7 @@
 
 #include <benchmark/benchmark.h>
 #include <fixture/benchmark_fixture.hpp>
+#include <fixture/templated_benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
@@ -40,7 +41,6 @@ enum class TreeType {
                    // child column reference
 };
 
-template <typename key_type, TreeType tree_type, bool reuse_columns, bool Nullable>
 class AST : public cudf::benchmark {
 };
 
@@ -127,9 +127,22 @@ static void BM_ast_transform(benchmark::State& state)
                           (tree_levels + 1) * sizeof(key_type));
 }
 
-#define AST_TRANSFORM_BENCHMARK_DEFINE(name, key_type, tree_type, reuse_columns, nullable) \
-  BENCHMARK_TEMPLATE_DEFINE_F(AST, name, key_type, tree_type, reuse_columns, nullable)     \
-  (::benchmark::State & st) { BM_ast_transform<key_type, tree_type, reuse_columns, nullable>(st); }
+static void CustomRanges(benchmark::internal::Benchmark* b)
+{
+  auto row_counts       = std::vector<cudf::size_type>{100'000, 1'000'000, 10'000'000, 100'000'000};
+  auto operation_counts = std::vector<cudf::size_type>{1, 5, 10};
+  for (auto const& row_count : row_counts) {
+    for (auto const& operation_count : operation_counts) {
+      b->Args({row_count, operation_count});
+    }
+  }
+}
+
+#define AST_TRANSFORM_BENCHMARK_DEFINE(name, key_type, tree_type, reuse_columns, nullable)   \
+  TEMPLATED_BENCHMARK_F(AST, BM_ast_transform, key_type, tree_type, reuse_columns, nullable) \
+    ->Apply(CustomRanges)                                                                    \
+    ->Unit(benchmark::kMillisecond)                                                          \
+    ->UseManualTime();
 
 AST_TRANSFORM_BENCHMARK_DEFINE(
   ast_int32_imbalanced_unique, int32_t, TreeType::IMBALANCED_LEFT, false, false);
@@ -144,44 +157,3 @@ AST_TRANSFORM_BENCHMARK_DEFINE(
   ast_int32_imbalanced_reuse_nulls, int32_t, TreeType::IMBALANCED_LEFT, true, true);
 AST_TRANSFORM_BENCHMARK_DEFINE(
   ast_double_imbalanced_unique_nulls, double, TreeType::IMBALANCED_LEFT, false, true);
-
-static void CustomRanges(benchmark::internal::Benchmark* b)
-{
-  auto row_counts       = std::vector<cudf::size_type>{100'000, 1'000'000, 10'000'000, 100'000'000};
-  auto operation_counts = std::vector<cudf::size_type>{1, 5, 10};
-  for (auto const& row_count : row_counts) {
-    for (auto const& operation_count : operation_counts) {
-      b->Args({row_count, operation_count});
-    }
-  }
-}
-
-BENCHMARK_REGISTER_F(AST, ast_int32_imbalanced_unique)
-  ->Apply(CustomRanges)
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();
-
-BENCHMARK_REGISTER_F(AST, ast_int32_imbalanced_reuse)
-  ->Apply(CustomRanges)
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();
-
-BENCHMARK_REGISTER_F(AST, ast_double_imbalanced_unique)
-  ->Apply(CustomRanges)
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();
-
-BENCHMARK_REGISTER_F(AST, ast_int32_imbalanced_unique_nulls)
-  ->Apply(CustomRanges)
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();
-
-BENCHMARK_REGISTER_F(AST, ast_int32_imbalanced_reuse_nulls)
-  ->Apply(CustomRanges)
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();
-
-BENCHMARK_REGISTER_F(AST, ast_double_imbalanced_unique_nulls)
-  ->Apply(CustomRanges)
-  ->Unit(benchmark::kMillisecond)
-  ->UseManualTime();

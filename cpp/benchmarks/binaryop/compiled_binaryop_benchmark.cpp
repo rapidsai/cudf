@@ -15,6 +15,7 @@
  */
 
 #include <fixture/benchmark_fixture.hpp>
+#include <fixture/templated_benchmark_fixture.hpp>
 #include <synchronization/synchronization.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
@@ -23,12 +24,11 @@
 
 #include <thrust/iterator/counting_iterator.h>
 
-template <typename TypeLhs, typename TypeRhs, typename TypeOut, cudf::binary_operator>
 class COMPILED_BINARYOP : public cudf::benchmark {
 };
 
-template <typename TypeLhs, typename TypeRhs, typename TypeOut>
-void BM_compiled_binaryop(benchmark::State& state, cudf::binary_operator binop)
+template <typename TypeLhs, typename TypeRhs, typename TypeOut, cudf::binary_operator binop>
+void BM_compiled_binaryop(benchmark::State& state)
 {
   const cudf::size_type column_size{(cudf::size_type)state.range(0)};
 
@@ -50,20 +50,19 @@ void BM_compiled_binaryop(benchmark::State& state, cudf::binary_operator binop)
 }
 
 // TODO tparam boolean for null.
-#define BINARYOP_BENCHMARK_DEFINE(TypeLhs, TypeRhs, binop, TypeOut)                    \
-  BENCHMARK_TEMPLATE_DEFINE_F(                                                         \
-    COMPILED_BINARYOP, binop, TypeLhs, TypeRhs, TypeOut, cudf::binary_operator::binop) \
-  (::benchmark::State & st)                                                            \
-  {                                                                                    \
-    BM_compiled_binaryop<TypeLhs, TypeRhs, TypeOut>(st, cudf::binary_operator::binop); \
-  }                                                                                    \
-  BENCHMARK_REGISTER_F(COMPILED_BINARYOP, binop)                                       \
-    ->Unit(benchmark::kMicrosecond)                                                    \
-    ->UseManualTime()                                                                  \
-    ->Arg(10000)      /* 10k */                                                        \
-    ->Arg(100000)     /* 100k */                                                       \
-    ->Arg(1000000)    /* 1M */                                                         \
-    ->Arg(10000000)   /* 10M */                                                        \
+#define BINARYOP_BENCHMARK_DEFINE(TypeLhs, TypeRhs, binop, TypeOut) \
+  TEMPLATED_BENCHMARK_F(COMPILED_BINARYOP,                          \
+                        BM_compiled_binaryop,                       \
+                        TypeLhs,                                    \
+                        TypeRhs,                                    \
+                        TypeOut,                                    \
+                        cudf::binary_operator::binop)               \
+    ->Unit(benchmark::kMicrosecond)                                 \
+    ->UseManualTime()                                               \
+    ->Arg(10000)      /* 10k */                                     \
+    ->Arg(100000)     /* 100k */                                    \
+    ->Arg(1000000)    /* 1M */                                      \
+    ->Arg(10000000)   /* 10M */                                     \
     ->Arg(100000000); /* 100M */
 
 using namespace cudf;
@@ -71,12 +70,18 @@ using namespace numeric;
 
 // clang-format off
 BINARYOP_BENCHMARK_DEFINE(float,        int64_t,      ADD,                  int32_t);
+BINARYOP_BENCHMARK_DEFINE(float,        float,        ADD,                  float);
+BINARYOP_BENCHMARK_DEFINE(timestamp_s,  duration_s,   ADD,                  timestamp_s);
 BINARYOP_BENCHMARK_DEFINE(duration_s,   duration_D,   SUB,                  duration_ms);
+BINARYOP_BENCHMARK_DEFINE(int64_t,      int64_t,      SUB,                  int64_t);
 BINARYOP_BENCHMARK_DEFINE(float,        float,        MUL,                  int64_t);
+BINARYOP_BENCHMARK_DEFINE(duration_s,   int64_t,      MUL,                  duration_s);
 BINARYOP_BENCHMARK_DEFINE(int64_t,      int64_t,      DIV,                  int64_t);
+BINARYOP_BENCHMARK_DEFINE(duration_ms,  int32_t,      DIV,                  duration_ms);
 BINARYOP_BENCHMARK_DEFINE(int64_t,      int64_t,      TRUE_DIV,             int64_t);
 BINARYOP_BENCHMARK_DEFINE(int64_t,      int64_t,      FLOOR_DIV,            int64_t);
 BINARYOP_BENCHMARK_DEFINE(double,       double,       MOD,                  double);
+BINARYOP_BENCHMARK_DEFINE(duration_ms,  int64_t,      MOD,                  duration_ms);
 BINARYOP_BENCHMARK_DEFINE(int32_t,      int64_t,      PMOD,                 double);
 BINARYOP_BENCHMARK_DEFINE(int32_t,      uint8_t,      PYMOD,                int64_t);
 BINARYOP_BENCHMARK_DEFINE(int64_t,      int64_t,      POW,                  double);
@@ -90,10 +95,11 @@ BINARYOP_BENCHMARK_DEFINE(int16_t,      int32_t,      BITWISE_OR,           int6
 BINARYOP_BENCHMARK_DEFINE(int16_t,      int64_t,      BITWISE_XOR,          int32_t);
 BINARYOP_BENCHMARK_DEFINE(double,       int8_t,       LOGICAL_AND,          bool);
 BINARYOP_BENCHMARK_DEFINE(int16_t,      int64_t,      LOGICAL_OR,           bool);
+BINARYOP_BENCHMARK_DEFINE(int32_t,      int64_t,      EQUAL,                bool);
 BINARYOP_BENCHMARK_DEFINE(duration_ms,  duration_ns,  EQUAL,                bool);
 BINARYOP_BENCHMARK_DEFINE(decimal32,    decimal32,    NOT_EQUAL,            bool);
 BINARYOP_BENCHMARK_DEFINE(timestamp_s,  timestamp_s,  LESS,                 bool);
 BINARYOP_BENCHMARK_DEFINE(timestamp_ms, timestamp_s,  GREATER,              bool);
 BINARYOP_BENCHMARK_DEFINE(duration_ms,  duration_ns,  NULL_EQUALS,          bool);
 BINARYOP_BENCHMARK_DEFINE(decimal32,    decimal32,    NULL_MAX,             decimal32);
-BINARYOP_BENCHMARK_DEFINE(timestamp_D, timestamp_s,   NULL_MIN,             timestamp_s);
+BINARYOP_BENCHMARK_DEFINE(timestamp_D,  timestamp_s,  NULL_MIN,             timestamp_s);

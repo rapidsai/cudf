@@ -42,6 +42,14 @@ add_library(
                                synchronization/synchronization.cpp io/cuio_benchmark_common.cpp
 )
 target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen)
+add_custom_command(
+  OUTPUT CUDF_BENCHMARKS
+  COMMAND echo Running benchmarks
+  COMMAND mkdir -p results
+  VERBATIM
+  COMMENT "Running cudf benchmarks."
+  USES_TERMINAL
+)
 
 # This function takes in a benchmark name and benchmark source and handles setting all of the
 # associated properties and linking to build the benchmark
@@ -53,6 +61,13 @@ function(ConfigureBench CMAKE_BENCH_NAME)
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main
+  )
+  add_custom_command(
+    OUTPUT CUDF_BENCHMARKS
+    COMMAND ${CMAKE_BENCH_NAME} --benchmark_out_format=json
+            --benchmark_out=results/${CMAKE_BENCH_NAME}.json
+    APPEND
+    COMMENT "Adding ${CMAKE_BENCH_NAME}"
   )
 endfunction()
 
@@ -208,7 +223,6 @@ ConfigureBench(AST_BENCH ast/transform_benchmark.cpp)
 # * binaryop benchmark ----------------------------------------------------------------------------
 ConfigureBench(
   BINARYOP_BENCH binaryop/binaryop_benchmark.cpp binaryop/compiled_binaryop_benchmark.cpp
-  binaryop/jit_binaryop_benchmark.cpp
 )
 
 # ##################################################################################################
@@ -255,3 +269,9 @@ ConfigureBench(JSON_BENCH string/json_benchmark.cpp)
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------
 ConfigureBench(MULTIBYTE_SPLIT_BENCHMARK io/text/multibyte_split_benchmark.cpp)
+
+add_custom_target(
+  run_benchmarks
+  DEPENDS CUDF_BENCHMARKS
+  COMMENT "Custom command for running cudf benchmarks."
+)

@@ -219,12 +219,13 @@ class reader::impl {
   cudf::io::orc::detail::aggregate_orc_metadata _metadata;
   cudf::io::orc::detail::column_hierarchy selected_columns;
 
-  bool _use_index     = true;
-  bool _use_np_dtypes = true;
+  bool _use_index{true};
+  bool _use_np_dtypes{true};
   std::vector<std::string> _decimal_cols_as_float;
   std::vector<std::string> decimal128_columns;
+  bool is_decimal128_enabled{true};
   data_type _timestamp_type{type_id::EMPTY};
-  reader_column_meta _col_meta;
+  reader_column_meta _col_meta{};
 };
 
 }  // namespace orc
