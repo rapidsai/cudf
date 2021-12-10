@@ -2,7 +2,7 @@
 
 cimport cpython
 from libc.stdint cimport int32_t, int64_t
-from libcpp cimport bool
+from libcpp cimport bool, nullptr
 from libcpp.map cimport map
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
@@ -11,20 +11,11 @@ from cudf._lib.cpp.io.types cimport datasource
 
 from cudf_kafka._lib.kafka cimport kafka_consumer
 
-import functools
 
-
+# To avoid including <python.h> in libcudf_kafka
+# we introduce this wrapper in Cython
 cdef map[string, string] oauth_callback_wrapper(void *ctx):
-    print("Entering oauth_callback_wrapper")
-
-    # ctx is a functools.partial
-    func, args = <object>(ctx)
-
-    # Never makes it here, ^^
-    print("Func: " + str(func))
-    print("Args: " + str(args))
-    ret = func(*args)
-    return ret
+    return (<object>(ctx))()
 
 
 cdef class KafkaDatasource(Datasource):
@@ -39,14 +30,14 @@ cdef class KafkaDatasource(Datasource):
                   string delimiter=b"",):
 
         cdef map[string, string] configs
-        cdef void* python_callable
-        cdef map[string, string] (*cb)(void *)
+        cdef void* python_callable = nullptr
+        cdef map[string, string] (*python_callable_wrapper)(void *)
 
         for key in kafka_configs:
             if key == 'oauth_cb':
                 if callable(kafka_configs[key]):
                     python_callable = <void *>kafka_configs[key]
-                    cb = &oauth_callback_wrapper
+                    python_callable_wrapper = &oauth_callback_wrapper
                 else:
                     raise TypeError("'oauth_cb' configuration must \
                                       be a Python callable object")
@@ -57,7 +48,7 @@ cdef class KafkaDatasource(Datasource):
             self.c_datasource = <unique_ptr[datasource]> \
                 make_unique[kafka_consumer](configs,
                                             python_callable,
-                                            cb,
+                                            python_callable_wrapper,
                                             topic,
                                             partition,
                                             start_offset,
@@ -66,7 +57,9 @@ cdef class KafkaDatasource(Datasource):
                                             delimiter)
         else:
             self.c_datasource = <unique_ptr[datasource]> \
-                make_unique[kafka_consumer](configs, python_callable, cb)
+                make_unique[kafka_consumer](configs,
+                                            python_callable,
+                                            python_callable_wrapper)
 
     cdef datasource* get_datasource(self) nogil:
         return <datasource *> self.c_datasource.get()

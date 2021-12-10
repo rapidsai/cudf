@@ -26,11 +26,11 @@ namespace external {
 namespace kafka {
 
 kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
-                               void* python_callable,
-                               kafka_oauth_callback_type oauth_callback)
+                               python_callable_type python_callable,
+                               kafka_oauth_callback_wrapper_type callable_wrapper)
   : configs(configs),
     python_callable_(python_callable),
-    oauth_callback_(oauth_callback),
+    callable_wrapper_(callable_wrapper),
     kafka_conf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL))
 {
   for (auto const& key_value : configs) {
@@ -40,10 +40,13 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
                  "Invalid Kafka configuration");
   }
 
-  // TODO: Just for testing ... want to make sure this works
-  std::string error_string;
-  python_oauth_refresh_callback cb(oauth_callback, python_callable_);
-  kafka_conf->set("oauthbearer_token_refresh_cb", &cb, error_string);
+  if (python_callable_ != nullptr) {
+    std::string error_string;
+    python_oauth_refresh_callback cb(callable_wrapper_, python_callable_);
+    CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
+                   kafka_conf->set("oauthbearer_token_refresh_cb", &cb, error_string),
+                 "Failed to set Kafka oauth callback");
+  }
 
   // Kafka 0.9 > requires group.id in the configuration
   std::string conf_val;
@@ -56,8 +59,8 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
 }
 
 kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
-                               void* python_callable,
-                               kafka_oauth_callback_type oauth_callback,
+                               python_callable_type python_callable,
+                               kafka_oauth_callback_wrapper_type callback_wrapper,
                                std::string const& topic_name,
                                int partition,
                                int64_t start_offset,
@@ -66,7 +69,7 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
                                std::string const& delimiter)
   : configs(configs),
     python_callable_(python_callable),
-    oauth_callback_(oauth_callback),
+    callable_wrapper_(callback_wrapper),
     topic_name(topic_name),
     partition(partition),
     start_offset(start_offset),
@@ -82,12 +85,13 @@ kafka_consumer::kafka_consumer(std::map<std::string, std::string> configs,
                  "Invalid Kafka configuration");
   }
 
-  // TODO: Just for testing ... want to make sure this works
-  std::string error_string;
-  python_oauth_refresh_callback cb(oauth_callback, python_callable_);
-  CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
-                 kafka_conf->set("oauthbearer_token_refresh_cb", &cb, error_string),
-               "Failed to set Kafka oauth callback");
+  if (python_callable_ != nullptr) {
+    std::string error_string;
+    python_oauth_refresh_callback cb(callable_wrapper_, python_callable_);
+    CUDF_EXPECTS(RdKafka::Conf::ConfResult::CONF_OK ==
+                   kafka_conf->set("oauthbearer_token_refresh_cb", &cb, error_string),
+                 "Failed to set Kafka oauth callback");
+  }
 
   // Kafka 0.9 > requires group.id in the configuration
   std::string conf_val;

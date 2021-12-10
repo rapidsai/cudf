@@ -27,24 +27,25 @@ namespace external {
 namespace kafka {
 
 /**
- * @brief Callback function type used for Kafka OAuth events
+ * @brief Python Callback function wrapper type used for Kafka OAuth events
  *
- * The KafkaConsumer calls the `kafka_oauth_callback_t` when the existing
+ * The KafkaConsumer calls the `kafka_oauth_callback_wrapper_type` when the existing
  * oauth token is considered expired by the KafkaConsumer. Typically that
  * means this will be invoked a single time when the KafkaConsumer is created
  * to get the initial token and then intermediately as the token becomes
  * expired.
  *
  * The callback function signature is:
- *     `PyObject* kafka_oauth_callback_t()
+ *     `std::map<std::string, std::string> kafka_oauth_callback_wrapper_type(void*)`
  *
- * The callback function returns a PyObject, Python Tuple,
- * where the Tuple consists of the Oauth token and its
+ * The callback function returns a std::map<std::string, std::string>,
+ * where the std::map consists of the Oauth token and its
  * linux epoch expiration time. Generally the token and expiration
  * time is retrieved from an external service by the callback.
  * Ex: [token, token_expiration_in_epoch]
  */
-using kafka_oauth_callback_type = std::map<std::string, std::string> (*)(void*);
+using kafka_oauth_callback_wrapper_type = std::map<std::string, std::string> (*)(void*);
+using python_callable_type              = void*;
 
 /**
  * @brief Callback to retrieve OAuth token from external source. Invoked when
@@ -52,13 +53,14 @@ using kafka_oauth_callback_type = std::map<std::string, std::string> (*)(void*);
  */
 class python_oauth_refresh_callback : public RdKafka::OAuthBearerTokenRefreshCb {
  public:
-  python_oauth_refresh_callback(kafka_oauth_callback_type cb, void* python_callable);
+  python_oauth_refresh_callback(kafka_oauth_callback_wrapper_type callback_wrapper,
+                                python_callable_type python_callable);
 
   void oauthbearer_token_refresh_cb(RdKafka::Handle* handle, const std::string& oauthbearer_config);
 
  private:
-  kafka_oauth_callback_type oauth_callback_;
-  void* python_callable_;
+  kafka_oauth_callback_wrapper_type callback_wrapper_;
+  python_callable_type python_callable_;
 };
 
 }  // namespace kafka

@@ -22,16 +22,14 @@ namespace io {
 namespace external {
 namespace kafka {
 
-python_oauth_refresh_callback::python_oauth_refresh_callback(kafka_oauth_callback_type cb,
-                                                             void* python_callable)
-  : oauth_callback_(cb), python_callable_(python_callable){};
+python_oauth_refresh_callback::python_oauth_refresh_callback(
+  kafka_oauth_callback_wrapper_type callback_wrapper, python_callable_type python_callable)
+  : callback_wrapper_(callback_wrapper), python_callable_(python_callable){};
 
 void python_oauth_refresh_callback::oauthbearer_token_refresh_cb(
   RdKafka::Handle* handle, const std::string& oauthbearer_config)
 {
-  printf("!!!!Invoking the python_oauth_callback!!!!\n");
-
-  std::map<std::string, std::string> resp = oauth_callback_(python_callable_);
+  std::map<std::string, std::string> resp = callback_wrapper_(python_callable_);
 
   // Build parameters to pass to librdkafka
   std::string token         = resp["token"];

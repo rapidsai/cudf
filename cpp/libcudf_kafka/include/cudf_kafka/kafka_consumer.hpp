@@ -52,14 +52,15 @@ class kafka_consumer : public cudf::io::datasource {
    *
    * @param configs key/value pairs of librdkafka configurations that will be
    *                passed to the librdkafka client
-   * @param oauth_callback `kafka_oauth_callback_t` Python callable provided by the
-   *                user to this constructor. This callback is responsible for both
-   *                retrieving the initial OAuth token and refreshing the OAuth
-   *                token when it expireskafka_oauth_callback_t
+   * @param python_callable `python_callable_type` pointer to a Python functools.partial object
+   * @param callable_wrapper `kafka_oauth_callback_wrapper_type` Cython wrapper that will
+   *                 be used to invoke the `python_callable`. This wrapper serves the purpose
+   *                 of preventing us from having to link against the Python development library
+   *                 in libcudf_kafka.
    */
   kafka_consumer(std::map<std::string, std::string> configs,
-                 void* python_callable,
-                 kafka_oauth_callback_type oauth_callback);
+                 python_callable_type python_callable,
+                 kafka_oauth_callback_wrapper_type callable_wrapper);
 
   /**
    * @brief Instantiate a Kafka consumer object. Documentation for librdkafka configurations can be
@@ -67,10 +68,11 @@ class kafka_consumer : public cudf::io::datasource {
    *
    * @param configs key/value pairs of librdkafka configurations that will be
    *                passed to the librdkafka client
-   * @param oauth_callback `kafka_oauth_callback_t` Python callable provided by the
-   *                user to this constructor. This callback is responsible for both
-   *                retrieving the initial OAuth token and refreshing the OAuth
-   *                token when it expires
+   * @param python_callable `python_callable_type` pointer to a Python functools.partial object
+   * @param callable_wrapper `kafka_oauth_callback_wrapper_type` Cython wrapper that will
+   *                 be used to invoke the `python_callable`. This wrapper serves the purpose
+   *                 of preventing us from having to link against the Python development library
+   *                 in libcudf_kafka.
    * @param topic_name name of the Kafka topic to consume from
    * @param partition partition index to consume from between `0` and `TOPIC_NUM_PARTITIONS - 1`
    * inclusive
@@ -81,8 +83,8 @@ class kafka_consumer : public cudf::io::datasource {
    * @param delimiter optional delimiter to insert into the output between kafka messages, Ex: "\n"
    */
   kafka_consumer(std::map<std::string, std::string> configs,
-                 void* python_callable,
-                 kafka_oauth_callback_type oauth_callback,
+                 python_callable_type python_callable,
+                 kafka_oauth_callback_wrapper_type callable_wrapper,
                  std::string const& topic_name,
                  int partition,
                  int64_t start_offset,
@@ -195,8 +197,8 @@ class kafka_consumer : public cudf::io::datasource {
   std::unique_ptr<RdKafka::KafkaConsumer> consumer;
 
   std::map<std::string, std::string> configs;
-  void* python_callable_;
-  kafka_oauth_callback_type oauth_callback_;
+  python_callable_type python_callable_;
+  kafka_oauth_callback_wrapper_type callable_wrapper_;
 
   std::string topic_name;
   int partition;
