@@ -20,6 +20,7 @@
  */
 
 #include <io/statistics/column_statistics.cuh>
+#include "io/parquet/parquet_gpu.hpp"
 #include "writer_impl.hpp"
 
 #include <io/utilities/column_utils.cuh>
@@ -34,6 +35,7 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/span.hpp>
 
+#include <iostream>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
@@ -774,6 +776,7 @@ void writer::impl::init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chu
 }
 
 auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
+                              hostdevice_2dvector<gpu::PageFragment>& fragments,
                               host_span<gpu::parquet_column_device_view const> col_desc,
                               uint32_t num_rows,
                               rmm::cuda_stream_view stream)
@@ -805,7 +808,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   chunks.host_to_device(stream);
 
   gpu::initialize_chunk_hash_maps(chunks.device_view().flat_view(), stream);
-  gpu::populate_chunk_hash_maps(chunks, num_rows, stream);
+  gpu::populate_chunk_hash_maps(chunks, fragments, num_rows, stream);
 
   chunks.device_to_host(stream, true);
 
@@ -854,7 +857,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   }
   chunks.host_to_device(stream);
   gpu::collect_map_entries(chunks.device_view().flat_view(), stream);
-  gpu::get_dictionary_indices(chunks.device_view(), num_rows, stream);
+  gpu::get_dictionary_indices(chunks.device_view(), fragments.device_view(), num_rows, stream);
 
   return std::make_pair(std::move(dict_data), std::move(dict_index));
 }
@@ -1156,9 +1159,9 @@ void writer::impl::write(table_view const& table)
   using cudf::io::parquet::gpu::max_page_fragment_size;
 
   bool row_group_sizes_specified = !row_group_sizes.empty();
-  size_type num_fragments = (num_rows + max_page_fragment_size - 1) / max_page_fragment_size;
+  size_type num_fragments        = (num_rows + max_page_fragment_size - 1) / max_page_fragment_size;
   if (row_group_sizes_specified) {
-    size_type num_fragments = 0;
+    num_fragments = 0;
     for (std::size_t i = 0; i < row_group_sizes.size(); i++) {
       num_fragments += (row_group_sizes[i] + max_page_fragment_size - 1) / max_page_fragment_size;
     }
@@ -1167,24 +1170,24 @@ void writer::impl::write(table_view const& table)
     num_columns, num_fragments, stream);
 
   if (row_group_sizes_specified) {
-    std::vector<size_type> fragment_sizes (num_fragments);
-    auto fragments_span = host_2dspan<gpu::PageFragment>{fragments};
+    // auto fragments_span = host_2dspan<gpu::PageFragment>{fragments};
     size_type i = 0;
     for (std::size_t j = 0; j < row_group_sizes.size(); j++) {
-      size_type start_row = 0;
+      size_type start_row                = 0;
       size_type const row_group_num_rows = row_group_sizes[j];
       size_type const row_group_num_fragments =
         (row_group_num_rows + max_page_fragment_size - 1) / max_page_fragment_size;
       for (size_type k = 0; k < row_group_num_fragments; k++) {
+        size_type const fragment_num_rows =
+          min(max_page_fragment_size, row_group_num_rows - min(start_row, row_group_num_rows));
+        start_row += fragment_num_rows;
         for (size_type col_idx = 0; col_idx < num_columns; col_idx++) {
-          size_type const fragment_num_rows =
-            min(max_page_fragment_size, row_group_num_rows - min(start_row, row_group_num_rows));
-          start_row += fragment_num_rows;
-          fragments_span[col_idx][i].num_rows = fragment_num_rows;
+          fragments.host_view()[col_idx][i].num_rows = fragment_num_rows;
         }
         i++;
       }
     }
+    fragments.host_to_device(stream);
   }
 
   if (num_fragments != 0) {
@@ -1194,37 +1197,54 @@ void writer::impl::write(table_view const& table)
       col_desc, *parent_column_table_device_view, stream);
 
     init_page_fragments(
-      fragments, col_desc, num_rows, row_group_sizes_specified ? -1 : static_cast<int32_t>(max_page_fragment_size));
+      fragments,
+      col_desc,
+      num_rows,
+      row_group_sizes_specified ? -1 : static_cast<int32_t>(max_page_fragment_size));
   }
 
   auto const global_rowgroup_base = static_cast<size_type>(md.row_groups.size());
 
   // Decide row group boundaries based on uncompressed data size
-  auto rowgroup_size = 0ul;
-  auto num_rowgroups = 0;
+  auto rowgroup_size     = 0ul;
+  auto rowgroup_num_rows = 0;
+  auto num_rowgroups     = 0;
   for (auto f = 0, global_r = global_rowgroup_base, rowgroup_start = 0; f < num_fragments; f++) {
     auto fragment_data_size = 0ul;
     // Replace with STL algorithm to transform and sum
     for (auto i = 0; i < num_columns; i++) {
       fragment_data_size += fragments[i][f].fragment_data_size;
     }
+    auto fragment_num_rows = fragments[0][f].num_rows;
     if (f > rowgroup_start &&
         (!row_group_sizes_specified ||
-          rowgroup_size + fragment_data_size > static_cast<std::size_t>(row_group_sizes[rowgroup_start])) &&
-        (rowgroup_size + fragment_data_size > max_row_group_size ||
+         rowgroup_num_rows + fragment_num_rows > row_group_sizes[rowgroup_start]) &&
+        (row_group_sizes_specified || rowgroup_size + fragment_data_size > max_row_group_size ||
          (f + 1 - rowgroup_start) * max_page_fragment_size > max_row_group_rows)) {
       // update schema
       md.row_groups.resize(md.row_groups.size() + 1);
-      md.row_groups[global_r++].num_rows = (f - rowgroup_start) * max_page_fragment_size;
+      if (row_group_sizes_specified) {
+        md.row_groups[global_r].num_rows = row_group_sizes[global_r];
+        global_r++;
+      } else {
+        md.row_groups[global_r++].num_rows = (f - rowgroup_start) * max_page_fragment_size;
+      }
       num_rowgroups++;
-      rowgroup_start = f;
-      rowgroup_size  = 0;
+      rowgroup_start    = f;
+      rowgroup_size     = 0;
+      rowgroup_num_rows = 0;
     }
     rowgroup_size += fragment_data_size;
+    rowgroup_num_rows += fragment_num_rows;
     if (f + 1 == num_fragments) {
       // update schema
       md.row_groups.resize(md.row_groups.size() + 1);
-      md.row_groups[global_r++].num_rows = num_rows - rowgroup_start * max_page_fragment_size;
+      if (row_group_sizes_specified) {
+        md.row_groups[global_r].num_rows = row_group_sizes[global_r];
+        global_r++;
+      } else {
+        md.row_groups[global_r++].num_rows = num_rows - rowgroup_start * max_page_fragment_size;
+      }
       num_rowgroups++;
     }
   }
@@ -1279,7 +1299,7 @@ void writer::impl::write(table_view const& table)
     start_row += (uint32_t)md.row_groups[global_r].num_rows;
   }
 
-  auto dict_info_owner = build_chunk_dictionaries(chunks, col_desc, num_rows, stream);
+  auto dict_info_owner = build_chunk_dictionaries(chunks, fragments, col_desc, num_rows, stream);
   for (auto rg = 0, global_rg = global_rowgroup_base; rg < num_rowgroups; rg++, global_rg++) {
     for (auto col = 0; col < num_columns; col++) {
       if (chunks.host_view()[rg][col].use_dictionary) {

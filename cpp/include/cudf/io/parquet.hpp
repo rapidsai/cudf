@@ -560,10 +560,7 @@ class parquet_writer_options {
   /**
    * @brief Sets the size of each row group.
    */
-  void set_row_group_sizes(std::vector<size_type> sizes_rows)
-  {
-    _row_group_sizes = sizes_rows;
-  }
+  void set_row_group_sizes(std::vector<size_type> sizes_rows) { _row_group_sizes = sizes_rows; }
 };
 
 class parquet_writer_options_builder {
@@ -868,10 +865,7 @@ class chunked_parquet_writer_options {
   /**
    * @brief Sets the size of each row group.
    */
-  void set_row_group_sizes(std::vector<size_type> sizes_rows)
-  {
-    _row_group_sizes = sizes_rows;
-  }
+  void set_row_group_sizes(std::vector<size_type> sizes_rows) { _row_group_sizes = sizes_rows; }
 
   /**
    * @brief creates builder to build chunked_parquet_writer_options.

@@ -95,16 +95,18 @@ struct map_find_fn {
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
   populate_chunk_hash_maps_kernel(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                                  cudf::detail::device_2dspan<PageFragment> fragments,
                                   size_type num_rows)
 {
   auto col_idx = blockIdx.y;
   auto block_x = blockIdx.x;
   auto t       = threadIdx.x;
 
-  auto start_row =
-    block_x *
-    max_page_fragment_size;  // This is fragment size. all chunks are multiple of these many rows.
-  size_type end_row = min(start_row + max_page_fragment_size, num_rows);
+  auto start_row = 0;
+  for (auto i = 0; i < block_x; i++) {
+    start_row += fragments[0][i].num_rows;
+  }
+  size_type end_row = min(start_row + fragments[0][block_x].num_rows, num_rows);
 
   __shared__ EncColumnChunk* s_chunk;
   __shared__ parquet_column_device_view s_col;
@@ -245,14 +247,18 @@ __global__ void __launch_bounds__(block_size, 1)
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
   get_dictionary_indices_kernel(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                                cudf::detail::device_2dspan<PageFragment> fragments,
                                 size_type num_rows)
 {
   auto col_idx = blockIdx.y;
   auto block_x = blockIdx.x;
   auto t       = threadIdx.x;
 
-  size_type start_row = block_x * max_page_fragment_size;
-  size_type end_row   = min(start_row + max_page_fragment_size, num_rows);
+  auto start_row = 0;
+  for (auto i = 0; i < block_x; i++) {
+    start_row += fragments[0][i].num_rows;
+  }
+  size_type end_row = min(start_row + fragments[0][block_x].num_rows, num_rows);
 
   __shared__ EncColumnChunk s_chunk;
   __shared__ parquet_column_device_view s_col;
@@ -335,16 +341,16 @@ void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_st
 }
 
 void populate_chunk_hash_maps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                              cudf::detail::device_2dspan<PageFragment> fragments,
                               size_type num_rows,
                               rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 256;
-  auto const grid_x        = cudf::detail::grid_1d(num_rows, max_page_fragment_size);
   auto const num_columns   = chunks.size().second;
-  dim3 const dim_grid(grid_x.num_blocks, num_columns);
+  dim3 const dim_grid(fragments.size().second, num_columns);
 
   populate_chunk_hash_maps_kernel<block_size>
-    <<<dim_grid, block_size, 0, stream.value()>>>(chunks, num_rows);
+    <<<dim_grid, block_size, 0, stream.value()>>>(chunks, fragments, num_rows);
 }
 
 void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
@@ -354,16 +360,16 @@ void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_vi
 }
 
 void get_dictionary_indices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                            cudf::detail::device_2dspan<PageFragment> fragments,
                             size_type num_rows,
                             rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 256;
-  auto const grid_x        = cudf::detail::grid_1d(num_rows, max_page_fragment_size);
   auto const num_columns   = chunks.size().second;
-  dim3 const dim_grid(grid_x.num_blocks, num_columns);
+  dim3 const dim_grid(fragments.size().second, num_columns);
 
   get_dictionary_indices_kernel<block_size>
-    <<<dim_grid, block_size, 0, stream.value()>>>(chunks, num_rows);
+    <<<dim_grid, block_size, 0, stream.value()>>>(chunks, fragments, num_rows);
 }
 }  // namespace gpu
 }  // namespace parquet

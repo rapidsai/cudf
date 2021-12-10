@@ -132,6 +132,8 @@ __global__ void __launch_bounds__(block_size)
     // num_rows is fixed but fragment size could be larger if the data is strings or nested.
     if (fragment_size != -1) {
       s->frag.num_rows = min(fragment_size, max_num_rows - min(start_row, max_num_rows));
+    } else {
+      s->frag.num_rows = frag[blockIdx.x][blockIdx.y].num_rows;
     }
     s->frag.num_dict_vals      = 0;
     s->frag.fragment_data_size = 0;

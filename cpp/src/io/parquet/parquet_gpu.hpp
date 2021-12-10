@@ -502,6 +502,7 @@ void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_st
  * @param stream CUDA stream to use
  */
 void populate_chunk_hash_maps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                              cudf::detail::device_2dspan<PageFragment> fragments,
                               size_type num_rows,
                               rmm::cuda_stream_view stream);
 
@@ -527,6 +528,7 @@ void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_vi
  * @param stream CUDA stream to use
  */
 void get_dictionary_indices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
+                            cudf::detail::device_2dspan<PageFragment> fragments,
                             size_type num_rows,
                             rmm::cuda_stream_view stream);
 

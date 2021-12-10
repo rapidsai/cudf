@@ -134,7 +134,7 @@ def write_to_dataset(
                         fil,
                         index=preserve_index,
                         row_group_cols=row_group_cols,
-                        **kwargs
+                        **kwargs,
                     )
 
     else:
