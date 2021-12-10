@@ -101,8 +101,8 @@ struct finder {
     auto const list_end   = find_end<ElementType, find_option>(list);
     auto const find_iter  = thrust::find_if(
       thrust::seq, list_begin, list_end, [search_key] __device__(auto element_and_validity) {
-        return element_and_validity.second &&
-               cudf::equality_compare(element_and_validity.first, search_key);
+        auto [element, element_is_valid] = element_and_validity;
+        return element_is_valid && cudf::equality_compare(element, search_key);
       });
     return distance<find_option>(list_begin, list_end, find_iter);
   };
