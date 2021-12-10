@@ -451,7 +451,7 @@ def test_parquet_row_group_sizes(tmpdir, row_group_sizes):
 
 @pytest.mark.parametrize(
     "row_group_cols",
-    ["a", "b", "c"],
+    ["a", "b", "c", ["a", "b"], ["b", "c"], ["c", "b"], ["b", "a", "c"]],
 )
 def test_parquet_row_group_cols(tmpdir, row_group_cols):
     df = cudf.DataFrame(

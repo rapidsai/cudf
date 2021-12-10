@@ -13,6 +13,7 @@ from dask import dataframe as dd
 from dask.utils import natural_sort_key
 
 import cudf
+from cudf.testing._utils import assert_eq
 
 import dask_cudf
 
@@ -307,6 +308,27 @@ def test_roundtrip_from_dask_partitioned(tmpdir, parts, daskcudf, metadata):
         )
         gdf_read = dask_cudf.read_parquet(tmpdir, aggregate_files="year")
         dd.assert_eq(df_read, gdf_read)
+
+
+@pytest.mark.parametrize(
+    "partition_on,row_group_cols",
+    [("year", "month"), ("year", "data"), ("data", "year")],
+)
+def test_row_group_partitioned(tmpdir, partition_on, row_group_cols):
+    tmpdir = str(tmpdir)
+
+    df = pd.DataFrame()
+    df["year"] = [2018, 2019, 2019, 2019, 2020, 2021]
+    df["month"] = [1, 2, 3, 3, 3, 2]
+    df["day"] = [1, 1, 1, 2, 2, 1]
+    df["data"] = [0, 0, 0, 0, 0, 0]
+
+    ddf = dask_cudf.from_cudf(cudf.from_pandas(df), npartitions=2)
+    ddf.to_parquet(
+        tmpdir, partition_on=partition_on, row_group_cols=row_group_cols
+    )
+    ddf_read = dask_cudf.read_parquet(tmpdir)
+    assert_eq(len(ddf), len(ddf_read))
 
 
 @pytest.mark.parametrize("metadata", [True, False])

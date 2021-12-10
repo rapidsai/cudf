@@ -476,10 +476,9 @@ def to_parquet(
         elif row_group_cols:
             _, offsets, _, grouped_df = df.groupby(row_group_cols)._grouped()
             row_group_sizes = [
-                offsets[i + 1] - offsets[i]
-                for i in range(len(offsets) - 1)
+                offsets[i + 1] - offsets[i] for i in range(len(offsets) - 1)
             ]
-            to_parquet(
+            return to_parquet(
                 grouped_df,
                 path,
                 engine=engine,
@@ -497,7 +496,6 @@ def to_parquet(
                 *args,
                 **kwargs,
             )
-            return
 
         # Ensure that no columns dtype is 'category'
         for col in df.columns:
