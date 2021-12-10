@@ -20,8 +20,9 @@ except ImportError:
 import cudf
 from cudf.core.column import as_column, build_categorical_column
 from cudf.io import write_to_dataset
-from cudf.io.parquet import _get_remote_open_func
+from cudf.io.parquet import _default_format_options
 from cudf.utils.dtypes import cudf_dtype_from_pa_type
+from cudf.utils.ioutils import _is_local_filesystem, open_remote_files
 
 
 class CudfEngine(ArrowDatasetEngine):
@@ -73,24 +74,19 @@ class CudfEngine(ArrowDatasetEngine):
         if row_groups == [None for path in paths]:
             row_groups = None
 
-        # Check for a remote-open function
-        remote_open = _get_remote_open_func(
-            fs=fs,
-            columns=columns,
-            row_groups=row_groups,
-            **(open_options or {}),
-        )
-
         with ExitStack() as stack:
 
             # Non-local filesystem handling
             paths_or_fobs = paths
-            if remote_open:
-
-                # Convert paths to file objects for remote data
-                paths_or_fobs = [
-                    stack.enter_context(remote_open(path)) for path in paths
-                ]
+            if not _is_local_filesystem(fs):
+                paths_or_fobs = open_remote_files(
+                    paths_or_fobs,
+                    fs,
+                    context_stack=stack,
+                    **_default_format_options(
+                        open_options, columns, row_groups
+                    ),
+                )
 
             # Use cudf to read in data
             df = cudf.read_parquet(

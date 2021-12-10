@@ -3,6 +3,7 @@
 import datetime
 import os
 import urllib
+import warnings
 from io import BufferedWriter, BytesIO, IOBase, TextIOWrapper
 from threading import Thread
 
@@ -11,6 +12,7 @@ import fsspec.implementations.local
 import numpy as np
 import pandas as pd
 from fsspec.core import get_fs_token_paths
+from packaging.version import parse as parse_version
 from pyarrow import PythonFile as ArrowPythonFile
 from pyarrow.fs import FSSpecHandler, PyFileSystem
 from pyarrow.lib import NativeFile
@@ -163,8 +165,9 @@ use_pandas_metadata : boolean, default True
 open_options : dict, optional
     Dictionary of key-value pairs to pass to the function used to open remote
     files. By default, this will be `fsspec.parquet.open_parquet_file`. If
-    `use_fsspec_parquet=False` is included in `open_options`, the fsspec
-    filesystem's `open` method will be use instead.
+    `file_format=None` is included in `open_options`, the fsspec
+    filesystem's `open` method will be use instead. Note that the `open_cb`
+    key can also be used to specify a custom file-open function.
 
 Returns
 -------
@@ -1207,6 +1210,104 @@ def _get_filesystem_and_paths(path_or_data, **kwargs):
     return fs, return_paths
 
 
+def open_remote_files(
+    paths, fs, context_stack=None, open_cb=None, file_format=None, **kwargs,
+):
+    """Return a list of open file-like objects given
+    a list of remote file paths.
+
+    Parameters
+    ----------
+    paths : list(str)
+        List of file-path strings.
+    fs : fsspec.AbstractFileSystem
+        Fsspec file-system object.
+    context_stack : contextlib.ExitStack, Optional
+        Context manager to use for open files.
+    open_cb : Callable, Optional
+        Call-back function to use for opening. If this argument
+        is specified, all other arguments will be ignored.
+    file_format : str, optional
+        Lable for format-specific file-opening function to
+        use. Supported options are currently 'parquet' and `None`.
+        If 'parquet' is specified, `fsspec.parquet.openn_parquet_file`
+        will be envoked. Otherwise, `fs.open` will be used.
+    **kwargs :
+        Key-word arguments to be passed to format-specific
+        open functions.
+
+    Returns
+    -------
+    filepath_or_buffer : str, bytes, BytesIO, list
+        Filepath string or in-memory buffer of data or a
+        list of Filepath strings or in-memory buffers of data.
+    compression : str
+        Type of compression algorithm for the content
+    """
+
+    # Just use call-back function if one was specified
+    if open_cb is not None:
+        return open_cb
+
+    # Check if file_format is supported
+    if file_format not in ("parquet", None):
+        raise ValueError(
+            f"{file_format} not a supported `file_format` option."
+        )
+
+    # Check that "parts" caching (used for all format-aware file handling)
+    # is supported by the installed fsspec/s3fs version
+    if file_format:
+        supported = parse_version(fsspec.__version__) > parse_version(
+            "2021.11.0"
+        )
+        if supported and "s3" in fs.protocol:
+            try:
+                import s3fs
+
+                supported = parse_version(s3fs.__version__) > parse_version(
+                    "2021.11.0"
+                )
+            except ImportError:
+                pass
+            if not supported:
+                file_format = None
+                warnings.warn(
+                    f"This version of s3fs ({s3fs.__version__}) does not "
+                    f"support the 'parts' cache in fsspec. Please update "
+                    f"to the latest s3fs version for better performance."
+                )
+        elif not supported:
+            file_format = None
+
+    # Helper function to place open file on context stack
+    def _set_context(obj, stack):
+        if stack is None:
+            return obj
+        return stack.enter_context(obj)
+
+    if file_format == "parquet":
+        # Use fsspec.parquet module.
+        # TODO: Use `cat_ranges` to collect "known"
+        # parts for all files at once.
+        return [
+            ArrowPythonFile(
+                _set_context(
+                    fsspec.parquet.open_parquet_file(path, fs=fs, **kwargs,),
+                    context_stack,
+                )
+            )
+            for path in paths
+        ]
+
+    # Default open - Use pyarrow filesystem API
+    pa_fs = PyFileSystem(FSSpecHandler(fs))
+    return [
+        _set_context(pa_fs.open_input_file(fpath), context_stack)
+        for fpath in paths
+    ]
+
+
 def get_filepath_or_buffer(
     path_or_data,
     compression,
@@ -1215,7 +1316,7 @@ def get_filepath_or_buffer(
     iotypes=(BytesIO, NativeFile),
     byte_ranges=None,
     use_python_file_object=False,
-    remote_open=None,
+    format_options=None,
     **kwargs,
 ):
     """Return either a filepath string to data, or a memory buffer of data.
@@ -1237,9 +1338,9 @@ def get_filepath_or_buffer(
     use_python_file_object : boolean, default False
         If True, Arrow-backed PythonFile objects will be used in place
         of fsspec AbstractBufferedFile objects.
-    remote_open : callable, optional
-        Optional file-open function to use for remote storage. Only
-        used for when path_or_data is a str (or list of str).
+    format_options : dict, optional
+        Optional dictionary of key-word argumentst to pass to
+        `open_remote_files` (used for remote storage only).
 
     Returns
     -------
@@ -1273,17 +1374,9 @@ def get_filepath_or_buffer(
 
         else:
             if use_python_file_object:
-                if remote_open is None:
-                    # Use pyarrow filesystem API
-                    pa_fs = PyFileSystem(FSSpecHandler(fs))
-                    path_or_data = [
-                        pa_fs.open_input_file(fpath) for fpath in paths
-                    ]
-                else:
-                    # Use provided remote_open function
-                    path_or_data = [
-                        ArrowPythonFile(remote_open(fpath)) for fpath in paths
-                    ]
+                path_or_data = open_remote_files(
+                    paths, fs, **(format_options or {}),
+                )
             else:
                 path_or_data = [
                     BytesIO(
