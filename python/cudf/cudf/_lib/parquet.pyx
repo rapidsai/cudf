@@ -60,6 +60,7 @@ from cudf._lib.cpp.types cimport data_type, size_type
 from cudf._lib.io.datasource cimport Datasource, NativeFileDatasource
 from cudf._lib.io.utils cimport (
     make_sink_info,
+    make_sinks_info,
     make_source_info,
     update_struct_field_names,
 )
@@ -277,14 +278,15 @@ cpdef read_parquet(filepaths_or_buffers, columns=None, row_groups=None,
 
 cpdef write_parquet(
         table,
-        object path,
+        object filepaths_or_buffers,
         object index=None,
         object compression="snappy",
         object statistics="ROWGROUP",
         object metadata_file_path=None,
         object int96_timestamps=False,
         object row_group_size_bytes=None,
-        object row_group_size_rows=None):
+        object row_group_size_rows=None,
+        object partitions_info=None):
     """
     Cython function to call into libcudf API, see `write_parquet`.
 
@@ -298,8 +300,8 @@ cpdef write_parquet(
 
     cdef vector[map[string, string]] user_data
     cdef table_view tv
-    cdef unique_ptr[cudf_io_types.data_sink] _data_sink
-    cdef cudf_io_types.sink_info sink = make_sink_info(path, _data_sink)
+    cdef vector[unique_ptr[cudf_io_types.data_sink]] _data_sinks
+    cdef cudf_io_types.sink_info sink = make_sinks_info(filepaths_or_buffers, _data_sinks)
 
     if index is True or (
         index is None and not isinstance(table._index, cudf.RangeIndex)
@@ -337,12 +339,17 @@ cpdef write_parquet(
     cdef unique_ptr[vector[uint8_t]] out_metadata_c
     cdef vector[string] c_column_chunks_file_paths
     cdef bool _int96_timestamps = int96_timestamps
+    cdef vector[cudf_io_types.partition_info] partitions
+    if partitions_info is not None:
+        for part in partitions_info:
+            partitions.push_back(cudf_io_types.partition_info(part[0], part[1]))
 
     # Perform write
     cdef parquet_writer_options args = move(
         parquet_writer_options.builder(sink, tv)
+        .partitions(partitions) # move if possible
         .metadata(tbl_meta.get())
-        .key_value_metadata(move(user_data))
+        # .key_value_metadata(move(user_data))
         .compression(comp_type)
         .stats_level(stat_freq)
         .int96_timestamps(_int96_timestamps)
