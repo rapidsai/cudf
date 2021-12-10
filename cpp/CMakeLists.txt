@@ -416,7 +416,8 @@ add_library(
   src/strings/copying/concatenate.cu
   src/strings/copying/copying.cu
   src/strings/copying/shift.cu
-  src/strings/extract.cu
+  src/strings/extract/extract.cu
+  src/strings/extract/extract_all.cu
   src/strings/filling/fill.cu
   src/strings/filter_chars.cu
   src/strings/findall.cu
