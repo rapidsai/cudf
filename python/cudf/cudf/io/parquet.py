@@ -386,6 +386,22 @@ def read_parquet(
 ):
     """{docstring}"""
 
+    # Since use_python_file_object=False is not longer
+    # supported, throw a deprecation warning if the
+    # parameter is used
+    use_python_file_object = kwargs.pop("use_python_file_object", None,)
+    if use_python_file_object is not None:
+        py_obj_msg = (
+            "The use_python_file_object argument is now "
+            "deprecated in cudf.read_parquet. "
+            "use_python_file_object=True is now the "
+            "required behavior."
+        )
+        if not use_python_file_object:
+            raise ValueError(py_obj_msg)
+        else:
+            warnings.warn(py_obj_msg, FutureWarning)
+
     # Multiple sources are passed as a list. If a single source is passed,
     # wrap it in a list for unified processing downstream.
     if not is_list_like(filepath_or_buffer):

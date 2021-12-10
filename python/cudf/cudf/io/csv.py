@@ -46,6 +46,7 @@ def read_csv(
     na_filter=True,
     prefix=None,
     index_col=None,
+    use_python_file_object=True,
     **kwargs,
 ):
     """{docstring}"""
@@ -62,7 +63,7 @@ def read_csv(
         path_or_data=filepath_or_buffer,
         compression=compression,
         iotypes=(BytesIO, StringIO, NativeFile),
-        use_python_file_object=True,
+        use_python_file_object=use_python_file_object,
         **kwargs,
     )
 

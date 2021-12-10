@@ -367,6 +367,10 @@ use_index : bool, default True
 decimal_cols_as_float: list, default None
     If specified, names of the columns that should be converted from
     Decimal to Float64 in the resulting dataframe.
+use_python_file_object : boolean, default True
+    If True, Arrow-backed PythonFile objects will be used in place of fsspec
+    AbstractBufferedFile objects at IO time. This option is likely to improve
+    performance when making small reads from larger ORC files.
 kwargs are passed to the engine
 
 Returns
@@ -903,6 +907,10 @@ prefix : str, default None
 index_col : int, string or False, default None
     Column to use as the row labels of the DataFrame. Passing `index_col=False`
     explicitly disables index column inference and discards the last column.
+use_python_file_object : boolean, default True
+    If True, Arrow-backed PythonFile objects will be used in place of fsspec
+    AbstractBufferedFile objects at IO time. This option is likely to improve
+    performance when making small reads from larger CSV files.
 
 Returns
 -------

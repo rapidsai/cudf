@@ -287,6 +287,7 @@ def read_orc(
     use_index=True,
     decimal_cols_as_float=None,
     timestamp_type=None,
+    use_python_file_object=True,
     **kwargs,
 ):
     """{docstring}"""
@@ -323,7 +324,7 @@ def read_orc(
         tmp_source, compression = ioutils.get_filepath_or_buffer(
             path_or_data=source,
             compression=None,
-            use_python_file_object=True,
+            use_python_file_object=use_python_file_object,
             **kwargs,
         )
         if compression is not None:
