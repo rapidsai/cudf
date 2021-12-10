@@ -2684,19 +2684,12 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if not axis == 0:
             raise NotImplementedError("Only axis=0 is supported.")
 
-        if not (np.issubdtype(i, np.number) for i in self.dtypes):
+        if not all(is_numeric_dtype(i) for i in self.dtypes):
             raise NotImplementedError(
                 "Diff currently only supports numeric dtypes"
             )
 
-        try:
-            result = self - self.shift(periods=periods)
-        except TypeError as e:
-            if "sub operator not supported" in str(e):
-                raise NotImplementedError(
-                    "Diff currently only supports numeric dtypes"
-                )
-            raise
+        result = self - self.shift(periods=periods)
 
         return result
 
