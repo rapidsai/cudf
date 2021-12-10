@@ -215,6 +215,10 @@ partition_file_name : str, optional, default None
     will be written to different directories, but all files will
     have this name.  If nothing is specified, a random uuid4 hex string
     will be used for each file.
+row_group_cols : list, optional, default None
+    Column names by which to partition the dataset across row groups in the
+    resulting Parquet file
+    Columns are partitioned in the order they are given
 int96_timestamps : bool, default False
     If ``True``, write timestamps in int96 format. This will convert
     timestamps from timestamp[ns], timestamp[ms], timestamp[s], and
