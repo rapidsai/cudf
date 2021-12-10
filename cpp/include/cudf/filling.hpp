@@ -232,5 +232,45 @@ std::unique_ptr<cudf::column> calendrical_month_sequence(
   size_type months,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief Policy to allow checking out-of-bounds values in the input.
+ *
+ * Enable out-of-bounds check if the input is not guaranteed to contain the values within a valid
+ * range. Otherwise, turn this off for better performance.
+ */
+enum class out_of_bounds_check : bool {
+  YES,  ///< Input values are checked and ignored from the operation if out-of-bounds.
+  NO    ///< No bounds checking is performed, better performance.
+};
+
+/**
+ * @brief Generate an array containing complement of the values given in the input.
+ *
+ * For a given input array of integer values, generate an output array containing the values in the
+ * range of [0, size) such that they do not appear in the input.
+ *
+ * The input array is allowed to have duplicates values, which will not affect the result.
+ * In addition, values that are outside of the given range [0, @p size) can be checked and ignored
+ * from the operation depending on the @p bounds_check parameter.
+ *
+ * If the input values are out-of-bounds but bound checking is not enabled, the output is undefined.
+ *
+ *
+ * @throws cudf::logic_error if @p size is < 0.
+ *
+ * @param input The input values to find complement.
+ * @param size Size that defines the range for output values.
+ * @param bounds_check Whether to check for the input values if they are within the range [0, size).
+ *        For better performance, use `NO` when the input are known to contain only in that range.
+ * @param mr Device memory resource used to allocate the returned column's device memory.
+ *
+ * @return Array containing the generated complement values.
+ */
+rmm::device_uvector<size_type> complement(
+  device_span<size_type const> const& input,
+  size_type size,
+  out_of_bounds_check bounds_check    = out_of_bounds_check::NO,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /** @} */  // end of group
 }  // namespace cudf
