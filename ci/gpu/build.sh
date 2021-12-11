@@ -83,7 +83,7 @@ gpuci_mamba_retry install -y \
                   "rapids-notebook-env=$MINOR_VERSION.*" \
                   "dask-cuda=${MINOR_VERSION}" \
                   "rmm=$MINOR_VERSION.*" \
-                  "ucx-py=0.23.*"
+                  "ucx-py=0.24.*"
 
 # https://docs.rapids.ai/maintainers/depmgmt/
 gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env

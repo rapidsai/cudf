@@ -21,7 +21,8 @@ function(find_and_configure_dlpack VERSION)
     dlpack ${VERSION}
     GIT_REPOSITORY https://github.com/dmlc/dlpack.git
     GIT_TAG v${VERSION}
-    GIT_SHALLOW TRUE DOWNLOAD_ONLY TRUE
+    GIT_SHALLOW TRUE
+    DOWNLOAD_ONLY TRUE
     OPTIONS "BUILD_MOCK OFF"
   )
 

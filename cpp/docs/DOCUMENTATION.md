@@ -9,7 +9,7 @@ The following is the license header comment that should appear at the beginning 
 
 ```c++
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,7 +30,7 @@ The comment should start with `/*` and not `/**` so it is not processed by doxyg
 Also, here are the rules for the copyright year.
 
 - A new file should have the year in which it was created
-- A modified file should span the year it was created and the year it was modified (e.g. `2019-2020`)
+- A modified file should span the year it was created and the year it was modified (e.g. `2019-2021`)
 
 Changing the copyright year may not be necessary if no content has changed (e.g. reformatting only).
 
@@ -48,7 +48,7 @@ Here are some of the custom options in the Doxyfile for libcudf.
 | Option | Setting | Description |
 | ------ | ------- | ----------- |
 | PROJECT_NAME | libcudf | Title used on the main page |
-| PROJECT_NUMBER | 0.14 | Version number |
+| PROJECT_NUMBER | 22.02.00 | Version number |
 | EXTENSION_MAPPING | cu=C++ cuh=C++ | Process `cu` and `cuh` as C++ |
 | INPUT | main_page.md regex.md unicode.md ../include | Embedded markdown files and source code directories to process |
 | FILE_PATTERNS | *.cpp *.hpp *.h *.c *.cu *.cuh | File extensions to process |
@@ -459,16 +459,13 @@ We recommend installing Doxygen using conda (`conda install doxygen`) or a Linux
 Alternatively you can [build and install doxygen from source](http://www.doxygen.nl/manual/install.html).
 
 To build the libcudf HTML documentation simply run the `doxygen` command from the `cpp/doxygen` directory containing the `Doxyfile`.
+The libcudf documentation can also be built using `make docs_cudf` from the cmake build directory (e.g. `cpp/build`).
 Doxygen reads and processes all appropriate source files under the `cpp/include/` directory.
 The output is generated in the `cpp/doxygen/html/` directory.
 You can load the local `index.html` file generated there into any web browser to view the result.
 
 To view docs built on a remote server, you can run a simple HTTP server using Python: `cd html && python -m http.server`.
 Then open `http://<IP address>:8000` in your local web browser, inserting the IP address of the machine on which you ran the HTTP server.
-
-By default, doxygen uses the `graphviz dot` tool to build diagrams of the class, namespace, and module relationships.
-If the `dot` tool cannot be found then doxygen generates output without diagrams.
-The doxygen installation page does not include instructions for downloading and installing `graphviz dot`.
 
 The doxygen output is intended for building documentation only for the public APIs and classes.
 For example, the output should not include documentation for `detail` or `/src` files, and these directories are excluded in the `Doxyfile` configuration.
