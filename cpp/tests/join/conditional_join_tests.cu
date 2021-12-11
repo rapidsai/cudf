@@ -894,8 +894,6 @@ TYPED_TEST(MixedJoinTest, Basic)
   cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_counts{0, 1, 0};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_counts, actual_counts);
 
-  std::cout << "Counts and offsets succeeded. Count is " << result_size << std::endl;
-
   auto result = cudf::mixed_inner_join(left, right, left_on, right_on, predicate);
   std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
   for (size_t i = 0; i < result.first->size(); ++i) {

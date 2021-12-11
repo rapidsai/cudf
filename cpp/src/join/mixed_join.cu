@@ -208,13 +208,12 @@ mixed_join(
                          matches_per_row->end(),
                          join_result_offsets->begin());
 
-  rmm::device_scalar<size_type> write_index(0, stream);
-
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
 
   auto const& join_output_l = left_indices->data();
   auto const& join_output_r = right_indices->data();
+
   if (has_nulls) {
     mixed_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, true>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -226,9 +225,7 @@ mixed_join(
         hash_table_view,
         join_output_l,
         join_output_r,
-        write_index.data(),
         parser.device_expression_data,
-        join_size,
         matches_per_row_ptr,
         join_result_offsets->data(),
         swap_tables);
@@ -243,9 +240,7 @@ mixed_join(
         hash_table_view,
         join_output_l,
         join_output_r,
-        write_index.data(),
         parser.device_expression_data,
-        join_size,
         matches_per_row_ptr,
         join_result_offsets->data(),
         swap_tables);

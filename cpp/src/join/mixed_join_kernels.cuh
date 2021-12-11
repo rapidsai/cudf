@@ -182,10 +182,10 @@ __global__ void compute_mixed_join_output_size(
       pair_expression_equality<has_nulls>{build, probe, evaluator, thread_intermediate_storage};
     if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::LEFT_ANTI_JOIN ||
         join_type == join_kind::FULL_JOIN) {
-      matches_per_row[outer_row_index] +=
+      matches_per_row[outer_row_index] =
         hash_table_view.pair_count_outer(this_thread, query_pair, count_equality);
     } else {
-      matches_per_row[outer_row_index] +=
+      matches_per_row[outer_row_index] =
         hash_table_view.pair_count(this_thread, query_pair, count_equality);
     }
     thread_counter += matches_per_row[outer_row_index];
@@ -214,26 +214,26 @@ __global__ void compute_mixed_join_output_size(
  * @param[in] join_type The type of join to be performed
  * @param[out] join_output_l The left result of the join operation
  * @param[out] join_output_r The right result of the join operation
- * @param[in,out] current_idx A global counter used by threads to coordinate
  * writes to the global output
  * @param device_expression_data Container of device data required to evaluate the desired
  * expression.
- * @param[in] max_size The maximum size of the output
  * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
  * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
  */
-template <cudf::size_type block_size, cudf::size_type output_cache_size, bool has_nulls>
+template <cudf::size_type block_size,
+          cudf::size_type output_cache_size,
+          bool has_nulls,
+          typename OutputIt1,
+          typename OutputIt2>
 __global__ void mixed_join(table_device_view left_table,
                            table_device_view right_table,
                            table_device_view probe,
                            table_device_view build,
                            join_kind join_type,
                            cudf::detail::mixed_multimap_type::device_view hash_table_view,
-                           cudf::size_type* join_output_l,
-                           cudf::size_type* join_output_r,
-                           cudf::size_type* current_idx,
+                           OutputIt1 join_output_l,
+                           OutputIt2 join_output_r,
                            cudf::ast::detail::expression_device_view device_expression_data,
-                           cudf::size_type const max_size,
                            cudf::size_type const* matches_per_row,
                            cudf::size_type const* join_result_offsets,
                            bool const swap_tables)
@@ -274,12 +274,14 @@ __global__ void mixed_join(table_device_view left_table,
     auto equality =
       pair_expression_equality<has_nulls>{build, probe, evaluator, thread_intermediate_storage};
 
+    // TODO: Verify that these are being passed in the correct order (at the
+    // moment it won't matter because my test produces a symmetric result).
     auto out1_zip_begin = thrust::make_zip_iterator(thrust::make_tuple(
       thrust::make_discard_iterator(), join_output_l + join_result_offsets[outer_row_index]));
     auto out2_zip_begin = thrust::make_zip_iterator(thrust::make_tuple(
       thrust::make_discard_iterator(), join_output_r + join_result_offsets[outer_row_index]));
 
-    hash_table_view.pair_retrieve(
+    auto num_matches_found = hash_table_view.pair_retrieve(
       this_thread, query_pair, out1_zip_begin, out2_zip_begin, equality);
 
     //// Left, left anti, and full joins all require saving left columns that
