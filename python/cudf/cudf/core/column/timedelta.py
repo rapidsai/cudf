@@ -21,7 +21,7 @@ from cudf._typing import (
 )
 from cudf.api.types import is_scalar
 from cudf.core.buffer import Buffer
-from cudf.core.column import ColumnBase, column, string
+from cudf.core.column import ColumnBase, column, column_empty_like, string
 from cudf.core.column.datetime import _numpy_to_pandas_conversion
 from cudf.utils.dtypes import np_to_pa_dtype
 from cudf.utils.utils import _fillna_natwise
@@ -226,6 +226,20 @@ class TimeDeltaColumn(column.ColumnBase):
             )
 
         return lhs, rhs, out_dtype
+
+    def _make_copy_with_na_as_null(self):
+        """Return a copy with NaN values replaced with nulls."""
+        null = column_empty_like(self, masked=True, newsize=1)
+        na_value = np.timedelta64("nat", self.time_unit)
+        out_col = cudf._lib.replace.replace(
+            self,
+            column.build_column(
+                Buffer(np.array([na_value], dtype=self.dtype).view("|u1")),
+                dtype=self.dtype,
+            ),
+            null,
+        )
+        return out_col
 
     def binary_operator(
         self, op: str, rhs: BinaryOperand, reflect: bool = False
