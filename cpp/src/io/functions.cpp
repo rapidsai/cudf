@@ -402,8 +402,7 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
   CUDF_FUNC_RANGE();
 
   auto datasources = make_datasources(options.get_source());
-  auto reader      = std::make_unique<detail_parquet::reader>(
-    std::move(datasources), options, rmm::cuda_stream_default, mr);
+  auto reader      = std::make_unique<detail_parquet::reader>(std::move(datasources), options, mr);
 
   return reader->read(options);
 }
