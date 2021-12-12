@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <io/orc/orc.h>
 #include <algorithm>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/avro.hpp>
@@ -32,6 +31,7 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
+#include <io/orc/orc.h>
 
 namespace cudf {
 namespace io {

@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include <tests/strings/utilities.h>
 #include <cudf/strings/contains.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <tests/strings/utilities.h>
 
 #include <algorithm>
 #include <vector>

@@ -26,9 +26,9 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
 
+#include "cudf/utilities/error.hpp"
 #include <tests/binaryop/assert-binops.h>
 #include <tests/binaryop/binop-fixture.hpp>
-#include "cudf/utilities/error.hpp"
 
 namespace cudf::test::binop {
 

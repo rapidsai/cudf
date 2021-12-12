@@ -25,9 +25,9 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
 
+#include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_buffer.hpp>
-#include "rmm/cuda_stream_view.hpp"
-#include "rmm/device_uvector.hpp"
+#include <rmm/device_uvector.hpp>
 
 struct BitmaskUtilitiesTest : public cudf::test::BaseFixture {
 };
