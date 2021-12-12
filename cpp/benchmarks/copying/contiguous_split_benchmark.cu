@@ -115,14 +115,9 @@ void BM_contiguous_split_strings(benchmark::State& state)
   using string_pair           = thrust::pair<const char*, cudf::size_type>;
 
   const int64_t string_len = 8;
-  cudf::test::strings_column_wrapper w_strings({"aaaaaaaa",
-                                                "bbbbbbbb",
-                                                "cccccccc",
-                                                "dddddddd",
-                                                "eeeeeeee",
-                                                "ffffffff",
-                                                "gggggggg",
-                                                "hhhhhhhh"});
+  cudf::test::strings_column_wrapper w_strings(
+    {"aaaaaaaa", "bbbbbbb", "cccccc", "ddddd", "eeee", "fff", "gg", "h", ""},
+    {1, 1, 1, 1, 1, 1, 1, 1, 0});
   cudf::column_view d_strings = w_strings;
   int64_t col_len_bytes       = total_desired_bytes / num_cols;
   int64_t num_rows            = col_len_bytes / string_len;
@@ -133,7 +128,7 @@ void BM_contiguous_split_strings(benchmark::State& state)
   for (int64_t idx = 0; idx < num_cols; idx++) {
     // fill in a random set of strings
     auto rand_elements = cudf::detail::make_counting_transform_iterator(
-      0, [idx, sz = d_strings.size() + include_validity] __device__(int i) {
+      0, [idx, sz = d_strings.size() - !include_validity] __device__(int i) {
         thrust::default_random_engine rng(31337 + idx);
         thrust::uniform_int_distribution<int> dist{0, sz - 1};
         rng.discard(i);
@@ -141,10 +136,9 @@ void BM_contiguous_split_strings(benchmark::State& state)
       });
     auto d_elements = cudf::test::fixed_width_column_wrapper<int>(
       thrust::input_device_iterator_tag{}, rand_elements, rand_elements + num_rows);
-    auto d_table = cudf::gather(cudf::table_view({d_strings}),
-                                d_elements,
-                                include_validity ? cudf::out_of_bounds_policy::NULLIFY
-                                                 : cudf::out_of_bounds_policy::DONT_CHECK);
+    auto d_table = cudf::gather(
+      cudf::table_view({d_strings}), d_elements, cudf::out_of_bounds_policy::DONT_CHECK);
+    if (!include_validity) d_table->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
     src_cols.push_back(std::move(d_table->release()[0]));
   }
 
