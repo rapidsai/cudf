@@ -63,7 +63,7 @@ void BM_basic_no_requests(benchmark::State& state)
 
 BENCHMARK_DEFINE_F(Groupby, BasicNoRequest)(::benchmark::State& state)
 { 
-  BM_basic_no_requests(state); 
+  BM_basic_no_requests(state);
 }
 
 BENCHMARK_REGISTER_F(Groupby, BasicNoRequest)
@@ -104,7 +104,7 @@ void BM_pre_sorted_no_requests(benchmark::State& state)
 
 BENCHMARK_DEFINE_F(Groupby, PreSortedNoRequests)(::benchmark::State& state)
 { 
-  BM_pre_sorted_no_requests(state); 
+  BM_pre_sorted_no_requests(state);
 }
 
 BENCHMARK_REGISTER_F(Groupby, PreSortedNoRequests)
