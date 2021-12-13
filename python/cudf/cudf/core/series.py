@@ -3345,7 +3345,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 "count": str(self.count()),
                 "mean": str(self.mean()),
                 "std": str(self.std()),
-                "min": pd.Timedelta(self.min()),
+                "min": str(pd.Timedelta(self.min())),
                 **dict(
                     zip(
                         _format_percentile_names(percentiles),
