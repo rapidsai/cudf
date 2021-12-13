@@ -3,7 +3,16 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any, Callable, Mapping, Sequence, Tuple, Union, cast
+from typing import (
+    Any,
+    Callable,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+    cast,
+)
 
 import cupy
 import numpy as np
@@ -46,6 +55,8 @@ class NumericalColumn(NumericalBaseColumn):
         The dtype associated with the data Buffer
     mask : Buffer, optional
     """
+
+    _nan_count: Optional[int]
 
     def __init__(
         self,
@@ -95,7 +106,7 @@ class NumericalColumn(NumericalBaseColumn):
         ).any()
 
     @property
-    def has_nans(self):
+    def has_nans(self) -> bool:
         return self.nan_count != 0
 
     @property
@@ -289,7 +300,7 @@ class NumericalColumn(NumericalBaseColumn):
         return libcudf.unary.cast(self, dtype)
 
     @property
-    def nan_count(self):
+    def nan_count(self) -> int:
         if self.dtype.kind != "f":
             self._nan_count = 0
         elif self._nan_count is None:
@@ -313,12 +324,15 @@ class NumericalColumn(NumericalBaseColumn):
 
         return lhs, rhs
 
+    def _can_return_nan(self, skipna: bool = None) -> bool:
+        return not skipna and (self.has_nulls or self.has_nans)
+
     def _process_for_reduction(
         self, skipna: bool = None, min_count: int = 0
     ) -> Union[ColumnBase, ScalarLike]:
         skipna = True if skipna is None else skipna
 
-        if not skipna and (self.has_nulls or self.has_nans):
+        if self._can_return_nan(skipna=skipna):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
         return super()._process_for_reduction(
             skipna=skipna, min_count=min_count
