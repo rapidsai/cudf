@@ -140,6 +140,9 @@ TEST_F(StringsReplaceRegexTest, MultiReplacement)
     cudf::strings::replace_re(cudf::strings_column_view(input), "aba", cudf::string_scalar("_"), 2);
   cudf::test::strings_column_wrapper expected({"_ bcd _", "_b_ abababa"});
   CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  results =
+    cudf::strings::replace_re(cudf::strings_column_view(input), "aba", cudf::string_scalar(""), 0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, input);
 }
 
 TEST_F(StringsReplaceRegexTest, Multiline)

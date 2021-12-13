@@ -65,7 +65,7 @@ struct replace_regex_fn {
     auto const d_str  = d_strings.element<string_view>(idx);
     auto const nchars = d_str.length();                  // number of characters in input string
     auto nbytes       = d_str.size_bytes();              // number of bytes in input string
-    auto mxn          = maxrepl > 0 ? maxrepl : nchars;  // max possible replaces for this string
+    auto mxn          = maxrepl < 0 ? nchars : maxrepl;  // max possible replaces for this string
     auto in_ptr       = d_str.data();                    // input pointer (i)
     auto out_ptr      = d_chars ? d_chars + d_offsets[idx] : nullptr;  // output pointer (o)
     size_type lpos    = 0;
@@ -125,7 +125,7 @@ std::unique_ptr<column> replace_re(
   // copy null mask
   auto null_mask        = cudf::detail::copy_bitmask(strings.parent(), stream, mr);
   auto const null_count = strings.null_count();
-  auto const maxrepl    = max_replace_count.value_or(0);
+  auto const maxrepl    = max_replace_count.value_or(-1);
 
   // create child columns
   auto children = [&] {
