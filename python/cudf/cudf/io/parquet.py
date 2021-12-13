@@ -192,46 +192,36 @@ def write_to_dataset(
             filename = filename or uuid4().hex + ".parquet"
             full_path = fs.sep.join([prefix, filename])
             full_paths.append(full_path)
-            # write_df = sub_df.copy(deep=False)
-            # write_df.drop(columns=partition_cols, inplace=True)
 
-        # with ExitStack() as stack:
-        #     open_files = [
-        #         stack.enter_context(fs.open(path, mode="wb"))
-        #         for path in full_paths
-        #     ]
-        #     file_objs = [ioutils.get_IOBase_writer(fil) for fil in open_files]
-        #     write_df = df.drop(columns=partition_cols, inplace=False)
-        #     if return_metadata:
-        #         metadata.append(
-        #             _write_parquet(
-        #                 write_df,
-        #                 file_objs,
-        #                 index=preserve_index,
-        #                 metadata_file_path=fs.sep.join([subdir, filename]),
-        #                 partitions_info=partitions_info,
-        #                 **kwargs,
-        #             )
-        #         )
-        #     else:
-        #         _write_parquet(
-        #             write_df,
-        #             file_objs,
-        #             index=preserve_index,
-        #             partitions_info=partitions_info,
-        #             **kwargs,
-        #         )
-        # TODO: this is temp. we'll replace get_partitions with groupby
-        write_df = df.sort_values(partition_cols).drop(
-            columns=partition_cols, inplace=False
-        )
-        _write_parquet(
-            write_df,
-            full_paths,
-            index=preserve_index,
-            partitions_info=partitions_info,
-            **kwargs,
-        )
+        with ExitStack() as stack:
+            open_files = [
+                stack.enter_context(fs.open(path, mode="wb"))
+                for path in full_paths
+            ]
+            file_objs = [ioutils.get_IOBase_writer(fil) for fil in open_files]
+            # TODO: this is temp. we'll replace get_partitions with groupby
+            write_df = df.sort_values(partition_cols).drop(
+                columns=partition_cols, inplace=False
+            )
+            if return_metadata:
+                metadata.append(
+                    _write_parquet(
+                        write_df,
+                        file_objs,
+                        index=preserve_index,
+                        metadata_file_path=fs.sep.join([subdir, filename]),
+                        partitions_info=partitions_info,
+                        **kwargs,
+                    )
+                )
+            else:
+                _write_parquet(
+                    write_df,
+                    file_objs,
+                    index=preserve_index,
+                    partitions_info=partitions_info,
+                    **kwargs,
+                )
 
     else:
         filename = filename or uuid4().hex + ".parquet"

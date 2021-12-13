@@ -80,7 +80,8 @@ cdef source_info make_source_info(list src) except*:
 
 # Converts the Python sink input to libcudf++ IO sink_info.
 cdef sink_info make_sinks_info(list src, vector[unique_ptr[data_sink]] & sink) except*:
-    cdef vector[data_sink] data_sinks
+    cdef vector[data_sink *] data_sinks
+    cdef vector[string] paths
     # TODO: re-enable after paths splits is known to work
     # if isinstance(src[0], io.StringIO):
     #     for s in src:
@@ -95,15 +96,15 @@ cdef sink_info make_sinks_info(list src, vector[unique_ptr[data_sink]] & sink) e
     #         raise NotImplementedError(f"Unsupported encoding {src.encoding}")
     #     sink.reset(new iobase_data_sink(src.buffer))
     #     return sink_info(sink.get())
-    # if isinstance(src[0], io.IOBase):
-    #     for s in src:
-    #         data_sinks.push_back(new iobase_data_sink(s))
-    #     return sink_info(sink.get())
-    # elif isinstance(src[0], (basestring, os.PathLike)):
-    cdef vector[string] paths
-    for s in src:
-        paths.push_back(<string> os.path.expanduser(s).encode())
-    return sink_info(move(paths))
+    if isinstance(src[0], io.IOBase):
+        for s in src:
+            sink.push_back(unique_ptr[data_sink](new iobase_data_sink(s)))
+            data_sinks.push_back(sink.back().get())
+        return sink_info(data_sinks)
+    elif isinstance(src[0], (basestring, os.PathLike)):
+        for s in src:
+            paths.push_back(<string> os.path.expanduser(s).encode())
+        return sink_info(move(paths))
     # else:
     #     raise TypeError("Unrecognized input type: {}".format(type(src)))
 

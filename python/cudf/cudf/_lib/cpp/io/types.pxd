@@ -109,6 +109,7 @@ cdef extern from "cudf/io/types.hpp" \
         sink_info(vector[string] file_path) except +
         sink_info(vector[char] * buffer) except +
         sink_info(data_sink * user_sink) except +
+        sink_info(vector[data_sink *] user_sink) except +
 
 
 cdef extern from "cudf/io/data_sink.hpp" \
