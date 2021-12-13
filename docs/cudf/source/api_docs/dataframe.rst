@@ -154,6 +154,8 @@ Reindexing / selection / label manipulation
 .. autosummary::
    :toctree: api/
 
+   DataFrame.add_prefix
+   DataFrame.add_suffix
    DataFrame.drop
    DataFrame.drop_duplicates
    DataFrame.equals

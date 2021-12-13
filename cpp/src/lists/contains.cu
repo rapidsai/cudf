@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
@@ -26,12 +25,9 @@
 #include <cudf/scalar/scalar_device_view.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
-
 #include <rmm/exec_policy.hpp>
-
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/logical.h>
-
 #include <type_traits>
 
 namespace cudf {
