@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <tests/strings/utilities.h>
 #include <cudf/strings/extract.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/table/table_view.hpp>
@@ -22,6 +21,7 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
+#include <tests/strings/utilities.h>
 
 #include <vector>
 

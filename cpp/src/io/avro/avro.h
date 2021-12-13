@@ -18,12 +18,12 @@
 
 #include "avro_common.h"
 
+#include <algorithm>
+#include <map>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <algorithm>
-#include <map>
 #include <string>
 #include <vector>
 
