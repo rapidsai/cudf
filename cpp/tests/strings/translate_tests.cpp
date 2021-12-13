@@ -20,10 +20,10 @@
 #include <cudf/strings/translate.hpp>
 #include <cudf/utilities/error.hpp>
 
-#include <tests/strings/utilities.h>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <tests/strings/utilities.h>
 
 #include <vector>
 
