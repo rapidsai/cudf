@@ -15,8 +15,8 @@
  */
 #pragma once
 
-#include <librdkafka/rdkafkacpp.h>
 #include <cudf/io/datasource.hpp>
+#include <librdkafka/rdkafkacpp.h>
 #include <map>
 #include <memory>
 #include <string>
