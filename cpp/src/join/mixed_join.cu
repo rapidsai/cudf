@@ -54,14 +54,14 @@ mixed_join(
   // We can immediately filter out cases where the right table is empty. In
   // some cases, we return all the rows of the left table with a corresponding
   // null index for the right table; in others, we return an empty output.
-  auto right_num_rows{right.num_rows()};
-  auto left_num_rows{left.num_rows()};
-  auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
+  auto const right_num_rows{right.num_rows()};
+  auto const left_num_rows{left.num_rows()};
+  auto const swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
 
-  // TODO: Always allocating for now for simplicity in debugging, but this
-  // shouldn't be allocated if output_size_data is provided.
-  auto matches_per_row = std::make_unique<rmm::device_uvector<size_type>>(
-    swap_tables ? right.num_rows() : left.num_rows(), stream, mr);
+  // The "outer" table is the larger of the two tables. The kernels are
+  // launched with one thread per row of the outer table, which also means that
+  // it is the probe table for the hash
+  auto const outer_num_rows{swap_tables ? right_num_rows : left_num_rows};
 
   if (right_num_rows == 0) {
     switch (join_type) {
@@ -135,20 +135,19 @@ mixed_join(
 
   // For inner joins we support optimizing the join by launching one thread for
   // whichever table is larger rather than always using the left table.
-  detail::grid_1d config(swap_tables ? right_num_rows : left_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
+  detail::grid_1d config(outer_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
   join_kind kernel_join_type = join_type == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : join_type;
 
   // If the join size was not provided as an input, compute it here.
 
-  // TODO: Introducing matches_per_row as an input is a fundamental change because
-  // calling code that wants to pass the size calculation to multiple join
-  // calculations as an optimization must now also pass this vector. Since this
-  // vector's nature changes depending on whether or not swapping occurs, we're
-  // effectively exposing an implementation detail. I don't know if there's any
-  // way to avoid this, though. We may just have to document it appropriately.
   std::size_t join_size;
-  auto matches_per_row_ptr = matches_per_row->data();
+  // This object will not be used if the user provided the size data, but we
+  // must declare it in this scope. IIFE is not a solution in this case since
+  // no such object will exist in the user-provided size case.
+  std::unique_ptr<rmm::device_uvector<size_type>> matches_per_row{};
+
+  size_type* matches_per_row_ptr;
 
   if (output_size_data.has_value()) {
     join_size           = (*output_size_data).first;
@@ -157,6 +156,9 @@ mixed_join(
     // Allocate storage for the counter used to get the size of the join output
     rmm::device_scalar<std::size_t> size(0, stream, mr);
     CHECK_CUDA(stream.value());
+    matches_per_row =
+      std::move(std::make_unique<rmm::device_uvector<size_type>>(outer_num_rows, stream, mr));
+    matches_per_row_ptr = matches_per_row->data();
     if (has_nulls) {
       compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -200,9 +202,8 @@ mixed_join(
   }
 
   // Given the number of matches per row, we need to compute the offsets for insertion.
-  // TODO: Try to reduce the number of places where swap_tables is used.
-  auto join_result_offsets = std::make_unique<rmm::device_uvector<size_type>>(
-    swap_tables ? right.num_rows() : left.num_rows(), stream, mr);
+  auto join_result_offsets =
+    std::make_unique<rmm::device_uvector<size_type>>(outer_num_rows, stream, mr);
   thrust::exclusive_scan(rmm::exec_policy{stream},
                          matches_per_row->begin(),
                          matches_per_row->end(),
@@ -273,9 +274,14 @@ compute_mixed_join_output_size(table_view const& left,
   // We can immediately filter out cases where one table is empty. In
   // some cases, we return all the rows of the other table with a corresponding
   // null index for the empty table; in others, we return an empty output.
-  auto right_num_rows{right.num_rows()};
-  auto left_num_rows{left.num_rows()};
-  auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
+  auto const right_num_rows{right.num_rows()};
+  auto const left_num_rows{left.num_rows()};
+  auto const swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
+
+  // The "outer" table is the larger of the two tables. The kernels are
+  // launched with one thread per row of the outer table, which also means that
+  // it is the probe table for the hash
+  auto const outer_num_rows{swap_tables ? right_num_rows : left_num_rows};
 
   // TODO: Introducing this as an output is a fundamental change because
   // calling code that wants to pass the size calculation to multiple join
@@ -285,8 +291,8 @@ compute_mixed_join_output_size(table_view const& left,
   // way to avoid this.
   // TODO: In the degenerate cases this is being returned as unintialized
   // memory, it should be zeroed out appropriately.
-  auto matches_per_row = std::make_unique<rmm::device_uvector<size_type>>(
-    swap_tables ? right.num_rows() : left.num_rows(), stream, mr);
+  auto matches_per_row =
+    std::make_unique<rmm::device_uvector<size_type>>(outer_num_rows, stream, mr);
 
   if (right_num_rows == 0) {
     switch (join_type) {

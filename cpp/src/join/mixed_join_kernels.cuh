@@ -74,6 +74,10 @@ class pair_expression_equality {
   __device__ __forceinline__ bool operator()(const pair_type& lhs_row,
                                              const pair_type& rhs_row) const noexcept
   {
+    // TODO: I've inlined the logic from cudf's row_equality_comparator because
+    // that comparator's constructor is not visible on device, and changing it
+    // would require removing an assertion-raising test. I don't think we want
+    // to do that, but should verify before finalizing.
     auto equal_elements = [=](column_device_view l, column_device_view r) {
       if constexpr (has_nulls) {
         return cudf::type_dispatcher(
