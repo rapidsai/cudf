@@ -3202,7 +3202,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param findOption Whether to find the first index of the key, or the last.
    * @return The resultant column of int32 indices
    */
-  public final ColumnVector listIndexOfScalar(Scalar key, FindOptions findOption) {
+  public final ColumnVector listIndexOf(Scalar key, FindOptions findOption) {
     assert type.equals(DType.LIST) : "column type must be a LIST";
     boolean isFindFirst = findOption == FindOptions.FIND_FIRST;
     return new ColumnVector(listIndexOfScalar(getNativeView(), key.getScalarHandle(), isFindFirst));
@@ -3219,7 +3219,7 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    * @param findOption Whether to find the first index of the key, or the last.
    * @return The resultant column of int32 indices
    */
-  public final ColumnVector listIndexOfColumn(ColumnView keys, FindOptions findOption) {
+  public final ColumnVector listIndexOf(ColumnView keys, FindOptions findOption) {
     assert type.equals(DType.LIST) : "column type must be a LIST";
     boolean isFindFirst = findOption == FindOptions.FIND_FIRST;
     return new ColumnVector(listIndexOfColumn(getNativeView(), keys.getNativeView(), isFindFirst));

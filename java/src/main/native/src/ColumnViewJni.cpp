@@ -548,11 +548,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listIndexOfScalar(JNIEnv 
   JNI_NULL_CHECK(env, lookup_key, "lookup scalar is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    auto cv = reinterpret_cast<cudf::column_view *>(column_view);
-    auto lcv = cudf::lists_column_view{*cv};
-    auto lookup_key_scalar = reinterpret_cast<cudf::scalar *>(lookup_key);
-    auto find_option = is_find_first ? cudf::lists::duplicate_find_option::FIND_FIRST :
-                                       cudf::lists::duplicate_find_option::FIND_LAST;
+    auto const cv = reinterpret_cast<cudf::column_view const *>(column_view);
+    auto const lcv = cudf::lists_column_view{*cv};
+    auto const lookup_key_scalar = reinterpret_cast<cudf::scalar const *>(lookup_key);
+    auto const find_option = is_find_first ? cudf::lists::duplicate_find_option::FIND_FIRST :
+                                             cudf::lists::duplicate_find_option::FIND_LAST;
     auto result = cudf::lists::index_of(lcv, *lookup_key_scalar, find_option);
     return reinterpret_cast<jlong>(result.release());
   }
@@ -567,11 +567,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listIndexOfColumn(JNIEnv 
   JNI_NULL_CHECK(env, lookup_keys, "lookup key column is null", 0);
   try {
     cudf::jni::auto_set_device(env);
-    auto cv = reinterpret_cast<cudf::column_view *>(column_view);
-    auto lcv = cudf::lists_column_view{*cv};
-    auto lookup_key_column = reinterpret_cast<cudf::column_view *>(lookup_keys);
-    auto find_option = is_find_first ? cudf::lists::duplicate_find_option::FIND_FIRST :
-                                       cudf::lists::duplicate_find_option::FIND_LAST;
+    auto const cv = reinterpret_cast<cudf::column_view const *>(column_view);
+    auto const lcv = cudf::lists_column_view{*cv};
+    auto const lookup_key_column = reinterpret_cast<cudf::column_view const *>(lookup_keys);
+    auto const find_option = is_find_first ? cudf::lists::duplicate_find_option::FIND_FIRST :
+                                             cudf::lists::duplicate_find_option::FIND_LAST;
     auto result = cudf::lists::index_of(lcv, *lookup_key_column, find_option);
     return reinterpret_cast<jlong>(result.release());
   }

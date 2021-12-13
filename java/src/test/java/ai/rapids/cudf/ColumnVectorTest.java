@@ -4457,9 +4457,9 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector input = makeListsColumn(DType.STRING, list0, list1, list2, list3, list4);
          Scalar searchKey = Scalar.fromString("thésé");
          ColumnVector expectedFirst = ColumnVector.fromBoxedInts(1, -1, 3, -1, null);
-         ColumnVector resultFirst = input.listIndexOfScalar(searchKey, FindOptions.FIND_FIRST);
+         ColumnVector resultFirst = input.listIndexOf(searchKey, FindOptions.FIND_FIRST);
          ColumnVector expectedLast = ColumnVector.fromBoxedInts(1, -1, 5, -1, null);
-         ColumnVector resultLast = input.listIndexOfScalar(searchKey, FindOptions.FIND_LAST)) {
+         ColumnVector resultLast = input.listIndexOf(searchKey, FindOptions.FIND_LAST)) {
       assertColumnsAreEqual(expectedFirst, resultFirst);
       assertColumnsAreEqual(expectedLast, resultLast);
     }
@@ -4474,9 +4474,9 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector input = makeListsColumn(DType.INT32, list0, list1, list2, list3);
          Scalar searchKey = Scalar.fromInt(7);
          ColumnVector expectedFirst = ColumnVector.fromBoxedInts(-1, -1, 0, null);
-         ColumnVector resultFirst = input.listIndexOfScalar(searchKey, FindOptions.FIND_FIRST);
+         ColumnVector resultFirst = input.listIndexOf(searchKey, FindOptions.FIND_FIRST);
          ColumnVector expectedLast = ColumnVector.fromBoxedInts(-1, -1, 3, null);
-         ColumnVector resultLast = input.listIndexOfScalar(searchKey, FindOptions.FIND_LAST)) {
+         ColumnVector resultLast = input.listIndexOf(searchKey, FindOptions.FIND_LAST)) {
       assertColumnsAreEqual(expectedFirst, resultFirst);
       assertColumnsAreEqual(expectedLast, resultLast);
     }
@@ -4493,9 +4493,9 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector input = makeListsColumn(DType.STRING, list0, list1, list2, list3, list4, list5);
          ColumnVector searchKeys = ColumnVector.fromStrings("thésé", "", "test", "test", "iotA", null);
          ColumnVector expectedFirst = ColumnVector.fromBoxedInts(1, 0, 3, 3, -1, null);
-         ColumnVector resultFirst = input.listIndexOfColumn(searchKeys, FindOptions.FIND_FIRST);
+         ColumnVector resultFirst = input.listIndexOf(searchKeys, FindOptions.FIND_FIRST);
          ColumnVector expectedLast = ColumnVector.fromBoxedInts(1, 0, 3, 5, -1, null);
-         ColumnVector resultLast = input.listIndexOfColumn(searchKeys, FindOptions.FIND_LAST)) {
+         ColumnVector resultLast = input.listIndexOf(searchKeys, FindOptions.FIND_LAST)) {
       assertColumnsAreEqual(expectedFirst, resultFirst);
       assertColumnsAreEqual(expectedLast, resultLast);
     }
@@ -4511,9 +4511,9 @@ public class ColumnVectorTest extends CudfTestBase {
     try (ColumnVector input = makeListsColumn(DType.INT32, list0, list1, list2, list3, list4);
          ColumnVector searchKeys = ColumnVector.fromBoxedInts(3, 3, 8, 3, null);
          ColumnVector expectedFirst = ColumnVector.fromBoxedInts(2, -1, 1, -1, null);
-         ColumnVector resultFirst = input.listIndexOfColumn(searchKeys, FindOptions.FIND_FIRST);
+         ColumnVector resultFirst = input.listIndexOf(searchKeys, FindOptions.FIND_FIRST);
          ColumnVector expectedLast = ColumnVector.fromBoxedInts(2, -1, 3, -1, null);
-         ColumnVector resultLast = input.listIndexOfColumn(searchKeys, FindOptions.FIND_LAST)) {
+         ColumnVector resultLast = input.listIndexOf(searchKeys, FindOptions.FIND_LAST)) {
       assertColumnsAreEqual(expectedFirst, resultFirst);
       assertColumnsAreEqual(expectedLast, resultLast);
     }
