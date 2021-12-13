@@ -281,7 +281,7 @@ __global__ void mixed_join(table_device_view left_table,
     auto out2_zip_begin = thrust::make_zip_iterator(thrust::make_tuple(
       thrust::make_discard_iterator(), join_output_r + join_result_offsets[outer_row_index]));
 
-    auto num_matches_found = hash_table_view.pair_retrieve(
+    hash_table_view.pair_retrieve(
       this_thread, query_pair, out1_zip_begin, out2_zip_begin, equality);
 
     //// Left, left anti, and full joins all require saving left columns that

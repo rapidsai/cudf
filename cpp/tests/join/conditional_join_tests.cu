@@ -908,3 +908,60 @@ TYPED_TEST(MixedJoinTest, Basic)
 
   EXPECT_TRUE(std::equal(expected_outputs.begin(), expected_outputs.end(), result_pairs.begin()));
 }
+
+TYPED_TEST(MixedJoinTest, Basic2)
+{
+  // Note that we need to maintain the column wrappers otherwise the
+  // resulting column views will be referencing potentially invalid memory.
+  ColumnVector<TypeParam> left_inputs{{0, 1, 2, 4}, {3, 4, 5, 6}, {10, 20, 30, 40}};
+  ColumnVector<TypeParam> right_inputs{{0, 1, 3, 4}, {5, 4, 5, 7}, {30, 40, 50, 60}};
+
+  auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
+    this->parse_input(left_inputs, right_inputs);
+
+  const auto col_ref_left_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
+  const auto col_ref_right_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
+
+  const auto col_ref_left_2  = cudf::ast::column_reference(2, cudf::ast::table_reference::LEFT);
+  const auto col_ref_right_2 = cudf::ast::column_reference(2, cudf::ast::table_reference::RIGHT);
+
+  auto scalar_1  = cudf::numeric_scalar<TypeParam>(35);
+  auto literal_1 = cudf::ast::literal(scalar_1);
+
+  auto op1 = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_left_1, col_ref_right_1);
+
+  auto op2 = cudf::ast::operation(cudf::ast::ast_operator::LESS, literal_1, col_ref_right_2);
+
+  auto predicate = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, op1, op2);
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs{{3, 3}};
+  // The left join output:
+  // std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs{{0, 0}, {1, 1}, {2,
+  // JoinNoneValue}};
+
+  std::vector<cudf::size_type> const left_on{0};
+  std::vector<cudf::size_type> const right_on{0};
+
+  auto [result_size, matches_per_row] =
+    cudf::mixed_inner_join_size(left, right, left_on, right_on, predicate);
+  EXPECT_TRUE(result_size == expected_outputs.size());
+
+  auto actual_counts = cudf::column_view{cudf::data_type{cudf::type_to_id<cudf::size_type>()},
+                                         static_cast<cudf::size_type>(matches_per_row->size()),
+                                         matches_per_row->data()};
+  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_counts{0, 0, 0, 1};
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_counts, actual_counts);
+
+  auto result = cudf::mixed_inner_join(left, right, left_on, right_on, predicate);
+  std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
+  for (size_t i = 0; i < result.first->size(); ++i) {
+    // Note: Not trying to be terribly efficient here since these tests are
+    // small, otherwise a batch copy to host before constructing the tuples
+    // would be important.
+    result_pairs.push_back({result.first->element(i, rmm::cuda_stream_default),
+                            result.second->element(i, rmm::cuda_stream_default)});
+  }
+  std::sort(result_pairs.begin(), result_pairs.end());
+  std::sort(expected_outputs.begin(), expected_outputs.end());
+
+  EXPECT_TRUE(std::equal(expected_outputs.begin(), expected_outputs.end(), result_pairs.begin()));
+}
