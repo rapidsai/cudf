@@ -16,7 +16,7 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/detail/hashing.hpp>
-#include <cudf/null_mask.hpp>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
 #include <cudf/utilities/traits.hpp>
@@ -66,7 +66,8 @@ column_view_base::column_view_base(data_type type,
 size_type column_view_base::null_count() const
 {
   if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
-    _null_count = cudf::count_unset_bits(null_mask(), offset(), offset() + size());
+    _null_count =
+      cudf::detail::null_count(null_mask(), offset(), offset() + size(), rmm::cuda_stream_default);
   }
   return _null_count;
 }
@@ -76,7 +77,8 @@ size_type column_view_base::null_count(size_type begin, size_type end) const
   CUDF_EXPECTS((begin >= 0) && (end <= size()) && (begin <= end), "Range is out of bounds.");
   return (null_count() == 0)
            ? 0
-           : cudf::count_unset_bits(null_mask(), offset() + begin, offset() + end);
+           : cudf::detail::null_count(
+               null_mask(), offset() + begin, offset() + end, rmm::cuda_stream_default);
 }
 
 // Struct to use custom hash combine and fold expression

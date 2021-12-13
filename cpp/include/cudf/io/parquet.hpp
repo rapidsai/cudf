@@ -46,7 +46,7 @@ constexpr size_type default_row_group_size_rows = 1000000;
 class parquet_reader_options_builder;
 
 /**
- * @brief Settings or `read_parquet()`.
+ * @brief Settings for `read_parquet()`.
  */
 class parquet_reader_options {
   source_info _source;

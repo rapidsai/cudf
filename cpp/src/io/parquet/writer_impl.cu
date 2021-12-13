@@ -19,12 +19,12 @@
  * @brief cuDF-IO parquet writer class implementation
  */
 
-#include <io/statistics/column_statistics.cuh>
 #include "writer_impl.hpp"
+#include <io/statistics/column_statistics.cuh>
 
+#include "compact_protocol_writer.hpp"
 #include <io/utilities/column_utils.cuh>
 #include <io/utilities/config_utils.hpp>
-#include "compact_protocol_writer.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/iterator.cuh>

@@ -48,7 +48,7 @@ struct replace_nans_functor {
 
     if (input.is_empty()) { return cudf::make_empty_column(input.type()); }
 
-    auto input_device_view = column_device_view::create(input);
+    auto input_device_view = column_device_view::create(input, stream);
     size_type size         = input.size();
 
     auto predicate = [dinput = *input_device_view] __device__(auto i) {
@@ -89,7 +89,7 @@ std::unique_ptr<column> replace_nans(column_view const& input,
   return type_dispatcher(input.type(),
                          replace_nans_functor{},
                          input,
-                         *column_device_view::create(replacement),
+                         *column_device_view::create(replacement, stream),
                          replacement.nullable(),
                          stream,
                          mr);
@@ -180,10 +180,10 @@ void normalize_nans_and_zeros(mutable_column_view in_out, rmm::cuda_stream_view 
   column_view input = in_out;
 
   // to device. unique_ptr which gets automatically cleaned up when we leave
-  auto device_in = column_device_view::create(input);
+  auto device_in = column_device_view::create(input, stream);
 
   // from device. unique_ptr which gets automatically cleaned up when we leave.
-  auto device_out = mutable_column_device_view::create(in_out);
+  auto device_out = mutable_column_device_view::create(in_out, stream);
 
   // invoke the actual kernel.
   cudf::type_dispatcher(

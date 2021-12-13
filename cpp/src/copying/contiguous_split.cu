@@ -63,7 +63,7 @@ struct src_buf_info {
                int _offset_stack_pos,
                int _parent_offsets_index,
                bool _is_validity,
-               int _column_offset)
+               size_type _column_offset)
     : type(_type),
       offsets(_offsets),
       offset_stack_pos(_offset_stack_pos),
@@ -194,11 +194,18 @@ __device__ void copy_buffer(uint8_t* __restrict__ dst,
     if (value_shift || bit_shift) {
       std::size_t idx = (num_bytes - remainder) / 4;
       uint32_t v = remainder > 0 ? (reinterpret_cast<uint32_t const*>(src)[idx] - value_shift) : 0;
+
+      constexpr size_type rows_per_element = 32;
+      auto const have_trailing_bits = ((num_elements * rows_per_element) - num_rows) < bit_shift;
       while (remainder) {
-        uint32_t const next = bit_shift > 0 || remainder > 4
-                                ? (reinterpret_cast<uint32_t const*>(src)[idx + 1] - value_shift)
-                                : 0;
-        uint32_t const val  = (v >> bit_shift) | (next << (32 - bit_shift));
+        // if we're at the very last word of a validity copy, we do not always need to read the next
+        // word to get the final trailing bits.
+        auto const read_trailing_bits = bit_shift > 0 && remainder == 4 && have_trailing_bits;
+        uint32_t const next           = (read_trailing_bits || remainder > 4)
+                                          ? (reinterpret_cast<uint32_t const*>(src)[idx + 1] - value_shift)
+                                          : 0;
+
+        uint32_t const val = (v >> bit_shift) | (next << (32 - bit_shift));
         if (valid_count) { thread_valid_count += __popc(val); }
         reinterpret_cast<uint32_t*>(dst)[idx] = val;
         v                                     = next;
