@@ -30,7 +30,11 @@ from cudf._lib.stream_compaction import drop_duplicates
 from cudf._lib.transform import bools_to_mask
 from cudf._lib.unary import UnaryOp, unary_operation
 from cudf._typing import ColumnLike, Dtype, ScalarLike
-from cudf.api.types import is_categorical_dtype, is_interval_dtype
+from cudf.api.types import (
+    is_categorical_dtype,
+    is_dtype_equal,
+    is_interval_dtype,
+)
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.core.column.methods import ColumnMethods
@@ -1151,43 +1155,18 @@ class CategoricalColumn(column.ColumnBase):
         """
         Fill null values with *fill_value*
         """
-        if not self.nullable:
-            return self
-
-        if fill_value is not None:
-            fill_is_scalar = np.isscalar(fill_value)
-
-            if fill_is_scalar:
-                if fill_value == self._default_na_value():
-                    fill_value = cudf.Scalar(None, dtype=self.dtype)
-                else:
-                    fill_value = cudf.Scalar(fill_value, dtype=self.dtype)
-            else:
-                fill_value = column.as_column(fill_value, nan_as_null=False)
-                if isinstance(fill_value, CategoricalColumn):
-                    if self.dtype != fill_value.dtype:
-                        raise ValueError(
-                            "Cannot set a Categorical with another, "
-                            "without identical categories"
-                        )
-                # TODO: only required if fill_value has a subset of the
-                # categories:
-                fill_value = fill_value._set_categories(
-                    self.categories, is_unique=True,
+        if (
+            fill_value is not None
+            and hasattr(fill_value, "dtype")
+            and is_categorical_dtype(fill_value.dtype)
+        ):
+            if not is_dtype_equal(self.dtype, fill_value.dtype):
+                raise ValueError(
+                    "Cannot set a Categorical with another, without identical "
+                    "categories"
                 )
 
-        result = super().fillna(value=fill_value, method=method)
-
-        result = column.build_categorical_column(
-            categories=result.children[1],
-            codes=result.children[0],
-            offset=result.offset,
-            size=result.size,
-            mask=result.base_mask,
-            ordered=self.dtype.ordered,
-        )
-
-        return result
+        return super().fillna(fill_value, method, dtype)
 
     def find_first_value(
         self, value: ScalarLike, closest: bool = False
