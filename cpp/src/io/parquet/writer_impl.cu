@@ -156,6 +156,20 @@ struct aggregate_metadata {
     return merged_md;
   }
 
+  std::vector<size_t> num_row_groups_per_file()
+  {
+    std::vector<size_t> global_rowgroup_base;
+    std::transform(this->files.begin(),
+                   this->files.end(),
+                   std::back_inserter(global_rowgroup_base),
+                   [](auto const& part) { return part.row_groups.size(); });
+    return global_rowgroup_base;
+  }
+
+  auto& file(size_t p) { return files[p]; }
+  size_t num_files() const { return files.size(); }
+
+ private:
   int32_t version = 0;
   std::vector<SchemaElement> schema;
   struct per_file_metadata {
@@ -1266,11 +1280,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
       fragments, col_desc, partitions, d_part_frag_offset, max_page_fragment_size);
   }
 
-  std::vector<size_t> global_rowgroup_base;
-  std::transform(md->files.begin(),
-                 md->files.end(),
-                 std::back_inserter(global_rowgroup_base),
-                 [](auto const& part) { return part.row_groups.size(); });
+  std::vector<size_t> const global_rowgroup_base = md->num_row_groups_per_file();
 
   // Decide row group boundaries based on uncompressed data size
   int num_rowgroups = 0;
@@ -1292,7 +1302,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
       if (f > first_frag_in_rg &&  // There has to be at least one fragment in row group
           (curr_rg_data_size + fragment_data_size > max_row_group_size ||
            curr_rg_num_rows + fragment_num_rows > max_row_group_rows)) {
-        auto& rg    = md->files[p].row_groups.emplace_back();
+        auto& rg    = md->file(p).row_groups.emplace_back();
         rg.num_rows = curr_rg_num_rows;
         num_rowgroups++;
         num_rg_in_part[p]++;
@@ -1305,7 +1315,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
 
       // TODO: (wishful) refactor to consolidate with above if block
       if (f == last_frag_in_part) {
-        auto& rg    = md->files[p].row_groups.emplace_back();
+        auto& rg    = md->file(p).row_groups.emplace_back();
         rg.num_rows = curr_rg_num_rows;
         num_rowgroups++;
         num_rg_in_part[p]++;
@@ -1337,7 +1347,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     size_type start_row = partitions[p].start_row;
     for (int r = 0; r < num_rg_in_part[p]; r++) {
       size_t global_r = global_rowgroup_base[p] + r;  // Number of rowgroups already in file/part
-      auto& row_group = md->files[p].row_groups[global_r];
+      auto& row_group = md->file(p).row_groups[global_r];
       uint32_t fragments_in_chunk =
         util::div_rounding_up_unsafe(row_group.num_rows, max_page_fragment_size);
       row_group.total_byte_size = 0;
@@ -1387,7 +1397,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
       size_t global_rg = global_rowgroup_base[p] + rg;
       for (int col = 0; col < num_columns; col++) {
         if (chunks.host_view()[rg][col].use_dictionary) {
-          md->files[p].row_groups[global_rg].columns[col].meta_data.encodings.push_back(
+          md->file(p).row_groups[global_rg].columns[col].meta_data.encodings.push_back(
             Encoding::PLAIN_DICTIONARY);
         }
       }
@@ -1530,7 +1540,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
     for (; r < rnext; r++) {
       int p           = rg_to_part[r];
       int global_r    = global_rowgroup_base[p] + r - first_rg_in_part[p];
-      auto& row_group = md->files[p].row_groups[global_r];
+      auto& row_group = md->file(p).row_groups[global_r];
       for (auto i = 0; i < num_columns; i++) {
         gpu::EncColumnChunk& ck = chunks[r][i];
         auto& column_chunk_meta = row_group.columns[i].meta_data;
@@ -1615,7 +1625,7 @@ std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
 
   // Optionally output raw file metadata with the specified column chunk file path
   if (column_chunks_file_path.size() > 0) {
-    CUDF_EXPECTS(column_chunks_file_path.size() == md->files.size(),
+    CUDF_EXPECTS(column_chunks_file_path.size() == md->num_files(),
                  "Expected one column chunk path per output file");
     md->set_file_paths(column_chunks_file_path);
     file_header_s fhdr = {parquet_magic};
