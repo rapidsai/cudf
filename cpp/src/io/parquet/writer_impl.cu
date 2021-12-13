@@ -19,12 +19,12 @@
  * @brief cuDF-IO parquet writer class implementation
  */
 
-#include <io/statistics/column_statistics.cuh>
 #include "writer_impl.hpp"
+#include <io/statistics/column_statistics.cuh>
 
+#include "compact_protocol_writer.hpp"
 #include <io/utilities/column_utils.cuh>
 #include <io/utilities/config_utils.hpp>
-#include "compact_protocol_writer.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -343,7 +343,9 @@ struct leaf_schema_fn {
       col_schema.type        = Type::INT64;
       col_schema.stats_dtype = statistics_dtype::dtype_decimal64;
     } else if (std::is_same_v<T, numeric::decimal128>) {
-      CUDF_FAIL("decimal128 currently not supported for parquet writer");
+      col_schema.type        = Type::FIXED_LEN_BYTE_ARRAY;
+      col_schema.type_length = sizeof(__int128_t);
+      col_schema.stats_dtype = statistics_dtype::dtype_decimal128;
     } else {
       CUDF_FAIL("Unsupported fixed point type for parquet writer");
     }
@@ -724,7 +726,7 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(
     desc.def_values    = _def_level.data();
   }
   desc.num_rows      = cudf_col.size();
-  desc.physical_type = static_cast<uint8_t>(physical_type());
+  desc.physical_type = physical_type();
 
   desc.level_bits = CompactProtocolReader::NumRequiredBits(max_rep_level()) << 4 |
                     CompactProtocolReader::NumRequiredBits(max_def_level());

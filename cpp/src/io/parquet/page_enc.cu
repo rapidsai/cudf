@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <io/utilities/block_utils.cuh>
 #include "parquet_gpu.hpp"
+#include <io/utilities/block_utils.cuh>
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -25,10 +25,10 @@
 
 #include <cub/cub.cuh>
 
-#include <thrust/gather.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <cub/cub.cuh>
 #include <cuda/std/chrono>
+#include <thrust/gather.h>
+#include <thrust/iterator/discard_iterator.h>
 
 namespace cudf {
 namespace io {
@@ -72,6 +72,23 @@ struct page_enc_state_s {
   gpu_inflate_status_s comp_stat;
   uint16_t vals[rle_buffer_size];
 };
+
+/**
+ * @brief Returns the size of the type in the Parquet file.
+ */
+uint32_t __device__ physical_type_len(Type physical_type, type_id id)
+{
+  if (physical_type == FIXED_LEN_BYTE_ARRAY and id == type_id::DECIMAL128) {
+    return sizeof(__int128_t);
+  }
+  switch (physical_type) {
+    case INT96: return 12u;
+    case INT64:
+    case DOUBLE: return sizeof(int64_t);
+    case BOOLEAN: return 1u;
+    default: return sizeof(int32_t);
+  }
+}
 
 /**
  * @brief Return a 12-bit hash from a byte sequence
@@ -123,11 +140,10 @@ __global__ void __launch_bounds__(block_size)
 
   frag_init_state_s* const s = &state_g;
   uint32_t t                 = threadIdx.x;
-  uint32_t start_row, dtype_len, dtype;
 
   if (t == 0) s->col = col_desc[blockIdx.x];
   __syncthreads();
-  start_row = blockIdx.y * fragment_size;
+  uint32_t const start_row = blockIdx.y * fragment_size;
   if (!t) {
     // frag.num_rows = fragment_size except for the last page fragment which can be smaller.
     // num_rows is fixed but fragment size could be larger if the data is strings or nested.
@@ -176,11 +192,8 @@ __global__ void __launch_bounds__(block_size)
       s->frag.num_values = s->frag.num_rows;
     }
   }
-  dtype     = s->col.physical_type;
-  dtype_len = (dtype == INT96)                      ? 12
-              : (dtype == INT64 || dtype == DOUBLE) ? 8
-              : (dtype == BOOLEAN)                  ? 1
-                                                    : 4;
+  auto const physical_type = s->col.physical_type;
+  auto const dtype_len     = physical_type_len(physical_type, s->col.leaf_column->type().id());
   __syncthreads();
 
   size_type nvals           = s->frag.num_leaf_values;
@@ -194,8 +207,8 @@ __global__ void __launch_bounds__(block_size)
     uint32_t len;
     if (is_valid) {
       len = dtype_len;
-      if (dtype != BOOLEAN) {
-        if (dtype == BYTE_ARRAY) {
+      if (physical_type != BOOLEAN) {
+        if (physical_type == BYTE_ARRAY) {
           auto str = s->col.leaf_column->element<string_view>(val_idx);
           len += str.size_bytes();
         }
@@ -759,8 +772,6 @@ __global__ void __launch_bounds__(128, 8)
 
   page_enc_state_s* const s = &state_g;
   uint32_t t                = threadIdx.x;
-  uint32_t dtype, dtype_len_in, dtype_len_out;
-  int32_t dict_bits;
 
   if (t == 0) {
     s->page = pages[blockIdx.x];
@@ -878,29 +889,26 @@ __global__ void __launch_bounds__(128, 8)
   }
   // Encode data values
   __syncthreads();
-  dtype         = s->col.physical_type;
-  dtype_len_out = (dtype == INT96)                      ? 12
-                  : (dtype == INT64 || dtype == DOUBLE) ? 8
-                  : (dtype == BOOLEAN)                  ? 1
-                                                        : 4;
-  if (dtype == INT32) {
-    dtype_len_in = GetDtypeLogicalLen(s->col.leaf_column);
-  } else if (dtype == INT96) {
-    dtype_len_in = 8;
-  } else {
-    dtype_len_in = dtype_len_out;
-  }
-  dict_bits = (dtype == BOOLEAN) ? 1
-              : (s->ck.use_dictionary and s->page.page_type != PageType::DICTIONARY_PAGE)
-                ? s->ck.dict_rle_bits
-                : -1;
+  auto const physical_type = s->col.physical_type;
+  auto const type_id       = s->col.leaf_column->type().id();
+  auto const dtype_len_out = physical_type_len(physical_type, type_id);
+  auto const dtype_len_in  = [&]() -> uint32_t {
+    if (physical_type == INT32) { return int32_logical_len(type_id); }
+    if (physical_type == INT96) { return sizeof(int64_t); }
+    return dtype_len_out;
+  }();
+
+  auto const dict_bits = (physical_type == BOOLEAN) ? 1
+                         : (s->ck.use_dictionary and s->page.page_type != PageType::DICTIONARY_PAGE)
+                           ? s->ck.dict_rle_bits
+                           : -1;
   if (t == 0) {
     uint8_t* dst   = s->cur;
     s->rle_run     = 0;
     s->rle_pos     = 0;
     s->rle_numvals = 0;
     s->rle_out     = dst;
-    if (dict_bits >= 0 && dtype != BOOLEAN) {
+    if (dict_bits >= 0 && physical_type != BOOLEAN) {
       dst[0]     = dict_bits;
       s->rle_out = dst + 1;
     }
@@ -964,7 +972,7 @@ __global__ void __launch_bounds__(128, 8)
         rle_numvals = s->rle_numvals;
         if (is_valid) {
           uint32_t v;
-          if (dtype == BOOLEAN) {
+          if (physical_type == BOOLEAN) {
             v = s->col.leaf_column->element<uint8_t>(val_idx);
           } else {
             v = s->ck.dict_index[val_idx];
@@ -973,7 +981,7 @@ __global__ void __launch_bounds__(128, 8)
         }
         rle_numvals += rle_numvals_in_block;
         __syncthreads();
-        if ((!enable_bool_rle) && (dtype == BOOLEAN)) {
+        if ((!enable_bool_rle) && (physical_type == BOOLEAN)) {
           PlainBoolEncode(s, rle_numvals, (cur_val_idx == s->page.num_leaf_values), t);
         } else {
           RleEncode(s, rle_numvals, dict_bits, (cur_val_idx == s->page.num_leaf_values), t);
@@ -988,7 +996,7 @@ __global__ void __launch_bounds__(128, 8)
 
       if (is_valid) {
         len = dtype_len_out;
-        if (dtype == BYTE_ARRAY) {
+        if (physical_type == BYTE_ARRAY) {
           len += s->col.leaf_column->element<string_view>(val_idx).size_bytes();
         }
       } else {
@@ -999,7 +1007,7 @@ __global__ void __launch_bounds__(128, 8)
       __syncthreads();
       if (t == 0) { s->cur = dst + total_len; }
       if (is_valid) {
-        switch (dtype) {
+        switch (physical_type) {
           case INT32:
           case FLOAT: {
             int32_t v;
@@ -1087,6 +1095,17 @@ __global__ void __launch_bounds__(128, 8)
             dst[pos + 2] = v >> 16;
             dst[pos + 3] = v >> 24;
             if (v != 0) memcpy(dst + pos + 4, str.data(), v);
+          } break;
+          case FIXED_LEN_BYTE_ARRAY: {
+            if (type_id == type_id::DECIMAL128) {
+              // When using FIXED_LEN_BYTE_ARRAY for decimals, the rep is encoded in big-endian
+              auto const v = s->col.leaf_column->element<numeric::decimal128>(val_idx).value();
+              auto const v_char_ptr = reinterpret_cast<char const*>(&v);
+              thrust::copy(thrust::seq,
+                           thrust::make_reverse_iterator(v_char_ptr + sizeof(v)),
+                           thrust::make_reverse_iterator(v_char_ptr),
+                           dst + pos);
+            }
           } break;
         }
       }

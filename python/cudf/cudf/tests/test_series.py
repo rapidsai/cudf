@@ -1348,6 +1348,43 @@ def test_nullable_bool_dtype_series(data, bool_dtype):
     assert_eq(psr, gsr.to_pandas(nullable=True))
 
 
+def test_series_add_prefix():
+    cd_s = cudf.Series([1, 2, 3, 4])
+    pd_s = cd_s.to_pandas()
+
+    got = cd_s.add_prefix("item_")
+    expected = pd_s.add_prefix("item_")
+
+    assert_eq(got, expected)
+
+
+def test_series_add_suffix():
+    cd_s = cudf.Series([1, 2, 3, 4])
+    pd_s = cd_s.to_pandas()
+
+    got = cd_s.add_suffix("_item")
+    expected = pd_s.add_suffix("_item")
+
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "cudf_series",
+    [
+        cudf.Series([0.25, 0.5, 0.2, -0.05]),
+        cudf.Series([0, 1, 2, np.nan, 4, cudf.NA, 6]),
+    ],
+)
+@pytest.mark.parametrize("lag", [1, 2, 3, 4])
+def test_autocorr(cudf_series, lag):
+    psr = cudf_series.to_pandas()
+
+    cudf_corr = cudf_series.autocorr(lag=lag)
+    pd_corr = psr.autocorr(lag=lag)
+
+    assert_eq(pd_corr, cudf_corr)
+
+
 @pytest.mark.parametrize(
     "data",
     [
