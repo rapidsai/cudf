@@ -3040,6 +3040,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             return out.copy(deep=copy)
 
+    def add_prefix(self, prefix):
+        out = self.copy(deep=True)
+        out.columns = [
+            prefix + col_name for col_name in list(self._data.keys())
+        ]
+        return out
+
+    def add_suffix(self, suffix):
+        out = self.copy(deep=True)
+        out.columns = [
+            col_name + suffix for col_name in list(self._data.keys())
+        ]
+        return out
+
     def as_gpu_matrix(self, columns=None, order="F"):
         warnings.warn(
             "The as_gpu_matrix method will be removed in a future cuDF "
@@ -3520,22 +3534,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         result.columns = columns
         return result
 
-    @property
-    def T(self):
-        """
-        Transpose index and columns.
-
-        Reflect the DataFrame over its main diagonal by writing rows
-        as columns and vice-versa. The property T is an accessor to
-        the method transpose().
-
-        Returns
-        -------
-        out : DataFrame
-            The transposed DataFrame.
-        """
-
-        return self.transpose()
+    T = property(transpose, doc=transpose.__doc__)
 
     def melt(self, **kwargs):
         """Unpivots a DataFrame from wide format to long format,
@@ -5351,34 +5350,19 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             return result_df
         elif isinstance(values, Series):
             values = values.reindex(self.index)
-
             result = DataFrame()
-            # TODO: propagate nulls through isin
-            # https://github.com/rapidsai/cudf/issues/7556
             for col in self._data.names:
-                if isinstance(
-                    self[col]._column, cudf.core.column.CategoricalColumn
-                ) and isinstance(
-                    values._column, cudf.core.column.CategoricalColumn
-                ):
-                    res = (self._data[col] == values._column).fillna(False)
-                    result[col] = res
-                elif (
-                    isinstance(
-                        self[col]._column, cudf.core.column.CategoricalColumn
-                    )
-                    or np.issubdtype(self[col].dtype, cudf.dtype("object"))
-                ) or (
-                    isinstance(
-                        values._column, cudf.core.column.CategoricalColumn
-                    )
-                    or np.issubdtype(values.dtype, cudf.dtype("object"))
-                ):
-                    result[col] = utils.scalar_broadcast_to(False, len(self))
-                else:
-                    result[col] = (self._data[col] == values._column).fillna(
-                        False
-                    )
+                breakpoint()
+                #l_is_cat_or_obj = isinstance(self._data[col].dtype, cudf.CategoricalDtype) or self._data[col].dtype == np.dtype('object')
+                #r_is_cat_or_obj = isinstance(values._column.dtype, cudf.CategoricalDtype) or values.dtype == np.dtype('object')
+                #if l_is_cat_or_obj or r_is_cat_or_obj:
+                #    res = utils.scalar_broadcast_to(False, len(self))
+                #else:
+                res = (self._data[col] == values._column).fillna(
+                    False
+                )
+                result[col] = res
+
 
             result.index = self.index
             return result

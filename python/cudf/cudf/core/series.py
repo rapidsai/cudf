@@ -2788,6 +2788,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return lhs._column.cov(rhs._column)
 
+    def transpose(self):
+        """Return the transpose, which is by definition self.
+        """
+
+        return self
+
+    T = property(transpose, doc=transpose.__doc__)
+
     def corr(self, other, method="pearson", min_periods=None):
         """Calculates the sample correlation between two Series,
         excluding missing values.
@@ -2815,6 +2823,31 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         lhs, rhs = _align_indices([lhs, rhs], how="inner")
 
         return lhs._column.corr(rhs._column)
+
+    def autocorr(self, lag=1):
+        """Compute the lag-N autocorrelation. This method computes the Pearson
+        correlation between the Series and its shifted self.
+
+        Parameters
+        ----------
+        lag : int, default 1
+            Number of lags to apply before performing autocorrelation.
+
+        Returns
+        -------
+        result : float
+            The Pearson correlation between self and self.shift(lag).
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([0.25, 0.5, 0.2, -0.05])
+        >>> s.autocorr()
+        0.10355263309024071
+        >>> s.autocorr(lag=2)
+        -0.9999999999999999
+        """
+        return self.corr(self.shift(lag))
 
     def isin(self, values):
         """Check whether values are contained in Series.
@@ -3659,6 +3692,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             suffixes=suffixes,
         )
 
+        return result
+
+    def add_prefix(self, prefix):
+        result = self.copy(deep=True)
+        result.index = prefix + self.index.astype(str)
+        return result
+
+    def add_suffix(self, suffix):
+        result = self.copy(deep=True)
+        result.index = self.index.astype(str) + suffix
         return result
 
     def keys(self):
@@ -4659,6 +4702,45 @@ class DatetimeProperties(object):
         dtype: datetime64[ns]
         """
         out_column = self.series._column.floor(freq)
+
+        return Series._from_data(
+            data={self.series.name: out_column}, index=self.series._index
+        )
+
+    def round(self, freq):
+        """
+        Perform round operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        freq : str
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
+            for more details on these aliases.
+
+        Returns
+        -------
+        Series
+            Series with all timestamps rounded to the specified frequency.
+            The index is preserved.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> dt_sr = cudf.Series([
+        ...     "2001-01-01 00:04:45",
+        ...     "2001-01-01 00:04:58",
+        ...     "2001-01-01 00:05:04",
+        ... ], dtype="datetime64[ns]")
+        >>> dt_sr.dt.round("T")
+        0   2001-01-01 00:05:00
+        1   2001-01-01 00:05:00
+        2   2001-01-01 00:05:00
+        dtype: datetime64[ns]
+        """
+        out_column = self.series._column.round(freq)
 
         return Series._from_data(
             data={self.series.name: out_column}, index=self.series._index
