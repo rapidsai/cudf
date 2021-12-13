@@ -166,6 +166,10 @@ struct aggregate_metadata {
     return global_rowgroup_base;
   }
 
+  bool schema_matches(std::vector<SchemaElement> const& schema) const
+  {
+    return this->schema == schema;
+  }
   auto& file(size_t p) { return files[p]; }
   size_t num_files() const { return files.size(); }
 
@@ -1226,7 +1230,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
       partitions, num_columns, std::move(this_table_schema), stats_granularity_, kv_md);
   } else {
     // verify the user isn't passing mismatched tables
-    CUDF_EXPECTS(md->schema == this_table_schema,
+    CUDF_EXPECTS(md->schema_matches(this_table_schema),
                  "Mismatch in schema between multiple calls to write_chunk");
 
     md->update_files(partitions);
