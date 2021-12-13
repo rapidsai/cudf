@@ -647,12 +647,12 @@ bool can_use_hash_groupby(table_view const& keys, host_span<aggregation_request 
   // Currently, structs are not supported in any of hash-based aggregations.
   // Therefore, if any request contains structs then we must fallback to sort-based aggregations.
   // TODO: Support structs in hash-based aggregations.
-  auto const all_no_structs =
-    std::all_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
-      return r.values.type().id() != type_id::STRUCT;
+  auto const has_structs =
+    std::any_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
+      return r.values.type().id() == type_id::STRUCT;
     });
 
-  return all_hash_aggregations && all_no_structs;
+  return all_hash_aggregations && !has_structs;
 }
 
 // Hash-based groupby
