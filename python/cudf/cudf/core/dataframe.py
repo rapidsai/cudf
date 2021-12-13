@@ -5350,19 +5350,34 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             return result_df
         elif isinstance(values, Series):
             values = values.reindex(self.index)
-            result = DataFrame()
-            for col in self._data.names:
-                breakpoint()
-                #l_is_cat_or_obj = isinstance(self._data[col].dtype, cudf.CategoricalDtype) or self._data[col].dtype == np.dtype('object')
-                #r_is_cat_or_obj = isinstance(values._column.dtype, cudf.CategoricalDtype) or values.dtype == np.dtype('object')
-                #if l_is_cat_or_obj or r_is_cat_or_obj:
-                #    res = utils.scalar_broadcast_to(False, len(self))
-                #else:
-                res = (self._data[col] == values._column).fillna(
-                    False
-                )
-                result[col] = res
 
+            result = DataFrame()
+            # TODO: propagate nulls through isin
+            # https://github.com/rapidsai/cudf/issues/7556
+            for col in self._data.names:
+                if isinstance(
+                    self[col]._column, cudf.core.column.CategoricalColumn
+                ) and isinstance(
+                    values._column, cudf.core.column.CategoricalColumn
+                ):
+                    res = (self._data[col] == values._column).fillna(False)
+                    result[col] = res
+                elif (
+                    isinstance(
+                        self[col]._column, cudf.core.column.CategoricalColumn
+                    )
+                    or np.issubdtype(self[col].dtype, cudf.dtype("object"))
+                ) or (
+                    isinstance(
+                        values._column, cudf.core.column.CategoricalColumn
+                    )
+                    or np.issubdtype(values.dtype, cudf.dtype("object"))
+                ):
+                    result[col] = utils.scalar_broadcast_to(False, len(self))
+                else:
+                    result[col] = (self._data[col] == values._column).fillna(
+                        False
+                    )
 
             result.index = self.index
             return result
