@@ -118,6 +118,12 @@ set(CUDF_LIB_HINTS HINTS "$ENV{CUDF_ROOT}" "$ENV{CUDF_ROOT}/lib" "$ENV{CONDA_PRE
 find_library(CUDF_LIB "cudf" REQUIRED HINTS ${CUDF_LIB_HINTS})
 
 # ##################################################################################################
+# * ZLIB ------------------------------------------------------------------------------------------
+
+# find zlib
+rapids_find_package(ZLIB REQUIRED)
+
+# ##################################################################################################
 # * RMM -------------------------------------------------------------------------------------------
 
 find_path(
@@ -321,7 +327,7 @@ target_compile_definitions(cudfjni PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM
 
 set(CUDF_LINK ${CUDF_LIB})
 if(CUDF_JNI_LIBCUDF_STATIC)
-  set(CUDF_LINK -Wl,--whole-archive ${CUDF_LIB} -Wl,--no-whole-archive)
+  set(CUDF_LINK -Wl,--whole-archive ${CUDF_LIB} -Wl,--no-whole-archive ZLIB::ZLIB)
 endif()
 
 target_link_libraries(
