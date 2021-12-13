@@ -130,7 +130,7 @@ class writer::impl {
    */
   void init_page_fragments(hostdevice_2dvector<gpu::PageFragment>& frag,
                            device_span<gpu::parquet_column_device_view const> col_desc,
-                           std::vector<partition_info> partitions,
+                           host_span<partition_info const> partitions,
                            device_span<int const> part_frag_offset,
                            uint32_t fragment_size);
 

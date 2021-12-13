@@ -54,12 +54,10 @@ class reader {
    *
    * @param sources Input `datasource` objects to read the dataset from
    * @param options Settings for controlling reading behavior
-   * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
   explicit reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                   parquet_reader_options const& options,
-                  rmm::cuda_stream_view stream,
                   rmm::mr::device_memory_resource* mr);
 
   /**
