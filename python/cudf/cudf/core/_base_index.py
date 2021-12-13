@@ -829,7 +829,7 @@ class BaseIndex(Serializable):
         >>> idx = cudf.Index([1.0, 2.0, np.nan, 4.0])
         >>> idx.is_floating()
         True
-        >>> idx = cudf.Index([1, 2, 3, 4, np.nan])
+        >>> idx = cudf.Index([1, 2, 3, 4, np.nan], nan_as_null=False)
         >>> idx.is_floating()
         True
         >>> idx = cudf.Index([1, 2, 3, 4])
