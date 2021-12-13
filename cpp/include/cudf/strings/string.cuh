@@ -15,8 +15,8 @@
  */
 #pragma once
 
-#include <thrust/logical.h>
 #include <cudf/strings/string_view.cuh>
+#include <thrust/logical.h>
 
 namespace cudf {
 namespace strings {

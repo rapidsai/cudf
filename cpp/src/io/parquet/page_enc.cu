@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include <io/utilities/block_utils.cuh>
 #include "parquet_gpu.hpp"
+#include <io/utilities/block_utils.cuh>
 
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
@@ -25,10 +25,10 @@
 
 #include <cub/cub.cuh>
 
-#include <thrust/gather.h>
-#include <thrust/iterator/discard_iterator.h>
 #include <cub/cub.cuh>
 #include <cuda/std/chrono>
+#include <thrust/gather.h>
+#include <thrust/iterator/discard_iterator.h>
 
 namespace cudf {
 namespace io {
