@@ -636,23 +636,16 @@ std::unique_ptr<table> groupby(table_view const& keys,
  */
 bool can_use_hash_groupby(table_view const& keys, host_span<aggregation_request const> requests)
 {
-  auto const all_hash_aggregations =
-    std::all_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
-      return cudf::has_atomic_support(r.values.type()) and
-             std::all_of(r.aggregations.begin(), r.aggregations.end(), [](auto const& a) {
-               return is_hash_aggregation(a->kind);
-             });
-    });
-
-  // Currently, structs are not supported in any of hash-based aggregations.
-  // Therefore, if any request contains structs then we must fallback to sort-based aggregations.
-  // TODO: Support structs in hash-based aggregations.
-  auto const has_structs =
-    std::any_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
-      return r.values.type().id() == type_id::STRUCT;
-    });
-
-  return all_hash_aggregations && !has_structs;
+  return std::all_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
+    // Currently, structs are not supported in any of hash-based aggregations.
+    // Therefore, if any request contains structs then we must fallback to sort-based aggregations.
+    // TODO: Support structs in hash-based aggregations.
+    return not(r.values.type().id() == type_id::STRUCT) and
+           cudf::has_atomic_support(r.values.type()) and
+           std::all_of(r.aggregations.begin(), r.aggregations.end(), [](auto const& a) {
+             return is_hash_aggregation(a->kind);
+           });
+  });
 }
 
 // Hash-based groupby
