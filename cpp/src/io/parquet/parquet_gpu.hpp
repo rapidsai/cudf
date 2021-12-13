@@ -233,7 +233,7 @@ struct ColumnChunkDesc {
  * @brief Struct describing an encoder column
  */
 struct parquet_column_device_view : stats_column_desc {
-  uint8_t physical_type;   //!< physical data type
+  Type physical_type;      //!< physical data type
   uint8_t converted_type;  //!< logical data type
   uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
                        //!< levels
@@ -273,9 +273,9 @@ constexpr size_t kDictScratchSize    = (1 << kDictHashBits) * sizeof(uint32_t);
 /**
  * @brief Return the byte length of parquet dtypes that are physically represented by INT32
  */
-inline uint32_t __device__ GetDtypeLogicalLen(column_device_view const* col)
+inline uint32_t __device__ int32_logical_len(type_id id)
 {
-  switch (col->type().id()) {
+  switch (id) {
     case cudf::type_id::INT8:
     case cudf::type_id::UINT8: return 1;
     case cudf::type_id::INT16:
@@ -307,7 +307,7 @@ struct EncColumnChunk {
   statistics_chunk const* stats;  //!< Fragment statistics
   uint32_t bfr_size;              //!< Uncompressed buffer size
   uint32_t compressed_size;       //!< Compressed buffer size
-  uint32_t max_page_data_size;    //!< Max data size (excuding header) of any page in this chunk
+  uint32_t max_page_data_size;    //!< Max data size (excluding header) of any page in this chunk
   uint32_t page_headers_size;     //!< Sum of size of all page headers
   uint32_t start_row;             //!< First row of chunk
   uint32_t num_rows;              //!< Number of rows in chunk
@@ -489,7 +489,7 @@ void InitFragmentStatistics(cudf::detail::device_2dspan<statistics_group> groups
 /**
  * @brief Initialize per-chunk hash maps used for dictionary with sentinel values
  *
- * @param chunks Flat span of chunks to intialize hash maps for
+ * @param chunks Flat span of chunks to initialize hash maps for
  * @param stream CUDA stream to use
  */
 void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream);

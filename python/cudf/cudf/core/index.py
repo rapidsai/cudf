@@ -86,6 +86,7 @@ def _lexsorted_equal_range(
 
 def _index_from_data(data: MutableMapping, name: Any = None):
     """Construct an index of the appropriate type from some data."""
+
     if len(data) == 0:
         raise ValueError("Cannot construct Index from any empty Table")
     if len(data) == 1:
@@ -474,7 +475,12 @@ class RangeIndex(BaseIndex):
         pos = search_range(start, stop, label, step, side=side)
         return pos
 
-    def memory_usage(self, **kwargs):
+    def memory_usage(self, deep=False):
+        if deep:
+            warnings.warn(
+                "The deep parameter is ignored and is only included "
+                "for pandas compatibility."
+            )
         return 0
 
     def unique(self):
@@ -618,7 +624,7 @@ class RangeIndex(BaseIndex):
                 else:
                     return result
 
-        # If all the above optimizations don't cater to the inpputs,
+        # If all the above optimizations don't cater to the inputs,
         # we materialize RangeIndex's into `Int64Index` and
         # then perform `union`.
         return Int64Index(self._values)._union(other, sort=sort)
@@ -764,34 +770,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
             )
 
         return super().deserialize(header, frames)
-
-    def drop_duplicates(self, keep="first"):
-        """
-        Return Index with duplicate values removed
-
-        Parameters
-        ----------
-        keep : {‘first’, ‘last’, False}, default ‘first’
-            * ‘first’ : Drop duplicates except for the
-                first occurrence.
-            * ‘last’ : Drop duplicates except for the
-                last occurrence.
-            *  False : Drop all duplicates.
-
-        Returns
-        -------
-        Index
-
-        Examples
-        --------
-        >>> import cudf
-        >>> idx = cudf.Index(['lama', 'cow', 'lama', 'beetle', 'lama', 'hippo'])
-        >>> idx
-        StringIndex(['lama' 'cow' 'lama' 'beetle' 'lama' 'hippo'], dtype='object')
-        >>> idx.drop_duplicates()
-        StringIndex(['beetle' 'cow' 'hippo' 'lama'], dtype='object')
-        """  # noqa: E501
-        return super().drop_duplicates(keep=keep)
 
     def _binaryop(
         self,
@@ -1021,9 +999,6 @@ class GenericIndex(SingleColumnFrame, BaseIndex):
         true_inds = sort_inds.slice(lower_bound, upper_bound).values
         mask[true_inds] = True
         return mask
-
-    def __sizeof__(self):
-        return self._values.__sizeof__()
 
     def __repr__(self):
         max_seq_items = get_option("max_seq_items") or len(self)
@@ -1896,6 +1871,114 @@ class DatetimeIndex(GenericIndex):
     def is_boolean(self):
         return False
 
+    def ceil(self, freq):
+        """
+        Perform ceil operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        freq : str
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
+            for more details on these aliases.
+
+        Returns
+        -------
+        DatetimeIndex
+            Index of the same type for a DatetimeIndex
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gIndex = cudf.DatetimeIndex(["2020-05-31 08:00:00",
+        ... "1999-12-31 18:40:00"])
+        >>> gIndex.ceil("T")
+        DatetimeIndex(['2020-05-31 08:00:00', '1999-12-31 18:40:00'],
+        dtype='datetime64[ns]', freq=None)
+        """
+        out_column = self._values.ceil(freq)
+
+        return self.__class__._from_data({self.name: out_column})
+
+    def floor(self, freq):
+        """
+        Perform floor operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        freq : str
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
+            for more details on these aliases.
+
+        Returns
+        -------
+        DatetimeIndex
+            Index of the same type for a DatetimeIndex
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gIndex = cudf.DatetimeIndex(["2020-05-31 08:59:59"
+        ... ,"1999-12-31 18:44:59"])
+        >>> gIndex.floor("T")
+        DatetimeIndex(['2020-05-31 08:59:00', '1999-12-31 18:44:00'],
+        dtype='datetime64[ns]', freq=None)
+        """
+        out_column = self._values.floor(freq)
+
+        return self.__class__._from_data({self.name: out_column})
+
+    def round(self, freq):
+        """
+        Perform round operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        freq : str
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
+            for more details on these aliases.
+
+        Returns
+        -------
+        DatetimeIndex
+            Index containing rounded datetimes.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> dt_idx = cudf.Index([
+        ...     "2001-01-01 00:04:45",
+        ...     "2001-01-01 00:04:58",
+        ...     "2001-01-01 00:05:04",
+        ... ], dtype="datetime64[ns]")
+        >>> dt_idx
+        DatetimeIndex(['2001-01-01 00:04:45',
+                '2001-01-01 00:05:04',
+                '2001-01-01 00:04:58'],
+                dtype='datetime64[ns]', freq=None)
+        >>> dt_idx.round('H')
+        DatetimeIndex(['2001-01-01',
+                    '2001-01-01',
+                    '2001-01-01'],
+                    dtype='datetime64[ns]', freq=None)
+        >>> dt_idx.round('T')
+        DatetimeIndex(['2001-01-01 00:05:00',
+                    '2001-01-01 00:05:00',
+                    '2001-01-01 00:05:00'],
+                    dtype='datetime64[ns]', freq=None)
+        """
+        out_column = self._values.round(freq)
+
+        return self.__class__._from_data({self.name: out_column})
+
 
 class TimedeltaIndex(GenericIndex):
     """
@@ -2329,6 +2412,7 @@ class IntervalIndex(GenericIndex):
             data = column.as_column(data)
             data.dtype.closed = closed
 
+        self.closed = closed
         super().__init__(data, **kwargs)
 
     def from_breaks(breaks, closed="right", name=None, copy=False, dtype=None):

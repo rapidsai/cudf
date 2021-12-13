@@ -210,7 +210,7 @@ template <typename T>
 class DLPackTimestampTests : public BaseFixture {
 };
 
-TYPED_TEST_CASE(DLPackTimestampTests, ChronoTypes);
+TYPED_TEST_SUITE(DLPackTimestampTests, ChronoTypes);
 
 TYPED_TEST(DLPackTimestampTests, ChronoTypesToDlpack)
 {
@@ -227,7 +227,7 @@ class DLPackNumericTests : public BaseFixture {
 // TODO: Replace with `NumericTypes` when unsigned support is added. Issue #5353
 using SupportedTypes =
   cudf::test::RemoveIf<cudf::test::ContainedIn<cudf::test::Types<bool>>, cudf::test::NumericTypes>;
-TYPED_TEST_CASE(DLPackNumericTests, SupportedTypes);
+TYPED_TEST_SUITE(DLPackNumericTests, SupportedTypes);
 
 TYPED_TEST(DLPackNumericTests, ToDlpack1D)
 {

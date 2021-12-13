@@ -13,11 +13,7 @@
 # =============================================================================
 cmake_minimum_required(VERSION 3.20.1 FATAL_ERROR)
 
-file(DOWNLOAD https://raw.githubusercontent.com/rapidsai/rapids-cmake/branch-21.12/RAPIDS.cmake
-     ${CMAKE_BINARY_DIR}/RAPIDS.cmake
-)
-include(${CMAKE_BINARY_DIR}/RAPIDS.cmake)
-
+include(../../../../fetch_rapids.cmake)
 include(rapids-cmake)
 include(rapids-cuda)
 include(rapids-find)
@@ -30,7 +26,7 @@ rapids_cuda_init_architectures(CUDF_JNI)
 
 project(
   CUDF_JNI
-  VERSION 21.12.00
+  VERSION 22.02.00
   LANGUAGES C CXX CUDA
 )
 
@@ -43,6 +39,7 @@ option(PER_THREAD_DEFAULT_STREAM "Build with per-thread default stream" OFF)
 option(CUDA_STATIC_RUNTIME "Statically link the CUDA runtime" OFF)
 option(USE_GDS "Build with GPUDirect Storage (GDS)/cuFile support" OFF)
 option(CUDF_JNI_ARROW_STATIC "Statically link Arrow" ON)
+option(CUDF_JNI_LIBCUDF_STATIC "Link with libcudf.a" OFF)
 
 message(VERBOSE "CUDF_JNI: Build with NVTX support: ${USE_NVTX}")
 message(VERBOSE "CUDF_JNI: Configure CMake to build tests: ${BUILD_TESTS}")
@@ -50,6 +47,7 @@ message(VERBOSE "CUDF_JNI: Build with per-thread default stream: ${PER_THREAD_DE
 message(VERBOSE "CUDF_JNI: Statically link the CUDA runtime: ${CUDA_STATIC_RUNTIME}")
 message(VERBOSE "CUDF_JNI: Build with GPUDirect Storage support: ${USE_GDS}")
 message(VERBOSE "CUDF_JNI: Build with static Arrow library: ${CUDF_JNI_ARROW_STATIC}")
+message(VERBOSE "CUDF_JNI: Link with libcudf statically: ${CUDF_JNI_LIBCUDF_STATIC}")
 
 set(CUDF_SOURCE_DIR "${PROJECT_SOURCE_DIR}/../../../../cpp")
 if(DEFINED ENV{CUDF_CPP_BUILD_DIR})
@@ -89,7 +87,7 @@ endif()
 rapids_cmake_build_type("Release")
 
 # ##################################################################################################
-# * Thrust/CUB/libcudacxx
+# * Thrust/CUB
 # ------------------------------------------------------------------------------------
 find_path(
   THRUST_INCLUDE "thrust"
@@ -106,19 +104,6 @@ find_path(
 
 message(STATUS "CUB: CUB_INCLUDE set to ${CUB_INCLUDE}")
 
-find_path(LIBCUDACXX_INCLUDE "cuda" HINTS "$ENV{CUDF_ROOT}/_deps/libcudacxx-src/include"
-                                          "${CUDF_CPP_BUILD_DIR}/_deps/libcudacxx-src/include"
-)
-
-message(STATUS "LIBCUDACXX: LIBCUDACXX_INCLUDE set to ${LIBCUDACXX_INCLUDE}")
-
-find_path(
-  SPDLOG_INCLUDE "spdlog"
-  HINTS "${CUDF_CPP_BUILD_DIR}/_deps/spdlog-src/include" "$ENV{RMM_ROOT}/_deps/spdlog-src/include"
-        "$ENV{RMM_ROOT}/include" "$ENV{CONDA_PREFIX}/include"
-)
-
-message(STATUS "SPDLOG: SPDLOG_INCLUDE set to ${SPDLOG_INCLUDE}")
 # ##################################################################################################
 # * CUDF ------------------------------------------------------------------------------------------
 
@@ -133,6 +118,12 @@ set(CUDF_LIB_HINTS HINTS "$ENV{CUDF_ROOT}" "$ENV{CUDF_ROOT}/lib" "$ENV{CONDA_PRE
 find_library(CUDF_LIB "cudf" REQUIRED HINTS ${CUDF_LIB_HINTS})
 
 # ##################################################################################################
+# * ZLIB ------------------------------------------------------------------------------------------
+
+# find zlib
+rapids_find_package(ZLIB REQUIRED)
+
+# ##################################################################################################
 # * RMM -------------------------------------------------------------------------------------------
 
 find_path(
@@ -142,6 +133,14 @@ find_path(
 )
 
 message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
+
+find_path(
+  SPDLOG_INCLUDE "spdlog"
+  HINTS "${CUDF_CPP_BUILD_DIR}/_deps/spdlog-src/include" "$ENV{RMM_ROOT}/_deps/spdlog-src/include"
+        "$ENV{RMM_ROOT}/include" "$ENV{CONDA_PREFIX}/include"
+)
+
+message(STATUS "SPDLOG: SPDLOG_INCLUDE set to ${SPDLOG_INCLUDE}")
 
 # ##################################################################################################
 # * ARROW -----------------------------------------------------------------------------------------
@@ -232,12 +231,25 @@ add_library(
   src/HostMemoryBufferNativeUtilsJni.cpp
   src/NvcompJni.cpp
   src/NvtxRangeJni.cpp
+  src/NvtxUniqueRangeJni.cpp
   src/RmmJni.cpp
   src/ScalarJni.cpp
   src/TableJni.cpp
   src/map_lookup.cu
   src/check_nvcomp_output_sizes.cu
 )
+
+if(CUDF_JNI_LIBCUDF_STATIC)
+  # When linking against libcudf.a, the JNI library will include the old libcudf.so. For
+  # backwards-compatibility for software that expects to find libcudf.so in the JVM environment
+  # after cudf has loaded, the JNI code and libcudf.a will be combined into libcudf.so. A stub
+  # library will be created for libcudfjni.so that will simply require libcudf.so for backwards
+  # compatibility with software that expects to find libcudfjni.so at runtime.
+  set_target_properties(cudfjni PROPERTIES OUTPUT_NAME "cudf")
+  add_library(cudfjnistub SHARED src/emptyfile.cpp)
+  set_target_properties(cudfjnistub PROPERTIES OUTPUT_NAME "cudfjni")
+  target_link_libraries(cudfjnistub -Wl,--no-as-needed cudfjni -Wl,--as-needed)
+endif()
 
 # ##################################################################################################
 # * include paths ---------------------------------------------------------------------------------
@@ -313,7 +325,14 @@ target_compile_definitions(cudfjni PUBLIC SPDLOG_ACTIVE_LEVEL=SPDLOG_LEVEL_${RMM
 # ##################################################################################################
 # * link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudfjni PRIVATE ${NVCOMP_LIBRARY} ${CUDF_LIB} ${ARROW_LIBRARY})
+set(CUDF_LINK ${CUDF_LIB})
+if(CUDF_JNI_LIBCUDF_STATIC)
+  set(CUDF_LINK -Wl,--whole-archive ${CUDF_LIB} -Wl,--no-whole-archive ZLIB::ZLIB)
+endif()
+
+target_link_libraries(
+  cudfjni PRIVATE ${CUDF_LINK} ${NVCOMP_LIBRARY} ${ARROW_LIBRARY} CUDA::cuda_driver
+)
 
 # ##################################################################################################
 # * cudart options --------------------------------------------------------------------------------

@@ -172,7 +172,9 @@ def gdf_day_timestamps(pdf_day_timestamps):
 
 @pytest.fixture(params=["snappy", "gzip", "brotli", None, np.str_("snappy")])
 def parquet_file(request, tmp_path_factory, pdf):
-    fname = tmp_path_factory.mktemp("parquet") / "test.parquet"
+    fname = tmp_path_factory.mktemp("parquet") / (
+        str(request.param) + "_test.parquet"
+    )
     pdf.to_parquet(fname, engine="pyarrow", compression=request.param)
     return fname
 
@@ -227,6 +229,11 @@ def parquet_path_or_buf(datadir):
         raise ValueError("Invalid source type")
 
     yield _make_parquet_path_or_buf
+
+
+@pytest.fixture(scope="module")
+def large_int64_gdf():
+    return cudf.DataFrame.from_pandas(pd.DataFrame({"col": range(0, 1 << 20)}))
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
@@ -370,6 +377,36 @@ def test_parquet_reader_pandas_metadata(tmpdir, columns, pandas_compat):
     else:
         assert got.index.name is None
     assert_eq(expect, got, check_categorical=False)
+
+
+@pytest.mark.parametrize("pandas_compat", [True, False])
+@pytest.mark.parametrize("as_bytes", [True, False])
+def test_parquet_range_index_pandas_metadata(tmpdir, pandas_compat, as_bytes):
+    df = pd.DataFrame(
+        {"a": range(6, 9), "b": ["abc", "def", "xyz"]},
+        index=pd.RangeIndex(3, 6, 1, name="c"),
+    )
+
+    fname = tmpdir.join("test_parquet_range_index_pandas_metadata")
+    df.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    # PANDAS `read_parquet()` and PyArrow `read_pandas()` always includes index
+    # Instead, directly use PyArrow to optionally omit the index
+    expect = pa.parquet.read_table(
+        fname, use_pandas_metadata=pandas_compat
+    ).to_pandas()
+    if as_bytes:
+        # Make sure we can handle RangeIndex parsing
+        # in pandas when the input is `bytes`
+        with open(fname, "rb") as f:
+            got = cudf.read_parquet(
+                f.read(), use_pandas_metadata=pandas_compat
+            )
+    else:
+        got = cudf.read_parquet(fname, use_pandas_metadata=pandas_compat)
+
+    assert_eq(expect, got)
 
 
 def test_parquet_read_metadata(tmpdir, pdf):
@@ -592,15 +629,29 @@ def test_parquet_reader_spark_timestamps(datadir):
 def test_parquet_reader_spark_decimals(datadir):
     fname = datadir / "spark_decimal.parquet"
 
-    expect = pd.read_parquet(fname)
-    got = cudf.read_parquet(fname)
+    # expect = pd.read_parquet(fname)
+    with pytest.raises(
+        NotImplementedError,
+        match="Decimal type greater than Decimal64 is not yet supported",
+    ):
+        cudf.read_parquet(fname)
 
     # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
     # This is because cuDF returns as float64 as it lacks an equivalent dtype
-    expect = expect.apply(pd.to_numeric)
+    # expect = expect.apply(pd.to_numeric)
 
     # np.testing.assert_allclose(expect, got)
-    assert_eq(expect, got)
+    # assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("columns", [["a"], ["b", "a"], None])
+def test_parquet_reader_decimal128_error_validation(datadir, columns):
+    fname = datadir / "nested_decimal128_file.parquet"
+    with pytest.raises(
+        NotImplementedError,
+        match="Decimal type greater than Decimal64 is not yet supported",
+    ):
+        cudf.read_parquet(fname, columns=columns)
 
 
 def test_parquet_reader_microsecond_timestamps(datadir):
@@ -1541,7 +1592,7 @@ def test_parquet_writer_bytes_io(simple_gdf):
 
 @pytest.mark.parametrize("filename", ["myfile.parquet", None])
 @pytest.mark.parametrize("cols", [["b"], ["c", "b"]])
-def test_parquet_write_partitioned(tmpdir_factory, cols, filename):
+def test_parquet_partitioned(tmpdir_factory, cols, filename):
     # Checks that write_to_dataset is wrapping to_parquet
     # as expected
     gdf_dir = str(tmpdir_factory.mktemp("gdf_dir"))
@@ -1560,10 +1611,14 @@ def test_parquet_write_partitioned(tmpdir_factory, cols, filename):
         gdf_dir, index=False, partition_cols=cols, partition_file_name=filename
     )
 
-    # Use pandas since dataset may be partitioned
-    expect = pd.read_parquet(pdf_dir)
-    got = pd.read_parquet(gdf_dir)
-    assert_eq(expect, got)
+    # Read back with pandas to compare
+    expect_pd = pd.read_parquet(pdf_dir)
+    got_pd = pd.read_parquet(gdf_dir)
+    assert_eq(expect_pd, got_pd)
+
+    # Check that cudf and pd return the same read
+    got_cudf = cudf.read_parquet(gdf_dir)
+    assert_eq(got_pd, got_cudf)
 
     # If filename is specified, check that it is correct
     if filename:
@@ -1592,9 +1647,9 @@ def test_parquet_write_to_dataset(tmpdir_factory, cols):
     gdf.to_parquet(dir1, partition_cols=cols)
     cudf.io.write_to_dataset(gdf, dir2, partition_cols=cols)
 
-    # cudf read_parquet cannot handle partitioned dataset
-    expect = pd.read_parquet(dir1)
-    got = pd.read_parquet(dir2)
+    # Read back with cudf
+    expect = cudf.read_parquet(dir1)
+    got = cudf.read_parquet(dir2)
     assert_eq(expect, got)
 
     gdf = cudf.DataFrame(
@@ -1606,6 +1661,80 @@ def test_parquet_write_to_dataset(tmpdir_factory, cols):
     )
     with pytest.raises(ValueError):
         gdf.to_parquet(dir1, partition_cols=cols)
+
+
+@pytest.mark.parametrize(
+    "pfilters", [[("b", "==", "b")], [("b", "==", "a"), ("c", "==", 1)]],
+)
+@pytest.mark.parametrize("selection", ["directory", "files", "row-groups"])
+@pytest.mark.parametrize("use_cat", [True, False])
+def test_read_parquet_partitioned_filtered(
+    tmpdir, pfilters, selection, use_cat
+):
+    path = str(tmpdir)
+    size = 100
+    df = cudf.DataFrame(
+        {
+            "a": np.arange(0, stop=size, dtype="int64"),
+            "b": np.random.choice(list("abcd"), size=size),
+            "c": np.random.choice(np.arange(4), size=size),
+        }
+    )
+    df.to_parquet(path, partition_cols=["c", "b"])
+
+    if selection == "files":
+        # Pass in a list of paths
+        fs = get_fs_token_paths(path)[0]
+        read_path = fs.find(path)
+        row_groups = None
+    elif selection == "row-groups":
+        # Pass in a list of paths AND row-group ids
+        fs = get_fs_token_paths(path)[0]
+        read_path = fs.find(path)
+        row_groups = [[0] for p in read_path]
+    else:
+        # Pass in a directory path
+        # (row-group selection not allowed in this case)
+        read_path = path
+        row_groups = None
+
+    # Filter on partitioned columns
+    expect = pd.read_parquet(read_path, filters=pfilters)
+    got = cudf.read_parquet(
+        read_path,
+        filters=pfilters,
+        row_groups=row_groups,
+        categorical_partitions=use_cat,
+    )
+    if use_cat:
+        assert got.dtypes["b"] == "category"
+        assert got.dtypes["c"] == "category"
+    else:
+        # Check that we didn't get categorical
+        # columns, but convert back to categorical
+        # for comparison with pandas
+        assert got.dtypes["b"] == "object"
+        assert got.dtypes["c"] == "int"
+        got["b"] = pd.Categorical(
+            got["b"].to_pandas(), categories=list("abcd")
+        )
+        got["c"] = pd.Categorical(
+            got["c"].to_pandas(), categories=np.arange(4)
+        )
+    assert_eq(expect, got)
+
+    # Filter on non-partitioned column.
+    # Cannot compare to pandas, since the pyarrow
+    # backend will filter by row (and cudf can
+    # only filter by column, for now)
+    filters = [("a", "==", 10)]
+    got = cudf.read_parquet(read_path, filters=filters, row_groups=row_groups,)
+    assert len(got) < len(df) and 10 in got["a"]
+
+    # Filter on both kinds of columns
+    filters = [[("a", "==", 10)], [("c", "==", 1)]]
+    got = cudf.read_parquet(read_path, filters=filters, row_groups=row_groups,)
+    assert len(got) < len(df) and (1 in got["c"] and 10 in got["a"])
 
 
 def test_parquet_writer_chunked_metadata(tmpdir, simple_pdf, simple_gdf):
@@ -2129,3 +2258,39 @@ def test_parquet_decimal_precision_empty(tmpdir):
     df.to_parquet(fname)
     df = cudf.read_parquet(fname)
     assert df.val.dtype.precision == 5
+
+
+def test_parquet_reader_brotli(datadir):
+    fname = datadir / "brotli_int16.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname).to_pandas(nullable=True)
+
+    assert_eq(expect, got)
+
+
+def test_parquet_reader_one_level_list(datadir):
+    fname = datadir / "one_level_list.parquet"
+
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname).to_pandas(nullable=True)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("size_bytes", [4_000_000, 1_000_000, 600_000])
+@pytest.mark.parametrize("size_rows", [1_000_000, 100_000, 10_000])
+def test_parquet_writer_row_group_size(
+    tmpdir, large_int64_gdf, size_bytes, size_rows
+):
+    fname = tmpdir.join("row_group_size.parquet")
+    large_int64_gdf.to_parquet(
+        fname, row_group_size_bytes=size_bytes, row_group_size_rows=size_rows
+    )
+
+    num_rows, row_groups, col_names = cudf.io.read_parquet_metadata(fname)
+    # 8 bytes per row, as the column is int64
+    expected_num_rows = max(
+        math.ceil(num_rows / size_rows), math.ceil(8 * num_rows / size_bytes)
+    )
+    assert expected_num_rows == row_groups

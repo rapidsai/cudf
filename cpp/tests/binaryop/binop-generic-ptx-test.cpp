@@ -21,11 +21,17 @@
 
 #include <tests/binaryop/assert-binops.h>
 #include <tests/binaryop/binop-fixture.hpp>
+#include <tests/binaryop/util/runtime_support.h>
 
 namespace cudf {
 namespace test {
 namespace binop {
 struct BinaryOperationGenericPTXTest : public BinaryOperationTest {
+ protected:
+  void SetUp() override
+  {
+    if (!can_do_runtime_jit()) { GTEST_SKIP() << "Skipping tests that require 11.5 runtime"; }
+  }
 };
 
 TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_FP32_FP32_FP32)

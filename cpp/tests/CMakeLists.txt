@@ -131,8 +131,8 @@ ConfigureTest(
 # ##################################################################################################
 # * reduction tests -------------------------------------------------------------------------------
 ConfigureTest(
-  REDUCTION_TEST reductions/reduction_tests.cpp reductions/segmented_reduction_tests.cpp
-  reductions/scan_tests.cpp
+  REDUCTION_TEST reductions/rank_tests.cpp reductions/reduction_tests.cpp reductions/scan_tests.cpp
+  reductions/segmented_reduction_tests.cpp
 )
 
 # ##################################################################################################
@@ -165,7 +165,6 @@ ConfigureTest(
   BINARY_TEST
   binaryop/binop-verify-input-test.cpp
   binaryop/binop-null-test.cpp
-  binaryop/binop-integration-test.cpp
   binaryop/binop-compiled-test.cpp
   binaryop/binop-compiled-fixed_point-test.cpp
   binaryop/binop-generic-ptx-test.cpp
@@ -368,6 +367,7 @@ ConfigureTest(
   strings/find_multiple_tests.cpp
   strings/fixed_point_tests.cpp
   strings/floats_tests.cpp
+  strings/format_lists_tests.cpp
   strings/integers_tests.cpp
   strings/ipv4_tests.cpp
   strings/json_tests.cpp

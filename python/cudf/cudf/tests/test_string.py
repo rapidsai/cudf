@@ -183,7 +183,19 @@ def test_string_astype(dtype):
     ):
         data = ["1", "2", "3", "4", "5"]
     elif dtype.startswith("float"):
-        data = ["1.0", "2.0", "3.0", "4.0", "5.0"]
+        data = [
+            "1.0",
+            "2.0",
+            "3.0",
+            "4.0",
+            None,
+            "5.0",
+            "nan",
+            "-INF",
+            "NaN",
+            "inF",
+            "NAn",
+        ]
     elif dtype.startswith("bool"):
         data = ["True", "False", "True", "False", "False"]
     elif dtype.startswith("datetime64"):
@@ -1734,12 +1746,13 @@ def test_string_wrap(data, width):
         ["A B", "1.5", "3,000"],
         ["23", "³", "⅕", ""],
         [" ", "\t\r\n ", ""],
-        ["$", "B", "Aab$", "$$ca", "C$B$", "cat"],
+        ["$", "B", "Aab$", "$$ca", "C$B$", "cat", "cat\ndog"],
         ["line\nto be wrapped", "another\nline\nto be wrapped"],
     ],
 )
 @pytest.mark.parametrize(
-    "pat", ["a", " ", "\t", "another", "0", r"\$", "^line$", "line.*be"]
+    "pat",
+    ["a", " ", "\t", "another", "0", r"\$", "^line$", "line.*be", "cat$"],
 )
 @pytest.mark.parametrize("flags", [0, re.MULTILINE, re.DOTALL])
 def test_string_count(data, pat, flags):

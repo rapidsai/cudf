@@ -40,14 +40,14 @@ struct FixedPointTest : public cudf::test::BaseFixture {
 };
 
 template <typename T>
-struct FixedPointTestBothReps : public cudf::test::BaseFixture {
+struct FixedPointTestAllReps : public cudf::test::BaseFixture {
 };
 
-using RepresentationTypes = ::testing::Types<int32_t, int64_t>;
+using RepresentationTypes = ::testing::Types<int32_t, int64_t, __int128_t>;
 
-TYPED_TEST_CASE(FixedPointTestBothReps, RepresentationTypes);
+TYPED_TEST_SUITE(FixedPointTestAllReps, RepresentationTypes);
 
-TYPED_TEST(FixedPointTestBothReps, DecimalXXThrust)
+TYPED_TEST(FixedPointTestAllReps, DecimalXXThrust)
 {
   using decimalXX = fixed_point<TypeParam, Radix::BASE_10>;
 

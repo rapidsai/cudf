@@ -64,7 +64,7 @@ struct typed_groupby_rank_scan_test : public BaseFixture {
 using testing_type_set =
   Concat<IntegralTypesNotBool, FloatingPointTypes, FixedPointTypes, ChronoTypes>;
 
-TYPED_TEST_CASE(typed_groupby_rank_scan_test, testing_type_set);
+TYPED_TEST_SUITE(typed_groupby_rank_scan_test, testing_type_set);
 
 TYPED_TEST(typed_groupby_rank_scan_test, empty_cols)
 {
@@ -323,7 +323,7 @@ using list_test_type_set = Concat<IntegralTypesNotBool,
                                               FloatingPointTypes,
                                               FixedPointTypes>;
 
-TYPED_TEST_CASE(list_groupby_rank_scan_test, list_test_type_set);
+TYPED_TEST_SUITE(list_groupby_rank_scan_test, list_test_type_set);
 
 TYPED_TEST(list_groupby_rank_scan_test, lists)
 {

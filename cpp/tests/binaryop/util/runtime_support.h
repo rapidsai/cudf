@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,8 +16,14 @@
 
 #pragma once
 
-#include <cudf/types.hpp>
-#include <io/utilities/column_buffer.hpp>
-#include <io/utilities/column_type_histogram.hpp>
+#include <cuda_runtime.h>
 
-using cudf::io::detail::string_index_pair;
+inline bool can_do_runtime_jit()
+{
+  // We require a CUDA NVRTC of 11.5+ to do runtime jit
+  // as we need support for __int128
+
+  int runtime      = 0;
+  auto error_value = cudaRuntimeGetVersion(&runtime);
+  return (error_value == cudaSuccess) && (runtime >= 11050);
+}

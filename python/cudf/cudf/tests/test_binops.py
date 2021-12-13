@@ -668,6 +668,8 @@ _operators_arithmetic = [
     "rmod",
     "pow",
     "rpow",
+    "div",
+    "divide",
     "floordiv",
     "rfloordiv",
     "truediv",
@@ -1171,7 +1173,7 @@ def make_scalar_product_data():
         )
     )
 
-    # we can muliply any timedelta by any int, or bool
+    # we can multiply any timedelta by any int, or bool
     valid |= set(product(TIMEDELTA_TYPES, INTEGER_TYPES | BOOL_TYPES))
 
     # we can multiply a float by any int, float, or bool

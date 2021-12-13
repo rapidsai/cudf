@@ -11,7 +11,6 @@ from hashlib import sha256
 from numbers import Number
 from shutil import get_terminal_size
 from typing import Any, MutableMapping, Optional, Set, Union
-from uuid import uuid4
 
 import cupy
 import numpy as np
@@ -979,9 +978,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             {self.name: self._column.set_mask(mask)}, self._index
         )
 
-    def __sizeof__(self):
-        return self._column.__sizeof__() + self._index.__sizeof__()
-
     def memory_usage(self, index=True, deep=False):
         """
         Return the memory usage of the Series.
@@ -1020,9 +1016,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> s.memory_usage(index=False)
         24
         """
-        n = self._column._memory_usage(deep=deep)
+        if deep:
+            warnings.warn(
+                "The deep parameter is ignored and is only included "
+                "for pandas compatibility."
+            )
+        n = self._column.memory_usage()
         if index:
-            n += self._index.memory_usage(deep=deep)
+            n += self._index.memory_usage()
         return n
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
@@ -2787,6 +2788,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return lhs._column.cov(rhs._column)
 
+    def transpose(self):
+        """Return the transpose, which is by definition self.
+        """
+
+        return self
+
+    T = property(transpose, doc=transpose.__doc__)
+
     def corr(self, other, method="pearson", min_periods=None):
         """Calculates the sample correlation between two Series,
         excluding missing values.
@@ -2814,6 +2823,31 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         lhs, rhs = _align_indices([lhs, rhs], how="inner")
 
         return lhs._column.corr(rhs._column)
+
+    def autocorr(self, lag=1):
+        """Compute the lag-N autocorrelation. This method computes the Pearson
+        correlation between the Series and its shifted self.
+
+        Parameters
+        ----------
+        lag : int, default 1
+            Number of lags to apply before performing autocorrelation.
+
+        Returns
+        -------
+        result : float
+            The Pearson correlation between self and self.shift(lag).
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([0.25, 0.5, 0.2, -0.05])
+        >>> s.autocorr()
+        0.10355263309024071
+        >>> s.autocorr(lag=2)
+        -0.9999999999999999
+        """
+        return self.corr(self.shift(lag))
 
     def isin(self, values):
         """Check whether values are contained in Series.
@@ -2915,7 +2949,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     def nunique(self, method="sort", dropna=True):
         """Returns the number of unique values of the Series: approximate version,
-        and exact version to be moved to libgdf
+        and exact version to be moved to libcudf
 
         Excludes NA values by default.
 
@@ -2984,7 +3018,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         Returns
         -------
-        result : Series contanining counts of unique values.
+        result : Series containing counts of unique values.
 
         See also
         --------
@@ -3532,6 +3566,8 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         observed=False,
         dropna=True,
     ):
+        import cudf.core.resample
+
         if axis not in (0, "index"):
             raise NotImplementedError("axis parameter is not yet implemented")
 
@@ -3555,8 +3591,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
                 "groupby() requires either by or level to be specified."
             )
 
-        return SeriesGroupBy(
-            self, by=by, level=level, dropna=dropna, sort=sort
+        return (
+            cudf.core.resample.SeriesResampler(self, by=by)
+            if isinstance(by, cudf.Grouper) and by.freq
+            else SeriesGroupBy(
+                self, by=by, level=level, dropna=dropna, sort=sort
+            )
         )
 
     def rename(self, index=None, copy=True):
@@ -3608,39 +3648,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return out.copy(deep=copy)
 
-    def _align_to_index(
-        self, index, how="outer", sort=True, allow_non_unique=False
-    ):
-        """
-        Align to the given Index. See _align_indices below.
-        """
-
-        index = as_index(index)
-        if self.index.equals(index):
-            return self
-        if not allow_non_unique:
-            if len(self) != len(self.index.unique()) or len(index) != len(
-                index.unique()
-            ):
-                raise ValueError("Cannot align indices with non-unique values")
-        lhs = self.to_frame(0)
-        rhs = cudf.DataFrame(index=as_index(index))
-        if how == "left":
-            tmp_col_id = str(uuid4())
-            lhs[tmp_col_id] = column.arange(len(lhs))
-        elif how == "right":
-            tmp_col_id = str(uuid4())
-            rhs[tmp_col_id] = column.arange(len(rhs))
-        result = lhs.join(rhs, how=how, sort=sort)
-        if how == "left" or how == "right":
-            result = result.sort_values(tmp_col_id)[0]
-        else:
-            result = result[0]
-
-        result.name = self.name
-        result.index.names = index.names
-        return result
-
     def merge(
         self,
         other,
@@ -3685,6 +3692,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             suffixes=suffixes,
         )
 
+        return result
+
+    def add_prefix(self, prefix):
+        result = self.copy(deep=True)
+        result.index = prefix + self.index.astype(str)
+        return result
+
+    def add_suffix(self, suffix):
+        result = self.copy(deep=True)
+        result.index = self.index.astype(str) + suffix
         return result
 
     def keys(self):
@@ -3828,7 +3845,7 @@ def make_binop_func(op):
     # __wrapped__ attributes to `wrapped_func`. Cpython looks up the signature
     # string of a function by recursively delving into __wrapped__ until
     # it hits the first function that has __signature__ attribute set. To make
-    # the signature stirng of `wrapper` matches with its actual parameter list,
+    # the signature string of `wrapper` matches with its actual parameter list,
     # we directly set the __signature__ attribute of `wrapper` below.
 
     new_sig = inspect.signature(
@@ -3856,6 +3873,7 @@ for binop in (
     "rfloordiv",
     "truediv",
     "div",
+    "divide",
     "rtruediv",
     "rdiv",
     "eq",
@@ -4617,11 +4635,115 @@ class DatetimeProperties(object):
             data=out_column, index=self.series._index, name=self.series.name
         )
 
-    def ceil(self, field):
-        out_column = self.series._column.ceil(field)
+    def ceil(self, freq):
+        """
+        Perform ceil operation on the data to the specified freq.
 
-        return Series(
-            data=out_column, index=self.series._index, name=self.series.name
+        Parameters
+        ----------
+        freq : str
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
+            for more details on these aliases.
+
+        Returns
+        -------
+        Series
+            Series with all timestamps rounded up to the specified frequency.
+            The index is preserved.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> t = cudf.Series(["2001-01-01 00:04:45", "2001-01-01 00:04:58",
+        ... "2001-01-01 00:05:04"], dtype="datetime64[ns]")
+        >>> t.dt.ceil("T")
+        0   2001-01-01 00:05:00
+        1   2001-01-01 00:05:00
+        2   2001-01-01 00:06:00
+        dtype: datetime64[ns]
+        """
+        out_column = self.series._column.ceil(freq)
+
+        return Series._from_data(
+            data={self.series.name: out_column}, index=self.series._index
+        )
+
+    def floor(self, freq):
+        """
+        Perform floor operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        freq : str
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
+            for more details on these aliases.
+
+        Returns
+        -------
+        Series
+            Series with all timestamps rounded up to the specified frequency.
+            The index is preserved.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> t = cudf.Series(["2001-01-01 00:04:45", "2001-01-01 00:04:58",
+        ... "2001-01-01 00:05:04"], dtype="datetime64[ns]")
+        >>> t.dt.floor("T")
+        0   2001-01-01 00:04:00
+        1   2001-01-01 00:04:00
+        2   2001-01-01 00:05:00
+        dtype: datetime64[ns]
+        """
+        out_column = self.series._column.floor(freq)
+
+        return Series._from_data(
+            data={self.series.name: out_column}, index=self.series._index
+        )
+
+    def round(self, freq):
+        """
+        Perform round operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        freq : str
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
+            for more details on these aliases.
+
+        Returns
+        -------
+        Series
+            Series with all timestamps rounded to the specified frequency.
+            The index is preserved.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> dt_sr = cudf.Series([
+        ...     "2001-01-01 00:04:45",
+        ...     "2001-01-01 00:04:58",
+        ...     "2001-01-01 00:05:04",
+        ... ], dtype="datetime64[ns]")
+        >>> dt_sr.dt.round("T")
+        0   2001-01-01 00:05:00
+        1   2001-01-01 00:05:00
+        2   2001-01-01 00:05:00
+        dtype: datetime64[ns]
+        """
+        out_column = self.series._column.round(freq)
+
+        return Series._from_data(
+            data={self.series.name: out_column}, index=self.series._index
         )
 
     def strftime(self, date_format, *args, **kwargs):
@@ -5014,7 +5136,7 @@ def _align_indices(series_list, how="outer", allow_non_unique=False):
 def isclose(a, b, rtol=1e-05, atol=1e-08, equal_nan=False):
     """Returns a boolean array where two arrays are equal within a tolerance.
 
-    Two values in ``a`` and ``b`` are  considiered equal when the following
+    Two values in ``a`` and ``b`` are  considered equal when the following
     equation is satisfied.
 
     .. math::

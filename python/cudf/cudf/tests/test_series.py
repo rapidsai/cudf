@@ -1322,3 +1322,85 @@ def test_set_index_unequal_length():
     s = cudf.Series()
     with pytest.raises(ValueError):
         s.index = [1, 2, 3]
+
+
+@pytest.mark.parametrize(
+    "lhs, rhs", [("a", "a"), ("a", "b"), (1, 1.0), (None, None), (None, "a")]
+)
+def test_equals_names(lhs, rhs):
+    lhs = cudf.Series([1, 2], name=lhs)
+    rhs = cudf.Series([1, 2], name=rhs)
+
+    got = lhs.equals(rhs)
+    expect = lhs.to_pandas().equals(rhs.to_pandas())
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "data", [[True, False, None, True, False], [None, None], []]
+)
+@pytest.mark.parametrize("bool_dtype", ["bool", "boolean", pd.BooleanDtype()])
+def test_nullable_bool_dtype_series(data, bool_dtype):
+    psr = pd.Series(data, dtype=pd.BooleanDtype())
+    gsr = cudf.Series(data, dtype=bool_dtype)
+
+    assert_eq(psr, gsr.to_pandas(nullable=True))
+
+
+def test_series_add_prefix():
+    cd_s = cudf.Series([1, 2, 3, 4])
+    pd_s = cd_s.to_pandas()
+
+    got = cd_s.add_prefix("item_")
+    expected = pd_s.add_prefix("item_")
+
+    assert_eq(got, expected)
+
+
+def test_series_add_suffix():
+    cd_s = cudf.Series([1, 2, 3, 4])
+    pd_s = cd_s.to_pandas()
+
+    got = cd_s.add_suffix("_item")
+    expected = pd_s.add_suffix("_item")
+
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "cudf_series",
+    [
+        cudf.Series([0.25, 0.5, 0.2, -0.05]),
+        cudf.Series([0, 1, 2, np.nan, 4, cudf.NA, 6]),
+    ],
+)
+@pytest.mark.parametrize("lag", [1, 2, 3, 4])
+def test_autocorr(cudf_series, lag):
+    psr = cudf_series.to_pandas()
+
+    cudf_corr = cudf_series.autocorr(lag=lag)
+    pd_corr = psr.autocorr(lag=lag)
+
+    assert_eq(pd_corr, cudf_corr)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [0, 1, 2, 3],
+        ["abc", "a", None, "hello world", "foo buzz", "", None, "rapids ai"],
+    ],
+)
+def test_series_transpose(data):
+    psr = pd.Series(data=data)
+    csr = cudf.Series(data=data)
+
+    cudf_transposed = csr.transpose()
+    pd_transposed = psr.transpose()
+    cudf_property = csr.T
+    pd_property = psr.T
+
+    assert_eq(pd_transposed, cudf_transposed)
+    assert_eq(pd_property, cudf_property)
+    assert_eq(cudf_transposed, csr)

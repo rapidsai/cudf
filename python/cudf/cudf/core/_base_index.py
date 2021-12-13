@@ -1147,14 +1147,14 @@ class BaseIndex(Serializable):
         if isinstance(lhs, cudf.MultiIndex):
             if level is not None and isinstance(level, int):
                 on = lhs._data.select_by_index(level).names[0]
-            right_names = (on,) or right_names
+            right_names = (on,) if on is not None else right_names
             on = right_names[0]
             if how == "outer":
                 how = "left"
             elif how == "right":
                 how = "inner"
         else:
-            # Both are nomal indices
+            # Both are normal indices
             right_names = left_names
             on = right_names[0]
 
@@ -1365,7 +1365,12 @@ class BaseIndex(Serializable):
         -------
             bytes used
         """
-        return self._values._memory_usage(deep=deep)
+        if deep:
+            warnings.warn(
+                "The deep parameter is ignored and is only included "
+                "for pandas compatibility."
+            )
+        return self._values.memory_usage()
 
     @classmethod
     def from_pandas(cls, index, nan_as_null=None):

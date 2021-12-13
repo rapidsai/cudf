@@ -625,7 +625,7 @@ std::unique_ptr<column> compute_tdigests(int delta,
                         centroids_begin,                  // values
                         thrust::make_discard_iterator(),  // key output
                         output,                           // output
-                        thrust::equal_to<size_type>{},    // key equality check
+                        thrust::equal_to{},               // key equality check
                         merge_centroids{});
 
   // create final tdigest column
@@ -692,7 +692,7 @@ struct typed_group_tdigest {
 
     // device column view. handy because the .element() function
     // automatically handles fixed-point conversions for us
-    auto d_col = cudf::column_device_view::create(col);
+    auto d_col = cudf::column_device_view::create(col, stream);
 
     // compute min and max columns
     auto min_col = cudf::make_numeric_column(
@@ -850,8 +850,8 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
                         min_iter,
                         thrust::make_discard_iterator(),
                         merged_min_col->mutable_view().begin<double>(),
-                        thrust::equal_to<size_type>{},  // key equality check
-                        thrust::minimum<double>{});
+                        thrust::equal_to{},  // key equality check
+                        thrust::minimum{});
 
   auto merged_max_col = cudf::make_numeric_column(
     data_type{type_id::FLOAT64}, num_groups, mask_state::UNALLOCATED, stream, mr);
@@ -864,8 +864,8 @@ std::unique_ptr<column> group_merge_tdigest(column_view const& input,
                         max_iter,
                         thrust::make_discard_iterator(),
                         merged_max_col->mutable_view().begin<double>(),
-                        thrust::equal_to<size_type>{},  // key equality check
-                        thrust::maximum<double>{});
+                        thrust::equal_to{},  // key equality check
+                        thrust::maximum{});
 
   // for any empty groups, set the min and max to be 0. not technically necessary but it makes
   // testing simpler.
