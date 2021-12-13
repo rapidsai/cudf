@@ -151,47 +151,48 @@ struct host_buffer {
  * @brief Source information for read interfaces
  */
 struct source_info {
-  io_type type = io_type::FILEPATH;
-  std::vector<std::shared_ptr<arrow::io::RandomAccessFile>> files;
+  std::vector<std::shared_ptr<arrow::io::RandomAccessFile>> _files;
 
   source_info() = default;
 
   explicit source_info(std::vector<std::string> const& file_paths)
-    : type(io_type::FILEPATH), filepaths(file_paths)
+    : _type(io_type::FILEPATH), _filepaths(file_paths)
   {
   }
   explicit source_info(std::string const& file_path)
-    : type(io_type::FILEPATH), filepaths({file_path})
+    : _type(io_type::FILEPATH), _filepaths({file_path})
   {
   }
 
   explicit source_info(std::vector<host_buffer> const& host_buffers)
-    : type(io_type::HOST_BUFFER), buffers(host_buffers)
+    : _type(io_type::HOST_BUFFER), _buffers(host_buffers)
   {
   }
   explicit source_info(const char* host_data, size_t size)
-    : type(io_type::HOST_BUFFER), buffers({{host_data, size}})
+    : _type(io_type::HOST_BUFFER), _buffers({{host_data, size}})
   {
   }
 
   explicit source_info(std::vector<cudf::io::datasource*> const& sources)
-    : type(io_type::USER_IMPLEMENTED), user_sources(sources)
+    : _type(io_type::USER_IMPLEMENTED), _user_sources(sources)
   {
   }
   explicit source_info(cudf::io::datasource* source)
-    : type(io_type::USER_IMPLEMENTED), user_sources({source})
+    : _type(io_type::USER_IMPLEMENTED), _user_sources({source})
   {
   }
 
-  auto const& get_filepaths() const { return filepaths; }
-  auto const& get_buffers() const { return buffers; }
-  auto const& get_files() const { return files; }
-  auto const& get_user_sources() const { return user_sources; }
+  auto type() const { return _type; }
+  auto const& filepaths() const { return _filepaths; }
+  auto const& buffers() const { return _buffers; }
+  auto const& files() const { return _files; }
+  auto const& user_sources() const { return _user_sources; }
 
  private:
-  std::vector<std::string> filepaths;
-  std::vector<host_buffer> buffers;
-  std::vector<cudf::io::datasource*> user_sources;
+  io_type _type = io_type::FILEPATH;
+  std::vector<std::string> _filepaths;
+  std::vector<host_buffer> _buffers;
+  std::vector<cudf::io::datasource*> _user_sources;
 };
 
 /**
@@ -199,41 +200,44 @@ struct source_info {
  */
 struct sink_info {
   sink_info() = default;
-  sink_info(size_t num_sinks) : type(io_type::VOID), num_sinks(num_sinks) {}
+  sink_info(size_t num_sinks) : _type(io_type::VOID), _num_sinks(num_sinks) {}
 
   explicit sink_info(std::vector<std::string> const& file_paths)
-    : type(io_type::FILEPATH), num_sinks(file_paths.size()), filepaths(file_paths)
+    : _type(io_type::FILEPATH), _num_sinks(file_paths.size()), _filepaths(file_paths)
   {
   }
-  explicit sink_info(std::string const& file_path) : type(io_type::FILEPATH), filepaths({file_path})
+  explicit sink_info(std::string const& file_path)
+    : _type(io_type::FILEPATH), _filepaths({file_path})
   {
   }
 
   explicit sink_info(std::vector<std::vector<char>*> const& buffers)
-    : type(io_type::HOST_BUFFER), num_sinks(buffers.size()), buffers(buffers)
+    : _type(io_type::HOST_BUFFER), _num_sinks(buffers.size()), _buffers(buffers)
   {
   }
-  explicit sink_info(std::vector<char>* buffer) : type(io_type::HOST_BUFFER), buffers({buffer}) {}
+  explicit sink_info(std::vector<char>* buffer) : _type(io_type::HOST_BUFFER), _buffers({buffer}) {}
 
   explicit sink_info(std::vector<cudf::io::data_sink*> const& user_sinks)
-    : type(io_type::USER_IMPLEMENTED), num_sinks(user_sinks.size()), user_sinks(user_sinks)
+    : _type(io_type::USER_IMPLEMENTED), _num_sinks(user_sinks.size()), _user_sinks(user_sinks)
   {
   }
   explicit sink_info(class cudf::io::data_sink* user_sink)
-    : type(io_type::USER_IMPLEMENTED), user_sinks({user_sink})
+    : _type(io_type::USER_IMPLEMENTED), _user_sinks({user_sink})
   {
   }
 
-  auto const& get_filepaths() const { return filepaths; }
-  auto const& get_buffers() const { return buffers; }
-  auto const& get_user_sinks() const { return user_sinks; }
-  io_type type     = io_type::VOID;
-  size_t num_sinks = 1;
+  auto type() const { return _type; }
+  auto num_sinks() const { return _num_sinks; }
+  auto const& filepaths() const { return _filepaths; }
+  auto const& buffers() const { return _buffers; }
+  auto const& user_sinks() const { return _user_sinks; }
 
  private:
-  std::vector<std::string> filepaths;
-  std::vector<std::vector<char>*> buffers;
-  std::vector<cudf::io::data_sink*> user_sinks;
+  io_type _type     = io_type::VOID;
+  size_t _num_sinks = 1;
+  std::vector<std::string> _filepaths;
+  std::vector<std::vector<char>*> _buffers;
+  std::vector<cudf::io::data_sink*> _user_sinks;
 };
 
 class table_input_metadata;

@@ -111,33 +111,33 @@ std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info 
                                                                     size_t range_offset = 0,
                                                                     size_t range_size   = 0)
 {
-  switch (info.type) {
+  switch (info.type()) {
     case io_type::FILEPATH: {
       auto sources = std::vector<std::unique_ptr<cudf::io::datasource>>();
-      for (auto const& filepath : info.get_filepaths()) {
+      for (auto const& filepath : info.filepaths()) {
         sources.emplace_back(cudf::io::datasource::create(filepath, range_offset, range_size));
       }
       return sources;
     }
-    case io_type::HOST_BUFFER: return cudf::io::datasource::create(info.get_buffers());
-    case io_type::USER_IMPLEMENTED: return cudf::io::datasource::create(info.get_user_sources());
+    case io_type::HOST_BUFFER: return cudf::io::datasource::create(info.buffers());
+    case io_type::USER_IMPLEMENTED: return cudf::io::datasource::create(info.user_sources());
     default: CUDF_FAIL("Unsupported source type");
   }
 }
 
 std::vector<std::unique_ptr<data_sink>> make_datasinks(sink_info const& info)
 {
-  switch (info.type) {
-    case io_type::FILEPATH: return cudf::io::data_sink::create(info.get_filepaths());
-    case io_type::HOST_BUFFER: return cudf::io::data_sink::create(info.get_buffers());
+  switch (info.type()) {
+    case io_type::FILEPATH: return cudf::io::data_sink::create(info.filepaths());
+    case io_type::HOST_BUFFER: return cudf::io::data_sink::create(info.buffers());
     case io_type::VOID: {
       std::vector<std::unique_ptr<data_sink>> sinks;
-      for (size_t i = 0; i < info.num_sinks; ++i) {
+      for (size_t i = 0; i < info.num_sinks(); ++i) {
         sinks.push_back(cudf::io::data_sink::create());
       }
       return sinks;
     }
-    case io_type::USER_IMPLEMENTED: return cudf::io::data_sink::create(info.get_user_sinks());
+    case io_type::USER_IMPLEMENTED: return cudf::io::data_sink::create(info.user_sinks());
     default: CUDF_FAIL("Unsupported sink type");
   }
 }
@@ -162,9 +162,9 @@ compression_type infer_compression_type(compression_type compression, source_inf
 {
   if (compression != compression_type::AUTO) { return compression; }
 
-  if (info.type != io_type::FILEPATH) { return compression_type::NONE; }
+  if (info.type() != io_type::FILEPATH) { return compression_type::NONE; }
 
-  auto filepath = info.get_filepaths()[0];
+  auto filepath = info.filepaths()[0];
 
   // Attempt to infer from the file extension
   const auto pos = filepath.find_last_of('.');
@@ -242,18 +242,16 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 {
   // Get source to read statistics from
   std::unique_ptr<datasource> source;
-  if (src_info.type == io_type::FILEPATH) {
-    CUDF_EXPECTS(src_info.get_filepaths().size() == 1,
+  if (src_info.type() == io_type::FILEPATH) {
+    CUDF_EXPECTS(src_info.filepaths().size() == 1, "Only a single source is currently supported.");
+    source = cudf::io::datasource::create(src_info.filepaths()[0]);
+  } else if (src_info.type() == io_type::HOST_BUFFER) {
+    CUDF_EXPECTS(src_info.buffers().size() == 1, "Only a single source is currently supported.");
+    source = cudf::io::datasource::create(src_info.buffers()[0]);
+  } else if (src_info.type() == io_type::USER_IMPLEMENTED) {
+    CUDF_EXPECTS(src_info.user_sources().size() == 1,
                  "Only a single source is currently supported.");
-    source = cudf::io::datasource::create(src_info.get_filepaths()[0]);
-  } else if (src_info.type == io_type::HOST_BUFFER) {
-    CUDF_EXPECTS(src_info.get_buffers().size() == 1,
-                 "Only a single source is currently supported.");
-    source = cudf::io::datasource::create(src_info.get_buffers()[0]);
-  } else if (src_info.type == io_type::USER_IMPLEMENTED) {
-    CUDF_EXPECTS(src_info.get_user_sources().size() == 1,
-                 "Only a single source is currently supported.");
-    source = cudf::io::datasource::create(src_info.get_user_sources()[0]);
+    source = cudf::io::datasource::create(src_info.user_sources()[0]);
   } else {
     CUDF_FAIL("Unsupported source type");
   }
