@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import warnings
+from collections import abc
 from typing import Type, TypeVar
 from uuid import uuid4
 
@@ -15,7 +16,12 @@ from nvtx import annotate
 import cudf
 import cudf._lib as libcudf
 from cudf._typing import ColumnLike
-from cudf.api.types import is_categorical_dtype, is_integer_dtype, is_list_like
+from cudf.api.types import (
+    _is_non_decimal_numeric_dtype,
+    is_categorical_dtype,
+    is_integer_dtype,
+    is_list_like,
+)
 from cudf.core.column import arange
 from cudf.core.frame import Frame
 from cudf.core.index import Index
@@ -544,6 +550,124 @@ class IndexedFrame(Frame):
         result._copy_type_metadata(self)
         return result
 
+    def add_prefix(self, prefix):
+        """
+        Prefix labels with string `prefix`.
+
+        For Series, the row labels are prefixed.
+        For DataFrame, the column labels are prefixed.
+
+        Parameters
+        ----------
+        prefix : str
+            The string to add before each label.
+
+        Returns
+        -------
+        Series or DataFrame
+            New Series with updated labels or DataFrame with updated labels.
+
+        See Also
+        --------
+        Series.add_suffix: Suffix row labels with string 'suffix'.
+        DataFrame.add_suffix: Suffix column labels with string 'suffix'.
+
+        Examples
+        --------
+        **Series**
+        >>> s = cudf.Series([1, 2, 3, 4])
+        >>> s
+        0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64
+        >>> s.add_prefix('item_')
+        item_0    1
+        item_1    2
+        item_2    3
+        item_3    4
+        dtype: int64
+
+        **DataFrame**
+        >>> df = cudf.DataFrame({'A': [1, 2, 3, 4], 'B': [3, 4, 5, 6]})
+        >>> df
+           A  B
+        0  1  3
+        1  2  4
+        2  3  5
+        3  4  6
+        >>> df.add_prefix('col_')
+             col_A  col_B
+        0       1       3
+        1       2       4
+        2       3       5
+        3       4       6
+        """
+        raise NotImplementedError(
+            "`IndexedFrame.add_prefix` not currently implemented. \
+                Use `Series.add_prefix` or `DataFrame.add_prefix`"
+        )
+
+    def add_suffix(self, suffix):
+        """
+        Suffix labels with string `suffix`.
+
+        For Series, the row labels are suffixed.
+        For DataFrame, the column labels are suffixed.
+
+        Parameters
+        ----------
+        prefix : str
+            The string to add after each label.
+
+        Returns
+        -------
+        Series or DataFrame
+            New Series with updated labels or DataFrame with updated labels.
+
+        See Also
+        --------
+        Series.add_prefix: prefix row labels with string 'prefix'.
+        DataFrame.add_prefix: Prefix column labels with string 'prefix'.
+
+        Examples
+        --------
+        **Series**
+        >>> s = cudf.Series([1, 2, 3, 4])
+        >>> s
+        0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64
+        >>> s.add_suffix('_item')
+        0_item    1
+        1_item    2
+        2_item    3
+        3_item    4
+        dtype: int64
+
+        **DataFrame**
+        >>> df = cudf.DataFrame({'A': [1, 2, 3, 4], 'B': [3, 4, 5, 6]})
+        >>> df
+           A  B
+        0  1  3
+        1  2  4
+        2  3  5
+        3  4  6
+        >>> df.add_suffix('_col')
+             A_col  B_col
+        0       1       3
+        1       2       4
+        2       3       5
+        3       4       6
+        """
+        raise NotImplementedError(
+            "`IndexedFrame.add_suffix` not currently implemented. \
+                Use `Series.add_suffix` or `DataFrame.add_suffix`"
+        )
+
     def sort_values(
         self,
         by,
@@ -694,6 +818,119 @@ class IndexedFrame(Frame):
         result.index.names = self.index.names
 
         return result
+
+    def round(self, decimals=0, how="half_even"):
+        """
+        Round to a variable number of decimal places.
+
+        Parameters
+        ----------
+        decimals : int, dict, Series
+            Number of decimal places to round each column to. This parameter
+            must be an int for a Series. For a DataFrame, a dict or a Series
+            are also valid inputs. If an int is given, round each column to the
+            same number of places. Otherwise dict and Series round to variable
+            numbers of places. Column names should be in the keys if
+            `decimals` is a dict-like, or in the index if `decimals` is a
+            Series. Any columns not included in `decimals` will be left as is.
+            Elements of `decimals` which are not columns of the input will be
+            ignored.
+        how : str, optional
+            Type of rounding. Can be either "half_even" (default)
+            or "half_up" rounding.
+
+        Returns
+        -------
+        Series or DataFrame
+            A Series or DataFrame with the affected columns rounded to the
+            specified number of decimal places.
+
+        Examples
+        --------
+        **Series**
+
+        >>> s = cudf.Series([0.1, 1.4, 2.9])
+        >>> s.round()
+        0    0.0
+        1    1.0
+        2    3.0
+        dtype: float64
+
+        **DataFrame**
+
+        >>> df = cudf.DataFrame(
+        ...     [(.21, .32), (.01, .67), (.66, .03), (.21, .18)],
+        ...     columns=['dogs', 'cats'],
+        ... )
+        >>> df
+           dogs  cats
+        0  0.21  0.32
+        1  0.01  0.67
+        2  0.66  0.03
+        3  0.21  0.18
+
+        By providing an integer each column is rounded to the same number
+        of decimal places.
+
+        >>> df.round(1)
+           dogs  cats
+        0   0.2   0.3
+        1   0.0   0.7
+        2   0.7   0.0
+        3   0.2   0.2
+
+        With a dict, the number of places for specific columns can be
+        specified with the column names as keys and the number of decimal
+        places as values.
+
+        >>> df.round({'dogs': 1, 'cats': 0})
+           dogs  cats
+        0   0.2   0.0
+        1   0.0   1.0
+        2   0.7   0.0
+        3   0.2   0.0
+
+        Using a Series, the number of places for specific columns can be
+        specified with the column names as the index and the number of
+        decimal places as the values.
+
+        >>> decimals = cudf.Series([0, 1], index=['cats', 'dogs'])
+        >>> df.round(decimals)
+           dogs  cats
+        0   0.2   0.0
+        1   0.0   1.0
+        2   0.7   0.0
+        3   0.2   0.0
+        """
+        if isinstance(decimals, cudf.Series):
+            decimals = decimals.to_pandas()
+
+        if isinstance(decimals, pd.Series):
+            if not decimals.index.is_unique:
+                raise ValueError("Index of decimals must be unique")
+            decimals = decimals.to_dict()
+        elif isinstance(decimals, int):
+            decimals = {name: decimals for name in self._column_names}
+        elif not isinstance(decimals, abc.Mapping):
+            raise TypeError(
+                "decimals must be an integer, a dict-like or a Series"
+            )
+
+        cols = {
+            name: col.round(decimals[name], how=how)
+            if (name in decimals and _is_non_decimal_numeric_dtype(col.dtype))
+            else col.copy(deep=True)
+            for name, col in self._data.items()
+        }
+
+        return self.__class__._from_data(
+            data=cudf.core.column_accessor.ColumnAccessor(
+                cols,
+                multiindex=self._data.multiindex,
+                level_names=self._data.level_names,
+            ),
+            index=self._index,
+        )
 
     def resample(
         self,

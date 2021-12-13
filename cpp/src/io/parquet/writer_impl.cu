@@ -19,12 +19,12 @@
  * @brief cuDF-IO parquet writer class implementation
  */
 
-#include <io/statistics/column_statistics.cuh>
 #include "writer_impl.hpp"
+#include <io/statistics/column_statistics.cuh>
 
+#include "compact_protocol_writer.hpp"
 #include <io/utilities/column_utils.cuh>
 #include <io/utilities/config_utils.hpp>
-#include "compact_protocol_writer.hpp"
 
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
@@ -343,7 +343,9 @@ struct leaf_schema_fn {
       col_schema.type        = Type::INT64;
       col_schema.stats_dtype = statistics_dtype::dtype_decimal64;
     } else if (std::is_same_v<T, numeric::decimal128>) {
-      CUDF_FAIL("decimal128 currently not supported for parquet writer");
+      col_schema.type        = Type::FIXED_LEN_BYTE_ARRAY;
+      col_schema.type_length = sizeof(__int128_t);
+      col_schema.stats_dtype = statistics_dtype::dtype_decimal128;
     } else {
       CUDF_FAIL("Unsupported fixed point type for parquet writer");
     }
@@ -673,12 +675,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
   _nullability = std::vector<uint8_t>(r_nullability.crbegin(), r_nullability.crend());
   // TODO(cp): Explore doing this for all columns in a single go outside this ctor. Maybe using
   // hostdevice_vector. Currently this involves a cudaMemcpyAsync for each column.
-  _d_nullability = rmm::device_uvector<uint8_t>(_nullability.size(), stream);
-  CUDA_TRY(cudaMemcpyAsync(_d_nullability.data(),
-                           _nullability.data(),
-                           _nullability.size() * sizeof(uint8_t),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  _d_nullability = cudf::detail::make_device_uvector_async(_nullability, stream);
 
   _is_list = (_max_rep_level > 0);
 
@@ -729,7 +726,7 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(
     desc.def_values    = _def_level.data();
   }
   desc.num_rows      = cudf_col.size();
-  desc.physical_type = static_cast<uint8_t>(physical_type());
+  desc.physical_type = physical_type();
 
   desc.level_bits = CompactProtocolReader::NumRequiredBits(max_rep_level()) << 4 |
                     CompactProtocolReader::NumRequiredBits(max_def_level());

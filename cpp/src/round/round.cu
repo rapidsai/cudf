@@ -246,7 +246,8 @@ std::unique_ptr<column> round_with(column_view const& input,
 
   // if rounding to more precision than fixed_point is capable of, just need to rescale
   // note: decimal_places has the opposite sign of numeric::scale_type (therefore have to negate)
-  if (input.type().scale() > -decimal_places) return cudf::detail::cast(input, result_type);
+  if (input.type().scale() > -decimal_places)
+    return cudf::detail::cast(input, result_type, stream, mr);
 
   auto result = cudf::make_fixed_width_column(
     result_type, input.size(), copy_bitmask(input, stream, mr), input.null_count(), stream, mr);

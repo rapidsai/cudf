@@ -3040,6 +3040,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             return out.copy(deep=copy)
 
+    def add_prefix(self, prefix):
+        out = self.copy(deep=True)
+        out.columns = [
+            prefix + col_name for col_name in list(self._data.keys())
+        ]
+        return out
+
+    def add_suffix(self, suffix):
+        out = self.copy(deep=True)
+        out.columns = [
+            col_name + suffix for col_name in list(self._data.keys())
+        ]
+        return out
+
     def as_gpu_matrix(self, columns=None, order="F"):
         warnings.warn(
             "The as_gpu_matrix method will be removed in a future cuDF "
@@ -3520,22 +3534,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         result.columns = columns
         return result
 
-    @property
-    def T(self):
-        """
-        Transpose index and columns.
-
-        Reflect the DataFrame over its main diagonal by writing rows
-        as columns and vice-versa. The property T is an accessor to
-        the method transpose().
-
-        Returns
-        -------
-        out : DataFrame
-            The transposed DataFrame.
-        """
-
-        return self.transpose()
+    T = property(transpose, doc=transpose.__doc__)
 
     def melt(self, **kwargs):
         """Unpivots a DataFrame from wide format to long format,
