@@ -258,7 +258,7 @@ def to_cudf_compatible_scalar(val, dtype=None):
 
     if dtype is not None:
         if isinstance(val, str) and np.dtype(dtype).kind == "M":
-            val = pd.Timestamp(str(val)).to_datetime64().astype(dtype)
+            val = pd.Timestamp(val).to_datetime64().astype(dtype)
         else:
             val = val.astype(dtype)
 
