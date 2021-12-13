@@ -164,12 +164,13 @@ def write_to_dataset(
         partition_offsets, partition_dfs = _get_partition_groups(
             df, partition_cols, preserve_index=preserve_index
         )
+        part_names, part_offsets, _, grouped_df = df.groupby(
+            partition_cols
+        )._grouped()
+        grouped_df.drop(columns=partition_cols, inplace=True)
         partitions_info = [
-            (
-                partition_offsets[i],
-                partition_offsets[i + 1] - partition_offsets[i],
-            )
-            for i in range(0, len(partition_offsets) - 1)
+            (part_offsets[i], part_offsets[i + 1] - part_offsets[i])
+            for i in range(0, len(part_offsets) - 1)
         ]
 
         full_paths = []
@@ -199,14 +200,10 @@ def write_to_dataset(
                 for path in full_paths
             ]
             file_objs = [ioutils.get_IOBase_writer(fil) for fil in open_files]
-            # TODO: this is temp. we'll replace get_partitions with groupby
-            write_df = df.sort_values(partition_cols).drop(
-                columns=partition_cols, inplace=False
-            )
             if return_metadata:
                 metadata.append(
                     _write_parquet(
-                        write_df,
+                        grouped_df,
                         file_objs,
                         index=preserve_index,
                         metadata_file_path=fs.sep.join([subdir, filename]),
@@ -216,7 +213,7 @@ def write_to_dataset(
                 )
             else:
                 _write_parquet(
-                    write_df,
+                    grouped_df,
                     file_objs,
                     index=preserve_index,
                     partitions_info=partitions_info,
