@@ -60,6 +60,7 @@ Computations / descriptive stats
    GroupBy.sum
    GroupBy.var
    GroupBy.corr
+   GroupBy.cov
    
 The following methods are available in both ``SeriesGroupBy`` and
 ``DataFrameGroupBy`` objects, but may differ slightly, usually in that

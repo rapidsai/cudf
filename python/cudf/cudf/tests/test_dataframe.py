@@ -9059,3 +9059,102 @@ def test_dataframe_add_suffix():
     expected = pdf.add_suffix("_item")
 
     assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data, gkey",
+    [
+        (
+            {
+                "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+                "val1": [5, 4, 6, 4, 8, 7, 4, 5, 2],
+                "val2": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+                "val3": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+            },
+            ["id", "val1", "val2"],
+        ),
+        (
+            {
+                "id": [0] * 4 + [1] * 3,
+                "a": [10, 3, 4, 2, -3, 9, 10],
+                "b": [10, 23, -4, 2, -3, 9, 19],
+            },
+            ["id", "a"],
+        ),
+        # (
+        #     {
+        #         "id": ["a", "a", "b", "b", "c", "c"],
+        #         "val": [None, None, None, None, None, None],
+        #     },
+        #     ["id"],
+        # ),
+        # (
+        #     {
+        #         "id": ["a", "a", "b", "b", "c", "c"],
+        #         "val1": [None, 4, 6, 8, None, 2],
+        #         "val2": [4, 5, None, 2, 9, None],
+        #     },
+        #     ["id"],
+        # ),
+        ({"id": [1.0], "val1": [2.0], "val2": [3.0]}, ["id"]),
+    ],
+)
+@pytest.mark.parametrize(
+    "min_per", [0, 1, 2, 3, 4],
+)
+@pytest.mark.parametrize(
+    "d_dof", [1, 2, 3, 4, 5],
+)
+def test_groupby_covariance(data, gkey, min_per, d_dof):
+    gdf = cudf.DataFrame(data)
+    pdf = gdf.to_pandas()
+
+    actual = gdf.groupby(gkey).cov(min_periods=min_per, ddof=d_dof)
+    expected = pdf.groupby(gkey).cov(min_periods=min_per, ddof=d_dof)
+
+    assert_eq(expected, actual)
+
+
+# def test_groupby_covariance_multiindex_dataframe():
+#     gdf = cudf.DataFrame(
+#         {"a": [1, 1, 2, 2], "b": [1, 1, 2, 3], "c": [2, 3, 4, 5]}
+#     ).set_index(["a", "b"])
+
+#     actual = gdf.groupby(level="a").cov()
+#     expected = gdf.to_pandas().groupby(level="a").cov()
+
+#     assert_eq(expected, actual)
+
+
+# def test_groupby_covariance_empty_columns():
+#     gdf = cudf.DataFrame(columns=["id", "val1", "val2"])
+#     pdf = gdf.to_pandas()
+
+#     actual = gdf.groupby("id").cov()
+#     expected = pdf.groupby("id").cov()
+
+#     assert_eq(
+#         expected, actual, check_dtype=False, check_index_type=False,
+#     )
+
+# @pytest.mark.parametrize(
+#     "data",
+#     [
+#         {
+#             "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+#             "val1": ["v", "n", "k", "l", "m", "i", "y", "r", "w"],
+#             "val2": ["d", "d", "d", "e", "e", "e", "f", "f", "f"],
+#         },
+#         {
+#             "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+#             "val1": [1, 1, 1, 2, 2, 2, 3, 3, 3],
+#             "val2": ["d", "d", "d", "e", "e", "e", "f", "f", "f"],
+#         },
+#     ],
+# )
+# @pytest.mark.parametrize("gkey", ["id", "val1", "val2"])
+# def test_groupby_cov_invalid_column_types(data, gkey):
+#     with pytest.raises(
+#         TypeError, match="Covariance accepts only numerical column-pairs",
+#     ):
+#         cudf.DataFrame(data).groupby(gkey).cov()

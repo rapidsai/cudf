@@ -897,6 +897,55 @@ class GroupBy(Serializable):
         return res
 
     def cov(self, min_periods=None, ddof=1):
+        """
+        Compute pairwise covariance of columns, excluding NA/null values.
+
+        Parameters
+        ----------
+        min_periods: int, optional
+            Minimum number of observations required per pair of columns
+            to have a valid result.
+
+        ddof: int, optional
+            Delta degrees of freedom, deafult is 1.
+
+        Returns
+        ----------
+        DataFrame
+            Covariance matrix.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gdf = cudf.DataFrame({
+        ...             "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+        ...             "val1": [5, 4, 6, 4, 8, 7, 4, 5, 2],
+        ...             "val2": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+        ...             "val3": [4, 5, 6, 1, 2, 9, 8, 5, 1]})
+        >>> gdf
+        id  val1  val2  val3
+        0  a     5     4     4
+        1  a     4     5     5
+        2  a     6     6     6
+        3  b     4     1     1
+        4  b     8     2     2
+        5  b     7     9     9
+        6  c     4     8     8
+        7  c     5     5     5
+        8  c     2     1     1
+        >>> gdf.groupby("id").cov()
+                    val1       val2       val3
+        id
+        a  val1  1.000000   0.500000   0.500000
+           val2  0.500000   1.000000   1.000000
+           val3  0.500000   1.000000   1.000000
+        b  val1  4.333333   3.500000   3.500000
+           val2  3.500000  19.000000  19.000000
+           val3  3.500000  19.000000  19.000000
+        c  val1  2.333333   3.833333   3.833333
+           val2  3.833333  12.333333  12.333333
+           val3  3.833333  12.333333  12.333333
+        """
 
         # create expanded dataframe consisting all combinations of the
         # struct columns-pairs to be correlated
@@ -913,8 +962,14 @@ class GroupBy(Serializable):
             by=self.grouping.keys
         )
 
-        gb_cov = new_gb.agg(lambda x: x.cov(min_periods, ddof))
-
+        try:
+            gb_cov = new_gb.agg(lambda x: x.cov(min_periods, ddof))
+        except RuntimeError as e:
+            if "Unsupported groupby reduction type-agg combination" in str(e):
+                raise TypeError(
+                    "Covariance accepts only numerical column-pairs"
+                )
+            raise
         # ensure that column-pair labels are arranged in ascending order
         cols_list = [
             (y, x) if i > j else (x, y)
