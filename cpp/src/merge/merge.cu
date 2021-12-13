@@ -36,9 +36,9 @@
 #include <thrust/merge.h>
 #include <thrust/pair.h>
 
+#include "cudf/utilities/traits.hpp"
 #include <queue>
 #include <vector>
-#include "cudf/utilities/traits.hpp"
 
 namespace cudf {
 namespace detail {
