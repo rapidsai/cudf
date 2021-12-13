@@ -13,9 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <join/hash_join.cuh>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/uninitialized_fill.h>
-#include <join/hash_join.cuh>
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/concatenate.cuh>
