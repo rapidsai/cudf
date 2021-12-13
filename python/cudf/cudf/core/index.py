@@ -2626,6 +2626,10 @@ class Index(BaseIndex, metaclass=IndexMeta):
     tupleize_cols : bool (default: True)
         When True, attempt to create a MultiIndex if possible.
         tupleize_cols == False is not yet supported.
+    nan_as_null : bool, Default True
+        If ``None``/``True``, converts ``np.nan`` values to
+        ``null`` values.
+        If ``False``, leaves ``np.nan`` values as is.
 
     Returns
     -------
