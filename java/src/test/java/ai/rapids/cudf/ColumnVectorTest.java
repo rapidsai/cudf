@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -1214,6 +1214,58 @@ public class ColumnVectorTest extends CudfTestBase {
       try (Scalar s = Scalar.timestampDaysFromInt(100);
            ColumnVector cv = ColumnVector.sequence(s, s, 5)) {}
     });
+  }
+
+  @Test
+  void testSequencesInt() {
+    try (ColumnVector start = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5);
+         ColumnVector size = ColumnVector.fromBoxedInts(2, 3, 2, 0, 1);
+         ColumnVector step = ColumnVector.fromBoxedInts(2, -1, 1, 1, 0);
+         ColumnVector cv = ColumnVector.sequence(start, size, step);
+         ColumnVector cv1 = ColumnVector.sequence(start, size);
+         ColumnVector expectCv = ColumnVector.fromLists(
+             new ListType(true, new BasicType(false, DType.INT32)),
+             Arrays.asList(1, 3),
+             Arrays.asList(2, 1, 0),
+             Arrays.asList(3, 4),
+             Arrays.asList(),
+             Arrays.asList(5));
+         ColumnVector expectCv1 = ColumnVector.fromLists(
+             new ListType(true, new BasicType(false, DType.INT32)),
+             Arrays.asList(1, 2),
+             Arrays.asList(2, 3, 4),
+             Arrays.asList(3, 4),
+             Arrays.asList(),
+             Arrays.asList(5))) {
+      assertColumnsAreEqual(expectCv, cv);
+      assertColumnsAreEqual(expectCv1, cv1);
+    }
+  }
+
+  @Test
+  void testSequencesDouble() {
+    try (ColumnVector start = ColumnVector.fromBoxedDoubles(1.2, 2.2, 3.2, 4.2, 5.2);
+         ColumnVector size = ColumnVector.fromBoxedInts(2, 3, 2, 0, 1);
+         ColumnVector step = ColumnVector.fromBoxedDoubles(2.1, -1.1, 1.1, 1.1, 0.1);
+         ColumnVector cv = ColumnVector.sequence(start, size, step);
+         ColumnVector cv1 = ColumnVector.sequence(start, size);
+         ColumnVector expectCv = ColumnVector.fromLists(
+             new ListType(true, new BasicType(false, DType.FLOAT64)),
+             Arrays.asList(1.2, 3.3),
+             Arrays.asList(2.2, 1.1, 0.0),
+             Arrays.asList(3.2, 4.3),
+             Arrays.asList(),
+             Arrays.asList(5.2));
+         ColumnVector expectCv1 = ColumnVector.fromLists(
+             new ListType(true, new BasicType(false, DType.FLOAT64)),
+             Arrays.asList(1.2, 2.2),
+             Arrays.asList(2.2, 3.2, 4.2),
+             Arrays.asList(3.2, 4.2),
+             Arrays.asList(),
+             Arrays.asList(5.2))) {
+      assertColumnsAreEqual(expectCv, cv);
+      assertColumnsAreEqual(expectCv1, cv1);
+    }
   }
 
   @Test
