@@ -77,11 +77,11 @@ std::unique_ptr<column> sequences(
  *  - If any row of the @p sizes column contains negative value, the output is undefined.
  *
  * @code{.pseudo}
- * starts = [0,  1, 2,    null, 4]
- * steps  = [2,  1, null, 1,    3]
- * sizes  = [-1, 2, 4,    2,    3]
+ * starts = [0, 1, 2, 3, 4]
+ * steps  = [2, 1, 1, 1, -3]
+ * sizes  = [0, 2, 2, 1, 3]
  *
- * output = [ [], [1, 2], null, null, [4, 7, 10] ]
+ * output = [ [], [1, 2], [2, 3], [3], [4, 1, -2] ]
  * @endcode
  *
  * @throws cudf::logic_error if @p sizes column is not of integer types.
