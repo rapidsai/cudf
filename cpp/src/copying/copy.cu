@@ -369,7 +369,7 @@ std::unique_ptr<column> copy_if_else(scalar const& lhs,
                "Boolean mask column must be the same size as rhs column");
 
   auto rhs_type =
-    cudf::is_dictionary(rhs.type()) ? cudf::dictionary_column_view(rhs).keys_type() : lhs.type();
+    cudf::is_dictionary(rhs.type()) ? cudf::dictionary_column_view(rhs).keys_type() : rhs.type();
   CUDF_EXPECTS(lhs.type() == rhs_type, "Both inputs must be of the same type");
 
   return copy_if_else(lhs, rhs, !lhs.is_valid(stream), rhs.has_nulls(), boolean_mask, stream, mr);

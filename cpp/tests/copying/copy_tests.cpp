@@ -715,4 +715,5 @@ TEST_F(DictionaryCopyIfElseTest, TypeMismatch)
   cudf::string_scalar input3{"1"};
   EXPECT_THROW(cudf::copy_if_else(input1, input3, mask), cudf::logic_error);
   EXPECT_THROW(cudf::copy_if_else(input3, input2, mask), cudf::logic_error);
+  EXPECT_THROW(cudf::copy_if_else(input2, input3, mask), cudf::logic_error);
 }
