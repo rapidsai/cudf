@@ -649,6 +649,11 @@ public final class Table implements AutoCloseable {
 
   private static native long[] gather(long tableHandle, long gatherView, boolean checkBounds);
 
+  private static native long[] scatterTable(long srcTableHandle, long scatterView,
+                                            long targetTableHandle, boolean checkBounds);
+  private static native long[] scatterScalars(long[] srcScalarHandles, long scatterView,
+                                             long targetTableHandle, boolean checkBounds);
+
   private static native long[] convertToRows(long nativeHandle);
 
   private static native long[] convertFromRows(long nativeColumnView, int[] types, int[] scale);
@@ -2047,12 +2052,65 @@ public final class Table implements AutoCloseable {
    * `n` is the number of rows in this table.
    *
    * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
-   * @param outOfBoundsPolicy policy to use when an out-of-range value is in `gatherMap`
+   * @param outOfBoundsPolicy policy to use when an out-of-range value is in `gatherMap`.
    * @return the resulting Table.
    */
   public Table gather(ColumnView gatherMap, OutOfBoundsPolicy outOfBoundsPolicy) {
     boolean checkBounds = outOfBoundsPolicy == OutOfBoundsPolicy.NULLIFY;
     return new Table(gather(nativeHandle, gatherMap.getNativeView(), checkBounds));
+  }
+
+  /**
+   * Scatters values from the source table into the target table out-of-place,
+   * returning a "destination table". The scatter is performed according to a
+   * scatter map such that row `scatter_map[i]` of the destination table gets row
+   * `i` of the source table. All other rows of the destination table equal
+   * corresponding rows of the target table.
+   *
+   * The number of columns in source must match the number of columns in target
+   * and their corresponding data types must be the same.
+   *
+   * If the same index appears more than once in the scatter map, the result is
+   * undefined.
+   *
+   * A negative value `i` in the `scatter_map` is interpreted as `i+n`, where `n`
+   * is the number of rows in the `target` table.
+   *
+   * @param scatterMap The map of indexes. Must be non-nullable and integral type.
+   * @param checkBounds Optionally perform bounds checking on the values of`scatterMap`
+   *                    and throw an error if any of its values are out of bounds.
+   */
+  public Table scatter(ColumnView scatterMap, Table target, boolean checkBounds) {
+    return new Table(scatterTable(nativeHandle, scatterMap.getNativeView(), target.getNativeView(),
+        checkBounds));
+  }
+
+  /**
+   * Scatters values from the source row into the target table out-of-place,
+   * returning a "destination table". The scatter is performed according to a
+   * scatter map such that row `scatter_map[i]` of the destination table is
+   * replaced by the source row. All other rows of the destination table equal
+   * corresponding rows of the target table.
+   *
+   * The number of elements in source must match the number of columns in target
+   * and their corresponding data types must be the same.
+   *
+   * If the same index appears more than once in the scatter map, the result is
+   * undefined.
+   *
+   * @param scatterMap The map of indexes. Must be non-nullable and integral type.
+   * @param checkBounds Optionally perform bounds checking on the values of`scatterMap`
+   *                    and throw an error if any of its values are out of bounds.
+   */
+  public static Table scatter(Scalar[] source, ColumnView scatterMap, Table target,
+                              boolean checkBounds) {
+    long[] srcScalarHandles = new long[source.length];
+    for(int i = 0; i < source.length; ++i) {
+      assert source[i] != null : "Scalar vectors passed in should not contain null";
+      srcScalarHandles[i] = source[i].getScalarHandle();
+    }
+    return new Table(scatterScalars(srcScalarHandles, scatterMap.getNativeView(),
+        target.getNativeView(), checkBounds));
   }
 
   private GatherMap[] buildJoinGatherMaps(long[] gatherMapData) {

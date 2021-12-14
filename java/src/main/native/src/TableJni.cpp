@@ -2719,6 +2719,46 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gather(JNIEnv *env, jclas
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_scatterTable(JNIEnv *env, jclass,
+                                                                    jlong j_input, jlong j_map,
+                                                                    jlong j_target,
+                                                                    jboolean check_bounds) {
+  JNI_NULL_CHECK(env, j_input, "input table is null", 0);
+  JNI_NULL_CHECK(env, j_map, "map column is null", 0);
+  JNI_NULL_CHECK(env, j_target, "target table is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const input = reinterpret_cast<cudf::table_view const *>(j_input);
+    auto const map = reinterpret_cast<cudf::column_view const *>(j_map);
+    auto const target = reinterpret_cast<cudf::table_view const *>(j_target);
+    auto result = cudf::scatter(*input, *map, *target, check_bounds);
+    return cudf::jni::convert_table_for_return(env, result);
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_scatterScalars(JNIEnv *env, jclass,
+                                                                      jlongArray j_input,
+                                                                      jlong j_map, jlong j_target,
+                                                                      jboolean check_bounds) {
+  JNI_NULL_CHECK(env, j_input, "input scalars array is null", 0);
+  JNI_NULL_CHECK(env, j_map, "map column is null", 0);
+  JNI_NULL_CHECK(env, j_target, "target table is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const scalars_array = cudf::jni::native_jpointerArray<cudf::scalar>(env, j_input);
+    std::vector<std::reference_wrapper<cudf::scalar const>> input;
+    for (int i = 0; i < scalars_array.size(); ++i) {
+      input.emplace_back(*scalars_array[i]);
+    }
+    auto const map = reinterpret_cast<cudf::column_view const *>(j_map);
+    auto const target = reinterpret_cast<cudf::table_view const *>(j_target);
+    auto result = cudf::scatter(input, *map, *target, check_bounds);
+    return cudf::jni::convert_table_for_return(env, result);
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertToRows(JNIEnv *env, jclass,
                                                                      jlong input_table) {
   JNI_NULL_CHECK(env, input_table, "input table is null", 0);
