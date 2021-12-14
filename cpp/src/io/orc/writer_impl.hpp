@@ -29,9 +29,9 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <memory>
 #include <string>

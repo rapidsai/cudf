@@ -21,8 +21,8 @@
 #include <cudf/detail/utilities/transform_unary_functions.cuh>
 #include <cudf/types.hpp>  //for CUDF_HDI
 
-#include <thrust/functional.h>
 #include <cmath>
+#include <thrust/functional.h>
 
 namespace cudf {
 namespace reduction {

@@ -20,9 +20,9 @@
 #include <cudf/utilities/span.hpp>
 #include <io/utilities/time_utils.cuh>
 
+#include <rmm/device_uvector.hpp>
 #include <thrust/binary_search.h>
 #include <thrust/execution_policy.h>
-#include <rmm/device_uvector.hpp>
 
 #include <stdint.h>
 #include <string>
