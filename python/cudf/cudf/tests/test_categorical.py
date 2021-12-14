@@ -871,3 +871,12 @@ def test_categorical_string_index_contains(data, value):
     pidx = idx.to_pandas()
 
     assert_eq(value in idx, value in pidx)
+
+def test_categorical_ordered_dtype_sort():
+    ps = pd.Series(pd.Categorical([1, None, 2], categories=[2, 1], ordered=True))
+    gs = cudf.from_pandas(ps)
+
+    expected = ps.sort_values()
+    got = gs.sort_values()
+
+    assert_eq(expected, got)

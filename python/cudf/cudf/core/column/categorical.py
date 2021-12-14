@@ -1155,15 +1155,21 @@ class CategoricalColumn(column.ColumnBase):
         """
         Fill null values with *fill_value*
         """
-        if (
-            fill_value is not None
-            and hasattr(fill_value, "dtype")
-            and is_categorical_dtype(fill_value.dtype)
-        ):
-            if not is_dtype_equal(self.dtype, fill_value.dtype):
+        if fill_value is not None:
+            if hasattr(fill_value, "dtype") and is_categorical_dtype(fill_value.dtype):
+                if not is_dtype_equal(self.dtype, fill_value.dtype):
+                    # Pandas will reject this input too, but with a different
+                    # exception message.
+                    raise ValueError(
+                        "Cannot fill categorical column with another column "
+                        "when dtypes are different."
+                    )
+            if np.isscalar(fill_value) and not self.dtype._categories.isin([fill_value]).any():
+                # Pandas will reject this input too, but with a different
+                # exception message.
                 raise ValueError(
-                    "Cannot set a Categorical with another, without identical "
-                    "categories"
+                    "Cannot fill categorical column with a scalar that is not"
+                    "part of existing categories."
                 )
 
         return super().fillna(fill_value, method, dtype)

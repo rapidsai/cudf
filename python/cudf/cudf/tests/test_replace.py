@@ -454,6 +454,7 @@ def test_fillna_categorical(psr_data, fill_value, inplace):
             rfunc=gsr.fillna,
             lfunc_args_and_kwargs=([fill_value], {"inplace": inplace}),
             rfunc_args_and_kwargs=([fill_value_cudf], {"inplace": inplace}),
+            compare_error_message=False,
         )
     else:
         expected = psr.fillna(fill_value, inplace=inplace)
@@ -465,6 +466,22 @@ def test_fillna_categorical(psr_data, fill_value, inplace):
 
         assert_eq(expected, got)
 
+def test_fillna_categorical_scalar():
+    ps = pd.Series([1, 1, None, 2], dtype="category")
+    gs = cudf.from_pandas(ps)
+
+    expected = ps.fillna(2)
+    got = gs.fillna(2)
+
+    assert_eq(expected, got)
+
+    assert_exceptions_equal(
+        lfunc=ps.fillna,
+        rfunc=gs.fillna,
+        lfunc_args_and_kwargs=([3], {}),
+        rfunc_args_and_kwargs=([3], {}),
+        compare_error_message=False
+    )
 
 @pytest.mark.parametrize(
     "psr_data",
