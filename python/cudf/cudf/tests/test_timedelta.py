@@ -1409,20 +1409,10 @@ def test_error_values():
 
 
 @pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
-def test_create_TimedeltaIndex(dtype):
+@pytest.mark.parametrize("name", [None, "delta-index"])
+def test_create_TimedeltaIndex(dtype, name):
     gdi = cudf.TimedeltaIndex(
-        [1132223, 2023232, 342234324, 4234324], dtype=dtype
+        [1132223, 2023232, 342234324, 4234324], dtype=dtype, name=name
     )
     pdi = gdi.to_pandas()
-
-    assert_eq(pdi, gdi)
-
-
-@pytest.mark.parametrize("dtype", utils.TIMEDELTA_TYPES)
-def test_create_TimedeltaIndex_with_name(dtype):
-    gdi = cudf.TimedeltaIndex(
-        [1132223, 2023232, 342234324, 4234324], dtype=dtype, name="delta-index"
-    )
-    pdi = gdi.to_pandas()
-
     assert_eq(pdi, gdi)
