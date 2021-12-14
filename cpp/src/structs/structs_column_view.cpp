@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
+#include "cudf/utilities/error.hpp"
 #include <cudf/column/column.hpp>
 #include <cudf/structs/structs_column_view.hpp>
-#include "cudf/utilities/error.hpp"
 
 namespace cudf {
 
