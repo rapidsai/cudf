@@ -2654,7 +2654,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         Notes
         -----
-        Diff currently only supports float and integer dtype columns
+        Diff currently only supports numeric dtype columns
 
         Examples
         --------
@@ -2689,9 +2689,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 "Diff currently only supports numeric dtypes"
             )
 
-        result = self - self.shift(periods=periods)
-
-        return result
+        return self - self.shift(periods=periods)
 
     def drop(
         self,
