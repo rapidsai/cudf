@@ -290,9 +290,6 @@ class Decimal64Column(DecimalBaseColumn):
 
         return self
 
-    def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
-        return self.dtype
-
 
 def _binop_scale(l_dtype, r_dtype, op):
     # This should at some point be hooked up to libcudf's

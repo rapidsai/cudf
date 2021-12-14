@@ -201,14 +201,3 @@ class NumericalBaseColumn(ColumnBase):
         return libcudf.reduce.scan(op, self, True)._with_type_metadata(
             self.dtype
         )
-
-    def _reduction_result_dtype(self, reduction_op: str) -> Dtype:
-        col_dtype = self.dtype
-        if reduction_op in {"sum", "product"}:
-            col_dtype = (
-                col_dtype if col_dtype.kind == "f" else np.dtype("int64")
-            )
-        elif reduction_op == "sum_of_squares":
-            col_dtype = np.find_common_type([col_dtype], [np.dtype("uint64")])
-
-        return col_dtype
