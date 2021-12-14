@@ -308,13 +308,13 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
     column_view sum_result   = sparse_results->get_result(col, *sum_agg);
     column_view count_result = sparse_results->get_result(col, *count_agg);
 
-    auto values_view = column_device_view::create(col);
-    auto sum_view    = column_device_view::create(sum_result);
-    auto count_view  = column_device_view::create(count_result);
+    auto values_view = column_device_view::create(col, stream);
+    auto sum_view    = column_device_view::create(sum_result, stream);
+    auto count_view  = column_device_view::create(count_result, stream);
 
     auto var_result = make_fixed_width_column(
       cudf::detail::target_type(result_type, agg.kind), col.size(), mask_state::ALL_NULL, stream);
-    auto var_result_view = mutable_column_device_view::create(var_result->mutable_view());
+    auto var_result_view = mutable_column_device_view::create(var_result->mutable_view(), stream);
     mutable_table_view var_table_view{{var_result->mutable_view()}};
     cudf::detail::initialize_with_identity(var_table_view, {agg.kind}, stream);
 
@@ -636,23 +636,16 @@ std::unique_ptr<table> groupby(table_view const& keys,
  */
 bool can_use_hash_groupby(table_view const& keys, host_span<aggregation_request const> requests)
 {
-  auto const all_hash_aggregations =
-    std::all_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
-      return cudf::has_atomic_support(r.values.type()) and
-             std::all_of(r.aggregations.begin(), r.aggregations.end(), [](auto const& a) {
-               return is_hash_aggregation(a->kind);
-             });
-    });
-
-  // Currently, structs are not supported in any of hash-based aggregations.
-  // Therefore, if any request contains structs then we must fallback to sort-based aggregations.
-  // TODO: Support structs in hash-based aggregations.
-  auto const has_struct =
-    std::all_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
-      return r.values.type().id() == type_id::STRUCT;
-    });
-
-  return all_hash_aggregations && !has_struct;
+  return std::all_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
+    // Currently, structs are not supported in any of hash-based aggregations.
+    // Therefore, if any request contains structs then we must fallback to sort-based aggregations.
+    // TODO: Support structs in hash-based aggregations.
+    return not(r.values.type().id() == type_id::STRUCT) and
+           cudf::has_atomic_support(r.values.type()) and
+           std::all_of(r.aggregations.begin(), r.aggregations.end(), [](auto const& a) {
+             return is_hash_aggregation(a->kind);
+           });
+  });
 }
 
 // Hash-based groupby
@@ -668,7 +661,7 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
   std::unique_ptr<table> unique_keys =
     groupby(keys, requests, &cache, has_nulls(keys), include_null_keys, stream, mr);
 
-  return std::make_pair(std::move(unique_keys), extract_results(requests, cache));
+  return std::make_pair(std::move(unique_keys), extract_results(requests, cache, stream, mr));
 }
 }  // namespace hash
 }  // namespace detail
