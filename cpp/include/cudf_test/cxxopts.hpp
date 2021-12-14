@@ -552,13 +552,13 @@ class abstract_value : public Value {
 
   void parse(const std::string& text) const { parse_value(text, *m_store); }
 
-  bool is_container() const { return type_is_container<T>::value; }
+  bool is_container() const override { return type_is_container<T>::value; }
 
-  void parse() const { parse_value(m_default_value, *m_store); }
+  void parse() const override { parse_value(m_default_value, *m_store); }
 
-  bool has_default() const { return m_default; }
+  bool has_default() const override { return m_default; }
 
-  bool has_implicit() const { return m_implicit; }
+  bool has_implicit() const override { return m_implicit; }
 
   std::shared_ptr<Value> default_value(const std::string& value)
   {
@@ -584,7 +584,7 @@ class abstract_value : public Value {
 
   std::string get_implicit_value() const { return m_implicit_value; }
 
-  bool is_boolean() const { return std::is_same_v<T, bool>; }
+  bool is_boolean() const override { return std::is_same_v<T, bool>; }
 
   const T& get() const
   {
