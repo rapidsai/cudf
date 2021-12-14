@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/logical.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
@@ -28,6 +26,8 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/exec_policy.hpp>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/logical.h>
 #include <type_traits>
 
 namespace cudf {

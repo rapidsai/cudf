@@ -20,8 +20,8 @@
 #include <cudf/binaryop.hpp>
 
 #include <tests/binaryop/assert-binops.h>
-#include <tests/binaryop/util/runtime_support.h>
 #include <tests/binaryop/binop-fixture.hpp>
+#include <tests/binaryop/util/runtime_support.h>
 
 namespace cudf {
 namespace test {

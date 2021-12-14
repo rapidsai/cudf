@@ -19,8 +19,8 @@
 #ifdef CUFILE_FOUND
 #include "thread_pool.hpp"
 
-#include <cufile.h>
 #include <cudf_test/file_utilities.hpp>
+#include <cufile.h>
 #endif
 
 #include <rmm/cuda_stream_view.hpp>
