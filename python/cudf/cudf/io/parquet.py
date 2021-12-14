@@ -172,21 +172,13 @@ def write_to_dataset(
             (part_offsets[i], part_offsets[i + 1] - part_offsets[i])
             for i in range(0, len(part_offsets) - 1)
         ]
+        # Copy the entire keys df in one operation rather than using iloc
+        part_names = part_names.to_pandas().to_frame(index=False)
 
         full_paths = []
-        for _, sub_df in enumerate(partition_dfs):
-            if sub_df is None or len(sub_df) == 0:
-                continue
-            # TODO: This will cause multiple device reads. When we use groupby,
-            # we get a keys column which we can transfer in a single d->h copy
-            keys = tuple([sub_df[col].iloc[0] for col in partition_cols])
-            if not isinstance(keys, tuple):
-                keys = (keys,)
+        for keys in part_names.itertuples(index=False):
             subdir = fs.sep.join(
-                [
-                    "{colname}={value}".format(colname=name, value=val)
-                    for name, val in zip(partition_cols, keys)
-                ]
+                [f"{name}={val}" for name, val in zip(partition_cols, keys)]
             )
             prefix = fs.sep.join([root_path, subdir])
             fs.mkdirs(prefix, exist_ok=True)
