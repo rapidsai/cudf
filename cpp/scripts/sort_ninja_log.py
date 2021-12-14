@@ -12,7 +12,11 @@ parser.add_argument(
     "log_file", type=str, default=".ninja_log", help=".ninja_log file"
 )
 parser.add_argument(
-    "--fmt", type=str, default="csv", help="output format (csv, xml, html)"
+    "--fmt",
+    type=str,
+    default="csv",
+    choices=["csv", "xml", "html"],
+    help="output format (to stdout)",
 )
 parser.add_argument(
     "--msg",
