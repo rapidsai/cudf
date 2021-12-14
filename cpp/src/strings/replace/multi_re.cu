@@ -170,30 +170,19 @@ std::unique_ptr<column> replace_re(
   auto children = [&] {
     // Each invocation is predicated on the stack size which is dependent on the number of regex
     // instructions
-    if (regex_insts <= RX_SMALL_INSTS)
-      return make_strings_children(
-        replace_multi_regex_fn<RX_STACK_SMALL>{*d_strings, d_progs, d_found_ranges, *d_repls},
-        strings_count,
-        stream,
-        mr);
-    else if (regex_insts <= RX_MEDIUM_INSTS)
-      return make_strings_children(
-        replace_multi_regex_fn<RX_STACK_MEDIUM>{*d_strings, d_progs, d_found_ranges, *d_repls},
-        strings_count,
-        stream,
-        mr);
-    else if (regex_insts <= RX_LARGE_INSTS)
-      return make_strings_children(
-        replace_multi_regex_fn<RX_STACK_LARGE>{*d_strings, d_progs, d_found_ranges, *d_repls},
-        strings_count,
-        stream,
-        mr);
-    else
-      return make_strings_children(
-        replace_multi_regex_fn<RX_STACK_ANY>{*d_strings, d_progs, d_found_ranges, *d_repls},
-        strings_count,
-        stream,
-        mr);
+    if (regex_insts <= RX_SMALL_INSTS) {
+      replace_multi_regex_fn<RX_STACK_SMALL> fn{*d_strings, d_progs, d_found_ranges, *d_repls};
+      return make_strings_children(fn, strings_count, stream, mr);
+    } else if (regex_insts <= RX_MEDIUM_INSTS) {
+      replace_multi_regex_fn<RX_STACK_MEDIUM> fn{*d_strings, d_progs, d_found_ranges, *d_repls};
+      return make_strings_children(fn, strings_count, stream, mr);
+    } else if (regex_insts <= RX_LARGE_INSTS) {
+      replace_multi_regex_fn<RX_STACK_LARGE> fn{*d_strings, d_progs, d_found_ranges, *d_repls};
+      return make_strings_children(fn, strings_count, stream, mr);
+    } else {
+      replace_multi_regex_fn<RX_STACK_ANY> fn{*d_strings, d_progs, d_found_ranges, *d_repls};
+      return make_strings_children(fn, strings_count, stream, mr);
+    }
   }();
 
   return make_strings_column(strings_count,

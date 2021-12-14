@@ -151,6 +151,8 @@ TEST_F(StringsReplaceRegexTest, Multiline)
 
   cudf::test::strings_column_wrapper input({"bcd\naba\nefg", "aba\naba abab\naba", "aba"});
   auto sv = cudf::strings_column_view(input);
+
+  // single-replace
   auto results =
     cudf::strings::replace_re(sv, "^aba$", cudf::string_scalar("_"), std::nullopt, multiline);
   cudf::test::strings_column_wrapper expected_ml({"bcd\n_\nefg", "_\naba abab\n_", "_"});

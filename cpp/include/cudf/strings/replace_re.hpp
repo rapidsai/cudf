@@ -41,7 +41,7 @@ namespace strings {
  * @param replacement The string used to replace the matched sequence in each string.
  *        Default is an empty string.
  * @param max_replace_count The maximum number of times to replace the matched pattern
- *        within each string. Default replaces every string that is matched.
+ *        within each string. Default replaces every substring that is matched.
  * @param flags Regex flags for interpreting special characters in the pattern.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
