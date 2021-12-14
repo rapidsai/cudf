@@ -129,7 +129,7 @@ gen_random_nullable_repeated_columns(unsigned int N = 10000, unsigned int num_re
  * The principal fixture for all conditional joins.
  */
 template <typename T>
-struct ConditionalJoinTest : public cudf::test::BaseFixture {
+struct JoinTest : public cudf::test::BaseFixture {
   /**
    * Convenience utility for parsing initializer lists of input data into
    * suitable inputs for tables.
@@ -177,6 +177,13 @@ struct ConditionalJoinTest : public cudf::test::BaseFixture {
                            cudf::table_view(left_columns),
                            cudf::table_view(right_columns));
   }
+};
+
+/**
+ * Fixture for all nested loop conditional joins.
+ */
+template <typename T>
+struct ConditionalJoinTest : public JoinTest<T> {
 };
 
 /**
@@ -342,7 +349,7 @@ struct ConditionalJoinPairReturnTest : public ConditionalJoinTest<T> {
 };
 
 /**
- * Tests of inner joins.
+ * Tests of conditional inner joins.
  */
 template <typename T>
 struct ConditionalInnerJoinTest : public ConditionalJoinPairReturnTest<T> {
@@ -528,7 +535,7 @@ TYPED_TEST(ConditionalInnerJoinTest, TestOneColumnTwoNullsNoOutputRowAllEqual)
 };
 
 /**
- * Tests of left joins.
+ * Tests of conditional left joins.
  */
 template <typename T>
 struct ConditionalLeftJoinTest : public ConditionalJoinPairReturnTest<T> {
@@ -583,7 +590,7 @@ TYPED_TEST(ConditionalLeftJoinTest, TestCompareRandomToHashNulls)
 };
 
 /**
- * Tests of full joins.
+ * Tests of conditional full joins.
  */
 template <typename T>
 struct ConditionalFullJoinTest : public ConditionalJoinPairReturnTest<T> {
@@ -763,7 +770,7 @@ struct ConditionalJoinSingleReturnTest : public ConditionalJoinTest<T> {
 };
 
 /**
- * Tests of left semi joins.
+ * Tests of conditional left semi joins.
  */
 template <typename T>
 struct ConditionalLeftSemiJoinTest : public ConditionalJoinSingleReturnTest<T> {
@@ -810,7 +817,7 @@ TYPED_TEST(ConditionalLeftSemiJoinTest, TestCompareRandomToHashNulls)
 };
 
 /**
- * Tests of left anti joins.
+ * Tests of conditional left anti joins.
  */
 template <typename T>
 struct ConditionalLeftAntiJoinTest : public ConditionalJoinSingleReturnTest<T> {
@@ -856,13 +863,31 @@ TYPED_TEST(ConditionalLeftAntiJoinTest, TestCompareRandomToHashNulls)
   this->compare_to_hash_join_nulls({left}, {right});
 };
 
+/**
+ * Fixture for all mixed hash + conditional joins.
+ */
 template <typename T>
-struct MixedJoinTest : public ConditionalJoinTest<T> {
+struct MixedJoinTest : public JoinTest<T> {
 };
 
-TYPED_TEST_SUITE(MixedJoinTest, cudf::test::IntegralTypesNotBool);
+/**
+ * Fixture for join types that return both left and right indices (inner, left,
+ * and full joins).
+ */
+template <typename T>
+struct MixedJoinPairReturnTest : public MixedJoinTest<T> {
+};
 
-TYPED_TEST(MixedJoinTest, Basic)
+/**
+ * Tests of mixed inner joins.
+ */
+template <typename T>
+struct MixedInnerJoinTest : public MixedJoinPairReturnTest<T> {
+};
+
+TYPED_TEST_SUITE(MixedInnerJoinTest, cudf::test::IntegralTypesNotBool);
+
+TYPED_TEST(MixedInnerJoinTest, Basic)
 {
   // Note that we need to maintain the column wrappers otherwise the
   // resulting column views will be referencing potentially invalid memory.
@@ -909,7 +934,7 @@ TYPED_TEST(MixedJoinTest, Basic)
   EXPECT_TRUE(std::equal(expected_outputs.begin(), expected_outputs.end(), result_pairs.begin()));
 }
 
-TYPED_TEST(MixedJoinTest, Basic2)
+TYPED_TEST(MixedInnerJoinTest, Basic2)
 {
   // Note that we need to maintain the column wrappers otherwise the
   // resulting column views will be referencing potentially invalid memory.
