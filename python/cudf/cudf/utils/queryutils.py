@@ -10,8 +10,18 @@ from numba import cuda
 import cudf
 from cudf.core.column import column_empty
 from cudf.utils import applyutils
+from cudf.utils.dtypes import (
+    BOOL_TYPES,
+    DATETIME_TYPES,
+    NUMERIC_TYPES,
+    TIMEDELTA_TYPES,
+)
 
 ENVREF_PREFIX = "__CUDF_ENVREF__"
+
+SUPPORTED_QUERY_TYPES = (
+    NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + BOOL_TYPES
+)
 
 
 class QuerySyntaxError(ValueError):
@@ -197,6 +207,17 @@ def query_execute(df, expr, callenv):
 
     # compile
     compiled = query_compile(expr)
+    columns = compiled["colnames"]
+
+    # wait to check the types until we know which cols are used
+    if any(
+        df._data[col].dtype not in SUPPORTED_QUERY_TYPES for col in columns
+    ):
+        raise TypeError(
+            "query only supports numeric, datetime, timedelta,"
+            "or bool dtypes."
+        )
+
     kernel = compiled["kernel"]
     # process env args
     envargs = []
@@ -214,7 +235,7 @@ def query_execute(df, expr, callenv):
             raise NameError(msg.format(name))
         else:
             envargs.append(val)
-    columns = compiled["colnames"]
+
     # prepare col args
 
     colarrays = [
