@@ -19,6 +19,7 @@
 #include <cudf/ast/expressions.hpp>
 #include <cudf/table/table_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utilities/span.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
@@ -692,8 +693,7 @@ mixed_inner_join(
   std::vector<cudf::size_type> const& left_on,
   std::vector<cudf::size_type> const& right_on,
   ast::expression const& binary_predicate,
-  std::optional<std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>>>
-    output_size_data                  = {},
+  std::optional<std::pair<std::size_t, device_span<size_type>>> output_size_data = {},
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
