@@ -688,10 +688,10 @@ class hash_join {
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 mixed_inner_join(
-  table_view const& left,
-  table_view const& right,
-  std::vector<cudf::size_type> const& left_on,
-  std::vector<cudf::size_type> const& right_on,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  table_view const& left_equality,
+  table_view const& right_equality,
   ast::expression const& binary_predicate,
   std::optional<std::pair<std::size_t, device_span<size_type>>> output_size_data = {},
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
@@ -923,10 +923,10 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
  * @return The size that would result from performing the requested join.
  */
 std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_inner_join_size(
-  table_view const& left,
-  table_view const& right,
-  std::vector<cudf::size_type> const& left_on,
-  std::vector<cudf::size_type> const& right_on,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  table_view const& left_equality,
+  table_view const& right_equality,
   ast::expression const& binary_predicate,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

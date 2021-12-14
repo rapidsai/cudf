@@ -906,11 +906,11 @@ TYPED_TEST(MixedInnerJoinTest, Basic)
   // std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs{{0, 0}, {1, 1}, {2,
   // JoinNoneValue}};
 
-  std::vector<cudf::size_type> const left_on{0};
-  std::vector<cudf::size_type> const right_on{0};
+  auto left_equality  = left.select({0});
+  auto right_equality = right.select({0});
 
   auto [result_size, matches_per_row] =
-    cudf::mixed_inner_join_size(left, right, left_on, right_on, predicate);
+    cudf::mixed_inner_join_size(left, right, left_equality, right_equality, predicate);
   EXPECT_TRUE(result_size == expected_outputs.size());
 
   auto actual_counts = cudf::column_view{cudf::data_type{cudf::type_to_id<cudf::size_type>()},
@@ -919,7 +919,7 @@ TYPED_TEST(MixedInnerJoinTest, Basic)
   cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_counts{0, 1, 0};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_counts, actual_counts);
 
-  auto result = cudf::mixed_inner_join(left, right, left_on, right_on, predicate);
+  auto result = cudf::mixed_inner_join(left, right, left_equality, right_equality, predicate);
   std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
   for (size_t i = 0; i < result.first->size(); ++i) {
     // Note: Not trying to be terribly efficient here since these tests are
@@ -963,11 +963,11 @@ TYPED_TEST(MixedInnerJoinTest, Basic2)
   // std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs{{0, 0}, {1, 1}, {2,
   // JoinNoneValue}};
 
-  std::vector<cudf::size_type> const left_on{0};
-  std::vector<cudf::size_type> const right_on{0};
+  auto left_equality  = left.select({0});
+  auto right_equality = right.select({0});
 
   auto [result_size, matches_per_row] =
-    cudf::mixed_inner_join_size(left, right, left_on, right_on, predicate);
+    cudf::mixed_inner_join_size(left, right, left_equality, right_equality, predicate);
   EXPECT_TRUE(result_size == expected_outputs.size());
 
   auto actual_counts = cudf::column_view{cudf::data_type{cudf::type_to_id<cudf::size_type>()},
@@ -976,7 +976,7 @@ TYPED_TEST(MixedInnerJoinTest, Basic2)
   cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_counts{0, 0, 0, 1};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_counts, actual_counts);
 
-  auto result = cudf::mixed_inner_join(left, right, left_on, right_on, predicate);
+  auto result = cudf::mixed_inner_join(left, right, left_equality, right_equality, predicate);
   std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
   for (size_t i = 0; i < result.first->size(); ++i) {
     // Note: Not trying to be terribly efficient here since these tests are
