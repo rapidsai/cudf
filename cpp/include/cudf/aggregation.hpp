@@ -200,6 +200,10 @@ std::unique_ptr<Base> make_mean_aggregation();
  * deviation across multiple discrete sets. See
  * `https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance#Parallel_algorithm` for more
  * detail.
+ *
+ * The results of M2 aggregation are structs whose the last member is the computed M2 values. The
+ * first two members store the results of `COUNT_VALID` and `MEAN` aggregation that were used to
+ * compute these M2 values.
  */
 template <typename Base = aggregation>
 std::unique_ptr<Base> make_m2_aggregation();

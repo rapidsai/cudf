@@ -230,12 +230,14 @@ std::unique_ptr<column> group_count_all(cudf::device_span<size_type const> group
  * @endcode
  *
  * @param values Grouped values to compute M2 values
+ * @param group_counts Number of non-null values in each group.
  * @param group_means Pre-computed groupwise MEAN
  * @param group_labels ID of group corresponding value in @p values belongs to
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  */
 std::unique_ptr<column> group_m2(column_view const& values,
+                                 column_view const& group_counts,
                                  column_view const& group_means,
                                  cudf::device_span<size_type const> group_labels,
                                  rmm::cuda_stream_view stream,

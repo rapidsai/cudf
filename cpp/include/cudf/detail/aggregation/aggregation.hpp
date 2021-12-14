@@ -1138,10 +1138,10 @@ struct target_type_impl<Source, k, std::enable_if_t<is_chrono<Source>() && is_su
   using type = Source;
 };
 
-// Always use `double` for M2
+// Always use struct for M2
 template <typename SourceType>
 struct target_type_impl<SourceType, aggregation::M2> {
-  using type = double;
+  using type = struct_view;
 };
 
 // Always use `double` for VARIANCE
