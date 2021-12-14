@@ -912,7 +912,7 @@ TYPED_TEST(MixedInnerJoinTest, Basic)
   auto right_conditional = right.select({1, 2});
 
   auto [result_size, matches_per_row] = cudf::mixed_inner_join_size(
-    left_conditional, right_conditional, left_equality, right_equality, predicate);
+    left_equality, right_equality, left_conditional, right_conditional, predicate);
   EXPECT_TRUE(result_size == expected_outputs.size());
 
   auto actual_counts = cudf::column_view{cudf::data_type{cudf::type_to_id<cudf::size_type>()},
@@ -922,7 +922,7 @@ TYPED_TEST(MixedInnerJoinTest, Basic)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_counts, actual_counts);
 
   auto result = cudf::mixed_inner_join(
-    left_conditional, right_conditional, left_equality, right_equality, predicate);
+    left_equality, right_equality, left_conditional, right_conditional, predicate);
   std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
   for (size_t i = 0; i < result.first->size(); ++i) {
     // Note: Not trying to be terribly efficient here since these tests are
@@ -972,7 +972,7 @@ TYPED_TEST(MixedInnerJoinTest, Basic2)
   auto right_conditional = right.select({1, 2});
 
   auto [result_size, matches_per_row] = cudf::mixed_inner_join_size(
-    left_conditional, right_conditional, left_equality, right_equality, predicate);
+    left_equality, right_equality, left_conditional, right_conditional, predicate);
   EXPECT_TRUE(result_size == expected_outputs.size());
 
   auto actual_counts = cudf::column_view{cudf::data_type{cudf::type_to_id<cudf::size_type>()},
@@ -982,7 +982,7 @@ TYPED_TEST(MixedInnerJoinTest, Basic2)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_counts, actual_counts);
 
   auto result = cudf::mixed_inner_join(
-    left_conditional, right_conditional, left_equality, right_equality, predicate);
+    left_equality, right_equality, left_conditional, right_conditional, predicate);
   std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
   for (size_t i = 0; i < result.first->size(); ++i) {
     // Note: Not trying to be terribly efficient here since these tests are

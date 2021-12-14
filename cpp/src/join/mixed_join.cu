@@ -46,10 +46,10 @@ namespace detail {
 // TODO: Clearly document failure cases.
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
-mixed_join(table_view const& left_conditional,
-           table_view const& right_conditional,
-           table_view const& left_equality,
+mixed_join(table_view const& left_equality,
            table_view const& right_equality,
+           table_view const& left_conditional,
+           table_view const& right_conditional,
            ast::expression const& binary_predicate,
            null_equality compare_nulls,
            join_kind join_type,
@@ -275,10 +275,10 @@ mixed_join(table_view const& left_conditional,
 }
 
 std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>>
-compute_mixed_join_output_size(table_view const& left_conditional,
-                               table_view const& right_conditional,
-                               table_view const& left_equality,
+compute_mixed_join_output_size(table_view const& left_equality,
                                table_view const& right_equality,
+                               table_view const& left_conditional,
+                               table_view const& right_conditional,
                                ast::expression const& binary_predicate,
                                null_equality compare_nulls,
                                join_kind join_type,
@@ -434,20 +434,20 @@ compute_mixed_join_output_size(table_view const& left_conditional,
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 mixed_inner_join(
-  table_view const& left_conditional,
-  table_view const& right_conditional,
   table_view const& left_equality,
   table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
   std::optional<std::pair<std::size_t, device_span<size_type>>> const output_size_data,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::mixed_join(left_conditional,
-                            right_conditional,
-                            left_equality,
+  return detail::mixed_join(left_equality,
                             right_equality,
+                            left_conditional,
+                            right_conditional,
                             binary_predicate,
                             compare_nulls,
                             detail::join_kind::INNER_JOIN,
@@ -457,19 +457,19 @@ mixed_inner_join(
 }
 
 std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_inner_join_size(
-  table_view const& left_conditional,
-  table_view const& right_conditional,
   table_view const& left_equality,
   table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
   ast::expression const& binary_predicate,
   null_equality compare_nulls,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::compute_mixed_join_output_size(left_conditional,
-                                                right_conditional,
-                                                left_equality,
+  return detail::compute_mixed_join_output_size(left_equality,
                                                 right_equality,
+                                                left_conditional,
+                                                right_conditional,
                                                 binary_predicate,
                                                 compare_nulls,
                                                 detail::join_kind::INNER_JOIN,
