@@ -183,31 +183,18 @@ rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 template <typename ElementTo, typename ElementFrom, typename InputIterator>
 rmm::device_buffer make_device_elements(InputIterator begin, InputIterator end)
 {
-  if constexpr (not cudf::is_fixed_point<ElementTo>()) {
-    using RepType        = ElementTo;
-    auto transformer     = fixed_width_type_converter<ElementFrom, ElementTo>{};
-    auto transform_begin = thrust::make_transform_iterator(begin, transformer);
-    auto const size      = cudf::distance(begin, end);
-    rmm::device_uvector<RepType> elements(size, rmm::cuda_stream_default);
-    thrust::copy(thrust::device, transform_begin, transform_begin + size, elements.begin());
-    return elements.release();
-  } else if constexpr (not cudf::is_fixed_point<ElementFrom>() and
-                       cudf::is_fixed_point<ElementTo>()) {
-    using RepType        = typename ElementTo::rep;
-    auto transformer     = fixed_width_type_converter<ElementFrom, RepType>{};
-    auto transform_begin = thrust::make_transform_iterator(begin, transformer);
-    auto const size      = cudf::distance(begin, end);
-    rmm::device_uvector<RepType> elements(size, rmm::cuda_stream_default);
-    thrust::copy(thrust::device, transform_begin, transform_begin + size, elements.begin());
-    return elements.release();
-  } else if constexpr (cudf::is_fixed_point<ElementFrom>() and cudf::is_fixed_point<ElementTo>()) {
-    using RepType        = typename ElementTo::rep;
-    auto transform_begin = thrust::make_transform_iterator(begin, to_rep<ElementFrom, RepType>{});
-    auto const size      = cudf::distance(begin, end);
-    rmm::device_uvector<RepType> elements(size, rmm::cuda_stream_default);
-    thrust::copy(thrust::device, transform_begin, transform_begin + size, elements.begin());
-    return elements.release();
-  }
+  using RepType = typename std::conditional_t<cudf::is_fixed_point<ElementTo>(),
+                                              rep_type<ElementTo>,
+                                              type_identity<ElementTo>>::type;
+  using transformer =
+    std::conditional_t<(cudf::is_fixed_point<ElementFrom>() and cudf::is_fixed_point<ElementTo>()),
+                       to_rep<ElementFrom, RepType>,
+                       fixed_width_type_converter<ElementFrom, RepType>>;
+  auto transform_begin = thrust::make_transform_iterator(begin, transformer{});
+  auto const size      = cudf::distance(begin, end);
+  rmm::device_uvector<RepType> elements(size, rmm::cuda_stream_default);
+  thrust::copy(thrust::device, transform_begin, transform_begin + size, elements.begin());
+  return elements.release();
 }
 #endif
 
