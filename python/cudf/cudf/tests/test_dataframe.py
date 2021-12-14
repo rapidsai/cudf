@@ -9064,22 +9064,39 @@ def test_dataframe_add_suffix():
 @pytest.mark.parametrize(
     "data",
     [
-        np.random.normal(-100, 100, (50, 50)),
         np.random.randint(-50, 50, (25, 30)),
         np.random.random_sample((4, 4)),
-        np.random.uniform(10.5, 75.5, (10, 6)),
         np.array([1.123, 2.343, 5.890, 0.0]),
         [np.nan, None, np.nan, None],
+        [True, False, True, False, False],
         {"a": [1.123, 2.343, np.nan, np.nan], "b": [None, 3, 9.08, None]},
     ],
 )
 @pytest.mark.parametrize("periods", range(-4, 5))
-def test_diff_dataframe(data, periods):
+def test_diff_dataframe_numeric_dtypes(data, periods):
     gdf = cudf.DataFrame(data)
     pdf = gdf.to_pandas()
 
     actual = gdf.diff(periods=periods, axis=0)
     expected = pdf.diff(periods=periods, axis=0)
+
+    assert_eq(
+        expected, actual, check_dtype=False,
+    )
+
+
+@pytest.mark.parametrize(
+    ("precision", "scale"), [(5, 2), (4, 3), (8, 5), (3, 1), (6, 4)],
+)
+def test_diff_decimal64_dtype(precision, scale):
+    gdf = cudf.DataFrame(
+        np.random.uniform(10.5, 75.5, (10, 6)),
+        dtype=cudf.Decimal64Dtype(precision=precision, scale=scale),
+    )
+    pdf = gdf.to_pandas()
+
+    actual = gdf.diff()
+    expected = pdf.diff()
 
     assert_eq(
         expected, actual, check_dtype=False,
@@ -9103,7 +9120,7 @@ def test_diff_dataframe_invalid_axis():
         ["a", "b", "c", "d", "e"],
     ],
 )
-def test_diff_dataframe_numeric_and_non_numeric_dypes(data):
+def test_diff_dataframe_non_numeric_dypes(data):
     with pytest.raises(
         NotImplementedError,
         match="Diff currently only supports numeric dtypes",
