@@ -165,9 +165,9 @@ use_pandas_metadata : boolean, default True
 open_options : dict, optional
     Dictionary of key-value pairs to pass to the function used to open remote
     files. By default, this will be `fsspec.parquet.open_parquet_file`. If
-    `file_format=None` is included in `open_options`, the fsspec
-    filesystem's `open` method will be use instead. Note that the `open_cb`
-    key can also be used to specify a custom file-open function.
+    `file_format=None` is included in `open_options`, the fsspec filesystem's
+    `open` method will be use instead. Note that the `open_file_cb` key can
+    also be used to specify a custom file-open function.
 
 Returns
 -------
@@ -1210,8 +1210,20 @@ def _get_filesystem_and_paths(path_or_data, **kwargs):
     return fs, return_paths
 
 
+def _set_context(obj, stack):
+    # Helper function to place open file on context stack
+    if stack is None:
+        return obj
+    return stack.enter_context(obj)
+
+
 def open_remote_files(
-    paths, fs, context_stack=None, open_cb=None, file_format=None, **kwargs,
+    paths,
+    fs,
+    context_stack=None,
+    open_file_cb=None,
+    file_format=None,
+    **kwargs,
 ):
     """Return a list of open file-like objects given
     a list of remote file paths.
@@ -1224,7 +1236,7 @@ def open_remote_files(
         Fsspec file-system object.
     context_stack : contextlib.ExitStack, Optional
         Context manager to use for open files.
-    open_cb : Callable, Optional
+    open_file_cb : Callable, Optional
         Call-back function to use for opening. If this argument
         is specified, all other arguments will be ignored.
     file_format : str, optional
@@ -1238,8 +1250,10 @@ def open_remote_files(
     """
 
     # Just use call-back function if one was specified
-    if open_cb is not None:
-        return open_cb
+    if open_file_cb is not None:
+        return [
+            _set_context(open_file_cb(path), context_stack) for path in paths
+        ]
 
     # Check if file_format is supported
     if file_format not in ("parquet", None):
@@ -1272,13 +1286,9 @@ def open_remote_files(
         elif not supported:
             file_format = None
 
-    # Helper function to place open file on context stack
-    def _set_context(obj, stack):
-        if stack is None:
-            return obj
-        return stack.enter_context(obj)
-
     if file_format == "parquet":
+        import fsspec.parquet as fsspec_parquet
+
         # Use fsspec.parquet module.
         # TODO: Use `cat_ranges` to collect "known"
         # parts for all files at once.
@@ -1286,7 +1296,7 @@ def open_remote_files(
         return [
             ArrowPythonFile(
                 _set_context(
-                    fsspec.parquet.open_parquet_file(
+                    fsspec_parquet.open_parquet_file(
                         path, fs=fs, row_groups=rgs, **kwargs,
                     ),
                     context_stack,

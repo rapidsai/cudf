@@ -4,17 +4,8 @@ import warnings
 from collections import defaultdict
 from uuid import uuid4
 
-import fsspec
 import pyarrow as pa
-from packaging.version import parse as parse_version
 from pyarrow import dataset as ds, parquet as pq
-
-if parse_version(fsspec.__version__) > parse_version("2021.11.0"):
-    # For new-enough versions of fsspec, we can use
-    # the fsspec.parquet module to open remote files
-    import fsspec.parquet as fsspec_parquet
-else:
-    fsspec_parquet = None
 
 import cudf
 from cudf._lib import parquet as libparquet
