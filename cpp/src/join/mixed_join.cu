@@ -38,6 +38,12 @@
 namespace cudf {
 namespace detail {
 
+// TODO: Clearly document that it is the user's responsibility to match the
+// null operators in the predicate and the compare_nulls parameter.
+// TODO: Clearly document that the parameters for the size computation must
+// match exactly the corresponding call to the join operation. This
+// documentation should be added to the nested loop conditional join as well.
+// TODO: Clearly document failure cases.
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 mixed_join(table_view const& left_conditional,
@@ -45,14 +51,23 @@ mixed_join(table_view const& left_conditional,
            table_view const& left_equality,
            table_view const& right_equality,
            ast::expression const& binary_predicate,
+           null_equality compare_nulls,
            join_kind join_type,
            std::optional<std::pair<std::size_t, device_span<size_type>>> const& output_size_data,
            rmm::cuda_stream_view stream,
            rmm::mr::device_memory_resource* mr)
 {
-  // We can immediately filter out cases where the right table is empty. In
-  // some cases, we return all the rows of the left table with a corresponding
-  // null index for the right table; in others, we return an empty output.
+  CUDF_EXPECTS(left_conditional.num_rows() == left_equality.num_rows(),
+               "The left conditional and equality tables must have the same number of rows.");
+  CUDF_EXPECTS(right_conditional.num_rows() == right_equality.num_rows(),
+               "The right conditional and equality tables must have the same number of rows.");
+  // Note: Technically the rest of the code would work to have 0 columns in the
+  // conditional tables and a predicate that is just a literal value, but
+  // there's no practical reason to support that.
+  CUDF_EXPECTS(left_conditional.num_columns() > 0 && right_conditional.num_columns() > 0 &&
+                 left_equality.num_columns() > 0 && right_equality.num_columns() > 0,
+               "All input tables must have a finit number of columns.");
+
   auto const right_num_rows{right_conditional.num_rows()};
   auto const left_num_rows{left_conditional.num_rows()};
   auto const swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
@@ -62,6 +77,9 @@ mixed_join(table_view const& left_conditional,
   // it is the probe table for the hash
   auto const outer_num_rows{swap_tables ? right_num_rows : left_num_rows};
 
+  // We can immediately filter out cases where the right table is empty. In
+  // some cases, we return all the rows of the left table with a corresponding
+  // null index for the right table; in others, we return an empty output.
   if (right_num_rows == 0) {
     switch (join_type) {
       // Left, left anti, and full all return all the row indices from left
@@ -122,8 +140,7 @@ mixed_join(table_view const& left_conditional,
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
-  // TODO: Decide how to handle null equality when mixing AST operators with hash joins.
-  build_join_hash_table(build, hash_table, null_equality::EQUAL, stream);
+  build_join_hash_table(build, hash_table, compare_nulls, stream);
   auto hash_table_view = hash_table.get_device_view();
 
   auto left_conditional_view  = table_device_view::create(left_conditional, stream);
@@ -263,13 +280,22 @@ compute_mixed_join_output_size(table_view const& left_conditional,
                                table_view const& left_equality,
                                table_view const& right_equality,
                                ast::expression const& binary_predicate,
+                               null_equality compare_nulls,
                                join_kind join_type,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
-  // We can immediately filter out cases where one table is empty. In
-  // some cases, we return all the rows of the other table with a corresponding
-  // null index for the empty table; in others, we return an empty output.
+  CUDF_EXPECTS(left_conditional.num_rows() == left_equality.num_rows(),
+               "The left conditional and equality tables must have the same number of rows.");
+  CUDF_EXPECTS(right_conditional.num_rows() == right_equality.num_rows(),
+               "The right conditional and equality tables must have the same number of rows.");
+  // Note: Technically the rest of the code would work to have 0 columns in the
+  // conditional tables and a predicate that is just a literal value, but
+  // there's no practical reason to support that.
+  CUDF_EXPECTS(left_conditional.num_columns() > 0 && right_conditional.num_columns() > 0 &&
+                 left_equality.num_columns() > 0 && right_equality.num_columns() > 0,
+               "All input tables must have a finit number of columns.");
+
   auto const right_num_rows{right_conditional.num_rows()};
   auto const left_num_rows{left_conditional.num_rows()};
   auto const swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
@@ -282,6 +308,9 @@ compute_mixed_join_output_size(table_view const& left_conditional,
   auto matches_per_row =
     std::make_unique<rmm::device_uvector<size_type>>(outer_num_rows, stream, mr);
 
+  // We can immediately filter out cases where one table is empty. In
+  // some cases, we return all the rows of the other table with a corresponding
+  // null index for the empty table; in others, we return an empty output.
   if (right_num_rows == 0) {
     switch (join_type) {
       // Left, left anti, and full all return all the row indices from left
@@ -348,7 +377,7 @@ compute_mixed_join_output_size(table_view const& left_conditional,
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
   // TODO: Decide how to handle null equality when mixing AST operators with hash joins.
-  build_join_hash_table(build, hash_table, null_equality::EQUAL, stream);
+  build_join_hash_table(build, hash_table, compare_nulls, stream);
   auto hash_table_view = hash_table.get_device_view();
 
   auto left_conditional_view  = table_device_view::create(left_conditional, stream);
@@ -410,6 +439,7 @@ mixed_inner_join(
   table_view const& left_equality,
   table_view const& right_equality,
   ast::expression const& binary_predicate,
+  null_equality compare_nulls,
   std::optional<std::pair<std::size_t, device_span<size_type>>> const output_size_data,
   rmm::mr::device_memory_resource* mr)
 {
@@ -419,6 +449,7 @@ mixed_inner_join(
                             left_equality,
                             right_equality,
                             binary_predicate,
+                            compare_nulls,
                             detail::join_kind::INNER_JOIN,
                             output_size_data,
                             rmm::cuda_stream_default,
@@ -431,6 +462,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
   table_view const& left_equality,
   table_view const& right_equality,
   ast::expression const& binary_predicate,
+  null_equality compare_nulls,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -439,6 +471,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
                                                 left_equality,
                                                 right_equality,
                                                 binary_predicate,
+                                                compare_nulls,
                                                 detail::join_kind::INNER_JOIN,
                                                 rmm::cuda_stream_default,
                                                 mr);

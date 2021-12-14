@@ -693,6 +693,7 @@ mixed_inner_join(
   table_view const& left_equality,
   table_view const& right_equality,
   ast::expression const& binary_predicate,
+  null_equality compare_nulls = null_equality::EQUAL,
   std::optional<std::pair<std::size_t, device_span<size_type>>> output_size_data = {},
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -928,6 +929,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
   table_view const& left_equality,
   table_view const& right_equality,
   ast::expression const& binary_predicate,
+  null_equality compare_nulls         = null_equality::EQUAL,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
