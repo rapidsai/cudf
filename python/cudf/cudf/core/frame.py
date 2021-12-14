@@ -4755,10 +4755,7 @@ class Frame:
                 result_col = self._data[name].nans_to_nulls()
             else:
                 result_col = self._data[name].copy()
-                if result_col.has_nulls or (
-                    isinstance(result_col, cudf.core.column.NumericalColumn)
-                    and result_col.has_nans
-                ):
+                if result_col.has_nulls(include_nan=True):
                     # Workaround as find_first_value doesn't seem to work
                     # incase of bools.
                     first_index = int(

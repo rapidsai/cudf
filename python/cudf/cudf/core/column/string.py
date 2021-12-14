@@ -5018,7 +5018,7 @@ class StringMethods(ColumnMethods):
             raise ValueError(
                 "Require size >= 2 to compute edit distance matrix."
             )
-        if self._column.has_nulls:
+        if self._column.has_nulls():
             raise ValueError(
                 "Cannot compute edit distance between null strings. "
                 "Consider removing them using `dropna` or fill with `fillna`."

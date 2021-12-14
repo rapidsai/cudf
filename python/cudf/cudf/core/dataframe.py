@@ -1765,7 +1765,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if is_list_dtype(df._data[col]) or is_struct_dtype(df._data[col]):
                 # TODO we need to handle this
                 pass
-            elif df._data[col].has_nulls:
+            elif df._data[col].has_nulls():
                 df[col] = df._data[col].astype("str").fillna(cudf._NA_REP)
             else:
                 df[col] = df._data[col]
@@ -3099,7 +3099,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         dtype = find_common_type([col.dtype for col in cols])
         for k, c in self._data.items():
-            if c.has_nulls:
+            if c.has_nulls():
                 raise ValueError(
                     f"column '{k}' has null values. "
                     f"hint: use .fillna() to replace null values"

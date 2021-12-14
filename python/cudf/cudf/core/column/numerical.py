@@ -105,9 +105,10 @@ class NumericalColumn(NumericalBaseColumn):
             self, column.as_column([item], dtype=self.dtype)
         ).any()
 
-    @property
-    def has_nans(self) -> bool:
-        return self.nan_count != 0
+    def has_nulls(self, include_nan=False):
+        return self.null_count != 0 or (
+            self.nan_count != 0 if include_nan else False
+        )
 
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
@@ -119,7 +120,7 @@ class NumericalColumn(NumericalBaseColumn):
             "version": 1,
         }
 
-        if self.nullable and self.has_nulls:
+        if self.nullable and self.has_nulls():
 
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
@@ -325,7 +326,7 @@ class NumericalColumn(NumericalBaseColumn):
         return lhs, rhs
 
     def _can_return_nan(self, skipna: bool = None) -> bool:
-        return not skipna and (self.has_nulls or self.has_nans)
+        return not skipna and self.has_nulls(include_nan=True)
 
     def _process_for_reduction(
         self, skipna: bool = None, min_count: int = 0
@@ -631,7 +632,7 @@ class NumericalColumn(NumericalBaseColumn):
             arrow_array = self.to_arrow()
             pandas_array = pandas_nullable_dtype.__from_arrow__(arrow_array)
             pd_series = pd.Series(pandas_array, copy=False)
-        elif str(self.dtype) in NUMERIC_TYPES and not self.has_nulls:
+        elif str(self.dtype) in NUMERIC_TYPES and not self.has_nulls():
             pd_series = pd.Series(cupy.asnumpy(self.values), copy=False)
         else:
             pd_series = self.to_arrow().to_pandas(**kwargs)

@@ -78,7 +78,7 @@ class NumericalBaseColumn(ColumnBase):
         )
 
     def _can_return_nan(self, skipna: bool = None) -> bool:
-        return not skipna and self.has_nulls
+        return not skipna and self.has_nulls()
 
     def kurtosis(self, skipna: bool = None) -> float:
         skipna = True if skipna is None else skipna
