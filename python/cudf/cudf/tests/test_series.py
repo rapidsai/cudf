@@ -12,7 +12,6 @@ import pytest
 
 import cudf
 from cudf.testing._utils import (
-    DATETIME_TYPES,
     NUMERIC_TYPES,
     TIMEDELTA_TYPES,
     assert_eq,
@@ -402,30 +401,21 @@ def test_series_describe_numeric(dtype):
     assert_eq(expected, actual)
 
 
-@pytest.mark.xfail(reason="https://github.com/rapidsai/cudf/issues/6219")
-@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+@pytest.mark.parametrize("dtype", ["datetime64[ns]"])
 def test_series_describe_datetime(dtype):
+    # Note that other datetime units are not tested because pandas does not
+    # support them. When specified coarser units, cuDF datetime columns cannot
+    # represent fractional time for quantiles of the column, which may require
+    # interpolation, this differs from pandas which always stay in [ns] unit.
     gs = cudf.Series([0, 1, 2, 3, 1, 2, 3], dtype=dtype)
     ps = gs.to_pandas()
 
-    pdf_results = ps.describe(datetime_is_numeric=True)
-    gdf_results = gs.describe()
+    # Treating datetimes as categoricals is deprecated in pandas and will
+    # be removed in future. Future behavior is treating datetime as numeric.
+    expected = ps.describe(datetime_is_numeric=True)
+    actual = gs.describe()
 
-    # Assert count
-    p_count = pdf_results["count"]
-    g_count = gdf_results["count"]
-
-    assert_eq(int(g_count), p_count)
-
-    # Assert Index
-    assert_eq(gdf_results.index, pdf_results.index)
-
-    # Assert rest of the element apart from
-    # the first index('count')
-    actual = gdf_results.tail(-1).astype("datetime64[ns]")
-    expected = pdf_results.tail(-1).astype("str").astype("datetime64[ns]")
-
-    assert_eq(expected, actual)
+    assert_eq(expected.astype("str"), actual)
 
 
 @pytest.mark.parametrize("dtype", TIMEDELTA_TYPES)
@@ -446,6 +436,13 @@ def test_series_describe_timedelta(dtype):
         pd.Series([True, False, True, True, False]),
         pd.Series([], dtype="str"),
         pd.Series(["a", "b", "c", "a"], dtype="category"),
+        pd.Series(["d", "e", "f"], dtype="category"),
+        pd.Series(pd.Categorical(["d", "e", "f"], categories=["f", "e", "d"])),
+        pd.Series(
+            pd.Categorical(
+                ["d", "e", "f"], categories=["f", "e", "d"], ordered=True
+            )
+        ),
     ],
 )
 def test_series_describe_other_types(ps):
