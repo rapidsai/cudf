@@ -166,15 +166,25 @@ else
     gpuci_logger "Check GPU usage"
     nvidia-smi
 
-    gpuci_logger "GoogleTests"
     set -x
     cd $LIB_BUILD_DIR
+
+    gpuci_logger "GoogleTests"
 
     for gt in gtests/* ; do
         test_name=$(basename ${gt})
         echo "Running GoogleTest $test_name"
         ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
     done
+
+    # Copy libcudf build time results
+    echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.html"
+    if [[ -f "$LIB_BUILD_DIR/ninja_log.html" ]]; then
+        gpuci_logger "Copying build time results"
+        cp "$LIB_BUILD_DIR/ninja_log.xml" "$WORKSPACE/test-results/buildtimes-junit.xml"
+        mkdir -p "$WORKSPACE/build-metrics"
+        cp "$LIB_BUILD_DIR/ninja_log.html" "$WORKSPACE/build-metrics/BuildMetrics.html"
+    fi
 
     ################################################################################
     # MEMCHECK - Run compute-sanitizer on GoogleTest (only in nightly builds)

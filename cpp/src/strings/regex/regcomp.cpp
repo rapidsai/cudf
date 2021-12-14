@@ -18,9 +18,9 @@
 
 #include <cudf/utilities/error.hpp>
 
-#include <string.h>
 #include <algorithm>
 #include <array>
+#include <string.h>
 
 namespace cudf {
 namespace strings {

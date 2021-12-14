@@ -25,9 +25,9 @@
 #include <io/utilities/column_utils.cuh>
 
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
-#include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/utilities/bit.hpp>
 #include <cudf/utilities/span.hpp>
@@ -903,7 +903,8 @@ encoded_data encode_columns(orc_table_view const& orc_table,
     }
   }
   for (auto& cnt_in : validity_check_inputs) {
-    auto const valid_counts = segmented_count_set_bits(cnt_in.second.mask, cnt_in.second.indices);
+    auto const valid_counts =
+      cudf::detail::segmented_valid_count(cnt_in.second.mask, cnt_in.second.indices, stream);
     CUDF_EXPECTS(
       std::none_of(valid_counts.cbegin(),
                    valid_counts.cend(),
@@ -1017,6 +1018,7 @@ std::vector<StripeInformation> writer::impl::gather_stripes(
   hostdevice_2dvector<gpu::encoder_chunk_streams>* enc_streams,
   hostdevice_2dvector<gpu::StripeStream>* strm_desc)
 {
+  if (segmentation.num_stripes() == 0) { return {}; }
   std::vector<StripeInformation> stripes(segmentation.num_stripes());
   for (auto const& stripe : segmentation.stripes) {
     for (size_t col_idx = 0; col_idx < enc_streams->size().first; col_idx++) {
@@ -1311,6 +1313,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     compression_kind_(to_orc_compression(options.get_compression())),
     enable_statistics_(options.is_enabled_statistics()),
     single_write_mode(mode == SingleWriteMode::YES),
+    kv_meta(options.get_key_value_metadata()),
     out_sink_(std::move(sink))
 {
   if (options.get_metadata()) {
@@ -1331,6 +1334,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     compression_kind_(to_orc_compression(options.get_compression())),
     enable_statistics_(options.is_enabled_statistics()),
     single_write_mode(mode == SingleWriteMode::YES),
+    kv_meta(options.get_key_value_metadata()),
     out_sink_(std::move(sink))
 {
   if (options.get_metadata()) {
@@ -2067,12 +2071,10 @@ void writer::impl::close()
   PostScript ps;
 
   ff.contentLength = out_sink_->bytes_written();
-  std::transform(table_meta->user_data.begin(),
-                 table_meta->user_data.end(),
-                 std::back_inserter(ff.metadata),
-                 [&](auto const& udata) {
-                   return UserMetadataItem{udata.first, udata.second};
-                 });
+  std::transform(
+    kv_meta.begin(), kv_meta.end(), std::back_inserter(ff.metadata), [&](auto const& udata) {
+      return UserMetadataItem{udata.first, udata.second};
+    });
 
   // Write statistics metadata
   if (md.stripeStats.size() != 0) {
