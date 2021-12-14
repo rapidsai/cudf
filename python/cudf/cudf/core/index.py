@@ -2515,7 +2515,7 @@ class StringIndex(GenericIndex):
         Convert all na values(if any) in Index object
         to `<NA>` as a preprocessing step to `__repr__` methods.
         """
-        if self._values.has_nulls:
+        if self._values.has_nulls():
             return self.fillna(cudf._NA_REP)
         else:
             return self
