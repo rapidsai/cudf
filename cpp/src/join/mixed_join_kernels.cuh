@@ -27,11 +27,11 @@
 
 #include <cooperative_groups.h>
 
+#include <cub/cub.cuh>
+#include <cuco/detail/pair.cuh>
 #include <thrust/equal.h>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/iterator/zip_iterator.h>
-#include <cub/cub.cuh>
-#include <cuco/detail/pair.cuh>
 
 namespace cudf {
 namespace detail {
@@ -79,19 +79,22 @@ class pair_expression_equality {
     // would require removing an assertion-raising test. I don't think we want
     // to do that, but should verify before finalizing.
     auto equal_elements = [=](column_device_view l, column_device_view r) {
-      if constexpr (has_nulls) {
-        return cudf::type_dispatcher(
-          l.type(),
-          element_equality_comparator{cudf::nullate::YES{}, l, r, nulls_are_equal},
-          lhs_row.second,
-          rhs_row.second);
-      } else {
-        return cudf::type_dispatcher(
-          l.type(),
-          element_equality_comparator{cudf::nullate::NO{}, l, r, nulls_are_equal},
-          lhs_row.second,
-          rhs_row.second);
-      }
+      // Note: we could use nullate::DYNAMIC to avoid the extra template
+      // instantiation, but in this case the performance impact of making that
+      // decision at runtime is substantial since this functor is used within
+      // a complex kernel.
+      auto has_nulls_nullate = []() {
+        if constexpr (has_nulls) {
+          return nullate::YES{};
+        } else if constexpr (!has_nulls) {
+          return nullate::NO{};
+        }
+      }();
+      return cudf::type_dispatcher(
+        l.type(),
+        element_equality_comparator{has_nulls_nullate, l, r, nulls_are_equal},
+        lhs_row.second,
+        rhs_row.second);
     };
 
     auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
@@ -141,6 +144,7 @@ __global__ void compute_mixed_join_output_size(
   table_device_view right_table,
   table_device_view probe,
   table_device_view build,
+  null_equality compare_nulls,
   join_kind join_type,
   cudf::detail::mixed_multimap_type::device_view hash_table_view,
   ast::detail::expression_device_view device_expression_data,
@@ -168,6 +172,8 @@ __global__ void compute_mixed_join_output_size(
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
 
+  // TODO: The hash join code assumes that nulls exist here, so I'm doing the
+  // same but at some point we may want to benchmark that.
   row_hash hash_probe{nullate::YES{}, probe};
   auto const empty_key_sentinel = hash_table_view.get_empty_key_sentinel();
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
@@ -182,8 +188,8 @@ __global__ void compute_mixed_join_output_size(
     // definitely matters because of which order the indices are passed to this
     // by the static_multimap::device_view::pair_count API.
     // TODO: Address asymmetry in operator.
-    auto count_equality =
-      pair_expression_equality<has_nulls>{build, probe, evaluator, thread_intermediate_storage};
+    auto count_equality = pair_expression_equality<has_nulls>{
+      build, probe, evaluator, thread_intermediate_storage, compare_nulls};
     if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::LEFT_ANTI_JOIN ||
         join_type == join_kind::FULL_JOIN) {
       matches_per_row[outer_row_index] =
@@ -233,6 +239,7 @@ __global__ void mixed_join(table_device_view left_table,
                            table_device_view right_table,
                            table_device_view probe,
                            table_device_view build,
+                           null_equality compare_nulls,
                            join_kind join_type,
                            cudf::detail::mixed_multimap_type::device_view hash_table_view,
                            OutputIt1 join_output_l,
@@ -263,6 +270,8 @@ __global__ void mixed_join(table_device_view left_table,
   auto evaluator = cudf::ast::detail::expression_evaluator<has_nulls>(
     left_table, right_table, device_expression_data);
 
+  // TODO: The hash join code assumes that nulls exist here, so I'm doing the
+  // same but at some point we may want to benchmark that.
   row_hash hash_probe{nullate::YES{}, probe};
   auto const empty_key_sentinel = hash_table_view.get_empty_key_sentinel();
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
@@ -275,8 +284,8 @@ __global__ void mixed_join(table_device_view left_table,
 
     // Figure out the number of elements for this key.
     auto query_pair = pair_func(outer_row_index);
-    auto equality =
-      pair_expression_equality<has_nulls>{build, probe, evaluator, thread_intermediate_storage};
+    auto equality   = pair_expression_equality<has_nulls>{
+      build, probe, evaluator, thread_intermediate_storage, compare_nulls};
 
     // TODO: Verify that these are being passed in the correct order (at the
     // moment it won't matter because my test produces a symmetric result).
