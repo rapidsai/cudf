@@ -183,7 +183,6 @@ __global__ void compute_mixed_join_output_size(
     // Figure out the number of elements for this key.
     cg::thread_block_tile<1> this_thread = cg::this_thread();
     auto query_pair                      = pair_func(outer_row_index);
-    // TODO: Figure out how to handle the nullability of this comparator.
     // TODO: Make sure that the probe/build order here is correct (it
     // definitely matters because of which order the indices are passed to this
     // by the static_multimap::device_view::pair_count API.

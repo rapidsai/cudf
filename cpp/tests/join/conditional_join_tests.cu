@@ -126,10 +126,10 @@ gen_random_nullable_repeated_columns(unsigned int N = 10000, unsigned int num_re
 }  // namespace
 
 /**
- * The principal fixture for all conditional joins.
+ * Fixture for all nested loop conditional joins.
  */
 template <typename T>
-struct JoinTest : public cudf::test::BaseFixture {
+struct ConditionalJoinTest : public cudf::test::BaseFixture {
   /**
    * Convenience utility for parsing initializer lists of input data into
    * suitable inputs for tables.
@@ -177,13 +177,6 @@ struct JoinTest : public cudf::test::BaseFixture {
                            cudf::table_view(left_columns),
                            cudf::table_view(right_columns));
   }
-};
-
-/**
- * Fixture for all nested loop conditional joins.
- */
-template <typename T>
-struct ConditionalJoinTest : public JoinTest<T> {
 };
 
 /**
@@ -867,7 +860,64 @@ TYPED_TEST(ConditionalLeftAntiJoinTest, TestCompareRandomToHashNulls)
  * Fixture for all mixed hash + conditional joins.
  */
 template <typename T>
-struct MixedJoinTest : public JoinTest<T> {
+struct MixedJoinTest : public cudf::test::BaseFixture {
+  /**
+   * Convenience utility for parsing initializer lists of input data into
+   * suitable inputs for tables.
+   */
+  template <typename U>
+  std::tuple<std::vector<cudf::test::fixed_width_column_wrapper<T>>,
+             std::vector<cudf::test::fixed_width_column_wrapper<T>>,
+             std::vector<cudf::column_view>,
+             std::vector<cudf::column_view>,
+             cudf::table_view,
+             cudf::table_view,
+             cudf::table_view,
+             cudf::table_view>
+  parse_input(std::vector<U> left_data,
+              std::vector<U> right_data,
+              std::vector<cudf::size_type> equality_columns,
+              std::vector<cudf::size_type> conditional_columns)
+  {
+    auto wrapper_generator = [](U& v) {
+      if constexpr (std::is_same_v<U, std::vector<T>>) {
+        return cudf::test::fixed_width_column_wrapper<T>(v.begin(), v.end());
+      } else if constexpr (std::is_same_v<U, std::pair<std::vector<T>, std::vector<bool>>>) {
+        return cudf::test::fixed_width_column_wrapper<T>(
+          v.first.begin(), v.first.end(), v.second.begin());
+      }
+      throw std::runtime_error("Invalid input to parse_input.");
+      return cudf::test::fixed_width_column_wrapper<T>();
+    };
+
+    // Note that we need to maintain the column wrappers otherwise the
+    // resulting column views will be referencing potentially invalid memory.
+    std::vector<cudf::test::fixed_width_column_wrapper<T>> left_wrappers;
+    std::vector<cudf::column_view> left_columns;
+    for (auto v : left_data) {
+      left_wrappers.push_back(wrapper_generator(v));
+      left_columns.push_back(left_wrappers.back());
+    }
+
+    std::vector<cudf::test::fixed_width_column_wrapper<T>> right_wrappers;
+    std::vector<cudf::column_view> right_columns;
+    for (auto v : right_data) {
+      right_wrappers.push_back(wrapper_generator(v));
+      right_columns.push_back(right_wrappers.back());
+    }
+
+    auto left  = cudf::table_view(left_columns);
+    auto right = cudf::table_view(right_columns);
+
+    return std::make_tuple(std::move(left_wrappers),
+                           std::move(right_wrappers),
+                           std::move(left_columns),
+                           std::move(right_columns),
+                           left.select(equality_columns),
+                           right.select(equality_columns),
+                           left.select(conditional_columns),
+                           right.select(conditional_columns));
+  }
 };
 
 /**
@@ -883,6 +933,26 @@ struct MixedJoinPairReturnTest : public MixedJoinTest<T> {
  */
 template <typename T>
 struct MixedInnerJoinTest : public MixedJoinPairReturnTest<T> {
+  PairJoinReturn join(cudf::table_view left_equality,
+                      cudf::table_view right_equality,
+                      cudf::table_view left_conditional,
+                      cudf::table_view right_conditional,
+                      cudf::ast::operation predicate)  // override
+  {
+    return cudf::mixed_inner_join(
+      left_equality, right_equality, left_conditional, right_conditional, predicate);
+  }
+
+  std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size(
+    cudf::table_view left_equality,
+    cudf::table_view right_equality,
+    cudf::table_view left_conditional,
+    cudf::table_view right_conditional,
+    cudf::ast::operation predicate)  // override
+  {
+    return cudf::mixed_inner_join_size(
+      left_equality, right_equality, left_conditional, right_conditional, predicate);
+  }
 };
 
 TYPED_TEST_SUITE(MixedInnerJoinTest, cudf::test::IntegralTypesNotBool);
@@ -894,8 +964,14 @@ TYPED_TEST(MixedInnerJoinTest, Basic)
   ColumnVector<TypeParam> left_inputs{{0, 1, 2}, {3, 4, 5}, {10, 20, 30}};
   ColumnVector<TypeParam> right_inputs{{0, 1, 3}, {5, 4, 5}, {30, 40, 50}};
 
-  auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
-    this->parse_input(left_inputs, right_inputs);
+  auto [left_wrappers,
+        right_wrappers,
+        left_columns,
+        right_columns,
+        left_equality,
+        right_equality,
+        left_conditional,
+        right_conditional] = this->parse_input(left_inputs, right_inputs, {0}, {1, 2});
 
   const auto col_ref_left_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
   const auto col_ref_right_1 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
@@ -906,13 +982,8 @@ TYPED_TEST(MixedInnerJoinTest, Basic)
   // std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs{{0, 0}, {1, 1}, {2,
   // JoinNoneValue}};
 
-  auto left_equality     = left.select({0});
-  auto right_equality    = right.select({0});
-  auto left_conditional  = left.select({1, 2});
-  auto right_conditional = right.select({1, 2});
-
-  auto [result_size, matches_per_row] = cudf::mixed_inner_join_size(
-    left_equality, right_equality, left_conditional, right_conditional, predicate);
+  auto [result_size, matches_per_row] =
+    this->join_size(left_equality, right_equality, left_conditional, right_conditional, predicate);
   EXPECT_TRUE(result_size == expected_outputs.size());
 
   auto actual_counts = cudf::column_view{cudf::data_type{cudf::type_to_id<cudf::size_type>()},
@@ -921,8 +992,8 @@ TYPED_TEST(MixedInnerJoinTest, Basic)
   cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_counts{0, 1, 0};
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_counts, actual_counts);
 
-  auto result = cudf::mixed_inner_join(
-    left_equality, right_equality, left_conditional, right_conditional, predicate);
+  auto result =
+    this->join(left_equality, right_equality, left_conditional, right_conditional, predicate);
   std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
   for (size_t i = 0; i < result.first->size(); ++i) {
     // Note: Not trying to be terribly efficient here since these tests are
@@ -944,12 +1015,17 @@ TYPED_TEST(MixedInnerJoinTest, Basic2)
   ColumnVector<TypeParam> left_inputs{{0, 1, 2, 4}, {3, 4, 5, 6}, {10, 20, 30, 40}};
   ColumnVector<TypeParam> right_inputs{{0, 1, 3, 4}, {5, 4, 5, 7}, {30, 40, 50, 60}};
 
-  auto [left_wrappers, right_wrappers, left_columns, right_columns, left, right] =
-    this->parse_input(left_inputs, right_inputs);
+  auto [left_wrappers,
+        right_wrappers,
+        left_columns,
+        right_columns,
+        left_equality,
+        right_equality,
+        left_conditional,
+        right_conditional] = this->parse_input(left_inputs, right_inputs, {0}, {1, 2});
 
   const auto col_ref_left_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
   const auto col_ref_right_1 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
-
   const auto col_ref_left_2  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
   const auto col_ref_right_2 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
 
@@ -957,7 +1033,6 @@ TYPED_TEST(MixedInnerJoinTest, Basic2)
   auto literal_1 = cudf::ast::literal(scalar_1);
 
   auto op1 = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_left_1, col_ref_right_1);
-
   auto op2 = cudf::ast::operation(cudf::ast::ast_operator::LESS, literal_1, col_ref_right_2);
 
   auto predicate = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, op1, op2);
@@ -965,11 +1040,6 @@ TYPED_TEST(MixedInnerJoinTest, Basic2)
   // The left join output:
   // std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs{{0, 0}, {1, 1}, {2,
   // JoinNoneValue}};
-
-  auto left_equality     = left.select({0});
-  auto right_equality    = right.select({0});
-  auto left_conditional  = left.select({1, 2});
-  auto right_conditional = right.select({1, 2});
 
   auto [result_size, matches_per_row] = cudf::mixed_inner_join_size(
     left_equality, right_equality, left_conditional, right_conditional, predicate);
