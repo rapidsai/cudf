@@ -5886,4 +5886,44 @@ public class ColumnVectorTest extends CudfTestBase {
     });
     assertTrue(e.getMessage().contains("Duplicate mapping found for replacing child index"));
   }
+
+  @Test
+  void testCopyWithValidity() {
+    final Boolean T = true;
+    final Boolean F = false;
+    final Integer X = null;
+
+    // Straight-line: Invalidate every other row.
+    try (ColumnVector exemplar = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+         ColumnVector validity = ColumnVector.fromBoxedBooleans(F, T, F, T, F, T, F, T, F, T);
+         ColumnVector expected = ColumnVector.fromBoxedInts(X, 2, X, 4, X, 6, X, 8, X, 10);
+         ColumnVector result = exemplar.copyWithValidity(validity)) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    // Straight-line: Invalidate all Rows.
+    try (ColumnVector exemplar = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+         ColumnVector validity = ColumnVector.fromBoxedBooleans(F, F, F, F, F, F, F, F, F, F);
+         ColumnVector expected = ColumnVector.fromBoxedInts(X, X, X, X, X, X, X, X, X, X);
+         ColumnVector result = exemplar.copyWithValidity(validity)) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    // Nulls in the validity column are treated as invalid.
+    try (ColumnVector exemplar = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+         ColumnVector validity = ColumnVector.fromBoxedBooleans(F, T, F, T, F, T, F, null, F, null);
+         ColumnVector expected = ColumnVector.fromBoxedInts(X, 2, X, 4, X, 6, X, X, X, X);
+         ColumnVector result = exemplar.copyWithValidity(validity)) {
+      assertColumnsAreEqual(expected, result);
+    }
+
+    // Negative case: Mismatch in row count.
+    Exception x = assertThrows(IllegalArgumentException.class, () ->  { 
+      try (ColumnVector exemplar = ColumnVector.fromBoxedInts(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+         ColumnVector validity = ColumnVector.fromBoxedBooleans(F, T, F, T);
+         ColumnVector result = exemplar.copyWithValidity(validity)) {
+      }
+    });
+    assertTrue(x.getMessage().contains("Exemplar and validity columns must have the same size"));
+  }
 }

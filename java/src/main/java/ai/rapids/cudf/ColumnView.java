@@ -803,6 +803,16 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
     return new ColumnVector(bitwiseMergeAndSetValidity(getNativeView(), columnViews, mergeOp.nativeId));
   }
 
+  /**
+   * Creates a deep copy of a column while replacing the null mask. The null mask is the
+   * device_vector equivalent of the boolean column given as argument.
+   * @param validity bool column whose value is to be used as the null mask.
+   * @return Deep copy of the column with replaced null mask.
+   */    
+  public final ColumnVector copyWithValidity(ColumnView validity) {
+    return new ColumnVector(copyWithValidity(getNativeView(), validity.getNativeView()));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // DATE/TIME
   /////////////////////////////////////////////////////////////////////////////
@@ -3751,6 +3761,15 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
    */
   private static native long bitwiseMergeAndSetValidity(long baseHandle, long[] viewHandles,
                                                         int nullConfig) throws CudfException;
+
+  /**
+   * Native method to deep copy a column while replacing the null mask. The null mask is the
+   * device_vector equivalent of the boolean column given as argument.
+   * @param viewHandle column view of the column that is deep copied.
+   * @param validityHandle bool column whose value is to be used as the null mask.
+   * @return Deep copy of the column with replaced null mask.
+   */                                                      
+  private static native long copyWithValidity(long viewHandle, long validityHandle) throws CudfException;
 
   /**
    * Get the number of bytes needed to allocate a validity buffer for the given number of rows.

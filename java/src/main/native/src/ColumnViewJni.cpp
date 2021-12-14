@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 
+#include "ColumnViewJni.hpp"
 #include <numeric>
+
+#include <jni.h>
 
 #include <cudf/aggregation.hpp>
 #include <cudf/binaryop.hpp>
@@ -66,14 +69,11 @@
 #include <cudf/types.hpp>
 #include <cudf/unary.hpp>
 #include <cudf/utilities/bit.hpp>
-#include <map_lookup.hpp>
-
-#include "cudf/types.hpp"
 
 #include "cudf_jni_apis.hpp"
 #include "dtype_utils.hpp"
-#include "jni.h"
 #include "jni_utils.hpp"
+#include "map_lookup.hpp"
 
 namespace {
 
@@ -1572,6 +1572,25 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_bitwiseMergeAndSetValidit
     }
 
     return reinterpret_cast<jlong>(copy.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_copyWithValidity(
+    JNIEnv *env, jobject j_object, jlong exemplar_handle, jlong validity_column_handle) {
+  JNI_NULL_CHECK(env, exemplar_handle, "ColumnView handle is null", 0);
+  JNI_NULL_CHECK(env, validity_column_handle, "Validity column handle is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+
+    auto const exemplar = *reinterpret_cast<cudf::column_view *>(exemplar_handle);
+    auto const validity = *reinterpret_cast<cudf::column_view *>(validity_column_handle);
+    if (exemplar.size() != validity.size()) {
+      JNI_THROW_NEW(env, cudf::jni::ILLEGAL_ARG_CLASS,
+                    "Exemplar and validity columns must have the same size", 0);
+    }
+    auto deep_copy = cudf::jni::new_column_with_validity(exemplar, validity);
+    return reinterpret_cast<jlong>(deep_copy.release());
   }
   CATCH_STD(env, 0);
 }
