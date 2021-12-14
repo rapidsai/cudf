@@ -306,6 +306,25 @@ class ColumnBase(Column, Serializable):
             self.base_mask, self.offset, self.offset + len(self)
         )
 
+    def _make_copy_replacing_NaT_with_null(self):
+        """Return a copy with NaT values replaced with nulls."""
+        if np.issubdtype(self.dtype, np.timedelta64):
+            na_value = np.timedelta64("NaT", self.time_unit)
+
+        elif np.issubdtype(self.dtype, np.datetime64):
+            na_value = np.datetime64("NaT", self.time_unit)
+
+        null = column_empty_like(self, masked=True, newsize=1)
+        out_col = cudf._lib.replace.replace(
+            self,
+            build_column(
+                Buffer(np.array([na_value], dtype=self.dtype).view("|u1")),
+                dtype=self.dtype,
+            ),
+            null,
+        )
+        return out_col
+
     def memory_usage(self) -> int:
         n = 0
         if self.data is not None:
@@ -1755,7 +1774,7 @@ def as_column(
             if nan_as_null or (mask is None and nan_as_null is None):
                 # Ignore typing error since this method is only defined for
                 # DatetimeColumn, not the ColumnBase class.
-                col = col._make_copy_with_na_as_null()  # type: ignore
+                col = col._make_copy_replacing_NaT_with_null()  # type: ignore
         return col
 
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
@@ -1878,7 +1897,7 @@ def as_column(
             mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = build_column(buffer, dtype=arbitrary.dtype)
-                data = data._make_copy_with_na_as_null()
+                data = data._make_copy_replacing_NaT_with_null()
                 mask = data.mask
 
             data = cudf.core.column.datetime.DatetimeColumn(
@@ -1896,7 +1915,7 @@ def as_column(
             mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = build_column(buffer, dtype=arbitrary.dtype)
-                data = data._make_copy_with_na_as_null()
+                data = data._make_copy_replacing_NaT_with_null()
                 mask = data.mask
 
             data = cudf.core.column.timedelta.TimeDeltaColumn(
