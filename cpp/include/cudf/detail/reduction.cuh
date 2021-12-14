@@ -248,9 +248,8 @@ std::unique_ptr<column> segmented_reduce(InputIterator d_in,
                                          rmm::cuda_stream_view stream,
                                          rmm::mr::device_memory_resource* mr)
 {
-  auto binary_op = sop.get_binary_op();
-  auto identity  = sop.template get_identity<OutputType>();
-  // auto dev_result = rmm::device_scalar<OutputType>{identity, stream, mr};
+  auto binary_op  = sop.get_binary_op();
+  auto identity   = sop.template get_identity<OutputType>();
   auto dev_result = make_fixed_width_column(
     data_type{type_to_id<OutputType>()}, num_segments, mask_state::UNALLOCATED, stream, mr);
   auto dev_result_mview = dev_result->mutable_view();

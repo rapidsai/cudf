@@ -64,7 +64,7 @@ __global__ void valid_if_kernel(
 
   size_type block_count = single_lane_block_sum_reduce<block_size, leader_lane>(warp_valid_count);
   if (threadIdx.x == 0) { atomicAdd(valid_count, block_count); }
-}  // namespace detail
+}
 
 /**
  * @brief Generate a bitmask where every bit is set for which a predicate is

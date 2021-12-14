@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include "cudf/types.hpp"
 #include <cudf/detail/reduction_functions.hpp>
 #include <cudf/detail/utilities/device_atomics.cuh>
 #include <reductions/simple_segmented.cuh>
@@ -24,6 +25,7 @@ namespace reduction {
 std::unique_ptr<cudf::column> segmented_all(column_view const& col,
                                             column_view const& offsets,
                                             cudf::data_type const output_dtype,
+                                            null_policy null_handling,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
@@ -31,12 +33,14 @@ std::unique_ptr<cudf::column> segmented_all(column_view const& col,
                "all() operation can be applied with output type `BOOL8` only");
 
   // dispatch for non-dictionary types
-  return cudf::type_dispatcher(col.type(),
-                               simple::bool_result_column_dispatcher<cudf::reduction::op::min>{},
-                               col,
-                               offsets,
-                               stream,
-                               mr);
+  return cudf::type_dispatcher(
+    col.type(),
+    simple::detail::bool_result_column_dispatcher<cudf::reduction::op::min>{},
+    col,
+    offsets,
+    null_handling,
+    stream,
+    mr);
 }
 
 }  // namespace reduction

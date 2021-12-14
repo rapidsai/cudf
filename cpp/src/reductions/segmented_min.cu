@@ -16,6 +16,7 @@
 
 #include <cudf/detail/reduction_functions.hpp>
 #include <cudf/dictionary/dictionary_column_view.hpp>
+#include <cudf/types.hpp>
 #include <reductions/simple_segmented.cuh>
 
 namespace cudf {
@@ -24,16 +25,19 @@ namespace reduction {
 std::unique_ptr<cudf::column> segmented_min(column_view const& col,
                                             column_view const& offsets,
                                             data_type const output_dtype,
+                                            null_policy null_handling,
                                             rmm::cuda_stream_view stream,
                                             rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(col.type() == output_dtype, "min() operation requires matching output type");
-  return cudf::type_dispatcher(col.type(),
-                               simple::same_column_type_dispatcher<cudf::reduction::op::min>{},
-                               col,
-                               offsets,
-                               stream,
-                               mr);
+  return cudf::type_dispatcher(
+    col.type(),
+    simple::detail::same_column_type_dispatcher<cudf::reduction::op::min>{},
+    col,
+    offsets,
+    null_handling,
+    stream,
+    mr);
 }
 
 }  // namespace reduction

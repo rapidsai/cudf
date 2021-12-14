@@ -273,6 +273,7 @@ std::unique_ptr<column> segmented_sum(
   column_view const& col,
   column_view const& offsets,
   data_type const output_dtype,
+  null_policy null_handling,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -294,6 +295,7 @@ std::unique_ptr<column> segmented_product(
   column_view const& col,
   column_view const& offsets,
   data_type const output_dtype,
+  null_policy null_handling,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -315,6 +317,7 @@ std::unique_ptr<column> segmented_min(
   column_view const& col,
   column_view const& offsets,
   data_type const output_dtype,
+  null_policy null_handling,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -336,6 +339,7 @@ std::unique_ptr<column> segmented_max(
   column_view const& col,
   column_view const& offsets,
   data_type const output_dtype,
+  null_policy null_handling,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -358,6 +362,7 @@ std::unique_ptr<column> segmented_any(
   column_view const& col,
   column_view const& offsets,
   data_type const output_dtype,
+  null_policy null_handling,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
@@ -380,6 +385,7 @@ std::unique_ptr<column> segmented_all(
   column_view const& col,
   column_view const& offsets,
   data_type const output_dtype,
+  null_policy null_handling,
   rmm::cuda_stream_view stream        = rmm::cuda_stream_default,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 

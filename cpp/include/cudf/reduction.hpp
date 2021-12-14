@@ -103,6 +103,7 @@ std::unique_ptr<scalar> reduce(
  * @param agg Aggregation operator applied by the reduction
  * @param offsets Indices to segment boundaries
  * @param output_dtype  The computation and output precision.
+ * @param null_handling  `INCLUDE`
  * @param mr Device memory resource used to allocate the returned scalar's device memory
  * @returns Output column with segment's reduce result.
  */
@@ -111,6 +112,7 @@ std::unique_ptr<column> segmented_reduce(
   column_view const& offsets,
   std::unique_ptr<aggregation> const& agg,
   data_type output_dtype,
+  null_policy null_handling,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
