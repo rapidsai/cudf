@@ -147,7 +147,7 @@ class BaseIndex(Serializable):
         methods using this method to replace or handle representation
         of the actual types correctly.
         """
-        if self._values.has_nulls:
+        if self._values.has_nulls():
             return cudf.Index(
                 self._values.astype("str").fillna(cudf._NA_REP), name=self.name
             )
