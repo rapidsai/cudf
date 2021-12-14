@@ -132,91 +132,54 @@ struct fixed_width_type_converter {
 };
 
 /**
- * @brief Creates a `device_buffer` containing the elements in the range `[begin,end)`.
- *
- * @tparam ElementTo The element type that is being created (non-`fixed_point`)
- * @tparam ElementFrom The element type used to create elements of type `ElementTo`
- * @tparam InputIterator Iterator type for `begin` and `end`
- * @param begin Beginning of the sequence of elements
- * @param end End of the sequence of elements
- * @return rmm::device_buffer Buffer containing all elements in the range `[begin,end)`
+ * @brief Convert fixed-point to Representation value.
  */
-template <typename ElementTo,
-          typename ElementFrom,
-          typename InputIterator,
-          typename std::enable_if_t<not cudf::is_fixed_point<ElementTo>()>* = nullptr>
-rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
-{
-  static_assert(cudf::is_fixed_width<ElementTo>(), "Unexpected non-fixed width type.");
-  auto transformer     = fixed_width_type_converter<ElementFrom, ElementTo>{};
-  auto transform_begin = thrust::make_transform_iterator(begin, transformer);
-  auto const size      = cudf::distance(begin, end);
-  auto const elements  = thrust::host_vector<ElementTo>(transform_begin, transform_begin + size);
-  return rmm::device_buffer{elements.data(), size * sizeof(ElementTo), rmm::cuda_stream_default};
-}
-
-/**
- * @brief Creates a `device_buffer` containing the elements in the range `[begin,end)`.
- *
- * @tparam ElementTo The element type that is being created (`fixed_point` specialization)
- * @tparam ElementFrom The element type used to create elements of type `ElementTo`
- * (non-`fixed-point`)
- * @tparam InputIterator Iterator type for `begin` and `end`
- * @param begin Beginning of the sequence of elements
- * @param end End of the sequence of elements
- * @return rmm::device_buffer Buffer containing all elements in the range `[begin,end)`
- */
-template <typename ElementTo,
-          typename ElementFrom,
-          typename InputIterator,
-          typename std::enable_if_t<not cudf::is_fixed_point<ElementFrom>() and
-                                    cudf::is_fixed_point<ElementTo>()>* = nullptr>
-rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
-{
-  using RepType        = typename ElementTo::rep;
-  auto transformer     = fixed_width_type_converter<ElementFrom, RepType>{};
-  auto transform_begin = thrust::make_transform_iterator(begin, transformer);
-  auto const size      = cudf::distance(begin, end);
-  auto const elements  = thrust::host_vector<RepType>(transform_begin, transform_begin + size);
-  return rmm::device_buffer{elements.data(), size * sizeof(RepType), rmm::cuda_stream_default};
-}
-
-/**
- * @brief Creates a `device_buffer` containing the elements in the range `[begin,end)`.
- *
- * @tparam ElementTo The element type that is being created (`fixed_point` specialization)
- * @tparam ElementFrom The element type used to create elements of type `ElementTo` (`fixed_point`)
- * @tparam InputIterator Iterator type for `begin` and `end`
- * @param begin Beginning of the sequence of elements
- * @param end End of the sequence of elements
- * @return rmm::device_buffer Buffer containing all elements in the range `[begin,end)`
- */
-template <typename ElementTo,
-          typename ElementFrom,
-          typename InputIterator,
-          typename std::enable_if_t<cudf::is_fixed_point<ElementFrom>() and
-                                    cudf::is_fixed_point<ElementTo>()>* = nullptr>
-rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
-{
-  using namespace numeric;
-  using RepType = typename ElementTo::rep;
-
-  auto to_rep            = [](ElementTo fp) { return fp.value(); };
-  auto transformer_begin = thrust::make_transform_iterator(begin, to_rep);
-  auto const size        = cudf::distance(begin, end);
-  auto const elements = thrust::host_vector<RepType>(transformer_begin, transformer_begin + size);
-  return rmm::device_buffer{elements.data(), size * sizeof(RepType), rmm::cuda_stream_default};
-}
-
-#ifdef __CUDACC__
+template <typename From, typename To>
 struct to_rep {
-  template <typename T>
-  __device__ typename T::rep operator()(T fp)
+  template <typename FromT = From, typename ToT = To>
+  constexpr ToT operator()(FromT fp) const
   {
     return fp.value();
   }
 };
 
+// TODO replace with std::type_identity in C++20
+template <class T>
+struct type_identity {
+  using type = T;
+};
+
+template <class T>
+struct rep_type {
+  using type = typename T::rep;
+};
+/**
+ * @brief Creates a `device_buffer` containing the elements in the range `[begin,end)`.
+ *
+ * @tparam ElementTo The element type that is being created (fixed-width types only)
+ * @tparam ElementFrom The element type used to create elements of type `ElementTo`
+ * @tparam InputIterator Iterator type for `begin` and `end`
+ * @param begin Beginning of the sequence of elements
+ * @param end End of the sequence of elements
+ * @return rmm::device_buffer Buffer containing all elements in the range `[begin,end)`
+ */
+template <typename ElementTo, typename ElementFrom, typename InputIterator>
+rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
+{
+  using RepType = typename std::conditional_t<cudf::is_fixed_point<ElementTo>(),
+                                              rep_type<ElementTo>,
+                                              type_identity<ElementTo>>::type;
+  using transformer =
+    std::conditional_t<(cudf::is_fixed_point<ElementFrom>() and cudf::is_fixed_point<ElementTo>()),
+                       to_rep<ElementFrom, RepType>,
+                       fixed_width_type_converter<ElementFrom, RepType>>;
+  auto transform_begin = thrust::make_transform_iterator(begin, transformer{});
+  auto const size      = cudf::distance(begin, end);
+  auto const elements  = thrust::host_vector<RepType>(transform_begin, transform_begin + size);
+  return rmm::device_buffer{elements.data(), size * sizeof(RepType), rmm::cuda_stream_default};
+}
+
+#ifdef __CUDACC__
 template <typename ElementTo, typename ElementFrom, typename InputIterator>
 rmm::device_buffer make_device_elements(InputIterator begin, InputIterator end)
 {
@@ -239,7 +202,7 @@ rmm::device_buffer make_device_elements(InputIterator begin, InputIterator end)
     return elements.release();
   } else if constexpr (cudf::is_fixed_point<ElementFrom>() and cudf::is_fixed_point<ElementTo>()) {
     using RepType        = typename ElementTo::rep;
-    auto transform_begin = thrust::make_transform_iterator(begin, to_rep{});
+    auto transform_begin = thrust::make_transform_iterator(begin, to_rep<ElementFrom, RepType>{});
     auto const size      = cudf::distance(begin, end);
     rmm::device_uvector<RepType> elements(size, rmm::cuda_stream_default);
     thrust::copy(thrust::device, transform_begin, transform_begin + size, elements.begin());
