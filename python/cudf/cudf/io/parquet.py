@@ -37,9 +37,14 @@ def _write_parquet(
     # If partitions_info are specified then paths should be list like.
     # In either case, both should be of same length.
     # Partition offsets should be a list of 2-tuples
-    if is_list_like(paths) or partitions_info is not None:
-        if not len(paths) == len(partitions_info):
-            ValueError("")
+    # if is_list_like(paths) and len(paths) > 1:
+    #     if partitions_info is None:
+    #         ValueError("partition info is required for multiple paths")
+    #     elif not is_list_like(partitions_info):
+    #         ValueError("partition info must be list-like")
+
+    #     if not len(paths) == len(partitions_info):
+    #         ValueError("")
 
     paths_or_bufs = [
         ioutils.get_writer_filepath_or_buffer(path, mode="wb", **kwargs)
@@ -764,6 +769,18 @@ def to_parquet(
             return
 
         # TODO: re-enable non-partitioned case
+        _write_parquet(
+            df,
+            paths=[path],
+            compression=compression,
+            index=index,
+            statistics=statistics,
+            metadata_file_path=metadata_file_path,
+            int96_timestamps=int96_timestamps,
+            row_group_size_bytes=row_group_size_bytes,
+            row_group_size_rows=row_group_size_rows,
+            **kwargs,
+        )
 
     else:
         # TODO: error if partition_offsets is specified without cudf engine

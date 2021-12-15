@@ -349,14 +349,10 @@ cpdef write_parquet(
     cdef vector[string] c_column_chunks_file_paths
     cdef bool _int96_timestamps = int96_timestamps
     cdef vector[cudf_io_types.partition_info] partitions
-    if partitions_info is not None:
-        for part in partitions_info:
-            partitions.push_back(cudf_io_types.partition_info(part[0], part[1]))
 
     # Perform write
     cdef parquet_writer_options args = move(
         parquet_writer_options.builder(sink, tv)
-        .partitions(partitions) # move if possible
         .metadata(tbl_meta.get())
         .key_value_metadata(move(user_data))
         .compression(comp_type)
@@ -364,6 +360,10 @@ cpdef write_parquet(
         .int96_timestamps(_int96_timestamps)
         .build()
     )
+    if partitions_info is not None:
+        for part in partitions_info:
+            partitions.push_back(cudf_io_types.partition_info(part[0], part[1]))
+        args.set_partitions(move(partitions))
     if metadata_file_path is not None:
         c_column_chunks_file_paths.push_back(str.encode(metadata_file_path))
         args.set_column_chunks_file_paths(move(c_column_chunks_file_paths))
