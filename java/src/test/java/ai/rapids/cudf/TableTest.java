@@ -56,12 +56,12 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static ai.rapids.cudf.ColumnWriterOptions.mapColumn;
 import static ai.rapids.cudf.AssertUtils.assertColumnsAreEqual;
 import static ai.rapids.cudf.AssertUtils.assertPartialColumnsAreEqual;
 import static ai.rapids.cudf.AssertUtils.assertPartialTablesAreEqual;
 import static ai.rapids.cudf.AssertUtils.assertTableTypes;
 import static ai.rapids.cudf.AssertUtils.assertTablesAreEqual;
+import static ai.rapids.cudf.ColumnWriterOptions.mapColumn;
 import static ai.rapids.cudf.ParquetWriterOptions.listBuilder;
 import static ai.rapids.cudf.ParquetWriterOptions.structBuilder;
 import static ai.rapids.cudf.Table.TestBuilder;
@@ -6335,6 +6335,56 @@ public class TableTest extends CudfTestBase {
                  .build();
          Table found = testTable.gather(gatherMap)) {
       assertTablesAreEqual(expected, found);
+    }
+  }
+
+
+  @Test
+  void testScatterTable() {
+    try (Table srcTable = new Table.TestBuilder()
+            .column(1, 2, 3, 4, 5)
+            .column("A", "AA", "AAA", "AAAA", "AAAAA")
+            .decimal32Column(-3, 1, 2, 3, 4, 5)
+            .decimal64Column(-8, 100001L, 200002L, 300003L, 400004L, 500005L)
+            .build();
+         ColumnVector scatterMap = ColumnVector.fromInts(0, 2, 4, -2);
+         Table targetTable = new Table.TestBuilder()
+            .column(-1, -2, -3, -4, -5)
+            .column("B", "BB", "BBB", "BBBB", "BBBBB")
+            .decimal32Column(-3, -1, -2, -3, -4, -5)
+            .decimal64Column(-8, -100001L, -200002L, -300003L, -400004L, -500005L)
+            .build();
+         Table expected = new Table.TestBuilder()
+            .column(1, -2, 2, 4, 3)
+            .column("A", "BB", "AA", "AAAA", "AAA")
+            .decimal32Column(-3, 1, -2, 2, 4, 3)
+            .decimal64Column(-8, 100001L, -200002L, 200002L, 400004L, 300003L)
+            .build();
+         Table result = srcTable.scatter(scatterMap, targetTable, false)) {
+      assertTablesAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testScatterScalars() {
+    Scalar[] srcScalars = new Scalar[] { Scalar.fromInt(0), Scalar.fromString("A") };
+    try {
+      try (ColumnVector scatterMap = ColumnVector.fromInts(0, 2, 4);
+           Table targetTable = new Table.TestBuilder()
+               .column(-1, -2, -3, -4, -5)
+               .column("B", "BB", "BBB", "BBBB", "BBBBB")
+               .build();
+           Table expected = new Table.TestBuilder()
+               .column(0, -2, 0, -4, 0)
+               .column("A", "BB", "A", "BBBB", "A")
+               .build();
+           Table result = Table.scatter(srcScalars, scatterMap, targetTable, false)) {
+         assertTablesAreEqual(expected, result);
+       }
+    } finally {
+      for (Scalar scalar : srcScalars) {
+        scalar.close();
+      }
     }
   }
 
