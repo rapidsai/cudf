@@ -2063,25 +2063,25 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Scatters values from the source table into the target table out-of-place,
-   * returning a "destination table". The scatter is performed according to a
-   * scatter map such that row `scatterMap[i]` of the destination table gets row
-   * `i` of the source table. All other rows of the destination table equal
-   * corresponding rows of the target table.
+   * Scatters values from the source table into the target table out-of-place, returning a new
+   * result table. The scatter is performed according to a scatter map such that row `scatterMap[i]`
+   * of the destination table gets row `i` of the source table. All other rows of the destination
+   * table equal corresponding rows of the target table.
    *
-   * The number of columns in source must match the number of columns in target
-   * and their corresponding data types must be the same.
+   * The number of columns in source must match the number of columns in target and their
+   * corresponding data types must be the same.
    *
-   * If the same index appears more than once in the scatter map, the result is
-   * undefined.
+   * If the same index appears more than once in the scatter map, the result is undefined.
    *
-   * A negative value `i` in the `scatter_map` is interpreted as `i+n`, where `n`
-   * is the number of rows in the `target` table.
+   * A negative value `i` in the `scatterMap` is interpreted as `i + n`, where `n` is the number of
+   * rows in the `target` table.
    *
    * @param scatterMap The map of indexes. Must be non-nullable and integral type.
-   * @param target The table where rows from the current table are scattered into.
-   * @param checkBounds Optionally perform bounds checking on the values of`scatterMap`
-   *                    and throw an error if any of its values are out of bounds.
+   * @param target The table into which rows from the current table are to be scattered out-of-place.
+   * @param checkBounds Optionally perform bounds checking on the values of`scatterMap` and throw
+   *                    an exception if any of its values are out of bounds.
+   * @return A new table which is the result of out-of-place scattering the source table into the
+   *         target table.
    */
   public Table scatter(ColumnView scatterMap, Table target, boolean checkBounds) {
     return new Table(scatterTable(nativeHandle, scatterMap.getNativeView(), target.getNativeView(),
@@ -2089,23 +2089,26 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Scatters values from the source row into the target table out-of-place,
-   * returning a "destination table". The scatter is performed according to a
-   * scatter map such that row `scatterMap[i]` of the destination table is
-   * replaced by the source row `i`. All other rows of the destination table equal
-   * corresponding rows of the target table.
+   * Scatters values from the source rows into the target table out-of-place, returning a new result
+   * table. The scatter is performed according to a scatter map such that row `scatterMap[i]` of the
+   * destination table is replaced by the source row `i`. All other rows of the destination table
+   * equal corresponding rows of the target table.
    *
-   * The number of elements in source must match the number of columns in target
-   * and their corresponding data types must be the same.
+   * The number of elements in source must match the number of columns in target and their
+   * corresponding data types must be the same.
    *
-   * If the same index appears more than once in the scatter map, the result is
-   * undefined.
+   * If the same index appears more than once in the scatter map, the result is undefined.
+   *
+   * A negative value `i` in the `scatterMap` is interpreted as `i + n`, where `n` is the number of
+   * rows in the `target` table.
    *
    * @param source The input scalars containing values to be scattered into the target table.
    * @param scatterMap The map of indexes. Must be non-nullable and integral type.
-   * @param target The table where rows from the current table are scattered into.
-   * @param checkBounds Optionally perform bounds checking on the values of`scatterMap`
-   *                    and throw an error if any of its values are out of bounds.
+   * @param target The table into which the values from source are to be scattered out-of-place.
+   * @param checkBounds Optionally perform bounds checking on the values of`scatterMap` and throw
+   *                    an exception if any of its values are out of bounds.
+   * @return A new table which is the result of out-of-place scattering the source values into the
+   *         target table.
    */
   public static Table scatter(Scalar[] source, ColumnView scatterMap, Table target,
                               boolean checkBounds) {
