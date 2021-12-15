@@ -16,7 +16,10 @@
 
 #pragma once
 
+#include <cudf/aggregation.hpp>
+#include <cudf/detail/reduction_operators.cuh>
 #include <cudf/detail/structs/utilities.hpp>
+#include <cudf/detail/utilities/device_operators.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_device_view.cuh>
@@ -89,8 +92,7 @@ class comparison_binop_generator {
   std::vector<null_order> null_orders;
   rmm::device_uvector<null_order> null_orders_dvec;
 
- public:
-  comparison_binop_generator(column_view const& input, bool is_min_op, rmm::cuda_stream_view stream)
+  comparison_binop_generator(column_view const& input, rmm::cuda_stream_view stream, bool is_min_op)
     : flattened_input{cudf::structs::detail::flatten_nested_columns(
         table_view{{input}}, {}, std::vector<null_order>{DEFAULT_NULL_ORDER})},
       d_flattened_input_ptr{table_device_view::create(flattened_input, stream)},
@@ -112,9 +114,27 @@ class comparison_binop_generator {
     // are BEFORE (that happens when we have is_min_op == false).
   }
 
+ public:
   auto binop() const
   {
     return row_arg_minmax_fn(*d_flattened_input_ptr, has_nulls, null_orders_dvec.data(), is_min_op);
+  }
+
+  template <typename BinOp>
+  static auto create(column_view const& input, rmm::cuda_stream_view stream)
+  {
+    return comparison_binop_generator(
+      input,
+      stream,
+      std::is_same_v<BinOp, cudf::reduction::op::min> || std::is_same_v<BinOp, cudf::DeviceMin>);
+  }
+
+  template <cudf::aggregation::Kind K>
+  static auto create(column_view const& input, rmm::cuda_stream_view stream)
+
+  {
+    return comparison_binop_generator(
+      input, stream, K == cudf::aggregation::MIN || K == cudf::aggregation::ARGMIN);
   }
 };
 

@@ -293,11 +293,9 @@ struct same_element_type_dispatcher {
   {
     if (input.is_empty()) { return cudf::make_empty_scalar_like(input, stream, mr); }
 
-    auto constexpr is_min_op = std::is_same_v<Op, cudf::reduction::op::min>;
-    auto const binop_generator =
-      cudf::reduction::detail::comparison_binop_generator(input, is_min_op, stream);
-
     // We will do reduction to find the ARGMIN/ARGMAX index, then return the element at that index.
+    auto const binop_generator =
+      cudf::reduction::detail::comparison_binop_generator::create<Op>(input, stream);
     auto const minmax_idx = thrust::reduce(rmm::exec_policy(stream),
                                            thrust::make_counting_iterator(0),
                                            thrust::make_counting_iterator(input.size()),

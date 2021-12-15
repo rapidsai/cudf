@@ -157,12 +157,10 @@ struct scan_functor<Op, cudf::struct_view> {
                                         rmm::cuda_stream_view stream,
                                         rmm::mr::device_memory_resource* mr)
   {
-    auto constexpr is_min_op = std::is_same_v<Op, DeviceMin>;
-    auto const binop_generator =
-      cudf::reduction::detail::comparison_binop_generator(input, is_min_op, stream);
-
     // Create a gather map contaning indices of the prefix min/max elements.
     auto gather_map = rmm::device_uvector<size_type>(input.size(), stream);
+    auto const binop_generator =
+      cudf::reduction::detail::comparison_binop_generator::create<Op>(input, stream);
     thrust::inclusive_scan(rmm::exec_policy(stream),
                            thrust::counting_iterator<size_type>(0),
                            thrust::counting_iterator<size_type>(input.size()),

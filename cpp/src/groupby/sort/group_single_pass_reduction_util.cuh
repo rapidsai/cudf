@@ -242,10 +242,6 @@ struct group_reduction_functor<
 
     if (values.is_empty()) { return result; }
 
-    auto constexpr is_min_op = K == aggregation::ARGMIN;
-    auto const binop_generator =
-      cudf::reduction::detail::comparison_binop_generator(values, is_min_op, stream);
-
     // Perform segmented reduction to find ARGMIN/ARGMAX.
     auto const do_reduction = [&](auto const& inp_iter, auto const& out_iter, auto const& binop) {
       thrust::reduce_by_key(rmm::exec_policy(stream),
@@ -260,6 +256,8 @@ struct group_reduction_functor<
 
     auto const count_iter   = thrust::make_counting_iterator<ResultType>(0);
     auto const result_begin = result->mutable_view().template begin<ResultType>();
+    auto const binop_generator =
+      cudf::reduction::detail::comparison_binop_generator::create<K>(values, stream);
     do_reduction(count_iter, result_begin, binop_generator.binop());
 
     if (values.has_nulls()) {

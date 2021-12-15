@@ -190,12 +190,11 @@ struct group_scan_functor<K,
   {
     if (values.is_empty()) { return cudf::empty_like(values); }
 
-    auto constexpr is_min_op = K == aggregation::MIN;
-    auto const binop_generator =
-      cudf::reduction::detail::comparison_binop_generator(values, is_min_op, stream);
-
     // Create a gather map containing indices of the prefix min/max elements within each group.
     auto gather_map = rmm::device_uvector<size_type>(values.size(), stream);
+
+    auto const binop_generator =
+      cudf::reduction::detail::comparison_binop_generator::create<K>(values, stream);
     thrust::inclusive_scan_by_key(rmm::exec_policy(stream),
                                   group_labels.begin(),
                                   group_labels.end(),
