@@ -75,7 +75,7 @@ namespace java {
 namespace detail {
 
 /**
- * @brief Copies data from row-base JCUDF format to column-based cudf format.
+ * @brief Copies data from row-based JCUDF format to column-based cudf format.
  *
  * This optimized version of the conversion is faster for fixed-width tables
  * that do not have more than 100 columns.
