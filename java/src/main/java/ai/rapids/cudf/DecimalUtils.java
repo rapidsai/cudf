@@ -102,10 +102,9 @@ public class DecimalUtils {
       try (Scalar isPositive = Scalar.fromBool(roundedRhs.compareTo(BigDecimal.ZERO) > 0)) {
         return ColumnVector.fromScalar(isPositive, (int) lhs.getRowCount());
       }
-    } else {
-      try (Scalar scalarRhs = Scalar.fromDecimal(roundedRhs.unscaledValue(), lhs.getType())) {
-        return lhs.lessThan(scalarRhs);
-      }
+    }
+    try (Scalar scalarRhs = Scalar.fromDecimal(roundedRhs.unscaledValue(), lhs.getType())) {
+      return lhs.lessThan(scalarRhs);
     }
   }
 
