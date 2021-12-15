@@ -1474,7 +1474,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> series.dropna().has_nulls
         False
         """
-        return self._column.has_nulls
+        return self._column.has_nulls()
 
     def dropna(self, axis=0, inplace=False, how=None):
         """
