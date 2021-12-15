@@ -87,7 +87,7 @@ void BM_parq_write_varying_options(benchmark::State& state)
       cudf_io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
         .compression(compression)
         .stats_level(enable_stats)
-        .column_chunks_file_path(file_path);
+        .column_chunks_file_paths({file_path});
     cudf_io::write_parquet(options);
   }
 
