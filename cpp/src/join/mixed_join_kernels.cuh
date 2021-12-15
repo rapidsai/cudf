@@ -287,14 +287,20 @@ __global__ void mixed_join(table_device_view left_table,
       build, probe, evaluator, thread_intermediate_storage, compare_nulls};
 
     // TODO: Verify that these are being passed in the correct order (at the
-    // moment it won't matter because my test produces a symmetric result).
-    auto out1_zip_begin = thrust::make_zip_iterator(thrust::make_tuple(
-      thrust::make_discard_iterator(), join_output_l + join_result_offsets[outer_row_index]));
-    auto out2_zip_begin = thrust::make_zip_iterator(thrust::make_tuple(
-      thrust::make_discard_iterator(), join_output_r + join_result_offsets[outer_row_index]));
+    // moment it won't matter because my test produces a symmetric result). I
+    // think this will require a swap_tables check though.
+    auto probe_key_begin       = thrust::make_discard_iterator();
+    auto probe_value_begin     = join_output_l + join_result_offsets[outer_row_index];
+    auto contained_key_begin   = thrust::make_discard_iterator();
+    auto contained_value_begin = join_output_r + join_result_offsets[outer_row_index];
 
-    hash_table_view.pair_retrieve(
-      this_thread, query_pair, out1_zip_begin, out2_zip_begin, equality);
+    hash_table_view.pair_retrieve(this_thread,
+                                  query_pair,
+                                  probe_key_begin,
+                                  probe_value_begin,
+                                  contained_key_begin,
+                                  contained_value_begin,
+                                  equality);
 
     //// Left, left anti, and full joins all require saving left columns that
     //// aren't present in the right.
