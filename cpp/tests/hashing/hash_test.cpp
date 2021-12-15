@@ -298,32 +298,36 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
   // The hash values were determined by running the following Scala code in Apache Spark:
   // import org.apache.spark.sql.catalyst.util.DateTimeUtils
   // val schema = new StructType().add("structs", new StructType().add("a",IntegerType)
-  //     .add("b",StringType).add("c",new StructType().add("x",FloatType).add("y",LongType)))
+  //   .add("b",StringType).add("c",new StructType().add("x",FloatType).add("y",LongType)))
   //   .add("strings",StringType).add("doubles",DoubleType).add("timestamps",TimestampType)
   //   .add("decimal64", DecimalType(18,7)).add("longs",LongType).add("floats",FloatType)
   //   .add("dates",DateType).add("decimal32", DecimalType(9,3)).add("ints",IntegerType)
   //   .add("shorts",ShortType).add("bytes",ByteType).add("bools",BooleanType)
+  //   .add("decimal128", DecimalType(27,11))
   // val data = Seq(
   // Row(Row(0, "a", Row(0f, 0L)), "", 0.toDouble, DateTimeUtils.toJavaTimestamp(0), BigDecimal(0),
   //     0.toLong, 0.toFloat, DateTimeUtils.toJavaDate(0), BigDecimal(0), 0, 0.toShort, 0.toByte,
-  //     false),
+  //     false, BigDecimal(0)),
   // Row(Row(100, "bc", Row(100f, 100L)), "The quick brown fox", -(0.toDouble),
   //     DateTimeUtils.toJavaTimestamp(100), BigDecimal("0.00001"), 100.toLong, -(0.toFloat),
-  //     DateTimeUtils.toJavaDate(100), BigDecimal("0.1"), 100, 100.toShort, 100.toByte, true),
+  //     DateTimeUtils.toJavaDate(100), BigDecimal("0.1"), 100, 100.toShort, 100.toByte, true,
+  //     BigDecimal("0.000000001")),
   // Row(Row(-100, "def", Row(-100f, -100L)), "jumps over the lazy dog.", -Double.NaN,
   //     DateTimeUtils.toJavaTimestamp(-100), BigDecimal("-0.00001"), -100.toLong, -Float.NaN,
   //     DateTimeUtils.toJavaDate(-100), BigDecimal("-0.1"), -100, -100.toShort, -100.toByte,
-  //     true),
+  //     true, BigDecimal("-0.000000001")),
   // Row(Row(0x12345678, "ghij", Row(Float.PositiveInfinity, 0x123456789abcdefL)),
   //     "All work and no play makes Jack a dull boy", Double.MinValue,
   //     DateTimeUtils.toJavaTimestamp(Long.MinValue/1000000), BigDecimal("-99999999999.9999999"),
   //     Long.MinValue, Float.MinValue, DateTimeUtils.toJavaDate(Int.MinValue/100),
-  //     BigDecimal("-999999.999"), Int.MinValue, Short.MinValue, Byte.MinValue, true),
+  //     BigDecimal("-999999.999"), Int.MinValue, Short.MinValue, Byte.MinValue, true,
+  //     BigDecimal("-9999999999999999.99999999999")),
   // Row(Row(-0x76543210, "klmno", Row(Float.NegativeInfinity, -0x123456789abcdefL)),
   //     "!\"#$%&\'()*+,-./:;<=>?@[\\]^_`{|}~\ud720\ud721", Double.MaxValue,
   //     DateTimeUtils.toJavaTimestamp(Long.MaxValue/1000000), BigDecimal("99999999999.9999999"),
   //     Long.MaxValue, Float.MaxValue, DateTimeUtils.toJavaDate(Int.MaxValue/100),
-  //     BigDecimal("999999.999"), Int.MaxValue, Short.MaxValue, Byte.MaxValue, false))
+  //     BigDecimal("999999.999"), Int.MaxValue, Short.MaxValue, Byte.MaxValue, false,
+  //     BigDecimal("9999999999999999.99999999999")))
   // val df = spark.createDataFrame(sc.parallelize(data), schema)
   // df.columns.foreach(c => println(s"$c => ${df.select(hash(col(c))).collect.mkString(",")}"))
   // df.select(hash(col("*"))).collect
@@ -353,8 +357,10 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
     {933211791, 751823303, -1080202046, 1110053733, 1135925485});
   fixed_width_column_wrapper<int32_t> const hash_bools_expected(
     {933211791, -559580957, -559580957, -559580957, 933211791});
+  fixed_width_column_wrapper<int32_t> const hash_decimal128_expected(
+    {-783713497, -295670906, -893129661, -52622807, 2061608841});
   fixed_width_column_wrapper<int32_t> const hash_combined_expected(
-    {-1172364561, -442972638, 1213234395, 796626751, 214075225});
+    {401603227, 588162166, 2087912312, 1132537411, -1590333397});
 
   using double_limits = std::numeric_limits<double>;
   using long_limits   = std::numeric_limits<int64_t>;
@@ -394,6 +400,13 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
   fixed_width_column_wrapper<int8_t> const bytes_col({0, 100, -100, -128, 127});
   fixed_width_column_wrapper<bool> const bools_col1({0, 1, 1, 1, 0});
   fixed_width_column_wrapper<bool> const bools_col2({0, 1, 2, 255, 0});
+  fixed_point_column_wrapper<__int128_t> const decimal128_col(
+    {(__int128)0,
+     (__int128)100,
+     (__int128)-100,
+     *(__int128*)"\x01\x00\x00\x18\xC3\x7F\x2F\x60\xC3\xD1\xC4\xFC\xFF\xFF\xFF\xFF",
+     *(__int128*)"\xFF\xFF\xFF\xE7\x3C\x80\xD0\x9F\x3C\x2E\x3B\x03\x00\x00\x00\x00"},
+    numeric::scale_type{-11});
 
   constexpr auto hasher      = cudf::hash_id::HASH_SPARK_MURMUR3;
   auto const hash_structs    = cudf::hash(cudf::table_view({structs_col}), hasher, {}, 42);
@@ -410,6 +423,7 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
   auto const hash_bytes      = cudf::hash(cudf::table_view({bytes_col}), hasher, {}, 42);
   auto const hash_bools1     = cudf::hash(cudf::table_view({bools_col1}), hasher, {}, 42);
   auto const hash_bools2     = cudf::hash(cudf::table_view({bools_col2}), hasher, {}, 42);
+  auto const hash_decimal128 = cudf::hash(cudf::table_view({decimal128_col}), hasher, {}, 42);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_structs, hash_structs_expected, verbosity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_strings, hash_strings_expected, verbosity);
@@ -425,6 +439,7 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_bytes, hash_bytes_expected, verbosity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_bools1, hash_bools_expected, verbosity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_bools2, hash_bools_expected, verbosity);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_decimal128, hash_decimal128_expected, verbosity);
 
   auto const combined_table = cudf::table_view({structs_col,
                                                 strings_col,
@@ -438,7 +453,8 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
                                                 ints_col,
                                                 shorts_col,
                                                 bytes_col,
-                                                bools_col2});
+                                                bools_col2,
+                                                decimal128_col});
   auto const hash_combined  = cudf::hash(combined_table, hasher, {}, 42);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_combined, hash_combined_expected, verbosity);
 }
