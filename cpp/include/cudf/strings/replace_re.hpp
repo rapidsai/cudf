@@ -17,6 +17,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
+#include <cudf/strings/regex/flags.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 
 namespace cudf {
@@ -37,22 +38,25 @@ namespace strings {
  *
  * @param strings Strings instance for this operation.
  * @param pattern The regular expression pattern to search within each string.
- * @param repl The string used to replace the matched sequence in each string.
+ * @param replacement The string used to replace the matched sequence in each string.
  *        Default is an empty string.
- * @param maxrepl The maximum number of times to replace the matched pattern within each string.
+ * @param max_replace_count The maximum number of times to replace the matched pattern
+ *        within each string. Default replaces every substring that is matched.
+ * @param flags Regex flags for interpreting special characters in the pattern.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 std::unique_ptr<column> replace_re(
   strings_column_view const& strings,
   std::string const& pattern,
-  string_scalar const& repl           = string_scalar(""),
-  size_type maxrepl                   = -1,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+  string_scalar const& replacement           = string_scalar(""),
+  std::optional<size_type> max_replace_count = std::nullopt,
+  regex_flags const flags                    = regex_flags::DEFAULT,
+  rmm::mr::device_memory_resource* mr        = rmm::mr::get_current_device_resource());
 
 /**
  * @brief For each string, replaces any character sequence matching the given patterns
- * with the corresponding string in the repls column.
+ * with the corresponding string in the `replacements` column.
  *
  * Any null string entries return corresponding null output column entries.
  *
@@ -60,14 +64,16 @@ std::unique_ptr<column> replace_re(
  *
  * @param strings Strings instance for this operation.
  * @param patterns The regular expression patterns to search within each string.
- * @param repls The strings used for replacement.
+ * @param replacements The strings used for replacement.
+ * @param flags Regex flags for interpreting special characters in the patterns.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
 std::unique_ptr<column> replace_re(
   strings_column_view const& strings,
   std::vector<std::string> const& patterns,
-  strings_column_view const& repls,
+  strings_column_view const& replacements,
+  regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -83,6 +89,7 @@ std::unique_ptr<column> replace_re(
  * @param strings Strings instance for this operation.
  * @param pattern The regular expression patterns to search within each string.
  * @param replacement The replacement template for creating the output string.
+ * @param flags Regex flags for interpreting special characters in the pattern.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  * @return New strings column.
  */
@@ -90,6 +97,7 @@ std::unique_ptr<column> replace_with_backrefs(
   strings_column_view const& strings,
   std::string const& pattern,
   std::string const& replacement,
+  regex_flags const flags             = regex_flags::DEFAULT,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace strings

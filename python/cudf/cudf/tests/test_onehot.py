@@ -113,10 +113,18 @@ def test_get_dummies(data):
     encoded_expected = pd.get_dummies(pdf, prefix="test")
     encoded_actual = cudf.get_dummies(gdf, prefix="test")
 
-    utils.assert_eq(encoded_expected, encoded_actual)
+    utils.assert_eq(
+        encoded_expected,
+        encoded_actual,
+        check_dtype=False if len(data) == 0 else True,
+    )
     encoded_actual = cudf.get_dummies(gdf, prefix="test", dtype=np.uint8)
 
-    utils.assert_eq(encoded_expected, encoded_actual)
+    utils.assert_eq(
+        encoded_expected,
+        encoded_actual,
+        check_dtype=False if len(data) == 0 else True,
+    )
 
 
 @pytest.mark.parametrize("n_cols", [5, 10, 20])
