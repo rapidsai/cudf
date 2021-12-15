@@ -22,12 +22,13 @@
 
 namespace cudf::jni {
 
-std::unique_ptr<cudf::column> new_column_with_validity(cudf::column_view const &exemplar,
-                                                       cudf::column_view const &validity_column) {
+std::unique_ptr<cudf::column>
+new_column_with_boolean_column_as_validity(cudf::column_view const &exemplar,
+                                           cudf::column_view const &validity_column) {
   CUDF_EXPECTS(validity_column.type().id() == type_id::BOOL8,
                "Validity column must be of type bool");
   CUDF_EXPECTS(validity_column.size() == exemplar.size(),
-               "Validity column must be of same size as exemplar column");
+               "Exemplar and validity columns must have the same size");
 
   auto validity_device_view = cudf::column_device_view::create(validity_column);
   auto validity_begin = cudf::detail::make_optional_iterator<bool>(

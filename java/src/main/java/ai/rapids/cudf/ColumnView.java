@@ -804,13 +804,22 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Creates a deep copy of a column while replacing the null mask. The null mask is the
+   * Creates a deep copy of a column while replacing the validity mask. The validity mask is the
    * device_vector equivalent of the boolean column given as argument.
-   * @param validity bool column whose value is to be used as the null mask.
-   * @return Deep copy of the column with replaced null mask.
+   * 
+   * The boolColumn must have the same number of rows as the current column.
+   * The result column will have the same number of rows as the current column. 
+   * For all indices `i` where the boolColumn is `true`, the result column will have a valid value at index i.
+   * For all other values (i.e. `false` or `null`), the result column will have nulls.
+   * 
+   * If the current column has a null at a given index `i`, and the new validity mask is `true` at index `i`,
+   * then the row value is undefined.
+   * 
+   * @param boolColumn bool column whose value is to be used as the validity mask.
+   * @return Deep copy of the column with replaced validity mask.
    */    
-  public final ColumnVector copyWithValidity(ColumnView validity) {
-    return new ColumnVector(copyWithValidity(getNativeView(), validity.getNativeView()));
+  public final ColumnVector copyWithBooleanColumnAsValidity(ColumnView boolColumn) {
+    return new ColumnVector(copyWithBooleanColumnAsValidity(getNativeView(), boolColumn.getNativeView()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -3765,11 +3774,21 @@ public class ColumnView implements AutoCloseable, BinaryOperable {
   /**
    * Native method to deep copy a column while replacing the null mask. The null mask is the
    * device_vector equivalent of the boolean column given as argument.
-   * @param viewHandle column view of the column that is deep copied.
-   * @param validityHandle bool column whose value is to be used as the null mask.
+   * 
+   * The boolColumn must have the same number of rows as the exemplar column.
+   * The result column will have the same number of rows as the exemplar.
+   * For all indices `i` where the boolean column is `true`, the result column will have a valid value at index i.
+   * For all other values (i.e. `false` or `null`), the result column will have nulls.
+   * 
+   * If the exemplar column has a null at a given index `i`, and the new validity mask is `true` at index `i`,
+   * then the resultant row value is undefined.
+   * 
+   * @param exemplarViewHandle column view of the column that is deep copied.
+   * @param boolColumnViewHandle bool column whose value is to be used as the null mask.
    * @return Deep copy of the column with replaced null mask.
    */                                                      
-  private static native long copyWithValidity(long viewHandle, long validityHandle) throws CudfException;
+  private static native long copyWithBooleanColumnAsValidity(long exemplarViewHandle, 
+                                                             long boolColumnViewHandle) throws CudfException;
 
   /**
    * Get the number of bytes needed to allocate a validity buffer for the given number of rows.
