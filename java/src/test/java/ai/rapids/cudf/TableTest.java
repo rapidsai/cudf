@@ -6369,7 +6369,7 @@ public class TableTest extends CudfTestBase {
   void testScatterScalars() {
     try (Scalar s1 = Scalar.fromInt(0);
          Scalar s2 = Scalar.fromString("A");
-         ColumnVector scatterMap = ColumnVector.fromInts(0, 2, 4);
+         ColumnVector scatterMap = ColumnVector.fromInts(0, 2, -1);
          Table targetTable = new Table.TestBuilder()
             .column(-1, -2, -3, -4, -5)
             .column("B", "BB", "BBB", "BBBB", "BBBBB")
