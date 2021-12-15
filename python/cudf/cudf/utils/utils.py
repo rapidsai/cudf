@@ -3,7 +3,7 @@
 import decimal
 import functools
 from collections.abc import Sequence
-from typing import Any, FrozenSet, Set, Union
+from typing import FrozenSet, Set, Union
 
 import cupy as cp
 import numpy as np
@@ -524,25 +524,3 @@ def _gather_map_is_valid(
         return True
     gm_min, gm_max = minmax(gather_map)
     return gm_min >= -nrows and gm_max < nrows
-
-
-def _make_column_name(
-    name: Any,
-    multilevel: bool,
-    col_level: int = 0,
-    col_fill: Any = "",
-    total_level: int = 0,
-):
-    """Make a cudf column name from `name`.
-
-    If `multilevel` is True, return a tuple with len == `total_level`. `name`
-    is the `col_level`th item, the rest is `col_fill`.
-
-    Otherwise, return ``name``.
-    """
-    # Should this be a ColumnAccessor method instead?
-    return (
-        tuple(name if i == col_level else col_fill for i in range(total_level))
-        if multilevel
-        else name
-    )

@@ -27,11 +27,7 @@ from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.frame import Frame
 from cudf.core.index import Index, RangeIndex, _index_from_columns
 from cudf.core.multiindex import MultiIndex
-from cudf.utils.utils import (
-    _gather_map_is_valid,
-    _make_column_name,
-    cached_property,
-)
+from cudf.utils.utils import _gather_map_is_valid, cached_property
 
 doc_reset_index_template = """
         Reset the index of the {klass}, or a level of it.
@@ -1164,12 +1160,13 @@ class IndexedFrame(Frame):
         for name, col in zip(data_names, data_columns):
             if name == "index" and "index" in self._data:
                 name = "level_0"
-            name = _make_column_name(
-                name,
-                self._data.multiindex,
-                col_level,
-                col_fill,
-                self._data.nlevels,
+            name = (
+                tuple(
+                    name if i == col_level else col_fill
+                    for i in range(self._data.nlevels)
+                )
+                if self._data.multiindex
+                else name
             )
             new_column_data[name] = col
         # This is to match pandas where the new data columns are always
