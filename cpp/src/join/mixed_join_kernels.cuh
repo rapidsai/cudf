@@ -189,6 +189,9 @@ __global__ void compute_mixed_join_output_size(
     // TODO: Address asymmetry in operator.
     auto count_equality = pair_expression_equality<has_nulls>{
       build, probe, evaluator, thread_intermediate_storage, compare_nulls};
+    // TODO: This entire kernel probably won't work for left anti joins since I
+    // need to use a normal map (not a multimap), so this condition is probably
+    // overspecified at the moment.
     if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::LEFT_ANTI_JOIN ||
         join_type == join_kind::FULL_JOIN) {
       matches_per_row[outer_row_index] =
@@ -294,31 +297,27 @@ __global__ void mixed_join(table_device_view left_table,
     auto contained_key_begin   = thrust::make_discard_iterator();
     auto contained_value_begin = join_output_r + join_result_offsets[outer_row_index];
 
-    hash_table_view.pair_retrieve(this_thread,
-                                  query_pair,
-                                  probe_key_begin,
-                                  probe_value_begin,
-                                  contained_key_begin,
-                                  contained_value_begin,
-                                  equality);
-
-    //// Left, left anti, and full joins all require saving left columns that
-    //// aren't present in the right.
-    // if ((join_type == join_kind::LEFT_JOIN || join_type == join_kind::LEFT_ANTI_JOIN ||
-    //     join_type == join_kind::FULL_JOIN) &&
-    //    (!found_match)) {
-    //  // TODO: This code assumes that swap_tables is false for all join
-    //  // kinds aside from inner joins. Once the code is generalized to handle
-    //  // other joins we'll want to switch the variable in the line below back
-    //  // to the left_row_index, but for now we can assume that they are
-    //  // equivalent inside this conditional.
-    //  add_pair_to_cache(outer_row_index,
-    //                    static_cast<cudf::size_type>(JoinNoneValue),
-    //                    current_idx_shared,
-    //                    warp_id,
-    //                    join_shared_l[warp_id],
-    //                    join_shared_r[warp_id]);
-    //}
+    // TODO: This entire kernel probably won't work for left anti joins since I
+    // need to use a normal map (not a multimap), so this condition is probably
+    // overspecified at the moment.
+    if (join_type == join_kind::LEFT_JOIN || join_type == join_kind::LEFT_ANTI_JOIN ||
+        join_type == join_kind::FULL_JOIN) {
+      hash_table_view.pair_retrieve_outer(this_thread,
+                                          query_pair,
+                                          probe_key_begin,
+                                          probe_value_begin,
+                                          contained_key_begin,
+                                          contained_value_begin,
+                                          equality);
+    } else {
+      hash_table_view.pair_retrieve(this_thread,
+                                    query_pair,
+                                    probe_key_begin,
+                                    probe_value_begin,
+                                    contained_key_begin,
+                                    contained_value_begin,
+                                    equality);
+    }
   }
 }
 

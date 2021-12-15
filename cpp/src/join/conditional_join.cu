@@ -199,6 +199,13 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
                                                  rmm::cuda_stream_view stream,
                                                  rmm::mr::device_memory_resource* mr)
 {
+  // Until we add logic to handle the number of non-matches in the right table,
+  // full joins are not supported in this function. Note that this does not
+  // prevent actually performing full joins since we do that by calculating the
+  // left join and then concatenating the complementary right indices.
+  CUDF_EXPECTS(join_type != join_kind::FULL_JOIN,
+               "Size estimation is not available for full joins.");
+
   // We can immediately filter out cases where one table is empty. In
   // some cases, we return all the rows of the other table with a corresponding
   // null index for the empty table; in others, we return an empty output.
@@ -250,8 +257,6 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
   detail::grid_1d const config(swap_tables ? right_num_rows : left_num_rows,
                                DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
-
-  assert(join_type != join_kind::FULL_JOIN);
 
   // Allocate storage for the counter used to get the size of the join output
   rmm::device_scalar<std::size_t> size(0, stream, mr);

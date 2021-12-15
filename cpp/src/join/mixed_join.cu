@@ -291,10 +291,18 @@ compute_mixed_join_output_size(table_view const& left_equality,
                                rmm::cuda_stream_view stream,
                                rmm::mr::device_memory_resource* mr)
 {
+  // Until we add logic to handle the number of non-matches in the right table,
+  // full joins are not supported in this function. Note that this does not
+  // prevent actually performing full joins since we do that by calculating the
+  // left join and then concatenating the complementary right indices.
+  CUDF_EXPECTS(join_type != join_kind::FULL_JOIN,
+               "Size estimation is not available for full joins.");
+
   CUDF_EXPECTS(left_conditional.num_rows() == left_equality.num_rows(),
                "The left conditional and equality tables must have the same number of rows.");
   CUDF_EXPECTS(right_conditional.num_rows() == right_equality.num_rows(),
                "The right conditional and equality tables must have the same number of rows.");
+
   // Note: Technically the rest of the code would work to have 0 columns in the
   // conditional tables and a predicate that is just a literal value, but
   // there's no practical reason to support that.
@@ -382,7 +390,6 @@ compute_mixed_join_output_size(table_view const& left_equality,
   // TODO: To add support for nested columns we will need to flatten in many
   // places. However, this probably isn't worth adding any time soon since we
   // won't be able to support AST conditions for those types anyway.
-  // TODO: Decide how to handle null equality when mixing AST operators with hash joins.
   build_join_hash_table(build, hash_table, compare_nulls, stream);
   auto hash_table_view = hash_table.get_device_view();
 
@@ -393,9 +400,6 @@ compute_mixed_join_output_size(table_view const& left_equality,
   // whichever table is larger rather than always using the left table.
   detail::grid_1d const config(outer_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
-
-  // TODO: Figure out why this is here. Also applies to nested loop conditional joins.
-  assert(join_type != join_kind::FULL_JOIN);
 
   // Allocate storage for the counter used to get the size of the join output
   rmm::device_scalar<std::size_t> size(0, stream, mr);
