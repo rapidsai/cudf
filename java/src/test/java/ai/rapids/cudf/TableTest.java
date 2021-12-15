@@ -6367,25 +6367,20 @@ public class TableTest extends CudfTestBase {
 
   @Test
   void testScatterScalars() {
-    Scalar[] srcScalars = new Scalar[] { Scalar.fromInt(0), Scalar.fromString("A") };
-    try {
-      try (ColumnVector scatterMap = ColumnVector.fromInts(0, 2, 4);
-           Table targetTable = new Table.TestBuilder()
-               .column(-1, -2, -3, -4, -5)
-               .column("B", "BB", "BBB", "BBBB", "BBBBB")
-               .build();
-           Table expected = new Table.TestBuilder()
-               .column(0, -2, 0, -4, 0)
-               .column("A", "BB", "A", "BBBB", "A")
-               .build();
-           Table result = Table.scatter(srcScalars, scatterMap, targetTable, false)) {
-         assertTablesAreEqual(expected, result);
-       }
-    } finally {
-      for (Scalar scalar : srcScalars) {
-        scalar.close();
-      }
-    }
+    try (Scalar s1 = Scalar.fromInt(0);
+         Scalar s2 = Scalar.fromString("A");
+         ColumnVector scatterMap = ColumnVector.fromInts(0, 2, 4);
+         Table targetTable = new Table.TestBuilder()
+            .column(-1, -2, -3, -4, -5)
+            .column("B", "BB", "BBB", "BBBB", "BBBBB")
+            .build();
+         Table expected = new Table.TestBuilder()
+            .column(0, -2, 0, -4, 0)
+            .column("A", "BB", "A", "BBBB", "A")
+            .build();
+         Table result = Table.scatter(new Scalar[] { s1, s2 }, scatterMap, targetTable, false)) {
+       assertTablesAreEqual(expected, result);
+     }
   }
 
   @Test
