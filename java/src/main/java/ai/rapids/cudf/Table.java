@@ -2079,6 +2079,7 @@ public final class Table implements AutoCloseable {
    * is the number of rows in the `target` table.
    *
    * @param scatterMap The map of indexes. Must be non-nullable and integral type.
+   * @param target The table where rows from the current table are scattered into.
    * @param checkBounds Optionally perform bounds checking on the values of`scatterMap`
    *                    and throw an error if any of its values are out of bounds.
    */
@@ -2100,7 +2101,9 @@ public final class Table implements AutoCloseable {
    * If the same index appears more than once in the scatter map, the result is
    * undefined.
    *
+   * @param source The input scalars containing values to be scattered into the target table.
    * @param scatterMap The map of indexes. Must be non-nullable and integral type.
+   * @param target The table where rows from the current table are scattered into.
    * @param checkBounds Optionally perform bounds checking on the values of`scatterMap`
    *                    and throw an error if any of its values are out of bounds.
    */
