@@ -183,9 +183,6 @@ __global__ void compute_mixed_join_output_size(
     // Figure out the number of elements for this key.
     cg::thread_block_tile<1> this_thread = cg::this_thread();
     auto query_pair                      = pair_func(outer_row_index);
-    // TODO: Make sure that the probe/build order here is correct (it
-    // definitely matters because of which order the indices are passed to this
-    // by the static_multimap::device_view::pair_count API.
     // TODO: Address asymmetry in operator.
     auto count_equality = pair_expression_equality<has_nulls>{
       build, probe, evaluator, thread_intermediate_storage, compare_nulls};
@@ -281,9 +278,6 @@ __global__ void mixed_join(table_device_view left_table,
   if (outer_row_index < outer_num_rows) {
     // Figure out the number of elements for this key.
     cg::thread_block_tile<1> this_thread = cg::this_thread();
-    // TODO: For now I'm assuming an inner join here and not inserting anything
-    // for the case of a left join row with no matches.
-
     // Figure out the number of elements for this key.
     auto query_pair = pair_func(outer_row_index);
     auto equality   = pair_expression_equality<has_nulls>{
