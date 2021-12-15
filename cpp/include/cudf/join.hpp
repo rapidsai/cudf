@@ -697,6 +697,17 @@ mixed_inner_join(
   std::optional<std::pair<std::size_t, device_span<size_type>>> output_size_data = {},
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
+          std::unique_ptr<rmm::device_uvector<size_type>>>
+mixed_left_join(table_view const& left_equality,
+                table_view const& right_equality,
+                table_view const& left_conditional,
+                table_view const& right_conditional,
+                ast::expression const& binary_predicate,
+                null_equality compare_nulls = null_equality::EQUAL,
+                std::optional<std::pair<std::size_t, device_span<size_type>>> output_size_data = {},
+                rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /**
  * @brief Returns a pair of row index vectors corresponding to all pairs
  * of rows between the specified tables where the predicate evaluates to true.
@@ -924,6 +935,15 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
  * @return The size that would result from performing the requested join.
  */
 std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_inner_join_size(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls         = null_equality::EQUAL,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_left_join_size(
   table_view const& left_equality,
   table_view const& right_equality,
   table_view const& left_conditional,

@@ -355,3 +355,68 @@ TYPED_TEST(MixedInnerJoinTest, Basic2)
              {0, 0, 0, 1},
              {{3, 3}});
 }
+
+/**
+ * Tests of mixed left joins.
+ */
+template <typename T>
+struct MixedLeftJoinTest : public MixedJoinPairReturnTest<T> {
+  PairJoinReturn join(cudf::table_view left_equality,
+                      cudf::table_view right_equality,
+                      cudf::table_view left_conditional,
+                      cudf::table_view right_conditional,
+                      cudf::ast::operation predicate) override
+  {
+    return cudf::mixed_left_join(
+      left_equality, right_equality, left_conditional, right_conditional, predicate);
+  }
+
+  std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size(
+    cudf::table_view left_equality,
+    cudf::table_view right_equality,
+    cudf::table_view left_conditional,
+    cudf::table_view right_conditional,
+    cudf::ast::operation predicate) override
+  {
+    return cudf::mixed_left_join_size(
+      left_equality, right_equality, left_conditional, right_conditional, predicate);
+  }
+};
+
+TYPED_TEST_SUITE(MixedLeftJoinTest, cudf::test::IntegralTypesNotBool);
+
+TYPED_TEST(MixedLeftJoinTest, Basic)
+{
+  this->test({{0, 1, 2}, {3, 4, 5}, {10, 20, 30}},
+             {{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
+             {0},
+             {1, 2},
+             left_zero_eq_right_zero,
+             {1, 1, 1},
+             {{0, JoinNoneValue}, {1, 1}, {2, JoinNoneValue}});
+}
+
+TYPED_TEST(MixedLeftJoinTest, Basic2)
+{
+  auto const col_ref_left_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_1 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+  auto const col_ref_left_2  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_2 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
+
+  auto scalar_1        = cudf::numeric_scalar<TypeParam>(35);
+  auto const literal_1 = cudf::ast::literal(scalar_1);
+
+  auto const op1 =
+    cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_left_1, col_ref_right_1);
+  auto const op2 = cudf::ast::operation(cudf::ast::ast_operator::LESS, literal_1, col_ref_right_2);
+
+  auto const predicate = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, op1, op2);
+
+  this->test({{0, 1, 2, 4}, {3, 4, 5, 6}, {10, 20, 30, 40}},
+             {{0, 1, 3, 4}, {5, 4, 5, 7}, {30, 40, 50, 60}},
+             {0},
+             {1, 2},
+             predicate,
+             {1, 1, 1, 1},
+             {{0, JoinNoneValue}, {1, JoinNoneValue}, {2, JoinNoneValue}, {3, 3}});
+}
