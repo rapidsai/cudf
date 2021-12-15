@@ -459,7 +459,8 @@ class DateOffset:
         "Y": "years",
     }
 
-    _TICK_TO_UNITS = {
+    _TICK_OR_WEEK_TO_UNITS = {
+        pd_offset.Week: "weeks",
         pd_offset.Day: "days",
         pd_offset.Hour: "hours",
         pd_offset.Minute: "minutes",
@@ -661,8 +662,11 @@ class DateOffset:
         return cls(**{cls._CODES_TO_UNITS[freq_part]: int(numeric_part)})
 
     @classmethod
-    def _from_pandas_ticks(cls: Type[_T], tick: pd.tseries.offsets.Tick) -> _T:
-        return cls(**{cls._TICK_TO_UNITS[type(tick)]: tick.n})
+    def _from_pandas_ticks_or_weeks(
+        cls: Type[_T],
+        tick: Union[pd.tseries.offsets.Tick, pd.tseries.offsets.Week],
+    ) -> _T:
+        return cls(**{cls._TICK_OR_WEEK_TO_UNITS[type(tick)]: tick.n})
 
     def _maybe_as_fast_pandas_offset(self):
         if (
@@ -830,12 +834,14 @@ def date_range(
         offset = freq
     elif isinstance(freq, str):
         offset = pd.tseries.frequencies.to_offset(freq)
-        if not isinstance(offset, pd.tseries.offsets.Tick):
+        if not isinstance(offset, pd.tseries.offsets.Tick) and not isinstance(
+            offset, pd.tseries.offsets.Week
+        ):
             raise ValueError(
                 f"Unrecognized frequency string {freq}. cuDF does"
                 " not yet support month, quarter, year-anchored frequency."
             )
-        offset = DateOffset._from_pandas_ticks(offset)
+        offset = DateOffset._from_pandas_ticks_or_weeks(offset)
     else:
         raise TypeError("`freq` must be a `str` or cudf.DateOffset object.")
 
