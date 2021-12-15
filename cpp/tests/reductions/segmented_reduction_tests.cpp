@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include "cudf_test/column_utilities.hpp"
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/type_lists.hpp>
@@ -36,12 +35,18 @@ struct SegmentedReductionTest : public cudf::test::BaseFixture {
 
 TYPED_TEST_CASE(SegmentedReductionTest, NumericTypes);
 
-TYPED_TEST(SegmentedReductionTest, Sum)
+TYPED_TEST(SegmentedReductionTest, SumExcludeNulls)
 {
-  // TODO: add nulls
-  auto input   = fixed_width_column_wrapper<TypeParam>{3, 3, 3, 8, 8, 0, 0, 0, 0};
-  auto offsets = fixed_width_column_wrapper<size_type>{0, 3, 5, 5, 9};
-  auto expect  = fixed_width_column_wrapper<TypeParam>{{9, 16, XXX, 0}, {1, 1, 0, 1}};
+  // [1, 2, 3], [1, null, 3], [1], [null], [null, null], []
+  // values:   {1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX}
+  // offsets:  {0, 3, 6, 7, 8, 10, 10}
+  // nullmask: {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}
+  // outputs:  {6, 4, 1, XXX, XXX, XXX}
+  // output nullmask: {1, 1, 1, 0, 0, 0}
+  auto input   = fixed_width_column_wrapper<TypeParam>{{1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
+                                                     {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
+  auto offsets = fixed_width_column_wrapper<size_type>{0, 3, 6, 7, 8, 10, 10};
+  auto expect = fixed_width_column_wrapper<TypeParam>{{6, 4, 1, XXX, XXX, XXX}, {1, 1, 1, 0, 0, 0}};
 
   auto res = segmented_reduce(input,
                               offsets,
@@ -65,12 +70,19 @@ TYPED_TEST(SegmentedReductionTest, EmptySum)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
 }
 
-TYPED_TEST(SegmentedReductionTest, Product)
+TYPED_TEST(SegmentedReductionTest, ProductExcludeNulls)
 {
-  // TODO: add nulls
-  auto input   = fixed_width_column_wrapper<TypeParam>{3, 3, 3, 8, 8, 0, 9, 9, 9};
-  auto offsets = fixed_width_column_wrapper<size_type>{0, 3, 5, 5, 9};
-  auto expect  = fixed_width_column_wrapper<TypeParam>{{27, 64, XXX, 0}, {1, 1, 0, 1}};
+  // [1, 3, 5], [null, 3, 5], [1], [null], [null, null], []
+  // values:    {1, 3, 5, XXX, 3, 5, 1, XXX, XXX, XXX}
+  // offsets:   {0, 3, 6, 7, 8, 10, 10}
+  // nullmask:  {1, 1, 1, 0, 1, 1, 1, 0, 0, 0}
+  // outputs:   {15, 15, 1, XXX, XXX, XXX}
+  // output nullmask: {1, 1, 1, 0, 0, 0}
+  auto input   = fixed_width_column_wrapper<TypeParam>{{1, 3, 5, XXX, 3, 5, 1, XXX, XXX, XXX},
+                                                     {1, 1, 1, 0, 1, 1, 1, 0, 0, 0}};
+  auto offsets = fixed_width_column_wrapper<size_type>{0, 3, 6, 7, 8, 10, 10};
+  auto expect =
+    fixed_width_column_wrapper<TypeParam>{{15, 15, 1, XXX, XXX, XXX}, {1, 1, 1, 0, 0, 0}};
 
   auto res = segmented_reduce(input,
                               offsets,
@@ -80,26 +92,18 @@ TYPED_TEST(SegmentedReductionTest, Product)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
 }
 
-TYPED_TEST(SegmentedReductionTest, EmptyProduct)
+TYPED_TEST(SegmentedReductionTest, MaxExcludeNulls)
 {
-  auto input   = fixed_width_column_wrapper<TypeParam>{};
-  auto offsets = fixed_width_column_wrapper<size_type>{0};
-  auto expect  = fixed_width_column_wrapper<TypeParam>{};
-
-  auto res = segmented_reduce(input,
-                              offsets,
-                              make_product_aggregation(),
-                              data_type{type_to_id<TypeParam>()},
-                              null_policy::EXCLUDE);
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
-}
-
-TYPED_TEST(SegmentedReductionTest, Max)
-{
-  // TODO: add nulls
-  auto input   = fixed_width_column_wrapper<TypeParam>{1, 8, 6, 7, 8, 9, 3, 7, 6};
-  auto offsets = fixed_width_column_wrapper<size_type>{0, 3, 3, 6, 9};
-  auto expect  = fixed_width_column_wrapper<TypeParam>{{8, XXX, 9, 7}, {1, 0, 1, 1}};
+  // [1, 2, 3], [1, null, 3], [1], [null], [null, null], []
+  // values:    {1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX}
+  // offsets:   {0, 3, 6, 7, 8, 10, 10}
+  // nullmask:  {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}
+  // outputs:   {3, 3, 1, XXX, XXX, XXX}
+  // output nullmask: {1, 1, 1, 0, 0, 0}
+  auto input   = fixed_width_column_wrapper<TypeParam>{{1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
+                                                     {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
+  auto offsets = fixed_width_column_wrapper<size_type>{0, 3, 6, 7, 8, 10, 10};
+  auto expect = fixed_width_column_wrapper<TypeParam>{{3, 3, 1, XXX, XXX, XXX}, {1, 1, 1, 0, 0, 0}};
 
   auto res = segmented_reduce(input,
                               offsets,
@@ -109,12 +113,18 @@ TYPED_TEST(SegmentedReductionTest, Max)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
 }
 
-TYPED_TEST(SegmentedReductionTest, Min)
+TYPED_TEST(SegmentedReductionTest, MinExcludeNulls)
 {
-  // TODO: add nulls
-  auto input   = fixed_width_column_wrapper<TypeParam>{8, 8, 8, 3, 2, 4, 8, 6, 1, 7};
-  auto offsets = fixed_width_column_wrapper<size_type>{0, 3, 3, 6, 10};
-  auto expect  = fixed_width_column_wrapper<TypeParam>{{8, XXX, 2, 1}, {1, 0, 1, 1}};
+  // [1, 2, 3], [1, null, 3], [1], [null], [null, null], []
+  // values:   {1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX}
+  // offsets:  {0, 3, 6, 7, 8, 10, 10}
+  // nullmask: {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}
+  // outputs:  {1, 1, 1, XXX, XXX, XXX}
+  // output nullmask: {1, 1, 1, 0, 0, 0}
+  auto input   = fixed_width_column_wrapper<TypeParam>{{1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
+                                                     {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
+  auto offsets = fixed_width_column_wrapper<size_type>{0, 3, 6, 7, 8, 10, 10};
+  auto expect = fixed_width_column_wrapper<TypeParam>{{1, 1, 1, XXX, XXX, XXX}, {1, 1, 1, 0, 0, 0}};
 
   auto res = segmented_reduce(input,
                               offsets,
@@ -124,19 +134,28 @@ TYPED_TEST(SegmentedReductionTest, Min)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
 }
 
-TYPED_TEST(SegmentedReductionTest, Any)
+TYPED_TEST(SegmentedReductionTest, AnyExcludeNulls)
 {
-  // TODO: add nulls
-  auto input   = fixed_width_column_wrapper<TypeParam>{4, 4, 4, 5, 0, 0, 0, 0, 0, 0};
-  auto offsets = fixed_width_column_wrapper<size_type>{0, 3, 6, 6, 10};
-  auto expect  = fixed_width_column_wrapper<bool>{{true, true, bool{XXX}, false}, {1, 1, 0, 1}};
+  // [0, 0, 0], [0, null, 0], [0, 1, 0], [1, null, 0], [], [0], [1], [null], [null, null]
+  // values:  {0, 0, 0, 0, XXX, 0, 0, 1, 0, 1, XXX, 0, 0, 1, XXX, XXX, XXX}
+  // offsets: {0, 3, 6, 9, 12, 12, 13, 14, 15, 17}
+  // nullmask:{1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0}
+  // outputs: {0, 0, 1, 1, XXX, 0, 1, XXX, XXX}
+  // output nullmask: {1, 1, 1, 1, 0, 1, 1, 0, 0}
+  auto input = fixed_width_column_wrapper<TypeParam>{
+    {0, 0, 0, 0, XXX, 0, 0, 1, 0, 1, XXX, 0, 0, 1, XXX, XXX, XXX},
+    {1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0}};
+  auto offsets = fixed_width_column_wrapper<size_type>{0, 3, 6, 9, 12, 12, 13, 14, 15, 17};
+  auto expect  = fixed_width_column_wrapper<bool>{
+    {false, false, true, true, bool{XXX}, false, true, bool{XXX}, bool{XXX}},
+    {1, 1, 1, 1, 0, 1, 1, 0, 0}};
 
   auto res = segmented_reduce(
     input, offsets, make_any_aggregation(), data_type{type_id::BOOL8}, null_policy::EXCLUDE);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
 }
 
-TYPED_TEST(SegmentedReductionTest, All)
+TYPED_TEST(SegmentedReductionTest, AllExcludeNulls)
 {
   // [1, 2, 3], [1, null, 3], [], [1], [null], [null, null], [1, 0, 3], [1, null, 0], [0]
   // values: {1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX, 1, 0, 3, 1, XXX, 0, 0}
@@ -159,6 +178,137 @@ TYPED_TEST(SegmentedReductionTest, All)
 }
 
 // TODO: Add tests for null_policy::INCLUDE
+
+TYPED_TEST(SegmentedReductionTest, SumIncludeNulls)
+{
+  // [1, 2, 3], [1, null, 3], [1], [null], [null, null], []
+  // values:   {1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX}
+  // offsets:  {0, 3, 6, 7, 8, 10, 10}
+  // nullmask: {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}
+  // outputs:  {6, XXX, 1, XXX, XXX, XXX}
+  // output nullmask: {1, 0, 1, 0, 0, 0}
+  auto input   = fixed_width_column_wrapper<TypeParam>{{1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
+                                                     {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
+  auto offsets = fixed_width_column_wrapper<size_type>{0, 3, 6, 7, 8, 10, 10};
+  auto expect =
+    fixed_width_column_wrapper<TypeParam>{{6, XXX, 1, XXX, XXX, XXX}, {1, 0, 1, 0, 0, 0}};
+
+  auto res = segmented_reduce(input,
+                              offsets,
+                              make_sum_aggregation(),
+                              data_type{type_to_id<TypeParam>()},
+                              null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
+}
+
+TYPED_TEST(SegmentedReductionTest, ProductIncludeNulls)
+{
+  // [1, 3, 5], [null, 3, 5], [1], [null], [null, null], []
+  // values:    {1, 3, 5, XXX, 3, 5, 1, XXX, XXX, XXX}
+  // offsets:   {0, 3, 6, 7, 8, 10, 10}
+  // nullmask:  {1, 1, 1, 0, 1, 1, 1, 0, 0, 0}
+  // outputs:   {15, XXX, 1, XXX, XXX, XXX}
+  // output nullmask: {1, 0, 1, 0, 0, 0}
+  auto input   = fixed_width_column_wrapper<TypeParam>{{1, 3, 5, XXX, 3, 5, 1, XXX, XXX, XXX},
+                                                     {1, 1, 1, 0, 1, 1, 1, 0, 0, 0}};
+  auto offsets = fixed_width_column_wrapper<size_type>{0, 3, 6, 7, 8, 10, 10};
+  auto expect =
+    fixed_width_column_wrapper<TypeParam>{{15, XXX, 1, XXX, XXX, XXX}, {1, 0, 1, 0, 0, 0}};
+
+  auto res = segmented_reduce(input,
+                              offsets,
+                              make_product_aggregation(),
+                              data_type{type_to_id<TypeParam>()},
+                              null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
+}
+
+TYPED_TEST(SegmentedReductionTest, MaxIncludeNulls)
+{
+  // [1, 2, 3], [1, null, 3], [1], [null], [null, null], []
+  // values:    {1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX}
+  // offsets:   {0, 3, 6, 7, 8, 10, 10}
+  // nullmask:  {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}
+  // outputs:   {3, XXX, 1, XXX, XXX, XXX}
+  // output nullmask: {1, 0, 1, 0, 0, 0}
+  auto input   = fixed_width_column_wrapper<TypeParam>{{1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
+                                                     {1, 1, 1, 1, 0, 1, 1, 0, 0, 0}};
+  auto offsets = fixed_width_column_wrapper<size_type>{0, 3, 6, 7, 8, 10, 10};
+  auto expect =
+    fixed_width_column_wrapper<TypeParam>{{3, XXX, 1, XXX, XXX, XXX}, {1, 0, 1, 0, 0, 0}};
+
+  auto res = segmented_reduce(input,
+                              offsets,
+                              make_max_aggregation(),
+                              data_type{type_to_id<TypeParam>()},
+                              null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
+}
+
+TYPED_TEST(SegmentedReductionTest, MinIncludeNulls)
+{
+  // [1, 2, 3], [1, null, 3], [1], [null], [null, null], []
+  // values:   {1, 2, 3, 1, XXX, 3, 1, XXX, XXX}
+  // offsets:  {0, 3, 6, 7, 8, 10, 10}
+  // nullmask: {1, 1, 1, 1, 0, 1, 1, 0, 0}
+  // outputs:  {1, XXX, 1, XXX, XXX, XXX}
+  // output nullmask: {1, 0, 1, 0, 0, 0}
+  auto input   = fixed_width_column_wrapper<TypeParam>{{1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX},
+                                                     {1, 1, 1, 1, 0, 1, 1, 0, 0}};
+  auto offsets = fixed_width_column_wrapper<size_type>{0, 3, 6, 7, 8, 10, 10};
+  auto expect =
+    fixed_width_column_wrapper<TypeParam>{{1, XXX, 1, XXX, XXX, XXX}, {1, 0, 1, 0, 0, 0}};
+
+  auto res = segmented_reduce(input,
+                              offsets,
+                              make_min_aggregation(),
+                              data_type{type_to_id<TypeParam>()},
+                              null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
+}
+
+TYPED_TEST(SegmentedReductionTest, AnyIncludeNulls)
+{
+  // [0, 0, 0], [0, null, 0], [0, 1, 0], [1, null, 0], [], [0], [1], [null], [null, null]
+  // values:  {0, 0, 0, 0, XXX, 0, 0, 1, 0, 1, XXX, 0, 0, 1, XXX, XXX, XXX}
+  // offsets: {0, 3, 6, 9, 12, 12, 13, 14, 15, 17}
+  // nullmask:{1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0}
+  // outputs: {0, XXX, 1, XXX, XXX, 0, 1, XXX, XXX}
+  // output nullmask: {1, 0, 1, 0, 0, 1, 1, 0, 0}
+  auto input = fixed_width_column_wrapper<TypeParam>{
+    {0, 0, 0, 0, XXX, 0, 0, 1, 0, 1, XXX, 0, 0, 1, XXX, XXX, XXX},
+    {1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 0, 0}};
+  auto offsets = fixed_width_column_wrapper<size_type>{0, 3, 6, 9, 12, 12, 13, 14, 15, 17};
+  auto expect  = fixed_width_column_wrapper<bool>{
+    {false, bool{XXX}, true, bool{XXX}, bool{XXX}, false, true, bool{XXX}, bool{XXX}},
+    {1, 0, 1, 0, 0, 1, 1, 0, 0}};
+
+  auto res = segmented_reduce(
+    input, offsets, make_any_aggregation(), data_type{type_id::BOOL8}, null_policy::INCLUDE);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
+}
+
+TYPED_TEST(SegmentedReductionTest, AllIncludeNulls)
+{
+  // [1, 2, 3], [1, null, 3], [], [1], [null], [null, null], [1, 0, 3], [1, null, 0], [0]
+  // values: {1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX, 1, 0, 3, 1, XXX, 0, 0}
+  // offsets: {0, 3, 6, 6, 7, 8, 10, 13, 16, 17}
+  // nullmask: {1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1}
+  // outputs: {true, XXX, XXX, true, XXX, XXX, false, XXX, false}
+  // output nullmask: {1, 0, 0, 1, 0, 0, 1, 0, 1}
+  auto input = fixed_width_column_wrapper<TypeParam>{
+    {1, 2, 3, 1, XXX, 3, 1, XXX, XXX, XXX, 1, 0, 3, 1, XXX, 0, 0},
+    {1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 1}};
+  auto offsets = fixed_width_column_wrapper<size_type>{0, 3, 6, 6, 7, 8, 10, 13, 16, 17};
+  auto expect  = fixed_width_column_wrapper<bool>{
+    {true, bool{XXX}, bool{XXX}, true, bool{XXX}, bool{XXX}, false, bool{XXX}, false},
+    {1, 0, 0, 1, 0, 0, 1, 0, 1}};
+
+  auto res = segmented_reduce(
+    input, offsets, make_all_aggregation(), data_type{type_id::BOOL8}, null_policy::INCLUDE);
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*res, expect);
+}
 
 #undef XXX
 
