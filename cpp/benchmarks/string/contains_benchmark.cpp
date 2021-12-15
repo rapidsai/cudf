@@ -46,7 +46,7 @@ static void BM_contains(benchmark::State& state, contains_type ct)
         cudf::strings::count_re(input, "\\d+");
         break;
       case contains_type::findall:  // returns occurrences of matches
-        cudf::strings::findall_re(input, "\\d+");
+        cudf::strings::findall(input, "\\d+");
         break;
     }
   }

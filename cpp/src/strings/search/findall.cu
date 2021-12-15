@@ -109,11 +109,11 @@ struct findall_count_fn : public findall_fn<stack_size> {
 }  // namespace
 
 //
-std::unique_ptr<table> findall_re(
+std::unique_ptr<table> findall(
   strings_column_view const& strings,
   std::string const& pattern,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource(),
-  rmm::cuda_stream_view stream        = rmm::cuda_stream_default)
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   auto const strings_count = strings.size();
   auto const d_strings     = column_device_view::create(strings.parent(), stream);
@@ -205,12 +205,12 @@ std::unique_ptr<table> findall_re(
 
 // external API
 
-std::unique_ptr<table> findall_re(strings_column_view const& strings,
-                                  std::string const& pattern,
-                                  rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> findall(strings_column_view const& strings,
+                               std::string const& pattern,
+                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::findall_re(strings, pattern, mr);
+  return detail::findall(strings, pattern, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings
