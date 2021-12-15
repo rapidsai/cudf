@@ -769,7 +769,7 @@ def to_parquet(
             return
 
         # TODO: re-enable non-partitioned case
-        _write_parquet(
+        return _write_parquet(
             df,
             paths=[path],
             compression=compression,

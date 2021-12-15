@@ -2294,8 +2294,3 @@ def test_parquet_writer_row_group_size(
         math.ceil(num_rows / size_rows), math.ceil(8 * num_rows / size_bytes)
     )
     assert expected_num_rows == row_groups
-
-
-def test_partitioned():
-    df = cudf.DataFrame({"a": [1, 1, 2, 2, 1], "b": [9, 8, 7, 6, 5]})
-    cudf.io.parquet.write_to_dataset(df, "./", partition_cols="a")
