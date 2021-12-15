@@ -705,15 +705,12 @@ int set_column_metadata(cudf::io::column_in_metadata &column_metadata,
 
 void createTableMetaData(JNIEnv *env, jint num_children, jobjectArray &j_col_names,
                          jintArray &j_children, jbooleanArray &j_col_nullability,
-                         jobjectArray &j_metadata_keys, jobjectArray &j_metadata_values,
                          jbooleanArray &j_is_int96, jintArray &j_precisions,
                          jbooleanArray &j_is_map, cudf::io::table_input_metadata &metadata) {
   cudf::jni::auto_set_device(env);
   cudf::jni::native_jstringArray col_names(env, j_col_names);
   cudf::jni::native_jbooleanArray col_nullability(env, j_col_nullability);
   cudf::jni::native_jbooleanArray is_int96(env, j_is_int96);
-  cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
-  cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
   cudf::jni::native_jintArray precisions(env, j_precisions);
   cudf::jni::native_jintArray children(env, j_children);
   cudf::jni::native_jbooleanArray is_map(env, j_is_map);
@@ -741,9 +738,6 @@ void createTableMetaData(JNIEnv *env, jint num_children, jobjectArray &j_col_nam
           set_column_metadata(metadata.column_metadata[write_index], cpp_names, col_nullability,
                               is_int96, precisions, is_map, children, childs_children, read_index);
     }
-  }
-  for (auto i = 0; i < meta_keys.size(); ++i) {
-    metadata.user_data[meta_keys[i].get()] = meta_values[i].get();
   }
 }
 
@@ -1364,15 +1358,23 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetBufferBegin(
     using namespace cudf::jni;
     sink_info sink{data_sink.get()};
     table_input_metadata metadata;
-    createTableMetaData(env, j_num_children, j_col_names, j_children, j_col_nullability,
-                        j_metadata_keys, j_metadata_values, j_isInt96, j_precisions, j_is_map,
-                        metadata);
+    createTableMetaData(env, j_num_children, j_col_names, j_children, j_col_nullability, j_isInt96,
+                        j_precisions, j_is_map, metadata);
+
+    cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
+    cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
+
+    std::map<std::string, std::string> kv_metadata;
+    for (auto i = 0; i < meta_keys.size(); ++i) {
+      kv_metadata[meta_keys[i].get()] = meta_values[i].get();
+    }
 
     chunked_parquet_writer_options opts =
         chunked_parquet_writer_options::builder(sink)
             .metadata(&metadata)
             .compression(static_cast<compression_type>(j_compression))
             .stats_level(static_cast<statistics_freq>(j_stats_freq))
+            .key_value_metadata({kv_metadata})
             .build();
     auto writer_ptr = std::make_unique<cudf::io::parquet_chunked_writer>(opts);
     cudf::jni::native_parquet_writer_handle *ret =
@@ -1398,15 +1400,24 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeParquetFileBegin(
     using namespace cudf::io;
     using namespace cudf::jni;
     table_input_metadata metadata;
-    createTableMetaData(env, j_num_children, j_col_names, j_children, j_col_nullability,
-                        j_metadata_keys, j_metadata_values, j_isInt96, j_precisions, j_is_map,
-                        metadata);
+    createTableMetaData(env, j_num_children, j_col_names, j_children, j_col_nullability, j_isInt96,
+                        j_precisions, j_is_map, metadata);
+
+    cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
+    cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
+
+    std::map<std::string, std::string> kv_metadata;
+    for (auto i = 0; i < meta_keys.size(); ++i) {
+      kv_metadata[meta_keys[i].get()] = meta_values[i].get();
+    }
+
     sink_info sink{output_path.get()};
     chunked_parquet_writer_options opts =
         chunked_parquet_writer_options::builder(sink)
             .metadata(&metadata)
             .compression(static_cast<compression_type>(j_compression))
             .stats_level(static_cast<statistics_freq>(j_stats_freq))
+            .key_value_metadata({kv_metadata})
             .build();
 
     auto writer_ptr = std::make_unique<cudf::io::parquet_chunked_writer>(opts);
@@ -1519,9 +1530,16 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCBufferBegin(
     table_input_metadata metadata;
     // ORC has no `j_is_int96`, but `createTableMetaData` needs a lvalue.
     jbooleanArray j_is_int96 = NULL;
-    createTableMetaData(env, j_num_children, j_col_names, j_children, j_col_nullability,
-                        j_metadata_keys, j_metadata_values, j_is_int96, j_precisions, j_is_map,
-                        metadata);
+    createTableMetaData(env, j_num_children, j_col_names, j_children, j_col_nullability, j_is_int96,
+                        j_precisions, j_is_map, metadata);
+
+    cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
+    cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
+
+    std::map<std::string, std::string> kv_metadata;
+    for (auto i = 0; i < meta_keys.size(); ++i) {
+      kv_metadata[meta_keys[i].get()] = meta_values[i].get();
+    }
 
     std::unique_ptr<cudf::jni::jni_writer_data_sink> data_sink(
         new cudf::jni::jni_writer_data_sink(env, consumer));
@@ -1530,6 +1548,7 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCBufferBegin(
                                           .metadata(&metadata)
                                           .compression(static_cast<compression_type>(j_compression))
                                           .enable_statistics(true)
+                                          .key_value_metadata(kv_metadata)
                                           .build();
     auto writer_ptr = std::make_unique<cudf::io::orc_chunked_writer>(opts);
     cudf::jni::native_orc_writer_handle *ret =
@@ -1556,15 +1575,23 @@ JNIEXPORT long JNICALL Java_ai_rapids_cudf_Table_writeORCFileBegin(
     table_input_metadata metadata;
     // ORC has no `j_is_int96`, but `createTableMetaData` needs a lvalue.
     jbooleanArray j_is_int96 = NULL;
-    createTableMetaData(env, j_num_children, j_col_names, j_children, j_col_nullability,
-                        j_metadata_keys, j_metadata_values, j_is_int96, j_precisions, j_is_map,
-                        metadata);
+    createTableMetaData(env, j_num_children, j_col_names, j_children, j_col_nullability, j_is_int96,
+                        j_precisions, j_is_map, metadata);
+
+    cudf::jni::native_jstringArray meta_keys(env, j_metadata_keys);
+    cudf::jni::native_jstringArray meta_values(env, j_metadata_values);
+
+    std::map<std::string, std::string> kv_metadata;
+    for (auto i = 0; i < meta_keys.size(); ++i) {
+      kv_metadata[meta_keys[i].get()] = meta_values[i].get();
+    }
 
     sink_info sink{output_path.get()};
     chunked_orc_writer_options opts = chunked_orc_writer_options::builder(sink)
                                           .metadata(&metadata)
                                           .compression(static_cast<compression_type>(j_compression))
                                           .enable_statistics(true)
+                                          .key_value_metadata(kv_metadata)
                                           .build();
     auto writer_ptr = std::make_unique<cudf::io::orc_chunked_writer>(opts);
     cudf::jni::native_orc_writer_handle *ret =
