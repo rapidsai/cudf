@@ -197,6 +197,14 @@ TEST_F(StringsExtractTests, ExtractAllTest)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
 }
 
+TEST_F(StringsExtractTests, Errors)
+{
+  cudf::test::strings_column_wrapper input({"this column intentionally left blank"});
+  auto sv = cudf::strings_column_view(input);
+  EXPECT_THROW(cudf::strings::extract(sv, "\\w+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::extract_all(sv, "\\w+"), cudf::logic_error);
+}
+
 TEST_F(StringsExtractTests, MediumRegex)
 {
   // This results in 95 regex instructions and falls in the 'medium' range.

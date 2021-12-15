@@ -57,21 +57,23 @@ std::unique_ptr<table> extract(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Returns a lists column of strings where each string column corresponds to the
+ * @brief Returns a lists column of strings where each string column row corresponds to the
  * matching group specified in the given regular expression pattern.
  *
  * All the matching groups for the first row will go in the first row output column; the second
- * row results will go into the second output column and so on.
+ * row results will go into the second row output column and so on.
  *
- * A null output row will result if the input string does not match or the input row is null.
+ * A null output row will result if the corresponding input string row does not match or
+ * that input row is null.
  *
  * @code{.pseudo}
  * Example:
- * s = ["a1 b4", "b2", "c3 a5", "z9"]
+ * s = ["a1 b4", "b2", "c3 a5", "b", null]
  * r = extract_all(s,"([ab])(\\d)")
  * r is now [ ["a", "1", "b", "4"],
  *            ["b", "2"],
  *            ["a", "5"],
+ *            null,
  *            null ]
  * @endcode
  *
