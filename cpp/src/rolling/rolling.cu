@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <cudf/detail/aggregation/aggregation.hpp>
 #include "rolling_detail.cuh"
+#include <cudf/detail/aggregation/aggregation.hpp>
 
 namespace cudf {
 namespace detail {

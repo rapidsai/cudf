@@ -67,7 +67,7 @@ struct has_negative_nans_fn {
  * @brief A structure to be used along with type_dispatcher to check if a column has any
  * negative NaN value.
  *
- * This functor is neccessary because when calling to segmented sort on the list entries, the
+ * This functor is necessary because when calling to segmented sort on the list entries, the
  * negative NaN and positive NaN values (if both exist) are separated to the two ends of the output
  * lists. We want to move all NaN values close together in order to call unique_copy later on.
  */
@@ -563,7 +563,7 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
                      values ? cudf::empty_like(values.value().parent()) : nullptr};
   }
 
-  // The child column conotaining list entries.
+  // The child column containing list entries.
   auto const keys_child = keys.get_sliced_child(stream);
 
   // Generate a mapping from list entries to their 1-based list indices for the keys column.
@@ -634,17 +634,21 @@ std::pair<std::unique_ptr<column>, std::unique_ptr<column>> drop_list_duplicates
   // If the values lists column is not given, its corresponding output will be nullptr.
   auto out_values =
     values ? make_lists_column(keys.size(),
-                               std::make_unique<column>(output_offsets->view()),
+                               std::make_unique<column>(output_offsets->view(), stream, mr),
                                std::move(unique_entries_and_list_indices[1]),
                                values.value().null_count(),
-                               cudf::detail::copy_bitmask(values.value().parent(), stream, mr))
+                               cudf::detail::copy_bitmask(values.value().parent(), stream, mr),
+                               stream,
+                               mr)
            : nullptr;
 
   auto out_keys = make_lists_column(keys.size(),
                                     std::move(output_offsets),
                                     std::move(unique_entries_and_list_indices[0]),
                                     keys.null_count(),
-                                    cudf::detail::copy_bitmask(keys.parent(), stream, mr));
+                                    cudf::detail::copy_bitmask(keys.parent(), stream, mr),
+                                    stream,
+                                    mr);
 
   return std::pair{std::move(out_keys), std::move(out_values)};
 }

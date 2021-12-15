@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <groupby/sort/group_util.cuh>
+#include <reductions/arg_minmax_util.cuh>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
@@ -191,7 +191,7 @@ struct group_reduction_functor<K, T, std::enable_if_t<is_group_reduction_support
                             inp_iter,
                             thrust::make_discard_iterator(),
                             out_iter,
-                            thrust::equal_to<size_type>{},
+                            thrust::equal_to{},
                             binop);
     };
 
@@ -215,10 +215,10 @@ struct group_reduction_functor<K, T, std::enable_if_t<is_group_reduction_support
       rmm::device_uvector<bool> validity(num_groups, stream);
       do_reduction(cudf::detail::make_validity_iterator(*d_values_ptr),
                    validity.begin(),
-                   thrust::logical_or<bool>{});
+                   thrust::logical_or{});
 
-      auto [null_mask, null_count] = cudf::detail::valid_if(
-        validity.begin(), validity.end(), thrust::identity<bool>{}, stream, mr);
+      auto [null_mask, null_count] =
+        cudf::detail::valid_if(validity.begin(), validity.end(), thrust::identity{}, stream, mr);
       result->set_null_mask(std::move(null_mask), null_count);
     }
     return result;
@@ -264,35 +264,30 @@ struct group_reduction_functor<
                             inp_iter,
                             thrust::make_discard_iterator(),
                             out_iter,
-                            thrust::equal_to<size_type>{},
+                            thrust::equal_to{},
                             binop);
     };
 
     auto const count_iter   = thrust::make_counting_iterator<ResultType>(0);
     auto const result_begin = result->mutable_view().template begin<ResultType>();
-    if (values.has_nulls()) {
-      auto const binop = row_arg_minmax_fn<true>(values.size(),
-                                                 *d_flattened_values_ptr,
-                                                 flattened_null_precedences.data(),
-                                                 K == aggregation::ARGMIN);
-      do_reduction(count_iter, result_begin, binop);
+    auto const binop        = cudf::reduction::detail::row_arg_minmax_fn(values.size(),
+                                                                  *d_flattened_values_ptr,
+                                                                  values.has_nulls(),
+                                                                  flattened_null_precedences.data(),
+                                                                  K == aggregation::ARGMIN);
+    do_reduction(count_iter, result_begin, binop);
 
+    if (values.has_nulls()) {
       // Generate bitmask for the output by segmented reduction of the input bitmask.
       auto const d_values_ptr = column_device_view::create(values, stream);
       auto validity           = rmm::device_uvector<bool>(num_groups, stream);
       do_reduction(cudf::detail::make_validity_iterator(*d_values_ptr),
                    validity.begin(),
-                   thrust::logical_or<bool>{});
+                   thrust::logical_or{});
 
-      auto [null_mask, null_count] = cudf::detail::valid_if(
-        validity.begin(), validity.end(), thrust::identity<bool>{}, stream, mr);
+      auto [null_mask, null_count] =
+        cudf::detail::valid_if(validity.begin(), validity.end(), thrust::identity{}, stream, mr);
       result->set_null_mask(std::move(null_mask), null_count);
-    } else {
-      auto const binop = row_arg_minmax_fn<false>(values.size(),
-                                                  *d_flattened_values_ptr,
-                                                  flattened_null_precedences.data(),
-                                                  K == aggregation::ARGMIN);
-      do_reduction(count_iter, result_begin, binop);
     }
 
     return result;

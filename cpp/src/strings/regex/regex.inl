@@ -276,7 +276,7 @@ __device__ inline int32_t reprog_device::regexec(
             }
             break;
           case EOL:
-            if (last_character || (inst->u1.c == '$' && c == '\n')) {
+            if (last_character || (c == '\n' && inst->u1.c == '$')) {
               id_activate = inst->u2.next_id;
               expanded    = true;
             }

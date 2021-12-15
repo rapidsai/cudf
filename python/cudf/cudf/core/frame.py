@@ -52,6 +52,7 @@ from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import find_common_type, is_column_like
+from cudf.utils.utils import _gather_map_is_valid
 
 T = TypeVar("T", bound="Frame")
 
@@ -139,6 +140,37 @@ class Frame:
         obj = cls.__new__(cls)
         Frame.__init__(obj, data, index)
         return obj
+
+    @classmethod
+    def _from_columns(
+        cls,
+        columns: List[ColumnBase],
+        column_names: List[str],
+        index_names: Optional[List[str]] = None,
+    ):
+        """Construct a `Frame` object from a list of columns.
+
+        If `index_names` is set, the first `len(index_names)` columns are
+        used to construct the index of the frame.
+        """
+        index = None
+        n_index_columns = 0
+        if index_names is not None:
+            n_index_columns = len(index_names)
+            index = cudf.core.index._index_from_data(
+                dict(zip(range(n_index_columns), columns))
+            )
+            if isinstance(index, cudf.MultiIndex):
+                index.names = index_names
+            else:
+                index.name = index_names[0]
+
+        data = {
+            name: columns[i + n_index_columns]
+            for i, name in enumerate(column_names)
+        }
+
+        return cls._from_data(data, index)
 
     def _mimic_inplace(
         self: T, result: Frame, inplace: bool = False
@@ -520,22 +552,32 @@ class Frame:
     def _gather(
         self, gather_map, keep_index=True, nullify=False, check_bounds=True
     ):
+        """Gather rows of frame specified by indices in `gather_map`.
+
+        Skip bounds checking if check_bounds is False.
+        Set rows to null for all out of bound indices if nullify is `True`.
+        """
+        # TODO: `keep_index` argument is to be removed.
+        gather_map = cudf.core.column.as_column(gather_map)
+
+        # TODO: For performance, the check and conversion of gather map should
+        # be done by the caller. This check will be removed in future release.
         if not is_integer_dtype(gather_map.dtype):
             gather_map = gather_map.astype("int32")
-        result = self.__class__._from_data(
-            *libcudf.copying.gather(
-                self,
-                as_column(gather_map),
-                keep_index=keep_index,
-                nullify=nullify,
-                check_bounds=check_bounds,
-            )
+
+        if not _gather_map_is_valid(
+            gather_map, len(self), check_bounds, nullify
+        ):
+            raise IndexError("Gather map index is out of bounds.")
+
+        result = self.__class__._from_columns(
+            libcudf.copying.gather(
+                list(self._columns), gather_map, nullify=nullify,
+            ),
+            self._column_names,
         )
 
-        result._copy_type_metadata(self, include_index=keep_index)
-        result._data.names = self._data.names
-        if keep_index and self._index is not None:
-            result._index.names = self._index.names
+        result._copy_type_metadata(self)
         return result
 
     def _hash(self, method, initial_hash=None):
@@ -1396,10 +1438,8 @@ class Frame:
         diff = set(subset) - set(self._data)
         if len(diff) != 0:
             raise KeyError(f"columns {diff} do not exist")
-        subset_cols = [
-            name for name, col in self._data.items() if name in subset
-        ]
-        if len(subset_cols) == 0:
+
+        if len(subset) == 0:
             return self.copy(deep=True)
 
         frame = self.copy(deep=False)
@@ -1412,16 +1452,19 @@ class Frame:
                 else:
                     frame._data[name] = col
 
-        result = self.__class__._from_data(
-            *libcudf.stream_compaction.drop_nulls(
-                frame, how=how, keys=subset, thresh=thresh
-            )
+        result = self.__class__._from_columns(
+            libcudf.stream_compaction.drop_nulls(
+                list(self._index._data.columns + frame._columns),
+                how=how,
+                keys=self._positions_from_column_names(
+                    subset, offset_by_index_columns=True
+                ),
+                thresh=thresh,
+            ),
+            self._column_names,
+            self._index.names,
         )
         result._copy_type_metadata(frame)
-        if self._index is not None:
-            result._index.name = self._index.name
-            if isinstance(self._index, cudf.MultiIndex):
-                result._index.names = self._index.names
         return result
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
@@ -1793,120 +1836,6 @@ class Frame:
             zip(self._column_names, data_columns), self._index
         )
 
-    def round(self, decimals=0, how="half_even"):
-        """
-        Round to a variable number of decimal places.
-
-        Parameters
-        ----------
-        decimals : int, dict, Series
-            Number of decimal places to round each column to. This parameter
-            must be an int for a Series.  For a DataFrame, a dict or a Series
-            are also valid inputs. If an int is given, round each column to the
-            same number of places.  Otherwise dict and Series round to variable
-            numbers of places.  Column names should be in the keys if
-            `decimals` is a dict-like, or in the index if `decimals` is a
-            Series. Any columns not included in `decimals` will be left as is.
-            Elements of `decimals` which are not columns of the input will be
-            ignored.
-        how : str, optional
-            Type of rounding. Can be either "half_even" (default)
-            of "half_up" rounding.
-
-        Returns
-        -------
-        Series or DataFrame
-            A Series or DataFrame with the affected columns rounded to the
-            specified number of decimal places.
-
-        Examples
-        --------
-        **Series**
-
-        >>> s = cudf.Series([0.1, 1.4, 2.9])
-        >>> s.round()
-        0    0.0
-        1    1.0
-        2    3.0
-        dtype: float64
-
-        **DataFrame**
-
-        >>> df = cudf.DataFrame(
-                [(.21, .32), (.01, .67), (.66, .03), (.21, .18)],
-        ...     columns=['dogs', 'cats']
-        ... )
-        >>> df
-           dogs  cats
-        0  0.21  0.32
-        1  0.01  0.67
-        2  0.66  0.03
-        3  0.21  0.18
-
-        By providing an integer each column is rounded to the same number
-        of decimal places
-
-        >>> df.round(1)
-           dogs  cats
-        0   0.2   0.3
-        1   0.0   0.7
-        2   0.7   0.0
-        3   0.2   0.2
-
-        With a dict, the number of places for specific columns can be
-        specified with the column names as key and the number of decimal
-        places as value
-
-        >>> df.round({'dogs': 1, 'cats': 0})
-           dogs  cats
-        0   0.2   0.0
-        1   0.0   1.0
-        2   0.7   0.0
-        3   0.2   0.0
-
-        Using a Series, the number of places for specific columns can be
-        specified with the column names as index and the number of
-        decimal places as value
-
-        >>> decimals = cudf.Series([0, 1], index=['cats', 'dogs'])
-        >>> df.round(decimals)
-           dogs  cats
-        0   0.2   0.0
-        1   0.0   1.0
-        2   0.7   0.0
-        3   0.2   0.0
-        """
-
-        if isinstance(decimals, cudf.Series):
-            decimals = decimals.to_pandas()
-
-        if isinstance(decimals, pd.Series):
-            if not decimals.index.is_unique:
-                raise ValueError("Index of decimals must be unique")
-            decimals = decimals.to_dict()
-        elif isinstance(decimals, int):
-            decimals = {name: decimals for name in self._column_names}
-        elif not isinstance(decimals, abc.Mapping):
-            raise TypeError(
-                "decimals must be an integer, a dict-like or a Series"
-            )
-
-        cols = {
-            name: col.round(decimals[name], how=how)
-            if (name in decimals and _is_non_decimal_numeric_dtype(col.dtype))
-            else col.copy(deep=True)
-            for name, col in self._data.items()
-        }
-
-        return self.__class__._from_data(
-            data=cudf.core.column_accessor.ColumnAccessor(
-                cols,
-                multiindex=self._data.multiindex,
-                level_names=self._data.level_names,
-            ),
-            index=self._index,
-        )
-
     @annotate("SAMPLE", color="orange", domain="cudf_python")
     def sample(
         self,
@@ -2262,54 +2191,44 @@ class Frame:
         )
 
     def drop_duplicates(
-        self,
-        subset=None,
-        keep="first",
-        nulls_are_equal=True,
-        ignore_index=False,
+        self, keep="first", nulls_are_equal=True,
     ):
         """
-        Drops rows in frame as per duplicate rows in `subset` columns from
-        self.
+        Drop duplicate rows in frame.
 
-        subset : list, optional
-            List of columns to consider when dropping rows.
-        keep : ["first", "last", False] first will keep first of duplicate,
-            last will keep last of the duplicate and False drop all
-            duplicate
-        nulls_are_equal: null elements are considered equal to other null
-            elements
-        ignore_index: bool, default False
-            If True, the resulting axis will be labeled 0, 1, …, n - 1.
+        keep : ["first", "last", False], default "first"
+            "first" will keep the first duplicate entry, "last" will keep the
+            last duplicate entry, and False will drop all duplicates.
+        nulls_are_equal: bool, default True
+            Null elements are considered equal to other null elements.
         """
-        if subset is None:
-            subset = self._column_names
-        elif (
-            not np.iterable(subset)
-            or isinstance(subset, str)
-            or isinstance(subset, tuple)
-            and subset in self._data.names
-        ):
-            subset = (subset,)
-        diff = set(subset) - set(self._data)
-        if len(diff) != 0:
-            raise KeyError(f"columns {diff} do not exist")
-        subset_cols = [name for name in self._column_names if name in subset]
-        if len(subset_cols) == 0:
-            return self.copy(deep=True)
 
-        result = self.__class__._from_data(
-            *libcudf.stream_compaction.drop_duplicates(
-                self,
-                keys=subset,
+        result = self.__class__._from_columns(
+            libcudf.stream_compaction.drop_duplicates(
+                list(self._columns),
+                keys=range(len(self._columns)),
                 keep=keep,
                 nulls_are_equal=nulls_are_equal,
-                ignore_index=ignore_index,
-            )
+            ),
+            self._column_names,
         )
-
+        # TODO: _copy_type_metadata is a common pattern to apply after the
+        # roundtrip from libcudf. We should build this into a factory function
+        # to increase reusability.
         result._copy_type_metadata(self)
         return result
+
+    def _positions_from_column_names(self, column_names):
+        """Map each column name into their positions in the frame.
+
+        The order of indices returned corresponds to the column order in this
+        Frame.
+        """
+        return [
+            i
+            for i, name in enumerate(self._column_names)
+            if name in set(column_names)
+        ]
 
     def replace(
         self,
@@ -2589,7 +2508,10 @@ class Frame:
                     self._index, cudf.core.index.CategoricalIndex
                 ):
                     self._index = cudf.Index(
-                        cast(cudf.core.index.NumericIndex, self._index)._column
+                        cast(
+                            cudf.core.index.NumericIndex, self._index
+                        )._column,
+                        name=self._index.name,
                     )
 
         return self
@@ -3673,6 +3595,13 @@ class Frame:
         3    5.0
         dtype: float64
         """
+
+        warnings.warn(
+            "Series.ceil and DataFrame.ceil are deprecated and will be \
+                removed in the future",
+            DeprecationWarning,
+        )
+
         return self._unaryop("ceil")
 
     def floor(self):
@@ -3705,6 +3634,13 @@ class Frame:
         5    3.0
         dtype: float64
         """
+
+        warnings.warn(
+            "Series.ceil and DataFrame.ceil are deprecated and will be \
+                removed in the future",
+            DeprecationWarning,
+        )
+
         return self._unaryop("floor")
 
     def scale(self):
@@ -4819,7 +4755,7 @@ class Frame:
                 result_col = self._data[name].nans_to_nulls()
             else:
                 result_col = self._data[name].copy()
-                if result_col.has_nulls:
+                if result_col.has_nulls(include_nan=True):
                     # Workaround as find_first_value doesn't seem to work
                     # incase of bools.
                     first_index = int(

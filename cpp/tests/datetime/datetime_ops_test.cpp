@@ -14,19 +14,18 @@
  * limitations under the License.
  */
 
-#include <cudf_test/base_fixture.hpp>
-#include <cudf_test/column_utilities.hpp>
-#include <cudf_test/column_wrapper.hpp>
-#include <cudf_test/iterator_utilities.hpp>
-#include <cudf_test/timestamp_utilities.cuh>
-#include <cudf_test/type_lists.hpp>
-
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
 #include <cudf/datetime.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/wrappers/timestamps.hpp>
+#include <cudf_test/base_fixture.hpp>
+#include <cudf_test/column_utilities.hpp>
+#include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
+#include <cudf_test/timestamp_utilities.cuh>
+#include <cudf_test/type_lists.hpp>
 
 #define XXX false  // stub for null values
 
@@ -183,10 +182,9 @@ TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedDatetimeComponents)
   using namespace cudf::datetime;
   using namespace cuda::std::chrono;
 
-  auto start = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
-  auto stop_ = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
-  auto timestamps =
-    generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop_));
+  auto start      = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
+  auto stop       = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
+  auto timestamps = generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop));
 
   auto expected_years =
     fixed_width_column_wrapper<int16_t>{1890, 1906, 1922, 1938, 1954, 1970, 1985, 2001, 2017, 2033};
@@ -221,9 +219,9 @@ TYPED_TEST(TypedDatetimeOpsTest, TestExtractingGeneratedNullableDatetimeComponen
   using namespace cuda::std::chrono;
 
   auto start = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
-  auto stop_ = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
+  auto stop  = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
   auto timestamps =
-    generate_timestamps<T, true>(this->size(), time_point_ms(start), time_point_ms(stop_));
+    generate_timestamps<T, true>(this->size(), time_point_ms(start), time_point_ms(stop));
 
   auto expected_years = fixed_width_column_wrapper<int16_t>{
     {1890, 1906, 1922, 1938, 1954, 1970, 1985, 2001, 2017, 2033},
@@ -758,7 +756,7 @@ TEST_F(BasicDatetimeOpsTest, TestIsLeapYear)
         707904541L,     // 1992-06-07 08:09:01 GMT - leap year
         -2181005247L,   // 1900-11-20 09:12:33 GMT - non leap year
         0L,             // UNIX EPOCH 1970-01-01 00:00:00 GMT - non leap year
-        -12212553600L,  // First full year of Gregorian Calandar 1583-01-01 00:00:00 - non-leap-year
+        -12212553600L,  // First full year of Gregorian Calendar 1583-01-01 00:00:00 - non-leap-year
         0L,             // null
         13591632822L,   // 2400-09-13 13:33:42 GMT - leap year
         4539564243L,    // 2113-11-08 06:04:03 GMT - non leap year
@@ -827,7 +825,7 @@ TEST_F(BasicDatetimeOpsTest, TestQuarter)
         707904541L,     // 1992-06-07 08:09:01 GMT
         -2181005247L,   // 1900-11-20 09:12:33 GMT
         0L,             // UNIX EPOCH 1970-01-01 00:00:00 GMT
-        -12212553600L,  // First full year of Gregorian Calandar 1583-01-01 00:00:00
+        -12212553600L,  // First full year of Gregorian Calendar 1583-01-01 00:00:00
         0L,             // null
         13591632822L,   // 2400-09-13 13:33:42 GMT
         4539564243L,    // 2113-11-08 06:04:03 GMT
@@ -913,6 +911,78 @@ TYPED_TEST(TypedDatetimeOpsTest, TestFloorDatetime)
   auto expected_nanosecond = fixed_width_column_wrapper<T, typename T::duration::rep>(
     floored_nanosecond.begin(), floored_nanosecond.end());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*floor_millisecond(input), expected_nanosecond);
+}
+
+TYPED_TEST(TypedDatetimeOpsTest, TestRoundDatetime)
+{
+  using T = TypeParam;
+  using namespace cudf::test;
+  using namespace cudf::datetime;
+  using namespace cuda::std::chrono;
+
+  auto start = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
+  auto stop  = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
+
+  auto input = generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop));
+
+  auto host_val   = to_host<T>(input);
+  auto timestamps = host_val.first;
+
+  std::vector<T> rounded_day(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), rounded_day.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(round<days>(i));
+  });
+  auto expected_day = fixed_width_column_wrapper<T, typename T::duration::rep>(rounded_day.begin(),
+                                                                               rounded_day.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*round_day(input), expected_day);
+
+  std::vector<T> rounded_hour(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), rounded_hour.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(round<hours>(i));
+  });
+  auto expected_hour = fixed_width_column_wrapper<T, typename T::duration::rep>(
+    rounded_hour.begin(), rounded_hour.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*round_hour(input), expected_hour);
+
+  std::vector<T> rounded_minute(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), rounded_minute.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(round<minutes>(i));
+  });
+  auto expected_minute = fixed_width_column_wrapper<T, typename T::duration::rep>(
+    rounded_minute.begin(), rounded_minute.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*round_minute(input), expected_minute);
+
+  std::vector<T> rounded_second(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), rounded_second.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(round<seconds>(i));
+  });
+  auto expected_second = fixed_width_column_wrapper<T, typename T::duration::rep>(
+    rounded_second.begin(), rounded_second.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*round_second(input), expected_second);
+
+  std::vector<T> rounded_millisecond(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), rounded_millisecond.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(round<milliseconds>(i));
+  });
+  auto expected_millisecond = fixed_width_column_wrapper<T, typename T::duration::rep>(
+    rounded_millisecond.begin(), rounded_millisecond.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*round_millisecond(input), expected_millisecond);
+
+  std::vector<T> rounded_microsecond(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), rounded_microsecond.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(round<microseconds>(i));
+  });
+  auto expected_microsecond = fixed_width_column_wrapper<T, typename T::duration::rep>(
+    rounded_microsecond.begin(), rounded_microsecond.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*round_microsecond(input), expected_microsecond);
+
+  std::vector<T> rounded_nanosecond(timestamps.size());
+  std::transform(timestamps.begin(), timestamps.end(), rounded_nanosecond.begin(), [](auto i) {
+    return time_point_cast<typename T::duration>(round<nanoseconds>(i));
+  });
+  auto expected_nanosecond = fixed_width_column_wrapper<T, typename T::duration::rep>(
+    rounded_nanosecond.begin(), rounded_nanosecond.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(*round_nanosecond(input), expected_nanosecond);
 }
 
 CUDF_TEST_PROGRAM_MAIN()

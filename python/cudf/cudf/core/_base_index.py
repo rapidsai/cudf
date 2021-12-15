@@ -147,7 +147,7 @@ class BaseIndex(Serializable):
         methods using this method to replace or handle representation
         of the actual types correctly.
         """
-        if self._values.has_nulls:
+        if self._values.has_nulls():
             return cudf.Index(
                 self._values.astype("str").fillna(cudf._NA_REP), name=self.name
             )
@@ -829,7 +829,7 @@ class BaseIndex(Serializable):
         >>> idx = cudf.Index([1.0, 2.0, np.nan, 4.0])
         >>> idx.is_floating()
         True
-        >>> idx = cudf.Index([1, 2, 3, 4, np.nan])
+        >>> idx = cudf.Index([1, 2, 3, 4, np.nan], nan_as_null=False)
         >>> idx.is_floating()
         True
         >>> idx = cudf.Index([1, 2, 3, 4])
@@ -1147,14 +1147,14 @@ class BaseIndex(Serializable):
         if isinstance(lhs, cudf.MultiIndex):
             if level is not None and isinstance(level, int):
                 on = lhs._data.select_by_index(level).names[0]
-            right_names = (on,) or right_names
+            right_names = (on,) if on is not None else right_names
             on = right_names[0]
             if how == "outer":
                 how = "left"
             elif how == "right":
                 how = "inner"
         else:
-            # Both are nomal indices
+            # Both are normal indices
             right_names = left_names
             on = right_names[0]
 

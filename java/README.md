@@ -87,24 +87,18 @@ within the libcudf build environment.
 
 ## Statically Linking the CUDA Runtime
 
-If you use the default cmake options libcudart will be dynamically linked to libcudf
-which is included.  If you do this the resulting jar will have a classifier associated with it
-because that jar can only be used with a single version of the CUDA runtime.  
+If you use the default cmake options libcudart will be dynamically linked to libcudf and libcudfjni.
+To build with a static CUDA runtime, build libcudf with the `-DCUDA_STATIC_RUNTIME=ON` as a cmake
+parameter, and similarly build with `-DCUDA_STATIC_RUNTIME=ON` when building the Java bindings
+with Maven.
 
-There is experimental work to try and remove that requirement but it is not fully functional
-you can build cuDF with `-DCUDA_STATIC_RUNTIME=ON` when running cmake, and similarly 
-`-DCUDA_STATIC_RUNTIME=ON` when running Maven.  This will statically link in the CUDA runtime
-and result in a jar with no classifier that should run on any host that has a version of the
-driver new enough to support the runtime that this was built with.
+### Building with a libcudf Archive
 
-To build the Java bindings with a statically-linked CUDA runtime, use a build command like:
-```
-mvn clean install -DCUDA_STATIC_RUNTIME=ON
-```
-
-You will get errors if the CUDA runtime linking is not consistent.  We tried to detect these
-up front and stop the build early if there is a mismatch, but there may be some cases we missed
-and this can result in some very hard to debug errors.
+When statically linking the CUDA runtime, it is recommended to build cuDF as an archive rather than
+a shared library, as this allows the Java bindings to only have a single shared library that uses
+the CUDA runtime. To build libcudf as an archive, specify `-DBUILD_SHARED_LIBS=OFF` as a cmake
+parameter when building libcudf, then specify `-DCUDF_JNI_LIBCUDF_STATIC=ON` when building the Java
+bindings with Maven.
 
 ## Per-thread Default Stream
 

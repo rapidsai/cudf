@@ -5,21 +5,29 @@ from __future__ import annotations
 
 import operator
 import warnings
+from collections import abc
 from typing import Callable, Type, TypeVar
 from uuid import uuid4
 
 import cupy as cp
+import numpy as np
 import pandas as pd
 from nvtx import annotate
 
 import cudf
+import cudf._lib as libcudf
 from cudf._typing import ColumnLike
-from cudf.api.types import is_categorical_dtype, is_list_like
+from cudf.api.types import (
+    _is_non_decimal_numeric_dtype,
+    is_categorical_dtype,
+    is_integer_dtype,
+    is_list_like,
+)
 from cudf.core.column import arange
 from cudf.core.frame import Frame
 from cudf.core.index import Index
 from cudf.core.multiindex import MultiIndex
-from cudf.utils.utils import cached_property
+from cudf.utils.utils import _gather_map_is_valid, cached_property
 
 
 def _indices_from_labels(obj, labels):
@@ -437,6 +445,231 @@ class IndexedFrame(Frame):
             out = out.reset_index(drop=True)
         return self._mimic_inplace(out, inplace=inplace)
 
+    def _gather(
+        self, gather_map, keep_index=True, nullify=False, check_bounds=True
+    ):
+        """Gather rows of frame specified by indices in `gather_map`.
+
+        Skip bounds checking if check_bounds is False.
+        Set rows to null for all out of bound indices if nullify is `True`.
+        """
+        gather_map = cudf.core.column.as_column(gather_map)
+
+        # TODO: For performance, the check and conversion of gather map should
+        # be done by the caller. This check will be removed in future release.
+        if not is_integer_dtype(gather_map.dtype):
+            gather_map = gather_map.astype("int32")
+
+        if not _gather_map_is_valid(
+            gather_map, len(self), check_bounds, nullify
+        ):
+            raise IndexError("Gather map index is out of bounds.")
+
+        result = self.__class__._from_columns(
+            libcudf.copying.gather(
+                list(self._index._columns + self._columns)
+                if keep_index
+                else list(self._columns),
+                gather_map,
+                nullify=nullify,
+            ),
+            self._column_names,
+            self._index.names if keep_index else None,
+        )
+
+        result._copy_type_metadata(self, include_index=keep_index)
+        return result
+
+    def _positions_from_column_names(
+        self, column_names, offset_by_index_columns=False
+    ):
+        """Map each column name into their positions in the frame.
+
+        Return positions of the provided column names, offset by the number of
+        index columns `offset_by_index_columns` is True. The order of indices
+        returned corresponds to the column order in this Frame.
+        """
+        num_index_columns = (
+            len(self._index._data) if offset_by_index_columns else 0
+        )
+        return [
+            i + num_index_columns
+            for i, name in enumerate(self._column_names)
+            if name in set(column_names)
+        ]
+
+    def drop_duplicates(
+        self,
+        subset=None,
+        keep="first",
+        nulls_are_equal=True,
+        ignore_index=False,
+    ):
+        """
+        Drop duplicate rows in frame.
+
+        subset : list, optional
+            List of columns to consider when dropping rows.
+        keep : ["first", "last", False]
+            "first" will keep the first duplicate entry, "last" will keep the
+            last duplicate entry, and False will drop all duplicates.
+        nulls_are_equal: bool, default True
+            Null elements are considered equal to other null elements.
+        ignore_index: bool, default False
+            If True, the resulting axis will be labeled 0, 1, ..., n - 1.
+        """
+        if subset is None:
+            subset = self._column_names
+        elif (
+            not np.iterable(subset)
+            or isinstance(subset, str)
+            or isinstance(subset, tuple)
+            and subset in self._data.names
+        ):
+            subset = (subset,)
+        diff = set(subset) - set(self._data)
+        if len(diff) != 0:
+            raise KeyError(f"columns {diff} do not exist")
+        subset_cols = [name for name in self._column_names if name in subset]
+        if len(subset_cols) == 0:
+            return self.copy(deep=True)
+
+        keys = self._positions_from_column_names(
+            subset, offset_by_index_columns=not ignore_index
+        )
+        result = self.__class__._from_columns(
+            libcudf.stream_compaction.drop_duplicates(
+                list(self._columns)
+                if ignore_index
+                else list(self._index._columns + self._columns),
+                keys=keys,
+                keep=keep,
+                nulls_are_equal=nulls_are_equal,
+            ),
+            self._column_names,
+            self._index.names if not ignore_index else None,
+        )
+        result._copy_type_metadata(self)
+        return result
+
+    def add_prefix(self, prefix):
+        """
+        Prefix labels with string `prefix`.
+
+        For Series, the row labels are prefixed.
+        For DataFrame, the column labels are prefixed.
+
+        Parameters
+        ----------
+        prefix : str
+            The string to add before each label.
+
+        Returns
+        -------
+        Series or DataFrame
+            New Series with updated labels or DataFrame with updated labels.
+
+        See Also
+        --------
+        Series.add_suffix: Suffix row labels with string 'suffix'.
+        DataFrame.add_suffix: Suffix column labels with string 'suffix'.
+
+        Examples
+        --------
+        **Series**
+        >>> s = cudf.Series([1, 2, 3, 4])
+        >>> s
+        0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64
+        >>> s.add_prefix('item_')
+        item_0    1
+        item_1    2
+        item_2    3
+        item_3    4
+        dtype: int64
+
+        **DataFrame**
+        >>> df = cudf.DataFrame({'A': [1, 2, 3, 4], 'B': [3, 4, 5, 6]})
+        >>> df
+           A  B
+        0  1  3
+        1  2  4
+        2  3  5
+        3  4  6
+        >>> df.add_prefix('col_')
+             col_A  col_B
+        0       1       3
+        1       2       4
+        2       3       5
+        3       4       6
+        """
+        raise NotImplementedError(
+            "`IndexedFrame.add_prefix` not currently implemented. \
+                Use `Series.add_prefix` or `DataFrame.add_prefix`"
+        )
+
+    def add_suffix(self, suffix):
+        """
+        Suffix labels with string `suffix`.
+
+        For Series, the row labels are suffixed.
+        For DataFrame, the column labels are suffixed.
+
+        Parameters
+        ----------
+        prefix : str
+            The string to add after each label.
+
+        Returns
+        -------
+        Series or DataFrame
+            New Series with updated labels or DataFrame with updated labels.
+
+        See Also
+        --------
+        Series.add_prefix: prefix row labels with string 'prefix'.
+        DataFrame.add_prefix: Prefix column labels with string 'prefix'.
+
+        Examples
+        --------
+        **Series**
+        >>> s = cudf.Series([1, 2, 3, 4])
+        >>> s
+        0    1
+        1    2
+        2    3
+        3    4
+        dtype: int64
+        >>> s.add_suffix('_item')
+        0_item    1
+        1_item    2
+        2_item    3
+        3_item    4
+        dtype: int64
+
+        **DataFrame**
+        >>> df = cudf.DataFrame({'A': [1, 2, 3, 4], 'B': [3, 4, 5, 6]})
+        >>> df
+           A  B
+        0  1  3
+        1  2  4
+        2  3  5
+        3  4  6
+        >>> df.add_suffix('_col')
+             A_col  B_col
+        0       1       3
+        1       2       4
+        2       3       5
+        3       4       6
+        """
+        raise NotImplementedError(
+            "`IndexedFrame.add_suffix` not currently implemented. \
+                Use `Series.add_suffix` or `DataFrame.add_suffix`"
+        )
+
     def sort_values(
         self,
         by,
@@ -587,6 +820,119 @@ class IndexedFrame(Frame):
         result.index.names = self.index.names
 
         return result
+
+    def round(self, decimals=0, how="half_even"):
+        """
+        Round to a variable number of decimal places.
+
+        Parameters
+        ----------
+        decimals : int, dict, Series
+            Number of decimal places to round each column to. This parameter
+            must be an int for a Series. For a DataFrame, a dict or a Series
+            are also valid inputs. If an int is given, round each column to the
+            same number of places. Otherwise dict and Series round to variable
+            numbers of places. Column names should be in the keys if
+            `decimals` is a dict-like, or in the index if `decimals` is a
+            Series. Any columns not included in `decimals` will be left as is.
+            Elements of `decimals` which are not columns of the input will be
+            ignored.
+        how : str, optional
+            Type of rounding. Can be either "half_even" (default)
+            or "half_up" rounding.
+
+        Returns
+        -------
+        Series or DataFrame
+            A Series or DataFrame with the affected columns rounded to the
+            specified number of decimal places.
+
+        Examples
+        --------
+        **Series**
+
+        >>> s = cudf.Series([0.1, 1.4, 2.9])
+        >>> s.round()
+        0    0.0
+        1    1.0
+        2    3.0
+        dtype: float64
+
+        **DataFrame**
+
+        >>> df = cudf.DataFrame(
+        ...     [(.21, .32), (.01, .67), (.66, .03), (.21, .18)],
+        ...     columns=['dogs', 'cats'],
+        ... )
+        >>> df
+           dogs  cats
+        0  0.21  0.32
+        1  0.01  0.67
+        2  0.66  0.03
+        3  0.21  0.18
+
+        By providing an integer each column is rounded to the same number
+        of decimal places.
+
+        >>> df.round(1)
+           dogs  cats
+        0   0.2   0.3
+        1   0.0   0.7
+        2   0.7   0.0
+        3   0.2   0.2
+
+        With a dict, the number of places for specific columns can be
+        specified with the column names as keys and the number of decimal
+        places as values.
+
+        >>> df.round({'dogs': 1, 'cats': 0})
+           dogs  cats
+        0   0.2   0.0
+        1   0.0   1.0
+        2   0.7   0.0
+        3   0.2   0.0
+
+        Using a Series, the number of places for specific columns can be
+        specified with the column names as the index and the number of
+        decimal places as the values.
+
+        >>> decimals = cudf.Series([0, 1], index=['cats', 'dogs'])
+        >>> df.round(decimals)
+           dogs  cats
+        0   0.2   0.0
+        1   0.0   1.0
+        2   0.7   0.0
+        3   0.2   0.0
+        """
+        if isinstance(decimals, cudf.Series):
+            decimals = decimals.to_pandas()
+
+        if isinstance(decimals, pd.Series):
+            if not decimals.index.is_unique:
+                raise ValueError("Index of decimals must be unique")
+            decimals = decimals.to_dict()
+        elif isinstance(decimals, int):
+            decimals = {name: decimals for name in self._column_names}
+        elif not isinstance(decimals, abc.Mapping):
+            raise TypeError(
+                "decimals must be an integer, a dict-like or a Series"
+            )
+
+        cols = {
+            name: col.round(decimals[name], how=how)
+            if (name in decimals and _is_non_decimal_numeric_dtype(col.dtype))
+            else col.copy(deep=True)
+            for name, col in self._data.items()
+        }
+
+        return self.__class__._from_data(
+            data=cudf.core.column_accessor.ColumnAccessor(
+                cols,
+                multiindex=self._data.multiindex,
+                level_names=self._data.level_names,
+            ),
+            index=self._index,
+        )
 
     def resample(
         self,
