@@ -1873,13 +1873,13 @@ class DatetimeIndex(GenericIndex):
     def is_boolean(self):
         return False
 
-    def ceil(self, field):
+    def ceil(self, freq):
         """
         Perform ceil operation on the data to the specified freq.
 
         Parameters
         ----------
-        field : str
+        freq : str
             One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
             Must be a fixed frequency like 'S' (second) not 'ME' (month end).
             See `frequency aliases <https://pandas.pydata.org/docs/\
@@ -1901,17 +1901,17 @@ class DatetimeIndex(GenericIndex):
         >>> gIndex.ceil("T")
         DatetimeIndex(['2020-05-31 08:06:00', '1999-12-31 18:41:00'], dtype='datetime64[ns]')
         """  # noqa: E501
-        out_column = self._values.ceil(field)
+        out_column = self._values.ceil(freq)
 
         return self.__class__._from_data({self.name: out_column})
 
-    def floor(self, field):
+    def floor(self, freq):
         """
         Perform floor operation on the data to the specified freq.
 
         Parameters
         ----------
-        field : str
+        freq : str
             One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
             Must be a fixed frequency like 'S' (second) not 'ME' (month end).
             See `frequency aliases <https://pandas.pydata.org/docs/\
@@ -1933,7 +1933,44 @@ class DatetimeIndex(GenericIndex):
         >>> gIndex.floor("T")
         DatetimeIndex(['2020-05-31 08:59:00', '1999-12-31 18:44:00'], dtype='datetime64[ns]')
         """  # noqa: E501
-        out_column = self._values.floor(field)
+        out_column = self._values.floor(freq)
+
+        return self.__class__._from_data({self.name: out_column})
+
+    def round(self, freq):
+        """
+        Perform round operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        freq : str
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
+            for more details on these aliases.
+
+        Returns
+        -------
+        DatetimeIndex
+            Index containing rounded datetimes.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> dt_idx = cudf.Index([
+        ...     "2001-01-01 00:04:45",
+        ...     "2001-01-01 00:04:58",
+        ...     "2001-01-01 00:05:04",
+        ... ], dtype="datetime64[ns]")
+        >>> dt_idx
+        DatetimeIndex(['2001-01-01 00:04:45', '2001-01-01 00:05:04', '2001-01-01 00:04:58'], dtype='datetime64[ns]')
+        >>> dt_idx.round('H')
+        DatetimeIndex(['2001-01-01', '2001-01-01', '2001-01-01'], dtype='datetime64[ns]')
+        >>> dt_idx.round('T')
+        DatetimeIndex(['2001-01-01 00:05:00', '2001-01-01 00:05:00', '2001-01-01 00:05:00'], dtype='datetime64[ns]')
+        """  # noqa: E501
+        out_column = self._values.round(freq)
 
         return self.__class__._from_data({self.name: out_column})
 
@@ -2471,7 +2508,7 @@ class StringIndex(GenericIndex):
         Convert all na values(if any) in Index object
         to `<NA>` as a preprocessing step to `__repr__` methods.
         """
-        if self._values.has_nulls:
+        if self._values.has_nulls():
             return self.fillna(cudf._NA_REP)
         else:
             return self

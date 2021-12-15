@@ -330,7 +330,7 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
             col = col.as_datetime_column(dtype=_unit_dtype_map[unit])
 
     elif col.dtype.kind in ("O"):
-        if unit not in (None, "ns"):
+        if unit not in (None, "ns") or col.null_count == len(col):
             try:
                 col = col.astype(dtype="int64")
             except ValueError:
