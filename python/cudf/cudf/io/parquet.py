@@ -148,6 +148,8 @@ def write_to_dataset(
         part_names, part_offsets, _, grouped_df = df.groupby(
             partition_cols
         )._grouped()
+        if not preserve_index:
+            grouped_df.reset_index(drop=True, inplace=True)
         grouped_df.drop(columns=partition_cols, inplace=True)
         partitions_info = [
             (part_offsets[i], part_offsets[i + 1] - part_offsets[i])
