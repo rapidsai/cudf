@@ -22,23 +22,23 @@
 #include <random>
 
 /**
- * @brief Generates a normal(binomial) distribution between zero and max_val.
+ * @brief Generates a normal(binomial) distribution between zero and upper_bound.
  */
 template <typename T, typename std::enable_if_t<std::is_integral<T>::value, T>* = nullptr>
-auto make_normal_dist(T max_val)
+auto make_normal_dist(T upper_bound)
 {
   using uT = typename std::make_unsigned<T>::type;
-  return std::binomial_distribution<uT>(max_val, 0.5);
+  return std::binomial_distribution<uT>(upper_bound, 0.5);
 }
 
 /**
- * @brief Generates a normal distribution between zero and max_val.
+ * @brief Generates a normal distribution between zero and upper_bound.
  */
 template <typename T, std::enable_if_t<cudf::is_floating_point<T>()>* = nullptr>
-auto make_normal_dist(T max_val)
+auto make_normal_dist(T upper_bound)
 {
-  T const mean   = max_val / 2;
-  T const stddev = max_val / 6;
+  T const mean   = upper_bound / 2;
+  T const stddev = upper_bound / 6;
   return std::normal_distribution<T>(mean, stddev);
 }
 
