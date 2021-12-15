@@ -838,8 +838,8 @@ def date_range(
             offset, pd.tseries.offsets.Week
         ):
             raise ValueError(
-                f"Unrecognized frequency string {freq}. cuDF does"
-                " not yet support month, quarter, year-anchored frequency."
+                f"Unrecognized frequency string {freq}. cuDF does "
+                "not yet support month, quarter, year-anchored frequency."
             )
         offset = DateOffset._from_pandas_ticks_or_weeks(offset)
     else:
