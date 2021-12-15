@@ -38,7 +38,15 @@ new_column_with_boolean_column_as_validity(cudf::column_view const &exemplar,
       cudf::detail::valid_if(validity_begin, validity_end, [] __device__(auto optional_bool) {
         return optional_bool.value_or(false);
       });
-  auto deep_copy = std::make_unique<cudf::column>(exemplar);
+  auto const exemplar_without_null_mask = cudf::column_view{
+      exemplar.type(),
+      exemplar.size(),
+      exemplar.head<void>(),
+      nullptr,
+      0,
+      exemplar.offset(),
+      std::vector<cudf::column_view>{exemplar.child_begin(), exemplar.child_end()}};
+  auto deep_copy = std::make_unique<cudf::column>(exemplar_without_null_mask);
   deep_copy->set_null_mask(std::move(null_mask), null_count);
   return deep_copy;
 }
