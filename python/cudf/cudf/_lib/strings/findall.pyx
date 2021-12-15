@@ -38,6 +38,7 @@ def findall(Column source_strings, pattern):
         column_names=range(0, c_result.get()[0].num_columns())
     )
 
+
 def findall_record(Column source_strings, pattern):
     """
     Returns data with all non-overlapping matches of `pattern`
