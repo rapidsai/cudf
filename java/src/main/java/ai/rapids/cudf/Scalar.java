@@ -265,6 +265,9 @@ public final class Scalar implements AutoCloseable, BinaryOperable {
   }
 
   public static Scalar fromDecimal(BigInteger unscaledValue, DType dt) {
+    if (unscaledValue == null) {
+      return Scalar.fromNull(dt);
+    }
     long handle;
     if (dt.typeId == DType.DTypeEnum.DECIMAL32) {
       handle = makeDecimal32Scalar(unscaledValue.intValueExact(), dt.getScale(), true);
