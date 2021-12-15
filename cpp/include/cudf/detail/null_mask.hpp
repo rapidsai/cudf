@@ -270,7 +270,7 @@ std::pair<rmm::device_buffer, size_type> bitmask_or(
  * @param mr Device memory resource used to allocate the returned device_buffer
  * @return size_type Count of set bits
  */
-size_type inplace_bitmask_and(
+cudf::size_type inplace_bitmask_and(
   device_span<bitmask_type> dest_mask,
   host_span<bitmask_type const*> masks,
   host_span<size_type const> masks_begin_bits,
