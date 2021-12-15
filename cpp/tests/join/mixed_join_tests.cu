@@ -199,13 +199,13 @@ struct MixedJoinPairReturnTest : public MixedJoinTest<T> {
    * Perform a join of tables constructed from two input data sets according to
    * verify that the outputs match the expected outputs (up to order).
    */
-  void _test(cudf::table_view left_equality,
-             cudf::table_view right_equality,
-             cudf::table_view left_conditional,
-             cudf::table_view right_conditional,
-             cudf::ast::operation predicate,
-             std::vector<cudf::size_type> expected_counts,
-             std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
+  virtual void _test(cudf::table_view left_equality,
+                     cudf::table_view right_equality,
+                     cudf::table_view left_conditional,
+                     cudf::table_view right_conditional,
+                     cudf::ast::operation predicate,
+                     std::vector<cudf::size_type> expected_counts,
+                     std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
   {
     auto [result_size, matches_per_row] = this->join_size(
       left_equality, right_equality, left_conditional, right_conditional, predicate);
@@ -419,4 +419,100 @@ TYPED_TEST(MixedLeftJoinTest, Basic2)
              predicate,
              {1, 1, 1, 1},
              {{0, JoinNoneValue}, {1, JoinNoneValue}, {2, JoinNoneValue}, {3, 3}});
+}
+
+/**
+ * Tests of mixed full joins.
+ */
+template <typename T>
+struct MixedFullJoinTest : public MixedJoinPairReturnTest<T> {
+  PairJoinReturn join(cudf::table_view left_equality,
+                      cudf::table_view right_equality,
+                      cudf::table_view left_conditional,
+                      cudf::table_view right_conditional,
+                      cudf::ast::operation predicate) override
+  {
+    return cudf::mixed_full_join(
+      left_equality, right_equality, left_conditional, right_conditional, predicate);
+  }
+
+  std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size(
+    cudf::table_view left_equality,
+    cudf::table_view right_equality,
+    cudf::table_view left_conditional,
+    cudf::table_view right_conditional,
+    cudf::ast::operation predicate) override
+  {
+    // Full joins don't actually support size calculations, and there's no easy way to spoof it.
+    CUDF_FAIL("Size calculation not supported for full joins.");
+  }
+
+  /*
+   * Override method to remove size calculation testing since it's not possible for full joins.
+   */
+  void _test(cudf::table_view left_equality,
+             cudf::table_view right_equality,
+             cudf::table_view left_conditional,
+             cudf::table_view right_conditional,
+             cudf::ast::operation predicate,
+             std::vector<cudf::size_type> expected_counts,
+             std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
+  {
+    auto result =
+      this->join(left_equality, right_equality, left_conditional, right_conditional, predicate);
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
+    for (size_t i = 0; i < result.first->size(); ++i) {
+      result_pairs.push_back({result.first->element(i, rmm::cuda_stream_default),
+                              result.second->element(i, rmm::cuda_stream_default)});
+    }
+    std::sort(result_pairs.begin(), result_pairs.end());
+    std::sort(expected_outputs.begin(), expected_outputs.end());
+
+    EXPECT_TRUE(std::equal(expected_outputs.begin(), expected_outputs.end(), result_pairs.begin()));
+  }
+};
+
+TYPED_TEST_SUITE(MixedFullJoinTest, cudf::test::IntegralTypesNotBool);
+
+TYPED_TEST(MixedFullJoinTest, Basic)
+{
+  this->test(
+    {{0, 1, 2}, {3, 4, 5}, {10, 20, 30}},
+    {{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
+    {0},
+    {1, 2},
+    left_zero_eq_right_zero,
+    {1, 1, 1},
+    {{0, JoinNoneValue}, {1, 1}, {2, JoinNoneValue}, {JoinNoneValue, 0}, {JoinNoneValue, 2}});
+}
+
+TYPED_TEST(MixedFullJoinTest, Basic2)
+{
+  auto const col_ref_left_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_1 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+  auto const col_ref_left_2  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_2 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
+
+  auto scalar_1        = cudf::numeric_scalar<TypeParam>(35);
+  auto const literal_1 = cudf::ast::literal(scalar_1);
+
+  auto const op1 =
+    cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_left_1, col_ref_right_1);
+  auto const op2 = cudf::ast::operation(cudf::ast::ast_operator::LESS, literal_1, col_ref_right_2);
+
+  auto const predicate = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, op1, op2);
+
+  this->test({{0, 1, 2, 4}, {3, 4, 5, 6}, {10, 20, 30, 40}},
+             {{0, 1, 3, 4}, {5, 4, 5, 7}, {30, 40, 50, 60}},
+             {0},
+             {1, 2},
+             predicate,
+             {1, 1, 1, 1},
+             {{0, JoinNoneValue},
+              {1, JoinNoneValue},
+              {2, JoinNoneValue},
+              {3, 3},
+              {JoinNoneValue, 0},
+              {JoinNoneValue, 1},
+              {JoinNoneValue, 2}});
 }
