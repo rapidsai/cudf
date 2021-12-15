@@ -329,9 +329,18 @@ cpdef write_parquet(
             table[name]._column, tbl_meta.get().column_metadata[i]
         )
 
-    pandas_metadata = generate_pandas_metadata(table, index)
-    user_data.resize(1)
-    user_data.back()[str.encode("pandas")] = str.encode(pandas_metadata)
+    cdef map[string, string] tmp_user_data
+    if partitions_info is not None:
+        for start_row, num_row in partitions_info:
+            partitioned_df = table.iloc[start_row: start_row+ num_row].copy(deep=False)
+            pandas_metadata = generate_pandas_metadata(partitioned_df, index)
+            tmp_user_data[str.encode("pandas")] = str.encode(pandas_metadata)
+            user_data.push_back(tmp_user_data)
+            tmp_user_data.clear()
+    else:
+        pandas_metadata = generate_pandas_metadata(table, index)
+        tmp_user_data[str.encode("pandas")] = str.encode(pandas_metadata)
+        user_data.push_back(tmp_user_data)
 
     cdef cudf_io_types.compression_type comp_type = _get_comp_type(compression)
     cdef cudf_io_types.statistics_freq stat_freq = _get_stat_freq(statistics)
@@ -349,7 +358,7 @@ cpdef write_parquet(
         parquet_writer_options.builder(sink, tv)
         .partitions(partitions) # move if possible
         .metadata(tbl_meta.get())
-        # .key_value_metadata(move(user_data))
+        .key_value_metadata(move(user_data))
         .compression(comp_type)
         .stats_level(stat_freq)
         .int96_timestamps(_int96_timestamps)

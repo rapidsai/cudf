@@ -82,26 +82,6 @@ def _write_parquet(
     return write_parquet_res
 
 
-def _get_partition_groups(df, partition_cols, preserve_index=False):
-    # TODO: We can use groupby functionality here after cudf#4346.
-    #       Longer term, we want more slicing logic to be pushed down
-    #       into cpp.  For example, it would be best to pass libcudf
-    #       a single sorted table with group offsets).
-    df = df.sort_values(partition_cols)
-    if not preserve_index:
-        df = df.reset_index(drop=True)
-    divisions = df[partition_cols].drop_duplicates(ignore_index=True)
-    splits = df[partition_cols].searchsorted(divisions, side="left")
-    splits = splits.tolist() + [len(df[partition_cols])]
-    return (
-        splits,
-        [
-            df.iloc[splits[i] : splits[i + 1]].copy(deep=False)
-            for i in range(0, len(splits) - 1)
-        ],
-    )
-
-
 # Logic chosen to match: https://arrow.apache.org/
 # docs/_modules/pyarrow/parquet.html#write_to_dataset
 def write_to_dataset(
@@ -160,10 +140,6 @@ def write_to_dataset(
         if len(data_cols) == 0:
             raise ValueError("No data left to save outside partition columns")
 
-        #  Loop through the partition groups
-        partition_offsets, partition_dfs = _get_partition_groups(
-            df, partition_cols, preserve_index=preserve_index
-        )
         part_names, part_offsets, _, grouped_df = df.groupby(
             partition_cols
         )._grouped()
