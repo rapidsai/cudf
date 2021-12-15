@@ -97,69 +97,6 @@ _timedelta_to_str_typecast_functions = {
     cudf.dtype("timedelta64[ns]"): str_cast.int2timedelta,
 }
 
-_NAN_INF_VARIATIONS = [
-    "nan",
-    "NAN",
-    "Nan",
-    "naN",
-    "nAN",
-    "NAn",
-    "nAn",
-    "-inf",
-    "-INF",
-    "-InF",
-    "-inF",
-    "-iNF",
-    "-INf",
-    "-iNf",
-    "+inf",
-    "+INF",
-    "+InF",
-    "+inF",
-    "+iNF",
-    "+INf",
-    "+Inf",
-    "+iNf",
-    "inf",
-    "INF",
-    "InF",
-    "inF",
-    "iNF",
-    "INf",
-    "iNf",
-]
-_LIBCUDF_SUPPORTED_NAN_INF_VARIATIONS = [
-    "NaN",
-    "NaN",
-    "NaN",
-    "NaN",
-    "NaN",
-    "NaN",
-    "NaN",
-    "-Inf",
-    "-Inf",
-    "-Inf",
-    "-Inf",
-    "-Inf",
-    "-Inf",
-    "-Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-    "Inf",
-]
-
 
 def _is_supported_regex_flags(flags):
     return flags == 0 or (
@@ -5081,7 +5018,7 @@ class StringMethods(ColumnMethods):
             raise ValueError(
                 "Require size >= 2 to compute edit distance matrix."
             )
-        if self._column.has_nulls:
+        if self._column.has_nulls():
             raise ValueError(
                 "Cannot compute edit distance between null strings. "
                 "Consider removing them using `dropna` or fill with `fillna`."
@@ -5309,16 +5246,6 @@ class StringColumn(column.ColumnBase):
                     "type due to presence of non-integer values."
                 )
         elif out_dtype.kind == "f":
-            # TODO: Replace this `replace` call with a
-            # case-insensitive method once following
-            # issue is fixed: https://github.com/rapidsai/cudf/issues/5217
-            old_values = cudf.core.column.as_column(_NAN_INF_VARIATIONS)
-            new_values = cudf.core.column.as_column(
-                _LIBCUDF_SUPPORTED_NAN_INF_VARIATIONS
-            )
-            string_col = libcudf.replace.replace(
-                string_col, old_values, new_values
-            )
             if not libstrings.is_float(string_col).all():
                 raise ValueError(
                     "Could not convert strings to float "
@@ -5513,20 +5440,7 @@ class StringColumn(column.ColumnBase):
         """
 
         to_replace_col = column.as_column(to_replace)
-        if to_replace_col.null_count == len(to_replace_col):
-            # If all of `to_replace` are `None`, dtype of `to_replace_col`
-            # is inferred as `float64`, but this is a valid
-            # string column too, Hence we will need to type-cast
-            # to self.dtype.
-            to_replace_col = to_replace_col.astype(self.dtype)
-
         replacement_col = column.as_column(replacement)
-        if replacement_col.null_count == len(replacement_col):
-            # If all of `replacement` are `None`, dtype of `replacement_col`
-            # is inferred as `float64`, but this is a valid
-            # string column too, Hence we will need to type-cast
-            # to self.dtype.
-            replacement_col = replacement_col.astype(self.dtype)
 
         if type(to_replace_col) != type(replacement_col):
             raise TypeError(

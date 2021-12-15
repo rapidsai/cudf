@@ -12,10 +12,10 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-#include <tests/iterator/iterator_tests.cuh>
 #include "cudf/detail/utilities/vector_factories.hpp"
 #include "rmm/cuda_stream_view.hpp"
 #include "rmm/device_uvector.hpp"
+#include <tests/iterator/iterator_tests.cuh>
 
 auto strings_to_string_views(std::vector<std::string>& input_strings)
 {

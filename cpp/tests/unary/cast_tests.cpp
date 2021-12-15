@@ -1003,3 +1003,16 @@ TYPED_TEST(FixedPointTests, Decimal128ToDecimalXXWithLargerScaleAndNullMask)
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
 }
+
+TEST_F(FixedPointTestSingleType, Int32ToInt64Convert)
+{
+  using namespace numeric;
+  using fp_wrapperA = cudf::test::fixed_point_column_wrapper<int32_t>;
+  using fp_wrapperB = cudf::test::fixed_point_column_wrapper<int64_t>;
+
+  auto const input    = fp_wrapperB{{141230900000L}, scale_type{-10}};
+  auto const expected = fp_wrapperA{{14123}, scale_type{-3}};
+  auto const result   = cudf::cast(input, make_fixed_point_data_type<decimal32>(-3));
+
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+}

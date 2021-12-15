@@ -24,6 +24,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -116,12 +117,8 @@ std::unique_ptr<column> replace_with_backrefs(
 
   // parse the repl string for back-ref indicators
   auto const parse_result = parse_backrefs(repl);
-  rmm::device_uvector<backref_type> backrefs(parse_result.second.size(), stream);
-  CUDA_TRY(cudaMemcpyAsync(backrefs.data(),
-                           parse_result.second.data(),
-                           sizeof(backref_type) * backrefs.size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  rmm::device_uvector<backref_type> backrefs =
+    cudf::detail::make_device_uvector_async(parse_result.second, stream);
   string_scalar repl_scalar(parse_result.first, true, stream);
   string_view const d_repl_template = repl_scalar.value();
 

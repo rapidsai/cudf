@@ -3,6 +3,7 @@
 import cudf
 
 from libcpp cimport bool, int
+from libcpp.map cimport map
 from libcpp.memory cimport make_unique, unique_ptr
 from libcpp.string cimport string
 from libcpp.utility cimport move
@@ -248,6 +249,7 @@ cdef orc_reader_options make_orc_reader_options(
         .timestamp_type(data_type(timestamp_type))
         .use_index(use_index)
         .decimal_cols_as_float(c_decimal_cols_as_float)
+        .decimal128(False)
         .build()
     )
 
@@ -310,10 +312,9 @@ cdef class ORCWriter:
         chunked_orc_writer_options anb creates a writer"""
         cdef table_view tv
 
-        # Set the table_metadata
         num_index_cols_meta = 0
         self.tbl_meta = make_unique[table_input_metadata](
-            table_view_from_table(table, ignore_index=True)
+            table_view_from_table(table, ignore_index=True),
         )
         if self.index is not False:
             if isinstance(table._index, cudf.core.multiindex.MultiIndex):
@@ -339,15 +340,16 @@ cdef class ORCWriter:
                 table[name]._column, self.tbl_meta.get().column_metadata[i]
             )
 
+        cdef map[string, string] user_data
         pandas_metadata = generate_pandas_metadata(table, self.index)
-        self.tbl_meta.get().user_data[str.encode("pandas")] = \
-            str.encode(pandas_metadata)
+        user_data[str.encode("pandas")] = str.encode(pandas_metadata)
 
         cdef chunked_orc_writer_options args
         with nogil:
             args = move(
                 chunked_orc_writer_options.builder(self.sink)
                 .metadata(self.tbl_meta.get())
+                .key_value_metadata(move(user_data))
                 .compression(self.comp_type)
                 .enable_statistics(self.enable_stats)
                 .build()

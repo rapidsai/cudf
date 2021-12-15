@@ -79,6 +79,7 @@ class column_wrapper {
 
   /**
    * @brief Releases internal unique_ptr to wrapped column
+   * @return unique_ptr to wrapped column
    */
   std::unique_ptr<cudf::column> release() { return std::move(wrapped); }
 
@@ -1040,11 +1041,13 @@ class dictionary_column_wrapper<std::string> : public detail::column_wrapper {
 
   /**
    * @brief Access keys column view
+   * @return column_view to keys column
    */
   column_view keys() const { return cudf::dictionary_column_view{wrapped->view()}.keys(); }
 
   /**
    * @brief Access indices column view
+   * @return column_view to indices column
    */
   column_view indices() const { return cudf::dictionary_column_view{wrapped->view()}.indices(); }
 
@@ -1499,11 +1502,8 @@ class lists_column_wrapper : public detail::column_wrapper {
 
     // concatenate them together, skipping children that are null.
     std::vector<column_view> children;
-    thrust::copy_if(std::cbegin(cols),
-                    std::cend(cols),
-                    valids,  // stencil
-                    std::back_inserter(children),
-                    thrust::identity<bool>{});
+    thrust::copy_if(
+      std::cbegin(cols), std::cend(cols), valids, std::back_inserter(children), thrust::identity{});
 
     auto data = children.empty() ? cudf::empty_like(expected_hierarchy) : concatenate(children);
 

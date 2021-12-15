@@ -233,7 +233,7 @@ struct ColumnChunkDesc {
  * @brief Struct describing an encoder column
  */
 struct parquet_column_device_view : stats_column_desc {
-  uint8_t physical_type;   //!< physical data type
+  Type physical_type;      //!< physical data type
   uint8_t converted_type;  //!< logical data type
   uint8_t level_bits;  //!< bits to encode max definition (lower nibble) & repetition (upper nibble)
                        //!< levels
@@ -252,6 +252,8 @@ struct parquet_column_device_view : stats_column_desc {
 
 constexpr int max_page_fragment_size = 5000;  //!< Max number of rows in a page fragment
 
+struct EncColumnChunk;
+
 /**
  * @brief Struct describing an encoder page fragment
  */
@@ -262,8 +264,10 @@ struct PageFragment {
   uint32_t start_value_idx;
   uint32_t num_leaf_values;  //!< Number of leaf values in fragment. Does not include nulls at
                              //!< non-leaf level
+  size_type start_row;       //!< First row in fragment
   uint16_t num_rows;         //!< Number of rows in fragment
   uint16_t num_dict_vals;    //!< Number of unique dictionary entries
+  EncColumnChunk* chunk;     //!< The chunk that this fragment belongs to
 };
 
 /// Size of hash used for building dictionaries
@@ -273,15 +277,36 @@ constexpr size_t kDictScratchSize    = (1 << kDictHashBits) * sizeof(uint32_t);
 /**
  * @brief Return the byte length of parquet dtypes that are physically represented by INT32
  */
-inline uint32_t __device__ GetDtypeLogicalLen(column_device_view const* col)
+inline uint32_t __device__ int32_logical_len(type_id id)
 {
-  switch (col->type().id()) {
+  switch (id) {
     case cudf::type_id::INT8:
     case cudf::type_id::UINT8: return 1;
     case cudf::type_id::INT16:
     case cudf::type_id::UINT16: return 2;
     default: return 4;
   }
+}
+
+/**
+ * @brief Translate the row index of a parent column_device_view into the index of the first value
+ * in the leaf child.
+ * Only works in the context of parquet writer where struct columns are previously modified s.t.
+ * they only have one immediate child.
+ */
+inline size_type __device__ row_to_value_idx(size_type idx, column_device_view col)
+{
+  while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
+    if (col.type().id() == type_id::STRUCT) {
+      idx += col.offset();
+      col = col.child(0);
+    } else {
+      auto offset_col = col.child(lists_column_view::offsets_column_index);
+      idx             = offset_col.element<size_type>(idx + col.offset());
+      col             = col.child(lists_column_view::child_column_index);
+    }
+  }
+  return idx;
 }
 
 /**
@@ -309,7 +334,7 @@ struct EncColumnChunk {
   uint32_t compressed_size;       //!< Compressed buffer size
   uint32_t max_page_data_size;    //!< Max data size (excluding header) of any page in this chunk
   uint32_t page_headers_size;     //!< Sum of size of all page headers
-  uint32_t start_row;             //!< First row of chunk
+  size_type start_row;            //!< First row of chunk
   uint32_t num_rows;              //!< Number of rows in chunk
   size_type num_values;     //!< Number of values in chunk. Different from num_rows for nested types
   uint32_t first_fragment;  //!< First fragment of chunk
@@ -459,18 +484,21 @@ dremel_data get_dremel_data(column_view h_col,
 /**
  * @brief Launches kernel for initializing encoder page fragments
  *
+ * Based on the number of rows in each fragment, populates the value count, the size of data in the
+ * fragment, the number of unique values, and the data size of unique values.
+ *
  * @param[out] frag Fragment array [column_id][fragment_id]
  * @param[in] col_desc Column description array [column_id]
- * @param[in] num_fragments Number of fragments per column
- * @param[in] num_columns Number of columns
+ * @param[in] partitions Information about partitioning of table
+ * @param[in] first_frag_in_part A Partition's offset into fragment array
  * @param[in] fragment_size Number of rows per fragment
- * @param[in] num_rows Number of rows per column
  * @param[in] stream CUDA stream to use
  */
 void InitPageFragments(cudf::detail::device_2dspan<PageFragment> frag,
                        device_span<parquet_column_device_view const> col_desc,
+                       device_span<partition_info const> partitions,
+                       device_span<int const> first_frag_in_part,
                        uint32_t fragment_size,
-                       uint32_t num_rows,
                        rmm::cuda_stream_view stream);
 
 /**
@@ -498,11 +526,11 @@ void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_st
  * @brief Insert chunk values into their respective hash maps
  *
  * @param chunks Column chunks [rowgroup][column]
- * @param num_rows Number of rows per column
+ * @param frags Column fragments
  * @param stream CUDA stream to use
  */
 void populate_chunk_hash_maps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                              size_type num_rows,
+                              cudf::detail::device_2dspan<gpu::PageFragment const> frags,
                               rmm::cuda_stream_view stream);
 
 /**
@@ -523,11 +551,11 @@ void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_vi
  * col[row] == col[dict_data[dict_index[row - chunk.start_row]]]
  *
  * @param chunks Column chunks [rowgroup][column]
- * @param num_rows Number of rows per column
+ * @param frags Column fragments
  * @param stream CUDA stream to use
  */
 void get_dictionary_indices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                            size_type num_rows,
+                            cudf::detail::device_2dspan<gpu::PageFragment const> frags,
                             rmm::cuda_stream_view stream);
 
 /**

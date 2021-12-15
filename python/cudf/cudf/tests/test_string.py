@@ -1746,7 +1746,7 @@ def test_string_wrap(data, width):
         ["A B", "1.5", "3,000"],
         ["23", "³", "⅕", ""],
         [" ", "\t\r\n ", ""],
-        ["$", "B", "Aab$", "$$ca", "C$B$", "cat", "cat\n"],
+        ["$", "B", "Aab$", "$$ca", "C$B$", "cat", "cat\ndog"],
         ["line\nto be wrapped", "another\nline\nto be wrapped"],
     ],
 )
