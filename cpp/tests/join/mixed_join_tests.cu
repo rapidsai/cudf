@@ -195,6 +195,100 @@ struct MixedJoinTest : public cudf::test::BaseFixture {
  */
 template <typename T>
 struct MixedJoinPairReturnTest : public MixedJoinTest<T> {
+  /*
+   * Perform a join of tables constructed from two input data sets according to
+   * verify that the outputs match the expected outputs (up to order).
+   */
+  void _test(cudf::table_view left_equality,
+             cudf::table_view right_equality,
+             cudf::table_view left_conditional,
+             cudf::table_view right_conditional,
+             cudf::ast::operation predicate,
+             std::vector<cudf::size_type> expected_counts,
+             std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
+  {
+    auto [result_size, matches_per_row] = this->join_size(
+      left_equality, right_equality, left_conditional, right_conditional, predicate);
+    EXPECT_TRUE(result_size == expected_outputs.size());
+
+    auto actual_counts = cudf::column_view{cudf::data_type{cudf::type_to_id<cudf::size_type>()},
+                                           static_cast<cudf::size_type>(matches_per_row->size()),
+                                           matches_per_row->data()};
+    cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_counts_cw(
+      expected_counts.begin(), expected_counts.end());
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_counts_cw, actual_counts);
+
+    auto result =
+      this->join(left_equality, right_equality, left_conditional, right_conditional, predicate);
+    std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
+    for (size_t i = 0; i < result.first->size(); ++i) {
+      // Note: Not trying to be terribly efficient here since these tests are
+      // small, otherwise a batch copy to host before constructing the tuples
+      // would be important.
+      result_pairs.push_back({result.first->element(i, rmm::cuda_stream_default),
+                              result.second->element(i, rmm::cuda_stream_default)});
+    }
+    std::sort(result_pairs.begin(), result_pairs.end());
+    std::sort(expected_outputs.begin(), expected_outputs.end());
+
+    EXPECT_TRUE(std::equal(expected_outputs.begin(), expected_outputs.end(), result_pairs.begin()));
+  }
+
+  /*
+   * Perform a join of tables constructed from two input data sets according to
+   * the provided predicate and verify that the outputs match the expected
+   * outputs (up to order).
+   */
+  void test(ColumnVector<T> left_data,
+            ColumnVector<T> right_data,
+            std::vector<cudf::size_type> equality_columns,
+            std::vector<cudf::size_type> conditional_columns,
+            cudf::ast::operation predicate,
+            std::vector<cudf::size_type> expected_counts,
+            std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs)
+  {
+    // Note that we need to maintain the column wrappers otherwise the
+    // resulting column views will be referencing potentially invalid memory.
+    auto [left_wrappers,
+          right_wrappers,
+          left_columns,
+          right_columns,
+          left_equality,
+          right_equality,
+          left_conditional,
+          right_conditional] =
+      this->parse_input(left_data, right_data, equality_columns, conditional_columns);
+    this->_test(left_equality,
+                right_equality,
+                left_conditional,
+                right_conditional,
+                predicate,
+                expected_counts,
+                expected_outputs);
+  }
+
+  /**
+   * This method must be implemented by subclasses for specific types of joins.
+   * It should be a simply forwarding of arguments to the appropriate cudf
+   * mixed join API.
+   */
+  virtual PairJoinReturn join(cudf::table_view left_equality,
+                              cudf::table_view right_equality,
+                              cudf::table_view left_conditional,
+                              cudf::table_view right_conditional,
+                              cudf::ast::operation predicate) = 0;
+
+  /**
+   * This method must be implemented by subclasses for specific types of joins.
+   * It should be a simply forwarding of arguments to the appropriate cudf
+   * mixed join size computation API.
+   */
+  virtual std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<cudf::size_type>>> join_size(
+    cudf::table_view left_equality,
+    cudf::table_view right_equality,
+    cudf::table_view left_conditional,
+    cudf::table_view right_conditional,
+    cudf::ast::operation predicate) = 0;
 };
 
 /**
@@ -206,7 +300,7 @@ struct MixedInnerJoinTest : public MixedJoinPairReturnTest<T> {
                       cudf::table_view right_equality,
                       cudf::table_view left_conditional,
                       cudf::table_view right_conditional,
-                      cudf::ast::operation predicate)  // override
+                      cudf::ast::operation predicate) override
   {
     return cudf::mixed_inner_join(
       left_equality, right_equality, left_conditional, right_conditional, predicate);
@@ -217,7 +311,7 @@ struct MixedInnerJoinTest : public MixedJoinPairReturnTest<T> {
     cudf::table_view right_equality,
     cudf::table_view left_conditional,
     cudf::table_view right_conditional,
-    cudf::ast::operation predicate)  // override
+    cudf::ast::operation predicate) override
   {
     return cudf::mixed_inner_join_size(
       left_equality, right_equality, left_conditional, right_conditional, predicate);
@@ -228,110 +322,36 @@ TYPED_TEST_SUITE(MixedInnerJoinTest, cudf::test::IntegralTypesNotBool);
 
 TYPED_TEST(MixedInnerJoinTest, Basic)
 {
-  // Note that we need to maintain the column wrappers otherwise the
-  // resulting column views will be referencing potentially invalid memory.
-  ColumnVector<TypeParam> left_inputs{{0, 1, 2}, {3, 4, 5}, {10, 20, 30}};
-  ColumnVector<TypeParam> right_inputs{{0, 1, 3}, {5, 4, 5}, {30, 40, 50}};
-
-  auto [left_wrappers,
-        right_wrappers,
-        left_columns,
-        right_columns,
-        left_equality,
-        right_equality,
-        left_conditional,
-        right_conditional] = this->parse_input(left_inputs, right_inputs, {0}, {1, 2});
-
-  const auto col_ref_left_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
-  const auto col_ref_right_1 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
-  auto predicate =
-    cudf::ast::operation(cudf::ast::ast_operator::EQUAL, col_ref_left_1, col_ref_right_1);
-  std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs{{1, 1}};
-  // The left join output:
-  // std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs{{0, 0}, {1, 1}, {2,
-  // JoinNoneValue}};
-
-  auto [result_size, matches_per_row] =
-    this->join_size(left_equality, right_equality, left_conditional, right_conditional, predicate);
-  EXPECT_TRUE(result_size == expected_outputs.size());
-
-  auto actual_counts = cudf::column_view{cudf::data_type{cudf::type_to_id<cudf::size_type>()},
-                                         static_cast<cudf::size_type>(matches_per_row->size()),
-                                         matches_per_row->data()};
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_counts{0, 1, 0};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_counts, actual_counts);
-
-  auto result =
-    this->join(left_equality, right_equality, left_conditional, right_conditional, predicate);
-  std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
-  for (size_t i = 0; i < result.first->size(); ++i) {
-    // Note: Not trying to be terribly efficient here since these tests are
-    // small, otherwise a batch copy to host before constructing the tuples
-    // would be important.
-    result_pairs.push_back({result.first->element(i, rmm::cuda_stream_default),
-                            result.second->element(i, rmm::cuda_stream_default)});
-  }
-  std::sort(result_pairs.begin(), result_pairs.end());
-  std::sort(expected_outputs.begin(), expected_outputs.end());
-
-  EXPECT_TRUE(std::equal(expected_outputs.begin(), expected_outputs.end(), result_pairs.begin()));
+  this->test({{0, 1, 2}, {3, 4, 5}, {10, 20, 30}},
+             {{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
+             {0},
+             {1, 2},
+             left_zero_eq_right_zero,
+             {0, 1, 0},
+             {{1, 1}});
 }
 
 TYPED_TEST(MixedInnerJoinTest, Basic2)
 {
-  // Note that we need to maintain the column wrappers otherwise the
-  // resulting column views will be referencing potentially invalid memory.
-  ColumnVector<TypeParam> left_inputs{{0, 1, 2, 4}, {3, 4, 5, 6}, {10, 20, 30, 40}};
-  ColumnVector<TypeParam> right_inputs{{0, 1, 3, 4}, {5, 4, 5, 7}, {30, 40, 50, 60}};
+  auto const col_ref_left_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_1 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
+  auto const col_ref_left_2  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
+  auto const col_ref_right_2 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
 
-  auto [left_wrappers,
-        right_wrappers,
-        left_columns,
-        right_columns,
-        left_equality,
-        right_equality,
-        left_conditional,
-        right_conditional] = this->parse_input(left_inputs, right_inputs, {0}, {1, 2});
+  auto scalar_1        = cudf::numeric_scalar<TypeParam>(35);
+  auto const literal_1 = cudf::ast::literal(scalar_1);
 
-  const auto col_ref_left_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);
-  const auto col_ref_right_1 = cudf::ast::column_reference(0, cudf::ast::table_reference::RIGHT);
-  const auto col_ref_left_2  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
-  const auto col_ref_right_2 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
+  auto const op1 =
+    cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_left_1, col_ref_right_1);
+  auto const op2 = cudf::ast::operation(cudf::ast::ast_operator::LESS, literal_1, col_ref_right_2);
 
-  auto scalar_1  = cudf::numeric_scalar<TypeParam>(35);
-  auto literal_1 = cudf::ast::literal(scalar_1);
+  auto const predicate = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, op1, op2);
 
-  auto op1 = cudf::ast::operation(cudf::ast::ast_operator::LESS, col_ref_left_1, col_ref_right_1);
-  auto op2 = cudf::ast::operation(cudf::ast::ast_operator::LESS, literal_1, col_ref_right_2);
-
-  auto predicate = cudf::ast::operation(cudf::ast::ast_operator::LOGICAL_AND, op1, op2);
-  std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs{{3, 3}};
-  // The left join output:
-  // std::vector<std::pair<cudf::size_type, cudf::size_type>> expected_outputs{{0, 0}, {1, 1}, {2,
-  // JoinNoneValue}};
-
-  auto [result_size, matches_per_row] = cudf::mixed_inner_join_size(
-    left_equality, right_equality, left_conditional, right_conditional, predicate);
-  EXPECT_TRUE(result_size == expected_outputs.size());
-
-  auto actual_counts = cudf::column_view{cudf::data_type{cudf::type_to_id<cudf::size_type>()},
-                                         static_cast<cudf::size_type>(matches_per_row->size()),
-                                         matches_per_row->data()};
-  cudf::test::fixed_width_column_wrapper<cudf::size_type> expected_counts{0, 0, 0, 1};
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected_counts, actual_counts);
-
-  auto result = cudf::mixed_inner_join(
-    left_equality, right_equality, left_conditional, right_conditional, predicate);
-  std::vector<std::pair<cudf::size_type, cudf::size_type>> result_pairs;
-  for (size_t i = 0; i < result.first->size(); ++i) {
-    // Note: Not trying to be terribly efficient here since these tests are
-    // small, otherwise a batch copy to host before constructing the tuples
-    // would be important.
-    result_pairs.push_back({result.first->element(i, rmm::cuda_stream_default),
-                            result.second->element(i, rmm::cuda_stream_default)});
-  }
-  std::sort(result_pairs.begin(), result_pairs.end());
-  std::sort(expected_outputs.begin(), expected_outputs.end());
-
-  EXPECT_TRUE(std::equal(expected_outputs.begin(), expected_outputs.end(), result_pairs.begin()));
+  this->test({{0, 1, 2, 4}, {3, 4, 5, 6}, {10, 20, 30, 40}},
+             {{0, 1, 3, 4}, {5, 4, 5, 7}, {30, 40, 50, 60}},
+             {0},
+             {1, 2},
+             predicate,
+             {0, 0, 0, 1},
+             {{3, 3}});
 }
