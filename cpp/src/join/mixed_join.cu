@@ -63,12 +63,6 @@ mixed_join(table_view const& left_equality,
                "The left conditional and equality tables must have the same number of rows.");
   CUDF_EXPECTS(right_conditional.num_rows() == right_equality.num_rows(),
                "The right conditional and equality tables must have the same number of rows.");
-  // Note: Technically the rest of the code would work to have 0 columns in the
-  // conditional tables and a predicate that is just a literal value, but
-  // there's no practical reason to support that.
-  CUDF_EXPECTS(left_conditional.num_columns() > 0 && right_conditional.num_columns() > 0 &&
-                 left_equality.num_columns() > 0 && right_equality.num_columns() > 0,
-               "All input tables must have a finit number of columns.");
 
   auto const right_num_rows{right_conditional.num_rows()};
   auto const left_num_rows{left_conditional.num_rows()};
@@ -118,6 +112,7 @@ mixed_join(table_view const& left_equality,
   // output column and follow the null-supporting expression evaluation code
   // path.
   auto const has_nulls =
+    cudf::has_nulls(left_equality) || cudf::has_nulls(right_equality) ||
     binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream);
 
   auto const parser = ast::detail::expression_parser{
@@ -303,13 +298,6 @@ compute_mixed_join_output_size(table_view const& left_equality,
   CUDF_EXPECTS(right_conditional.num_rows() == right_equality.num_rows(),
                "The right conditional and equality tables must have the same number of rows.");
 
-  // Note: Technically the rest of the code would work to have 0 columns in the
-  // conditional tables and a predicate that is just a literal value, but
-  // there's no practical reason to support that.
-  CUDF_EXPECTS(left_conditional.num_columns() > 0 && right_conditional.num_columns() > 0 &&
-                 left_equality.num_columns() > 0 && right_equality.num_columns() > 0,
-               "All input tables must have a finit number of columns.");
-
   auto const right_num_rows{right_conditional.num_rows()};
   auto const left_num_rows{left_conditional.num_rows()};
   auto const swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
@@ -366,6 +354,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
   // output column and follow the null-supporting expression evaluation code
   // path.
   auto const has_nulls =
+    cudf::has_nulls(left_equality) || cudf::has_nulls(right_equality) ||
     binary_predicate.may_evaluate_null(left_conditional, right_conditional, stream);
 
   auto const parser = ast::detail::expression_parser{
