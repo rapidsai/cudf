@@ -68,7 +68,6 @@ void BM_parq_write_varying_options(benchmark::State& state)
   auto const compression  = static_cast<cudf::io::compression_type>(state.range(0));
   auto const enable_stats = static_cast<cudf::io::statistics_freq>(state.range(1));
   auto const file_path    = state.range(2) != 0 ? "unused_path.parquet" : "";
-  auto const file_paths   = std::vector<std::string>{file_path};
 
   auto const data_types = get_type_or_group({int32_t(type_group_id::INTEGRAL_SIGNED),
                                              int32_t(type_group_id::FLOATING_POINT),
