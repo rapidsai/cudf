@@ -186,6 +186,16 @@ type_id to_type_id(SchemaElement const& schema,
 }
 
 /**
+ * @brief Converts cuDF type enum to column logical type
+ */
+data_type to_data_type(type_id t_id, SchemaElement const& schema)
+{
+  return t_id == type_id::DECIMAL32 || t_id == type_id::DECIMAL64 || t_id == type_id::DECIMAL128
+           ? data_type{t_id, numeric::scale_type{-schema.decimal_scale}}
+           : data_type{t_id};
+}
+
+/**
  * @brief Function that returns the required the number of bits to store a value
  */
 template <typename T = uint8_t>
@@ -414,6 +424,9 @@ class aggregate_metadata {
     // walk upwards, skipping repeated fields
     while (schema_index > 0) {
       if (!pfm.schema[schema_index].is_stub()) { depth++; }
+      // schema of one-level encoding list doesn't contain nesting information, so we need to
+      // manually add an extra nesting level
+      if (pfm.schema[schema_index].is_one_level_list()) { depth++; }
       schema_index = pfm.schema[schema_index].parent_idx;
     }
     return depth;
@@ -596,11 +609,11 @@ class aggregate_metadata {
         }
 
         // if we're at the root, this is a new output column
-        auto const col_type = to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
-        auto const dtype    = col_type == type_id::DECIMAL32 || col_type == type_id::DECIMAL64 ||
-                               col_type == type_id::DECIMAL128
-                                ? data_type{col_type, numeric::scale_type{-schema_elem.decimal_scale}}
-                                : data_type{col_type};
+        auto const col_type =
+          schema_elem.is_one_level_list()
+            ? type_id::LIST
+            : to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
+        auto const dtype = to_data_type(col_type, schema_elem);
 
         column_buffer output_col(dtype, schema_elem.repetition_type == OPTIONAL);
         // store the index of this element if inserted in out_col_array
@@ -630,6 +643,23 @@ class aggregate_metadata {
         if (schema_elem.num_children == 0) {
           input_column_info& input_col =
             input_columns.emplace_back(input_column_info{schema_idx, schema_elem.name});
+
+          // set up child output column for one-level encoding list
+          if (schema_elem.is_one_level_list()) {
+            // determine the element data type
+            auto const element_type =
+              to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
+            auto const element_dtype = to_data_type(element_type, schema_elem);
+
+            column_buffer element_col(element_dtype, schema_elem.repetition_type == OPTIONAL);
+            // store the index of this element
+            nesting.push_back(static_cast<int>(output_col.children.size()));
+            // TODO: not sure if we should assign a name or leave it blank
+            element_col.name = "element";
+
+            output_col.children.push_back(std::move(element_col));
+          }
+
           std::copy(nesting.cbegin(), nesting.cend(), std::back_inserter(input_col.nesting));
           path_is_valid = true;  // If we're able to reach leaf then path is valid
         }
@@ -849,6 +879,10 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
         if (cur_schema.max_repetition_level == r) {
           // if this is a repeated field, map it one level deeper
           shallowest = cur_schema.is_stub() ? cur_depth + 1 : cur_depth;
+        }
+        // if it's one-level encoding list
+        else if (cur_schema.is_one_level_list()) {
+          shallowest = cur_depth - 1;
         }
         if (!cur_schema.is_stub()) { cur_depth--; }
         schema_idx = cur_schema.parent_idx;
@@ -1770,7 +1804,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 // Forward to implementation
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                parquet_reader_options const& options,
-               rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
   : _impl(std::make_unique<impl>(std::move(sources), options, mr))
 {

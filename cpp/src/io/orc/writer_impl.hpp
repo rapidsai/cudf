@@ -29,9 +29,9 @@
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utilities/error.hpp>
 
-#include <thrust/iterator/counting_iterator.h>
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
+#include <thrust/iterator/counting_iterator.h>
 
 #include <memory>
 #include <string>
@@ -369,6 +369,8 @@ class writer::impl {
   bool const single_write_mode;
   // optional user metadata
   std::unique_ptr<table_input_metadata> table_meta;
+  // optional user metadata
+  std::map<std::string, std::string> kv_meta;
   // to track if the output has been written to sink
   bool closed = false;
 
