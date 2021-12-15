@@ -33,12 +33,11 @@ struct row_arg_minmax_fn {
   row_lexicographic_comparator<nullate::DYNAMIC> const comp;
   bool const arg_min;
 
-  row_arg_minmax_fn(size_type const num_rows,
-                    table_device_view const& table,
+  row_arg_minmax_fn(table_device_view const& table,
                     bool has_nulls,
                     null_order const* null_precedence,
                     bool const arg_min)
-    : num_rows(num_rows),
+    : num_rows(table.num_rows()),
       comp(nullate::DYNAMIC{has_nulls}, table, table, nullptr, null_precedence),
       arg_min(arg_min)
   {
@@ -85,7 +84,6 @@ class comparison_binop_generator {
   std::unique_ptr<table_device_view, std::function<void(table_device_view*)>> const
     d_flattened_input_ptr;
   bool const is_min_op;
-  size_type const n_rows;
   bool const has_nulls;
 
   std::vector<null_order> null_orders;
@@ -97,7 +95,6 @@ class comparison_binop_generator {
         table_view{{input}}, {}, std::vector<null_order>{DEFAULT_NULL_ORDER})},
       d_flattened_input_ptr{table_device_view::create(flattened_input, stream)},
       is_min_op(is_min_op),
-      n_rows{input.size()},
       has_nulls{input.has_nulls()},
       null_orders_dvec(0, stream)
   {
@@ -117,8 +114,7 @@ class comparison_binop_generator {
 
   auto binop() const
   {
-    return row_arg_minmax_fn(
-      n_rows, *d_flattened_input_ptr, has_nulls, null_orders_dvec.data(), is_min_op);
+    return row_arg_minmax_fn(*d_flattened_input_ptr, has_nulls, null_orders_dvec.data(), is_min_op);
   }
 };
 
