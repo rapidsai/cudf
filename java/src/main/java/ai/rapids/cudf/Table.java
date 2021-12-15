@@ -649,9 +649,9 @@ public final class Table implements AutoCloseable {
 
   private static native long[] gather(long tableHandle, long gatherView, boolean checkBounds);
 
-  private static native long[] scatter(long srcTableHandle, long scatterView,
+  private static native long[] scatterTable(long srcTableHandle, long scatterView,
                                             long targetTableHandle, boolean checkBounds);
-  private static native long[] scatter(long[] srcScalarHandles, long scatterView,
+  private static native long[] scatterScalars(long[] srcScalarHandles, long scatterView,
                                              long targetTableHandle, boolean checkBounds);
 
   private static native long[] convertToRows(long nativeHandle);
@@ -2081,7 +2081,7 @@ public final class Table implements AutoCloseable {
    *                    and throw an error if any of its values are out of bounds.
    */
   public Table scatter(ColumnView scatterMap, Table target, boolean checkBounds) {
-    return new Table(scatter(nativeHandle, scatterMap.getNativeView(), target.getNativeView(),
+    return new Table(scatterTable(nativeHandle, scatterMap.getNativeView(), target.getNativeView(),
         checkBounds));
   }
 
@@ -2109,7 +2109,7 @@ public final class Table implements AutoCloseable {
       assert source[i] != null : "Scalar vectors passed in should not contain null";
       srcScalarHandles[i] = source[i].getScalarHandle();
     }
-    return new Table(scatter(srcScalarHandles, scatterMap.getNativeView(),
+    return new Table(scatterScalars(srcScalarHandles, scatterMap.getNativeView(),
         target.getNativeView(), checkBounds));
   }
 
