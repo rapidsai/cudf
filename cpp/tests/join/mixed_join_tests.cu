@@ -331,6 +331,39 @@ TYPED_TEST(MixedInnerJoinTest, Basic)
              {{1, 1}});
 }
 
+TYPED_TEST(MixedInnerJoinTest, Asymmetric)
+{
+  this->test({{0, 2, 1}, {3, 5, 4}, {10, 30, 20}},
+             {{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
+             {0},
+             {1, 2},
+             left_zero_eq_right_zero,
+             {0, 0, 1},
+             {{2, 1}});
+}
+
+TYPED_TEST(MixedInnerJoinTest, AsymmetricLeftLarger)
+{
+  this->test({{0, 2, 1, 4}, {3, 5, 4, 10}, {10, 30, 20, 100}},
+             {{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
+             {0},
+             {1, 2},
+             left_zero_eq_right_zero,
+             {0, 0, 1, 0},
+             {{2, 1}});
+}
+
+TYPED_TEST(MixedInnerJoinTest, AsymmetricRightLarger)
+{
+  this->test({{0, 1, 3}, {5, 4, 5}, {30, 40, 50}},
+             {{0, 2, 1, 4}, {3, 5, 4, 10}, {10, 30, 20, 100}},
+             {0},
+             {1, 2},
+             left_zero_eq_right_zero,
+             {0, 0, 1, 0},
+             {{1, 2}});
+}
+
 TYPED_TEST(MixedInnerJoinTest, Basic2)
 {
   auto const col_ref_left_1  = cudf::ast::column_reference(0, cudf::ast::table_reference::LEFT);

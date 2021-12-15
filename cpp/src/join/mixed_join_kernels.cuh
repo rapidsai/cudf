@@ -289,13 +289,12 @@ __global__ void mixed_join(table_device_view left_table,
     auto equality   = pair_expression_equality<has_nulls>{
       build, probe, evaluator, thread_intermediate_storage, compare_nulls};
 
-    // TODO: Verify that these are being passed in the correct order (at the
-    // moment it won't matter because my test produces a symmetric result). I
-    // think this will require a swap_tables check though.
     auto probe_key_begin       = thrust::make_discard_iterator();
-    auto probe_value_begin     = join_output_l + join_result_offsets[outer_row_index];
+    auto probe_value_begin     = swap_tables ? join_output_r + join_result_offsets[outer_row_index]
+                                             : join_output_l + join_result_offsets[outer_row_index];
     auto contained_key_begin   = thrust::make_discard_iterator();
-    auto contained_value_begin = join_output_r + join_result_offsets[outer_row_index];
+    auto contained_value_begin = swap_tables ? join_output_l + join_result_offsets[outer_row_index]
+                                             : join_output_r + join_result_offsets[outer_row_index];
 
     // TODO: This entire kernel probably won't work for left anti joins since I
     // need to use a normal map (not a multimap), so this condition is probably
