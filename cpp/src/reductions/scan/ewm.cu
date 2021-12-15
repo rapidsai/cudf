@@ -64,7 +64,7 @@ rmm::device_uvector<cudf::size_type> null_roll_up(column_view const& input,
                                                   rmm::cuda_stream_view stream)
 {
   rmm::device_uvector<cudf::size_type> output(
-    input.size(), stream, rmm::mr::get_current_device_resource());
+    input.size(), stream);
 
   auto device_view = column_device_view::create(input);
   auto valid_it    = cudf::detail::make_validity_iterator(*device_view);
@@ -138,7 +138,7 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                                            rmm::cuda_stream_view stream,
                                            rmm::mr::device_memory_resource* mr)
 {
-  rmm::device_uvector<T> output(input.size(), stream, mr);
+  rmm::device_uvector<T> output(input.size(), stream);
   rmm::device_uvector<pair_type<T>> pairs(input.size(), stream);
 
   if (input.has_nulls()) {
@@ -219,7 +219,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
                                              rmm::cuda_stream_view stream,
                                              rmm::mr::device_memory_resource* mr)
 {
-  rmm::device_uvector<T> output(input.size(), stream, mr);
+  rmm::device_uvector<T> output(input.size(), stream);
   rmm::device_uvector<pair_type<T>> pairs(input.size(), stream);
 
   thrust::transform(rmm::exec_policy(stream),
@@ -258,7 +258,7 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
     rmm::device_uvector<cudf::size_type> nullcnt = null_roll_up(input, stream);
     pair_beta_adjust(input, pairs, nullcnt, stream);
 
-    rmm::device_uvector<T> nullcnt_factor(nullcnt.size(), stream, mr);
+    rmm::device_uvector<T> nullcnt_factor(nullcnt.size(), stream);
 
     thrust::transform(rmm::exec_policy(stream),
                       nullcnt.begin(),
@@ -320,14 +320,27 @@ std::unique_ptr<column> ewma(std::unique_ptr<aggregation> const& agg,
   // better expressed in terms of the derived parameter `beta`
   T beta = 1.0 - (1.0 / (com + 1.0));
 
-  rmm::device_uvector<T> data(input.size(), stream, mr);
+  //rmm::device_uvector<T> data(input.size(), stream, mr);
   if (adjust) {
-    data = compute_ewma_adjust(input, beta, stream, mr);
+    return std::make_unique<column>(
+      cudf::data_type(
+        cudf::type_to_id<T>()), 
+        input.size(), 
+        std::move(
+          compute_ewma_adjust(input, beta, stream, mr).release()
+        )
+    );
   } else {
-    data = compute_ewma_noadjust(input, beta, stream, mr);
+    return std::make_unique<column>(
+      cudf::data_type(
+        cudf::type_to_id<T>()), 
+        input.size(), 
+        std::move(
+          compute_ewma_noadjust(input, beta, stream, mr).release()
+        )
+    );
   }
-  return std::make_unique<column>(
-    cudf::data_type(cudf::type_to_id<T>()), input.size(), std::move(data.release()));
+
 }
 
 struct ewma_functor {
