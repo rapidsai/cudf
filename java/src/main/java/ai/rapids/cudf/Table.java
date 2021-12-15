@@ -650,9 +650,11 @@ public final class Table implements AutoCloseable {
   private static native long[] gather(long tableHandle, long gatherView, boolean checkBounds);
 
   private static native long[] scatterTable(long srcTableHandle, long scatterView,
-                                            long targetTableHandle, boolean checkBounds);
+                                            long targetTableHandle, boolean checkBounds)
+                                            throws CudfException;
   private static native long[] scatterScalars(long[] srcScalarHandles, long scatterView,
-                                             long targetTableHandle, boolean checkBounds);
+                                             long targetTableHandle, boolean checkBounds)
+                                             throws CudfException;
 
   private static native long[] convertToRows(long nativeHandle);
 
@@ -2063,7 +2065,7 @@ public final class Table implements AutoCloseable {
   /**
    * Scatters values from the source table into the target table out-of-place,
    * returning a "destination table". The scatter is performed according to a
-   * scatter map such that row `scatter_map[i]` of the destination table gets row
+   * scatter map such that row `scatterMap[i]` of the destination table gets row
    * `i` of the source table. All other rows of the destination table equal
    * corresponding rows of the target table.
    *
@@ -2088,8 +2090,8 @@ public final class Table implements AutoCloseable {
   /**
    * Scatters values from the source row into the target table out-of-place,
    * returning a "destination table". The scatter is performed according to a
-   * scatter map such that row `scatter_map[i]` of the destination table is
-   * replaced by the source row. All other rows of the destination table equal
+   * scatter map such that row `scatterMap[i]` of the destination table is
+   * replaced by the source row `i`. All other rows of the destination table equal
    * corresponding rows of the target table.
    *
    * The number of elements in source must match the number of columns in target
