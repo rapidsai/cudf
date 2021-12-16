@@ -1314,15 +1314,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             return NotImplemented
 
-    def _get_numeric_data(self):
-        """Return a dataframe with only numeric data types"""
-        columns = [
-            c
-            for c, dt in self.dtypes.items()
-            if dt != object and not is_categorical_dtype(dt)
-        ]
-        return self[columns]
-
     def assign(self, **kwargs):
         """
         Assign columns to DataFrame from keyword arguments.
@@ -2090,20 +2081,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         self._data = ColumnAccessor(
             data, multiindex=is_multiindex, level_names=columns.names,
         )
-
-    def _rename_columns(self, new_names):
-        old_cols = iter(self._data.names)
-        l_old_cols = len(self._data)
-        l_new_cols = len(new_names)
-        if l_new_cols != l_old_cols:
-            msg = (
-                f"Length of new column names: {l_new_cols} does not "
-                "match length of previous column names: {l_old_cols}"
-            )
-            raise ValueError(msg)
-
-        mapper = dict(zip(old_cols, new_names))
-        self.rename(mapper=mapper, inplace=True, axis=1)
 
     def _reindex(
         self, columns, dtypes=None, deep=False, index=None, inplace=False
