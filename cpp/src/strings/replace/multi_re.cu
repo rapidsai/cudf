@@ -22,6 +22,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/detail/utilities.cuh>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/string_view.cuh>
@@ -53,12 +54,11 @@ using found_range = thrust::pair<size_type, size_type>;
 template <int stack_size>
 struct replace_multi_regex_fn {
   column_device_view const d_strings;
-  reprog_device* progs;  // array of regex progs
-  size_type number_of_patterns;
-  found_range* d_found_ranges;       // working array matched (begin,end) values
-  column_device_view const d_repls;  // replacement strings
-  int32_t* d_offsets{};              // these are null when
-  char* d_chars{};                   // only computing size
+  device_span<reprog_device const> progs;  // array of regex progs
+  found_range* d_found_ranges;             // working array matched (begin,end) values
+  column_device_view const d_repls;        // replacement strings
+  int32_t* d_offsets{};
+  char* d_chars{};
 
   __device__ void operator()(size_type idx)
   {
@@ -66,6 +66,9 @@ struct replace_multi_regex_fn {
       if (!d_chars) d_offsets[idx] = 0;
       return;
     }
+
+    auto const number_of_patterns = static_cast<size_type>(progs.size());
+
     auto const d_str      = d_strings.element<string_view>(idx);
     auto const nchars     = d_str.length();      // number of characters in input string
     auto nbytes           = d_str.size_bytes();  // number of bytes in input string
@@ -129,7 +132,8 @@ struct replace_multi_regex_fn {
 std::unique_ptr<column> replace_re(
   strings_column_view const& strings,
   std::vector<std::string> const& patterns,
-  strings_column_view const& repls,
+  strings_column_view const& replacements,
+  regex_flags const flags,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
@@ -138,31 +142,25 @@ std::unique_ptr<column> replace_re(
   if (patterns.empty())  // no patterns; just return a copy
     return std::make_unique<column>(strings.parent(), stream, mr);
 
-  CUDF_EXPECTS(!repls.has_nulls(), "Parameter repls must not have any nulls");
+  CUDF_EXPECTS(!replacements.has_nulls(), "Parameter replacements must not have any nulls");
 
-  auto d_strings = column_device_view::create(strings.parent(), stream);
-  auto d_repls   = column_device_view::create(repls.parent(), stream);
-  auto d_flags   = get_character_flags_table();
+  auto d_strings    = column_device_view::create(strings.parent(), stream);
+  auto d_repls      = column_device_view::create(replacements.parent(), stream);
+  auto d_char_table = get_character_flags_table();
 
   // compile regexes into device objects
   size_type regex_insts = 0;
   std::vector<std::unique_ptr<reprog_device, std::function<void(reprog_device*)>>> h_progs;
-  thrust::host_vector<reprog_device> progs;
+  std::vector<reprog_device> progs;
   for (auto itr = patterns.begin(); itr != patterns.end(); ++itr) {
-    auto prog   = reprog_device::create(*itr, d_flags, strings_count, stream);
+    auto prog   = reprog_device::create(*itr, flags, d_char_table, strings_count, stream);
     regex_insts = std::max(regex_insts, prog->insts_counts());
     progs.push_back(*prog);
     h_progs.emplace_back(std::move(prog));
   }
 
   // copy all the reprog_device instances to a device memory array
-  rmm::device_buffer progs_buffer{sizeof(reprog_device) * progs.size(), stream};
-  CUDA_TRY(cudaMemcpyAsync(progs_buffer.data(),
-                           progs.data(),
-                           progs.size() * sizeof(reprog_device),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
-  reprog_device* d_progs = reinterpret_cast<reprog_device*>(progs_buffer.data());
+  auto d_progs = cudf::detail::make_device_uvector_async(progs, stream);
 
   // create working buffer for ranges pairs
   rmm::device_uvector<found_range> found_ranges(patterns.size() * strings_count, stream);
@@ -172,34 +170,19 @@ std::unique_ptr<column> replace_re(
   auto children = [&] {
     // Each invocation is predicated on the stack size which is dependent on the number of regex
     // instructions
-    if (regex_insts <= RX_SMALL_INSTS)
-      return make_strings_children(
-        replace_multi_regex_fn<RX_STACK_SMALL>{
-          *d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, *d_repls},
-        strings_count,
-        stream,
-        mr);
-    else if (regex_insts <= RX_MEDIUM_INSTS)
-      return make_strings_children(
-        replace_multi_regex_fn<RX_STACK_MEDIUM>{
-          *d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, *d_repls},
-        strings_count,
-        stream,
-        mr);
-    else if (regex_insts <= RX_LARGE_INSTS)
-      return make_strings_children(
-        replace_multi_regex_fn<RX_STACK_LARGE>{
-          *d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, *d_repls},
-        strings_count,
-        stream,
-        mr);
-    else
-      return make_strings_children(
-        replace_multi_regex_fn<RX_STACK_ANY>{
-          *d_strings, d_progs, static_cast<size_type>(progs.size()), d_found_ranges, *d_repls},
-        strings_count,
-        stream,
-        mr);
+    if (regex_insts <= RX_SMALL_INSTS) {
+      replace_multi_regex_fn<RX_STACK_SMALL> fn{*d_strings, d_progs, d_found_ranges, *d_repls};
+      return make_strings_children(fn, strings_count, stream, mr);
+    } else if (regex_insts <= RX_MEDIUM_INSTS) {
+      replace_multi_regex_fn<RX_STACK_MEDIUM> fn{*d_strings, d_progs, d_found_ranges, *d_repls};
+      return make_strings_children(fn, strings_count, stream, mr);
+    } else if (regex_insts <= RX_LARGE_INSTS) {
+      replace_multi_regex_fn<RX_STACK_LARGE> fn{*d_strings, d_progs, d_found_ranges, *d_repls};
+      return make_strings_children(fn, strings_count, stream, mr);
+    } else {
+      replace_multi_regex_fn<RX_STACK_ANY> fn{*d_strings, d_progs, d_found_ranges, *d_repls};
+      return make_strings_children(fn, strings_count, stream, mr);
+    }
   }();
 
   return make_strings_column(strings_count,
@@ -215,11 +198,12 @@ std::unique_ptr<column> replace_re(
 
 std::unique_ptr<column> replace_re(strings_column_view const& strings,
                                    std::vector<std::string> const& patterns,
-                                   strings_column_view const& repls,
+                                   strings_column_view const& replacements,
+                                   regex_flags const flags,
                                    rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_re(strings, patterns, repls, rmm::cuda_stream_default, mr);
+  return detail::replace_re(strings, patterns, replacements, flags, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

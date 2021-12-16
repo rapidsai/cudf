@@ -1137,8 +1137,7 @@ struct OrcWriterTestDecimal : public OrcWriterTest,
 
 TEST_P(OrcWriterTestDecimal, Decimal64)
 {
-  auto const num_rows = std::get<0>(GetParam());
-  auto const scale    = std::get<1>(GetParam());
+  auto const [num_rows, scale] = GetParam();
 
   // Using int16_t because scale causes values to overflow if they already require 32 bits
   auto const vals = random_values<int32_t>(num_rows);
@@ -1241,9 +1240,8 @@ struct OrcWriterTestStripes
 
 TEST_P(OrcWriterTestStripes, StripeSize)
 {
-  constexpr auto num_rows = 1000000;
-  auto size_bytes         = std::get<0>(GetParam());
-  auto size_rows          = std::get<1>(GetParam());
+  constexpr auto num_rows            = 1000000;
+  auto const [size_bytes, size_rows] = GetParam();
 
   const auto seq_col = random_values<int>(num_rows);
   const auto validity =

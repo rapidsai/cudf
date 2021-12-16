@@ -5018,7 +5018,7 @@ class StringMethods(ColumnMethods):
             raise ValueError(
                 "Require size >= 2 to compute edit distance matrix."
             )
-        if self._column.has_nulls:
+        if self._column.has_nulls():
             raise ValueError(
                 "Cannot compute edit distance between null strings. "
                 "Consider removing them using `dropna` or fill with `fillna`."
@@ -5440,20 +5440,7 @@ class StringColumn(column.ColumnBase):
         """
 
         to_replace_col = column.as_column(to_replace)
-        if to_replace_col.null_count == len(to_replace_col):
-            # If all of `to_replace` are `None`, dtype of `to_replace_col`
-            # is inferred as `float64`, but this is a valid
-            # string column too, Hence we will need to type-cast
-            # to self.dtype.
-            to_replace_col = to_replace_col.astype(self.dtype)
-
         replacement_col = column.as_column(replacement)
-        if replacement_col.null_count == len(replacement_col):
-            # If all of `replacement` are `None`, dtype of `replacement_col`
-            # is inferred as `float64`, but this is a valid
-            # string column too, Hence we will need to type-cast
-            # to self.dtype.
-            replacement_col = replacement_col.astype(self.dtype)
 
         if type(to_replace_col) != type(replacement_col):
             raise TypeError(
