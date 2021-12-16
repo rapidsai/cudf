@@ -23,9 +23,15 @@ cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:
         MICROSECOND "cudf::datetime::rounding_frequency::MICROSECOND"
         NANOSECOND "cudf::datetime::rounding_frequency::NANOSECOND"
 
-    cdef unique_ptr[column] ceil_datetimes(const column_view& column, rounding_frequency freq) except +
-    cdef unique_ptr[column] floor_datetimes(const column_view& column, rounding_frequency freq) except +
-    cdef unique_ptr[column] round_datetimes(const column_view& column, rounding_frequency freq) except +
+    cdef unique_ptr[column] ceil_datetimes(
+        const column_view& column, rounding_frequency freq
+    ) except +
+    cdef unique_ptr[column] floor_datetimes(
+        const column_view& column, rounding_frequency freq
+    ) except +
+    cdef unique_ptr[column] round_datetimes(
+        const column_view& column, rounding_frequency freq
+    ) except +
 
     cdef unique_ptr[column] add_calendrical_months(
         const column_view& timestamps,

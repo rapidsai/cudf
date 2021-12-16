@@ -61,6 +61,7 @@ def extract_datetime_component(Column col, object field):
 
     return result
 
+
 cdef libcudf_datetime.rounding_frequency _get_rounding_frequency(object freq):
     cdef libcudf_datetime.rounding_frequency freq_val
 
@@ -83,10 +84,12 @@ cdef libcudf_datetime.rounding_frequency _get_rounding_frequency(object freq):
         raise ValueError(f"Invalid resolution: '{freq}'")
     return freq_val
 
+
 def ceil_datetime(Column col, object freq):
     cdef unique_ptr[column] c_result
     cdef column_view col_view = col.view()
-    cdef libcudf_datetime.rounding_frequency freq_val = _get_rounding_frequency(freq)
+    cdef libcudf_datetime.rounding_frequency freq_val = \
+        _get_rounding_frequency(freq)
 
     with nogil:
         c_result = move(libcudf_datetime.ceil_datetimes(col_view, freq_val))
@@ -98,7 +101,8 @@ def ceil_datetime(Column col, object freq):
 def floor_datetime(Column col, object freq):
     cdef unique_ptr[column] c_result
     cdef column_view col_view = col.view()
-    cdef libcudf_datetime.rounding_frequency freq_val = _get_rounding_frequency(freq)
+    cdef libcudf_datetime.rounding_frequency freq_val = \
+        _get_rounding_frequency(freq)
 
     with nogil:
         c_result = move(libcudf_datetime.floor_datetimes(col_view, freq_val))
@@ -110,7 +114,8 @@ def floor_datetime(Column col, object freq):
 def round_datetime(Column col, object freq):
     cdef unique_ptr[column] c_result
     cdef column_view col_view = col.view()
-    cdef libcudf_datetime.rounding_frequency freq_val = _get_rounding_frequency(freq)
+    cdef libcudf_datetime.rounding_frequency freq_val = \
+        _get_rounding_frequency(freq)
 
     with nogil:
         c_result = move(libcudf_datetime.round_datetimes(col_view, freq_val))
