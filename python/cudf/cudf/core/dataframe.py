@@ -59,6 +59,7 @@ from cudf.core.indexed_frame import (
     _get_label_range_or_mask,
     _indices_from_labels,
 )
+from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
@@ -90,10 +91,8 @@ _cupy_nan_methods_map = {
 
 class _DataFrameIndexer(_FrameIndexer):
     def __getitem__(self, arg):
-        from cudf import MultiIndex
-
-        if isinstance(self._frame.index, MultiIndex) or isinstance(
-            self._frame.columns, MultiIndex
+        if isinstance(self._frame.index, cudf.MultiIndex) or isinstance(
+            self._frame.columns, cudf.MultiIndex
         ):
             # This try/except block allows the use of pandas-like
             # tuple arguments into MultiIndex dataframes.
@@ -118,8 +117,6 @@ class _DataFrameIndexer(_FrameIndexer):
         operation should be "downcasted" from a DataFrame to a
         Series
         """
-        from cudf.core.column import as_column
-
         if isinstance(df, cudf.Series):
             return False
         nrows, ncols = df.shape
@@ -201,11 +198,6 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
     def _getitem_tuple_arg(self, arg):
         from uuid import uuid4
 
-        from cudf import MultiIndex
-        from cudf.core.column import column
-        from cudf.core.dataframe import DataFrame
-        from cudf.core.index import as_index
-
         # Step 1: Gather columns
         if isinstance(arg, tuple):
             columns_df = self._frame._get_columns_by_label(arg[1])
@@ -245,13 +237,13 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     tmp_arg = ([tmp_arg[0]], tmp_arg[1])
                 if len(tmp_arg[0]) == 0:
                     return columns_df._empty_like(keep_index=True)
-                tmp_arg = (column.as_column(tmp_arg[0]), tmp_arg[1])
+                tmp_arg = (as_column(tmp_arg[0]), tmp_arg[1])
 
                 if is_bool_dtype(tmp_arg[0]):
                     df = columns_df._apply_boolean_mask(tmp_arg[0])
                 else:
                     tmp_col_name = str(uuid4())
-                    other_df = DataFrame(
+                    other_df = cudf.DataFrame(
                         {tmp_col_name: column.arange(len(tmp_arg[0]))},
                         index=as_index(tmp_arg[0]),
                     )
@@ -273,7 +265,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     start = self._frame.index[0]
                 df.index = as_index(start)
             else:
-                row_selection = column.as_column(arg[0])
+                row_selection = as_column(arg[0])
                 if is_bool_dtype(row_selection.dtype):
                     df.index = self._frame.index.take(row_selection)
                 else:
@@ -285,7 +277,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
     @annotate("LOC_SETITEM", color="blue", domain="cudf_python")
     def _setitem_tuple_arg(self, key, value):
-        if isinstance(self._frame.index, cudf.MultiIndex) or isinstance(
+        if isinstance(self._frame.index, MultiIndex) or isinstance(
             self._frame.columns, pd.MultiIndex
         ):
             raise NotImplementedError(
@@ -351,10 +343,6 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
     @annotate("ILOC_GETITEM", color="blue", domain="cudf_python")
     def _getitem_tuple_arg(self, arg):
-        from cudf import MultiIndex
-        from cudf.core.column import column
-        from cudf.core.index import as_index
-
         # Iloc Step 1:
         # Gather the columns specified by the second tuple arg
         columns_df = cudf.DataFrame(self._frame._get_columns_by_index(arg[1]))
@@ -385,7 +373,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                     index += len(columns_df)
                 df = columns_df._slice(slice(index, index + 1, 1))
             else:
-                arg = (column.as_column(arg[0]), arg[1])
+                arg = (as_column(arg[0]), arg[1])
                 if is_bool_dtype(arg[0]):
                     df = columns_df._apply_boolean_mask(arg[0])
                 else:
@@ -953,6 +941,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return 2
 
     def __dir__(self):
+        # Add the columns of the DataFrame to the dir output.
         o = set(dir(type(self)))
         o.update(self.__dict__)
         o.update(
@@ -1169,8 +1158,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         arg : should always be of type slice
 
         """
-        from cudf.core.index import RangeIndex
-
         num_rows = len(self)
         if num_rows == 0:
             return self
@@ -1284,8 +1271,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return Series(sizes, index=ind)
 
     def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        import cudf
-
         if method == "__call__" and hasattr(cudf, ufunc.__name__):
             func = getattr(cudf, ufunc.__name__)
             return func(self)
@@ -1554,9 +1539,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 out._index._data,
                 indices[:first_data_column_position],
             )
-            if not isinstance(
-                out._index, cudf.MultiIndex
-            ) and is_categorical_dtype(out._index._values.dtype):
+            if not isinstance(out._index, MultiIndex) and is_categorical_dtype(
+                out._index._values.dtype
+            ):
                 out = out.set_index(
                     cudf.core.index.as_index(out.index._values)
                 )
@@ -1777,7 +1762,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 # adjust right columns for output if multiindex.
                 right_cols = (
                     right_cols - 1
-                    if isinstance(self.index, cudf.MultiIndex)
+                    if isinstance(self.index, MultiIndex)
                     else right_cols
                 )
                 left_cols = int(ncols / 2.0) + 1
@@ -2400,7 +2385,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     except TypeError:
                         msg = f"{col} cannot be converted to column-like."
                         raise TypeError(msg)
-                if isinstance(col, (cudf.MultiIndex, pd.MultiIndex)):
+                if isinstance(col, (MultiIndex, pd.MultiIndex)):
                     col = (
                         cudf.from_pandas(col)
                         if isinstance(col, pd.MultiIndex)
@@ -2428,7 +2413,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if append:
             idx_cols = [self.index._data[x] for x in self.index._data]
-            if isinstance(self.index, cudf.MultiIndex):
+            if isinstance(self.index, MultiIndex):
                 idx_names = self.index.names
             else:
                 idx_names = [self.index.name]
@@ -2440,7 +2425,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         elif len(columns_to_add) == 1:
             idx = cudf.Index(columns_to_add[0], name=names[0])
         else:
-            idx = cudf.MultiIndex._from_data(
+            idx = MultiIndex._from_data(
                 {i: col for i, col in enumerate(columns_to_add)}
             )
             idx.names = names
@@ -2523,7 +2508,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         result = self if inplace else self.copy()
 
         if not drop:
-            if isinstance(self.index, cudf.MultiIndex):
+            if isinstance(self.index, MultiIndex):
                 names = tuple(
                     name if name is not None else f"level_{i}"
                     for i, name in enumerate(self.index.names)
@@ -2983,9 +2968,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     "mixed type is not yet supported."
                 )
 
-            if level is not None and isinstance(
-                self.index, cudf.core.multiindex.MultiIndex
-            ):
+            if level is not None and isinstance(self.index, MultiIndex):
                 out_index = self.index.copy(deep=copy)
                 out_index.get_level_values(level).to_frame().replace(
                     to_replace=list(index.keys()),
@@ -4713,7 +4696,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if isinstance(self.columns, BaseIndex):
             out_columns = self.columns.to_pandas()
-            if isinstance(self.columns, cudf.core.multiindex.MultiIndex):
+            if isinstance(self.columns, MultiIndex):
                 if self.columns.names is not None:
                     out_columns.names = self.columns.names
             else:
@@ -4889,7 +4872,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     "step": 1,
                 }
             else:
-                if isinstance(self.index, cudf.MultiIndex):
+                if isinstance(self.index, MultiIndex):
                     gen_names = tuple(
                         f"level_{i}"
                         for i, _ in enumerate(self.index._data.names)
@@ -5965,11 +5948,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         repeated_index = self.index.repeat(self.shape[1])
         name_index = Frame({0: self._column_names}).tile(self.shape[0])
         new_index = list(repeated_index._columns) + [name_index._columns[0]]
-        if isinstance(self._index, cudf.MultiIndex):
+        if isinstance(self._index, MultiIndex):
             index_names = self._index.names + [None]
         else:
             index_names = [None] * len(new_index)
-        new_index = cudf.core.multiindex.MultiIndex.from_frame(
+        new_index = MultiIndex.from_frame(
             DataFrame(dict(zip(range(0, len(new_index)), new_index))),
             names=index_names,
         )
@@ -6529,7 +6512,7 @@ def from_pandas(obj, nan_as_null=None):
     elif isinstance(obj, pd.Series):
         return Series.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.MultiIndex):
-        return cudf.MultiIndex.from_pandas(obj, nan_as_null=nan_as_null)
+        return MultiIndex.from_pandas(obj, nan_as_null=nan_as_null)
     elif isinstance(obj, pd.RangeIndex):
         return cudf.core.index.RangeIndex(
             start=obj.start, stop=obj.stop, step=obj.step, name=obj.name
@@ -6647,7 +6630,7 @@ def extract_col(df, col):
         if (
             col == "index"
             and col not in df.index._data
-            and not isinstance(df.index, cudf.MultiIndex)
+            and not isinstance(df.index, MultiIndex)
         ):
             return df.index._data.columns[0]
         return df.index._data[col]
