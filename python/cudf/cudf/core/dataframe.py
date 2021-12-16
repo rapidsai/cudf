@@ -1672,51 +1672,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         return result
 
-    def _repr_pandas025_formatting(self, ncols, nrows, dtype=None):
-        """
-        With Pandas > 0.25 there are some new conditional formatting for some
-        datatypes and column/row configurations. This fixes most of them in
-        context to match the expected Pandas repr of the same content.
-
-        Examples
-        --------
-        >>> gdf.__repr__()
-            0   ...  19
-        0   46  ...  48
-        ..  ..  ...  ..
-        19  40  ...  29
-
-        [20 rows x 20 columns]
-
-        >>> nrows, ncols = _repr_pandas025_formatting(2, 2, dtype="category")
-        >>> pd.options.display.max_rows = nrows
-        >>> pd.options.display.max_columns = ncols
-        >>> gdf.__repr__()
-             0  ...  19
-        0   46  ...  48
-        ..  ..  ...  ..
-        19  40  ...  29
-
-        [20 rows x 20 columns]
-        """
-        ncols = 1 if ncols in [0, 2] and dtype == "datetime64[ns]" else ncols
-        ncols = (
-            1
-            if ncols == 0
-            and nrows == 1
-            and dtype in ["int8", "str", "category"]
-            else ncols
-        )
-        ncols = (
-            1
-            if nrows == 1
-            and dtype in ["int8", "int16", "int64", "str", "category"]
-            else ncols
-        )
-        ncols = 0 if ncols == 2 else ncols
-        ncols = 19 if ncols in [20, 21] else ncols
-        return ncols, nrows
-
     def _clean_renderable_dataframe(self, output):
         """
         This method takes in partial/preprocessed dataframe
