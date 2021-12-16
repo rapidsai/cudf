@@ -275,16 +275,16 @@ mixed_join(table_view const& left_equality,
   return join_indices;
 }
 
-std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>>
-compute_mixed_join_output_size(table_view const& left_equality,
-                               table_view const& right_equality,
-                               table_view const& left_conditional,
-                               table_view const& right_conditional,
-                               ast::expression const& binary_predicate,
-                               null_equality compare_nulls,
-                               join_kind join_type,
-                               rmm::cuda_stream_view stream,
-                               rmm::mr::device_memory_resource* mr)
+std::pair<std::size_t, std::unique_ptr<column>> compute_mixed_join_output_size(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls,
+  join_kind join_type,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   // Until we add logic to handle the number of non-matches in the right table,
   // full joins are not supported in this function. Note that this does not
@@ -307,8 +307,10 @@ compute_mixed_join_output_size(table_view const& left_equality,
   // it is the probe table for the hash
   auto const outer_num_rows{swap_tables ? right_num_rows : left_num_rows};
 
-  auto matches_per_row =
-    std::make_unique<rmm::device_uvector<size_type>>(outer_num_rows, stream, mr);
+  auto matches_per_row = make_numeric_column(
+    data_type(type_to_id<size_type>()), outer_num_rows, mask_state::UNALLOCATED, stream, mr);
+  auto matches_mutable_view = matches_per_row->mutable_view();
+  auto matches_device_view  = mutable_column_device_view::create(matches_mutable_view, stream);
 
   // We can immediately filter out cases where one table is empty. In
   // some cases, we return all the rows of the other table with a corresponding
@@ -320,13 +322,15 @@ compute_mixed_join_output_size(table_view const& left_equality,
       case join_kind::LEFT_JOIN:
       case join_kind::LEFT_ANTI_JOIN:
       case join_kind::FULL_JOIN: {
-        thrust::fill(matches_per_row->begin(), matches_per_row->end(), 1);
+        thrust::fill(
+          matches_device_view->begin<size_type>(), matches_device_view->end<size_type>(), 1);
         return {left_num_rows, std::move(matches_per_row)};
       }
       // Inner and left semi joins return empty output because no matches can exist.
       case join_kind::INNER_JOIN:
       case join_kind::LEFT_SEMI_JOIN: {
-        thrust::fill(matches_per_row->begin(), matches_per_row->end(), 0);
+        thrust::fill(
+          matches_device_view->begin<size_type>(), matches_device_view->end<size_type>(), 0);
         return {0, std::move(matches_per_row)};
       }
       default: CUDF_FAIL("Invalid join kind."); break;
@@ -338,12 +342,14 @@ compute_mixed_join_output_size(table_view const& left_equality,
       case join_kind::LEFT_ANTI_JOIN:
       case join_kind::INNER_JOIN:
       case join_kind::LEFT_SEMI_JOIN: {
-        thrust::fill(matches_per_row->begin(), matches_per_row->end(), 0);
+        thrust::fill(
+          matches_device_view->begin<size_type>(), matches_device_view->end<size_type>(), 0);
         return {0, std::move(matches_per_row)};
       }
       // Full joins need to return the trivial complement.
       case join_kind::FULL_JOIN: {
-        thrust::fill(matches_per_row->begin(), matches_per_row->end(), 1);
+        thrust::fill(
+          matches_device_view->begin<size_type>(), matches_device_view->end<size_type>(), 1);
         return {right_num_rows, std::move(matches_per_row)};
       }
       default: CUDF_FAIL("Invalid join kind."); break;
@@ -409,7 +415,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
         parser.device_expression_data,
         swap_tables,
         size.data(),
-        matches_per_row->data());
+        matches_device_view->data<size_type>());
   } else {
     compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -423,7 +429,7 @@ compute_mixed_join_output_size(table_view const& left_equality,
         parser.device_expression_data,
         swap_tables,
         size.data(),
-        matches_per_row->data());
+        matches_device_view->data<size_type>());
   }
   CHECK_CUDA(stream.value());
 
@@ -457,7 +463,7 @@ mixed_inner_join(
                             mr);
 }
 
-std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_inner_join_size(
+std::pair<std::size_t, std::unique_ptr<column>> mixed_inner_join_size(
   table_view const& left_equality,
   table_view const& right_equality,
   table_view const& left_conditional,
@@ -503,7 +509,7 @@ mixed_left_join(
                             mr);
 }
 
-std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_left_join_size(
+std::pair<std::size_t, std::unique_ptr<column>> mixed_left_join_size(
   table_view const& left_equality,
   table_view const& right_equality,
   table_view const& left_conditional,
@@ -549,7 +555,7 @@ mixed_full_join(
                             mr);
 }
 
-std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_full_join_size(
+std::pair<std::size_t, std::unique_ptr<column>> mixed_full_join_size(
   table_view const& left_equality,
   table_view const& right_equality,
   table_view const& left_conditional,

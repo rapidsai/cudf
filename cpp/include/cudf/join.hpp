@@ -1069,7 +1069,7 @@ mixed_full_join(table_view const& left_equality,
  * be relied upon, simply passed to the corresponding `mixed_inner_join` API as
  * is.
  */
-std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_inner_join_size(
+std::pair<std::size_t, std::unique_ptr<column>> mixed_inner_join_size(
   table_view const& left_equality,
   table_view const& right_equality,
   table_view const& left_conditional,
@@ -1112,7 +1112,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_in
  * be relied upon, simply passed to the corresponding `mixed_left_join` API as
  * is.
  */
-std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_left_join_size(
+std::pair<std::size_t, std::unique_ptr<column>> mixed_left_join_size(
   table_view const& left_equality,
   table_view const& right_equality,
   table_view const& left_conditional,
@@ -1155,7 +1155,7 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
  * be relied upon, simply passed to the corresponding `mixed_full_join` API as
  * is.
  */
-std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_full_join_size(
+std::pair<std::size_t, std::unique_ptr<column>> mixed_full_join_size(
   table_view const& left_equality,
   table_view const& right_equality,
   table_view const& left_conditional,
