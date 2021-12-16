@@ -1024,11 +1024,6 @@ class Frame:
 
         result = partitioned._split(output_offsets, keep_index=keep_index)
 
-        splits = libcudf.copying.table_split(
-            self, output_offsets, keep_index=keep_index
-        )
-        result = [self.__class__._from_data(*result) for result in splits]
-
         for frame in result:
             frame._copy_type_metadata(self, include_index=keep_index)
 
@@ -3737,6 +3732,12 @@ class Frame:
         return libcudf.sort.is_sorted(
             self, ascending=ascending, null_position=null_position
         )
+
+    def _split(self, splits, keep_index=True):
+        results = libcudf.copying.table_split(
+            self, splits, keep_index=keep_index
+        )
+        return [self.__class__._from_data(*result) for result in results]
 
     def _encode(self):
         data, index, indices = libcudf.transform.table_encode(self)
