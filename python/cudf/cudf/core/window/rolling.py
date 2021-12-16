@@ -332,7 +332,7 @@ class Rolling(GetAttrGetItemMixin, _RollingBase):
         """
         has_nulls = False
         if isinstance(self.obj, cudf.Series):
-            if self.obj._column.has_nulls:
+            if self.obj._column.has_nulls():
                 has_nulls = True
         else:
             for col in self.obj._data:

@@ -50,31 +50,17 @@ std::unique_ptr<column> murmur_hash3_32(table_view const& input,
                  "Expected same size of initial hash values as number of columns");
     auto device_initial_hash = make_device_uvector_async(initial_hash, stream);
 
-    if (nullable) {
-      thrust::tabulate(
-        rmm::exec_policy(stream),
-        output_view.begin<int32_t>(),
-        output_view.end<int32_t>(),
-        row_hasher_initial_values<MurmurHash3_32, true>(*device_input, device_initial_hash.data()));
-    } else {
-      thrust::tabulate(rmm::exec_policy(stream),
-                       output_view.begin<int32_t>(),
-                       output_view.end<int32_t>(),
-                       row_hasher_initial_values<MurmurHash3_32, false>(
-                         *device_input, device_initial_hash.data()));
-    }
+    thrust::tabulate(rmm::exec_policy(stream),
+                     output_view.begin<int32_t>(),
+                     output_view.end<int32_t>(),
+                     row_hasher_initial_values<MurmurHash3_32, nullate::DYNAMIC>(
+                       nullate::DYNAMIC{nullable}, *device_input, device_initial_hash.data()));
   } else {
-    if (nullable) {
-      thrust::tabulate(rmm::exec_policy(stream),
-                       output_view.begin<int32_t>(),
-                       output_view.end<int32_t>(),
-                       row_hasher<MurmurHash3_32, true>(*device_input));
-    } else {
-      thrust::tabulate(rmm::exec_policy(stream),
-                       output_view.begin<int32_t>(),
-                       output_view.end<int32_t>(),
-                       row_hasher<MurmurHash3_32, false>(*device_input));
-    }
+    thrust::tabulate(
+      rmm::exec_policy(stream),
+      output_view.begin<int32_t>(),
+      output_view.end<int32_t>(),
+      row_hasher<MurmurHash3_32, nullate::DYNAMIC>(nullate::DYNAMIC{nullable}, *device_input));
   }
 
   return output;

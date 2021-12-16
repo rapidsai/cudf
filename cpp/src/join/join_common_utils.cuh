@@ -32,8 +32,10 @@ namespace detail {
  */
 class pair_equality {
  public:
-  pair_equality(table_device_view lhs, table_device_view rhs, bool nulls_are_equal = true)
-    : _check_row_equality{lhs, rhs, nulls_are_equal}
+  pair_equality(table_device_view lhs,
+                table_device_view rhs,
+                null_equality nulls_are_equal = null_equality::EQUAL)
+    : _check_row_equality{cudf::nullate::YES{}, lhs, rhs, nulls_are_equal}
   {
   }
 

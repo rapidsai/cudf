@@ -56,12 +56,12 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static ai.rapids.cudf.ColumnWriterOptions.mapColumn;
 import static ai.rapids.cudf.AssertUtils.assertColumnsAreEqual;
 import static ai.rapids.cudf.AssertUtils.assertPartialColumnsAreEqual;
 import static ai.rapids.cudf.AssertUtils.assertPartialTablesAreEqual;
 import static ai.rapids.cudf.AssertUtils.assertTableTypes;
 import static ai.rapids.cudf.AssertUtils.assertTablesAreEqual;
+import static ai.rapids.cudf.ColumnWriterOptions.mapColumn;
 import static ai.rapids.cudf.ParquetWriterOptions.listBuilder;
 import static ai.rapids.cudf.ParquetWriterOptions.structBuilder;
 import static ai.rapids.cudf.Table.TestBuilder;
@@ -523,17 +523,12 @@ public class TableTest extends CudfTestBase {
           DType.create(DType.DTypeEnum.DECIMAL64, -10),  // Decimal(10, 10)
           DType.create(DType.DTypeEnum.DECIMAL32, 0),  // Decimal(1, 0)
           DType.create(DType.DTypeEnum.DECIMAL64, -15),  // Decimal(18, 15)
-          DType.FLOAT64,  // Decimal(20, 10) which is backed by FIXED_LEN_BYTE_ARRAY
+          DType.create(DType.DTypeEnum.DECIMAL128, -10),  // Decimal(20, 10)
           DType.INT64,
           DType.FLOAT32
       };
       assertTableTypes(expectedTypes, table);
     }
-    // An CudfException will be thrown here because it contains a FIXED_LEN_BYTE_ARRAY column whose type length exceeds 8.
-    ParquetOptions opts = ParquetOptions.builder().enableStrictDecimalType(true).build();
-    assertThrows(ai.rapids.cudf.CudfException.class, () -> {
-      try (Table table = Table.readParquet(opts, TEST_DECIMAL_PARQUET_FILE)) {}
-    });
   }
 
   @Test
@@ -6343,6 +6338,51 @@ public class TableTest extends CudfTestBase {
     }
   }
 
+
+  @Test
+  void testScatterTable() {
+    try (Table srcTable = new Table.TestBuilder()
+            .column(1, 2, 3, 4, 5)
+            .column("A", "AA", "AAA", "AAAA", "AAAAA")
+            .decimal32Column(-3, 1, 2, 3, 4, 5)
+            .decimal64Column(-8, 100001L, 200002L, 300003L, 400004L, 500005L)
+            .build();
+         ColumnVector scatterMap = ColumnVector.fromInts(0, 2, 4, -2);
+         Table targetTable = new Table.TestBuilder()
+            .column(-1, -2, -3, -4, -5)
+            .column("B", "BB", "BBB", "BBBB", "BBBBB")
+            .decimal32Column(-3, -1, -2, -3, -4, -5)
+            .decimal64Column(-8, -100001L, -200002L, -300003L, -400004L, -500005L)
+            .build();
+         Table expected = new Table.TestBuilder()
+            .column(1, -2, 2, 4, 3)
+            .column("A", "BB", "AA", "AAAA", "AAA")
+            .decimal32Column(-3, 1, -2, 2, 4, 3)
+            .decimal64Column(-8, 100001L, -200002L, 200002L, 400004L, 300003L)
+            .build();
+         Table result = srcTable.scatter(scatterMap, targetTable, false)) {
+      assertTablesAreEqual(expected, result);
+    }
+  }
+
+  @Test
+  void testScatterScalars() {
+    try (Scalar s1 = Scalar.fromInt(0);
+         Scalar s2 = Scalar.fromString("A");
+         ColumnVector scatterMap = ColumnVector.fromInts(0, 2, -1);
+         Table targetTable = new Table.TestBuilder()
+            .column(-1, -2, -3, -4, -5)
+            .column("B", "BB", "BBB", "BBBB", "BBBBB")
+            .build();
+         Table expected = new Table.TestBuilder()
+            .column(0, -2, 0, -4, 0)
+            .column("A", "BB", "A", "BBBB", "A")
+            .build();
+         Table result = Table.scatter(new Scalar[] { s1, s2 }, scatterMap, targetTable, false)) {
+       assertTablesAreEqual(expected, result);
+     }
+  }
+
   @Test
   void testMaskWithoutValidity() {
     try (ColumnVector mask = ColumnVector.fromBoxedBooleans(true, false, true, false, true);
@@ -6589,6 +6629,32 @@ public class TableTest extends CudfTestBase {
          ColumnVector expectedFromDecimals = ColumnVector.fromDecimals(null, null, BigDecimal.TEN);
          Table expected = new Table(expectedFromInts, expectedFromStrings, expectedFromDecimals)) {
       assertTablesAreEqual(expected, filtered);
+    }
+  }
+
+  @Test
+  void testDropDuplicates() {
+    int[] keyColumns = new int[]{ 1 };
+
+    try (ColumnVector col1 = ColumnVector.fromBoxedInts(5, null, 3, 5, 8, 1);
+         ColumnVector col2 = ColumnVector.fromBoxedInts(20, null, null, 19, 21, 19);
+         Table input = new Table(col1, col2)) {
+
+      // Keep the first duplicate element.
+      try (Table result = input.dropDuplicates(keyColumns, true, true, true);
+           ColumnVector expectedCol1 = ColumnVector.fromBoxedInts(null, 5, 5, 8);
+           ColumnVector expectedCol2 = ColumnVector.fromBoxedInts(null, 19, 20, 21);
+           Table expected = new Table(expectedCol1, expectedCol2)) {
+        assertTablesAreEqual(expected, result);
+      }
+
+      // Keep the last duplicate element.
+      try (Table result = input.dropDuplicates(keyColumns, false, true, true);
+           ColumnVector expectedCol1 = ColumnVector.fromBoxedInts(3, 1, 5, 8);
+           ColumnVector expectedCol2 = ColumnVector.fromBoxedInts(null, 19, 20, 21);
+           Table expected = new Table(expectedCol1, expectedCol2)) {
+        assertTablesAreEqual(expected, result);
+      }
     }
   }
 
@@ -7152,19 +7218,6 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
-  void testORCWriteToFile() throws IOException {
-    File tempFile = File.createTempFile("test", ".orc");
-    try (Table table0 = getExpectedFileTable(WriteUtils.getNonNestedColumns(false))) {
-      table0.writeORC(tempFile.getAbsoluteFile());
-      try (Table table1 = Table.readORC(tempFile.getAbsoluteFile())) {
-        assertTablesAreEqual(table0, table1);
-      }
-    } finally {
-      tempFile.delete();
-    }
-  }
-
-  @Test
   void testORCWriteToFileWithColNames() throws IOException {
     File tempFile = File.createTempFile("test", ".orc");
     String[] colNames = WriteUtils.getNonNestedColumns(false);
@@ -7172,7 +7225,9 @@ public class TableTest extends CudfTestBase {
       ORCWriterOptions.Builder optBuilder = ORCWriterOptions.builder();
       WriteUtils.buildWriterOptions(optBuilder, colNames);
       ORCWriterOptions options = optBuilder.build();
-      table0.writeORC(options, tempFile.getAbsoluteFile());
+      try (TableWriter writer = Table.writeORCChunked(options, tempFile.getAbsoluteFile())) {
+        writer.write(table0);
+      }
       ORCOptions opts = ORCOptions.builder().includeColumn(colNames).build();
       try (Table table1 = Table.readORC(opts, tempFile.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table1);
@@ -7191,7 +7246,9 @@ public class TableTest extends CudfTestBase {
       ORCWriterOptions.Builder optBuilder = ORCWriterOptions.builder();
       WriteUtils.buildWriterOptions(optBuilder, colNames);
       ORCWriterOptions options = optBuilder.build();
-      table0.writeORC(options, tempFile.getAbsoluteFile());
+      try (TableWriter writer = Table.writeORCChunked(options, tempFile.getAbsoluteFile())) {
+        writer.write(table0);
+      }
       ORCOptions opts = ORCOptions.builder()
           .includeColumn(colNames)
           .decimal128Column(Columns.DECIMAL128.name,
@@ -7210,13 +7267,15 @@ public class TableTest extends CudfTestBase {
   void testORCWriteToFileUncompressed() throws IOException {
     File tempFileUncompressed = File.createTempFile("test-uncompressed", ".orc");
     try (Table table0 = getExpectedFileTable(WriteUtils.getNonNestedColumns(false))) {
-      String[] colNames = new String[table0.getNumberOfColumns()];
-      Arrays.fill(colNames, "");
-      ORCWriterOptions opts = ORCWriterOptions.builder()
-              .withColumns(true, colNames)
-              .withCompressionType(CompressionType.NONE)
-              .build();
-      table0.writeORC(opts, tempFileUncompressed.getAbsoluteFile());
+      String[] colNames = WriteUtils.getNonNestedColumns(false);
+      ORCWriterOptions.Builder optsBuilder = ORCWriterOptions.builder();
+      WriteUtils.buildWriterOptions(optsBuilder, colNames);
+      optsBuilder.withCompressionType(CompressionType.NONE);
+      ORCWriterOptions opts = optsBuilder.build();
+      try (TableWriter writer =
+               Table.writeORCChunked(opts,tempFileUncompressed.getAbsoluteFile())) {
+        writer.write(table0);
+      }
       try (Table table2 = Table.readORC(tempFileUncompressed.getAbsoluteFile())) {
         assertTablesAreEqual(table0, table2);
       }

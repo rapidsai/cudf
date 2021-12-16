@@ -99,7 +99,7 @@ TYPED_TEST(NumericOptionalIteratorTest, mean_var_output)
     replaced_array.begin(), replaced_array.end(), T{0}, [](T acc, T i) { return acc + i * i; });
 
   // GPU test
-  auto it_dev         = d_col->optional_begin<T>(cudf::contains_nulls::YES{});
+  auto it_dev         = d_col->optional_begin<T>(cudf::nullate::YES{});
   auto it_dev_squared = thrust::make_transform_iterator(it_dev, transformer);
 
   // this can be computed with a single reduce and without a temporary output vector

@@ -185,6 +185,7 @@ add_library(
   src/binaryop/compiled/LogicalOr.cu
   src/binaryop/compiled/Mod.cu
   src/binaryop/compiled/Mul.cu
+  src/binaryop/compiled/NullEquals.cu
   src/binaryop/compiled/NullMax.cu
   src/binaryop/compiled/NullMin.cu
   src/binaryop/compiled/PMod.cu
