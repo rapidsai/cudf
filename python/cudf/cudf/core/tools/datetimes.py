@@ -8,6 +8,7 @@ from typing import Sequence, Type, TypeVar, Union
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pandas.tseries.offsets as pd_offset
 from pandas.core.tools.datetimes import _unit_map
 
 import cudf
@@ -459,7 +460,18 @@ class DateOffset:
         "Y": "years",
     }
 
-    _FREQSTR_REGEX = re.compile("(-)*([0-9]*)([a-zA-Z]+)")
+    _TICK_OR_WEEK_TO_UNITS = {
+        pd_offset.Week: "weeks",
+        pd_offset.Day: "days",
+        pd_offset.Hour: "hours",
+        pd_offset.Minute: "minutes",
+        pd_offset.Second: "seconds",
+        pd_offset.Milli: "milliseconds",
+        pd_offset.Micro: "microseconds",
+        pd_offset.Nano: "nanoseconds",
+    }
+
+    _FREQSTR_REGEX = re.compile("([0-9]*)([a-zA-Z]+)")
 
     def __init__(self, n=1, normalize=False, **kwds):
         if normalize:
@@ -677,7 +689,14 @@ class DateOffset:
         # Construct the kwds dictionary
         return cls(**{cls._CODES_TO_UNITS[code]: n * sign})
 
-    def _maybe_as_fast_pandas_offset(self) -> pd.DateOffset:
+    @classmethod
+    def _from_pandas_ticks_or_weeks(
+        cls: Type[_T],
+        tick: Union[pd.tseries.offsets.Tick, pd.tseries.offsets.Week],
+    ) -> _T:
+        return cls(**{cls._TICK_OR_WEEK_TO_UNITS[type(tick)]: tick.n})
+
+    def _maybe_as_fast_pandas_offset(self):
         if (
             len(self.kwds) == 1
             and _has_fixed_frequency(self)
@@ -842,18 +861,15 @@ def date_range(
     if isinstance(freq, DateOffset):
         offset = freq
     elif isinstance(freq, str):
-        if (
-            any(
-                x in freq.upper()
-                for x in {"Y", "A", "Q", "B", "SM", "SMS", "CBMS", "M"}
-            )
-            or "MS" in freq
+        offset = pd.tseries.frequencies.to_offset(freq)
+        if not isinstance(offset, pd.tseries.offsets.Tick) and not isinstance(
+            offset, pd.tseries.offsets.Week
         ):
             raise ValueError(
-                "date_range does not yet support month, quarter, year-anchored"
-                "or business-date frequency."
+                f"Unrecognized frequency string {freq}. cuDF does "
+                "not yet support month, quarter, year-anchored frequency."
             )
-        offset = DateOffset._from_str(freq)
+        offset = DateOffset._from_pandas_ticks_or_weeks(offset)
     else:
         raise TypeError("`freq` must be a `str` or cudf.DateOffset object.")
 
