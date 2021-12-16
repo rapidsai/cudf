@@ -19,9 +19,10 @@ from cudf.utils.dtypes import (
 
 ENVREF_PREFIX = "__CUDF_ENVREF__"
 
-SUPPORTED_QUERY_TYPES = (
-    NUMERIC_TYPES + DATETIME_TYPES + TIMEDELTA_TYPES + BOOL_TYPES
-)
+SUPPORTED_QUERY_TYPES = {
+    np.dtype(dt)
+    for dt in NUMERIC_TYPES | DATETIME_TYPES | TIMEDELTA_TYPES | BOOL_TYPES
+}
 
 
 class QuerySyntaxError(ValueError):
@@ -210,11 +211,12 @@ def query_execute(df, expr, callenv):
     columns = compiled["colnames"]
 
     # wait to check the types until we know which cols are used
+    breakpoint()
     if any(
         df._data[col].dtype not in SUPPORTED_QUERY_TYPES for col in columns
     ):
         raise TypeError(
-            "query only supports numeric, datetime, timedelta,"
+            "query only supports numeric, datetime, timedelta, "
             "or bool dtypes."
         )
 
