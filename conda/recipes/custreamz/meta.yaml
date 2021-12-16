@@ -3,7 +3,7 @@
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set py_version=environ.get('CONDA_PY', 36) %}
-{% set cuda_version='.'.join(environ.get('CUDA', '10.1').split('.')[:2]) %}
+{% set cuda_version='.'.join(environ.get('CUDA', '11.5').split('.')[:2]) %}
 
 package:
   name: custreamz
@@ -29,10 +29,10 @@ requirements:
     - cudf_kafka {{ version }}
   run:
     - python
-    - streamz 
+    - streamz
     - cudf {{ version }}
-    - dask>=2021.09.1
-    - distributed>=2021.09.1
+    - dask>=2021.11.1,<=2021.11.2
+    - distributed>=2021.11.1,<=2021.11.2
     - python-confluent-kafka
     - cudf_kafka {{ version }}
 

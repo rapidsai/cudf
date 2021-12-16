@@ -433,6 +433,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         Data type to force. Only a single dtype is allowed.
         If None, infer.
 
+    nan_as_null : bool, Default True
+        If ``None``/``True``, converts ``np.nan`` values to
+        ``null`` values.
+        If ``False``, leaves ``np.nan`` values as is.
+
     Examples
     --------
 
@@ -507,7 +512,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
     _iloc_indexer_type = _DataFrameIlocIndexer
 
     @annotate("DATAFRAME_INIT", color="blue", domain="cudf_python")
-    def __init__(self, data=None, index=None, columns=None, dtype=None):
+    def __init__(
+        self, data=None, index=None, columns=None, dtype=None, nan_as_null=True
+    ):
 
         super().__init__()
 
@@ -516,7 +523,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         if isinstance(data, (DataFrame, pd.DataFrame)):
             if isinstance(data, pd.DataFrame):
-                data = self.from_pandas(data)
+                data = self.from_pandas(data, nan_as_null=nan_as_null)
 
             if index is not None:
                 if not data.index.equals(index):
@@ -539,11 +546,14 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 self.columns = data.columns
         elif isinstance(data, (cudf.Series, pd.Series)):
             if isinstance(data, pd.Series):
-                data = cudf.Series.from_pandas(data)
+                data = cudf.Series.from_pandas(data, nan_as_null=nan_as_null)
 
             name = data.name or 0
             self._init_from_dict_like(
-                {name: data}, index=index, columns=columns
+                {name: data},
+                index=index,
+                columns=columns,
+                nan_as_null=nan_as_null,
             )
         elif data is None:
             if index is None:
@@ -613,7 +623,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 if not is_dict_like(data):
                     raise TypeError("data must be list or dict-like")
 
-                self._init_from_dict_like(data, index=index, columns=columns)
+                self._init_from_dict_like(
+                    data, index=index, columns=columns, nan_as_null=nan_as_null
+                )
 
         if dtype:
             self._data = self.astype(dtype)._data
@@ -752,7 +764,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
             self.columns = columns
 
-    def _init_from_dict_like(self, data, index=None, columns=None):
+    def _init_from_dict_like(
+        self, data, index=None, columns=None, nan_as_null=None
+    ):
         if columns is not None:
             # remove all entries in `data` that are
             # not in `columns`
@@ -787,7 +801,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 if is_scalar(data[col_name]):
                     num_rows = num_rows or 1
                 else:
-                    data[col_name] = column.as_column(data[col_name])
+                    data[col_name] = column.as_column(
+                        data[col_name], nan_as_null=nan_as_null
+                    )
                     num_rows = len(data[col_name])
             self._index = RangeIndex(0, num_rows)
         else:
@@ -799,7 +815,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 self._data.multiindex = self._data.multiindex and isinstance(
                     col_name, tuple
                 )
-                self.insert(i, col_name, data[col_name])
+                self.insert(
+                    i, col_name, data[col_name], nan_as_null=nan_as_null
+                )
 
         if columns is not None:
             self.columns = columns
@@ -1721,7 +1739,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             if is_list_dtype(df._data[col]) or is_struct_dtype(df._data[col]):
                 # TODO we need to handle this
                 pass
-            elif df._data[col].has_nulls:
+            elif df._data[col].has_nulls():
                 df[col] = df._data[col].astype("str").fillna(cudf._NA_REP)
             else:
                 df[col] = df._data[col]
@@ -2556,7 +2574,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         return out
 
     @annotate("INSERT", color="green", domain="cudf_python")
-    def insert(self, loc, name, value):
+    def insert(self, loc, name, value, nan_as_null=None):
         """Add a column to DataFrame at the index specified by loc.
 
         Parameters
@@ -2599,11 +2617,11 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         )
                 self._data = new_data
         elif isinstance(value, (pd.Series, Series)):
-            value = Series(value)._align_to_index(
+            value = Series(value, nan_as_null=nan_as_null)._align_to_index(
                 self._index, how="right", sort=False
             )
 
-        value = column.as_column(value)
+        value = column.as_column(value, nan_as_null=nan_as_null)
 
         self._data.insert(name, value, loc=loc)
 
@@ -3014,6 +3032,20 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             return out.copy(deep=copy)
 
+    def add_prefix(self, prefix):
+        out = self.copy(deep=True)
+        out.columns = [
+            prefix + col_name for col_name in list(self._data.keys())
+        ]
+        return out
+
+    def add_suffix(self, suffix):
+        out = self.copy(deep=True)
+        out.columns = [
+            col_name + suffix for col_name in list(self._data.keys())
+        ]
+        return out
+
     def as_gpu_matrix(self, columns=None, order="F"):
         warnings.warn(
             "The as_gpu_matrix method will be removed in a future cuDF "
@@ -3041,7 +3073,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
 
         dtype = find_common_type([col.dtype for col in cols])
         for k, c in self._data.items():
-            if c.has_nulls:
+            if c.has_nulls():
                 raise ValueError(
                     f"column '{k}' has null values. "
                     f"hint: use .fillna() to replace null values"
@@ -3494,22 +3526,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         result.columns = columns
         return result
 
-    @property
-    def T(self):
-        """
-        Transpose index and columns.
-
-        Reflect the DataFrame over its main diagonal by writing rows
-        as columns and vice-versa. The property T is an accessor to
-        the method transpose().
-
-        Returns
-        -------
-        out : DataFrame
-            The transposed DataFrame.
-        """
-
-        return self.transpose()
+    T = property(transpose, doc=transpose.__doc__)
 
     def melt(self, **kwargs):
         """Unpivots a DataFrame from wide format to long format,

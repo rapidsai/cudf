@@ -127,9 +127,9 @@ public class ByteColumnVectorTest extends CudfTestBase {
          ColumnVector expected1 = ColumnVector.fromBytes((byte)4, (byte)3, (byte)8);
          ColumnVector expected2 = ColumnVector.fromBytes((byte)100);
          ColumnVector expected3 = ColumnVector.fromBytes((byte)-23)) {
-      TableTest.assertColumnsAreEqual(expected1, byteColumnVector1);
-      TableTest.assertColumnsAreEqual(expected2, byteColumnVector2);
-      TableTest.assertColumnsAreEqual(expected3, byteColumnVector3);
+      AssertUtils.assertColumnsAreEqual(expected1, byteColumnVector1);
+      AssertUtils.assertColumnsAreEqual(expected2, byteColumnVector2);
+      AssertUtils.assertColumnsAreEqual(expected3, byteColumnVector3);
     }
   }
 

@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 
-#include <thrust/iterator/constant_iterator.h>
-#include <thrust/logical.h>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/iterator.cuh>
 #include <cudf/detail/valid_if.cuh>
@@ -28,6 +26,8 @@
 #include <cudf/table/row_operators.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <rmm/exec_policy.hpp>
+#include <thrust/iterator/constant_iterator.h>
+#include <thrust/logical.h>
 #include <type_traits>
 
 namespace cudf {
@@ -74,11 +74,8 @@ struct lookup_functor {
     if (!search_keys_have_nulls && !input_lists.has_nulls() && !input_lists.child().has_nulls()) {
       return {rmm::device_buffer{0, stream, mr}, size_type{0}};
     } else {
-      return cudf::detail::valid_if(result_validity.begin<bool>(),
-                                    result_validity.end<bool>(),
-                                    thrust::identity<bool>{},
-                                    stream,
-                                    mr);
+      return cudf::detail::valid_if(
+        result_validity.begin<bool>(), result_validity.end<bool>(), thrust::identity{}, stream, mr);
     }
   }
 

@@ -24,6 +24,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/detail/null_mask.hpp>
 #include <cudf/detail/nvtx/ranges.hpp>
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -100,28 +101,26 @@ std::pair<std::string, std::vector<backref_type>> parse_backrefs(std::string con
 std::unique_ptr<column> replace_with_backrefs(
   strings_column_view const& strings,
   std::string const& pattern,
-  std::string const& repl,
+  std::string const& replacement,
+  regex_flags const flags,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
 {
   if (strings.is_empty()) return make_empty_column(type_id::STRING);
 
   CUDF_EXPECTS(!pattern.empty(), "Parameter pattern must not be empty");
-  CUDF_EXPECTS(!repl.empty(), "Parameter repl must not be empty");
+  CUDF_EXPECTS(!replacement.empty(), "Parameter replacement must not be empty");
 
   auto d_strings = column_device_view::create(strings.parent(), stream);
   // compile regex into device object
-  auto d_prog = reprog_device::create(pattern, get_character_flags_table(), strings.size(), stream);
+  auto d_prog =
+    reprog_device::create(pattern, flags, get_character_flags_table(), strings.size(), stream);
   auto const regex_insts = d_prog->insts_counts();
 
   // parse the repl string for back-ref indicators
-  auto const parse_result = parse_backrefs(repl);
-  rmm::device_uvector<backref_type> backrefs(parse_result.second.size(), stream);
-  CUDA_TRY(cudaMemcpyAsync(backrefs.data(),
-                           parse_result.second.data(),
-                           sizeof(backref_type) * backrefs.size(),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  auto const parse_result = parse_backrefs(replacement);
+  rmm::device_uvector<backref_type> backrefs =
+    cudf::detail::make_device_uvector_async(parse_result.second, stream);
   string_scalar repl_scalar(parse_result.first, true, stream);
   string_view const d_repl_template = repl_scalar.value();
 
@@ -173,11 +172,13 @@ std::unique_ptr<column> replace_with_backrefs(
 
 std::unique_ptr<column> replace_with_backrefs(strings_column_view const& strings,
                                               std::string const& pattern,
-                                              std::string const& repl,
+                                              std::string const& replacement,
+                                              regex_flags const flags,
                                               rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::replace_with_backrefs(strings, pattern, repl, rmm::cuda_stream_default, mr);
+  return detail::replace_with_backrefs(
+    strings, pattern, replacement, flags, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace strings

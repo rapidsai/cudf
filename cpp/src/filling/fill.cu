@@ -49,7 +49,7 @@ void in_place_fill(cudf::mutable_column_view& destination,
   using ScalarType = cudf::scalar_type_t<T>;
   auto p_scalar    = static_cast<ScalarType const*>(&value);
   T fill_value     = p_scalar->value(stream);
-  bool is_valid    = p_scalar->is_valid();
+  bool is_valid    = p_scalar->is_valid(stream);
   cudf::detail::copy_range(thrust::make_constant_iterator(fill_value),
                            thrust::make_constant_iterator(is_valid),
                            destination,

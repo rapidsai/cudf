@@ -269,8 +269,14 @@ def to_cudf_compatible_scalar(val, dtype=None):
 
     val = cudf.api.types.pandas_dtype(type(val)).type(val)
 
-    if dtype is not None and not isinstance(dtype, cudf.CategoricalDtype):
-        val = val.astype(dtype)
+    if dtype is not None:
+        if isinstance(val, str) and np.dtype(dtype).kind == "M":
+            # pd.Timestamp can handle str, but not np.str_
+            val = pd.Timestamp(str(val)).to_datetime64().astype(dtype)
+        elif not isinstance(
+            dtype, cudf.CategoricalDtype
+        ):  # TODO: what to do with categoricaldtype??
+            val = val.astype(dtype)
 
     if val.dtype.type is np.datetime64:
         time_unit, _ = np.datetime_data(val.dtype)

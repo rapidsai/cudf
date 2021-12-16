@@ -18,17 +18,17 @@
 
 #include "orc_common.h"
 
-#include <io/comp/io_uncomp.h>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/io/datasource.hpp>
 #include <cudf/io/orc_metadata.hpp>
 #include <cudf/utilities/error.hpp>
+#include <io/comp/io_uncomp.h>
 
-#include <stddef.h>
-#include <stdint.h>
 #include <algorithm>
 #include <memory>
 #include <optional>
+#include <stddef.h>
+#include <stdint.h>
 #include <string>
 #include <vector>
 
