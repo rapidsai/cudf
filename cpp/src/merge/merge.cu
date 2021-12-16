@@ -80,8 +80,7 @@ __global__ void materialize_merged_bitmask_kernel(
   auto active_threads = __ballot_sync(0xffffffff, destination_row < num_destination_rows);
 
   while (destination_row < num_destination_rows) {
-    index_type const& merged_idx   = merged_indices[destination_row];
-    auto const [src_side, src_row] = merged_idx;
+    auto const [src_side, src_row] = merged_indices[destination_row];
     bool const from_left{src_side == side::LEFT};
     bool source_bit_is_valid{true};
     if (left_have_valids && from_left) {
