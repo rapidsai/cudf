@@ -907,7 +907,7 @@ class GroupBy(Serializable):
             to have a valid result.
 
         ddof: int, optional
-            Delta degrees of freedom, deafult is 1.
+            Delta degrees of freedom, default is 1.
 
         Returns
         ----------
