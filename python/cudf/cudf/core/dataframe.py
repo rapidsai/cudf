@@ -91,8 +91,8 @@ _cupy_nan_methods_map = {
 
 class _DataFrameIndexer(_FrameIndexer):
     def __getitem__(self, arg):
-        if isinstance(self._frame.index, cudf.MultiIndex) or isinstance(
-            self._frame.columns, cudf.MultiIndex
+        if isinstance(self._frame.index, MultiIndex) or isinstance(
+            self._frame.columns, MultiIndex
         ):
             # This try/except block allows the use of pandas-like
             # tuple arguments into MultiIndex dataframes.
