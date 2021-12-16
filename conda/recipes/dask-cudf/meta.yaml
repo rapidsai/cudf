@@ -40,6 +40,8 @@ requirements:
 test:                                   # [linux64]
   requires:                             # [linux64]
     - cudatoolkit {{ cuda_version }}.*  # [linux64]
+  imports:                              # [linux64]
+    - dask_cudf                         # [linux64]
 
 
 about:
