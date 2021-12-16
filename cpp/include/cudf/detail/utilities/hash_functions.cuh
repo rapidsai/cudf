@@ -337,10 +337,13 @@ struct SparkMurmurHash3_32 {
   template <typename TKey>
   result_type CUDA_DEVICE_CALLABLE compute(TKey const& key) const
   {
-    constexpr int len        = sizeof(TKey);
-    int8_t const* const data = reinterpret_cast<int8_t const*>(&key);
-    constexpr int nblocks    = len / 4;
+    return compute_bytes(reinterpret_cast<int8_t const*>(&key), sizeof(TKey));
+  }
 
+  result_type CUDA_DEVICE_CALLABLE compute_bytes(int8_t const* const data,
+                                                 cudf::size_type const len) const
+  {
+    int32_t nblocks = len / 4;
     uint32_t h1           = m_seed;
     constexpr uint32_t c1 = 0xcc9e2d51;
     constexpr uint32_t c2 = 0x1b873593;
@@ -430,61 +433,22 @@ template <>
 hash_value_type CUDA_DEVICE_CALLABLE
 SparkMurmurHash3_32<numeric::decimal128>::operator()(numeric::decimal128 const& key) const
 {
-  __int128_t val     = key.value();
-  int8_t const* data = reinterpret_cast<int8_t const*>(&val);
-  __int128_t flipped = 0;
-  int8_t* dflipped   = reinterpret_cast<int8_t*>(&flipped);
-  int32_t length     = 15;
-  int8_t sign_bit    = data[15] & (int8_t)0x80;
-  int8_t zero_value  = sign_bit ? (int8_t)0xff : (int8_t)0x00;
+  __int128_t val          = key.value();
+  __int128_t flipped      = 0;
+  int8_t* data            = reinterpret_cast<int8_t*>(&val);
+  int8_t* dflipped        = reinterpret_cast<int8_t*>(&flipped);
+  int8_t const sign_bit   = data[15] & 0x80;
+  int8_t const zero_value = sign_bit ? 0xff : 0x00;
+  int32_t length          = 15;
 
-  while (length >= 0 && data[length] == zero_value)
-    length--;
-  if (length == -1) {
-    return this->compute<uint8_t>(0);
-  } else if (sign_bit ^ (data[length] & (int8_t)0x80)) {
-    ++length;
-  }
-
-  for (int i = 0; i <= length; i++) {
+  for (; length >= 0 && data[length] == zero_value; --length)
+    ;
+  if (length == -1) return this->compute<uint8_t>(0);
+  if (sign_bit ^ (data[length] & static_cast<int8_t>(0x80))) ++length;
+  for (int i = 0; i <= length; i++)
     dflipped[i] = data[length - i];
-  }
-  length++;
-  int const nblocks     = length / 4;
-  result_type h1        = m_seed;
-  constexpr uint32_t c1 = 0xcc9e2d51;
-  constexpr uint32_t c2 = 0x1b873593;
 
-  //----------
-  // body
-  uint32_t* flipped32 = reinterpret_cast<uint32_t*>(dflipped);
-
-  uint32_t const* const blocks = reinterpret_cast<uint32_t const*>(data + nblocks * 4);
-  for (int i = 0; i < nblocks; i++) {
-    uint32_t k1 = flipped32[i];
-    k1 *= c1;
-    k1 = rotl32(k1, 15);
-    k1 *= c2;
-    h1 ^= k1;
-    h1 = rotl32(h1, 13);
-    h1 = h1 * 5 + 0xe6546b64;
-  }
-  //----------
-  // Spark's byte by byte tail processing
-  for (int i = nblocks * 4; i < length; i++) {
-    int32_t k1 = dflipped[i];
-    k1 *= c1;
-    k1 = rotl32(k1, 15);
-    k1 *= c2;
-    h1 ^= k1;
-    h1 = rotl32(h1, 13);
-    h1 = h1 * 5 + 0xe6546b64;
-  }
-  //----------
-  // finalization
-  h1 ^= length;
-  h1 = fmix32(h1);
-  return h1;
+  return this->compute_bytes(dflipped, length + 1);
 }
 
 template <>
