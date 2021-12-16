@@ -430,7 +430,7 @@ std::tuple<cudf::table_view, std::vector<rmm::device_buffer>> superimpose_parent
   auto superimposed_columns   = std::vector<column_view>{};
   auto superimposed_nullmasks = std::vector<rmm::device_buffer>{};
   for (auto col : table) {
-    auto [superimposed_col, null_masks] = superimpose_parent_nulls(col);
+    auto [superimposed_col, null_masks] = superimpose_parent_nulls(col, stream, mr);
     superimposed_columns.push_back(superimposed_col);
     superimposed_nullmasks.insert(superimposed_nullmasks.begin(),
                                   std::make_move_iterator(null_masks.begin()),

@@ -177,13 +177,14 @@ std::unique_ptr<column> rescale(column_view input,
   using namespace numeric;
 
   if (input.type().scale() >= scale) {
-    auto const scalar = make_fixed_point_scalar<T>(0, scale_type{scale});
+    auto const scalar = make_fixed_point_scalar<T>(0, scale_type{scale}, rmm::cuda_stream_default);
     auto const type   = cudf::data_type{cudf::type_to_id<T>(), scale};
     return detail::binary_operation(input, *scalar, binary_operator::ADD, type, stream, mr);
   } else {
-    auto const diff   = input.type().scale() - scale;
-    auto const scalar = make_fixed_point_scalar<T>(std::pow(10, -diff), scale_type{diff});
-    auto const type   = cudf::data_type{cudf::type_to_id<T>(), scale};
+    auto const diff = input.type().scale() - scale;
+    auto const scalar =
+      make_fixed_point_scalar<T>(std::pow(10, -diff), scale_type{diff}, rmm::cuda_stream_default);
+    auto const type = cudf::data_type{cudf::type_to_id<T>(), scale};
     return detail::binary_operation(input, *scalar, binary_operator::DIV, type, stream, mr);
   }
 };
@@ -290,7 +291,9 @@ struct dispatch_unary_cast_to {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    if (input.type() == type) return std::make_unique<column>(input);  // TODO add test for this
+    if (input.type() == type) {
+      return std::make_unique<column>(input, stream, mr);  // TODO add test for this
+    }
 
     return detail::rescale<TargetT>(input, numeric::scale_type{type.scale()}, stream, mr);
   }

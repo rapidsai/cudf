@@ -30,8 +30,8 @@
 #include <cudf_test/type_list_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
-#include <thrust/sequence.h>
 #include <random>
+#include <thrust/sequence.h>
 
 template <typename T>
 struct TypedColumnTest : public cudf::test::BaseFixture {

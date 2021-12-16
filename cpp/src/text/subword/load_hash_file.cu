@@ -28,10 +28,10 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/device_uvector.hpp>
 
-#include <stdint.h>
 #include <algorithm>
 #include <fstream>
 #include <iostream>
+#include <stdint.h>
 #include <vector>
 
 namespace nvtext {

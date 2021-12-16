@@ -1315,6 +1315,21 @@ TEST_F(ContiguousSplitUntypedTest, ProgressiveSizes)
   }
 }
 
+TEST_F(ContiguousSplitUntypedTest, ValidityEdgeCase)
+{
+  // tests an edge case where the splits cause the final validity data to be copied
+  // to be < 32 full bits, making sure we don't unintentionally read past the end of the input
+  auto col = cudf::make_numeric_column(
+    cudf::data_type{cudf::type_id::INT32}, 512, cudf::mask_state::ALL_VALID);
+  auto result   = cudf::contiguous_split(cudf::table_view{{*col}}, {510});
+  auto expected = cudf::split(cudf::table_view{{*col}}, {510});
+
+  EXPECT_EQ(expected.size(), result.size());
+  for (unsigned long index = 0; index < result.size(); index++) {
+    CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(expected[index].column(0), result[index].table.column(0));
+  }
+}
+
 // contiguous split with strings
 struct ContiguousSplitStringTableTest : public SplitTest<std::string> {
 };

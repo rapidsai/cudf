@@ -13,9 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <join/hash_join.cuh>
 #include <thrust/iterator/discard_iterator.h>
 #include <thrust/uninitialized_fill.h>
-#include <join/hash_join.cuh>
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/concatenate.cuh>
@@ -293,7 +293,8 @@ hash_join::hash_join_impl::hash_join_impl(cudf::table_view const& build,
     _hash_table{compute_hash_table_size(build.num_rows()),
                 std::numeric_limits<hash_value_type>::max(),
                 cudf::detail::JoinNoneValue,
-                stream.value()}
+                stream.value(),
+                detail::hash_table_allocator_type{default_allocator<char>{}, stream}}
 {
   CUDF_FUNC_RANGE();
   CUDF_EXPECTS(0 != build.num_columns(), "Hash join build table is empty");
