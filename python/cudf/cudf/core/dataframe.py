@@ -243,7 +243,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     df = columns_df._apply_boolean_mask(tmp_arg[0])
                 else:
                     tmp_col_name = str(uuid4())
-                    other_df = cudf.DataFrame(
+                    other_df = DataFrame(
                         {tmp_col_name: column.arange(len(tmp_arg[0]))},
                         index=as_index(tmp_arg[0]),
                     )
@@ -314,7 +314,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             self._frame._data.insert(key[1], new_col)
         else:
             if isinstance(value, (cupy.ndarray, np.ndarray)):
-                value_df = cudf.DataFrame(value)
+                value_df = DataFrame(value)
                 if value_df.shape[1] != columns_df.shape[1]:
                     if value_df.shape[1] == 1:
                         value_cols = (
@@ -345,7 +345,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     def _getitem_tuple_arg(self, arg):
         # Iloc Step 1:
         # Gather the columns specified by the second tuple arg
-        columns_df = cudf.DataFrame(self._frame._get_columns_by_index(arg[1]))
+        columns_df = DataFrame(self._frame._get_columns_by_index(arg[1]))
 
         columns_df._index = self._frame._index
 
@@ -395,7 +395,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
     @annotate("ILOC_SETITEM", color="blue", domain="cudf_python")
     def _setitem_tuple_arg(self, key, value):
-        columns = cudf.DataFrame(self._frame._get_columns_by_index(key[1]))
+        columns = DataFrame(self._frame._get_columns_by_index(key[1]))
 
         for col in columns:
             self._frame[col].iloc[key[0]] = value
@@ -2126,11 +2126,9 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                 columns = (
                     columns if columns is not None else list(df._column_names)
                 )
-                df = cudf.DataFrame()
+                df = DataFrame()
             else:
-                df = cudf.DataFrame(None, index).join(
-                    df, how="left", sort=True
-                )
+                df = DataFrame(None, index).join(df, how="left", sort=True)
                 # double-argsort to map back from sorted to unsorted positions
                 df = df.take(index.argsort(ascending=True).argsort())
 
@@ -3222,7 +3220,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             raise NotImplementedError("axis not implemented yet")
 
         if isinstance(aggs, Iterable) and not isinstance(aggs, (str, dict)):
-            result = cudf.DataFrame()
+            result = DataFrame()
             # TODO : Allow simultaneous pass for multi-aggregation as
             # a future optimization
             for agg in aggs:
@@ -3235,7 +3233,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                     f"{aggs} is not a valid function for "
                     f"'DataFrame' object"
                 )
-            result = cudf.DataFrame()
+            result = DataFrame()
             result[aggs] = getattr(df_normalized, aggs)()
             result = result.iloc[:, 0]
             result.name = None
@@ -3270,7 +3268,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
                         raise NotImplementedError(
                             "callable parameter is not implemented yet"
                         )
-                result = cudf.DataFrame(index=idxs, columns=cols)
+                result = DataFrame(index=idxs, columns=cols)
                 for key in aggs.keys():
                     col = df_normalized[key]
                     col_empty = column_empty(
@@ -5377,7 +5375,7 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             warnings.warn(msg)
 
         if not skipna and any(col.nullable for col in filtered._columns):
-            mask = cudf.DataFrame(
+            mask = DataFrame(
                 {
                     name: filtered._data[name]._get_mask_as_column()
                     if filtered._data[name].nullable
@@ -6190,8 +6188,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         elif isinstance(other, list):
             if not other:
                 pass
-            elif not isinstance(other[0], cudf.DataFrame):
-                other = cudf.DataFrame(other)
+            elif not isinstance(other[0], DataFrame):
+                other = DataFrame(other)
                 if (self.columns.get_indexer(other.columns) >= 0).all():
                     other = other.reindex(columns=self.columns)
 
