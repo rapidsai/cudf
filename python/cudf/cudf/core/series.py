@@ -1630,7 +1630,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
     def fill(self, fill_value, begin=0, end=-1, inplace=False):
         warnings.warn(
-            "The fill method will be removed in a future cuDF " "release.",
+            "The fill method will be removed in a future cuDF release.",
             FutureWarning,
         )
         fill_values = [fill_value]
