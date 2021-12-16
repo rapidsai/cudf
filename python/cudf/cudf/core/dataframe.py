@@ -341,7 +341,11 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     self._frame[col].loc[key[0]] = value_cols[i]
             else:
                 for col in columns_df._column_names:
-                    self._frame[col].loc[key[0]] = value
+                    # self._frame[col].loc[key[0]] =
+                    # value[columns_df.columns.get_loc(col)]
+                    self._frame[col].loc[key[0]] = value[
+                        columns_df._column_names.index(col)
+                    ]
 
 
 class _DataFrameIlocIndexer(_DataFrameIndexer):
