@@ -51,7 +51,6 @@ using multimap_type =
                         hash_table_allocator_type,
                         cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, hash_type, hash_type>>;
 
-
 // Multimap type used for mixed joins. TODO: This is a temporary alias used
 // until the mixed joins are converted to using CGs properly. Right now it's
 // using a cooperative group of size 1.
