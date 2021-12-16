@@ -92,11 +92,12 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
 
   // Create hash table.
   auto hash_table = cuco::
-    static_map<hash_value_type, size_type, cuda::thread_scope_device, default_allocator<char>>{
+    static_map<hash_value_type, size_type, cuda::thread_scope_device, hash_table_allocator_type>{
       compute_hash_table_size(right_num_rows),
       std::numeric_limits<hash_value_type>::max(),
       cudf::detail::JoinNoneValue,
-    };
+      hash_table_allocator_type{default_allocator<char>{}, stream},
+      stream.value()};
 
   // Create hash table containing all keys found in right table
   auto right_rows_d = table_device_view::create(right_flattened_keys, stream);
@@ -108,10 +109,7 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
 
   // skip rows that are null here.
   if ((compare_nulls == null_equality::EQUAL) or (not nullable(right_keys))) {
-    // TODO: Need to enable a stream argument in cuco, see
-    // https://github.com/NVIDIA/cuCollections/pull/113
-    hash_table.insert(iter, iter + right_num_rows, hash_build, equality_build);
-    // hash_table.insert(iter, iter + right_num_rows, hash_build, equality_build, stream.value());
+    hash_table.insert(iter, iter + right_num_rows, hash_build, equality_build, stream.value());
   } else {
     thrust::counting_iterator<size_type> stencil(0);
     auto const [row_bitmask, _] = cudf::detail::bitmask_and(right_flattened_keys, stream);
