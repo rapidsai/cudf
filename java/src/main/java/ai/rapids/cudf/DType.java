@@ -188,11 +188,10 @@ public final class DType {
 
   /**
    * Get the number of decimal places needed to hold the Integral Type.
-   * NOTE: this method is NOT for Decimal Type but for Integral Type
-   *
+   * NOTE: this method is NOT for Decimal Type but for Integral Type.
    * @return the minimum decimal precision (places) for Integral Type
    */
-  public int getPrecisionForIntegralType() {
+  public int getPrecisionForInt() {
     // -128 to 127
     if (typeId == DTypeEnum.INT8) return 3;
     // -32768 to 32767
