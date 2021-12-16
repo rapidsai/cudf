@@ -9118,7 +9118,9 @@ def test_dataframe_add_suffix():
         (
             {
                 "id": ["a", "a", "b", "b", "c", "c"],
-                "val": [None, None, None, None, None, None],
+                "val": cudf.Series(
+                    [None, None, None, None, None, None], dtype="float64"
+                ),
             },
             ["id"],
         ),
