@@ -308,13 +308,13 @@ class hash_compound_agg_finalizer final : public cudf::detail::aggregation_final
     column_view sum_result   = sparse_results->get_result(col, *sum_agg);
     column_view count_result = sparse_results->get_result(col, *count_agg);
 
-    auto values_view = column_device_view::create(col);
-    auto sum_view    = column_device_view::create(sum_result);
-    auto count_view  = column_device_view::create(count_result);
+    auto values_view = column_device_view::create(col, stream);
+    auto sum_view    = column_device_view::create(sum_result, stream);
+    auto count_view  = column_device_view::create(count_result, stream);
 
     auto var_result = make_fixed_width_column(
       cudf::detail::target_type(result_type, agg.kind), col.size(), mask_state::ALL_NULL, stream);
-    auto var_result_view = mutable_column_device_view::create(var_result->mutable_view());
+    auto var_result_view = mutable_column_device_view::create(var_result->mutable_view(), stream);
     mutable_table_view var_table_view{{var_result->mutable_view()}};
     cudf::detail::initialize_with_identity(var_table_view, {agg.kind}, stream);
 
@@ -416,8 +416,8 @@ void sparse_to_dense_results(table_view const& keys,
  * @brief Construct hash map that uses row comparator and row hasher on
  * `d_keys` table and stores indices
  */
-template <bool keys_have_nulls>
 auto create_hash_map(table_device_view const& d_keys,
+                     bool keys_have_nulls,
                      null_policy include_null_keys,
                      rmm::cuda_stream_view stream)
 {
@@ -426,15 +426,17 @@ auto create_hash_map(table_device_view const& d_keys,
 
   using map_type = concurrent_unordered_map<size_type,
                                             size_type,
-                                            row_hasher<default_hash, keys_have_nulls>,
-                                            row_equality_comparator<keys_have_nulls>>;
+                                            row_hasher<default_hash, nullate::DYNAMIC>,
+                                            row_equality_comparator<nullate::DYNAMIC>>;
 
   using allocator_type = typename map_type::allocator_type;
 
-  bool const null_keys_are_equal{include_null_keys == null_policy::INCLUDE};
+  auto const null_keys_are_equal =
+    include_null_keys == null_policy::INCLUDE ? null_equality::EQUAL : null_equality::UNEQUAL;
 
-  row_hasher<default_hash, keys_have_nulls> hasher{d_keys};
-  row_equality_comparator<keys_have_nulls> rows_equal{d_keys, d_keys, null_keys_are_equal};
+  row_hasher<default_hash, nullate::DYNAMIC> hasher{nullate::DYNAMIC{keys_have_nulls}, d_keys};
+  row_equality_comparator rows_equal{
+    nullate::DYNAMIC{keys_have_nulls}, d_keys, d_keys, null_keys_are_equal};
 
   return map_type::create(compute_hash_table_size(d_keys.num_rows()),
                           stream,
@@ -481,14 +483,13 @@ auto create_sparse_results_table(table_view const& flattened_values,
 /**
  * @brief Computes all aggregations from `requests` that require a single pass
  * over the data and stores the results in `sparse_results`
- *
- * @see groupby_null_templated()
  */
-template <bool keys_have_nulls, typename Map>
+template <typename Map>
 void compute_single_pass_aggs(table_view const& keys,
                               host_span<aggregation_request const> requests,
                               cudf::detail::result_cache* sparse_results,
                               Map& map,
+                              bool keys_have_nulls,
                               null_policy include_null_keys,
                               rmm::cuda_stream_view stream)
 {
@@ -578,24 +579,24 @@ rmm::device_uvector<size_type> extract_populated_keys(Map map,
  * results using the aforementioned index vector. Dense results are stored into
  * the in/out parameter `cache`.
  */
-template <bool keys_have_nulls>
-std::unique_ptr<table> groupby_null_templated(table_view const& keys,
-                                              host_span<aggregation_request const> requests,
-                                              cudf::detail::result_cache* cache,
-                                              null_policy include_null_keys,
-                                              rmm::cuda_stream_view stream,
-                                              rmm::mr::device_memory_resource* mr)
+std::unique_ptr<table> groupby(table_view const& keys,
+                               host_span<aggregation_request const> requests,
+                               cudf::detail::result_cache* cache,
+                               bool keys_have_nulls,
+                               null_policy include_null_keys,
+                               rmm::cuda_stream_view stream,
+                               rmm::mr::device_memory_resource* mr)
 {
   auto d_keys_ptr = table_device_view::create(keys, stream);
-  auto map        = create_hash_map<keys_have_nulls>(*d_keys_ptr, include_null_keys, stream);
+  auto map        = create_hash_map(*d_keys_ptr, keys_have_nulls, include_null_keys, stream);
 
   // Cache of sparse results where the location of aggregate value in each
   // column is indexed by the hash map
   cudf::detail::result_cache sparse_results(requests.size());
 
   // Compute all single pass aggs first
-  compute_single_pass_aggs<keys_have_nulls>(
-    keys, requests, &sparse_results, *map, include_null_keys, stream);
+  compute_single_pass_aggs(
+    keys, requests, &sparse_results, *map, keys_have_nulls, include_null_keys, stream);
 
   // Extract the populated indices from the hash map and create a gather map.
   // Gathering using this map from sparse results will give dense results.
@@ -635,23 +636,16 @@ std::unique_ptr<table> groupby_null_templated(table_view const& keys,
  */
 bool can_use_hash_groupby(table_view const& keys, host_span<aggregation_request const> requests)
 {
-  auto const all_hash_aggregations =
-    std::all_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
-      return cudf::has_atomic_support(r.values.type()) and
-             std::all_of(r.aggregations.begin(), r.aggregations.end(), [](auto const& a) {
-               return is_hash_aggregation(a->kind);
-             });
-    });
-
-  // Currently, structs are not supported in any of hash-based aggregations.
-  // Therefore, if any request contains structs then we must fallback to sort-based aggregations.
-  // TODO: Support structs in hash-based aggregations.
-  auto const has_struct =
-    std::all_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
-      return r.values.type().id() == type_id::STRUCT;
-    });
-
-  return all_hash_aggregations && !has_struct;
+  return std::all_of(requests.begin(), requests.end(), [](aggregation_request const& r) {
+    // Currently, structs are not supported in any of hash-based aggregations.
+    // Therefore, if any request contains structs then we must fallback to sort-based aggregations.
+    // TODO: Support structs in hash-based aggregations.
+    return not(r.values.type().id() == type_id::STRUCT) and
+           cudf::has_atomic_support(r.values.type()) and
+           std::all_of(r.aggregations.begin(), r.aggregations.end(), [](auto const& a) {
+             return is_hash_aggregation(a->kind);
+           });
+  });
 }
 
 // Hash-based groupby
@@ -664,16 +658,10 @@ std::pair<std::unique_ptr<table>, std::vector<aggregation_result>> groupby(
 {
   cudf::detail::result_cache cache(requests.size());
 
-  std::unique_ptr<table> unique_keys;
-  if (has_nulls(keys)) {
-    unique_keys =
-      groupby_null_templated<true>(keys, requests, &cache, include_null_keys, stream, mr);
-  } else {
-    unique_keys =
-      groupby_null_templated<false>(keys, requests, &cache, include_null_keys, stream, mr);
-  }
+  std::unique_ptr<table> unique_keys =
+    groupby(keys, requests, &cache, has_nulls(keys), include_null_keys, stream, mr);
 
-  return std::make_pair(std::move(unique_keys), extract_results(requests, cache));
+  return std::make_pair(std::move(unique_keys), extract_results(requests, cache, stream, mr));
 }
 }  // namespace hash
 }  // namespace detail

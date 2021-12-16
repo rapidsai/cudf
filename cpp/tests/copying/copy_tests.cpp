@@ -18,11 +18,13 @@
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/dictionary/encode.hpp>
 #include <cudf/scalar/scalar.hpp>
 
 template <typename T>
@@ -632,4 +634,86 @@ TYPED_TEST(FixedPointTypes, FixedPointScaleMismatch)
   auto const b    = fp_wrapper{{0, 0, 0, 0, 0, 0}, scale_type{-1}};
 
   EXPECT_THROW(cudf::copy_if_else(a, b, mask), cudf::logic_error);
+}
+
+struct DictionaryCopyIfElseTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(DictionaryCopyIfElseTest, ColumnColumn)
+{
+  auto valids = cudf::test::iterators::null_at(2);
+  std::vector<const char*> h_strings1{"eee", "bb", "", "aa", "bb", "ééé"};
+  cudf::test::dictionary_column_wrapper<std::string> input1(
+    h_strings1.begin(), h_strings1.end(), valids);
+  std::vector<const char*> h_strings2{"zz", "bb", "", "aa", "ééé", "ooo"};
+  cudf::test::dictionary_column_wrapper<std::string> input2(
+    h_strings2.begin(), h_strings2.end(), valids);
+
+  bool mask[]   = {1, 1, 0, 1, 0, 1};
+  bool mask_v[] = {1, 1, 1, 1, 1, 0};
+  cudf::test::fixed_width_column_wrapper<bool> mask_w(mask, mask + 6, mask_v);
+
+  auto results = cudf::copy_if_else(input1, input2, mask_w);
+  auto decoded = cudf::dictionary::decode(cudf::dictionary_column_view(results->view()));
+
+  std::vector<const char*> h_expected;
+  for (cudf::size_type idx = 0; idx < static_cast<cudf::size_type>(h_strings1.size()); ++idx) {
+    if (mask[idx] and mask_v[idx])
+      h_expected.push_back(h_strings1[idx]);
+    else
+      h_expected.push_back(h_strings2[idx]);
+  }
+  cudf::test::strings_column_wrapper expected(h_expected.begin(), h_expected.end(), valids);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(decoded->view(), expected);
+}
+
+TEST_F(DictionaryCopyIfElseTest, ColumnScalar)
+{
+  std::string h_string{"eee"};
+  cudf::string_scalar input1{h_string};
+  std::vector<const char*> h_strings{"zz", "", "yyy", "w", "ééé", "ooo"};
+  auto valids = cudf::test::iterators::null_at(1);
+  cudf::test::dictionary_column_wrapper<std::string> input2(
+    h_strings.begin(), h_strings.end(), valids);
+
+  bool mask[] = {0, 1, 1, 1, 0, 1};
+  cudf::test::fixed_width_column_wrapper<bool> mask_w(mask, mask + 6);
+
+  auto results = cudf::copy_if_else(input2, input1, mask_w);
+  auto decoded = cudf::dictionary::decode(cudf::dictionary_column_view(results->view()));
+
+  std::vector<const char*> h_expected1;
+  std::vector<const char*> h_expected2;
+  for (cudf::size_type idx = 0; idx < static_cast<cudf::size_type>(h_strings.size()); ++idx) {
+    if (mask[idx]) {
+      h_expected1.push_back(h_strings[idx]);
+      h_expected2.push_back(h_string.c_str());
+    } else {
+      h_expected1.push_back(h_string.c_str());
+      h_expected2.push_back(h_strings[idx]);
+    }
+  }
+
+  cudf::test::strings_column_wrapper expected1(h_expected1.begin(), h_expected1.end(), valids);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(decoded->view(), expected1);
+
+  results = cudf::copy_if_else(input1, input2, mask_w);
+  decoded = cudf::dictionary::decode(cudf::dictionary_column_view(results->view()));
+
+  cudf::test::strings_column_wrapper expected2(h_expected2.begin(), h_expected2.end());
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(decoded->view(), expected2);
+}
+
+TEST_F(DictionaryCopyIfElseTest, TypeMismatch)
+{
+  cudf::test::dictionary_column_wrapper<int32_t> input1({1, 1, 1, 1});
+  cudf::test::dictionary_column_wrapper<double> input2({1.0, 1.0, 1.0, 1.0});
+  cudf::test::fixed_width_column_wrapper<bool> mask({1, 0, 0, 1});
+
+  EXPECT_THROW(cudf::copy_if_else(input1, input2, mask), cudf::logic_error);
+
+  cudf::string_scalar input3{"1"};
+  EXPECT_THROW(cudf::copy_if_else(input1, input3, mask), cudf::logic_error);
+  EXPECT_THROW(cudf::copy_if_else(input3, input2, mask), cudf::logic_error);
+  EXPECT_THROW(cudf::copy_if_else(input2, input3, mask), cudf::logic_error);
 }

@@ -323,10 +323,10 @@ struct replace_kernel_forwarder {
     auto output_view = output->mutable_view();
     auto grid        = cudf::detail::grid_1d{output_view.size(), BLOCK_SIZE, 1};
 
-    auto device_in                 = cudf::column_device_view::create(input_col);
-    auto device_out                = cudf::mutable_column_device_view::create(output_view);
-    auto device_values_to_replace  = cudf::column_device_view::create(values_to_replace);
-    auto device_replacement_values = cudf::column_device_view::create(replacement_values);
+    auto device_in                 = cudf::column_device_view::create(input_col, stream);
+    auto device_out                = cudf::mutable_column_device_view::create(output_view, stream);
+    auto device_values_to_replace  = cudf::column_device_view::create(values_to_replace, stream);
+    auto device_replacement_values = cudf::column_device_view::create(replacement_values, stream);
 
     replace<<<grid.num_blocks, BLOCK_SIZE, 0, stream.value()>>>(*device_in,
                                                                 *device_out,
@@ -412,7 +412,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
   std::unique_ptr<cudf::column> offsets = cudf::strings::detail::make_offsets_child_column(
     sizes_view.begin<int32_t>(), sizes_view.end<int32_t>(), stream, mr);
   auto offsets_view   = offsets->mutable_view();
-  auto device_offsets = cudf::mutable_column_device_view::create(offsets_view);
+  auto device_offsets = cudf::mutable_column_device_view::create(offsets_view, stream);
   auto const bytes =
     cudf::detail::get_value<int32_t>(offsets_view, offsets_view.size() - 1, stream);
 
@@ -422,7 +422,7 @@ std::unique_ptr<cudf::column> replace_kernel_forwarder::operator()<cudf::string_
     cudf::strings::detail::create_chars_child_column(bytes, stream, mr);
 
   auto output_chars_view = output_chars->mutable_view();
-  auto device_chars      = cudf::mutable_column_device_view::create(output_chars_view);
+  auto device_chars      = cudf::mutable_column_device_view::create(output_chars_view, stream);
 
   replace_second<<<grid.num_blocks, BLOCK_SIZE, 0, stream.value()>>>(
     *device_in, *device_replacement, *device_offsets, *device_chars, *device_indices);

@@ -50,6 +50,7 @@ class BaseFixture : public ::testing::Test {
   /**
    * @brief Returns pointer to `device_memory_resource` that should be used for
    * all tests inheriting from this fixture
+   * @return pointer to memory resource
    */
   rmm::mr::device_memory_resource* mr() { return _mr; }
 };
@@ -170,6 +171,7 @@ class UniformRandomGenerator {
 
   /**
    * @brief Returns the next random number.
+   * @return generated random number
    */
   template <typename TL = T, std::enable_if_t<!cudf::is_timestamp<TL>()>* = nullptr>
   T generate()
@@ -211,6 +213,7 @@ class TempDirTestEnvironment : public ::testing::Environment {
   /**
    * @brief Get a temporary filepath to use for the specified filename
    *
+   * @param filename name of the file to be placed in temporary directory.
    * @return std::string The temporary filepath
    */
   std::string get_temp_filepath(std::string filename) { return tmpdir.path() + filename; }

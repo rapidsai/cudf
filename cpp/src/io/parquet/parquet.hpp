@@ -18,9 +18,9 @@
 
 #include "parquet_common.hpp"
 
+#include <algorithm>
 #include <stddef.h>
 #include <stdint.h>
-#include <algorithm>
 #include <string>
 #include <tuple>
 #include <vector>
@@ -198,6 +198,12 @@ struct SchemaElement {
   //  };
   // }
   bool is_stub() const { return repetition_type == REPEATED && num_children == 1; }
+
+  // https://github.com/apache/parquet-cpp/blob/642da05/src/parquet/schema.h#L49-L50
+  // One-level LIST encoding: Only allows required lists with required cells:
+  //   repeated value_type name
+  bool is_one_level_list() const { return repetition_type == REPEATED and num_children == 0; }
+
   // in parquet terms, a group is a level of nesting in the schema. a group
   // can be a struct or a list
   bool is_struct() const

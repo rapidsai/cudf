@@ -16,6 +16,7 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/detail/iterator.cuh>
+#include <cudf/detail/null_mask.hpp>
 #include <cudf/stream_compaction.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
@@ -204,13 +205,13 @@ TEST_F(ApplyBooleanMask, FixedPointLargeColumnTest)
                   dec32_data.cend(),
                   mask_data.cbegin(),
                   std::back_inserter(expect_dec32_data),
-                  thrust::identity<bool>());
+                  thrust::identity{});
   thrust::copy_if(thrust::seq,
                   dec64_data.cbegin(),
                   dec64_data.cend(),
                   mask_data.cbegin(),
                   std::back_inserter(expect_dec64_data),
-                  thrust::identity<bool>());
+                  thrust::identity{});
 
   decimal32_wrapper expect_col32(
     expect_dec32_data.begin(), expect_dec32_data.end(), numeric::scale_type{-3});
@@ -264,9 +265,10 @@ TEST_F(ApplyBooleanMask, CorrectNullCount)
     cudf::detail::make_counting_transform_iterator(0, [](auto i) { return (i % 277) == 0; });
   cudf::test::fixed_width_column_wrapper<bool> boolean_mask(seq3, seq3 + inputRows);
 
-  auto got                 = cudf::apply_boolean_mask(input, boolean_mask);
-  auto out_col             = got->get_column(0).view();
-  auto expected_null_count = cudf::count_unset_bits(out_col.null_mask(), 0, out_col.size());
+  auto got     = cudf::apply_boolean_mask(input, boolean_mask);
+  auto out_col = got->get_column(0).view();
+  auto expected_null_count =
+    cudf::detail::null_count(out_col.null_mask(), 0, out_col.size(), rmm::cuda_stream_default);
 
   ASSERT_EQ(out_col.null_count(), expected_null_count);
 }

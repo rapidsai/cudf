@@ -70,7 +70,9 @@ std::unique_ptr<column> concatenate_lists_ignore_null(column_view const& input,
 
   // The child column of the output lists column is just copied from the input column.
   auto out_entries = std::make_unique<column>(
-    lists_column_view(lists_column_view(input).get_sliced_child(stream)).get_sliced_child(stream));
+    lists_column_view(lists_column_view(input).get_sliced_child(stream)).get_sliced_child(stream),
+    stream,
+    mr);
 
   auto [null_mask, null_count] = [&] {
     if (!build_null_mask)
@@ -225,7 +227,7 @@ std::unique_ptr<column> concatenate_lists_nullifying_rows(column_view const& inp
   auto list_entries =
     gather_list_entries(input, offsets_view, num_rows, num_output_entries, stream, mr);
   auto [null_mask, null_count] = cudf::detail::valid_if(
-    list_validities.begin(), list_validities.end(), thrust::identity<int8_t>{}, stream, mr);
+    list_validities.begin(), list_validities.end(), thrust::identity{}, stream, mr);
 
   return make_lists_column(num_rows,
                            std::move(list_offsets),

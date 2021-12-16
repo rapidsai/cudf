@@ -387,9 +387,7 @@ TEST_F(OrcWriterTest, MultiColumn)
   cudf_io::write_orc(out_opts);
 
   cudf_io::orc_reader_options in_opts =
-    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
-      .use_index(false)
-      .decimal128_columns({"decimal_pos_scale", "decimal_neg_scale"});
+    cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath}).use_index(false);
   auto result = cudf_io::read_orc(in_opts);
 
   CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
@@ -1139,8 +1137,7 @@ struct OrcWriterTestDecimal : public OrcWriterTest,
 
 TEST_P(OrcWriterTestDecimal, Decimal64)
 {
-  auto const num_rows = std::get<0>(GetParam());
-  auto const scale    = std::get<1>(GetParam());
+  auto const [num_rows, scale] = GetParam();
 
   // Using int16_t because scale causes values to overflow if they already require 32 bits
   auto const vals = random_values<int32_t>(num_rows);
@@ -1178,9 +1175,9 @@ TEST_F(OrcWriterTest, Decimal32)
   auto data       = cudf::detail::make_counting_transform_iterator(0, [&vals](auto i) {
     return numeric::decimal32{vals[i], numeric::scale_type{2}};
   });
-  auto mask = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 13 == 0; });
+  auto mask = cudf::detail::make_counting_transform_iterator(0, [](auto i) { return i % 13; });
   column_wrapper<numeric::decimal32> col{data, data + num_rows, mask};
-  cudf::table_view expected({static_cast<cudf::column_view>(col)});
+  cudf::table_view expected({col});
 
   auto filepath = temp_env->get_temp_filepath("Decimal32.orc");
   cudf_io::orc_writer_options out_opts =
@@ -1192,12 +1189,7 @@ TEST_F(OrcWriterTest, Decimal32)
     cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath});
   auto result = cudf_io::read_orc(in_opts);
 
-  auto data64 = cudf::detail::make_counting_transform_iterator(0, [&vals](auto i) {
-    return numeric::decimal64{vals[i], numeric::scale_type{2}};
-  });
-  column_wrapper<numeric::decimal64> col64{data64, data64 + num_rows, mask};
-
-  CUDF_TEST_EXPECT_COLUMNS_EQUAL(col64, result.tbl->view().column(0));
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(col, result.tbl->view().column(0));
 }
 
 TEST_F(OrcStatisticsTest, Overflow)
@@ -1248,9 +1240,8 @@ struct OrcWriterTestStripes
 
 TEST_P(OrcWriterTestStripes, StripeSize)
 {
-  constexpr auto num_rows = 1000000;
-  auto size_bytes         = std::get<0>(GetParam());
-  auto size_rows          = std::get<1>(GetParam());
+  constexpr auto num_rows            = 1000000;
+  auto const [size_bytes, size_rows] = GetParam();
 
   const auto seq_col = random_values<int>(num_rows);
   const auto validity =
@@ -1438,7 +1429,7 @@ TEST_F(OrcReaderTest, DecimalOptions)
     cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
       .decimal128_columns({"dec", "fake_name"})
       .decimal_cols_as_float({"decc", "fake_name"});
-  // Should not throw
+  // Should not throw, even with "fake name" in both options
   EXPECT_NO_THROW(cudf_io::read_orc(valid_opts));
 
   cudf_io::orc_reader_options invalid_opts =
@@ -1493,10 +1484,12 @@ TEST_F(OrcWriterTest, DecimalOptionsNested)
   cudf_io::orc_reader_options in_opts =
     cudf_io::orc_reader_options::builder(cudf_io::source_info{filepath})
       .use_index(false)
-      .decimal128_columns({"lists.1.dec128"});
+      .decimal128_columns({"lists.1.dec64"});
   auto result = cudf_io::read_orc(in_opts);
 
-  CUDF_TEST_EXPECT_TABLES_EQUAL(expected, result.tbl->view());
+  // Both columns should be read as decimal128
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(result.tbl->view().column(0).child(1).child(0),
+                                      result.tbl->view().column(0).child(1).child(1));
 }
 
 CUDF_TEST_PROGRAM_MAIN()
