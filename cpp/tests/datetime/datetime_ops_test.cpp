@@ -779,10 +779,9 @@ TYPED_TEST(TypedDatetimeOpsTest, TestCeilDatetime)
   auto start = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
   auto stop  = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
 
-  auto input = generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop));
-
-  auto host_val             = to_host<T>(input);
-  std::vector<T> timestamps = host_val.first;
+  auto const input =
+    generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop));
+  auto const timestamps = to_host<T>(input).first;
 
   std::vector<T> ceiled_day(timestamps.size());
   thrust::transform(timestamps.begin(), timestamps.end(), ceiled_day.begin(), [](auto i) {
@@ -856,10 +855,9 @@ TYPED_TEST(TypedDatetimeOpsTest, TestFloorDatetime)
   auto start = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
   auto stop  = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
 
-  auto input = generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop));
-
-  auto host_val             = to_host<T>(input);
-  std::vector<T> timestamps = host_val.first;
+  auto const input =
+    generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop));
+  auto const timestamps = to_host<T>(input).first;
 
   std::vector<T> floored_day(timestamps.size());
   std::transform(timestamps.begin(), timestamps.end(), floored_day.begin(), [](auto i) {
@@ -933,10 +931,9 @@ TYPED_TEST(TypedDatetimeOpsTest, TestRoundDatetime)
   auto start = milliseconds(-2500000000000);  // Sat, 11 Oct 1890 19:33:20 GMT
   auto stop  = milliseconds(2500000000000);   // Mon, 22 Mar 2049 04:26:40 GMT
 
-  auto input = generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop));
-
-  auto host_val   = to_host<T>(input);
-  auto timestamps = host_val.first;
+  auto const input =
+    generate_timestamps<T>(this->size(), time_point_ms(start), time_point_ms(stop));
+  auto const timestamps = to_host<T>(input).first;
 
   std::vector<T> rounded_day(timestamps.size());
   std::transform(timestamps.begin(), timestamps.end(), rounded_day.begin(), [](auto i) {
