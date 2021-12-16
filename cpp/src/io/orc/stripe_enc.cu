@@ -705,10 +705,7 @@ static __device__ void encode_null_mask(orcenc_state_s* s,
   }
 
   // reset shared state
-  if (t == 0) {
-    s->nnz     = 0;
-    s->numvals = 0;
-  }
+  if (t == 0) { s->nnz = 0; }
 }
 
 /**

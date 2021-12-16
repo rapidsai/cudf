@@ -650,13 +650,11 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
                                          int t,
                                          bool has_buffered_values = false)
 {
-  uint32_t numvals, numruns;
-  int r, tr;
-
   if (t == 0) {
     uint32_t maxpos  = min(bs->len, bs->pos + (bytestream_buffer_size - 8u));
     uint32_t lastpos = bs->pos;
-    numvals = numruns = 0;
+    auto numvals     = 0;
+    auto numruns     = 0;
     // Find the length and start location of each run
     while (numvals < maxvals) {
       uint32_t pos   = lastpos;
@@ -713,9 +711,9 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
   }
   __syncthreads();
   // Process the runs, 1 warp per run
-  numruns = rle->num_runs;
-  r       = t >> 5;
-  tr      = t & 0x1f;
+  auto const numruns = rle->num_runs;
+  auto const r       = t >> 5;
+  auto const tr      = t & 0x1f;
   for (uint32_t run = r; run < numruns; run += num_warps) {
     uint32_t base, pos, w, n;
     int mode;
@@ -731,7 +729,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
         w = 8 + (byte0 & 0x38);  // 8 to 64 bits
         n = 3 + (byte0 & 7);     // 3 to 10 values
         bytestream_readbe(bs, pos * 8, w, baseval);
-        if (sizeof(T) <= 4) {
+        if constexpr (sizeof(T) <= 4) {
           rle->baseval.u32[r] = baseval;
         } else {
           rle->baseval.u64[r] = baseval;
@@ -766,7 +764,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
             int64_t delta;
             // Delta
             pos = decode_varint(bs, pos, baseval);
-            if (sizeof(T) <= 4) {
+            if constexpr (sizeof(T) <= 4) {
               rle->baseval.u32[r] = baseval;
             } else {
               rle->baseval.u64[r] = baseval;
@@ -782,6 +780,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
     pos  = shuffle(pos);
     n    = shuffle(n);
     w    = shuffle(w);
+    __syncwarp();
     for (uint32_t i = tr; i < n; i += 32) {
       if (sizeof(T) <= 4) {
         if (mode == 0) {
@@ -860,7 +859,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
           if (j & i) vals[base + j] += vals[base + ((j & ~i) | (i - 1))];
         }
       }
-      if (sizeof(T) <= 4)
+      if constexpr (sizeof(T) <= 4)
         baseval = rle->baseval.u32[r];
       else
         baseval = rle->baseval.u64[r];
@@ -868,6 +867,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
         vals[base + j] += baseval;
       }
     }
+    __syncwarp();
   }
   __syncthreads();
   return rle->num_vals;
@@ -1679,11 +1679,12 @@ __global__ void __launch_bounds__(block_size)
           }
         }
       }
-      if (t == 0 && numvals + vals_skipped > 0 && numvals < s->top.data.max_vals) {
-        if (s->chunk.type_kind == TIMESTAMP) {
-          s->top.data.buffered_count = s->top.data.max_vals - numvals;
+      if (t == 0 && numvals + vals_skipped > 0) {
+        auto const max_vals = s->top.data.max_vals;
+        if (max_vals > numvals) {
+          if (s->chunk.type_kind == TIMESTAMP) { s->top.data.buffered_count = max_vals - numvals; }
+          s->top.data.max_vals = numvals;
         }
-        s->top.data.max_vals = numvals;
       }
       __syncthreads();
       // Use the valid bits to compute non-null row positions until we get a full batch of values to
