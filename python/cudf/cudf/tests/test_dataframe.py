@@ -9081,26 +9081,18 @@ def test_dataframe_add_suffix():
             },
             ["id", "a"],
         ),
-        # (
-        #     {
-        #         "id": ["a", "a", "b", "b", "c", "c"],
-        #         "val": [None, None, None, None, None, None],
-        #     },
-        #     ["id"],
-        # ),
-        # (
-        #     {
-        #         "id": ["a", "a", "b", "b", "c", "c"],
-        #         "val1": [None, 4, 6, 8, None, 2],
-        #         "val2": [4, 5, None, 2, 9, None],
-        #     },
-        #     ["id"],
-        # ),
+        (
+            {
+                "id": ["a", "a", "b", "b", "c", "c"],
+                "val": [None, None, None, None, None, None],
+            },
+            ["id"],
+        ),
         ({"id": [1.0], "val1": [2.0], "val2": [3.0]}, ["id"]),
     ],
 )
 @pytest.mark.parametrize(
-    "min_per", [0, 1, 2, 3, 4],
+    "min_per", [1, 2, 3, 4, 5],
 )
 @pytest.mark.parametrize(
     "d_dof", [1, 2, 3, 4, 5],
