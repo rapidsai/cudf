@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-#include <thrust/tuple.h>
-#include <io/utilities/block_utils.cuh>
 #include "parquet_gpu.hpp"
+#include <io/utilities/block_utils.cuh>
+#include <thrust/tuple.h>
 
 #include <rmm/cuda_stream_view.hpp>
 
