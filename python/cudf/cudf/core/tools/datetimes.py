@@ -39,8 +39,6 @@ _offset_alias_to_code = {
     "min": "m",
     "s": "s",
     "S": "s",
-    "L": "ms",
-    "ms": "ms",
     "U": "us",
     "us": "us",
     "N": "ns",
@@ -451,6 +449,7 @@ class DateOffset:
         "ns": "nanoseconds",
         "us": "microseconds",
         "ms": "milliseconds",
+        "L": "milliseconds",
         "s": "seconds",
         "m": "minutes",
         "h": "hours",
@@ -642,52 +641,25 @@ class DateOffset:
         return repr_str
 
     @classmethod
-    def _from_str(cls: Type[_T], freqstr: str) -> _T:
+    def _from_freqstr(cls: Type[_T], freqstr: str) -> _T:
         """
-        Parse a string and return a DateOffset object.
-
-        A string can be a pandas `offset alias`<https://pandas.pydata.org/\
-            pandas-docs/stable/user_guide/timeseries.html#offset-aliases>_ or a
-        numpy `date/time unit code`<https://numpy.org/doc/stable/reference/arr\
-            ays.datetime.html#datetime-units>_
-
-        Note that ``m`` (lower case) is ambiguous and is not accepted in this
-        function. Use ``T``/``min`` for minutely frequency and ``M`` (upper
-        case) for monthly frequency.
-
-        Expects strings of the form 3D, 25W, -10ms, 42ns, etc.
-
-        Not all offset aliases are supported. See `_offset_alias_to_code` and
-        `_CODE_TO_UNITS` for supported list of strings.
+        Parse a string and return a DateOffset object
+        expects strings of the form 3D, 25W, 10ms, 42ns, etc.
         """
-        match = cls._FREQSTR_REGEX.fullmatch(freqstr)
+        match = cls._FREQSTR_REGEX.match(freqstr)
+
         if match is None:
             raise ValueError(f"Invalid frequency string: {freqstr}")
 
-        # Decompose the string into separate components
-        sign_part, numeric_part, freq_part = match.groups()
+        numeric_part = match.group(1)
+        if numeric_part == "":
+            numeric_part = "1"
+        freq_part = match.group(2)
 
-        # Handle various offset strings and normalize as codes
-        if freq_part == "m":
-            raise ValueError(
-                "Lower cased `m` is ambiguous. Use 'T'/'min' to specify "
-                "minutely frequency or upper cased `M` to specify monthly "
-                "frequency."
-            )
-
-        if freq_part in _offset_alias_to_code:
-            code = _offset_alias_to_code[freq_part]
-        elif freq_part in cls._CODES_TO_UNITS:
-            code = freq_part
-        else:
+        if freq_part not in cls._CODES_TO_UNITS:
             raise ValueError(f"Cannot interpret frequency str: {freqstr}")
 
-        # Handle sign and numerics
-        sign = -1 if sign_part else 1
-        n = int(numeric_part) if numeric_part else 1
-
-        # Construct the kwds dictionary
-        return cls(**{cls._CODES_TO_UNITS[code]: n * sign})
+        return cls(**{cls._CODES_TO_UNITS[freq_part]: int(numeric_part)})
 
     @classmethod
     def _from_pandas_ticks_or_weeks(
