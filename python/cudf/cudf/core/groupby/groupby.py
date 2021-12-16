@@ -896,7 +896,7 @@ class GroupBy(Serializable):
 
         return res
 
-    def cov(self, ddof=1, min_periods=None):
+    def cov(self, min_periods=None, ddof=1):
         """
         Compute pairwise covariance of columns, excluding NA/null values.
 
