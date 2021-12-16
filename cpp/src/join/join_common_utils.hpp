@@ -57,7 +57,7 @@ using multimap_type =
 using mixed_multimap_type = cuco::static_multimap<hash_value_type,
                                                   size_type,
                                                   cuda::thread_scope_device,
-                                                  default_allocator<char>,
+                                                  hash_table_allocator_type,
                                                   cuco::double_hashing<1, hash_type, hash_type>>;
 
 using row_hash = cudf::row_hasher<default_hash, cudf::nullate::YES>;

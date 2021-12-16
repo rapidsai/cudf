@@ -162,6 +162,8 @@ std::unique_ptr<cudf::table> combine_table_pair(std::unique_ptr<cudf::table>&& l
 /**
  * @brief Builds the hash table based on the given `build_table`.
  *
+ * @tparam MultimapType The type of the hash table
+ *
  * @param build Table of columns used to build join hash.
  * @param hash_table Build hash table.
  * @param compare_nulls Controls whether null join-key values should match or not.
