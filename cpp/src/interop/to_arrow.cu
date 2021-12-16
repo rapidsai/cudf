@@ -210,7 +210,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::string_view>(
   std::unique_ptr<column> tmp_column =
     ((input.offset() != 0) or
      ((input.num_children() == 2) and (input.child(0).size() - 1 != input.size())))
-      ? std::make_unique<cudf::column>(input)
+      ? std::make_unique<cudf::column>(input, stream)
       : nullptr;
 
   column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
@@ -245,7 +245,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::struct_view>(
                "Number of field names and number of children doesn't match\n");
   std::unique_ptr<column> tmp_column = nullptr;
 
-  if (input.offset() != 0) { tmp_column = std::make_unique<cudf::column>(input); }
+  if (input.offset() != 0) { tmp_column = std::make_unique<cudf::column>(input, stream); }
 
   column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;
   auto child_arrays      = fetch_child_array(input_view, metadata.children_meta, ar_mr, stream);
@@ -280,7 +280,7 @@ std::shared_ptr<arrow::Array> dispatch_to_arrow::operator()<cudf::list_view>(
   std::unique_ptr<column> tmp_column = nullptr;
   if ((input.offset() != 0) or
       ((input.num_children() == 2) and (input.child(0).size() - 1 != input.size()))) {
-    tmp_column = std::make_unique<cudf::column>(input);
+    tmp_column = std::make_unique<cudf::column>(input, stream);
   }
 
   column_view input_view = (tmp_column != nullptr) ? tmp_column->view() : input;

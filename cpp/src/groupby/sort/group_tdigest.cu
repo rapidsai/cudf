@@ -692,7 +692,7 @@ struct typed_group_tdigest {
 
     // device column view. handy because the .element() function
     // automatically handles fixed-point conversions for us
-    auto d_col = cudf::column_device_view::create(col);
+    auto d_col = cudf::column_device_view::create(col, stream);
 
     // compute min and max columns
     auto min_col = cudf::make_numeric_column(

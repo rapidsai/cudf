@@ -116,15 +116,16 @@ mutable_column_view column::mutable_view()
     child_views.emplace_back(*c);
   }
 
-  // Store the old null count before resetting it. By accessing the value directly instead of
-  // calling `null_count()`, we can avoid a potential invocation of `count_unset_bits()`. This does
-  // however mean that calling `null_count()` on the resulting mutable view could still potentially
-  // invoke `count_unset_bits()`.
+  // Store the old null count before resetting it. By accessing the value
+  // directly instead of calling `this->null_count()`, we can avoid a potential
+  // invocation of `cudf::detail::null_count()`. This does however mean that
+  // calling `this->null_count()` on the resulting mutable view could still
+  // potentially invoke `cudf::detail::null_count()`.
   auto current_null_count = _null_count;
 
   // The elements of a column could be changed through a `mutable_column_view`, therefore the
   // existing `null_count` is no longer valid. Reset it to `UNKNOWN_NULL_COUNT` forcing it to be
-  // recomputed on the next invocation of `null_count()`.
+  // recomputed on the next invocation of `this->null_count()`.
   set_null_count(cudf::UNKNOWN_NULL_COUNT);
 
   return mutable_column_view{type(),
@@ -141,8 +142,8 @@ size_type column::null_count() const
 {
   CUDF_FUNC_RANGE();
   if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
-    _null_count =
-      cudf::count_unset_bits(static_cast<bitmask_type const*>(_null_mask.data()), 0, size());
+    _null_count = cudf::detail::null_count(
+      static_cast<bitmask_type const*>(_null_mask.data()), 0, size(), rmm::cuda_stream_default);
   }
   return _null_count;
 }
