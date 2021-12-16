@@ -1468,6 +1468,144 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testMixedLeftJoinGatherMaps() {
+    final int inv = Integer.MIN_VALUE;
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+            new ColumnReference(1, TableReference.LEFT),
+            new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8)
+             .column(1, 2, 3, 4, 5, 6, 7, 8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3,  4,  5)
+             .column(7, 8, 9, 0,  1,  2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(  0,   1, 2,   3,   4,   5,   6, 7, 8,   9)
+             .column(inv, inv, 2, inv, inv, inv, inv, 0, 1, inv)
+             .build()) {
+      GatherMap[] maps = Table.mixedLeftJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
+          NullEquality.UNEQUAL);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testMixedLeftJoinGatherMapsNulls() {
+    final int inv = Integer.MIN_VALUE;
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+            new ColumnReference(1, TableReference.LEFT),
+            new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(null, 3, 9, 0, 1, 7, 4, null, 5, 8)
+             .column(   1, 2, 3, 4, 5, 6, 7,    8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(null, 5, null, 8, 10, 32)
+             .column(   0, 1,    2, 3,  4,  5)
+             .column(   7, 8,    9, 0,  1,  2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(0,   1,   2,   3,   4,   5,   6, 7, 7, 8,   9)
+             .column(0, inv, inv, inv, inv, inv, inv, 0, 2, 1, inv)
+             .build()) {
+      GatherMap[] maps = Table.mixedLeftJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
+          NullEquality.EQUAL);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testMixedLeftJoinGatherMapsWithSize() {
+    final int inv = Integer.MIN_VALUE;
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+            new ColumnReference(1, TableReference.LEFT),
+            new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8)
+             .column(1, 2, 3, 4, 5, 6, 7, 8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5)
+             .column(7, 8, 9, 0, 1, 2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(  0,   1, 2,   3,   4,   5,   6, 7, 8,   9)
+             .column(inv, inv, 2, inv, inv, inv, inv, 0, 1, inv)
+             .build();
+         MixedJoinSize sizeInfo = Table.mixedLeftJoinSize(leftKeys, rightKeys, left, right,
+             condition, NullEquality.UNEQUAL)) {
+      assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
+      GatherMap[] maps = Table.mixedLeftJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
+          NullEquality.UNEQUAL, sizeInfo);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testMixedLeftJoinGatherMapsNullsWithSize() {
+    final int inv = Integer.MIN_VALUE;
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+            new ColumnReference(1, TableReference.LEFT),
+            new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(null, 3, 9, 0, 1, 7, 4, null, 5, 8)
+             .column(   1, 2, 3, 4, 5, 6, 7,    8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(null, 5, null, 8, 10, 32)
+             .column(   0, 1,    2, 3,  4,  5)
+             .column(   7, 8,    9, 0,  1,  2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(0,   1,   2,   3,   4,   5,   6, 7, 7, 8,   9)
+             .column(0, inv, inv, inv, inv, inv, inv, 0, 2, 1, inv)
+             .build();
+         MixedJoinSize sizeInfo = Table.mixedLeftJoinSize(leftKeys, rightKeys, left, right,
+             condition, NullEquality.EQUAL)) {
+      assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
+      GatherMap[] maps = Table.mixedLeftJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
+              NullEquality.EQUAL, sizeInfo);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
   void testInnerJoinGatherMaps() {
     try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8).build();
          Table rightKeys = new Table.TestBuilder().column(6, 5, 9, 8, 10, 32).build();
@@ -1738,6 +1876,142 @@ public class TableTest extends CudfTestBase {
   }
 
   @Test
+  void testMixedInnerJoinGatherMaps() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(1, TableReference.LEFT),
+        new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8)
+             .column(1, 2, 3, 4, 5, 6, 7, 8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5)
+             .column(7, 8, 9, 0, 1, 2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 8)
+             .column(2, 0, 1)
+             .build()) {
+      GatherMap[] maps = Table.mixedInnerJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
+          NullEquality.UNEQUAL);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testMixedInnerJoinGatherMapsNulls() {
+    final int inv = Integer.MIN_VALUE;
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(1, TableReference.LEFT),
+        new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(null, 3, 9, 0, 1, 7, 4, null, 5, 8)
+             .column(   1, 2, 3, 4, 5, 6, 7,    8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(null, 5, null, 8, 10, 32)
+             .column(   0, 1,    2, 3,  4,  5)
+             .column(   7, 8,    9, 0,  1,  2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(0, 7, 7, 8)
+             .column(0, 0, 2, 1)
+             .build()) {
+      GatherMap[] maps = Table.mixedInnerJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
+          NullEquality.EQUAL);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testMixedInnerJoinGatherMapsWithSize() {
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(1, TableReference.LEFT),
+        new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8)
+             .column(1, 2, 3, 4, 5, 6, 7, 8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5)
+             .column(7, 8, 9, 0, 1, 2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(2, 7, 8)
+             .column(2, 0, 1)
+             .build();
+         MixedJoinSize sizeInfo = Table.mixedInnerJoinSize(leftKeys, rightKeys, left, right,
+             condition, NullEquality.UNEQUAL)) {
+      assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
+      GatherMap[] maps = Table.mixedInnerJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
+          NullEquality.UNEQUAL, sizeInfo);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testMixedInnerJoinGatherMapsNullsWithSize() {
+    final int inv = Integer.MIN_VALUE;
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(1, TableReference.LEFT),
+        new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(null, 3, 9, 0, 1, 7, 4, null, 5, 8)
+             .column(   1, 2, 3, 4, 5, 6, 7,    8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(null, 5, null, 8, 10, 32)
+             .column(   0, 1,    2, 3,  4,  5)
+             .column(   7, 8,    9, 0,  1,  2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(0, 7, 7, 8)
+             .column(0, 0, 2, 1)
+             .build();
+         MixedJoinSize sizeInfo = Table.mixedInnerJoinSize(leftKeys, rightKeys, left, right,
+             condition, NullEquality.EQUAL)) {
+      assertEquals(expected.getRowCount(), sizeInfo.getOutputRowCount());
+      GatherMap[] maps = Table.mixedInnerJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
+          NullEquality.EQUAL, sizeInfo);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
   void testFullJoinGatherMaps() {
     final int inv = Integer.MIN_VALUE;
     try (Table leftKeys = new Table.TestBuilder().column(2, 3, 9, null, 1, 7, 4, 6, 5, 8).build();
@@ -1921,6 +2195,72 @@ public class TableTest extends CudfTestBase {
              .build();
          CompiledExpression condition = expr.compile()) {
       GatherMap[] maps = left.conditionalFullJoinGatherMaps(right, condition);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testMixedFullJoinGatherMaps() {
+    final int inv = Integer.MIN_VALUE;
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+            new ColumnReference(1, TableReference.LEFT),
+            new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8)
+             .column(1, 2, 3, 4, 5, 6, 7, 8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(6, 5, 9, 8, 10, 32)
+             .column(0, 1, 2, 3, 4, 5)
+             .column(7, 8, 9, 0, 1, 2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(inv, inv, inv,   0,   1, 2,   3,   4,   5,   6, 7, 8,   9)
+             .column(  3,   4,   5, inv, inv, 2, inv, inv, inv, inv, 0, 1, inv)
+             .build()) {
+      GatherMap[] maps = Table.mixedFullJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
+          NullEquality.UNEQUAL);
+      try {
+        verifyJoinGatherMaps(maps, expected);
+      } finally {
+        for (GatherMap map : maps) {
+          map.close();
+        }
+      }
+    }
+  }
+
+  @Test
+  void testMixedFullJoinGatherMapsNulls() {
+    final int inv = Integer.MIN_VALUE;
+    BinaryOperation expr = new BinaryOperation(BinaryOperator.GREATER,
+        new ColumnReference(1, TableReference.LEFT),
+        new ColumnReference(1, TableReference.RIGHT));
+    try (CompiledExpression condition = expr.compile();
+         Table left = new Table.TestBuilder()
+             .column(null, 3, 9, 0, 1, 7, 4, null, 5, 8)
+             .column(   1, 2, 3, 4, 5, 6, 7,    8, 9, 0)
+             .build();
+         Table leftKeys = new Table(left.getColumn(0));
+         Table right = new Table.TestBuilder()
+             .column(null, 5, null, 8, 10, 32)
+             .column(   0, 1,    2, 3,  4,  5)
+             .column(   7, 8,    9, 0,  1,  2).build();
+         Table rightKeys = new Table(right.getColumn(0));
+         Table expected = new Table.TestBuilder()
+             .column(inv, inv, inv, 0,   1,   2,   3,   4,   5,   6, 7, 7, 8,   9)
+             .column(  3,   4,   5, 0, inv, inv, inv, inv, inv, inv, 0, 2, 1, inv)
+             .build()) {
+      GatherMap[] maps = Table.mixedFullJoinGatherMaps(leftKeys, rightKeys, left, right, condition,
+          NullEquality.EQUAL);
       try {
         verifyJoinGatherMaps(maps, expected);
       } finally {
