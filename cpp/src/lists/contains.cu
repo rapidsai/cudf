@@ -72,16 +72,13 @@ template <duplicate_find_option find_option, typename Iterator>
 size_type __device__ distance([[maybe_unused]] Iterator begin, Iterator end, Iterator find_iter)
 {
   if (find_iter == end) {
-    // Not found.
-    return absent_index;
+    return absent_index;  // Not found.
   }
 
   if constexpr (find_option == duplicate_find_option::FIND_FIRST) {
-    // Distance of find_position from begin.
-    return find_iter - begin;
+    return find_iter - begin;  // Distance of find_position from begin.
   } else {
-    // Distance of find_position from end.
-    return end - find_iter - 1;
+    return end - find_iter - 1;  // Distance of find_position from end.
   }
 }
 

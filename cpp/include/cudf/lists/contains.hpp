@@ -27,7 +27,7 @@ namespace lists {
  */
 
 /**
- * @brief Create a column of bool values indicating whether the specified scalar
+ * @brief Create a column of `bool` values indicating whether the specified scalar
  * is an element of each row of a list column.
  *
  * The output column has as many elements as the input `lists` column.
@@ -51,7 +51,7 @@ std::unique_ptr<column> contains(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Create a column of bool values indicating whether the list rows of the first
+ * @brief Create a column of `bool` values indicating whether the list rows of the first
  * column contain the corresponding values in the second column
  *
  * The output column has as many elements as the input `lists` column.
@@ -75,7 +75,7 @@ std::unique_ptr<column> contains(
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
- * @brief Create a column of bool values indicating whether each row in the `lists` column
+ * @brief Create a column of `bool` values indicating whether each row in the `lists` column
  * contains at least one null element.
  *
  * The output column has as many elements as the input `lists` column.
