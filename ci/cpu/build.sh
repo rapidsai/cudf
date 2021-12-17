@@ -73,14 +73,6 @@ else
 fi
 
 if [ "$BUILD_LIBCUDF" == '1' ]; then
-  # Copy libcudf build time results
-  LIBCUDF_BUILD_DIR=$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build
-  echo "Checking for build time log $LIBCUDF_BUILD_DIR/ninja_log.html"
-  if [[ -f "$LIBCUDF_BUILD_DIR/ninja_log.html" ]]; then
-      gpuci_logger "Copying build time results"
-      mkdir -p "$WORKSPACE/build-metrics"
-      cp "$LIBCUDF_BUILD_DIR/ninja_log.html" "$WORKSPACE/build-metrics/BuildMetrics.html"
-  fi
 
   # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
   ccache -s
@@ -92,6 +84,16 @@ if [ "$BUILD_LIBCUDF" == '1' ]; then
 
   echo "LIB_BUILD_DIR=$LIB_BUILD_DIR"
   echo "CONDA_BLD_DIR=$CONDA_BLD_DIR"
+  echo "SRC_DIR=$SRC_DIR"
+
+  # Copy libcudf build time results
+  LIBCUDF_BUILD_DIR=$SRC_DIR/cpp/build
+  echo "Checking for build time log $LIBCUDF_BUILD_DIR/ninja_log.html"
+  if [[ -f "$LIBCUDF_BUILD_DIR/ninja_log.html" ]]; then
+      gpuci_logger "Copying build time results"
+      mkdir -p "$WORKSPACE/build-metrics"
+      cp "$LIBCUDF_BUILD_DIR/ninja_log.html" "$WORKSPACE/build-metrics/BuildMetrics.html"
+  fi
 
   gpuci_logger "Build conda pkg for libcudf_kafka"
   gpuci_conda_retry build --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf_kafka $CONDA_BUILD_ARGS
