@@ -548,8 +548,8 @@ TEST_F(OrcWriterTest, SlicedTable)
   list_col<int64_t> col4{
     {9, 8}, {7, 6, 5}, {}, {4}, {3, 2, 1, 0}, {20, 21, 22, 23, 24}, {}, {66, 666}};
 
-  int16_col ages_col{{48, 27, 25, 31, 351, 351, 29, 15}, {1, 1, 1, 1, 1, 0, 1, 1}};
-  struct_col col5{{ages_col}, {1, 1, 1, 1, 0, 1, 1, 1}};
+  int16_col ages_col{{48, 27, 25, 31, 351, 351, 29, 15}, cudf::test::iterators::null_at(5)};
+  struct_col col5{{ages_col}, cudf::test::iterators::null_at(4)};
 
   table_view expected({col0, col1, col2, col3, col4, col5});
 
@@ -634,7 +634,7 @@ TEST_F(OrcWriterTest, negTimestampsNano)
 
 TEST_F(OrcWriterTest, Slice)
 {
-  int32_col col{{1, 2, 3, 4, 5}, {true, true, true, false, true}};
+  int32_col col{{1, 2, 3, 4, 5}, cudf::test::iterators::null_at(3)};
   std::vector<cudf::size_type> indices{2, 5};
   std::vector<cudf::column_view> result = cudf::slice(col, indices);
   cudf::table_view tbl{result};
