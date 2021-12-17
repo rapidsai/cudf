@@ -210,15 +210,17 @@ def query_execute(df, expr, callenv):
     compiled = query_compile(expr)
     columns = compiled["colnames"]
 
+    # prepare col args
+    colarrays = [cudf.core.dataframe.extract_col(df, col) for col in columns]
+
     # wait to check the types until we know which cols are used
-    breakpoint()
-    if any(
-        df._data[col].dtype not in SUPPORTED_QUERY_TYPES for col in columns
-    ):
+    if any(col.dtype not in SUPPORTED_QUERY_TYPES for col in colarrays):
         raise TypeError(
             "query only supports numeric, datetime, timedelta, "
             "or bool dtypes."
         )
+
+    colarrays = [col.data_array_view for col in colarrays]
 
     kernel = compiled["kernel"]
     # process env args
@@ -237,13 +239,6 @@ def query_execute(df, expr, callenv):
             raise NameError(msg.format(name))
         else:
             envargs.append(val)
-
-    # prepare col args
-
-    colarrays = [
-        cudf.core.dataframe.extract_col(df, col).data_array_view
-        for col in columns
-    ]
 
     # allocate output buffer
     nrows = len(df)
