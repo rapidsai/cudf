@@ -950,20 +950,22 @@ class GroupBy(Serializable):
         # create expanded dataframe consisting all combinations of the
         # struct columns-pairs to be correlated
         # i.e (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
-        _cols = self.grouping.values.columns.tolist()
-        len_cols = len(_cols)
+        column_names = self.grouping.values.columns.tolist()
+        len_cols = len(column_names)
 
-        new_df_data = {}
-        for x, y in itertools.combinations_with_replacement(_cols, 2):
-            new_df_data[(x, y)] = cudf.DataFrame._from_data(
+        column_pair_structs = {}
+        for x, y in itertools.combinations_with_replacement(column_names, 2):
+            column_pair_structs[(x, y)] = cudf.DataFrame._from_data(
                 {"x": self.obj._data[x], "y": self.obj._data[y]}
             ).to_struct()
-        new_gb = cudf.DataFrame._from_data(new_df_data).groupby(
-            by=self.grouping.keys
-        )
+        column_pair_groupby = cudf.DataFrame._from_data(
+            column_pair_structs
+        ).groupby(by=self.grouping.keys)
 
         try:
-            gb_cov = new_gb.agg(lambda x: x.cov(min_periods, ddof))
+            gb_cov = column_pair_groupby.agg(
+                lambda x: x.cov(min_periods, ddof)
+            )
         except RuntimeError as e:
             if "Unsupported groupby reduction type-agg combination" in str(e):
                 raise TypeError(
@@ -973,8 +975,8 @@ class GroupBy(Serializable):
         # ensure that column-pair labels are arranged in ascending order
         cols_list = [
             (y, x) if i > j else (x, y)
-            for j, y in enumerate(_cols)
-            for i, x in enumerate(_cols)
+            for j, y in enumerate(column_names)
+            for i, x in enumerate(column_names)
         ]
         cols_split = [
             cols_list[i : i + len_cols]
@@ -986,7 +988,7 @@ class GroupBy(Serializable):
         res = cudf.DataFrame._from_data(
             {
                 x: gb_cov.loc[:, i].interleave_columns()
-                for i, x in zip(cols_split, _cols)
+                for i, x in zip(cols_split, column_names)
             }
         )
 
@@ -998,7 +1000,7 @@ class GroupBy(Serializable):
         if len(gb_cov):
             # TO-DO: Should the operation below be done on the CPU instead?
             sorted_idx._data[None] = as_column(
-                cudf.Series(_cols).tile(len(gb_cov.index))
+                cudf.Series(column_names).tile(len(gb_cov.index))
             )
         res.index = MultiIndex._from_data(sorted_idx._data)
 
