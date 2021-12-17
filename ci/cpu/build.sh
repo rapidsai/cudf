@@ -82,15 +82,13 @@ if [ "$BUILD_LIBCUDF" == '1' ]; then
   mkdir -p ${CONDA_BLD_DIR}/libcudf/work
   cp -r ${CONDA_BLD_DIR}/work/* ${CONDA_BLD_DIR}/libcudf/work
 
-  echo "LIB_BUILD_DIR=$LIB_BUILD_DIR"
   echo "CONDA_BLD_DIR=$CONDA_BLD_DIR"
-  echo "SRC_DIR=$SRC_DIR"
 
   echo "searching for ninja_log"
   find . -name "ninja_log.html"
 
   # Copy libcudf build time results
-  LIBCUDF_BUILD_DIR=$SRC_DIR/cpp/build
+  LIBCUDF_BUILD_DIR=$CONDA_BLD_DIR/libcudf/work/cpp/build
   echo "Checking for build time log $LIBCUDF_BUILD_DIR/ninja_log.html"
   if [[ -f "$LIBCUDF_BUILD_DIR/ninja_log.html" ]]; then
       gpuci_logger "Copying build time results"
