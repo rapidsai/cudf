@@ -73,6 +73,15 @@ else
 fi
 
 if [ "$BUILD_LIBCUDF" == '1' ]; then
+  # Copy libcudf build time results
+  echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.html"
+  if [[ -f "$LIB_BUILD_DIR/ninja_log.html" ]]; then
+      gpuci_logger "Copying build time results"
+      cp "$LIB_BUILD_DIR/ninja_log.xml" "$WORKSPACE/test-results/buildtimes-junit.xml"
+      mkdir -p "$WORKSPACE/build-metrics"
+      cp "$LIB_BUILD_DIR/ninja_log.html" "$WORKSPACE/build-metrics/BuildMetrics.html"
+  fi
+
   gpuci_logger "Build conda pkg for libcudf"
   gpuci_conda_retry build --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf $CONDA_BUILD_ARGS
   mkdir -p ${CONDA_BLD_DIR}/libcudf/work
