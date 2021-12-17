@@ -791,7 +791,6 @@ __device__ void process_symbols(inflate_state_s* s, int t)
     auto const lit_mask = ballot(symt >= 256);
     auto pos            = min((__ffs(lit_mask) - 1) & 0xff, 32);
 
-    __syncwarp();  // Ensure all threads read from `b` before resuming the `decode_symbols` thread
     if (t == 0) { s->x.batch_len[batch] = 0; }
 
     if (t < pos && out + t < outend) { out[t] = symt; }
