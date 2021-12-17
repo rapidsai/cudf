@@ -74,11 +74,12 @@ fi
 
 if [ "$BUILD_LIBCUDF" == '1' ]; then
   # Copy libcudf build time results
-  echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.html"
-  if [[ -f "$LIB_BUILD_DIR/ninja_log.html" ]]; then
+  LIBCUDF_BUILD_DIR=$WORKSPACE/ci/artifacts/cudf/cpu/libcudf_work/cpp/build
+  echo "Checking for build time log $LIBCUDF_BUILD_DIR/ninja_log.html"
+  if [[ -f "$LIBCUDF_BUILD_DIR/ninja_log.html" ]]; then
       gpuci_logger "Copying build time results"
       mkdir -p "$WORKSPACE/build-metrics"
-      cp "$LIB_BUILD_DIR/ninja_log.html" "$WORKSPACE/build-metrics/BuildMetrics.html"
+      cp "$LIBCUDF_BUILD_DIR/ninja_log.html" "$WORKSPACE/build-metrics/BuildMetrics.html"
   fi
 
   gpuci_logger "Build conda pkg for libcudf"
@@ -117,3 +118,7 @@ fi
 
 gpuci_logger "Upload conda pkgs"
 source ci/cpu/upload.sh
+
+## XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+echo "temporary clean ccache"
+ccache -C
