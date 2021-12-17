@@ -369,3 +369,15 @@ def test_construct_from_scalar(value):
 
     x._is_host_value_current == y._is_host_value_current
     x._is_device_value_current == y._is_device_value_current
+
+
+@pytest.mark.parametrize(
+    "data", ["20000101", "2000-01-01", "2000-01-01T00:00:00.000000000", "2000"]
+)
+@pytest.mark.parametrize("dtype", DATETIME_TYPES)
+def test_datetime_scalar_from_string(data, dtype):
+    slr = cudf.Scalar(data, dtype)
+
+    expected = np.datetime64(datetime.datetime(2000, 1, 1)).astype(dtype)
+
+    assert expected == slr.value

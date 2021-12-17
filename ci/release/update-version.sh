@@ -21,6 +21,7 @@ CURRENT_SHORT_TAG=${CURRENT_MAJOR}.${CURRENT_MINOR}
 NEXT_MAJOR=$(echo $NEXT_FULL_TAG | awk '{split($0, a, "."); print a[1]}')
 NEXT_MINOR=$(echo $NEXT_FULL_TAG | awk '{split($0, a, "."); print a[2]}')
 NEXT_SHORT_TAG=${NEXT_MAJOR}.${NEXT_MINOR}
+NEXT_UCX_PY_VERSION="$(curl -sL https://version.gpuci.io/rapids/${NEXT_SHORT_TAG}).*"
 
 echo "Preparing release $CURRENT_TAG => $NEXT_FULL_TAG"
 
@@ -62,3 +63,7 @@ sed_runner "s/cudf=${CURRENT_SHORT_TAG}/cudf=${NEXT_SHORT_TAG}/g" README.md
 
 # Libcudf examples update
 sed_runner "s/CUDF_TAG branch-${CURRENT_SHORT_TAG}/CUDF_TAG branch-${NEXT_SHORT_TAG}/" cpp/examples/basic/CMakeLists.txt
+
+# ucx-py version update
+sed_runner "s/export UCX_PY_VERSION=.*/export UCX_PY_VERSION='${NEXT_UCX_PY_VERSION}'/g" ci/gpu/build.sh
+sed_runner "s/export UCX_PY_VERSION=.*/export UCX_PY_VERSION='${NEXT_UCX_PY_VERSION}'/g" ci/gpu/java.sh

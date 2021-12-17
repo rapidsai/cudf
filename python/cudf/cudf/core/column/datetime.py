@@ -228,6 +228,9 @@ class DatetimeColumn(column.ColumnBase):
     def floor(self, freq: str) -> ColumnBase:
         return libcudf.datetime.floor_datetime(self, freq)
 
+    def round(self, freq: str) -> ColumnBase:
+        return libcudf.datetime.round_datetime(self, freq)
+
     def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarLike:
         if isinstance(other, cudf.Scalar):
             return other
@@ -289,7 +292,7 @@ class DatetimeColumn(column.ColumnBase):
             "version": 1,
         }
 
-        if self.nullable and self.has_nulls:
+        if self.nullable and self.has_nulls():
 
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify

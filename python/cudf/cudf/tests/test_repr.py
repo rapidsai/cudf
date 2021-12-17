@@ -328,10 +328,14 @@ def test_dataframe_sliced(gdf, slice, max_seq_items, max_rows):
         ),
         (
             cudf.Index([None, None, None], name="hello"),
+            "StringIndex([None None None], dtype='object', name='hello')",
+        ),
+        (
+            cudf.Index([None, None, None], dtype="float", name="hello"),
             "Float64Index([<NA>, <NA>, <NA>], dtype='float64', name='hello')",
         ),
         (
-            cudf.Index([None], name="hello"),
+            cudf.Index([None], dtype="float64", name="hello"),
             "Float64Index([<NA>], dtype='float64', name='hello')",
         ),
         (

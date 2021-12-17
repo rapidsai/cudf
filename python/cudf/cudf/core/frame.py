@@ -1836,119 +1836,6 @@ class Frame:
             zip(self._column_names, data_columns), self._index
         )
 
-    def round(self, decimals=0, how="half_even"):
-        """
-        Round to a variable number of decimal places.
-
-        Parameters
-        ----------
-        decimals : int, dict, Series
-            Number of decimal places to round each column to. This parameter
-            must be an int for a Series.  For a DataFrame, a dict or a Series
-            are also valid inputs. If an int is given, round each column to the
-            same number of places.  Otherwise dict and Series round to variable
-            numbers of places.  Column names should be in the keys if
-            `decimals` is a dict-like, or in the index if `decimals` is a
-            Series. Any columns not included in `decimals` will be left as is.
-            Elements of `decimals` which are not columns of the input will be
-            ignored.
-        how : str, optional
-            Type of rounding. Can be either "half_even" (default)
-            of "half_up" rounding.
-
-        Returns
-        -------
-        Series or DataFrame
-            A Series or DataFrame with the affected columns rounded to the
-            specified number of decimal places.
-
-        Examples
-        --------
-        **Series**
-
-        >>> s = cudf.Series([0.1, 1.4, 2.9])
-        >>> s.round()
-        0    0.0
-        1    1.0
-        2    3.0
-        dtype: float64
-
-        **DataFrame**
-
-        >>> df = cudf.DataFrame(
-                [(.21, .32), (.01, .67), (.66, .03), (.21, .18)],
-        ...     columns=['dogs', 'cats']
-        ... )
-        >>> df
-           dogs  cats
-        0  0.21  0.32
-        1  0.01  0.67
-        2  0.66  0.03
-        3  0.21  0.18
-
-        By providing an integer each column is rounded to the same number
-        of decimal places
-
-        >>> df.round(1)
-           dogs  cats
-        0   0.2   0.3
-        1   0.0   0.7
-        2   0.7   0.0
-        3   0.2   0.2
-
-        With a dict, the number of places for specific columns can be
-        specified with the column names as key and the number of decimal
-        places as value
-
-        >>> df.round({'dogs': 1, 'cats': 0})
-           dogs  cats
-        0   0.2   0.0
-        1   0.0   1.0
-        2   0.7   0.0
-        3   0.2   0.0
-
-        Using a Series, the number of places for specific columns can be
-        specified with the column names as index and the number of
-        decimal places as value
-
-        >>> decimals = cudf.Series([0, 1], index=['cats', 'dogs'])
-        >>> df.round(decimals)
-           dogs  cats
-        0   0.2   0.0
-        1   0.0   1.0
-        2   0.7   0.0
-        3   0.2   0.0
-        """
-        if isinstance(decimals, cudf.Series):
-            decimals = decimals.to_pandas()
-
-        if isinstance(decimals, pd.Series):
-            if not decimals.index.is_unique:
-                raise ValueError("Index of decimals must be unique")
-            decimals = decimals.to_dict()
-        elif isinstance(decimals, int):
-            decimals = {name: decimals for name in self._column_names}
-        elif not isinstance(decimals, abc.Mapping):
-            raise TypeError(
-                "decimals must be an integer, a dict-like or a Series"
-            )
-
-        cols = {
-            name: col.round(decimals[name], how=how)
-            if (name in decimals and _is_non_decimal_numeric_dtype(col.dtype))
-            else col.copy(deep=True)
-            for name, col in self._data.items()
-        }
-
-        return self.__class__._from_data(
-            data=cudf.core.column_accessor.ColumnAccessor(
-                cols,
-                multiindex=self._data.multiindex,
-                level_names=self._data.level_names,
-            ),
-            index=self._index,
-        )
-
     @annotate("SAMPLE", color="orange", domain="cudf_python")
     def sample(
         self,
@@ -4868,7 +4755,7 @@ class Frame:
                 result_col = self._data[name].nans_to_nulls()
             else:
                 result_col = self._data[name].copy()
-                if result_col.has_nulls:
+                if result_col.has_nulls(include_nan=True):
                     # Workaround as find_first_value doesn't seem to work
                     # incase of bools.
                     first_index = int(
