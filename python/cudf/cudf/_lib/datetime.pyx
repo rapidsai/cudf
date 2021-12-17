@@ -65,18 +65,18 @@ def extract_datetime_component(Column col, object field):
 cdef libcudf_datetime.rounding_frequency _get_rounding_frequency(object freq):
     cdef libcudf_datetime.rounding_frequency freq_val
 
-    # https://pandas.pydata.org/pandas-docs/version/0.25.0/reference/api/pandas.Timedelta.resolution.html
+    # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Timedelta.resolution_string.html
     if freq == "D":
         freq_val = libcudf_datetime.rounding_frequency.DAY
     elif freq == "H":
         freq_val = libcudf_datetime.rounding_frequency.HOUR
-    elif freq == "T" or freq == "min":
+    elif freq in ("T", "min"):
         freq_val = libcudf_datetime.rounding_frequency.MINUTE
     elif freq == "S":
         freq_val = libcudf_datetime.rounding_frequency.SECOND
-    elif freq == "L" or freq == "ms":
+    elif freq in ("L", "ms"):
         freq_val = libcudf_datetime.rounding_frequency.MILLISECOND
-    elif freq == "U" or freq == "us":
+    elif freq in ("U", "us"):
         freq_val = libcudf_datetime.rounding_frequency.MICROSECOND
     elif freq == "N":
         freq_val = libcudf_datetime.rounding_frequency.NANOSECOND
