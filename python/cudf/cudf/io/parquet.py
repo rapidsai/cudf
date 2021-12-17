@@ -50,6 +50,16 @@ def _write_parquet(
         ioutils.get_writer_filepath_or_buffer(path, mode="wb", **kwargs)
         for path in paths
     ]
+    common_args = {
+        "index": index,
+        "compression": compression,
+        "statistics": statistics,
+        "metadata_file_path": metadata_file_path,
+        "int96_timestamps": int96_timestamps,
+        "row_group_size_bytes": row_group_size_bytes,
+        "row_group_size_rows": row_group_size_rows,
+        "partitions_info": partitions_info,
+    }
     if all([ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs]):
         with ExitStack() as stack:
             fsspec_objs = [
@@ -59,29 +69,11 @@ def _write_parquet(
                 ioutils.get_IOBase_writer(file_obj) for file_obj in fsspec_objs
             ]
             write_parquet_res = libparquet.write_parquet(
-                df,
-                filepaths_or_buffers=file_objs,
-                index=index,
-                compression=compression,
-                statistics=statistics,
-                metadata_file_path=metadata_file_path,
-                int96_timestamps=int96_timestamps,
-                row_group_size_bytes=row_group_size_bytes,
-                row_group_size_rows=row_group_size_rows,
-                partitions_info=partitions_info,
+                df, filepaths_or_buffers=file_objs, **common_args
             )
     else:
         write_parquet_res = libparquet.write_parquet(
-            df,
-            filepaths_or_buffers=paths_or_bufs,
-            index=index,
-            compression=compression,
-            statistics=statistics,
-            metadata_file_path=metadata_file_path,
-            int96_timestamps=int96_timestamps,
-            row_group_size_bytes=row_group_size_bytes,
-            row_group_size_rows=row_group_size_rows,
-            partitions_info=partitions_info,
+            df, filepaths_or_buffers=paths_or_bufs, **common_args
         )
 
     return write_parquet_res
