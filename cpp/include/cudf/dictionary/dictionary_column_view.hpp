@@ -78,6 +78,11 @@ class dictionary_column_view : private column_view {
   column_view keys() const noexcept;
 
   /**
+   * @brief Returns the `data_type` of the keys child column.
+   */
+  data_type keys_type() const noexcept;
+
+  /**
    * @brief Returns the number of rows in the keys column.
    */
   size_type keys_size() const noexcept;
