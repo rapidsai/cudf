@@ -63,7 +63,11 @@ cmake .. -GNinja \
          -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL \
          -DBUILD_SHARED_LIBS=OFF
 
-ninja install
+if [ -z ${PARALLEL_LEVEL+x} ]; then
+    ninja install
+else
+    ninja -j $PARALLEL_LEVEL install
+fi
 
 ###### Build cudf jar ######
 BUILD_ARG="-Dmaven.repo.local=\"$WORKSPACE/.m2\"\
