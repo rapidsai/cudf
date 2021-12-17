@@ -198,7 +198,7 @@ if buildAll || hasArg libcudf; then
 
     # Record build times
     if [[ -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
-        echo "Formatting build times"
+        echo "Formatting build times $LIB_BUILD_DIR"
         python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt xml > ${LIB_BUILD_DIR}/ninja_log.xml
         message="$FILES_IN_CCACHE <p>$PARALLEL_LEVEL parallel build time is $compile_total seconds"
         echo "$message"

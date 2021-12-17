@@ -81,6 +81,14 @@ if [ "$BUILD_LIBCUDF" == '1' ]; then
       mkdir -p "$WORKSPACE/build-metrics"
       cp "$LIBCUDF_BUILD_DIR/ninja_log.html" "$WORKSPACE/build-metrics/BuildMetrics.html"
   fi
+  if [[ -d "$WORKSPACE/build-metrics" ]]; then
+      echo "Found build-metrics dir"
+  fi
+  if [[ -d "$WORKSPACE/test-results" ]]; then
+      echo "Found test-results dir"
+  fi
+
+  ccache -s
 
   gpuci_logger "Build conda pkg for libcudf"
   gpuci_conda_retry build --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf $CONDA_BUILD_ARGS
@@ -118,7 +126,3 @@ fi
 
 gpuci_logger "Upload conda pkgs"
 source ci/cpu/upload.sh
-
-## XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-echo "temporary clean ccache"
-ccache -C
