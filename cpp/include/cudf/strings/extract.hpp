@@ -82,7 +82,7 @@ std::unique_ptr<table> extract(
  * @param strings Strings instance for this operation.
  * @param pattern The regular expression pattern with group indicators.
  * @param mr Device memory resource used to allocate any returned device memory.
- * @return Lists column containing strings columns extracted from the input column.
+ * @return Lists column containing strings extracted from the input column.
  */
 std::unique_ptr<column> extract_all(
   strings_column_view const& strings,

@@ -73,7 +73,7 @@ struct extract_fn {
         auto const extracted = d_prog.extract<stack_size>(idx, d_str, begin, end, group_idx);
 
         d_output[group_idx + output_idx] = [&] {
-          if (!extracted) return string_index_pair{nullptr, 0};
+          if (!extracted) { return string_index_pair{nullptr, 0}; }
           auto const offset = d_str.byte_offset(extracted->first);
           return string_index_pair{d_str.data() + offset,
                                    d_str.byte_offset(extracted->second) - offset};
