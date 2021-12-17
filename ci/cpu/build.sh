@@ -86,6 +86,9 @@ if [ "$BUILD_LIBCUDF" == '1' ]; then
   echo "CONDA_BLD_DIR=$CONDA_BLD_DIR"
   echo "SRC_DIR=$SRC_DIR"
 
+  echo "searching for ninja_log"
+  find . -name "ninja_log.html"
+
   # Copy libcudf build time results
   LIBCUDF_BUILD_DIR=$SRC_DIR/cpp/build
   echo "Checking for build time log $LIBCUDF_BUILD_DIR/ninja_log.html"

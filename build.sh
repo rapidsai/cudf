@@ -190,6 +190,7 @@ if buildAll || hasArg libcudf; then
           ${CMAKE_ARGS}
 
     echo "LIB_BUILD_DIR=$LIB_BUILD_DIR"
+    echo "SRC_DIR=$SRC_DIR"
     cd ${LIB_BUILD_DIR}
 
     compile_start=$(date +%s)
