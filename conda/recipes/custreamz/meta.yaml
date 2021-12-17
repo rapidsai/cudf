@@ -2,7 +2,7 @@
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
-{% set cuda_version = '.'.join(environ.get('CUDA', '10.1').split('.')[:2]) %}
+{% set cuda_version = '.'.join(environ.get('CUDA', '11.5').split('.')[:2]) %}
 {% set py_version = environ.get('python', '3.8') %}
 
 package:
@@ -28,8 +28,13 @@ requirements:
     - python-confluent-kafka >=1.7.0,<1.8.0a0=py{{ py_version.replace('.', '') }}*
     - cudf_kafka {{ version }}
   run:
+<<<<<<< HEAD
     - python {{ py_version }}
     - streamz 
+=======
+    - python
+    - streamz
+>>>>>>> upstream/branch-22.02
     - cudf {{ version }}
     - dask>=2021.11.1,<=2021.11.2
     - distributed>=2021.11.1,<=2021.11.2

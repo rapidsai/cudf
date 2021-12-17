@@ -292,7 +292,7 @@ class DatetimeColumn(column.ColumnBase):
             "version": 1,
         }
 
-        if self.nullable and self.has_nulls:
+        if self.nullable and self.has_nulls():
 
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
