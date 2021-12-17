@@ -159,6 +159,7 @@ def write_to_dataset(
         part_names = part_names.to_pandas().to_frame(index=False)
 
         full_paths = []
+        metadata_file_paths = []
         for keys in part_names.itertuples(index=False):
             subdir = fs.sep.join(
                 [f"{name}={val}" for name, val in zip(partition_cols, keys)]
@@ -168,6 +169,7 @@ def write_to_dataset(
             filename = filename or uuid4().hex + ".parquet"
             full_path = fs.sep.join([prefix, filename])
             full_paths.append(full_path)
+            metadata_file_paths.append(fs.sep.join([subdir, filename]))
 
         with ExitStack() as stack:
             open_files = [
@@ -181,7 +183,7 @@ def write_to_dataset(
                         grouped_df,
                         file_objs,
                         index=preserve_index,
-                        metadata_file_path=fs.sep.join([subdir, filename]),
+                        metadata_file_path=metadata_file_paths,
                         partitions_info=partitions_info,
                         **kwargs,
                     )

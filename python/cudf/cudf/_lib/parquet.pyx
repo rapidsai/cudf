@@ -23,6 +23,7 @@ from cudf.api.types import (
     is_categorical_dtype,
     is_decimal_dtype,
     is_list_dtype,
+    is_list_like,
     is_struct_dtype,
 )
 from cudf.utils.dtypes import np_to_pa_dtype
@@ -365,7 +366,11 @@ cpdef write_parquet(
             partitions.push_back(cudf_io_types.partition_info(part[0], part[1]))
         args.set_partitions(move(partitions))
     if metadata_file_path is not None:
-        c_column_chunks_file_paths.push_back(str.encode(metadata_file_path))
+        if is_list_like(metadata_file_path):
+            for path in metadata_file_path:
+                c_column_chunks_file_paths.push_back(str.encode(path))
+        else:
+            c_column_chunks_file_paths.push_back(str.encode(metadata_file_path))
         args.set_column_chunks_file_paths(move(c_column_chunks_file_paths))
     if row_group_size_bytes is not None:
         args.set_row_group_size_bytes(row_group_size_bytes)
