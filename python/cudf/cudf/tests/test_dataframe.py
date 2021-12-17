@@ -9140,7 +9140,11 @@ def test_groupby_covariance(data, gkey, min_per, d_dof):
     actual = gdf.groupby(gkey).cov(min_periods=min_per, ddof=d_dof)
     expected = pdf.groupby(gkey).cov(min_periods=min_per, ddof=d_dof)
 
+    actual_no_args = gdf.groupby(gkey).cov()
+    expected_no_args = pdf.groupby(gkey).cov()
+
     assert_eq(expected, actual)
+    assert_eq(expected_no_args, actual_no_args)
 
 
 def test_groupby_covariance_multiindex_dataframe():
