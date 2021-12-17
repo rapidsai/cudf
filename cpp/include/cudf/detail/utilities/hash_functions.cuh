@@ -343,7 +343,7 @@ struct SparkMurmurHash3_32 {
   result_type CUDA_DEVICE_CALLABLE compute_bytes(int8_t const* const data,
                                                  cudf::size_type const len) const
   {
-    int32_t nblocks       = len / 4;
+    int32_t const nblocks = len / 4;
     uint32_t h1           = m_seed;
     constexpr uint32_t c1 = 0xcc9e2d51;
     constexpr uint32_t c2 = 0x1b873593;
@@ -433,9 +433,9 @@ template <>
 hash_value_type CUDA_DEVICE_CALLABLE
 SparkMurmurHash3_32<numeric::decimal128>::operator()(numeric::decimal128 const& key) const
 {
-  __int128_t val          = key.value();
+  __int128_t const val    = key.value();
   __int128_t flipped      = 0;
-  int8_t* data            = reinterpret_cast<int8_t*>(&val);
+  int8_t const* data      = reinterpret_cast<int8_t const*>(&val);
   int8_t* dflipped        = reinterpret_cast<int8_t*>(&flipped);
   int8_t const sign_bit   = data[15] & 0x80;
   int8_t const zero_value = sign_bit ? 0xff : 0x00;
