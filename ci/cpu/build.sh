@@ -81,12 +81,6 @@ if [ "$BUILD_LIBCUDF" == '1' ]; then
       mkdir -p "$WORKSPACE/build-metrics"
       cp "$LIBCUDF_BUILD_DIR/ninja_log.html" "$WORKSPACE/build-metrics/BuildMetrics.html"
   fi
-  if [[ -d "$WORKSPACE/build-metrics" ]]; then
-      echo "Found build-metrics dir"
-  fi
-  if [[ -d "$WORKSPACE/test-results" ]]; then
-      echo "Found test-results dir"
-  fi
 
   # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
   ccache -s
@@ -96,6 +90,8 @@ if [ "$BUILD_LIBCUDF" == '1' ]; then
   mkdir -p ${CONDA_BLD_DIR}/libcudf/work
   cp -r ${CONDA_BLD_DIR}/work/* ${CONDA_BLD_DIR}/libcudf/work
 
+  echo "LIB_BUILD_DIR=$LIB_BUILD_DIR"
+  echo "CONDA_BLD_DIR=$CONDA_BLD_DIR"
 
   gpuci_logger "Build conda pkg for libcudf_kafka"
   gpuci_conda_retry build --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf_kafka $CONDA_BUILD_ARGS
