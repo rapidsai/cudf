@@ -73,22 +73,22 @@ class pair_expression_equality {
   {
   }
 
-  // The argument order is reversed from the norm because cuco calls the
-  // comparator with the element of the build table as the first argument and
-  // by default we build with the right table. This function handles swapping
-  // appropriately below.
-  __device__ __forceinline__ bool operator()(const pair_type& rhs_row,
-                                             const pair_type& lhs_row) const noexcept
+  // The parameters are build/probe rather than left/right because the operator
+  // is called by cuco's kernels with parameters in this order (note that this
+  // is an implementation detail that we should eventually stop relying on by
+  // defining operators with suitable heterogeneous typing). Rather than
+  // converting to left/right semantics, we can operate directly on build/probe
+  // until we get to the expression evaluator, which needs to convert back to
+  // left/right semantics because the conditional expression need not be
+  // commutative.
+  __device__ __forceinline__ bool operator()(const pair_type& build_row,
+                                             const pair_type& probe_row) const noexcept
   {
-    auto const lrow_idx = swap_tables ? rhs_row.second : lhs_row.second;
-    auto const rrow_idx = swap_tables ? lhs_row.second : rhs_row.second;
-    auto const& lhs     = swap_tables ? build : probe;
-    auto const& rhs     = swap_tables ? probe : build;
     // TODO: I've inlined the logic from cudf's row_equality_comparator because
     // that comparator's constructor is not visible on device, and changing it
     // would require removing an assertion-raising test. I don't think we want
     // to do that, but should verify before finalizing.
-    auto equal_elements = [=](column_device_view l, column_device_view r) {
+    auto equal_elements = [=](column_device_view b, column_device_view p) {
       // Note: we could use nullate::DYNAMIC to avoid the extra template
       // instantiation, but in this case the performance impact of making that
       // decision at runtime is substantial since this functor is used within
@@ -101,10 +101,10 @@ class pair_expression_equality {
         }
       }();
       return cudf::type_dispatcher(
-        l.type(),
-        element_equality_comparator{has_nulls_nullate, l, r, nulls_are_equal},
-        lrow_idx,
-        rrow_idx);
+        b.type(),
+        element_equality_comparator{has_nulls_nullate, b, p, nulls_are_equal},
+        build_row.second,
+        probe_row.second);
     };
 
     auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
@@ -113,8 +113,10 @@ class pair_expression_equality {
     // 2. The contents of the columns involved in the equality condition are equal.
     // 3. The predicate evaluated on the relevant columns (already encoded in the evaluator)
     // evaluates to true.
-    if ((lhs_row.first == rhs_row.first) &&
-        (thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(), equal_elements))) {
+    if ((probe_row.first == build_row.first) &&
+        (thrust::equal(thrust::seq, build.begin(), build.end(), probe.begin(), equal_elements))) {
+      auto const lrow_idx = swap_tables ? build_row.second : probe_row.second;
+      auto const rrow_idx = swap_tables ? probe_row.second : build_row.second;
       evaluator.evaluate(output_dest, lrow_idx, rrow_idx, 0, thread_intermediate_storage);
       return (output_dest.is_valid() && output_dest.value());
     }
