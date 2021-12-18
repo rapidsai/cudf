@@ -129,7 +129,6 @@ def write_to_dataset(
 
     fs = ioutils._ensure_filesystem(fs, root_path, **kwargs)
     fs.mkdirs(root_path, exist_ok=True)
-    metadata = []
 
     if partition_cols is not None and len(partition_cols) > 0:
 
@@ -161,55 +160,27 @@ def write_to_dataset(
             filename = filename or uuid4().hex + ".parquet"
             full_path = fs.sep.join([prefix, filename])
             full_paths.append(full_path)
-            metadata_file_paths.append(fs.sep.join([subdir, filename]))
-
-        with ExitStack() as stack:
-            open_files = [
-                stack.enter_context(fs.open(path, mode="wb"))
-                for path in full_paths
-            ]
-            file_objs = [ioutils.get_IOBase_writer(fil) for fil in open_files]
             if return_metadata:
-                metadata.append(
-                    _write_parquet(
-                        grouped_df,
-                        file_objs,
-                        index=preserve_index,
-                        metadata_file_path=metadata_file_paths,
-                        partitions_info=partitions_info,
-                        **kwargs,
-                    )
-                )
-            else:
-                _write_parquet(
-                    grouped_df,
-                    file_objs,
-                    index=preserve_index,
-                    partitions_info=partitions_info,
-                    **kwargs,
-                )
+                metadata_file_paths.append(fs.sep.join([subdir, filename]))
+
+        if return_metadata:
+            kwargs["metadata_file_path"] = metadata_file_paths
+        metadata = _write_parquet(
+            grouped_df,
+            full_paths,
+            index=preserve_index,
+            partitions_info=partitions_info,
+            **kwargs,
+        )
 
     else:
         filename = filename or uuid4().hex + ".parquet"
         full_path = fs.sep.join([root_path, filename])
         if return_metadata:
-            metadata.append(
-                df.to_parquet(
-                    full_path,
-                    index=preserve_index,
-                    metadata_file_path=filename,
-                    **kwargs,
-                )
-            )
-        else:
-            df.to_parquet(full_path, index=preserve_index, **kwargs)
+            kwargs["metadata_file_path"] = filename
+        metadata = df.to_parquet(full_path, index=preserve_index, **kwargs)
 
-    if metadata:
-        return (
-            merge_parquet_filemetadata(metadata)
-            if len(metadata) > 1
-            else metadata[0]
-        )
+    return metadata
 
 
 @ioutils.doc_read_parquet_metadata()
