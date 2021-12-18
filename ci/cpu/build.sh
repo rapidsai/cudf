@@ -75,7 +75,7 @@ fi
 if [ "$BUILD_LIBCUDF" == '1' ]; then
 
   # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-  ccache -s
+  ccache -C
 
   gpuci_logger "Build conda pkg for libcudf"
   gpuci_conda_retry build --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf $CONDA_BUILD_ARGS
