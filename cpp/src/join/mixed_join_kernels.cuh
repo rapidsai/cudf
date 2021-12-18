@@ -58,22 +58,32 @@ template <bool has_nulls>
 class pair_expression_equality {
  public:
   __device__ pair_expression_equality(
-    table_device_view lhs,
-    table_device_view rhs,
+    table_device_view build,
+    table_device_view probe,
+    bool swap_tables,
     cudf::ast::detail::expression_evaluator<has_nulls> evaluator,
     cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage,
     null_equality nulls_are_equal = null_equality::EQUAL)
-    : lhs(lhs),
-      rhs{rhs},
+    : build(build),
+      probe{probe},
+      swap_tables{swap_tables},
       nulls_are_equal{nulls_are_equal},
       evaluator{evaluator},
       thread_intermediate_storage{thread_intermediate_storage}
   {
   }
 
-  __device__ __forceinline__ bool operator()(const pair_type& lhs_row,
-                                             const pair_type& rhs_row) const noexcept
+  // The argument order is reversed from the norm because cuco calls the
+  // comparator with the element of the build table as the first argument and
+  // by default we build with the right table. This function handles swapping
+  // appropriately below.
+  __device__ __forceinline__ bool operator()(const pair_type& rhs_row,
+                                             const pair_type& lhs_row) const noexcept
   {
+    auto const lrow_idx = swap_tables ? rhs_row.second : lhs_row.second;
+    auto const rrow_idx = swap_tables ? lhs_row.second : rhs_row.second;
+    auto const& lhs     = swap_tables ? build : probe;
+    auto const& rhs     = swap_tables ? probe : build;
     // TODO: I've inlined the logic from cudf's row_equality_comparator because
     // that comparator's constructor is not visible on device, and changing it
     // would require removing an assertion-raising test. I don't think we want
@@ -93,8 +103,8 @@ class pair_expression_equality {
       return cudf::type_dispatcher(
         l.type(),
         element_equality_comparator{has_nulls_nullate, l, r, nulls_are_equal},
-        lhs_row.second,
-        rhs_row.second);
+        lrow_idx,
+        rrow_idx);
     };
 
     auto output_dest = cudf::ast::detail::value_expression_result<bool, has_nulls>();
@@ -105,16 +115,16 @@ class pair_expression_equality {
     // evaluates to true.
     if ((lhs_row.first == rhs_row.first) &&
         (thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(), equal_elements))) {
-      evaluator.evaluate(
-        output_dest, lhs_row.second, rhs_row.second, 0, thread_intermediate_storage);
+      evaluator.evaluate(output_dest, lrow_idx, rrow_idx, 0, thread_intermediate_storage);
       return (output_dest.is_valid() && output_dest.value());
     }
     return false;
   }
 
  private:
-  table_device_view const lhs;
-  table_device_view const rhs;
+  table_device_view const build;
+  table_device_view const probe;
+  bool const swap_tables;
   null_equality const nulls_are_equal;
   cudf::ast::detail::IntermediateDataType<has_nulls>* thread_intermediate_storage;
   cudf::ast::detail::expression_evaluator<has_nulls> const evaluator;
@@ -185,7 +195,7 @@ __global__ void compute_mixed_join_output_size(
     auto query_pair                      = pair_func(outer_row_index);
     // TODO: Address asymmetry in operator.
     auto count_equality = pair_expression_equality<has_nulls>{
-      build, probe, evaluator, thread_intermediate_storage, compare_nulls};
+      build, probe, swap_tables, evaluator, thread_intermediate_storage, compare_nulls};
     // TODO: This entire kernel probably won't work for left anti joins since I
     // need to use a normal map (not a multimap), so this condition is probably
     // overspecified at the moment.
@@ -281,7 +291,7 @@ __global__ void mixed_join(table_device_view left_table,
     // Figure out the number of elements for this key.
     auto query_pair = pair_func(outer_row_index);
     auto equality   = pair_expression_equality<has_nulls>{
-      build, probe, evaluator, thread_intermediate_storage, compare_nulls};
+      build, probe, swap_tables, evaluator, thread_intermediate_storage, compare_nulls};
 
     auto probe_key_begin       = thrust::make_discard_iterator();
     auto probe_value_begin     = swap_tables ? join_output_r + join_result_offsets[outer_row_index]

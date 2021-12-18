@@ -25,7 +25,9 @@
 
 #include <rmm/cuda_stream_view.hpp>
 
+#include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
+#include <thrust/host_vector.h>
 #include <thrust/pair.h>
 #include <thrust/sort.h>
 
@@ -418,6 +420,21 @@ TYPED_TEST(MixedInnerJoinTest, AsymmetricLeftLargerEquality)
              left_zero_eq_right_zero,
              {0, 0, 1, 0},
              {{2, 1}});
+}
+
+TYPED_TEST(MixedInnerJoinTest, AsymmetricLeftLargerGreater)
+{
+  auto col_ref_left_1  = cudf::ast::column_reference(1, cudf::ast::table_reference::LEFT);
+  auto col_ref_right_1 = cudf::ast::column_reference(1, cudf::ast::table_reference::RIGHT);
+  auto condition =
+    cudf::ast::operation(cudf::ast::ast_operator::GREATER, col_ref_left_1, col_ref_right_1);
+  this->test({{2, 3, 9, 0, 1, 7, 4, 6, 5, 8}, {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}},
+             {{6, 5, 9, 8, 10, 32}, {0, 1, 2, 3, 4, 5}, {7, 8, 9, 0, 1, 2}},
+             {0},
+             {0, 1},
+             condition,
+             {0, 0, 1, 0, 0, 0, 0, 1, 1, 0},
+             {{2, 2}, {7, 0}, {8, 1}});
 }
 
 TYPED_TEST(MixedInnerJoinTest, AsymmetricRightLargerEquality)
