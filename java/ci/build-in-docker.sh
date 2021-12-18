@@ -63,7 +63,7 @@ cmake .. -GNinja \
          -DRMM_LOGGING_LEVEL=$RMM_LOGGING_LEVEL \
          -DBUILD_SHARED_LIBS=OFF
 
-if [ -z ${PARALLEL_LEVEL+x} ]; then
+if [[ -z "${PARALLEL_LEVEL}" ]]; then
     ninja install
 else
     ninja -j $PARALLEL_LEVEL install
