@@ -88,25 +88,25 @@ if output_fmt == "xml":
 elif output_fmt == "html":
     # output results in HTML format
     print("<html><head><title>Sorted Ninja Build Times</title>")
-    print("<style>", "table, th, td { border:1px solid black; }", "</style>")
+    # print("<style>", "table, th, td { border:1px solid black; }", "</style>")
     print("</head><body>")
     if args.msg is not None:
         print("<p>", args.msg, "</p>")
-    print("<table>")
+    print("<table style='border:1px solid black'>")
     print(
-        "<tr><th>File</th>",
-        "<th align='right'>Compile time (ms)</th>",
-        "<th align='right'>Size (bytes)</th><tr>",
+        "<tr><th style='border:1px solid black'>File</th>",
+        "<th style='border:1px solid black;text-align:right'>Compile time (ms)</th>",
+        "<th style='border:1px solid black;text-align:right'>Size (bytes)</th><tr>",
         sep="",
     )
     for key in sl:
         result = entries[key]
         print(
-            "<tr><td>",
+            "<tr><td style='border:1px solid black'>",
             key,
-            "</td><td align='right'>",
+            "</td><td style='border:1px solid black; text-align:right'>",
             result[0],
-            "</td><td align='right'>",
+            "</td><td style='border:1px solid black; text-align:right'>",
             result[1],
             "</td></tr>",
             sep="",

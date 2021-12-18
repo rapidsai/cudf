@@ -176,6 +176,7 @@ if buildAll || hasArg libcudf; then
     FILES_IN_CCACHE=""
     if [ -x "$(command -v ccache)" ]; then
         FILES_IN_CCACHE=$(ccache -s | grep "files in cache")
+        echo "$FILES_IN_CCACHE"
     fi
 
     cmake -S $REPODIR/cpp -B ${LIB_BUILD_DIR} \
@@ -190,7 +191,6 @@ if buildAll || hasArg libcudf; then
           ${CMAKE_ARGS}
 
     echo "LIB_BUILD_DIR=$LIB_BUILD_DIR"
-    echo "SRC_DIR=$SRC_DIR"
     cd ${LIB_BUILD_DIR}
 
     compile_start=$(date +%s)

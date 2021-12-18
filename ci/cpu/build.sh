@@ -125,6 +125,3 @@ fi
 
 gpuci_logger "Upload conda pkgs"
 source ci/cpu/upload.sh
-
-# XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-ccache -C
