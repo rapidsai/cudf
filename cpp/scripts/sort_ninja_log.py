@@ -103,10 +103,10 @@ elif output_fmt == "html":
         "<th align='right'>Size (bytes)</th><tr>",
         sep="",
     )
-    red = "style='background-color:#FFBBD0'"
-    yellow = "style='background-color:#FFFF80'"
-    gray = "style='background-color:#CCCCCC'"
-    green = "style='background-color:#AAFFBD'"
+    red = "bgcolor='#FFBBD0'"
+    yellow = "bgcolor='#FFFF80'"
+    gray = "bgcolor='#CCCCCC'"
+    green = "bgcolor='#AAFFBD'"
     for key in sl:
         result = entries[key]
         elapsed = result[0]
