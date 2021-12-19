@@ -204,7 +204,7 @@ if buildAll || hasArg libcudf; then
         python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt xml > ${LIB_BUILD_DIR}/ninja_log.xml
         message="<p>$PR_ID"
         message="$message<br/>build $BUILD_ID"
-        message="$message<br/>CUDA $CUDA_VERSION"
+        message="$message<br/>CUDA version $CUDA"
         message="$message<br/>$FILES_IN_CCACHE"
         message="$message<br/>parallel setting $PARALLEL_LEVEL"
         message="$message<br/>$compile_total seconds"

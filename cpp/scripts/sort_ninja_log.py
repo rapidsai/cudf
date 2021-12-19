@@ -100,24 +100,20 @@ elif output_fmt == "html":
         "<th>Size<br/>(bytes)</th><tr>",
         sep="",
     )
-    summary = {"red": 0, "yellow": 0, "gray": 0, "green": 0}
+    summary = {"red": 0, "yellow": 0, "green": 0}
     red = "bgcolor='#FFBBD0'"
     yellow = "bgcolor='#FFFF80'"
-    gray = "bgcolor='#CCCCCC'"
     green = "bgcolor='#AAFFBD'"
     for key in sl:
         result = entries[key]
         elapsed = result[0]
         color = green
-        if elapsed > 600000:  # 10 minutes
+        if elapsed > 300000:  # 5 minutes
             color = red
             summary["red"] += 1
-        elif elapsed > 300000:  # 5 minutes
+        elif elapsed > 120000:  # 2 minutes
             color = yellow
             summary["yellow"] += 1
-        elif elapsed > 120000:  # 2 minutes
-            color = gray
-            summary["gray"] += 1
         else:
             summary["green"] += 1
         print(
@@ -134,13 +130,11 @@ elif output_fmt == "html":
         )
     print("</table><br/><table border='2'>")
     # include summary table with color legend
-    print("<tr><td", red, ">&gt; 10 minutes</td>")
+    print("<tr><td", red, ">time &gt; 5 minutes</td>")
     print("<td align='right'>", summary["red"], "</td></tr>")
-    print("<tr><td", yellow, ">5 minutes &lt; time &lt; 10 minutes</td>")
+    print("<tr><td", yellow, ">2 minutes &lt; time &lt; 5 minutes</td>")
     print("<td align='right'>", summary["yellow"], "</td></tr>")
-    print("<tr><td", gray, ">2 minutes &lt; time &lt; 5 minutes</td>")
-    print("<td align='right'>", summary["gray"], "</td></tr>")
-    print("<tr><td", green, ">&lt; 2 minutes</td>")
+    print("<tr><td", green, ">time &lt; 2 minutes</td>")
     print("<td align='right'>", summary["green"], "</td></tr>")
     print("</table></body></html>")
 
