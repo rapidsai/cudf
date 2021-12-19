@@ -73,18 +73,10 @@ else
 fi
 
 if [ "$BUILD_LIBCUDF" == '1' ]; then
-
-  # XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-  ccache -C
-
   gpuci_logger "Build conda pkg for libcudf"
   gpuci_conda_retry build --no-build-id --croot ${CONDA_BLD_DIR} conda/recipes/libcudf $CONDA_BUILD_ARGS
   mkdir -p ${CONDA_BLD_DIR}/libcudf/work
   cp -r ${CONDA_BLD_DIR}/work/* ${CONDA_BLD_DIR}/libcudf/work
-
-  # echo "CONDA_BLD_DIR=$CONDA_BLD_DIR"
-  # echo "searching for ninja_log"
-  # find . -name "ninja_log.html"
 
   # Copy libcudf build time results
   LIBCUDF_BUILD_DIR=$CONDA_BLD_DIR/libcudf/work/cpp/build

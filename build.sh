@@ -198,13 +198,18 @@ if buildAll || hasArg libcudf; then
     compile_end=$(date +%s)
     compile_total=$(( compile_end - compile_start ))
 
+    echo "Some environment variables here"
+    env | grep 11.5
+    env | grep 9927
+    env | grep BUILD
+
     # Record build times
     if [[ -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
         echo "Formatting build times $LIB_BUILD_DIR"
         python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt xml > ${LIB_BUILD_DIR}/ninja_log.xml
         message="<p>$PR_ID"
         message="$message<br/>build $BUILD_ID"
-        message="$message<br/>CUDA version $CUDA"
+        message="$message<br/>CUDA LIB $NV_CUDA_LIB_VERSION"
         message="$message<br/>$FILES_IN_CCACHE"
         message="$message<br/>parallel setting $PARALLEL_LEVEL"
         message="$message<br/>$compile_total seconds"
