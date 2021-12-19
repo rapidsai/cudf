@@ -88,21 +88,19 @@ if output_fmt == "xml":
 elif output_fmt == "html":
     # output results in HTML format
     print("<html><head><title>Sorted Ninja Build Times</title>")
-    print("<style>")
-    # print("table, th, td { border:1px solid black; }")
-    # print(".metrics { border:1px solid black; } ")
-    # print(".metrics_values { border:1px solid black; text-align:right; } ")
-    print("</style>")
+    # Note: Jenkins does not support style defined in the html
+    # https://www.jenkins.io/doc/book/security/configuring-content-security-policy/
     print("</head><body>")
     if args.msg is not None:
         print("<p>", args.msg, "</p>")
     print("<table>")
     print(
         "<tr><th>File</th>",
-        "<th align='right'>Compile time (ms)</th>",
-        "<th align='right'>Size (bytes)</th><tr>",
+        "<th>Compile time<br/>(ms)</th>",
+        "<th>Size<br/>(bytes)</th><tr>",
         sep="",
     )
+    summary = {"red": 0, "yellow": 0, "gray": 0, "green": 0}
     red = "bgcolor='#FFBBD0'"
     yellow = "bgcolor='#FFFF80'"
     gray = "bgcolor='#CCCCCC'"
@@ -113,10 +111,15 @@ elif output_fmt == "html":
         color = green
         if elapsed > 600000:  # 10 minutes
             color = red
+            summary["red"] += 1
         elif elapsed > 300000:  # 5 minutes
             color = yellow
+            summary["yellow"] += 1
         elif elapsed > 120000:  # 2 minutes
             color = gray
+            summary["gray"] += 1
+        else:
+            summary["green"] += 1
         print(
             "<tr ",
             color,
@@ -129,14 +132,17 @@ elif output_fmt == "html":
             "</td></tr>",
             sep="",
         )
-    print("</table>")
-    print("<br><table>")
-    print("<tr><td", red, ">&gt; 10 minutes</td></tr>")
-    print("<tr><td", yellow, ">5 minutes &lt; time &lt; 10 minutes</td></tr>")
-    print("<tr><td", gray, ">2 minutes &lt; time &lt; 5 minutes</td></tr>")
-    print("<tr><td", green, ">&lt; 2 minutes</td></tr>")
-    print("</table>")
-    print("</body></html>")
+    print("</table><br/><table border='2'>")
+    # include summary table with color legend
+    print("<tr><td", red, ">&gt; 10 minutes</td>")
+    print("<td align='right'>", summary["red"], "</td></tr>")
+    print("<tr><td", yellow, ">5 minutes &lt; time &lt; 10 minutes</td>")
+    print("<td align='right'>", summary["yellow"], "</td></tr>")
+    print("<tr><td", gray, ">2 minutes &lt; time &lt; 5 minutes</td>")
+    print("<td align='right'>", summary["gray"], "</td></tr>")
+    print("<tr><td", green, ">&lt; 2 minutes</td>")
+    print("<td align='right'>", summary["green"], "</td></tr>")
+    print("</table></body></html>")
 
 else:
     # output results in CSV format
