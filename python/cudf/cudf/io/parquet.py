@@ -142,10 +142,6 @@ def write_to_dataset(
         if not preserve_index:
             grouped_df.reset_index(drop=True, inplace=True)
         grouped_df.drop(columns=partition_cols, inplace=True)
-        partitions_info = [
-            (part_offsets[i], part_offsets[i + 1] - part_offsets[i])
-            for i in range(0, len(part_offsets) - 1)
-        ]
         # Copy the entire keys df in one operation rather than using iloc
         part_names = part_names.to_pandas().to_frame(index=False)
 
@@ -165,11 +161,11 @@ def write_to_dataset(
 
         if return_metadata:
             kwargs["metadata_file_path"] = metadata_file_paths
-        metadata = _write_parquet(
+        metadata = to_parquet(
             grouped_df,
             full_paths,
             index=preserve_index,
-            partitions_info=partitions_info,
+            partition_offsets=part_offsets,
             **kwargs,
         )
 
@@ -736,9 +732,18 @@ def to_parquet(
             return
 
         # TODO: re-enable non-partitioned case
+        if partition_offsets:
+            kwargs["partitions_info"] = [
+                (
+                    partition_offsets[i],
+                    partition_offsets[i + 1] - partition_offsets[i],
+                )
+                for i in range(0, len(partition_offsets) - 1)
+            ]
+
         return _write_parquet(
             df,
-            paths=[path],
+            paths=path if is_list_like(path) else [path],
             compression=compression,
             index=index,
             statistics=statistics,
