@@ -352,5 +352,8 @@ enum class hash_id {
  */
 static constexpr uint32_t DEFAULT_HASH_SEED = 0;
 
+// TODO: remove this
+static constexpr int force_recompile_of_everything = 1;
+
 /** @} */
 }  // namespace cudf
