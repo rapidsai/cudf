@@ -32,19 +32,16 @@ def _write_parquet(
     partitions_info=None,
     **kwargs,
 ):
-    # TODO: exceptions:
-    # If paths are multiple then partitions_info are required.
-    # If partitions_info are specified then paths should be list like.
-    # In either case, both should be of same length.
-    # Partition offsets should be a list of 2-tuples
-    # if is_list_like(paths) and len(paths) > 1:
-    #     if partitions_info is None:
-    #         ValueError("partition info is required for multiple paths")
-    #     elif not is_list_like(partitions_info):
-    #         ValueError("partition info must be list-like")
-
-    #     if not len(paths) == len(partitions_info):
-    #         ValueError("")
+    if is_list_like(paths) and len(paths) > 1:
+        if partitions_info is None:
+            ValueError("partition info is required for multiple paths")
+        elif not is_list_like(partitions_info):
+            ValueError("partition info must be list-like for multiple paths")
+        elif not len(paths) == len(partitions_info):
+            ValueError("partitions_info and paths must be of same size")
+    if is_list_like(partitions_info) and len(partitions_info) > 1:
+        if not is_list_like(paths):
+            ValueError("paths must be list-like when partitions_info provided")
 
     paths_or_bufs = [
         ioutils.get_writer_filepath_or_buffer(path, mode="wb", **kwargs)
@@ -716,11 +713,21 @@ def to_parquet(
                     + "supported by the gpu accelerated parquet writer"
                 )
 
-        # TODO: propagate compression, statistics, int96, row_group_size_bytes,
-        # row_group_size_rows.
-        # TODO: warn against metadata_file_path being provided when partition
-        # cols specified
         if partition_cols:
+            if metadata_file_path is not None:
+                warnings.warn(
+                    "metadata_file_path will be ignored/overwritten when "
+                    "partition_cols are provided"
+                )
+            kwargs.update(
+                {
+                    "compression": compression,
+                    "statistics": statistics,
+                    "int96_timestamps": int96_timestamps,
+                    "row_group_size_bytes": row_group_size_bytes,
+                    "row_group_size_rows": row_group_size_rows,
+                }
+            )
             write_to_dataset(
                 df,
                 filename=partition_file_name,
@@ -731,7 +738,6 @@ def to_parquet(
             )
             return
 
-        # TODO: re-enable non-partitioned case
         if partition_offsets:
             kwargs["partitions_info"] = [
                 (
@@ -755,7 +761,10 @@ def to_parquet(
         )
 
     else:
-        # TODO: error if partition_offsets is specified without cudf engine
+        if partition_offsets is not None:
+            warnings.warn(
+                "partition_offsets will be ignored when engine is not cudf"
+            )
 
         # If index is empty set it to the expected default value of True
         if index is None:
