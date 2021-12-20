@@ -34,8 +34,9 @@ class pair_equality {
  public:
   pair_equality(table_device_view lhs,
                 table_device_view rhs,
+                nullate::DYNAMIC has_nulls,
                 null_equality nulls_are_equal = null_equality::EQUAL)
-    : _check_row_equality{cudf::nullate::YES{}, lhs, rhs, nulls_are_equal}
+    : _check_row_equality{has_nulls, lhs, rhs, nulls_are_equal}
   {
   }
 
