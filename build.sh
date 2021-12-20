@@ -198,22 +198,15 @@ if buildAll || hasArg libcudf; then
     compile_end=$(date +%s)
     compile_total=$(( compile_end - compile_start ))
 
-    echo "Some environment variables here"
-    declare
-    echo "Done"
-
     # Record build times
     if [[ -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
         echo "Formatting build times $LIB_BUILD_DIR"
         python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt xml > ${LIB_BUILD_DIR}/ninja_log.xml
-        message="<p>$PR_ID"
-        message="$message<br/>build $BUILD_ID"
-        message="$message<br/>CUDA LIB $NV_CUDA_LIB_VERSION"
-        message="$message<br/>$FILES_IN_CCACHE"
-        message="$message<br/>parallel setting $PARALLEL_LEVEL"
-        message="$message<br/>$compile_total seconds"
-        echo "$message"
-        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt html --msg "$message" > ${LIB_BUILD_DIR}/ninja_log.html
+        MSG="${MSG}<br/>$FILES_IN_CCACHE"
+        MSG="${MSG}<br/>parallel setting: $PARALLEL_LEVEL"
+        MSG="${MSG}<br/>parallel compile time: $compile_total seconds"
+        echo "$MSG"
+        python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt html --msg "$MSG" > ${LIB_BUILD_DIR}/ninja_log.html
     fi
 
     if [[ ${INSTALL_TARGET} != "" ]]; then
