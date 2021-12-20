@@ -199,9 +199,8 @@ if buildAll || hasArg libcudf; then
     compile_total=$(( compile_end - compile_start ))
 
     echo "Some environment variables here"
-    declare | grep "11.5"
-    declare | grep "9927"
-    declare | grep "BUILD"
+    declare
+    echo "Done"
 
     # Record build times
     if [[ -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
