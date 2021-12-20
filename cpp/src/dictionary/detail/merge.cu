@@ -53,10 +53,8 @@ std::unique_ptr<column> merge(dictionary_column_view const& lcol,
                     row_order.end(),
                     output_iter,
                     [lcol_iter, rcol_iter] __device__(auto const& index_pair) {
-                      auto index = thrust::get<1>(index_pair);
-                      return (thrust::get<0>(index_pair) == cudf::detail::side::LEFT
-                                ? lcol_iter[index]
-                                : rcol_iter[index]);
+                      auto const [side, index] = index_pair;
+                      return side == cudf::detail::side::LEFT ? lcol_iter[index] : rcol_iter[index];
                     });
 
   // build dictionary; the validity mask is updated by the caller

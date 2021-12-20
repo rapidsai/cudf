@@ -56,8 +56,7 @@ struct MaskToBoolsTest
 TEST_P(MaskToBoolsTest, LargeDataSizeTest)
 {
   auto data                       = std::vector<bool>(10000);
-  cudf::size_type const begin_bit = std::get<0>(GetParam());
-  cudf::size_type const end_bit   = std::get<1>(GetParam());
+  auto const [begin_bit, end_bit] = GetParam();
   std::transform(data.cbegin(), data.cend(), data.begin(), [](auto val) {
     return rand() % 2 == 0 ? true : false;
   });

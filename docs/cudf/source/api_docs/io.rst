@@ -33,6 +33,7 @@ Parquet
 
    read_parquet
    DataFrame.to_parquet
+   cudf.io.parquet.read_parquet_metadata
 
 ORC
 ~~~
