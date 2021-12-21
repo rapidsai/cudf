@@ -3377,6 +3377,15 @@ def test_dataframe_describe_percentiles():
     assert_eq(pdf_results, gdf_results)
 
 
+def test_get_numeric_data():
+    pdf = pd.DataFrame(
+        {"x": [1, 2, 3], "y": [1.0, 2.0, 3.0], "z": ["a", "b", "c"]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(pdf._get_numeric_data(), gdf._get_numeric_data())
+
+
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES)
 @pytest.mark.parametrize("period", [-1, -5, -10, -20, 0, 1, 5, 10, 20])
 @pytest.mark.parametrize("data_empty", [False, True])

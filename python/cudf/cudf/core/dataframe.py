@@ -1314,6 +1314,16 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         else:
             return NotImplemented
 
+    # The _get_numeric_data method is necessary for dask compatibility.
+    def _get_numeric_data(self):
+        """Return a dataframe with only numeric data types"""
+        columns = [
+            c
+            for c, dt in self.dtypes.items()
+            if dt != object and not is_categorical_dtype(dt)
+        ]
+        return self[columns]
+
     def assign(self, **kwargs):
         """
         Assign columns to DataFrame from keyword arguments.
