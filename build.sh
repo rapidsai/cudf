@@ -177,6 +177,7 @@ if buildAll || hasArg libcudf; then
     if [ -x "$(command -v ccache)" ]; then
         FILES_IN_CCACHE=$(ccache -s | grep "files in cache")
         echo "$FILES_IN_CCACHE"
+        # zero the ccache statistics
         ccache -z
     fi
 
@@ -201,16 +202,17 @@ if buildAll || hasArg libcudf; then
 
     # Record build times
     if [[ -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
-        echo "Formatting build times $LIB_BUILD_DIR"
+        echo "Formatting build metrics"
         python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt xml > ${LIB_BUILD_DIR}/ninja_log.xml
         MSG="<p>"
+        # get some ccache stats after the compile
         if [ -x "$(command -v ccache)" ]; then
            MSG="${MSG}<br/>$FILES_IN_CCACHE"
            HIT_RATE=$(ccache -s | grep "cache hit rate")
            MSG="${MSG}<br/>${HIT_RATE}"
         fi
         MSG="${MSG}<br/>parallel setting: $PARALLEL_LEVEL"
-        MSG="${MSG}<br/>parallel compile time: $compile_total seconds"
+        MSG="${MSG}<br/>parallel build time: $compile_total seconds"
         echo "$MSG"
         python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt html --msg "$MSG" > ${LIB_BUILD_DIR}/ninja_log.html
     fi

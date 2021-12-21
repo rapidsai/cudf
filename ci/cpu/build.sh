@@ -78,11 +78,11 @@ if [ "$BUILD_LIBCUDF" == '1' ]; then
   mkdir -p ${CONDA_BLD_DIR}/libcudf/work
   cp -r ${CONDA_BLD_DIR}/work/* ${CONDA_BLD_DIR}/libcudf/work
 
-  # Copy libcudf build time results
+  # Copy libcudf build metrics results
   LIBCUDF_BUILD_DIR=$CONDA_BLD_DIR/libcudf/work/cpp/build
-  echo "Checking for build time log $LIBCUDF_BUILD_DIR/ninja_log.html"
+  echo "Checking for build metrics log $LIBCUDF_BUILD_DIR/ninja_log.html"
   if [[ -f "$LIBCUDF_BUILD_DIR/ninja_log.html" ]]; then
-      gpuci_logger "Copying build time results"
+      gpuci_logger "Copying build metrics results"
       mkdir -p "$WORKSPACE/build-metrics"
       cp "$LIBCUDF_BUILD_DIR/ninja_log.html" "$WORKSPACE/build-metrics/BuildMetrics.html"
   fi
