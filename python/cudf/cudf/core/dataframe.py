@@ -4227,38 +4227,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             tpb=tpb,
         )
 
-    def hash_columns(self, columns=None, method="murmur3"):
-        """Hash the given *columns* and return a new device array
-
-        This method is deprecated. Replace ``df.hash_columns(columns, method)``
-        with ``df[columns].hash_values(method)``.
-
-        Parameters
-        ----------
-        columns : sequence of str; optional
-            Sequence of column names. If columns is *None* (unspecified),
-            all columns in the frame are used.
-        method : {'murmur3', 'md5'}, default 'murmur3'
-            Hash function to use:
-            * murmur3: MurmurHash3 hash function.
-            * md5: MD5 hash function.
-
-        Returns
-        -------
-        Series
-            Hash values for each row.
-        """
-        warnings.warn(
-            "The `hash_columns` method will be removed in a future cuDF "
-            "release. Replace `df.hash_columns(columns, method)` with "
-            "`df[columns].hash_values(method)`.",
-            FutureWarning,
-        )
-        if columns is None:
-            # Slice by [:] to keep all columns.
-            columns = slice(None, None, None)
-        return self[columns].hash_values(method=method)
-
     def hash_values(self, method="murmur3"):
         """Compute the hash of values in each row.
 
