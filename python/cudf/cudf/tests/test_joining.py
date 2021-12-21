@@ -2150,3 +2150,16 @@ def test_join_redundant_params():
         lhs.merge(rhs, right_on="a", left_index=True, right_index=True)
     with pytest.raises(ValueError):
         lhs.merge(rhs, left_on="c", right_on="b")
+
+
+def test_join_multiindex_index():
+    # test joining a MultiIndex with an Index with overlapping name
+    lhs = (
+        cudf.DataFrame({"a": [2, 3, 1], "b": [3, 4, 2]})
+        .set_index(["a", "b"])
+        .index
+    )
+    rhs = cudf.DataFrame({"a": [1, 4, 3]}).set_index("a").index
+    expect = lhs.to_pandas().join(rhs.to_pandas(), how="inner")
+    got = lhs.join(rhs, how="inner")
+    assert_join_results_equal(expect, got, how="inner")

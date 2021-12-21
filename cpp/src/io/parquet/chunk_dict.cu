@@ -95,69 +95,41 @@ struct map_find_fn {
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
   populate_chunk_hash_maps_kernel(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                                  size_type num_rows)
+                                  cudf::detail::device_2dspan<gpu::PageFragment const> frags)
 {
   auto col_idx = blockIdx.y;
   auto block_x = blockIdx.x;
   auto t       = threadIdx.x;
+  auto frag    = frags[col_idx][block_x];
+  auto chunk   = frag.chunk;
+  auto col     = chunk->col_desc;
 
-  auto start_row =
-    block_x *
-    max_page_fragment_size;  // This is fragment size. all chunks are multiple of these many rows.
-  size_type end_row = min(start_row + max_page_fragment_size, num_rows);
+  size_type start_row = frag.start_row;
+  size_type end_row   = frag.start_row + frag.num_rows;
 
-  __shared__ EncColumnChunk* s_chunk;
-  __shared__ parquet_column_device_view s_col;
   __shared__ size_type s_start_value_idx;
   __shared__ size_type s_num_values;
-  if (t == 0) {
-    // Find the chunk this block is a part of
-    size_type num_rowgroups = chunks.size().first;
-    size_type rg_idx        = 0;
-    while (rg_idx < num_rowgroups) {
-      if (auto ck = chunks[rg_idx][col_idx];
-          start_row >= ck.start_row and start_row < ck.start_row + ck.num_rows) {
-        break;
-      }
-      ++rg_idx;
-    }
-    s_chunk = &chunks[rg_idx][col_idx];
-    s_col   = *(s_chunk->col_desc);
-  }
-  __syncthreads();
-  if (not s_chunk->use_dictionary) { return; }
+
+  if (not chunk->use_dictionary) { return; }
 
   if (t == 0) {
     // Find the bounds of values in leaf column to be inserted into the map for current chunk
-    auto col             = *(s_col.parent_column);
-    auto start_value_idx = start_row;
-    auto end_value_idx   = end_row;
-    while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
-      if (col.type().id() == type_id::STRUCT) {
-        start_value_idx += col.offset();
-        end_value_idx += col.offset();
-        col = col.child(0);
-      } else {
-        auto offset_col = col.child(lists_column_view::offsets_column_index);
-        start_value_idx = offset_col.element<size_type>(start_value_idx + col.offset());
-        end_value_idx   = offset_col.element<size_type>(end_value_idx + col.offset());
-        col             = col.child(lists_column_view::child_column_index);
-      }
-    }
-    s_start_value_idx = start_value_idx;
-    s_num_values      = end_value_idx - start_value_idx;
+    auto cudf_col      = *(col->parent_column);
+    s_start_value_idx  = row_to_value_idx(start_row, cudf_col);
+    auto end_value_idx = row_to_value_idx(end_row, cudf_col);
+    s_num_values       = end_value_idx - s_start_value_idx;
   }
   __syncthreads();
 
-  column_device_view const& data_col = *s_col.leaf_column;
+  column_device_view const& data_col = *col->leaf_column;
   using block_reduce                 = cub::BlockReduce<size_type, block_size>;
   __shared__ typename block_reduce::TempStorage reduce_storage;
 
   // Make a view of the hash map
   auto hash_map_mutable = map_type::device_mutable_view(
-    s_chunk->dict_map_slots, s_chunk->dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
+    chunk->dict_map_slots, chunk->dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
   auto hash_map = map_type::device_view(
-    s_chunk->dict_map_slots, s_chunk->dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
+    chunk->dict_map_slots, chunk->dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
 
   __shared__ int total_num_dict_entries;
   for (size_type i = 0; i < s_num_values; i += block_size) {
@@ -176,7 +148,7 @@ __global__ void __launch_bounds__(block_size, 1)
           type_dispatcher(data_col.type(), map_insert_fn{hash_map_mutable}, data_col, val_idx);
         uniq_elem_size = [&]() -> size_type {
           if (not is_unique) { return 0; }
-          switch (s_col.physical_type) {
+          switch (col->physical_type) {
             case Type::INT32: return 4;
             case Type::INT64: return 8;
             case Type::INT96: return 12;
@@ -188,6 +160,7 @@ __global__ void __launch_bounds__(block_size, 1)
                 return 4 + data_col.element<string_view>(val_idx).size_bytes();
               }
             case Type::FIXED_LEN_BYTE_ARRAY:
+              if (data_col.type().id() == type_id::DECIMAL128) { return sizeof(__int128_t); }
             default: cudf_assert(false && "Unsupported type for dictionary encoding"); return 0;
           }
         }();
@@ -199,9 +172,9 @@ __global__ void __launch_bounds__(block_size, 1)
     __syncthreads();
     auto uniq_data_size = block_reduce(reduce_storage).Sum(uniq_elem_size);
     if (t == 0) {
-      total_num_dict_entries = atomicAdd(&s_chunk->num_dict_entries, num_unique);
+      total_num_dict_entries = atomicAdd(&chunk->num_dict_entries, num_unique);
       total_num_dict_entries += num_unique;
-      atomicAdd(&s_chunk->uniq_data_size, uniq_data_size);
+      atomicAdd(&chunk->uniq_data_size, uniq_data_size);
     }
     __syncthreads();
 
@@ -245,67 +218,38 @@ __global__ void __launch_bounds__(block_size, 1)
 template <int block_size>
 __global__ void __launch_bounds__(block_size, 1)
   get_dictionary_indices_kernel(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                                size_type num_rows)
+                                cudf::detail::device_2dspan<gpu::PageFragment const> frags)
 {
   auto col_idx = blockIdx.y;
   auto block_x = blockIdx.x;
   auto t       = threadIdx.x;
+  auto frag    = frags[col_idx][block_x];
+  auto chunk   = frag.chunk;
+  auto col     = chunk->col_desc;
 
-  size_type start_row = block_x * max_page_fragment_size;
-  size_type end_row   = min(start_row + max_page_fragment_size, num_rows);
+  size_type start_row = frag.start_row;
+  size_type end_row   = frag.start_row + frag.num_rows;
 
-  __shared__ EncColumnChunk s_chunk;
-  __shared__ parquet_column_device_view s_col;
   __shared__ size_type s_start_value_idx;
   __shared__ size_type s_ck_start_val_idx;
   __shared__ size_type s_num_values;
 
   if (t == 0) {
-    // Find the chunk this block is a part of
-    size_type num_rowgroups = chunks.size().first;
-    size_type rg_idx        = 0;
-    while (rg_idx < num_rowgroups) {
-      if (auto ck = chunks[rg_idx][col_idx];
-          start_row >= ck.start_row and start_row < ck.start_row + ck.num_rows) {
-        break;
-      }
-      ++rg_idx;
-    }
-    s_chunk = chunks[rg_idx][col_idx];
-    s_col   = *(s_chunk.col_desc);
-
-    // Find the bounds of values in leaf column to be inserted into the map for current chunk
-
-    auto col                 = *(s_col.parent_column);
-    auto start_value_idx     = start_row;
-    auto end_value_idx       = end_row;
-    auto chunk_start_val_idx = s_chunk.start_row;
-    while (col.type().id() == type_id::LIST or col.type().id() == type_id::STRUCT) {
-      if (col.type().id() == type_id::STRUCT) {
-        start_value_idx += col.offset();
-        chunk_start_val_idx += col.offset();
-        end_value_idx += col.offset();
-        col = col.child(0);
-      } else {
-        auto offset_col     = col.child(lists_column_view::offsets_column_index);
-        start_value_idx     = offset_col.element<size_type>(start_value_idx + col.offset());
-        chunk_start_val_idx = offset_col.element<size_type>(chunk_start_val_idx + col.offset());
-        end_value_idx       = offset_col.element<size_type>(end_value_idx + col.offset());
-        col                 = col.child(lists_column_view::child_column_index);
-      }
-    }
-    s_start_value_idx  = start_value_idx;
-    s_ck_start_val_idx = chunk_start_val_idx;
-    s_num_values       = end_value_idx - start_value_idx;
+    // Find the bounds of values in leaf column to be searched in the map for current chunk
+    auto cudf_col      = *(col->parent_column);
+    s_start_value_idx  = row_to_value_idx(start_row, cudf_col);
+    s_ck_start_val_idx = row_to_value_idx(chunk->start_row, cudf_col);
+    auto end_value_idx = row_to_value_idx(end_row, cudf_col);
+    s_num_values       = end_value_idx - s_start_value_idx;
   }
   __syncthreads();
 
-  if (not s_chunk.use_dictionary) { return; }
+  if (not chunk->use_dictionary) { return; }
 
-  column_device_view const& data_col = *s_col.leaf_column;
+  column_device_view const& data_col = *col->leaf_column;
 
   auto map = map_type::device_view(
-    s_chunk.dict_map_slots, s_chunk.dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
+    chunk->dict_map_slots, chunk->dict_map_size, KEY_SENTINEL, VALUE_SENTINEL);
 
   for (size_t i = 0; i < s_num_values; i += block_size) {
     if (t + i < s_num_values) {
@@ -320,7 +264,7 @@ __global__ void __launch_bounds__(block_size, 1)
         if (found_slot != map.end()) {
           // No need for atomic as this is not going to be modified by any other thread
           auto* val_ptr = reinterpret_cast<map_type::mapped_type*>(&found_slot->second);
-          s_chunk.dict_index[val_idx - s_ck_start_val_idx] = *val_ptr;
+          chunk->dict_index[val_idx - s_ck_start_val_idx] = *val_ptr;
         }
       }
     }
@@ -335,16 +279,14 @@ void initialize_chunk_hash_maps(device_span<EncColumnChunk> chunks, rmm::cuda_st
 }
 
 void populate_chunk_hash_maps(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                              size_type num_rows,
+                              cudf::detail::device_2dspan<gpu::PageFragment const> frags,
                               rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 256;
-  auto const grid_x        = cudf::detail::grid_1d(num_rows, max_page_fragment_size);
-  auto const num_columns   = chunks.size().second;
-  dim3 const dim_grid(grid_x.num_blocks, num_columns);
+  dim3 const dim_grid(frags.size().second, frags.size().first);
 
   populate_chunk_hash_maps_kernel<block_size>
-    <<<dim_grid, block_size, 0, stream.value()>>>(chunks, num_rows);
+    <<<dim_grid, block_size, 0, stream.value()>>>(chunks, frags);
 }
 
 void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_view stream)
@@ -354,16 +296,14 @@ void collect_map_entries(device_span<EncColumnChunk> chunks, rmm::cuda_stream_vi
 }
 
 void get_dictionary_indices(cudf::detail::device_2dspan<EncColumnChunk> chunks,
-                            size_type num_rows,
+                            cudf::detail::device_2dspan<gpu::PageFragment const> frags,
                             rmm::cuda_stream_view stream)
 {
   constexpr int block_size = 256;
-  auto const grid_x        = cudf::detail::grid_1d(num_rows, max_page_fragment_size);
-  auto const num_columns   = chunks.size().second;
-  dim3 const dim_grid(grid_x.num_blocks, num_columns);
+  dim3 const dim_grid(frags.size().second, frags.size().first);
 
   get_dictionary_indices_kernel<block_size>
-    <<<dim_grid, block_size, 0, stream.value()>>>(chunks, num_rows);
+    <<<dim_grid, block_size, 0, stream.value()>>>(chunks, frags);
 }
 }  // namespace gpu
 }  // namespace parquet

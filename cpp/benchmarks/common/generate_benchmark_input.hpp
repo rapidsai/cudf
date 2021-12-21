@@ -216,6 +216,7 @@ class data_profile {
   distribution_params<cudf::string_view> string_dist_desc{{distribution_id::NORMAL, 0, 32}};
   distribution_params<cudf::list_view> list_dist_desc{
     cudf::type_id::INT32, {distribution_id::GEOMETRIC, 0, 100}, 2};
+  std::map<cudf::type_id, distribution_params<__uint128_t>> decimal_params;
 
   double bool_probability        = 0.5;
   double null_frequency          = 0.01;
@@ -284,9 +285,17 @@ class data_profile {
   }
 
   template <typename T, typename std::enable_if_t<cudf::is_fixed_point<T>()>* = nullptr>
-  distribution_params<T> get_distribution_params() const
+  distribution_params<typename T::rep> get_distribution_params() const
   {
-    CUDF_FAIL("Not implemented");
+    using rep = typename T::rep;
+    auto it   = decimal_params.find(cudf::type_to_id<T>());
+    if (it == decimal_params.end()) {
+      auto const range = default_range<rep>();
+      return distribution_params<rep>{default_distribution_id<rep>(), range.first, range.second};
+    } else {
+      auto& desc = it->second;
+      return {desc.id, static_cast<rep>(desc.lower_bound), static_cast<rep>(desc.upper_bound)};
+    }
   }
 
   auto get_bool_probability() const { return bool_probability; }

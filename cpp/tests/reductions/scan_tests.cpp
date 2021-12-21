@@ -18,6 +18,7 @@
 
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <cudf_test/iterator_utilities.hpp>
 
 #include <cudf/detail/aggregation/aggregation.hpp>
 #include <cudf/detail/iterator.cuh>
@@ -396,4 +397,223 @@ TYPED_TEST(ScanDurationTest, Sum)
 
   EXPECT_THROW(cudf::scan(col, cudf::make_sum_aggregation(), cudf::scan_type::EXCLUSIVE),
                cudf::logic_error);
+}
+
+struct StructScanTest : public cudf::test::BaseFixture {
+};
+
+TEST_F(StructScanTest, StructScanMinMaxNoNull)
+{
+  using INTS_CW    = cudf::test::fixed_width_column_wrapper<int32_t>;
+  using STRINGS_CW = cudf::test::strings_column_wrapper;
+  using STRUCTS_CW = cudf::test::structs_column_wrapper;
+
+  auto const input = [] {
+    auto child1 = STRINGS_CW{"año", "bit", "₹1", "aaa", "zit", "bat", "aab", "$1", "€1", "wut"};
+    auto child2 = INTS_CW{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+    return STRUCTS_CW{{child1, child2}};
+  }();
+
+  {
+    auto const expected = [] {
+      auto child1 = STRINGS_CW{"año", "año", "año", "aaa", "aaa", "aaa", "aaa", "$1", "$1", "$1"};
+      auto child2 = INTS_CW{1, 1, 1, 4, 4, 4, 4, 8, 8, 8};
+      return STRUCTS_CW{{child1, child2}};
+    }();
+    auto const result = cudf::scan(input, cudf::make_min_aggregation(), cudf::scan_type::INCLUSIVE);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+
+  {
+    auto const expected = [] {
+      auto child1 = STRINGS_CW{"año", "bit", "₹1", "₹1", "₹1", "₹1", "₹1", "₹1", "₹1", "₹1"};
+      auto child2 = INTS_CW{1, 2, 3, 3, 3, 3, 3, 3, 3, 3};
+      return STRUCTS_CW{{child1, child2}};
+    }();
+    auto const result = cudf::scan(input, cudf::make_max_aggregation(), cudf::scan_type::INCLUSIVE);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+}
+
+TEST_F(StructScanTest, StructScanMinMaxSlicedInput)
+{
+  using INTS_CW    = cudf::test::fixed_width_column_wrapper<int>;
+  using STRINGS_CW = cudf::test::strings_column_wrapper;
+  using STRUCTS_CW = cudf::test::structs_column_wrapper;
+  constexpr int32_t dont_care{1};
+
+  auto const input_original = [] {
+    auto child1 = STRINGS_CW{"$dont_care",
+                             "$dont_care",
+                             "año",
+                             "bit",
+                             "₹1",
+                             "aaa",
+                             "zit",
+                             "bat",
+                             "aab",
+                             "$1",
+                             "€1",
+                             "wut",
+                             "₹dont_care"};
+    auto child2 = INTS_CW{dont_care, dont_care, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, dont_care};
+    return STRUCTS_CW{{child1, child2}};
+  }();
+
+  auto const input = cudf::slice(input_original, {2, 12})[0];
+
+  {
+    auto const expected = [] {
+      auto child1 = STRINGS_CW{"año", "año", "año", "aaa", "aaa", "aaa", "aaa", "$1", "$1", "$1"};
+      auto child2 = INTS_CW{1, 1, 1, 4, 4, 4, 4, 8, 8, 8};
+      return STRUCTS_CW{{child1, child2}};
+    }();
+    auto const result = cudf::scan(input, cudf::make_min_aggregation(), cudf::scan_type::INCLUSIVE);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+
+  {
+    auto const expected = [] {
+      auto child1 = STRINGS_CW{"año", "bit", "₹1", "₹1", "₹1", "₹1", "₹1", "₹1", "₹1", "₹1"};
+      auto child2 = INTS_CW{1, 2, 3, 3, 3, 3, 3, 3, 3, 3};
+      return STRUCTS_CW{{child1, child2}};
+    }();
+    auto const result = cudf::scan(input, cudf::make_max_aggregation(), cudf::scan_type::INCLUSIVE);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+}
+
+TEST_F(StructScanTest, StructScanMinMaxWithNulls)
+{
+  using INTS_CW    = cudf::test::fixed_width_column_wrapper<int>;
+  using STRINGS_CW = cudf::test::strings_column_wrapper;
+  using STRUCTS_CW = cudf::test::structs_column_wrapper;
+  using cudf::test::iterators::null_at;
+  using cudf::test::iterators::nulls_at;
+
+  // `null` means null at child column.
+  // `NULL` means null at parent column.
+  auto const input = [] {
+    auto child1 = STRINGS_CW{{"año",
+                              "bit",
+                              "₹1" /*null*/,
+                              "aaa" /*NULL*/,
+                              "zit",
+                              "bat",
+                              "aab",
+                              "$1" /*null*/,
+                              "€1" /*NULL*/,
+                              "wut"},
+                             nulls_at({2, 7})};
+    auto child2 = INTS_CW{{1, 2, 3 /*null*/, 4 /*NULL*/, 5, 6, 7, 8 /*null*/, 9 /*NULL*/, 10},
+                          nulls_at({2, 7})};
+    return STRUCTS_CW{{child1, child2}, nulls_at({3, 8})};
+  }();
+
+  {
+    auto const expected = [] {
+      auto child1 = STRINGS_CW{{"año",
+                                "año",
+                                "" /*null*/,
+                                "" /*null*/,
+                                "" /*null*/,
+                                "" /*null*/,
+                                "" /*null*/,
+                                "" /*null*/,
+                                "" /*null*/,
+                                "" /*null*/},
+                               nulls_at({2, 3, 4, 5, 6, 7, 8, 9})};
+      auto child2 = INTS_CW{{1,
+                             1,
+                             0 /*null*/,
+                             0 /*null*/,
+                             0 /*null*/,
+                             0 /*null*/,
+                             0 /*null*/,
+                             0 /*null*/,
+                             0 /*null*/,
+                             0 /*null*/},
+                            nulls_at({2, 3, 4, 5, 6, 7, 8, 9})};
+      return STRUCTS_CW{{child1, child2}, nulls_at({3, 8})};
+    }();
+
+    auto const result = cudf::scan(
+      input, cudf::make_min_aggregation(), cudf::scan_type::INCLUSIVE, null_policy::EXCLUDE);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+
+  {
+    auto const expected = [] {
+      auto child1 = STRINGS_CW{
+        "año", "bit", "bit", "" /*NULL*/, "zit", "zit", "zit", "zit", "" /*NULL*/, "zit"};
+      auto child2 = INTS_CW{1, 2, 2, 0 /*NULL*/, 5, 5, 5, 5, 0 /*NULL*/, 5};
+      return STRUCTS_CW{{child1, child2}, nulls_at({3, 8})};
+    }();
+
+    auto const result = cudf::scan(
+      input, cudf::make_max_aggregation(), cudf::scan_type::INCLUSIVE, null_policy::EXCLUDE);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+
+  {
+    auto const expected = [] {
+      auto child1 = STRINGS_CW{{"año",
+                                "año",
+                                "" /*null*/,
+                                "" /*NULL*/,
+                                "" /*NULL*/,
+                                "" /*NULL*/,
+                                "" /*NULL*/,
+                                "" /*NULL*/,
+                                "" /*NULL*/,
+                                "" /*NULL*/},
+                               null_at(2)};
+      auto child2 = INTS_CW{{1,
+                             1,
+                             0 /*null*/,
+                             0 /*NULL*/,
+                             0 /*NULL*/,
+                             0 /*NULL*/,
+                             0 /*NULL*/,
+                             0 /*NULL*/,
+                             0 /*NULL*/,
+                             0 /*NULL*/},
+                            null_at(2)};
+      return STRUCTS_CW{{child1, child2}, nulls_at({3, 4, 5, 6, 7, 8, 9})};
+    }();
+
+    auto const result = cudf::scan(
+      input, cudf::make_min_aggregation(), cudf::scan_type::INCLUSIVE, null_policy::INCLUDE);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
+
+  {
+    auto const expected = [] {
+      auto child1 = STRINGS_CW{"año",
+                               "bit",
+                               "bit",
+                               "" /*NULL*/,
+                               "" /*NULL*/,
+                               "" /*NULL*/,
+                               "" /*NULL*/,
+                               "" /*NULL*/,
+                               "" /*NULL*/,
+                               "" /*NULL*/};
+      auto child2 = INTS_CW{1,
+                            2,
+                            2,
+                            0 /*NULL*/,
+                            0 /*NULL*/,
+                            0 /*NULL*/,
+                            0 /*NULL*/,
+                            0 /*NULL*/,
+                            0 /*NULL*/,
+                            0 /*NULL*/};
+      return STRUCTS_CW{{child1, child2}, nulls_at({3, 4, 5, 6, 7, 8, 9})};
+    }();
+
+    auto const result = cudf::scan(
+      input, cudf::make_max_aggregation(), cudf::scan_type::INCLUSIVE, null_policy::INCLUDE);
+    CUDF_TEST_EXPECT_COLUMNS_EQUAL(expected, result->view());
+  }
 }
