@@ -2,7 +2,6 @@
 
 import io
 import json
-from typing import ValuesView
 import warnings
 from collections import defaultdict
 from contextlib import ExitStack

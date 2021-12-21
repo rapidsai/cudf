@@ -302,7 +302,9 @@ cpdef write_parquet(
     cdef vector[map[string, string]] user_data
     cdef table_view tv
     cdef vector[unique_ptr[cudf_io_types.data_sink]] _data_sinks
-    cdef cudf_io_types.sink_info sink = make_sinks_info(filepaths_or_buffers, _data_sinks)
+    cdef cudf_io_types.sink_info sink = make_sinks_info(
+        filepaths_or_buffers, _data_sinks
+    )
 
     if index is True or (
         index is None and not isinstance(table._index, cudf.RangeIndex)
@@ -333,7 +335,9 @@ cpdef write_parquet(
     cdef map[string, string] tmp_user_data
     if partitions_info is not None:
         for start_row, num_row in partitions_info:
-            partitioned_df = table.iloc[start_row: start_row+ num_row].copy(deep=False)
+            partitioned_df = table.iloc[start_row: start_row + num_row].copy(
+                deep=False
+            )
             pandas_metadata = generate_pandas_metadata(partitioned_df, index)
             tmp_user_data[str.encode("pandas")] = str.encode(pandas_metadata)
             user_data.push_back(tmp_user_data)
@@ -363,14 +367,18 @@ cpdef write_parquet(
     )
     if partitions_info is not None:
         for part in partitions_info:
-            partitions.push_back(cudf_io_types.partition_info(part[0], part[1]))
+            partitions.push_back(
+                cudf_io_types.partition_info(part[0], part[1])
+            )
         args.set_partitions(move(partitions))
     if metadata_file_path is not None:
         if is_list_like(metadata_file_path):
             for path in metadata_file_path:
                 c_column_chunks_file_paths.push_back(str.encode(path))
         else:
-            c_column_chunks_file_paths.push_back(str.encode(metadata_file_path))
+            c_column_chunks_file_paths.push_back(
+                str.encode(metadata_file_path)
+            )
         args.set_column_chunks_file_paths(move(c_column_chunks_file_paths))
     if row_group_size_bytes is not None:
         args.set_row_group_size_bytes(row_group_size_bytes)
