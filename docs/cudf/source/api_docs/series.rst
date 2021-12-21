@@ -174,7 +174,6 @@ Reindexing / selection / label manipulation
    Series.reset_index
    Series.reverse
    Series.sample
-   Series.set_index
    Series.set_mask
    Series.take
    Series.tail
@@ -424,4 +423,3 @@ Serialization / IO / conversion
    Series.from_pandas
    Series.hash_encode
    Series.hash_values
-   
