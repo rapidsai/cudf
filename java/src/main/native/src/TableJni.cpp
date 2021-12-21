@@ -26,6 +26,7 @@
 #include <cudf/hashing.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/io/csv.hpp>
+#include <cudf/io/json.hpp>
 #include <cudf/io/data_sink.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/io/parquet.hpp>
@@ -1289,6 +1290,68 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
                                             .build();
 
     cudf::io::table_with_metadata result = cudf::io::read_csv(opts);
+    return cudf::jni::convert_table_for_return(env, result.tbl);
+  }
+  CATCH_STD(env, NULL);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
+    JNIEnv *env, jclass, jintArray j_types, jintArray j_scales,
+    jstring inputfilepath, jlong buffer, jlong buffer_length,
+    jboolean day_first, jboolean lines) {
+
+  bool read_buffer = true;
+  if (buffer == 0) {
+    JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
+    read_buffer = false;
+  } else if (inputfilepath != NULL) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                  "cannot pass in both a buffer and an inputfilepath", NULL);
+  } else if (buffer_length <= 0) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "An empty buffer is not supported",
+                  NULL);
+  }
+
+  try {
+    cudf::jni::auto_set_device(env);
+    cudf::jni::native_jintArray n_types(env, j_types);
+    cudf::jni::native_jintArray n_scales(env, j_scales);
+    if (n_types.is_null() != n_scales.is_null()) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "types and scales must match null",
+                    NULL);
+    }
+    std::vector<cudf::data_type> data_types;
+    if (!n_types.is_null()) {
+      if (n_types.size() != n_scales.size()) {
+        JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "types and scales must match size",
+                      NULL);
+      }
+      data_types.reserve(n_types.size());
+      for (int index = 0; index < n_types.size(); index++) {
+        data_types.emplace_back(cudf::jni::make_data_type(n_types[index], n_scales[index]));
+      }
+    }
+
+    cudf::jni::native_jstring filename(env, inputfilepath);
+    if (!read_buffer && filename.is_empty()) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "inputfilepath can't be empty",
+                    NULL);
+    }
+
+    std::unique_ptr<cudf::io::source_info> source;
+    if (read_buffer) {
+      source.reset(new cudf::io::source_info(reinterpret_cast<char *>(buffer), buffer_length));
+    } else {
+      source.reset(new cudf::io::source_info(filename.get()));
+    }
+
+    cudf::io::json_reader_options opts = cudf::io::json_reader_options::builder(*source)
+                                             .dtypes(data_types)
+                                             .dayfirst(static_cast<bool>(day_first))
+                                             .lines(static_cast<bool>(lines))
+                                             .build();
+
+    cudf::io::table_with_metadata result = cudf::io::read_json(opts);
     return cudf::jni::convert_table_for_return(env, result.tbl);
   }
   CATCH_STD(env, NULL);

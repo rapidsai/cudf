@@ -234,6 +234,10 @@ public final class Table implements AutoCloseable {
                                        byte comment, String[] nullValues,
                                        String[] trueValues, String[] falseValues) throws CudfException;
 
+  private static native long[] readJSON(int[] dTypeIds, int[] dTypeScales,
+                                       String filePath, long address, long length,
+                                        boolean dayFirst, boolean lines) throws CudfException;
+
   /**
    * Read in Parquet formatted data.
    * @param filterColumnNames  name of the columns to read, or an empty array if we want to read
@@ -795,6 +799,31 @@ public final class Table implements AutoCloseable {
         opts.getNullValues(),
         opts.getTrueValues(),
         opts.getFalseValues()));
+  }
+
+  /**
+   * Read a Json file using the default JSONOptions.
+   * @param schema the schema of the file.  You may use Schema.INFERRED to infer the schema.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, File path) {
+    return readJSON(schema, JSONOptions.DEFAULT, path);
+  }
+
+  /**
+   * Read a JSON file.
+   * @param schema the schema of the file.  You may use Schema.INFERRED to infer the schema.
+   * @param opts various CSV parsing options.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, File path) {
+    return new Table(
+        readJSON(schema.getTypeIds(), schema.getTypeScales(),
+            path.getAbsolutePath(),
+            0, 0,
+            opts.isDayFirst(), opts.isLines()));
   }
 
   /**

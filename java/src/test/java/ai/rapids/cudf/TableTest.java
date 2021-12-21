@@ -80,6 +80,7 @@ public class TableTest extends CudfTestBase {
   private static final File TEST_ORC_TIMESTAMP_DATE_FILE = TestUtils.getResourceAsFile("timestamp-date-test.orc");
   private static final File TEST_DECIMAL_PARQUET_FILE = TestUtils.getResourceAsFile("decimal.parquet");
   private static final File TEST_SIMPLE_CSV_FILE = TestUtils.getResourceAsFile("simple.csv");
+  private static final File TEST_SIMPLE_JSON_FILE = TestUtils.getResourceAsFile("people.json");
 
   private static final Schema CSV_DATA_BUFFER_SCHEMA = Schema.builder()
       .column(DType.INT32, "A")
@@ -289,6 +290,26 @@ public class TableTest extends CudfTestBase {
          ColumnVector v2 = ColumnVector.build(DType.INT32, 5, Range.appendInts(5));
          Table t = new Table(new ColumnVector[]{v1, v2})) {
       assertEquals(2, t.getNumberOfColumns());
+    }
+  }
+
+  @Test
+  void testReadJSON() {
+    Schema schema = Schema.builder()
+        .column(DType.STRING, "A")
+        .column(DType.INT32, "B")
+        .build();
+    JSONOptions opts = JSONOptions.builder()
+        .withLines(true)
+        .build();
+    try (Table table = Table.readJSON(schema, opts, TEST_SIMPLE_JSON_FILE)) {
+      HostColumnVector hc = table.getColumn(0).copyToHost();
+      HostColumnVector hcage = table.getColumn(1).copyToHost();
+      StringBuilder builder = new StringBuilder();
+      for (int i = 0; i < hc.getRowCount(); i++) {
+        builder.append(hc.getJavaString(i) + " " + (hcage.isNull(i) ? null : hcage.getInt(i)) + "\n");
+      }
+      System.out.println(builder.toString());
     }
   }
 
