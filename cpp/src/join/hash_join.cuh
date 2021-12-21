@@ -114,6 +114,7 @@ template <join_kind JoinKind, typename multimap_type>
 std::size_t compute_join_output_size(table_device_view build_table,
                                      table_device_view probe_table,
                                      multimap_type const& hash_table,
+                                     bool has_nulls,
                                      null_equality compare_nulls,
                                      rmm::cuda_stream_view stream)
 {
@@ -135,9 +136,10 @@ std::size_t compute_join_output_size(table_device_view build_table,
     }
   }
 
-  pair_equality equality{probe_table, build_table, compare_nulls};
+  auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
+  pair_equality equality{probe_table, build_table, probe_nulls, compare_nulls};
 
-  row_hash hash_probe{nullate::YES{}, probe_table};
+  row_hash hash_probe{probe_nulls, probe_table};
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
 
@@ -181,7 +183,7 @@ void build_join_hash_table(cudf::table_view const& build,
   CUDF_EXPECTS(0 != build_table_ptr->num_columns(), "Selected build dataset is empty");
   CUDF_EXPECTS(0 != build_table_ptr->num_rows(), "Build side table has no rows");
 
-  row_hash hash_build{nullate::YES{}, *build_table_ptr};
+  row_hash hash_build{nullate::DYNAMIC{cudf::has_nulls(build)}, *build_table_ptr};
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   make_pair_function pair_func{hash_build, empty_key_sentinel};
 

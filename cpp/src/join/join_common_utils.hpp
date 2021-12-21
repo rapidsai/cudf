@@ -60,9 +60,9 @@ using mixed_multimap_type = cuco::static_multimap<hash_value_type,
                                                   hash_table_allocator_type,
                                                   cuco::double_hashing<1, hash_type, hash_type>>;
 
-using row_hash = cudf::row_hasher<default_hash, cudf::nullate::YES>;
+using row_hash = cudf::row_hasher<default_hash, cudf::nullate::DYNAMIC>;
 
-using row_equality = cudf::row_equality_comparator<cudf::nullate::YES>;
+using row_equality = cudf::row_equality_comparator<cudf::nullate::DYNAMIC>;
 
 enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_ANTI_JOIN };
 

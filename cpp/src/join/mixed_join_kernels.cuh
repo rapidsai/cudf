@@ -186,7 +186,7 @@ __global__ void compute_mixed_join_output_size(
 
   // TODO: The hash join code assumes that nulls exist here, so I'm doing the
   // same but at some point we may want to benchmark that.
-  row_hash hash_probe{nullate::YES{}, probe};
+  row_hash hash_probe{nullate::DYNAMIC{has_nulls}, probe};
   auto const empty_key_sentinel = hash_table_view.get_empty_key_sentinel();
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
 
@@ -283,7 +283,7 @@ __global__ void mixed_join(table_device_view left_table,
 
   // TODO: The hash join code assumes that nulls exist here, so I'm doing the
   // same but at some point we may want to benchmark that.
-  row_hash hash_probe{nullate::YES{}, probe};
+  row_hash hash_probe{nullate::DYNAMIC{has_nulls}, probe};
   auto const empty_key_sentinel = hash_table_view.get_empty_key_sentinel();
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
 
