@@ -100,9 +100,10 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
       stream.value()};
 
   // Create hash table containing all keys found in right table
-  auto right_rows_d = table_device_view::create(right_flattened_keys, stream);
-  row_hash const hash_build{cudf::nullate::YES{}, *right_rows_d};
-  row_equality equality_build{cudf::nullate::YES{}, *right_rows_d, *right_rows_d, compare_nulls};
+  auto right_rows_d      = table_device_view::create(right_flattened_keys, stream);
+  auto const right_nulls = cudf::nullate::DYNAMIC{cudf::has_nulls(right_flattened_keys)};
+  row_hash const hash_build{right_nulls, *right_rows_d};
+  row_equality equality_build{right_nulls, *right_rows_d, *right_rows_d, compare_nulls};
   make_pair_function pair_func_build{};
 
   auto iter = cudf::detail::make_counting_transform_iterator(0, pair_func_build);
@@ -122,13 +123,14 @@ std::unique_ptr<rmm::device_uvector<cudf::size_type>> left_semi_anti_join(
 
   // Now we have a hash table, we need to iterate over the rows of the left table
   // and check to see if they are contained in the hash table
-  auto left_rows_d = table_device_view::create(left_flattened_keys, stream);
-  row_hash hash_probe{cudf::nullate::YES{}, *left_rows_d};
+  auto left_rows_d      = table_device_view::create(left_flattened_keys, stream);
+  auto const left_nulls = cudf::nullate::DYNAMIC{cudf::has_nulls(left_flattened_keys)};
+  row_hash hash_probe{left_nulls, *left_rows_d};
   // Note: This equality comparator violates symmetry of equality and is
   // therefore relying on the implementation detail of the order in which its
   // operator is invoked. If cuco makes no promises about the order of
   // invocation this seems a bit unsafe.
-  row_equality equality_probe{cudf::nullate::YES{}, *right_rows_d, *left_rows_d, compare_nulls};
+  row_equality equality_probe{left_nulls, *right_rows_d, *left_rows_d, compare_nulls};
 
   // For semi join we want contains to be true, for anti join we want contains to be false
   bool const join_type_boolean = (kind == join_kind::LEFT_SEMI_JOIN);
