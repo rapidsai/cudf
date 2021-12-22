@@ -38,12 +38,6 @@
 namespace cudf {
 namespace detail {
 
-// TODO: Clearly document that it is the user's responsibility to match the
-// null operators in the predicate and the compare_nulls parameter.
-// TODO: Clearly document that the parameters for the size computation must
-// match exactly the corresponding call to the join operation. This
-// documentation should be added to the nested loop conditional join as well.
-// TODO: Clearly document failure cases.
 std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
           std::unique_ptr<rmm::device_uvector<size_type>>>
 mixed_join(table_view const& left_equality,
@@ -51,8 +45,6 @@ mixed_join(table_view const& left_equality,
            table_view const& left_conditional,
            table_view const& right_conditional,
            ast::expression const& binary_predicate,
-           // TODO: Figure out how to propagate compare_nulls to the query of
-           // the hash table in device code.
            null_equality compare_nulls,
            join_kind join_type,
            std::optional<std::pair<std::size_t, column_view>> const& output_size_data,
@@ -230,7 +222,6 @@ mixed_join(table_view const& left_equality,
   auto const& join_output_l = left_indices->data();
   auto const& join_output_r = right_indices->data();
 
-  // TODO: For non-inner joins we need to map the sentinel value from cuco to JoinNoneValue.
   if (has_nulls) {
     mixed_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, true>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
