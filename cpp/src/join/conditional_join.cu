@@ -210,12 +210,13 @@ conditional_join(table_view const& left,
   return join_indices;
 }
 
-std::size_t compute_conditional_join_output_size(table_view const& left,
-                                                 table_view const& right,
-                                                 ast::expression const& binary_predicate,
-                                                 join_kind join_type,
-                                                 rmm::cuda_stream_view stream,
-                                                 rmm::mr::device_memory_resource* mr)
+std::pair<std::size_t, std::unique_ptr<column>> compute_conditional_join_output_size(
+  table_view const& left,
+  table_view const& right,
+  ast::expression const& binary_predicate,
+  join_kind join_type,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
 {
   // We can immediately filter out cases where one table is empty. In
   // some cases, we return all the rows of the other table with a corresponding
@@ -240,10 +241,18 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
       // with a corresponding NULL from the right.
       case join_kind::LEFT_JOIN:
       case join_kind::LEFT_ANTI_JOIN:
-      case join_kind::FULL_JOIN: return left_num_rows;
+      case join_kind::FULL_JOIN: {
+        thrust::fill(
+          matches_device_view->begin<size_type>(), matches_device_view->end<size_type>(), 1);
+        return {left_num_rows, std::move(matches_per_row)};
+      }
       // Inner and left semi joins return empty output because no matches can exist.
       case join_kind::INNER_JOIN:
-      case join_kind::LEFT_SEMI_JOIN: return 0;
+      case join_kind::LEFT_SEMI_JOIN: {
+        thrust::fill(
+          matches_device_view->begin<size_type>(), matches_device_view->end<size_type>(), 0);
+        return {0, std::move(matches_per_row)};
+      }
       default: CUDF_FAIL("Invalid join kind."); break;
     }
   } else if (left_num_rows == 0) {
@@ -252,9 +261,17 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
       case join_kind::LEFT_JOIN:
       case join_kind::LEFT_ANTI_JOIN:
       case join_kind::INNER_JOIN:
-      case join_kind::LEFT_SEMI_JOIN: return 0;
+      case join_kind::LEFT_SEMI_JOIN: {
+        thrust::fill(
+          matches_device_view->begin<size_type>(), matches_device_view->end<size_type>(), 0);
+        return {0, std::move(matches_per_row)};
+      }
       // Full joins need to return the trivial complement.
-      case join_kind::FULL_JOIN: return right_num_rows;
+      case join_kind::FULL_JOIN: {
+        thrust::fill(
+          matches_device_view->begin<size_type>(), matches_device_view->end<size_type>(), 1);
+        return {right_num_rows, std::move(matches_per_row)};
+      }
       default: CUDF_FAIL("Invalid join kind."); break;
     }
   }
@@ -311,7 +328,7 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
   }
   CHECK_CUDA(stream.value());
 
-  return size.value(stream);
+  return {size.value(stream), std::move(matches_per_row)};
 }
 
 }  // namespace detail
@@ -400,30 +417,33 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
                      .first);
 }
 
-std::size_t conditional_inner_join_size(table_view const& left,
-                                        table_view const& right,
-                                        ast::expression const& binary_predicate,
-                                        rmm::mr::device_memory_resource* mr)
+std::pair<std::size_t, std::unique_ptr<column>> conditional_inner_join_size(
+  table_view const& left,
+  table_view const& right,
+  ast::expression const& binary_predicate,
+  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::compute_conditional_join_output_size(
     left, right, binary_predicate, detail::join_kind::INNER_JOIN, rmm::cuda_stream_default, mr);
 }
 
-std::size_t conditional_left_join_size(table_view const& left,
-                                       table_view const& right,
-                                       ast::expression const& binary_predicate,
-                                       rmm::mr::device_memory_resource* mr)
+std::pair<std::size_t, std::unique_ptr<column>> conditional_left_join_size(
+  table_view const& left,
+  table_view const& right,
+  ast::expression const& binary_predicate,
+  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return detail::compute_conditional_join_output_size(
     left, right, binary_predicate, detail::join_kind::LEFT_JOIN, rmm::cuda_stream_default, mr);
 }
 
-std::size_t conditional_left_semi_join_size(table_view const& left,
-                                            table_view const& right,
-                                            ast::expression const& binary_predicate,
-                                            rmm::mr::device_memory_resource* mr)
+std::pair<std::size_t, std::unique_ptr<column>> conditional_left_semi_join_size(
+  table_view const& left,
+  table_view const& right,
+  ast::expression const& binary_predicate,
+  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return std::move(detail::compute_conditional_join_output_size(left,
@@ -434,10 +454,11 @@ std::size_t conditional_left_semi_join_size(table_view const& left,
                                                                 mr));
 }
 
-std::size_t conditional_left_anti_join_size(table_view const& left,
-                                            table_view const& right,
-                                            ast::expression const& binary_predicate,
-                                            rmm::mr::device_memory_resource* mr)
+std::pair<std::size_t, std::unique_ptr<column>> conditional_left_anti_join_size(
+  table_view const& left,
+  table_view const& right,
+  ast::expression const& binary_predicate,
+  rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
   return std::move(detail::compute_conditional_join_output_size(left,

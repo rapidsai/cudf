@@ -62,7 +62,7 @@ conditional_join(table_view const& left,
  *
  * @return Join output indices vector pair
  */
-std::size_t compute_conditional_join_output_size(
+std::pair<std::size_t, std::unique_ptr<column>> compute_conditional_join_output_size(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,

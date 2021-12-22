@@ -875,7 +875,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
  *
  * @return The size that would result from performing the requested join.
  */
-std::size_t conditional_inner_join_size(
+std::pair<std::size_t, std::unique_ptr<column>> conditional_inner_join_size(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
@@ -898,7 +898,7 @@ std::size_t conditional_inner_join_size(
  *
  * @return The size that would result from performing the requested join.
  */
-std::size_t conditional_left_join_size(
+std::pair<std::size_t, std::unique_ptr<column>> conditional_left_join_size(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
@@ -921,7 +921,7 @@ std::size_t conditional_left_join_size(
  *
  * @return The size that would result from performing the requested join.
  */
-std::size_t conditional_left_semi_join_size(
+std::pair<std::size_t, std::unique_ptr<column>> conditional_left_semi_join_size(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
@@ -944,7 +944,7 @@ std::size_t conditional_left_semi_join_size(
  *
  * @return The size that would result from performing the requested join.
  */
-std::size_t conditional_left_anti_join_size(
+std::pair<std::size_t, std::unique_ptr<column>> conditional_left_anti_join_size(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
