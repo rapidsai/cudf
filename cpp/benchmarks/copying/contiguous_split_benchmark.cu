@@ -20,12 +20,19 @@
 
 #include <cudf_test/column_wrapper.hpp>
 
+#include <thrust/iterator/detail/tagged_iterator.h>
 #include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
 
 #include <thrust/random.h>
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON
+
+template <typename Tag, typename Iterator>
+inline auto make_tagged_iterator(Iterator iter)
+{
+  return thrust::detail::tagged_iterator<Iterator, Tag>(iter);
+}
 
 template <typename T>
 void BM_contiguous_split_common(benchmark::State& state,
@@ -72,21 +79,20 @@ void BM_contiguous_split(benchmark::State& state)
   std::vector<std::unique_ptr<cudf::column>> src_cols;
   src_cols.reserve(num_cols);
   for (int idx = 0; idx < num_cols; idx++) {
-    auto rand_elements = cudf::detail::make_counting_transform_iterator(0, [idx] __device__(int i) {
-      thrust::default_random_engine rng(31337 + idx);
-      thrust::uniform_int_distribution<cudf::size_type> dist;
-      rng.discard(i);
-      return dist(rng);
-    });
+    auto rand_elements = make_tagged_iterator<thrust::device_system_tag>(
+      cudf::detail::make_counting_transform_iterator(0, [idx] __device__(int i) {
+        thrust::default_random_engine rng(31337 + idx);
+        thrust::uniform_int_distribution<cudf::size_type> dist;
+        rng.discard(i);
+        return dist(rng);
+      }));
     if (include_validity) {
       src_cols.push_back(
-        cudf::test::fixed_width_column_wrapper<int>(
-          thrust::input_device_iterator_tag{}, rand_elements, rand_elements + num_rows, valids)
+        cudf::test::fixed_width_column_wrapper<int>(rand_elements, rand_elements + num_rows, valids)
           .release());
     } else {
       src_cols.push_back(
-        cudf::test::fixed_width_column_wrapper<int>(
-          thrust::input_device_iterator_tag{}, rand_elements, rand_elements + num_rows)
+        cudf::test::fixed_width_column_wrapper<int>(rand_elements, rand_elements + num_rows)
           .release());
     }
   }
@@ -127,15 +133,16 @@ void BM_contiguous_split_strings(benchmark::State& state)
   src_cols.reserve(num_cols);
   for (int64_t idx = 0; idx < num_cols; idx++) {
     // fill in a random set of strings
-    auto rand_elements = cudf::detail::make_counting_transform_iterator(
-      0, [idx, sz = d_strings.size() - !include_validity] __device__(int i) {
-        thrust::default_random_engine rng(31337 + idx);
-        thrust::uniform_int_distribution<int> dist{0, sz - 1};
-        rng.discard(i);
-        return dist(rng);
-      });
-    auto d_elements = cudf::test::fixed_width_column_wrapper<int>(
-      thrust::input_device_iterator_tag{}, rand_elements, rand_elements + num_rows);
+    auto rand_elements = make_tagged_iterator<thrust::device_system_tag>(
+      cudf::detail::make_counting_transform_iterator(
+        0, [idx, sz = d_strings.size() - !include_validity] __device__(int i) {
+          thrust::default_random_engine rng(31337 + idx);
+          thrust::uniform_int_distribution<int> dist{0, sz - 1};
+          rng.discard(i);
+          return dist(rng);
+        }));
+    auto d_elements =
+      cudf::test::fixed_width_column_wrapper<int>(rand_elements, rand_elements + num_rows);
     auto d_table = cudf::gather(
       cudf::table_view({d_strings}), d_elements, cudf::out_of_bounds_policy::DONT_CHECK);
     if (!include_validity) d_table->get_column(0).set_null_mask(rmm::device_buffer{}, 0);
