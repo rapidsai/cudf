@@ -2,7 +2,6 @@
 
 Please see https://github.com/rapidsai/cudf/releases/tag/v22.02.00a for the latest changes to this development branch.
 
-# cuDF 21.12.00 (Date TBD)
 # cuDF 21.12.00 (9 Dec 2021)
 
 ## 🚨 Breaking Changes
@@ -1705,7 +1704,7 @@ Please see https://github.com/rapidsai/cudf/releases/tag/v22.02.00a for the late
 - PR #6459 Add `map` method to series
 - PR #6379 Add list hashing functionality to MD5
 - PR #6498 Add helper method to ColumnBuilder with some nits
-- PR #6336 Add `join` functionality in cudf concat 
+- PR #6336 Add `join` functionality in cudf concat
 - PR #6653 Replaced SHFL_XOR calls with cub::WarpReduce
 - PR #6751 Rework ColumnViewAccess and its usage
 - PR #6698 Remove macros from ORC reader and writer
