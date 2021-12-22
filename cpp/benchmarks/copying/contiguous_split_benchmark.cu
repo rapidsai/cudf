@@ -14,16 +14,15 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf_test/column_wrapper.hpp>
 
-#include <thrust/iterator/detail/tagged_iterator.h>
 #include <cudf/column/column.hpp>
 #include <cudf/copying.hpp>
 
+#include <thrust/iterator/detail/tagged_iterator.h>
 #include <thrust/random.h>
 
 // to enable, run cmake with -DBUILD_BENCHMARKS=ON

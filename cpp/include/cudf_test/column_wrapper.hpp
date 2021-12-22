@@ -41,10 +41,9 @@
 #include <rmm/device_buffer.hpp>
 
 #include <thrust/copy.h>
-#include <thrust/functional.h>
 #include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/counting_iterator.h>
-#include <thrust/iterator/iterator_categories.h>
+#include <thrust/iterator/iterator_traits.h>
 #include <thrust/iterator/transform_iterator.h>
 
 #include <algorithm>
@@ -132,30 +131,7 @@ struct fixed_width_type_converter {
 };
 
 /**
- * @brief Convert fixed-point to Representation value.
- */
-template <typename From, typename To>
-struct to_rep {
-  template <typename FromT = From, typename ToT = To>
-  constexpr ToT operator()(FromT fp) const
-  {
-    return fp.value();
-  }
-};
-
-// TODO replace with std::type_identity in C++20
-template <class T>
-struct type_identity {
-  using type = T;
-};
-
-template <class T>
-struct rep_type {
-  using type = typename T::rep;
-};
-
-/**
- * @brief copy the iterator range to device memory.
+ * @brief Copy the iterator range to device memory.
  * If the iterators are tagged device iterators, the copy is performed directly.
  * Else, the copy is performed on the host and then copied to device.
  */
@@ -188,22 +164,21 @@ inline rmm::device_buffer make_device_elements(InputIterator begin, InputIterato
 template <typename ElementTo, typename ElementFrom, typename InputIterator>
 rmm::device_buffer make_elements(InputIterator begin, InputIterator end)
 {
-  using RepType = typename std::conditional_t<cudf::is_fixed_point<ElementTo>(),
-                                              rep_type<ElementTo>,
-                                              type_identity<ElementTo>>::type;
   if constexpr (not cudf::is_fixed_point<ElementTo>()) {
+    using RepType        = ElementTo;
     auto transformer     = fixed_width_type_converter<ElementFrom, ElementTo>{};
     auto transform_begin = thrust::make_transform_iterator(begin, transformer);
     auto const size      = cudf::distance(begin, end);
     return make_device_elements<RepType>(transform_begin, transform_begin + size);
-  }
-  if constexpr (not cudf::is_fixed_point<ElementFrom>() and cudf::is_fixed_point<ElementTo>()) {
+  } else if constexpr (not cudf::is_fixed_point<ElementFrom>() and
+                       cudf::is_fixed_point<ElementTo>()) {
+    using RepType        = typename ElementTo::rep;
     auto transformer     = fixed_width_type_converter<ElementFrom, RepType>{};
     auto transform_begin = thrust::make_transform_iterator(begin, transformer);
     auto const size      = cudf::distance(begin, end);
     return make_device_elements<RepType>(transform_begin, transform_begin + size);
-  }
-  if constexpr (cudf::is_fixed_point<ElementFrom>() and cudf::is_fixed_point<ElementTo>()) {
+  } else if constexpr (cudf::is_fixed_point<ElementFrom>() and cudf::is_fixed_point<ElementTo>()) {
+    using RepType        = typename ElementTo::rep;
     auto transformer     = [](ElementFrom fp) { return fp.value(); };
     auto transform_begin = thrust::make_transform_iterator(begin, transformer);
     auto const size      = cudf::distance(begin, end);
