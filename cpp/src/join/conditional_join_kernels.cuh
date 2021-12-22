@@ -54,7 +54,8 @@ __global__ void compute_conditional_join_output_size(
   join_kind join_type,
   ast::detail::expression_device_view device_expression_data,
   bool const swap_tables,
-  std::size_t* output_size)
+  std::size_t* output_size,
+  cudf::size_type* matches_per_row)
 {
   // The (required) extern storage of the shared memory array leads to
   // conflicting declarations between different templates. The easiest
@@ -79,7 +80,8 @@ __global__ void compute_conditional_join_output_size(
 
   for (cudf::size_type outer_row_index = start_idx; outer_row_index < outer_num_rows;
        outer_row_index += stride) {
-    bool found_match = false;
+    bool found_match          = false;
+    cudf::size_type row_count = 0;
     for (cudf::size_type inner_row_index = 0; inner_row_index < inner_num_rows; inner_row_index++) {
       auto output_dest           = cudf::ast::detail::value_expression_result<bool, has_nulls>();
       auto const left_row_index  = swap_tables ? inner_row_index : outer_row_index;
@@ -89,7 +91,7 @@ __global__ void compute_conditional_join_output_size(
       if (output_dest.is_valid() && output_dest.value()) {
         if ((join_type != join_kind::LEFT_ANTI_JOIN) &&
             !(join_type == join_kind::LEFT_SEMI_JOIN && found_match)) {
-          ++thread_counter;
+          row_count += 1;
         }
         found_match = true;
       }
@@ -97,8 +99,10 @@ __global__ void compute_conditional_join_output_size(
     if ((join_type == join_kind::LEFT_JOIN || join_type == join_kind::LEFT_ANTI_JOIN ||
          join_type == join_kind::FULL_JOIN) &&
         (!found_match)) {
-      ++thread_counter;
+      row_count = 1;
     }
+    matches_per_row[outer_row_index] = row_count;
+    thread_counter += row_count;
   }
 
   using BlockReduce = cub::BlockReduce<cudf::size_type, block_size>;

@@ -49,6 +49,13 @@ conditional_join(table_view const& left,
   // null index for the right table; in others, we return an empty output.
   auto right_num_rows{right.num_rows()};
   auto left_num_rows{left.num_rows()};
+  auto const swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
+
+  // The "outer" table is the larger of the two tables. The kernels are
+  // launched with one thread per row of the outer table, which also means that
+  // it is the probe table for the hash
+  auto const outer_num_rows{swap_tables ? right_num_rows : left_num_rows};
+
   if (right_num_rows == 0) {
     switch (join_type) {
       // Left, left anti, and full all return all the row indices from left
@@ -96,19 +103,30 @@ conditional_join(table_view const& left,
 
   // For inner joins we support optimizing the join by launching one thread for
   // whichever table is larger rather than always using the left table.
-  auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
-  detail::grid_1d config(swap_tables ? right_num_rows : left_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
+  detail::grid_1d const config(outer_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
   join_kind kernel_join_type = join_type == join_kind::FULL_JOIN ? join_kind::LEFT_JOIN : join_type;
 
   // If the join size was not provided as an input, compute it here.
   std::size_t join_size;
+  std::unique_ptr<column> matches_per_row{};
+  column_view matches_view{};
+
   if (output_size.has_value()) {
     join_size = *output_size;
   } else {
     // Allocate storage for the counter used to get the size of the join output
     rmm::device_scalar<std::size_t> size(0, stream, mr);
     CHECK_CUDA(stream.value());
+
+    matches_per_row = make_numeric_column(
+      data_type(type_to_id<size_type>()), outer_num_rows, mask_state::UNALLOCATED, stream, mr);
+    // Note that the view goes out of scope after this else statement, but the
+    // data owned by matches_per_row stays alive so the data pointer is valid.
+    matches_view                     = matches_per_row->view();
+    auto matches_mutable_view        = matches_per_row->mutable_view();
+    auto matches_per_row_mutable_ptr = matches_mutable_view.begin<size_type>();
+
     if (has_nulls) {
       compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -117,7 +135,8 @@ conditional_join(table_view const& left,
           kernel_join_type,
           parser.device_expression_data,
           swap_tables,
-          size.data());
+          size.data(),
+          matches_per_row_mutable_ptr);
     } else {
       compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -126,7 +145,8 @@ conditional_join(table_view const& left,
           kernel_join_type,
           parser.device_expression_data,
           swap_tables,
-          size.data());
+          size.data(),
+          matches_per_row_mutable_ptr);
     }
     CHECK_CUDA(stream.value());
     join_size = size.value(stream);
@@ -202,6 +222,18 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
   // null index for the empty table; in others, we return an empty output.
   auto right_num_rows{right.num_rows()};
   auto left_num_rows{left.num_rows()};
+  auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
+
+  // The "outer" table is the larger of the two tables. The kernels are
+  // launched with one thread per row of the outer table, which also means that
+  // it is the probe table for the hash
+  auto const outer_num_rows{swap_tables ? right_num_rows : left_num_rows};
+
+  auto matches_per_row = make_numeric_column(
+    data_type(type_to_id<size_type>()), outer_num_rows, mask_state::UNALLOCATED, stream, mr);
+  auto matches_mutable_view = matches_per_row->mutable_view();
+  auto matches_device_view  = mutable_column_device_view::create(matches_mutable_view, stream);
+
   if (right_num_rows == 0) {
     switch (join_type) {
       // Left, left anti, and full all return all the row indices from left
@@ -245,8 +277,7 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
 
   // For inner joins we support optimizing the join by launching one thread for
   // whichever table is larger rather than always using the left table.
-  auto swap_tables = (join_type == join_kind::INNER_JOIN) && (right_num_rows > left_num_rows);
-  detail::grid_1d config(swap_tables ? right_num_rows : left_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
+  detail::grid_1d const config(outer_num_rows, DEFAULT_JOIN_BLOCK_SIZE);
   auto const shmem_size_per_block = parser.shmem_per_thread * config.num_threads_per_block;
 
   assert(join_type != join_kind::FULL_JOIN);
@@ -265,7 +296,8 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
         join_type,
         parser.device_expression_data,
         swap_tables,
-        size.data());
+        size.data(),
+        matches_device_view->data<size_type>());
   } else {
     compute_conditional_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -274,7 +306,8 @@ std::size_t compute_conditional_join_output_size(table_view const& left,
         join_type,
         parser.device_expression_data,
         swap_tables,
-        size.data());
+        size.data(),
+        matches_device_view->data<size_type>());
   }
   CHECK_CUDA(stream.value());
 
