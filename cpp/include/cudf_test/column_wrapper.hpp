@@ -143,7 +143,7 @@ inline rmm::device_buffer make_device_elements(InputIterator begin, InputIterato
   if constexpr (std::is_same<typename thrust::iterator_system<InputIterator>::type,
                              thrust::device_system_tag>::value) {
     rmm::device_uvector<RepType> elements(size, rmm::cuda_stream_default);
-    thrust::copy(thrust::device, begin, begin, elements.begin());
+    thrust::copy(thrust::device, begin, end, elements.begin());
     return elements.release();
   }
 #endif

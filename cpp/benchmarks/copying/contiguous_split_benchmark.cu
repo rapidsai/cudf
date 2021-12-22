@@ -136,7 +136,7 @@ void BM_contiguous_split_strings(benchmark::State& state)
       cudf::detail::make_counting_transform_iterator(
         0u, [idx, sz = d_strings.size() - !include_validity] __device__(uint32_t i) {
           thrust::default_random_engine rng(31337 + idx);
-          thrust::uniform_int_distribution<uint32_t> dist{0, sz - 1};
+          thrust::uniform_int_distribution<uint32_t> dist{0, sz - 1u};
           rng.discard(i);
           return dist(rng);
         }));
