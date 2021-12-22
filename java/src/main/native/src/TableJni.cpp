@@ -26,8 +26,8 @@
 #include <cudf/hashing.hpp>
 #include <cudf/interop.hpp>
 #include <cudf/io/csv.hpp>
-#include <cudf/io/json.hpp>
 #include <cudf/io/data_sink.hpp>
+#include <cudf/io/json.hpp>
 #include <cudf/io/orc.hpp>
 #include <cudf/io/parquet.hpp>
 #include <cudf/join.hpp>
@@ -1296,10 +1296,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
-    JNIEnv *env, jclass, jobjectArray col_names,
-    jintArray j_types, jintArray j_scales,
-    jstring inputfilepath, jlong buffer, jlong buffer_length,
-    jboolean day_first, jboolean lines) {
+    JNIEnv *env, jclass, jobjectArray col_names, jintArray j_types, jintArray j_scales,
+    jstring inputfilepath, jlong buffer, jlong buffer_length, jboolean day_first, jboolean lines) {
 
   bool read_buffer = true;
   if (buffer == 0) {
@@ -1348,8 +1346,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
     }
 
     cudf::io::json_reader_options_builder opts = cudf::io::json_reader_options::builder(*source)
-                                             .dayfirst(static_cast<bool>(day_first))
-                                             .lines(static_cast<bool>(lines));
+                                                     .dayfirst(static_cast<bool>(day_first))
+                                                     .lines(static_cast<bool>(lines));
 
     if (!n_col_names.is_null() && data_types.size() > 0) {
       if (n_col_names.size() != n_types.size()) {
