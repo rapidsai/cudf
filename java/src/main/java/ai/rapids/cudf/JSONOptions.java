@@ -18,6 +18,8 @@
 
 package ai.rapids.cudf;
 
+import java.util.Collection;
+
 /**
  * Options for reading in JSON encoded data.
  */
@@ -42,6 +44,11 @@ public final class JSONOptions extends ColumnFilterOptions {
     return lines;
   }
 
+  @Override
+  String[] getIncludeColumnNames() {
+    throw new IllegalArgumentException("JSON reader didn't support column prune");
+  }
+
   public static Builder builder() {
     return new Builder();
   }
@@ -50,14 +57,34 @@ public final class JSONOptions extends ColumnFilterOptions {
     private boolean dayFirst = false;
     private boolean lines = true;
 
+    /**
+     * Whether to parse dates as DD/MM versus MM/DD
+     * @param dayFirst true: DD/MM, false, MM/DD
+     * @return
+     */
     public Builder withDayFirst(boolean dayFirst) {
       this.dayFirst = dayFirst;
       return this;
     }
 
+    /**
+     * Whether to the file as a json object per line
+     * @param lines true: per line, false: not per line
+     * @return builder for chaining
+     */
     public Builder withLines(boolean lines) {
       this.lines = lines;
       return this;
+    }
+
+    @Override
+    public Builder includeColumn(String... names) {
+      throw new IllegalArgumentException("JSON reader didn't support column prune");
+    }
+
+    @Override
+    public Builder includeColumn(Collection<String> names) {
+      throw new IllegalArgumentException("JSON reader didn't support column prune");
     }
 
     public JSONOptions build() {

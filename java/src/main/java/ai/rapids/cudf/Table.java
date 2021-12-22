@@ -234,8 +234,9 @@ public final class Table implements AutoCloseable {
                                        byte comment, String[] nullValues,
                                        String[] trueValues, String[] falseValues) throws CudfException;
 
-  private static native long[] readJSON(int[] dTypeIds, int[] dTypeScales,
-                                       String filePath, long address, long length,
+  private static native long[] readJSON(String[] columnNames,
+                                        int[] dTypeIds, int[] dTypeScales,
+                                        String filePath, long address, long length,
                                         boolean dayFirst, boolean lines) throws CudfException;
 
   /**
@@ -802,7 +803,7 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Read a Json file using the default JSONOptions.
+   * Read a JSON file using the default JSONOptions.
    * @param schema the schema of the file.  You may use Schema.INFERRED to infer the schema.
    * @param path the local file to read.
    * @return the file parsed as a table on the GPU.
@@ -812,18 +813,84 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Read JSON formatted data using the default JSONOptions.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param buffer raw UTF8 formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, byte[] buffer) {
+    return readJSON(schema, JSONOptions.DEFAULT, buffer, 0, buffer.length);
+  }
+
+  /**
+   * Read JSON formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer) {
+    return readJSON(schema, opts, buffer, 0, buffer.length);
+  }
+
+  /**
    * Read a JSON file.
    * @param schema the schema of the file.  You may use Schema.INFERRED to infer the schema.
-   * @param opts various CSV parsing options.
+   * @param opts various JSON parsing options.
    * @param path the local file to read.
    * @return the file parsed as a table on the GPU.
    */
   public static Table readJSON(Schema schema, JSONOptions opts, File path) {
     return new Table(
-        readJSON(schema.getTypeIds(), schema.getTypeScales(),
+        readJSON(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
             path.getAbsolutePath(),
             0, 0,
             opts.isDayFirst(), opts.isLines()));
+  }
+
+  /**
+   * Read JSON formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
+                              long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
+    assert len > 0;
+    assert len <= buffer.length - offset;
+    assert offset >= 0 && offset < buffer.length;
+    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+      newBuf.setBytes(0, buffer, offset, len);
+      return readJSON(schema, opts, newBuf, 0, len);
+    }
+  }
+
+  /**
+   * Read JSON formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various JSON parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readJSON(Schema schema, JSONOptions opts, HostMemoryBuffer buffer,
+                              long offset, long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
+    assert len > 0;
+    assert len <= buffer.getLength() - offset;
+    assert offset >= 0 && offset < buffer.length;
+    return new Table(readJSON(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
+        null, buffer.getAddress() + offset, len,
+        opts.isDayFirst(), opts.isLines()));
   }
 
   /**

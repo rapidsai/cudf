@@ -1296,7 +1296,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readCSV(
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
-    JNIEnv *env, jclass, jintArray j_types, jintArray j_scales,
+    JNIEnv *env, jclass, jobjectArray col_names,
+    jintArray j_types, jintArray j_scales,
     jstring inputfilepath, jlong buffer, jlong buffer_length,
     jboolean day_first, jboolean lines) {
 
@@ -1314,6 +1315,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
 
   try {
     cudf::jni::auto_set_device(env);
+    cudf::jni::native_jstringArray n_col_names(env, col_names);
     cudf::jni::native_jintArray n_types(env, j_types);
     cudf::jni::native_jintArray n_scales(env, j_scales);
     if (n_types.is_null() != n_scales.is_null()) {
@@ -1345,13 +1347,30 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
       source.reset(new cudf::io::source_info(filename.get()));
     }
 
-    cudf::io::json_reader_options opts = cudf::io::json_reader_options::builder(*source)
-                                             .dtypes(data_types)
+    cudf::io::json_reader_options_builder opts = cudf::io::json_reader_options::builder(*source)
                                              .dayfirst(static_cast<bool>(day_first))
-                                             .lines(static_cast<bool>(lines))
-                                             .build();
+                                             .lines(static_cast<bool>(lines));
 
-    cudf::io::table_with_metadata result = cudf::io::read_json(opts);
+    if (!n_col_names.is_null() && data_types.size() > 0) {
+      if (n_col_names.size() != n_types.size()) {
+        JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                      "types and column names must match size", NULL);
+      }
+
+      std::map<std::string, cudf::data_type> map;
+
+      auto col_names_vec = n_col_names.as_cpp_vector();
+      std::transform(col_names_vec.begin(), col_names_vec.end(), data_types.begin(),
+                     std::inserter(map, map.end()),
+                     [](std::string a, cudf::data_type b) { return std::make_pair(a, b); });
+      opts.dtypes(map);
+    } else if (data_types.size() > 0) {
+      opts.dtypes(data_types);
+    } else {
+      // should infer the types
+    }
+
+    cudf::io::table_with_metadata result = cudf::io::read_json(opts.build());
     return cudf::jni::convert_table_for_return(env, result.tbl);
   }
   CATCH_STD(env, NULL);
