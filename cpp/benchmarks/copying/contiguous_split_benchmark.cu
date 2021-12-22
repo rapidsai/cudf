@@ -79,9 +79,9 @@ void BM_contiguous_split(benchmark::State& state)
   src_cols.reserve(num_cols);
   for (int idx = 0; idx < num_cols; idx++) {
     auto rand_elements = make_tagged_iterator<thrust::device_system_tag>(
-      cudf::detail::make_counting_transform_iterator(0, [idx] __device__(int i) {
+      cudf::detail::make_counting_transform_iterator(0u, [idx] __device__(uint32_t i) {
         thrust::default_random_engine rng(31337 + idx);
-        thrust::uniform_int_distribution<cudf::size_type> dist;
+        thrust::uniform_int_distribution<uint32_t> dist;
         rng.discard(i);
         return dist(rng);
       }));
@@ -134,9 +134,9 @@ void BM_contiguous_split_strings(benchmark::State& state)
     // fill in a random set of strings
     auto rand_elements = make_tagged_iterator<thrust::device_system_tag>(
       cudf::detail::make_counting_transform_iterator(
-        0, [idx, sz = d_strings.size() - !include_validity] __device__(int i) {
+        0u, [idx, sz = d_strings.size() - !include_validity] __device__(uint32_t i) {
           thrust::default_random_engine rng(31337 + idx);
-          thrust::uniform_int_distribution<int> dist{0, sz - 1};
+          thrust::uniform_int_distribution<uint32_t> dist{0, sz - 1};
           rng.discard(i);
           return dist(rng);
         }));
