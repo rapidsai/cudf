@@ -690,8 +690,8 @@ conditional_inner_join(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
-  std::optional<std::size_t> output_size = {},
-  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
+  std::optional<std::pair<std::size_t, column_view>> output_size_data = {},
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns a pair of row index vectors corresponding to all pairs
@@ -735,7 +735,7 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 conditional_left_join(table_view const& left,
                       table_view const& right,
                       ast::expression const& binary_predicate,
-                      std::optional<std::size_t> output_size = {},
+                      std::optional<std::pair<std::size_t, column_view>> output_size_data = {},
                       rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
@@ -816,8 +816,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
-  std::optional<std::size_t> output_size = {},
-  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
+  std::optional<std::pair<std::size_t, column_view>> output_size_data = {},
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns an index vector corresponding to all rows in the left table
@@ -855,8 +855,8 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
-  std::optional<std::size_t> output_size = {},
-  rmm::mr::device_memory_resource* mr    = rmm::mr::get_current_device_resource());
+  std::optional<std::pair<std::size_t, column_view>> output_size_data = {},
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
  * @brief Returns the exact number of matches (rows) when performing a

@@ -128,7 +128,6 @@ __global__ void compute_conditional_join_output_size(
  * @param[in] join_type The type of join to be performed
  * @param[out] join_output_l The left result of the join operation
  * @param[out] join_output_r The right result of the join operation
- * @param[in,out] current_idx A global counter used by threads to coordinate
  * writes to the global output
  * @param device_expression_data Container of device data required to evaluate the desired
  * expression.
@@ -142,16 +141,11 @@ __global__ void conditional_join(table_device_view left_table,
                                  join_kind join_type,
                                  cudf::size_type* join_output_l,
                                  cudf::size_type* join_output_r,
-                                 cudf::size_type* current_idx,
                                  cudf::ast::detail::expression_device_view device_expression_data,
-                                 cudf::size_type const max_size,
+                                 cudf::size_type const* matches_per_row,
+                                 cudf::size_type const* join_result_offsets,
                                  bool const swap_tables)
 {
-  constexpr int num_warps = block_size / detail::warp_size;
-  __shared__ cudf::size_type current_idx_shared[num_warps];
-  __shared__ cudf::size_type join_shared_l[num_warps][output_cache_size];
-  __shared__ cudf::size_type join_shared_r[num_warps][output_cache_size];
-
   // Normally the casting of a shared memory array is used to create multiple
   // arrays of different types from the shared memory buffer, but here it is
   // used to circumvent conflicts between arrays of different types between
@@ -162,16 +156,10 @@ __global__ void conditional_join(table_device_view left_table,
   auto thread_intermediate_storage =
     &intermediate_storage[threadIdx.x * device_expression_data.num_intermediates];
 
-  int const warp_id                    = threadIdx.x / detail::warp_size;
-  int const lane_id                    = threadIdx.x % detail::warp_size;
   cudf::size_type const left_num_rows  = left_table.num_rows();
   cudf::size_type const right_num_rows = right_table.num_rows();
   auto const outer_num_rows            = (swap_tables ? right_num_rows : left_num_rows);
   auto const inner_num_rows            = (swap_tables ? left_num_rows : right_num_rows);
-
-  if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
-
-  __syncwarp();
 
   cudf::size_type outer_row_index = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -181,7 +169,10 @@ __global__ void conditional_join(table_device_view left_table,
     left_table, right_table, device_expression_data);
 
   if (outer_row_index < outer_num_rows) {
-    bool found_match = false;
+    bool found_match      = false;
+    auto shifted_output_l = join_output_l + join_result_offsets[outer_row_index];
+    auto shifted_output_r = join_output_r + join_result_offsets[outer_row_index];
+
     for (size_type inner_row_index(0); inner_row_index < inner_num_rows; ++inner_row_index) {
       auto output_dest           = cudf::ast::detail::value_expression_result<bool, has_nulls>();
       auto const left_row_index  = swap_tables ? inner_row_index : outer_row_index;
@@ -199,32 +190,10 @@ __global__ void conditional_join(table_device_view left_table,
         // synchronization of found_match is required).
         if ((join_type != join_kind::LEFT_ANTI_JOIN) &&
             !(join_type == join_kind::LEFT_SEMI_JOIN && found_match)) {
-          add_pair_to_cache(left_row_index,
-                            right_row_index,
-                            current_idx_shared,
-                            warp_id,
-                            join_shared_l[warp_id],
-                            join_shared_r[warp_id]);
+          *(shifted_output_l++) = left_row_index;
+          *(shifted_output_r++) = right_row_index;
         }
         found_match = true;
-      }
-
-      __syncwarp(activemask);
-      // flush output cache if next iteration does not fit
-      if (current_idx_shared[warp_id] + detail::warp_size >= output_cache_size) {
-        flush_output_cache<num_warps, output_cache_size>(activemask,
-                                                         max_size,
-                                                         warp_id,
-                                                         lane_id,
-                                                         current_idx,
-                                                         current_idx_shared,
-                                                         join_shared_l,
-                                                         join_shared_r,
-                                                         join_output_l,
-                                                         join_output_r);
-        __syncwarp(activemask);
-        if (0 == lane_id) { current_idx_shared[warp_id] = 0; }
-        __syncwarp(activemask);
       }
     }
 
@@ -238,26 +207,8 @@ __global__ void conditional_join(table_device_view left_table,
       // other joins we'll want to switch the variable in the line below back
       // to the left_row_index, but for now we can assume that they are
       // equivalent inside this conditional.
-      add_pair_to_cache(outer_row_index,
-                        static_cast<cudf::size_type>(JoinNoneValue),
-                        current_idx_shared,
-                        warp_id,
-                        join_shared_l[warp_id],
-                        join_shared_r[warp_id]);
-    }
-
-    // final flush of output cache
-    if (current_idx_shared[warp_id] > 0) {
-      flush_output_cache<num_warps, output_cache_size>(activemask,
-                                                       max_size,
-                                                       warp_id,
-                                                       lane_id,
-                                                       current_idx,
-                                                       current_idx_shared,
-                                                       join_shared_l,
-                                                       join_shared_r,
-                                                       join_output_l,
-                                                       join_output_r);
+      *(shifted_output_l++) = outer_row_index;
+      *(shifted_output_r++) = static_cast<cudf::size_type>(JoinNoneValue);
     }
   }
 }

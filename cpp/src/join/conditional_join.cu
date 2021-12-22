@@ -28,6 +28,7 @@
 #include <join/join_common_utils.hpp>
 
 #include <rmm/cuda_stream_view.hpp>
+#include <rmm/exec_policy.hpp>
 
 #include <optional>
 
@@ -40,7 +41,7 @@ conditional_join(table_view const& left,
                  table_view const& right,
                  ast::expression const& binary_predicate,
                  join_kind join_type,
-                 std::optional<std::size_t> output_size,
+                 std::optional<std::pair<std::size_t, column_view>> const& output_size_data,
                  rmm::cuda_stream_view stream,
                  rmm::mr::device_memory_resource* mr)
 {
@@ -112,8 +113,9 @@ conditional_join(table_view const& left,
   std::unique_ptr<column> matches_per_row{};
   column_view matches_view{};
 
-  if (output_size.has_value()) {
-    join_size = *output_size;
+  if (output_size_data.has_value()) {
+    join_size    = output_size_data->first;
+    matches_view = output_size_data->second;
   } else {
     // Allocate storage for the counter used to get the size of the join output
     rmm::device_scalar<std::size_t> size(0, stream, mr);
@@ -163,7 +165,13 @@ conditional_join(table_view const& left,
                           std::make_unique<rmm::device_uvector<size_type>>(0, stream, mr));
   }
 
-  rmm::device_scalar<size_type> write_index(0, stream);
+  // Given the number of matches per row, we need to compute the offsets for insertion.
+  auto join_result_offsets =
+    std::make_unique<rmm::device_uvector<size_type>>(outer_num_rows, stream, mr);
+  thrust::exclusive_scan(rmm::exec_policy{stream},
+                         matches_view.begin<size_type>(),
+                         matches_view.end<size_type>(),
+                         join_result_offsets->begin());
 
   auto left_indices  = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
   auto right_indices = std::make_unique<rmm::device_uvector<size_type>>(join_size, stream, mr);
@@ -178,9 +186,9 @@ conditional_join(table_view const& left,
         kernel_join_type,
         join_output_l,
         join_output_r,
-        write_index.data(),
         parser.device_expression_data,
-        join_size,
+        matches_view.data<size_type>(),
+        join_result_offsets->data(),
         swap_tables);
   } else {
     conditional_join<DEFAULT_JOIN_BLOCK_SIZE, DEFAULT_JOIN_CACHE_SIZE, false>
@@ -190,9 +198,9 @@ conditional_join(table_view const& left,
         kernel_join_type,
         join_output_l,
         join_output_r,
-        write_index.data(),
         parser.device_expression_data,
-        join_size,
+        matches_view.data<size_type>(),
+        join_result_offsets->data(),
         swap_tables);
   }
 
@@ -338,7 +346,7 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 conditional_inner_join(table_view const& left,
                        table_view const& right,
                        ast::expression const& binary_predicate,
-                       std::optional<std::size_t> output_size,
+                       std::optional<std::pair<std::size_t, column_view>> output_size,
                        rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -356,7 +364,7 @@ std::pair<std::unique_ptr<rmm::device_uvector<size_type>>,
 conditional_left_join(table_view const& left,
                       table_view const& right,
                       ast::expression const& binary_predicate,
-                      std::optional<std::size_t> output_size,
+                      std::optional<std::pair<std::size_t, column_view>> output_size,
                       rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -385,7 +393,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_semi_join(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
-  std::optional<std::size_t> output_size,
+  std::optional<std::pair<std::size_t, column_view>> output_size,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
@@ -403,7 +411,7 @@ std::unique_ptr<rmm::device_uvector<size_type>> conditional_left_anti_join(
   table_view const& left,
   table_view const& right,
   ast::expression const& binary_predicate,
-  std::optional<std::size_t> output_size,
+  std::optional<std::pair<std::size_t, column_view>> output_size,
   rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
