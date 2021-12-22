@@ -13,7 +13,7 @@ from cudf._lib.io.datasource cimport Datasource
 
 cdef extern from "kafka_callback.hpp" \
         namespace "cudf::io::external::kafka" nogil:
-    ctypedef object (*kafka_oauth_callback_t)()
+    ctypedef object (*python_callable_type)()
 
 
 cdef extern from "kafka_consumer.hpp" \
@@ -22,10 +22,10 @@ cdef extern from "kafka_consumer.hpp" \
     cpdef cppclass kafka_consumer:
 
         kafka_consumer(map[string, string] configs,
-                       kafka_oauth_callback_t oauth_callback) except +
+                       python_callable_type python_callable) except +
 
         kafka_consumer(map[string, string] configs,
-                       kafka_oauth_callback_t oauth_callback,
+                       python_callable_type python_callable,
                        string topic_name,
                        int32_t partition,
                        int64_t start_offset,

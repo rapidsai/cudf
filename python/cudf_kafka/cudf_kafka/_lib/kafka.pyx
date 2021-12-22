@@ -1,6 +1,5 @@
 # Copyright (c) 2020, NVIDIA CORPORATION.
 
-cimport cpython
 from libc.stdint cimport int32_t, int64_t
 from libcpp cimport bool, nullptr
 from libcpp.map cimport map
