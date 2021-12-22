@@ -27,7 +27,7 @@ python_oauth_refresh_callback::python_oauth_refresh_callback(
   : callback_wrapper_(callback_wrapper), python_callable_(python_callable){};
 
 void python_oauth_refresh_callback::oauthbearer_token_refresh_cb(
-  RdKafka::Handle* handle, const std::string& oauthbearer_config)
+  RdKafka::Handle* handle, std::string const& oauthbearer_config)
 {
   std::map<std::string, std::string> resp = callback_wrapper_(python_callable_);
 
