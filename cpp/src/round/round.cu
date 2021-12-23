@@ -23,7 +23,6 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/fixed_point/temporary.hpp>
 #include <cudf/round.hpp>
-#include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -254,13 +253,11 @@ std::unique_ptr<column> round_with(column_view const& input,
 
   auto out_view = result->mutable_view();
 
-  constexpr int max_precision = cuda::std::numeric_limits<Type>::digits10;
-
   auto const scale_movement = -decimal_places - input.type().scale();
   // If scale_movement is larger than max precision of current type, the pow operation will
   // overflow. Under this circumstance, we can simply output a zero column because no digits can
   // survive such a large scale movement.
-  if (scale_movement > max_precision) {
+  if (scale_movement > cuda::std::numeric_limits<Type>::digits10) {
     auto zero_scalar = make_fixed_point_scalar<T>(0, scale_type{-decimal_places});
     detail::fill_in_place(out_view, 0, out_view.size(), *zero_scalar, stream);
   } else {
