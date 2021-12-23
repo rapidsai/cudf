@@ -1591,16 +1591,6 @@ std::vector<std::unique_ptr<column>> convert_to_rows(table_view const &tbl,
   std::transform(output_buffers.begin(), output_buffers.end(), std::back_inserter(output_data),
                  [](auto &buf) { return static_cast<int8_t *>(buf.data()); });
 
-  /*   auto output_data_begin = thrust::make_transform_iterator(batch_info.row_batches.begin(),
-      [stream, mr](auto const& batch) { return rmm::device_buffer(batch.num_bytes, stream, mr); });
-      std::vector<rmm::device_buffer> output_buffers( output_data_begin, output_data_begin +
-     batch_info.row_batches.size() );
-
-      auto output_buffers_begin = thrust::make_transform_iterator(output_buffers.begin(),
-        [](auto const &buf) -> int8_t * { return static_cast<int8_t *>(buf.data()); });
-      std::vector<int8_t *> output_data( output_buffers_begin, output_buffers_begin +
-     output_buffers.size() );*/
-
   auto dev_output_data = make_device_uvector_async(output_data, stream, mr);
 
   int info_count = 0;
