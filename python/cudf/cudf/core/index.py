@@ -2520,7 +2520,7 @@ class StringIndex(GenericIndex):
         return True
 
 
-def as_index(arbitrary, **kwargs) -> BaseIndex:
+def as_index(arbitrary, nan_as_null=None, **kwargs) -> BaseIndex:
     """Create an Index from an arbitrary object
 
     Currently supported inputs are:
@@ -2553,7 +2553,7 @@ def as_index(arbitrary, **kwargs) -> BaseIndex:
     elif isinstance(arbitrary, ColumnBase):
         return _index_from_data({kwargs.get("name", None): arbitrary})
     elif isinstance(arbitrary, cudf.Series):
-        return as_index(arbitrary._column, **kwargs)
+        return as_index(arbitrary._column, nan_as_null=nan_as_null, **kwargs)
     elif isinstance(arbitrary, (pd.RangeIndex, range)):
         return RangeIndex(
             start=arbitrary.start,
@@ -2562,11 +2562,14 @@ def as_index(arbitrary, **kwargs) -> BaseIndex:
             **kwargs,
         )
     elif isinstance(arbitrary, pd.MultiIndex):
-        return cudf.MultiIndex.from_pandas(arbitrary)
+        return cudf.MultiIndex.from_pandas(arbitrary, nan_as_null=nan_as_null)
     elif isinstance(arbitrary, cudf.DataFrame):
         return cudf.MultiIndex.from_frame(arbitrary)
     return as_index(
-        column.as_column(arbitrary, dtype=kwargs.get("dtype", None)), **kwargs
+        column.as_column(
+            arbitrary, dtype=kwargs.get("dtype", None), nan_as_null=nan_as_null
+        ),
+        **kwargs,
     )
 
 
@@ -2616,6 +2619,10 @@ class Index(BaseIndex, metaclass=IndexMeta):
     tupleize_cols : bool (default: True)
         When True, attempt to create a MultiIndex if possible.
         tupleize_cols == False is not yet supported.
+    nan_as_null : bool, Default True
+        If ``None``/``True``, converts ``np.nan`` values to
+        ``null`` values.
+        If ``False``, leaves ``np.nan`` values as is.
 
     Returns
     -------
@@ -2648,6 +2655,7 @@ class Index(BaseIndex, metaclass=IndexMeta):
         copy=False,
         name=None,
         tupleize_cols=True,
+        nan_as_null=True,
         **kwargs,
     ):
         assert (
@@ -2658,7 +2666,14 @@ class Index(BaseIndex, metaclass=IndexMeta):
                 "tupleize_cols != True is not yet supported"
             )
 
-        return as_index(data, copy=copy, dtype=dtype, name=name, **kwargs)
+        return as_index(
+            data,
+            copy=copy,
+            dtype=dtype,
+            name=name,
+            nan_as_null=nan_as_null,
+            **kwargs,
+        )
 
     @classmethod
     def from_arrow(cls, obj):

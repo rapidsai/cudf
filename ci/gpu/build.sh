@@ -33,6 +33,9 @@ export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 # Dask & Distributed git tag
 export DASK_DISTRIBUTED_GIT_TAG='2021.11.2'
 
+# ucx-py version
+export UCX_PY_VERSION='0.24.*'
+
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
 ################################################################################
@@ -83,7 +86,7 @@ gpuci_mamba_retry install -y \
                   "rapids-notebook-env=$MINOR_VERSION.*" \
                   "dask-cuda=${MINOR_VERSION}" \
                   "rmm=$MINOR_VERSION.*" \
-                  "ucx-py=0.24.*"
+                  "ucx-py=${UCX_PY_VERSION}"
 
 # https://docs.rapids.ai/maintainers/depmgmt/
 # gpuci_mamba_retry remove --force rapids-build-env rapids-notebook-env
@@ -216,7 +219,7 @@ else
     KAFKA_CONDA_FILE=${KAFKA_CONDA_FILE//-/=} #convert to conda install
 
     gpuci_logger "Installing $CUDF_CONDA_FILE & $KAFKA_CONDA_FILE"
-    conda install -c ${CONDA_ARTIFACT_PATH} "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
+    gpuci_mamba_retry install -c ${CONDA_ARTIFACT_PATH} "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
 
     install_dask
 
