@@ -580,8 +580,8 @@ class Frame:
         result._copy_type_metadata(self)
         return result
 
-    def _hash(self, method, initial_hash=None):
-        return libcudf.hash.hash(self, method, initial_hash)
+    def _hash(self, method):
+        return libcudf.hash.hash(self, method)
 
     def _hash_partition(
         self, columns_to_hash, num_partitions, keep_index=True
