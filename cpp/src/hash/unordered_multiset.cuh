@@ -159,13 +159,13 @@ using d_table_ptr = std::unique_ptr<table_device_view, std::function<void(table_
 template <>
 class unordered_multiset_device_view<cudf::struct_view, table_row_hash, table_row_equality> {
  public:
-  unordered_multiset_device_view(table_row_hash hasher,
-                                 table_row_equality eq_comp,
+  unordered_multiset_device_view(table_row_hash&& hasher,
+                                 table_row_equality&& eq_comp,
                                  size_type hash_size,
                                  size_type const* const hash_begin,
                                  table_device_view const& hash_data)
-    : hasher{hasher},
-      eq_comp{eq_comp},
+    : hasher{std::move(hasher)},
+      eq_comp{std::move(eq_comp)},
       hash_size{hash_size},
       hash_begin{hash_begin},
       hash_data{hash_data}
@@ -183,7 +183,7 @@ class unordered_multiset_device_view<cudf::struct_view, table_row_hash, table_ro
 
  private:
   table_row_hash const hasher;
-  table_row_equality eq_comp;
+  table_row_equality const eq_comp;
   size_type const hash_size;
   size_type const* const hash_begin;
   table_device_view const hash_data;
@@ -213,11 +213,14 @@ class unordered_multiset<cudf::struct_view, table_row_hash, table_row_equality> 
     auto const flatten_nullability = has_null_elements
                                        ? structs::detail::column_nullability::FORCE
                                        : structs::detail::column_nullability::MATCH_INCOMING;
-
     auto const flattened_lhs =
       cudf::structs::detail::flatten_nested_columns(lhs_table, {}, {}, flatten_nullability);
     auto const d_flattened_lhs_ptr = table_device_view::create(flattened_lhs, stream);
-    auto hasher = table_row_hash{cudf::nullate::DYNAMIC{lhs.has_nulls()}, *d_flattened_lhs_ptr};
+
+    // Hasher is constructed from the lhs column.
+    auto const hasher =
+      table_row_hash{cudf::nullate::DYNAMIC{lhs.has_nulls()}, *d_flattened_lhs_ptr};
+
     thrust::for_each(rmm::exec_policy(stream),
                      thrust::make_counting_iterator<size_type>(0),
                      thrust::make_counting_iterator<size_type>(lhs.size()),
@@ -271,25 +274,27 @@ class unordered_multiset<cudf::struct_view, table_row_hash, table_row_equality> 
     auto flattened_rhs =
       cudf::structs::detail::flatten_nested_columns(rhs_table, {}, {}, flatten_nullability);
     auto d_flattened_rhs_ptr = table_device_view::create(flattened_rhs, stream);
-    auto eq_comp             = table_row_equality{cudf::nullate::DYNAMIC{lhs.has_nulls()},
-                                      *d_flattened_reordered_lhs_ptr,
-                                      *d_flattened_rhs_ptr};
 
     return unordered_multiset(std::move(hash_bins_start),
                               std::move(reordered_lhs.front()),
-                              std::move(hasher),
-                              std::move(eq_comp),
                               std::move(flattened_reordered_lhs),
                               std::move(flattened_rhs),
                               std::move(d_flattened_reordered_lhs_ptr),
-                              std::move(d_flattened_rhs_ptr));
+                              std::move(d_flattened_rhs_ptr),
+                              lhs.has_nulls(),
+                              rhs.has_nulls());
   }
 
   unordered_multiset_device_view<cudf::struct_view, table_row_hash, table_row_equality> to_device()
   {
+    // Hasher is constructed from the rhs column.
+    auto hasher  = table_row_hash{cudf::nullate::DYNAMIC{rhs_has_nulls}, *d_flattened_rhs_ptr};
+    auto eq_comp = table_row_equality{cudf::nullate::DYNAMIC{lhs_has_nulls || rhs_has_nulls},
+                                      *d_flattened_reordered_lhs_ptr,
+                                      *d_flattened_rhs_ptr};
     return unordered_multiset_device_view<cudf::struct_view, table_row_hash, table_row_equality>(
-      hasher,
-      eq_comp,
+      std::move(hasher),
+      std::move(eq_comp),
       static_cast<size_type>(hash_bins.size()),
       hash_bins.data(),
       *d_flattened_reordered_lhs_ptr);
@@ -298,32 +303,32 @@ class unordered_multiset<cudf::struct_view, table_row_hash, table_row_equality> 
  private:
   unordered_multiset(rmm::device_uvector<size_type>&& hash_bins,
                      std::unique_ptr<column>&& reordered_lhs,
-                     table_row_hash&& hasher,
-                     table_row_equality&& eq_comp,
                      cudf::structs::detail::flattened_table&& flattened_reordered_lhs,
                      cudf::structs::detail::flattened_table&& flattened_rhs,
                      d_table_ptr&& d_flattened_reordered_lhs_ptr,
-                     d_table_ptr&& d_flattened_rhs_ptr)
+                     d_table_ptr&& d_flattened_rhs_ptr,
+                     bool lhs_has_nulls,
+                     bool rhs_has_nulls)
     : hash_bins{std::move(hash_bins)},
       reordered_lhs{std::move(reordered_lhs)},
-      hasher{std::move(hasher)},
-      eq_comp{std::move(eq_comp)},
       flattened_reordered_lhs{std::move(flattened_reordered_lhs)},
       flattened_rhs{std::move(flattened_rhs)},
       d_flattened_reordered_lhs_ptr{std::move(d_flattened_reordered_lhs_ptr)},
-      d_flattened_rhs_ptr{std::move(d_flattened_rhs_ptr)}
+      d_flattened_rhs_ptr{std::move(d_flattened_rhs_ptr)},
+      lhs_has_nulls{lhs_has_nulls},
+      rhs_has_nulls{rhs_has_nulls}
 
   {
   }
   rmm::device_uvector<size_type> const hash_bins;
   std::unique_ptr<column> const reordered_lhs;
-  table_row_hash const hasher;
-  table_row_equality const eq_comp;
 
   cudf::structs::detail::flattened_table const flattened_reordered_lhs;
   cudf::structs::detail::flattened_table const flattened_rhs;
   d_table_ptr const d_flattened_reordered_lhs_ptr;
   d_table_ptr const d_flattened_rhs_ptr;
+  bool const lhs_has_nulls;
+  bool const rhs_has_nulls;
 };
 
 }  // namespace detail
