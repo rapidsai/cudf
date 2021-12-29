@@ -791,7 +791,120 @@ def merge_parquet_filemetadata(filemetadata_list):
     return libparquet.merge_filemetadata(filemetadata_list)
 
 
-ParquetWriter = libparquet.ParquetWriter
+def _get_partitioned(
+    df,
+    root_path,
+    partition_cols,
+    filename=None,
+    fs=None,
+    return_metadata=False,
+    **kwargs,
+):
+    fs = ioutils._ensure_filesystem(fs, root_path, **kwargs)
+    fs.mkdirs(root_path, exist_ok=True)
+    data_cols = df.columns.drop(partition_cols)
+    if len(data_cols) == 0:
+        raise ValueError("No data left to save outside partition columns")
+
+    part_names, part_offsets, _, grouped_df = df.groupby(
+        partition_cols
+    )._grouped()
+    # if not preserve_index:
+    #     grouped_df.reset_index(drop=True, inplace=True)
+    grouped_df.drop(columns=partition_cols, inplace=True)
+    # Copy the entire keys df in one operation rather than using iloc
+    part_names = part_names.to_pandas().to_frame(index=False)
+
+    full_paths = []
+    metadata_file_paths = []
+    for keys in part_names.itertuples(index=False):
+        subdir = fs.sep.join(
+            [f"{name}={val}" for name, val in zip(partition_cols, keys)]
+        )
+        prefix = fs.sep.join([root_path, subdir])
+        fs.mkdirs(prefix, exist_ok=True)
+        filename = filename or uuid4().hex + ".parquet"
+        full_path = fs.sep.join([prefix, filename])
+        full_paths.append(full_path)
+        if return_metadata:
+            metadata_file_paths.append(fs.sep.join([subdir, filename]))
+
+    return full_paths, grouped_df, part_offsets, filename
+
+
+class ParquetWriter:
+    def __init__(self, path, partition_cols=None, fs=None) -> None:
+        # Holds in self:
+        # 1. Collection of libparquet.ParquetWriter, each responsible for own set of partition keys
+        # 2.
+        self.path = path
+        self.partition_cols = partition_cols
+        self._chunked_writers = []
+        self.path_cw_map = {}
+        self.fs = fs
+        self.filename = None
+        pass
+
+    def write_table(self, df):
+        # Get partitions - paths (keys), grouped_df, offsets
+        # Add to libparquet.ParquetWriter collection
+        # if some paths match other writer then remove
+        paths, grouped_df, offsets, self.filename = _get_partitioned(
+            df,
+            self.path,
+            self.partition_cols,
+            fs=self.fs,
+            filename=self.filename,
+        )
+
+        existing_cw_batch = defaultdict(dict)
+        new_cw_paths = []
+
+        def pairwise(iterable):
+            it = iter(iterable)
+            a = next(it, None)
+            for b in it:
+                yield (a, b - a)
+                a = b
+
+        for path, part_info in zip(paths, pairwise(offsets)):  # and bounds
+            if path in self.path_cw_map:  # path is a currently open file
+                cw_idx = self.path_cw_map[path]
+                existing_cw_batch[cw_idx][path] = part_info
+            else:  # path not currently handled by any chunked writer
+                new_cw_paths.append((path, part_info))
+
+        # Write out the parts of the grouped_df currently handled by existing cws
+        for batch_cw_path_list in existing_cw_batch.items():
+            cw_idx = batch_cw_path_list[0]
+            cw = self._chunked_writers[cw_idx][0]
+            # match found paths with this cw's paths and nullify partition info for ones not in this batch
+            this_cw_part_info = []
+            for path in self._chunked_writers[cw_idx][1]:
+                if path in batch_cw_path_list[1]:
+                    this_cw_part_info.append(batch_cw_path_list[1][path])
+                else:
+                    this_cw_part_info.append((0, 0))
+
+            cw.write_table(grouped_df, this_cw_part_info)
+
+        # Create new cw for unhandled paths encountered in this write_table
+        new_paths = [path for path, _ in new_cw_paths]
+        self._chunked_writers.append(
+            (libparquet.ParquetWriter(new_paths), new_paths)
+        )
+        new_cw_idx = len(self._chunked_writers) - 1
+        for path in new_paths:
+            self.path_cw_map[path] = new_cw_idx
+        part_info = [info for _, info in new_cw_paths]
+        self._chunked_writers[-1][0].write_table(grouped_df, part_info)
+
+    def close(self):
+        for cw, _ in self._chunked_writers:
+            cw.close()
+
+    def __del__(self):
+        self.close()
 
 
 def _check_decimal128_type(arrow_type):
