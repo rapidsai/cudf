@@ -410,23 +410,26 @@ cdef class ParquetWriter:
     cdef unique_ptr[cpp_parquet_chunked_writer] writer
     cdef unique_ptr[table_input_metadata] tbl_meta
     cdef cudf_io_types.sink_info sink
-    cdef unique_ptr[cudf_io_types.data_sink] _data_sink
+    cdef vector[unique_ptr[cudf_io_types.data_sink]] _data_sink
     cdef cudf_io_types.statistics_freq stat_freq
     cdef cudf_io_types.compression_type comp_type
     cdef object index
 
-    def __cinit__(self, object path, object index=None,
+    def __cinit__(self, object filepaths_or_buffers, object index=None,
                   object compression=None, str statistics="ROWGROUP"):
-        self.sink = make_sink_info(path, self._data_sink)
+        self.sink = make_sinks_info(filepaths_or_buffers, self._data_sink)
         self.stat_freq = _get_stat_freq(statistics)
         self.comp_type = _get_comp_type(compression)
         self.index = index
         self.initialized = False
 
-    def write_table(self, table):
+    def write_table(self, table, object partitions_info=None):
         """ Writes a single table to the file """
         if not self.initialized:
-            self._initialize_chunked_state(table)
+            self._initialize_chunked_state(
+                table,
+                num_partitions=len(partitions_info) if partitions_info else 1
+            )
 
         cdef table_view tv
         if self.index is not False and (
@@ -436,8 +439,15 @@ cdef class ParquetWriter:
         else:
             tv = table_view_from_table(table, ignore_index=True)
 
+        cdef vector[cudf_io_types.partition_info] partitions
+        if partitions_info is not None:
+            for part in partitions_info:
+                partitions.push_back(
+                    cudf_io_types.partition_info(part[0], part[1])
+                )
+
         with nogil:
-            self.writer.get()[0].write(tv)
+            self.writer.get()[0].write(tv, partitions)
 
     def close(self, object metadata_file_path=None):
         cdef unique_ptr[vector[uint8_t]] out_metadata_c
@@ -465,7 +475,7 @@ cdef class ParquetWriter:
     def __dealloc__(self):
         self.close()
 
-    def _initialize_chunked_state(self, table):
+    def _initialize_chunked_state(self, table, num_partitions=1):
         """ Prepares all the values required to build the
         chunked_parquet_writer_options and creates a writer"""
         cdef table_view tv
@@ -498,10 +508,12 @@ cdef class ParquetWriter:
                 table[name]._column, self.tbl_meta.get().column_metadata[i]
             )
 
-        pandas_metadata = generate_pandas_metadata(table, self.index)
+        index = False if isinstance(table._index, cudf.RangeIndex) else self.index
+        pandas_metadata = generate_pandas_metadata(table, index)
+        cdef map[string, string] tmp_user_data
+        tmp_user_data[str.encode("pandas")] = str.encode(pandas_metadata)
         cdef vector[map[string, string]] user_data
-        user_data.resize(1)
-        user_data.back()[str.encode("pandas")] = str.encode(pandas_metadata)
+        user_data = vector[map[string, string]](num_partitions, tmp_user_data)
 
         cdef chunked_parquet_writer_options args
         with nogil:
