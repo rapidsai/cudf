@@ -834,12 +834,13 @@ def _get_partitioned(
 
 class ParquetWriter:
     def __init__(self, path, partition_cols=None, fs=None) -> None:
-        # Holds in self:
-        # 1. Collection of libparquet.ParquetWriter, each responsible for own set of partition keys
-        # 2.
         self.path = path
         self.partition_cols = partition_cols
+        # Collection of `libparquet.ParquetWriter`s, and the corresponding
+        # partition_col values they're responsible for
         self._chunked_writers = []
+        # Map of partition_col values to their libparquet.ParquetWriter's index
+        # in self._chunked_writers for reverse lookup
         self.path_cw_map = {}
         self.fs = fs
         self.filename = None
@@ -867,25 +868,23 @@ class ParquetWriter:
                 yield (a, b - a)
                 a = b
 
-        for path, part_info in zip(paths, pairwise(offsets)):  # and bounds
+        for path, part_info in zip(paths, pairwise(offsets)):
             if path in self.path_cw_map:  # path is a currently open file
                 cw_idx = self.path_cw_map[path]
                 existing_cw_batch[cw_idx][path] = part_info
             else:  # path not currently handled by any chunked writer
                 new_cw_paths.append((path, part_info))
 
-        # Write out the parts of the grouped_df currently handled by existing cws
+        # Write out the parts of grouped_df currently handled by existing cw's
         for batch_cw_path_list in existing_cw_batch.items():
             cw_idx = batch_cw_path_list[0]
             cw = self._chunked_writers[cw_idx][0]
-            # match found paths with this cw's paths and nullify partition info for ones not in this batch
-            this_cw_part_info = []
-            for path in self._chunked_writers[cw_idx][1]:
-                if path in batch_cw_path_list[1]:
-                    this_cw_part_info.append(batch_cw_path_list[1][path])
-                else:
-                    this_cw_part_info.append((0, 0))
-
+            # match found paths with this cw's paths and nullify partition info
+            # for partition_col values not in this batch
+            this_cw_part_info = [
+                batch_cw_path_list[1].get(path, (0, 0))
+                for path in self._chunked_writers[cw_idx][1]
+            ]
             cw.write_table(grouped_df, this_cw_part_info)
 
         # Create new cw for unhandled paths encountered in this write_table
@@ -894,8 +893,7 @@ class ParquetWriter:
             (libparquet.ParquetWriter(new_paths), new_paths)
         )
         new_cw_idx = len(self._chunked_writers) - 1
-        for path in new_paths:
-            self.path_cw_map[path] = new_cw_idx
+        self.path_cw_map.update({k: new_cw_idx for k in new_paths})
         part_info = [info for _, info in new_cw_paths]
         self._chunked_writers[-1][0].write_table(grouped_df, part_info)
 
