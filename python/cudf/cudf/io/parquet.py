@@ -844,12 +844,16 @@ class ParquetWriter:
         self.path_cw_map = {}
         self.fs = fs
         self.filename = None
-        pass
+        if partition_cols is None:
+            self._chunked_writers.append(
+                (libparquet.ParquetWriter([path]), [])
+            )
 
     def write_table(self, df):
-        # Get partitions - paths (keys), grouped_df, offsets
-        # Add to libparquet.ParquetWriter collection
-        # if some paths match other writer then remove
+        if self.partition_cols is None:
+            self._chunked_writers[0][0].write_table(df)
+            return
+
         paths, grouped_df, offsets, self.filename = _get_partitioned(
             df,
             self.path,
