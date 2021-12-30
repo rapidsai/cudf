@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include <thrust/transform.h>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 #include <cudf/transpose.hpp>
 #include <cudf/types.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <memory>
+#include <thrust/transform.h>
 
 using cudf::test::fixed_width_column_wrapper;
 

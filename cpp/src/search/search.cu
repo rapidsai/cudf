@@ -124,17 +124,13 @@ std::unique_ptr<column> search_ordered(table_view const& t,
     detail::make_device_uvector_async(null_precedence_flattened, stream);
 
   auto const count_it = thrust::make_counting_iterator<size_type>(0);
-  if (has_null_elements) {
-    auto const comp = row_lexicographic_comparator<true>(
-      lhs, rhs, column_order_dv.data(), null_precedence_dv.data());
-    launch_search(
-      count_it, count_it, t.num_rows(), values.num_rows(), result_out, comp, find_first, stream);
-  } else {
-    auto const comp = row_lexicographic_comparator<false>(
-      lhs, rhs, column_order_dv.data(), null_precedence_dv.data());
-    launch_search(
-      count_it, count_it, t.num_rows(), values.num_rows(), result_out, comp, find_first, stream);
-  }
+  auto const comp     = row_lexicographic_comparator(nullate::DYNAMIC{has_null_elements},
+                                                 lhs,
+                                                 rhs,
+                                                 column_order_dv.data(),
+                                                 null_precedence_dv.data());
+  launch_search(
+    count_it, count_it, t.num_rows(), values.num_rows(), result_out, comp, find_first, stream);
 
   return result;
 }
@@ -193,12 +189,12 @@ bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const&
   // first, find the value in the dictionary's key set
   auto index = cudf::dictionary::detail::get_index(dict_col, value, stream);
   // if found, check the index is actually in the indices column
-  return index->is_valid() ? cudf::type_dispatcher(dict_col.indices().type(),
-                                                   contains_scalar_dispatch{},
-                                                   dict_col.indices(),
-                                                   *index,
-                                                   stream)
-                           : false;
+  return index->is_valid(stream) ? cudf::type_dispatcher(dict_col.indices().type(),
+                                                         contains_scalar_dispatch{},
+                                                         dict_col.indices(),
+                                                         *index,
+                                                         stream)
+                                 : false;
 }
 
 }  // namespace

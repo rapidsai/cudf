@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <thrust/iterator/discard_iterator.h>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_view.hpp>
@@ -24,6 +23,7 @@
 #include <cudf/detail/iterator.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
+#include <thrust/iterator/discard_iterator.h>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
@@ -72,7 +72,7 @@ std::unique_ptr<column> group_nth_element(column_view const& values,
       });
   } else {  // skip nulls (equivalent to pandas nth(dropna='any'))
     // Returns index of nth value.
-    auto values_view = column_device_view::create(values);
+    auto values_view = column_device_view::create(values, stream);
     auto bitmask_iterator =
       thrust::make_transform_iterator(cudf::detail::make_validity_iterator(*values_view),
                                       [] __device__(auto b) { return static_cast<size_type>(b); });

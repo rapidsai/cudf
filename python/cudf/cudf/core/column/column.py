@@ -139,7 +139,7 @@ class ColumnBase(Column, Serializable):
         if len(self) == 0:
             return np.array([], dtype=self.dtype)
 
-        if self.has_nulls:
+        if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
         return self.data_array_view.copy_to_host()
@@ -152,7 +152,7 @@ class ColumnBase(Column, Serializable):
         if len(self) == 0:
             return cupy.array([], dtype=self.dtype)
 
-        if self.has_nulls:
+        if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
         return cupy.asarray(self.data_array_view)
@@ -193,7 +193,7 @@ class ColumnBase(Column, Serializable):
     def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
         result_col = self.nans_to_nulls() if skipna else self
-        if not skipna and result_col.has_nulls:
+        if not skipna and result_col.has_nulls():
             return True
         elif skipna and result_col.null_count == result_col.size:
             return False
@@ -786,7 +786,7 @@ class ColumnBase(Column, Serializable):
         Buffer
         """
 
-        if self.has_nulls:
+        if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
         return bools_to_mask(self)
@@ -797,13 +797,13 @@ class ColumnBase(Column, Serializable):
 
     @property
     def is_monotonic_increasing(self) -> bool:
-        return not self.has_nulls and self.as_frame()._is_sorted(
+        return not self.has_nulls() and self.as_frame()._is_sorted(
             ascending=None, null_position=None
         )
 
     @property
     def is_monotonic_decreasing(self) -> bool:
-        return not self.has_nulls and self.as_frame()._is_sorted(
+        return not self.has_nulls() and self.as_frame()._is_sorted(
             ascending=[False], null_position=None
         )
 
@@ -942,7 +942,7 @@ class ColumnBase(Column, Serializable):
         )
 
         # columns include null index in factorization; remove:
-        if self.has_nulls:
+        if self.has_nulls():
             cats = cats._column.dropna(drop_nan=False)
             min_type = min_unsigned_type(len(cats), 8)
             labels = labels - 1
@@ -1216,10 +1216,10 @@ class ColumnBase(Column, Serializable):
 
         if skipna:
             result_col = self.nans_to_nulls()
-            if result_col.has_nulls:
+            if result_col.has_nulls():
                 result_col = result_col.dropna()
         else:
-            if self.has_nulls:
+            if self.has_nulls():
                 return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
             result_col = self
@@ -1652,6 +1652,27 @@ def build_struct_column(
     return cast("cudf.core.column.StructColumn", result)
 
 
+def _make_copy_replacing_NaT_with_null(column):
+    """Return a copy with NaT values replaced with nulls."""
+    if np.issubdtype(column.dtype, np.timedelta64):
+        na_value = np.timedelta64("NaT", column.time_unit)
+    elif np.issubdtype(column.dtype, np.datetime64):
+        na_value = np.datetime64("NaT", column.time_unit)
+    else:
+        raise ValueError("This type does not support replacing NaT with null.")
+
+    null = column_empty_like(column, masked=True, newsize=1)
+    out_col = cudf._lib.replace.replace(
+        column,
+        build_column(
+            Buffer(np.array([na_value], dtype=column.dtype).view("|u1")),
+            dtype=column.dtype,
+        ),
+        null,
+    )
+    return out_col
+
+
 def as_column(
     arbitrary: Any,
     nan_as_null: bool = None,
@@ -1753,9 +1774,7 @@ def as_column(
                 col = col.set_mask(mask)
         elif np.issubdtype(col.dtype, np.datetime64):
             if nan_as_null or (mask is None and nan_as_null is None):
-                # Ignore typing error since this method is only defined for
-                # DatetimeColumn, not the ColumnBase class.
-                col = col._make_copy_with_na_as_null()  # type: ignore
+                col = _make_copy_replacing_NaT_with_null(col)
         return col
 
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
@@ -1766,12 +1785,20 @@ def as_column(
                 "https://issues.apache.org/jira/browse/ARROW-3802"
             )
         col = ColumnBase.from_arrow(arbitrary)
+
         if isinstance(arbitrary, pa.NullArray):
-            if type(dtype) == str and dtype == "empty":
-                new_dtype = cudf.dtype(arbitrary.type.to_pandas_dtype())
+            new_dtype = cudf.dtype(arbitrary.type.to_pandas_dtype())
+            if dtype is not None:
+                # Cast the column to the `dtype` if specified.
+                col = col.astype(dtype)
+            elif len(arbitrary) == 0:
+                # If the column is empty, it has to be
+                # a `float64` dtype.
+                col = col.astype("float64")
             else:
-                new_dtype = cudf.dtype(dtype)
-            col = col.astype(new_dtype)
+                # If the null column is not empty, it has to
+                # be of `object` dtype.
+                col = col.astype(new_dtype)
 
         return col
 
@@ -1878,7 +1905,7 @@ def as_column(
             mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = build_column(buffer, dtype=arbitrary.dtype)
-                data = data._make_copy_with_na_as_null()
+                data = _make_copy_replacing_NaT_with_null(data)
                 mask = data.mask
 
             data = cudf.core.column.datetime.DatetimeColumn(
@@ -1896,7 +1923,7 @@ def as_column(
             mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = build_column(buffer, dtype=arbitrary.dtype)
-                data = data._make_copy_with_na_as_null()
+                data = _make_copy_replacing_NaT_with_null(data)
                 mask = data.mask
 
             data = cudf.core.column.timedelta.TimeDeltaColumn(

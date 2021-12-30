@@ -255,7 +255,9 @@ std::unique_ptr<column> split_record_fn(strings_column_view const& strings,
                            std::move(offsets),
                            std::move(strings_output),
                            strings.null_count(),
-                           copy_bitmask(strings.parent(), stream, mr));
+                           copy_bitmask(strings.parent(), stream, mr),
+                           stream,
+                           mr);
 }
 
 template <Dir dir>

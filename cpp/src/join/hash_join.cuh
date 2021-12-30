@@ -96,6 +96,7 @@ template <join_kind JoinKind, typename multimap_type>
 std::size_t compute_join_output_size(table_device_view build_table,
                                      table_device_view probe_table,
                                      multimap_type const& hash_table,
+                                     bool has_nulls,
                                      null_equality compare_nulls,
                                      rmm::cuda_stream_view stream)
 {
@@ -117,9 +118,10 @@ std::size_t compute_join_output_size(table_device_view build_table,
     }
   }
 
-  pair_equality equality{probe_table, build_table, compare_nulls == null_equality::EQUAL};
+  auto const probe_nulls = cudf::nullate::DYNAMIC{has_nulls};
+  pair_equality equality{probe_table, build_table, probe_nulls, compare_nulls};
 
-  row_hash hash_probe{probe_table};
+  row_hash hash_probe{probe_nulls, probe_table};
   auto const empty_key_sentinel = hash_table.get_empty_key_sentinel();
   make_pair_function pair_func{hash_probe, empty_key_sentinel};
 
