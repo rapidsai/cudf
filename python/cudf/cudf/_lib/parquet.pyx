@@ -458,7 +458,13 @@ cdef class ParquetWriter:
 
         # Update metadata-collection options
         if metadata_file_path is not None:
-            column_chunks_file_paths.push_back(str.encode(metadata_file_path))
+            if is_list_like(metadata_file_path):
+                for path in metadata_file_path:
+                    column_chunks_file_paths.push_back(str.encode(path))
+            else:
+                column_chunks_file_paths.push_back(
+                    str.encode(metadata_file_path)
+                )
 
         with nogil:
             out_metadata_c = move(

@@ -798,7 +798,6 @@ def _get_partitioned(
     filename=None,
     fs=None,
     preserve_index=False,
-    return_metadata=False,
     **kwargs,
 ):
     fs = ioutils._ensure_filesystem(fs, root_path, **kwargs)
@@ -827,10 +826,9 @@ def _get_partitioned(
         filename = filename or uuid4().hex + ".parquet"
         full_path = fs.sep.join([prefix, filename])
         full_paths.append(full_path)
-        if return_metadata:
-            metadata_file_paths.append(fs.sep.join([subdir, filename]))
+        metadata_file_paths.append(fs.sep.join([subdir, filename]))
 
-    return full_paths, grouped_df, part_offsets, filename
+    return full_paths, metadata_file_paths, grouped_df, part_offsets, filename
 
 
 class ParquetWriter:
@@ -860,7 +858,11 @@ class ParquetWriter:
         self.filename = None
         if partition_cols is None:
             self._chunked_writers.append(
-                (libparquet.ParquetWriter([path], **self.common_args), [])
+                [
+                    libparquet.ParquetWriter([path], **self.common_args),
+                    [],
+                    None,
+                ]
             )
 
     def write_table(self, df):
@@ -868,7 +870,13 @@ class ParquetWriter:
             self._chunked_writers[0][0].write_table(df)
             return
 
-        paths, grouped_df, offsets, self.filename = _get_partitioned(
+        (
+            paths,
+            metadata_file_paths,
+            grouped_df,
+            offsets,
+            self.filename,
+        ) = _get_partitioned(
             df,
             self.path,
             self.partition_cols,
@@ -887,12 +895,14 @@ class ParquetWriter:
                 yield (a, b - a)
                 a = b
 
-        for path, part_info in zip(paths, pairwise(offsets)):
+        for path, part_info, meta_path in zip(
+            paths, pairwise(offsets), metadata_file_paths
+        ):
             if path in self.path_cw_map:  # path is a currently open file
                 cw_idx = self.path_cw_map[path]
                 existing_cw_batch[cw_idx][path] = part_info
             else:  # path not currently handled by any chunked writer
-                new_cw_paths.append((path, part_info))
+                new_cw_paths.append((path, part_info, meta_path))
 
         # Write out the parts of grouped_df currently handled by existing cw's
         for batch_cw_path_list in existing_cw_batch.items():
@@ -907,21 +917,47 @@ class ParquetWriter:
             cw.write_table(grouped_df, this_cw_part_info)
 
         # Create new cw for unhandled paths encountered in this write_table
-        new_paths = [path for path, _ in new_cw_paths]
+        new_paths = [path for path, _, _ in new_cw_paths]
+        meta_paths = [path for _, _, path in new_cw_paths]
         self._chunked_writers.append(
-            (
+            [
                 libparquet.ParquetWriter(new_paths, **self.common_args),
                 new_paths,
-            )
+                meta_paths,
+            ]
         )
         new_cw_idx = len(self._chunked_writers) - 1
         self.path_cw_map.update({k: new_cw_idx for k in new_paths})
-        part_info = [info for _, info in new_cw_paths]
+        part_info = [info for _, info, _ in new_cw_paths]
         self._chunked_writers[-1][0].write_table(grouped_df, part_info)
 
-    def close(self):
-        for cw, _ in self._chunked_writers:
-            cw.close()
+    def close(self, metadata_file_path=None):
+        return_metadata = bool(metadata_file_path)
+        if self.partition_cols is not None:
+            if isinstance(metadata_file_path, str):
+                warnings.warn(
+                    "metadata_file_path is automatically determined for "
+                    "partitioned writing. The passed metadata_file_path will "
+                    "be ignored"
+                )
+        else:
+            if return_metadata:
+                self._chunked_writers[0][2] = metadata_file_path
+
+        metadata = []
+        for cw, _, meta_path in self._chunked_writers:
+            metadata.append(
+                cw.close(
+                    metadata_file_path=meta_path if return_metadata else None
+                )
+            )
+
+        if return_metadata:
+            return (
+                merge_parquet_filemetadata(metadata)
+                if len(metadata) > 1
+                else metadata[0]
+            )
 
     def __del__(self):
         self.close()
