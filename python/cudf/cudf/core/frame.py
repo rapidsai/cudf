@@ -270,15 +270,6 @@ class Frame:
         return self._num_rows, self._num_columns
 
     @property
-    def _is_homogeneous(self):
-        # make sure that the dataframe has columns
-        if not self._data.columns:
-            return True
-
-        first_type = self._data.columns[0].dtype.name
-        return all(x.dtype.name == first_type for x in self._data.columns)
-
-    @property
     def empty(self):
         """
         Indicator whether DataFrame or Series is empty.
