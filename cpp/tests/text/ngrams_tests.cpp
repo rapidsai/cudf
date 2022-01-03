@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include <tests/strings/utilities.h>
 #include <cudf/column/column.hpp>
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <tests/strings/utilities.h>
 
 #include <nvtext/generate_ngrams.hpp>
 

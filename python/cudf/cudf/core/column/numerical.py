@@ -3,7 +3,16 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import Any, Callable, Mapping, Sequence, Tuple, Union, cast
+from typing import (
+    Any,
+    Callable,
+    Mapping,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+    cast,
+)
 
 import cupy
 import numpy as np
@@ -47,6 +56,8 @@ class NumericalColumn(NumericalBaseColumn):
     mask : Buffer, optional
     """
 
+    _nan_count: Optional[int]
+
     def __init__(
         self,
         data: Buffer,
@@ -62,7 +73,7 @@ class NumericalColumn(NumericalBaseColumn):
             raise ValueError("Buffer size must be divisible by element size")
         if size is None:
             size = (data.size // dtype.itemsize) - offset
-
+        self._nan_count = None
         super().__init__(
             data,
             size=size,
@@ -71,6 +82,10 @@ class NumericalColumn(NumericalBaseColumn):
             offset=offset,
             null_count=null_count,
         )
+
+    def _clear_cache(self):
+        super()._clear_cache()
+        self._nan_count = None
 
     def __contains__(self, item: ScalarLike) -> bool:
         """
@@ -90,6 +105,11 @@ class NumericalColumn(NumericalBaseColumn):
             self, column.as_column([item], dtype=self.dtype)
         ).any()
 
+    def has_nulls(self, include_nan=False):
+        return self.null_count != 0 or (
+            self.nan_count != 0 if include_nan else False
+        )
+
     @property
     def __cuda_array_interface__(self) -> Mapping[str, Any]:
         output = {
@@ -100,7 +120,7 @@ class NumericalColumn(NumericalBaseColumn):
             "version": 1,
         }
 
-        if self.nullable and self.has_nulls:
+        if self.nullable and self.has_nulls():
 
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
@@ -280,6 +300,15 @@ class NumericalColumn(NumericalBaseColumn):
             return self
         return libcudf.unary.cast(self, dtype)
 
+    @property
+    def nan_count(self) -> int:
+        if self.dtype.kind != "f":
+            self._nan_count = 0
+        elif self._nan_count is None:
+            nan_col = libcudf.unary.is_nan(self)
+            self._nan_count = nan_col.sum()
+        return self._nan_count
+
     def _process_values_for_isin(
         self, values: Sequence
     ) -> Tuple[ColumnBase, ColumnBase]:
@@ -295,6 +324,20 @@ class NumericalColumn(NumericalBaseColumn):
             rhs = rhs.astype(lhs.dtype)
 
         return lhs, rhs
+
+    def _can_return_nan(self, skipna: bool = None) -> bool:
+        return not skipna and self.has_nulls(include_nan=True)
+
+    def _process_for_reduction(
+        self, skipna: bool = None, min_count: int = 0
+    ) -> Union[ColumnBase, ScalarLike]:
+        skipna = True if skipna is None else skipna
+
+        if self._can_return_nan(skipna=skipna):
+            return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
+        return super()._process_for_reduction(
+            skipna=skipna, min_count=min_count
+        )
 
     def _default_na_value(self) -> ScalarLike:
         """Returns the default NA value for this column"""
@@ -319,8 +362,19 @@ class NumericalColumn(NumericalBaseColumn):
         """
         Return col with *to_replace* replaced with *value*.
         """
+
+        # If all of `to_replace`/`replacement` are `None`,
+        # dtype of `to_replace_col`/`replacement_col`
+        # is inferred as `string`, but this is a valid
+        # float64 column too, Hence we will need to type-cast
+        # to self.dtype.
         to_replace_col = column.as_column(to_replace)
+        if to_replace_col.null_count == len(to_replace_col):
+            to_replace_col = to_replace_col.astype(self.dtype)
+
         replacement_col = column.as_column(replacement)
+        if replacement_col.null_count == len(replacement_col):
+            replacement_col = replacement_col.astype(self.dtype)
 
         if type(to_replace_col) != type(replacement_col):
             raise TypeError(
@@ -578,7 +632,7 @@ class NumericalColumn(NumericalBaseColumn):
             arrow_array = self.to_arrow()
             pandas_array = pandas_nullable_dtype.__from_arrow__(arrow_array)
             pd_series = pd.Series(pandas_array, copy=False)
-        elif str(self.dtype) in NUMERIC_TYPES and not self.has_nulls:
+        elif str(self.dtype) in NUMERIC_TYPES and not self.has_nulls():
             pd_series = pd.Series(cupy.asnumpy(self.values), copy=False)
         else:
             pd_series = self.to_arrow().to_pandas(**kwargs)
@@ -597,6 +651,8 @@ def _normalize_find_and_replace_input(
     )
     col_to_normalize_dtype = normalized_column.dtype
     if isinstance(col_to_normalize, list):
+        if normalized_column.null_count == len(normalized_column):
+            normalized_column = normalized_column.astype(input_column_dtype)
         col_to_normalize_dtype = min_column_type(
             normalized_column, input_column_dtype
         )
