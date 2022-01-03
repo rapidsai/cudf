@@ -50,8 +50,16 @@ void BM_parq_read_varying_input(benchmark::State& state)
   auto const view = tbl->view();
 
   cuio_source_sink_pair source_sink(source_type);
+  auto table_meta = cudf::io::table_input_metadata(view);
+  if (state.range(0) == int32_t(type_group_id::FIXED_POINT)) {
+    // Precision is required for decimal columns but the value doesn't affect the performance
+    for (auto& col_meta : table_meta.column_metadata) {
+      col_meta.set_decimal_precision(10);
+    }
+  }
   cudf_io::parquet_writer_options write_opts =
     cudf_io::parquet_writer_options::builder(source_sink.make_sink_info(), view)
+      .metadata(&table_meta)
       .compression(compression);
   cudf_io::write_parquet(write_opts);
 
@@ -160,12 +168,12 @@ void BM_parq_read_varying_options(benchmark::State& state)
     ->Unit(benchmark::kMillisecond)                                                          \
     ->UseManualTime();
 
-RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, integral, type_group_id::INTEGRAL);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
+// RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, integral, type_group_id::INTEGRAL);
+// RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, decimal, type_group_id::FIXED_POINT);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, string, cudf::type_id::STRING);
-RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, list, cudf::type_id::LIST);
+// RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
+// RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, string, cudf::type_id::STRING);
+// RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, list, cudf::type_id::LIST);
 
 BENCHMARK_DEFINE_F(ParquetRead, column_selection)
 (::benchmark::State& state) { BM_parq_read_varying_options(state); }
