@@ -107,7 +107,7 @@ Examples
 
 See Also
 --------
-cudf.io.parquet.read_parquet
+cudf.read_parquet
 """
 doc_read_parquet_metadata = docfmt_partial(
     docstring=_docstring_read_parquet_metadata
@@ -186,7 +186,7 @@ Examples
 See Also
 --------
 cudf.io.parquet.read_parquet_metadata
-cudf.io.parquet.to_parquet
+cudf.DataFrame.to_parquet
 cudf.read_orc
 """.format(
     remote_data_sources=_docstring_remote_sources
@@ -234,7 +234,7 @@ row_group_size_rows: integer or None, default None
 
 See Also
 --------
-cudf.io.parquet.read_parquet
+cudf.read_parquet
 cudf.read_orc
 """
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
@@ -253,7 +253,7 @@ Combined parquet metadata blob
 
 See Also
 --------
-cudf.io.parquet.to_parquet
+cudf.DataFrame.to_parquet
 """
 doc_merge_parquet_filemetadata = docfmt_partial(
     docstring=_docstring_merge_parquet_filemetadata
@@ -392,8 +392,8 @@ Examples
 
 See Also
 --------
-cudf.io.parquet.read_parquet
-cudf.io.parquet.to_parquet
+cudf.read_parquet
+cudf.DataFrame.to_parquet
 """.format(
     remote_data_sources=_docstring_remote_sources
 )
@@ -660,7 +660,7 @@ item : object
 
 See Also
 --------
-cudf.io.hdf.to_hdf : Write a HDF file from a DataFrame.
+cudf.DataFrame.to_hdf : Write a HDF file from a DataFrame.
 """
 doc_read_hdf = docfmt_partial(docstring=_docstring_read_hdf)
 
@@ -731,8 +731,8 @@ errors : str, default 'strict'
 See Also
 --------
 cudf.read_hdf : Read from HDF file.
-cudf.io.parquet.to_parquet : Write a DataFrame to the binary parquet format.
-cudf.io.feather.to_feather : Write out feather-format for DataFrames.
+cudf.DataFrame.to_parquet : Write a DataFrame to the binary parquet format.
+cudf.DataFrame.to_feather : Write out feather-format for DataFrames.
 """
 doc_to_hdf = docfmt_partial(docstring=_docstring_to_hdf)
 
@@ -762,7 +762,7 @@ Examples
 
 See Also
 --------
-cudf.io.feather.to_feather
+cudf.DataFrame.to_feather
 """
 doc_read_feather = docfmt_partial(docstring=_docstring_read_feather)
 
@@ -776,7 +776,7 @@ path : str
 
 See Also
 --------
-cudf.io.feather.read_feather
+cudf.read_feather
 """
 doc_to_feather = docfmt_partial(docstring=_docstring_to_feather)
 
@@ -945,7 +945,7 @@ Read the file with ``cudf.read_csv``
 
 See Also
 --------
-cudf.io.csv.to_csv
+cudf.DataFrame.to_csv
 """.format(
     remote_data_sources=_docstring_remote_sources
 )
