@@ -780,7 +780,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
     pos  = shuffle(pos);
     n    = shuffle(n);
     w    = shuffle(w);
-    __syncwarp();
+    __syncwarp(); // Not required, included to fix the racecheck warning
     for (uint32_t i = tr; i < n; i += 32) {
       if (sizeof(T) <= 4) {
         if (mode == 0) {
