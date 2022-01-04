@@ -409,7 +409,7 @@ inline __device__ int decode_base128_varint(volatile orc_bytestream_s* bs, int p
         if (b > 0x7f) {
           b = bytestream_readbyte(bs, pos++);
           v = (v & 0x0fffffff) | (b << 28);
-          if (sizeof(T) > 4) {
+          if constexpr (sizeof(T) > 4) {
             uint32_t lo = v;
             uint64_t hi;
             v = b >> 4;
@@ -744,7 +744,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
             uint32_t byte3 = bytestream_readbyte(bs, pos++);
             uint32_t bw    = 1 + (byte2 >> 5);        // base value width, 1 to 8 bytes
             uint32_t pw    = kRLEv2_W[byte2 & 0x1f];  // patch width, 1 to 64 bits
-            if (sizeof(T) <= 4) {
+            if constexpr (sizeof(T) <= 4) {
               uint32_t baseval, mask;
               bytestream_readbe(bs, pos * 8, bw * 8, baseval);
               mask                = (1 << (bw * 8 - 1)) - 1;
@@ -780,9 +780,9 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s* bs,
     pos  = shuffle(pos);
     n    = shuffle(n);
     w    = shuffle(w);
-    __syncwarp(); // Not required, included to fix the racecheck warning
+    __syncwarp();  // Not required, included to fix the racecheck warning
     for (uint32_t i = tr; i < n; i += 32) {
-      if (sizeof(T) <= 4) {
+      if constexpr (sizeof(T) <= 4) {
         if (mode == 0) {
           vals[base + i] = rle->baseval.u32[r];
         } else if (mode == 1) {
