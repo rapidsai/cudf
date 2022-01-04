@@ -249,7 +249,6 @@ tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
 
 }  // namespace detail
 
-
 tokenizer_result subword_tokenize(cudf::strings_column_view const& strings,
                                   hashed_vocabulary const& vocabulary_table,
                                   uint32_t max_sequence_length,

@@ -67,7 +67,7 @@ TEST(TextSubwordTest, Tokenize)
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
   create_hashed_vocab(hash_file);
-  auto vocab  = nvtext::load_vocabulary_file(hash_file);
+  auto vocab = nvtext::load_vocabulary_file(hash_file);
 
   uint32_t max_sequence_length = 16;
   uint32_t stride              = 16;
@@ -120,8 +120,7 @@ TEST(TextSubwordTest, TokenizeMultiRow)
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
   create_hashed_vocab(hash_file);
-  auto vocab  = nvtext::load_vocabulary_file(hash_file);
-
+  auto vocab = nvtext::load_vocabulary_file(hash_file);
 
   uint32_t max_sequence_length = 8;
   uint32_t stride              = 6;
@@ -151,8 +150,7 @@ TEST(TextSubwordTest, TokenizeMaxEqualsTokens)
   cudf::test::strings_column_wrapper strings({"This is a test."});
   std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
   create_hashed_vocab(hash_file);
-  auto vocab  = nvtext::load_vocabulary_file(hash_file);
-
+  auto vocab = nvtext::load_vocabulary_file(hash_file);
 
   uint32_t max_sequence_length = 5;  // five tokens in strings;
   uint32_t stride              = 5;  // this should not effect the result
@@ -180,7 +178,7 @@ TEST(TextSubwordTest, ParameterErrors)
   cudf::test::strings_column_wrapper strings(h_strings.begin(), h_strings.end());
   std::string hash_file = temp_env->get_temp_filepath("hashed_vocab.txt");
   create_hashed_vocab(hash_file);
-  auto vocab  = nvtext::load_vocabulary_file(hash_file);
+  auto vocab = nvtext::load_vocabulary_file(hash_file);
 
   EXPECT_THROW(nvtext::subword_tokenize(cudf::strings_column_view{strings},
                                         *vocab,
