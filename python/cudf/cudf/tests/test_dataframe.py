@@ -1109,34 +1109,6 @@ def test_assign():
 
 @pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
 @pytest.mark.parametrize("method", ["murmur3", "md5"])
-def test_dataframe_hash_columns(nrows, method):
-    gdf = cudf.DataFrame()
-    data = np.asarray(range(nrows))
-    data[0] = data[-1]  # make first and last the same
-    gdf["a"] = data
-    gdf["b"] = gdf.a + 100
-    with pytest.warns(FutureWarning):
-        out = gdf.hash_columns(["a", "b"])
-    assert isinstance(out, cudf.Series)
-    assert len(out) == nrows
-    assert out.dtype == np.int32
-
-    # Check default
-    with pytest.warns(FutureWarning):
-        out_all = gdf.hash_columns()
-    assert_eq(out, out_all)
-
-    # Check single column
-    with pytest.warns(FutureWarning):
-        out_one = gdf.hash_columns(["a"], method=method)
-    # First matches last
-    assert out_one.iloc[0] == out_one.iloc[-1]
-    # Equivalent to the cudf.Series.hash_values()
-    assert_eq(gdf["a"].hash_values(method=method), out_one)
-
-
-@pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
-@pytest.mark.parametrize("method", ["murmur3", "md5"])
 def test_dataframe_hash_values(nrows, method):
     gdf = cudf.DataFrame()
     data = np.asarray(range(nrows))
