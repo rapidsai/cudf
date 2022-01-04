@@ -433,19 +433,29 @@ template <>
 hash_value_type CUDA_DEVICE_CALLABLE
 SparkMurmurHash3_32<numeric::decimal128>::operator()(numeric::decimal128 const& key) const
 {
+  // Generates the Spark murmur3 hash value, mimicing the conversion
+  // java.math.BigDecimal.valueOf(unscaled_value, _scale).unscaledValue().toByteArray()
+  // https://github.com/apache/spark/blob/master/sql/catalyst/src/main/scala/org/apache/spark/sql/catalyst/expressions/hash.scala#L381
   __int128_t const val    = key.value();
-  __int128_t flipped      = 0;
   int8_t const* data      = reinterpret_cast<int8_t const*>(&val);
-  int8_t* dflipped        = reinterpret_cast<int8_t*>(&flipped);
   int8_t const sign_bit   = data[15] & 0x80;
   int8_t const zero_value = sign_bit ? 0xff : 0x00;
   int32_t length          = 15;
 
-  // Remove preceeding zero values and flip endianess before hashing
+  // Search for first non-zero byte in the unscaled value, shortening the hashed data
   for (; length >= 0 && data[length] == zero_value; --length)
     ;
+  // Special case for 0 which does not shorten correctly
   if (length == -1) return this->compute<uint8_t>(0);
-  if (sign_bit ^ (data[length] & static_cast<int8_t>(0x80))) ++length;
+  // Preserve the 2's complement sign bit by adding a byte back on if necessary
+  // e.g. 0x0000FF would shorten to 0x00FF -- 0x00 byte retained to preserve sign
+  // 0x00007F would shorten to 0x7f -- no 0x00 byte retained because the leftmost bit is not set
+  // similarly for negative values 0xFFFF00 --> 0xFF00 and 0xFFFF80 --> 0x80
+  if (length != 15 && sign_bit ^ (data[length] & static_cast<int8_t>(0x80))) ++length;
+
+  // Convert resulting byte range to big endian
+  __int128_t flipped = 0;
+  int8_t* dflipped   = reinterpret_cast<int8_t*>(&flipped);
   for (int i = 0; i <= length; i++)
     dflipped[i] = data[length - i];
 

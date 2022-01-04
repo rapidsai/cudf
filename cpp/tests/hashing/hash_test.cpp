@@ -404,8 +404,8 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
     {(__int128)0,
      (__int128)100,
      (__int128)-100,
-     *(__int128*)"\x01\x00\x00\x18\xC3\x7F\x2F\x60\xC3\xD1\xC4\xFC\xFF\xFF\xFF\xFF",
-     *(__int128*)"\xFF\xFF\xFF\xE7\x3C\x80\xD0\x9F\x3C\x2E\x3B\x03\x00\x00\x00\x00"},
+     ((__int128)0xFFFFFFFFFCC4D1C3u << 64 | 0x602F7FC318000001u),
+     ((__int128)0x00000000033B2E3Cu << 64 | 0x9FD0803CE7FFFFFFu)},
     numeric::scale_type{-11});
 
   constexpr auto hasher      = cudf::hash_id::HASH_SPARK_MURMUR3;
