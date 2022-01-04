@@ -2789,15 +2789,6 @@ public final class Table implements AutoCloseable {
     return ret;
   }
 
-  public ColumnVector[] convertToRowsFixedWidthOptimized() {
-    long[] ptrs = convertToRowsFixedWidthOptimized(nativeHandle);
-    ColumnVector[] ret = new ColumnVector[ptrs.length];
-    for (int i = 0; i < ptrs.length; i++) {
-      ret[i] = new ColumnVector(ptrs[i]);
-    }
-    return ret;
-  }
-
   /**
    * Convert a column of list of bytes that is formatted like the output from `convertToRows`
    * and convert it back to a table.
