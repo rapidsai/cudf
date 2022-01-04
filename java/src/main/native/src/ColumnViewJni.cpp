@@ -511,6 +511,18 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listContains(JNIEnv *env,
   CATCH_STD(env, 0);
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listContainsNulls(JNIEnv *env, jclass,
+                                                                         jlong column_view) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto cv = reinterpret_cast<cudf::column_view *>(column_view);
+    auto lcv = cudf::lists_column_view{*cv};
+    return reinterpret_cast<jlong>(cudf::lists::contains_nulls(lcv).release());
+  }
+  CATCH_STD(env, 0);
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listContainsColumn(JNIEnv *env, jclass,
                                                                           jlong column_view,
                                                                           jlong lookup_key_cv) {
@@ -524,6 +536,44 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listContainsColumn(JNIEnv
 
     std::unique_ptr<cudf::column> ret = cudf::lists::contains(lcv, *lookup_cv);
     return reinterpret_cast<jlong>(ret.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listIndexOfScalar(JNIEnv *env, jclass,
+                                                                         jlong column_view,
+                                                                         jlong lookup_key,
+                                                                         jboolean is_find_first) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, lookup_key, "lookup scalar is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const cv = reinterpret_cast<cudf::column_view const *>(column_view);
+    auto const lcv = cudf::lists_column_view{*cv};
+    auto const lookup_key_scalar = reinterpret_cast<cudf::scalar const *>(lookup_key);
+    auto const find_option = is_find_first ? cudf::lists::duplicate_find_option::FIND_FIRST :
+                                             cudf::lists::duplicate_find_option::FIND_LAST;
+    auto result = cudf::lists::index_of(lcv, *lookup_key_scalar, find_option);
+    return reinterpret_cast<jlong>(result.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnView_listIndexOfColumn(JNIEnv *env, jclass,
+                                                                         jlong column_view,
+                                                                         jlong lookup_keys,
+                                                                         jboolean is_find_first) {
+  JNI_NULL_CHECK(env, column_view, "column is null", 0);
+  JNI_NULL_CHECK(env, lookup_keys, "lookup key column is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto const cv = reinterpret_cast<cudf::column_view const *>(column_view);
+    auto const lcv = cudf::lists_column_view{*cv};
+    auto const lookup_key_column = reinterpret_cast<cudf::column_view const *>(lookup_keys);
+    auto const find_option = is_find_first ? cudf::lists::duplicate_find_option::FIND_FIRST :
+                                             cudf::lists::duplicate_find_option::FIND_LAST;
+    auto result = cudf::lists::index_of(lcv, *lookup_key_column, find_option);
+    return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
 }
