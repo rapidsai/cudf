@@ -680,7 +680,7 @@ public final class ColumnVector extends ColumnView {
           "Unsupported nested type column";
       columnViews[i] = columns[i].getNativeView();
     }
-    return new ColumnVector(hash(columnViews, HashType.HASH_MD5.getNativeId(), new int[0], 0));
+    return new ColumnVector(hash(columnViews, HashType.HASH_MD5.getNativeId(), 0));
   }
 
   /**
@@ -704,7 +704,7 @@ public final class ColumnVector extends ColumnView {
       assert !columns[i].getType().equals(DType.LIST) : "List columns are not supported";
       columnViews[i] = columns[i].getNativeView();
     }
-    return new ColumnVector(hash(columnViews, HashType.HASH_SERIAL_MURMUR3.getNativeId(), new int[0], seed));
+    return new ColumnVector(hash(columnViews, HashType.HASH_SERIAL_MURMUR3.getNativeId(), seed));
   }
 
   /**
@@ -739,7 +739,7 @@ public final class ColumnVector extends ColumnView {
       assert !columns[i].getType().equals(DType.LIST) : "List columns are not supported";
       columnViews[i] = columns[i].getNativeView();
     }
-    return new ColumnVector(hash(columnViews, HashType.HASH_SPARK_MURMUR3.getNativeId(), new int[0], seed));
+    return new ColumnVector(hash(columnViews, HashType.HASH_SPARK_MURMUR3.getNativeId(), seed));
   }
 
   /**
@@ -859,14 +859,10 @@ public final class ColumnVector extends ColumnView {
    *
    * @param viewHandles array of native handles to the cudf::column_view columns being operated on.
    * @param hashId integer native ID of the hashing function identifier HashType.
-   * @param initialValues array of integer values, one per column, only used by non-serial murmur3
-   *                      hash. Each element's hash value is merged with its column's initial value
-   *                      before the row is merged into a single value.
    * @param seed integer seed for the hash. Only used by serial murmur3 hash.
    * @return native handle of the resulting cudf column containing the hex-string hashing results.
    */
-  private static native long hash(long[] viewHandles, int hashId, int[] initialValues,
-                                  int seed) throws CudfException;
+  private static native long hash(long[] viewHandles, int hashId, int seed) throws CudfException;
 
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
