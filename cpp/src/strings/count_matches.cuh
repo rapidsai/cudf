@@ -16,12 +16,12 @@
 
 #pragma once
 
+#include <strings/regex/regex.cuh>
+
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/string_view.cuh>
-
-#include <strings/regex/regex.cuh>
 
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
