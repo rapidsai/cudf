@@ -1769,7 +1769,7 @@ def test_dataframe_shape_empty():
 
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
 @pytest.mark.parametrize("num_rows", [1, 2, 20])
-@pytest.mark.parametrize("dtype", dtypes)
+@pytest.mark.parametrize("dtype", dtypes + ["object"])
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
 def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
     # In case of `bool` dtype: pandas <= 1.2.5 type-casts
