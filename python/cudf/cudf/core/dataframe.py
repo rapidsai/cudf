@@ -4337,20 +4337,23 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         dtypes: float64(1), int64(1), object(1)
         memory usage: 130.0+ bytes
 
-        Pipe output of DataFrame.info to buffer instead of sys.stdout,
-        get buffer content and writes to a text file:
+        Pipe output of DataFrame.info to a buffer instead of sys.stdout and
+        print buffer contents:
 
         >>> import io
         >>> buffer = io.StringIO()
         >>> df.info(buf=buffer)
-        >>> s = buffer.getvalue()
-        >>> # TODO Can we remove this example? It writes a text file every time
-        >>> # tests run and it does not seem particularly helpful...
-        >>> with open("df_info.txt", "w",
-        ...           encoding="utf-8") as f:
-        ...     f.write(s)
-        ...
-        362
+        >>> print(buffer.getvalue())
+        <class 'cudf.core.dataframe.DataFrame'>
+        RangeIndex: 5 entries, 0 to 4
+        Data columns (total 3 columns):
+         #   Column     Non-Null Count  Dtype
+        ---  ------     --------------  -----
+         0   int_col    5 non-null      int64
+         1   text_col   5 non-null      object
+         2   float_col  5 non-null      float64
+        dtypes: float64(1), int64(1), object(1)
+        memory usage: 130.0+ bytes
 
         The `memory_usage` parameter allows deep introspection mode, specially
         useful for big DataFrames and fine-tune memory optimization:
