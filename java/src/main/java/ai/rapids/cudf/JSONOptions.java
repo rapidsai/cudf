@@ -46,7 +46,7 @@ public final class JSONOptions extends ColumnFilterOptions {
 
   @Override
   String[] getIncludeColumnNames() {
-    throw new IllegalArgumentException("JSON reader didn't support column prune");
+    throw new UnsupportedOperationException("JSON reader didn't support column prune");
   }
 
   public static Builder builder() {
@@ -68,7 +68,7 @@ public final class JSONOptions extends ColumnFilterOptions {
     }
 
     /**
-     * Whether to the file as a json object per line
+     * Whether to read the file as a json object per line
      * @param lines true: per line, false: not per line
      * @return builder for chaining
      */
@@ -79,17 +79,16 @@ public final class JSONOptions extends ColumnFilterOptions {
 
     @Override
     public Builder includeColumn(String... names) {
-      throw new IllegalArgumentException("JSON reader didn't support column prune");
+      throw new UnsupportedOperationException("JSON reader didn't support column prune");
     }
 
     @Override
     public Builder includeColumn(Collection<String> names) {
-      throw new IllegalArgumentException("JSON reader didn't support column prune");
+      throw new UnsupportedOperationException("JSON reader didn't support column prune");
     }
 
     public JSONOptions build() {
       return new JSONOptions(this);
     }
   }
-
 }

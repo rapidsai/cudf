@@ -858,7 +858,7 @@ public final class Table implements AutoCloseable {
    * @return the data parsed as a table on the GPU.
    */
   public static Table readJSON(Schema schema, JSONOptions opts, byte[] buffer, long offset,
-                              long len) {
+                               long len) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
@@ -886,7 +886,7 @@ public final class Table implements AutoCloseable {
       len = buffer.length - offset;
     }
     assert len > 0;
-    assert len <= buffer.getLength() - offset;
+    assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(readJSON(schema.getColumnNames(), schema.getTypeIds(), schema.getTypeScales(),
         null, buffer.getAddress() + offset, len,
