@@ -23,7 +23,7 @@
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
-namespace java {
+namespace jni {
 
 std::vector<std::unique_ptr<cudf::column>> convert_to_rows_fixed_width_optimized(
     cudf::table_view const &tbl,
