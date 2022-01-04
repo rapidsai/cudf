@@ -56,8 +56,6 @@ from cudf.core.dtypes import (
     StructDtype,
 )
 from cudf.core.groupby import Grouper
-
-# TODO: Math operations like add, arccos, etc. are not exposed in pandas' root namespace.
 from cudf.core.ops import (
     add,
     arccos,
@@ -86,8 +84,6 @@ from cudf.core.reshape import (
     pivot,
     unstack,
 )
-
-# TODO: Pandas does not expose isclose in the root namespace.
 from cudf.core.series import isclose
 from cudf.core.tools.datetimes import DateOffset, to_datetime
 from cudf.core.tools.numeric import to_numeric
@@ -174,6 +170,7 @@ __all__ = [
     "from_pandas",
     "get_dummies",
     "interval_range",
+    "isclose",
     "melt",
     "merge",
     "merge_sorted",
