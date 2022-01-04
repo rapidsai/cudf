@@ -74,9 +74,9 @@ struct extract_fn {
 
         d_output[group_idx + output_idx] = [&] {
           if (!extracted) { return string_index_pair{nullptr, 0}; }
-          auto const offset = d_str.byte_offset(extracted->first);
-          return string_index_pair{d_str.data() + offset,
-                                   d_str.byte_offset(extracted->second) - offset};
+          auto const start_offset = d_str.byte_offset(extracted->first);
+          auto const end_offset   = d_str.byte_offset(extracted->second);
+          return string_index_pair{d_str.data() + start_offset, end_offset - start_offset};
         }();
       }
       // continue to next match
@@ -118,7 +118,7 @@ std::unique_ptr<column> extract_all(
     d_offsets, d_offsets + strings_count, [] __device__(auto v) { return v > 0; }, stream, mr);
 
   // Return an empty lists column if there are no valid rows
-  if ((strings_count - null_count) == 0) {
+  if (strings_count == null_count) {
     return make_lists_column(0,
                              make_empty_column(type_to_id<offset_type>()),
                              make_empty_column(type_id::STRING),
