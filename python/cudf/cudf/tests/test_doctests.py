@@ -44,7 +44,7 @@ def _fetch_doctests():
 
 class TestDoctests:
     @pytest.fixture(autouse=True)
-    def chdir_to_tmp_path(tmp_path):
+    def chdir_to_tmp_path(cls, tmp_path):
         original_directory = os.getcwd()
         try:
             os.chdir(tmp_path)
