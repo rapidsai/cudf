@@ -109,8 +109,17 @@ void BM_parq_read_varying_options(benchmark::State& state)
   auto const view = tbl->view();
 
   std::vector<char> parquet_data;
+  auto table_meta = cudf::io::table_input_metadata(view);
+  // Precision is required for decimal columns but the value doesn't affect the performance
+  for (cudf::size_type c = 0; c < view.num_columns(); ++c) {
+    if (cudf::is_fixed_point(view.column(c).type())) {
+      table_meta.column_metadata[c].set_decimal_precision(10);
+    }
+  }
+
   cudf_io::parquet_writer_options options =
-    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{&parquet_data}, view);
+    cudf_io::parquet_writer_options::builder(cudf_io::sink_info{&parquet_data}, view)
+      .metadata(&table_meta);
   cudf_io::write_parquet(options);
 
   auto const cols_to_read = select_column_names(get_col_names(parquet_data), col_sel);
