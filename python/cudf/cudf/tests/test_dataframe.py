@@ -1109,34 +1109,6 @@ def test_assign():
 
 @pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
 @pytest.mark.parametrize("method", ["murmur3", "md5"])
-def test_dataframe_hash_columns(nrows, method):
-    gdf = cudf.DataFrame()
-    data = np.asarray(range(nrows))
-    data[0] = data[-1]  # make first and last the same
-    gdf["a"] = data
-    gdf["b"] = gdf.a + 100
-    with pytest.warns(FutureWarning):
-        out = gdf.hash_columns(["a", "b"])
-    assert isinstance(out, cudf.Series)
-    assert len(out) == nrows
-    assert out.dtype == np.int32
-
-    # Check default
-    with pytest.warns(FutureWarning):
-        out_all = gdf.hash_columns()
-    assert_eq(out, out_all)
-
-    # Check single column
-    with pytest.warns(FutureWarning):
-        out_one = gdf.hash_columns(["a"], method=method)
-    # First matches last
-    assert out_one.iloc[0] == out_one.iloc[-1]
-    # Equivalent to the cudf.Series.hash_values()
-    assert_eq(gdf["a"].hash_values(method=method), out_one)
-
-
-@pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
-@pytest.mark.parametrize("method", ["murmur3", "md5"])
 def test_dataframe_hash_values(nrows, method):
     gdf = cudf.DataFrame()
     data = np.asarray(range(nrows))
@@ -2235,44 +2207,6 @@ def test_arrow_pandas_compat(pdf, gdf, preserve_index):
     pdf2 = pdf_arrow_table.to_pandas()
 
     assert_eq(pdf2, gdf2)
-
-
-@pytest.mark.parametrize("nrows", [1, 8, 100, 1000, 100000])
-def test_series_hash_encode(nrows):
-    data = np.asarray(range(nrows))
-    # Python hash returns different value which sometimes
-    # results in enc_with_name_arr and enc_arr to be same.
-    # And there is no other better way to make hash return same value.
-    # So using an integer name to get constant value back from hash.
-    s = cudf.Series(data, name=1)
-    num_features = 1000
-
-    with pytest.warns(FutureWarning):
-        encoded_series = s.hash_encode(num_features)
-    assert isinstance(encoded_series, cudf.Series)
-    enc_arr = encoded_series.to_numpy()
-    assert np.all(enc_arr >= 0)
-    assert np.max(enc_arr) < num_features
-
-    with pytest.warns(FutureWarning):
-        enc_with_name_arr = s.hash_encode(
-            num_features, use_name=True
-        ).to_numpy()
-    assert enc_with_name_arr[0] != enc_arr[0]
-
-
-def test_series_hash_encode_reproducible_results():
-    # Regression test to ensure that hash_encode outputs are reproducible
-    data = cudf.Series([0, 1, 2])
-    with pytest.warns(FutureWarning):
-        hash_result = data.hash_encode(stop=2 ** 16, use_name=False)
-    expected_result = cudf.Series([42165, 55037, 7341])
-    assert_eq(hash_result, expected_result)
-
-    with pytest.warns(FutureWarning):
-        hash_result_with_name = data.hash_encode(stop=2 ** 16, use_name=True)
-    expected_result_with_name = cudf.Series([36137, 39649, 58673])
-    assert_eq(hash_result_with_name, expected_result_with_name)
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["bool"])
