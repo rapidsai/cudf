@@ -1,7 +1,6 @@
 import doctest
 import inspect
 import os
-from contextlib import AbstractContextManager
 
 import numpy as np
 import pytest
@@ -43,37 +42,25 @@ def _fetch_doctests():
     yield from _find_docstrings_in_obj(finder, cudf, criteria=_name_in_all)
 
 
-class _chdir(AbstractContextManager):
-    """Non thread-safe context manager to change the current working directory.
-
-    Implementation copied from Python's contextlib.chdir, implemented in
-    October 2021. This is not yet released but can be replaced with
-    contextlib.chdir in the future.
-    """
-
-    def __init__(self, path):
-        self.path = path
-        self._old_cwd = []
-
-    def __enter__(self):
-        self._old_cwd.append(os.getcwd())
-        os.chdir(self.path)
-
-    def __exit__(self, *excinfo):
-        os.chdir(self._old_cwd.pop())
-
-
 class TestDoctests:
+    @pytest.fixture(autouse=True)
+    def chdir_to_tmp_path(tmp_path):
+        original_directory = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            yield
+        finally:
+            os.chdir(original_directory)
+
     @pytest.mark.parametrize(
         "docstring", _fetch_doctests(), ids=lambda docstring: docstring.name
     )
-    def test_docstring(self, docstring, tmp_path):
+    def test_docstring(self, docstring):
         optionflags = doctest.ELLIPSIS | doctest.NORMALIZE_WHITESPACE
         runner = doctest.DocTestRunner(optionflags=optionflags)
         globs = dict(cudf=cudf, np=np,)
         docstring.globs = globs
-        with _chdir(tmp_path):
-            runner.run(docstring)
+        runner.run(docstring)
         results = runner.summarize()
         if results.failed:
             raise AssertionError(results)
