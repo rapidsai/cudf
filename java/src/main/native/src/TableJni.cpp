@@ -2754,7 +2754,7 @@ Java_ai_rapids_cudf_Table_convertToRowsFixedWidthOptimized(JNIEnv *env, jclass, 
     cudf::jni::auto_set_device(env);
     cudf::table_view *n_input_table = reinterpret_cast<cudf::table_view *>(input_table);
     std::vector<std::unique_ptr<cudf::column>> cols =
-        cudf::java::convert_to_rows_fixed_width_optimized(*n_input_table);
+        cudf::jni::convert_to_rows_fixed_width_optimized(*n_input_table);
     int num_columns = cols.size();
     cudf::jni::native_jlongArray outcol_handles(env, num_columns);
     for (int i = 0; i < num_columns; i++) {
@@ -2812,7 +2812,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertToRows(JNIEnv *env
   try {
     cudf::jni::auto_set_device(env);
     cudf::table_view *n_input_table = reinterpret_cast<cudf::table_view *>(input_table);
-    std::vector<std::unique_ptr<cudf::column>> cols = cudf::java::convert_to_rows(*n_input_table);
+    std::vector<std::unique_ptr<cudf::column>> cols = cudf::jni::convert_to_rows(*n_input_table);
     int num_columns = cols.size();
     cudf::jni::native_jlongArray outcol_handles(env, num_columns);
     for (int i = 0; i < num_columns; i++) {
@@ -2839,7 +2839,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertFromRowsFixedWidth
       types_vec.emplace_back(cudf::jni::make_data_type(n_types[i], n_scale[i]));
     }
     std::unique_ptr<cudf::table> result =
-        cudf::java::convert_from_rows_fixed_width_optimized(list_input, types_vec);
+        cudf::jni::convert_from_rows_fixed_width_optimized(list_input, types_vec);
     return cudf::jni::convert_table_for_return(env, result);
   }
   CATCH_STD(env, 0);
@@ -2862,7 +2862,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_convertFromRows(JNIEnv *e
     for (int i = 0; i < n_types.size(); i++) {
       types_vec.emplace_back(cudf::jni::make_data_type(n_types[i], n_scale[i]));
     }
-    std::unique_ptr<cudf::table> result = cudf::java::convert_from_rows(list_input, types_vec);
+    std::unique_ptr<cudf::table> result = cudf::jni::convert_from_rows(list_input, types_vec);
     return cudf::jni::convert_table_for_return(env, result);
   }
   CATCH_STD(env, 0);
