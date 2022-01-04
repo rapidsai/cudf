@@ -62,55 +62,63 @@ def extract_datetime_component(Column col, object field):
     return result
 
 
-def ceil_datetime(Column col, object field):
+cdef libcudf_datetime.rounding_frequency _get_rounding_frequency(object freq):
+    cdef libcudf_datetime.rounding_frequency freq_val
+
+    # https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.Timedelta.resolution_string.html
+    if freq == "D":
+        freq_val = libcudf_datetime.rounding_frequency.DAY
+    elif freq == "H":
+        freq_val = libcudf_datetime.rounding_frequency.HOUR
+    elif freq in ("T", "min"):
+        freq_val = libcudf_datetime.rounding_frequency.MINUTE
+    elif freq == "S":
+        freq_val = libcudf_datetime.rounding_frequency.SECOND
+    elif freq in ("L", "ms"):
+        freq_val = libcudf_datetime.rounding_frequency.MILLISECOND
+    elif freq in ("U", "us"):
+        freq_val = libcudf_datetime.rounding_frequency.MICROSECOND
+    elif freq == "N":
+        freq_val = libcudf_datetime.rounding_frequency.NANOSECOND
+    else:
+        raise ValueError(f"Invalid resolution: '{freq}'")
+    return freq_val
+
+
+def ceil_datetime(Column col, object freq):
     cdef unique_ptr[column] c_result
     cdef column_view col_view = col.view()
+    cdef libcudf_datetime.rounding_frequency freq_val = \
+        _get_rounding_frequency(freq)
 
     with nogil:
-        # https://pandas.pydata.org/pandas-docs/version/0.25.0/reference/api/pandas.Timedelta.resolution.html
-        if field == "D":
-            c_result = move(libcudf_datetime.ceil_day(col_view))
-        elif field == "H":
-            c_result = move(libcudf_datetime.ceil_hour(col_view))
-        elif field == "T" or field == "min":
-            c_result = move(libcudf_datetime.ceil_minute(col_view))
-        elif field == "S":
-            c_result = move(libcudf_datetime.ceil_second(col_view))
-        elif field == "L" or field == "ms":
-            c_result = move(libcudf_datetime.ceil_millisecond(col_view))
-        elif field == "U" or field == "us":
-            c_result = move(libcudf_datetime.ceil_microsecond(col_view))
-        elif field == "N":
-            c_result = move(libcudf_datetime.ceil_nanosecond(col_view))
-        else:
-            raise ValueError(f"Invalid resolution: '{field}'")
+        c_result = move(libcudf_datetime.ceil_datetimes(col_view, freq_val))
 
     result = Column.from_unique_ptr(move(c_result))
     return result
 
 
-def floor_datetime(Column col, object field):
+def floor_datetime(Column col, object freq):
     cdef unique_ptr[column] c_result
     cdef column_view col_view = col.view()
+    cdef libcudf_datetime.rounding_frequency freq_val = \
+        _get_rounding_frequency(freq)
 
     with nogil:
-        # https://pandas.pydata.org/docs/reference/api/pandas.Timedelta.resolution_string.html
-        if field == "D":
-            c_result = move(libcudf_datetime.floor_day(col_view))
-        elif field == "H":
-            c_result = move(libcudf_datetime.floor_hour(col_view))
-        elif field == "T" or field == "min":
-            c_result = move(libcudf_datetime.floor_minute(col_view))
-        elif field == "S":
-            c_result = move(libcudf_datetime.floor_second(col_view))
-        elif field == "L" or field == "ms":
-            c_result = move(libcudf_datetime.floor_millisecond(col_view))
-        elif field == "U" or field == "us":
-            c_result = move(libcudf_datetime.floor_microsecond(col_view))
-        elif field == "N":
-            c_result = move(libcudf_datetime.floor_nanosecond(col_view))
-        else:
-            raise ValueError(f"Invalid resolution: '{field}'")
+        c_result = move(libcudf_datetime.floor_datetimes(col_view, freq_val))
+
+    result = Column.from_unique_ptr(move(c_result))
+    return result
+
+
+def round_datetime(Column col, object freq):
+    cdef unique_ptr[column] c_result
+    cdef column_view col_view = col.view()
+    cdef libcudf_datetime.rounding_frequency freq_val = \
+        _get_rounding_frequency(freq)
+
+    with nogil:
+        c_result = move(libcudf_datetime.round_datetimes(col_view, freq_val))
 
     result = Column.from_unique_ptr(move(c_result))
     return result

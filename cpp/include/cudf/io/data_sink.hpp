@@ -70,6 +70,22 @@ class data_sink {
   static std::unique_ptr<data_sink> create(cudf::io::data_sink* const user_sink);
 
   /**
+   * @brief Creates a vector of data sinks, one per element in the input vector.
+   *
+   * @param[in] args vector of parameters
+   */
+  template <typename T>
+  static std::vector<std::unique_ptr<data_sink>> create(std::vector<T> const& args)
+  {
+    std::vector<std::unique_ptr<data_sink>> sinks;
+    sinks.reserve(args.size());
+    std::transform(args.cbegin(), args.cend(), std::back_inserter(sinks), [](auto const& arg) {
+      return data_sink::create(arg);
+    });
+    return sinks;
+  }
+
+  /**
    * @brief Base class destructor
    */
   virtual ~data_sink(){};

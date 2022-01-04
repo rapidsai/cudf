@@ -20,13 +20,7 @@ from cudf._typing import DatetimeLikeScalar, Dtype, DtypeObj, ScalarLike
 from cudf.api.types import is_scalar
 from cudf.core._compat import PANDAS_GE_120
 from cudf.core.buffer import Buffer
-from cudf.core.column import (
-    ColumnBase,
-    as_column,
-    column,
-    column_empty_like,
-    string,
-)
+from cudf.core.column import ColumnBase, as_column, column, string
 from cudf.utils.utils import _fillna_natwise
 
 if PANDAS_GE_120:
@@ -228,6 +222,9 @@ class DatetimeColumn(column.ColumnBase):
     def floor(self, freq: str) -> ColumnBase:
         return libcudf.datetime.floor_datetime(self, freq)
 
+    def round(self, freq: str) -> ColumnBase:
+        return libcudf.datetime.round_datetime(self, freq)
+
     def normalize_binop_value(self, other: DatetimeLikeScalar) -> ScalarLike:
         if isinstance(other, cudf.Scalar):
             return other
@@ -289,7 +286,7 @@ class DatetimeColumn(column.ColumnBase):
             "version": 1,
         }
 
-        if self.nullable and self.has_nulls:
+        if self.nullable and self.has_nulls():
 
             # Create a simple Python object that exposes the
             # `__cuda_array_interface__` attribute here since we need to modify
@@ -489,20 +486,6 @@ class DatetimeColumn(column.ColumnBase):
             return True
         else:
             return False
-
-    def _make_copy_with_na_as_null(self):
-        """Return a copy with NaN values replaced with nulls."""
-        null = column_empty_like(self, masked=True, newsize=1)
-        na_value = np.datetime64("nat", self.time_unit)
-        out_col = cudf._lib.replace.replace(
-            self,
-            column.build_column(
-                Buffer(np.array([na_value], dtype=self.dtype).view("|u1")),
-                dtype=self.dtype,
-            ),
-            null,
-        )
-        return out_col
 
 
 def binop_offset(lhs, rhs, op):
