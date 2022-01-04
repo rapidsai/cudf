@@ -51,7 +51,7 @@ void BM_parq_read_varying_input(benchmark::State& state)
 
   cuio_source_sink_pair source_sink(source_type);
   auto table_meta = cudf::io::table_input_metadata(view);
-  if (state.range(0) == int32_t(type_group_id::FIXED_POINT)) {
+  if (state.range(0) == static_cast<int32_t>(type_group_id::FIXED_POINT)) {
     // Precision is required for decimal columns but the value doesn't affect the performance
     for (auto& col_meta : table_meta.column_metadata) {
       col_meta.set_decimal_precision(10);
@@ -97,14 +97,14 @@ void BM_parq_read_varying_options(benchmark::State& state)
   auto const use_pandas_metadata = (flags & 2) != 0;
   auto const ts_type = cudf::data_type{static_cast<cudf::type_id>(state.range(state_idx++))};
 
-  auto const data_types =
-    dtypes_for_column_selection(get_type_or_group({int32_t(type_group_id::INTEGRAL),
-                                                   int32_t(type_group_id::FLOATING_POINT),
-                                                   int32_t(type_group_id::FIXED_POINT),
-                                                   int32_t(type_group_id::TIMESTAMP),
-                                                   int32_t(cudf::type_id::STRING),
-                                                   int32_t(cudf::type_id::LIST)}),
-                                col_sel);
+  auto const data_types = dtypes_for_column_selection(
+    get_type_or_group({static_cast<int32_t>(type_group_id::INTEGRAL),
+                       static_cast<int32_t>(type_group_id::FLOATING_POINT),
+                       static_cast<int32_t>(type_group_id::FIXED_POINT),
+                       static_cast<int32_t>(type_group_id::TIMESTAMP),
+                       static_cast<int32_t>(cudf::type_id::STRING),
+                       static_cast<int32_t>(cudf::type_id::LIST)}),
+    col_sel);
   auto const tbl  = create_random_table(data_types, data_types.size(), table_size_bytes{data_size});
   auto const view = tbl->view();
 
@@ -198,6 +198,9 @@ BENCHMARK_REGISTER_F(ParquetRead, column_selection)
   ->Unit(benchmark::kMillisecond)
   ->UseManualTime();
 
+// Disabled until we add an API to read metadata from a parquet file and determine num row groups.
+// https://github.com/rapidsai/cudf/pull/9963#issuecomment-1004832863
+/*
 BENCHMARK_DEFINE_F(ParquetRead, row_selection)
 (::benchmark::State& state) { BM_parq_read_varying_options(state); }
 BENCHMARK_REGISTER_F(ParquetRead, row_selection)
@@ -208,6 +211,7 @@ BENCHMARK_REGISTER_F(ParquetRead, row_selection)
                  {int32_t(cudf::type_id::EMPTY)}})
   ->Unit(benchmark::kMillisecond)
   ->UseManualTime();
+*/
 
 BENCHMARK_DEFINE_F(ParquetRead, misc_options)
 (::benchmark::State& state) { BM_parq_read_varying_options(state); }
