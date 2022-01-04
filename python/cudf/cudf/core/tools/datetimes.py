@@ -8,6 +8,7 @@ from typing import Sequence, Type, TypeVar, Union
 import cupy as cp
 import numpy as np
 import pandas as pd
+import pandas.tseries.offsets as pd_offset
 from pandas.core.tools.datetimes import _unit_map
 
 import cudf
@@ -330,7 +331,7 @@ def _process_col(col, unit, dayfirst, infer_datetime_format, format):
             col = col.as_datetime_column(dtype=_unit_dtype_map[unit])
 
     elif col.dtype.kind in ("O"):
-        if unit not in (None, "ns"):
+        if unit not in (None, "ns") or col.null_count == len(col):
             try:
                 col = col.astype(dtype="int64")
             except ValueError:
@@ -456,6 +457,17 @@ class DateOffset:
         "W": "weeks",
         "M": "months",
         "Y": "years",
+    }
+
+    _TICK_OR_WEEK_TO_UNITS = {
+        pd_offset.Week: "weeks",
+        pd_offset.Day: "days",
+        pd_offset.Hour: "hours",
+        pd_offset.Minute: "minutes",
+        pd_offset.Second: "seconds",
+        pd_offset.Milli: "milliseconds",
+        pd_offset.Micro: "microseconds",
+        pd_offset.Nano: "nanoseconds",
     }
 
     _FREQSTR_REGEX = re.compile("([0-9]*)([a-zA-Z]+)")
@@ -649,6 +661,13 @@ class DateOffset:
 
         return cls(**{cls._CODES_TO_UNITS[freq_part]: int(numeric_part)})
 
+    @classmethod
+    def _from_pandas_ticks_or_weeks(
+        cls: Type[_T],
+        tick: Union[pd.tseries.offsets.Tick, pd.tseries.offsets.Week],
+    ) -> _T:
+        return cls(**{cls._TICK_OR_WEEK_TO_UNITS[type(tick)]: tick.n})
+
     def _maybe_as_fast_pandas_offset(self):
         if (
             len(self.kwds) == 1
@@ -814,23 +833,15 @@ def date_range(
     if isinstance(freq, DateOffset):
         offset = freq
     elif isinstance(freq, str):
-        # Map pandas `offset alias` into cudf DateOffset `CODE`, only
-        # fixed-frequency, non-anchored offset aliases are supported.
-        mo = re.fullmatch(
-            rf'(-)*(\d*)({"|".join(_offset_alias_to_code.keys())})', freq
-        )
-        if mo is None:
+        offset = pd.tseries.frequencies.to_offset(freq)
+        if not isinstance(offset, pd.tseries.offsets.Tick) and not isinstance(
+            offset, pd.tseries.offsets.Week
+        ):
             raise ValueError(
-                f"Unrecognized or unsupported offset alias {freq}."
+                f"Unrecognized frequency string {freq}. cuDF does "
+                "not yet support month, quarter, year-anchored frequency."
             )
-
-        sign, n, offset_alias = mo.groups()
-        code = _offset_alias_to_code[offset_alias]
-
-        freq = "".join([n, code])
-        offset = DateOffset._from_freqstr(freq)
-        if sign:
-            offset.kwds.update({s: -i for s, i in offset.kwds.items()})
+        offset = DateOffset._from_pandas_ticks_or_weeks(offset)
     else:
         raise TypeError("`freq` must be a `str` or cudf.DateOffset object.")
 

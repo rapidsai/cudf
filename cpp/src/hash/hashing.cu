@@ -88,13 +88,12 @@ std::unique_ptr<column> serial_murmur_hash3_32(table_view const& input,
 
 std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
-                             cudf::host_span<uint32_t const> initial_hash,
                              uint32_t seed,
                              rmm::cuda_stream_view stream,
                              rmm::mr::device_memory_resource* mr)
 {
   switch (hash_function) {
-    case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, initial_hash, stream, mr);
+    case (hash_id::HASH_MURMUR3): return murmur_hash3_32(input, stream, mr);
     case (hash_id::HASH_MD5): return md5_hash(input, stream, mr);
     case (hash_id::HASH_SERIAL_MURMUR3):
       return serial_murmur_hash3_32<MurmurHash3_32>(input, seed, stream, mr);
@@ -108,12 +107,11 @@ std::unique_ptr<column> hash(table_view const& input,
 
 std::unique_ptr<column> hash(table_view const& input,
                              hash_id hash_function,
-                             cudf::host_span<uint32_t const> initial_hash,
                              uint32_t seed,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_FUNC_RANGE();
-  return detail::hash(input, hash_function, initial_hash, seed, rmm::cuda_stream_default, mr);
+  return detail::hash(input, hash_function, seed, rmm::cuda_stream_default, mr);
 }
 
 }  // namespace cudf

@@ -246,7 +246,7 @@ def test_series_init_none():
     sr1 = cudf.Series()
     got = sr1.to_string()
 
-    expect = "Series([], dtype: float64)"
+    expect = sr1.to_pandas().__repr__()
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
@@ -254,7 +254,7 @@ def test_series_init_none():
     sr2 = cudf.Series(None)
     got = sr2.to_string()
 
-    expect = "Series([], dtype: float64)"
+    expect = sr2.to_pandas().__repr__()
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
@@ -1308,7 +1308,7 @@ def test_concat_empty_dataframe(df_1, df_2):
     [
         {"a": [1, 2], "b": [1, 2], "c": ["s1", "s2"], "d": [1.0, 2.0]},
         {"b": [1.9, 10.9], "c": ["s1", "s2"]},
-        {"c": ["s1"], "b": [None], "a": [False]},
+        {"c": ["s1"], "b": pd.Series([None], dtype="float"), "a": [False]},
     ],
 )
 @pytest.mark.parametrize(
@@ -2008,8 +2008,8 @@ def test_dataframe_count_reduction(data, func):
         {"x": [np.nan, 2, 3, 4, 100, np.nan], "y": [4, 5, 6, 88, 99, np.nan]},
         {"x": [1, 2, 3], "y": [4, 5, 6]},
         {"x": [np.nan, np.nan, np.nan], "y": [np.nan, np.nan, np.nan]},
-        {"x": [], "y": []},
-        {"x": []},
+        {"x": pd.Series([], dtype="float"), "y": pd.Series([], dtype="float")},
+        {"x": pd.Series([], dtype="int")},
     ],
 )
 @pytest.mark.parametrize("ops", ["sum", "product", "prod"])
@@ -2017,7 +2017,7 @@ def test_dataframe_count_reduction(data, func):
 @pytest.mark.parametrize("min_count", [-10, -1, 0, 1, 2, 3, 10])
 def test_dataframe_min_count_ops(data, ops, skipna, min_count):
     psr = pd.DataFrame(data)
-    gsr = cudf.DataFrame(data)
+    gsr = cudf.from_pandas(psr)
 
     assert_eq(
         getattr(psr, ops)(skipna=skipna, min_count=min_count),
@@ -2235,44 +2235,6 @@ def test_arrow_pandas_compat(pdf, gdf, preserve_index):
     pdf2 = pdf_arrow_table.to_pandas()
 
     assert_eq(pdf2, gdf2)
-
-
-@pytest.mark.parametrize("nrows", [1, 8, 100, 1000, 100000])
-def test_series_hash_encode(nrows):
-    data = np.asarray(range(nrows))
-    # Python hash returns different value which sometimes
-    # results in enc_with_name_arr and enc_arr to be same.
-    # And there is no other better way to make hash return same value.
-    # So using an integer name to get constant value back from hash.
-    s = cudf.Series(data, name=1)
-    num_features = 1000
-
-    with pytest.warns(FutureWarning):
-        encoded_series = s.hash_encode(num_features)
-    assert isinstance(encoded_series, cudf.Series)
-    enc_arr = encoded_series.to_numpy()
-    assert np.all(enc_arr >= 0)
-    assert np.max(enc_arr) < num_features
-
-    with pytest.warns(FutureWarning):
-        enc_with_name_arr = s.hash_encode(
-            num_features, use_name=True
-        ).to_numpy()
-    assert enc_with_name_arr[0] != enc_arr[0]
-
-
-def test_series_hash_encode_reproducible_results():
-    # Regression test to ensure that hash_encode outputs are reproducible
-    data = cudf.Series([0, 1, 2])
-    with pytest.warns(FutureWarning):
-        hash_result = data.hash_encode(stop=2 ** 16, use_name=False)
-    expected_result = cudf.Series([42165, 55037, 7341])
-    assert_eq(hash_result, expected_result)
-
-    with pytest.warns(FutureWarning):
-        hash_result_with_name = data.hash_encode(stop=2 ** 16, use_name=True)
-    expected_result_with_name = cudf.Series([36137, 39649, 58673])
-    assert_eq(hash_result_with_name, expected_result_with_name)
 
 
 @pytest.mark.parametrize("dtype", NUMERIC_TYPES + ["bool"])
@@ -2498,7 +2460,7 @@ def test_series_all_null(num_elements, null_type):
 
     # Typecast Pandas because None will return `object` dtype
     expect = pd.Series(data, dtype="float64")
-    got = cudf.Series(data)
+    got = cudf.Series(data, dtype="float64")
 
     assert_eq(expect, got)
 
@@ -8480,10 +8442,10 @@ def test_agg_for_dataframe_with_string_columns(aggs):
 )
 def test_update_for_dataframes(data, data2, join, overwrite, errors):
     pdf = pd.DataFrame(data)
-    gdf = cudf.DataFrame(data)
+    gdf = cudf.DataFrame(data, nan_as_null=False)
 
     other_pd = pd.DataFrame(data2)
-    other_gd = cudf.DataFrame(data2)
+    other_gd = cudf.DataFrame(data2, nan_as_null=False)
 
     pdf.update(other=other_pd, join=join, overwrite=overwrite, errors=errors)
     gdf.update(other=other_gd, join=join, overwrite=overwrite, errors=errors)
@@ -8949,7 +8911,9 @@ def test_frame_series_where_other(data):
         (
             {
                 "id": ["a", "a", "b", "b", "c", "c"],
-                "val": [None, None, None, None, None, None],
+                "val": cudf.Series(
+                    [None, None, None, None, None, None], dtype="float64"
+                ),
             },
             ["id"],
         ),
@@ -9039,3 +9003,55 @@ def test_pearson_corr_multiindex_dataframe():
     expected = gdf.to_pandas().groupby(level="a").corr("pearson")
 
     assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [np.nan, 1, 2], "b": [None, None, None]},
+        {"a": [1, 2, np.nan, 2], "b": [np.nan, np.nan, np.nan, np.nan]},
+        {
+            "a": [1, 2, np.nan, 2, None],
+            "b": [np.nan, np.nan, None, np.nan, np.nan],
+        },
+        {"a": [1, 2, 2, None, 1.1], "b": [1, 2.2, 3, None, 5]},
+    ],
+)
+@pytest.mark.parametrize("nan_as_null", [True, False])
+def test_dataframe_constructor_nan_as_null(data, nan_as_null):
+    actual = cudf.DataFrame(data, nan_as_null=nan_as_null)
+
+    if nan_as_null:
+        assert (
+            not (
+                actual.astype("float").replace(
+                    cudf.Series([np.nan], nan_as_null=False), cudf.Series([-1])
+                )
+                == -1
+            )
+            .any()
+            .any()
+        )
+    else:
+        actual = actual.select_dtypes(exclude=["object"])
+        assert (actual.replace(np.nan, -1) == -1).any().any()
+
+
+def test_dataframe_add_prefix():
+    cdf = cudf.DataFrame({"A": [1, 2, 3, 4], "B": [3, 4, 5, 6]})
+    pdf = cdf.to_pandas()
+
+    got = cdf.add_prefix("item_")
+    expected = pdf.add_prefix("item_")
+
+    assert_eq(got, expected)
+
+
+def test_dataframe_add_suffix():
+    cdf = cudf.DataFrame({"A": [1, 2, 3, 4], "B": [3, 4, 5, 6]})
+    pdf = cdf.to_pandas()
+
+    got = cdf.add_suffix("_item")
+    expected = pdf.add_suffix("_item")
+
+    assert_eq(got, expected)

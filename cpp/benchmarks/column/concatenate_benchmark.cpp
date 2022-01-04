@@ -19,6 +19,7 @@
 #include <cudf_test/column_wrapper.hpp>
 
 #include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/fixture/templated_benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <thrust/iterator/constant_iterator.h>
@@ -26,7 +27,6 @@
 #include <algorithm>
 #include <vector>
 
-template <typename T, bool Nullable>
 class Concatenate : public cudf::benchmark {
 };
 
@@ -69,17 +69,15 @@ static void BM_concatenate(benchmark::State& state)
   state.SetBytesProcessed(state.iterations() * num_cols * num_rows * sizeof(T));
 }
 
-#define CONCAT_BENCHMARK_DEFINE(name, type, nullable)                     \
-  BENCHMARK_TEMPLATE_DEFINE_F(Concatenate, name, type, nullable)          \
-  (::benchmark::State & state) { BM_concatenate<type, nullable>(state); } \
-  BENCHMARK_REGISTER_F(Concatenate, name)                                 \
-    ->RangeMultiplier(8)                                                  \
-    ->Ranges({{1 << 6, 1 << 18}, {2, 1024}})                              \
-    ->Unit(benchmark::kMillisecond)                                       \
+#define CONCAT_BENCHMARK_DEFINE(type, nullable)                      \
+  TEMPLATED_BENCHMARK_F(Concatenate, BM_concatenate, type, nullable) \
+    ->RangeMultiplier(8)                                             \
+    ->Ranges({{1 << 6, 1 << 18}, {2, 1024}})                         \
+    ->Unit(benchmark::kMillisecond)                                  \
     ->UseManualTime();
 
-CONCAT_BENCHMARK_DEFINE(concat_columns_int64_non_null, int64_t, false)
-CONCAT_BENCHMARK_DEFINE(concat_columns_int64_nullable, int64_t, true)
+CONCAT_BENCHMARK_DEFINE(int64_t, false)
+CONCAT_BENCHMARK_DEFINE(int64_t, true)
 
 template <typename T, bool Nullable>
 static void BM_concatenate_tables(benchmark::State& state)
@@ -131,19 +129,16 @@ static void BM_concatenate_tables(benchmark::State& state)
   state.SetBytesProcessed(state.iterations() * num_cols * num_rows * num_tables * sizeof(T));
 }
 
-#define CONCAT_TABLES_BENCHMARK_DEFINE(name, type, nullable)                     \
-  BENCHMARK_TEMPLATE_DEFINE_F(Concatenate, name, type, nullable)                 \
-  (::benchmark::State & state) { BM_concatenate_tables<type, nullable>(state); } \
-  BENCHMARK_REGISTER_F(Concatenate, name)                                        \
-    ->RangeMultiplier(8)                                                         \
-    ->Ranges({{1 << 8, 1 << 12}, {2, 32}, {2, 128}})                             \
-    ->Unit(benchmark::kMillisecond)                                              \
+#define CONCAT_TABLES_BENCHMARK_DEFINE(type, nullable)                      \
+  TEMPLATED_BENCHMARK_F(Concatenate, BM_concatenate_tables, type, nullable) \
+    ->RangeMultiplier(8)                                                    \
+    ->Ranges({{1 << 8, 1 << 12}, {2, 32}, {2, 128}})                        \
+    ->Unit(benchmark::kMillisecond)                                         \
     ->UseManualTime();
 
-CONCAT_TABLES_BENCHMARK_DEFINE(concat_tables_int64_non_null, int64_t, false)
-CONCAT_TABLES_BENCHMARK_DEFINE(concat_tables_int64_nullable, int64_t, true)
+CONCAT_TABLES_BENCHMARK_DEFINE(int64_t, false)
+CONCAT_TABLES_BENCHMARK_DEFINE(int64_t, true)
 
-template <bool Nullable>
 class ConcatenateStrings : public cudf::benchmark {
 };
 
@@ -192,14 +187,12 @@ static void BM_concatenate_strings(benchmark::State& state)
                           (sizeof(int32_t) + num_chars));  // offset + chars
 }
 
-#define CONCAT_STRINGS_BENCHMARK_DEFINE(name, nullable)                     \
-  BENCHMARK_TEMPLATE_DEFINE_F(ConcatenateStrings, name, nullable)           \
-  (::benchmark::State & state) { BM_concatenate_strings<nullable>(state); } \
-  BENCHMARK_REGISTER_F(ConcatenateStrings, name)                            \
-    ->RangeMultiplier(8)                                                    \
-    ->Ranges({{1 << 8, 1 << 14}, {8, 128}, {2, 256}})                       \
-    ->Unit(benchmark::kMillisecond)                                         \
+#define CONCAT_STRINGS_BENCHMARK_DEFINE(nullable)                             \
+  TEMPLATED_BENCHMARK_F(ConcatenateStrings, BM_concatenate_strings, nullable) \
+    ->RangeMultiplier(8)                                                      \
+    ->Ranges({{1 << 8, 1 << 14}, {8, 128}, {2, 256}})                         \
+    ->Unit(benchmark::kMillisecond)                                           \
     ->UseManualTime();
 
-CONCAT_STRINGS_BENCHMARK_DEFINE(concat_string_columns_non_null, false)
-CONCAT_STRINGS_BENCHMARK_DEFINE(concat_string_columns_nullable, true)
+CONCAT_STRINGS_BENCHMARK_DEFINE(false)
+CONCAT_STRINGS_BENCHMARK_DEFINE(true)

@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/hashing.hpp>
 #include <cudf/partitioning.hpp>
 #include <cudf/sorting.hpp>
@@ -22,7 +23,6 @@
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
 #include <cudf_test/type_lists.hpp>
-#include "cudf/detail/utilities/vector_factories.hpp"
 
 using cudf::test::fixed_width_column_wrapper;
 using cudf::test::strings_column_wrapper;
