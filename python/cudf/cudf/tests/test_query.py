@@ -214,7 +214,8 @@ def test_query_with_index_keyword(query, a_val, b_val, c_val):
 @pytest.mark.parametrize(
     "data, query",
     [
-        # Only need to test the
+        # Only need to test the dtypes that pandas
+        # supports but that we do not
         (["a", "b", "c"], "data == 'a'"),
     ],
 )
