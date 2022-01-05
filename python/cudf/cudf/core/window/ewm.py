@@ -119,19 +119,14 @@ class ExponentialMovingWindow(_RollingBase):
         raise NotImplementedError("ewmstd not yet supported.")
 
     def corr(self, other):
-        raise NotImplementedError("corr not yet supported.")
+        raise NotImplementedError("ewmcorr not yet supported.")
 
     def cov(self, other):
-        raise NotImplementedError("cov not yet supported.")
+        raise NotImplementedError("ewmcov not yet supported.")
 
     def _apply_agg_series(self, sr, agg_name):
         if not is_numeric_dtype(sr.dtype):
             raise TypeError("No numeric types to aggregate")
-
-        kws = {
-            "com": self.com,
-            "adjust": self.adjust,
-        }
 
         # libcudf ewm has special casing for nulls only
         # and come what may with nans. It treats those nulls like
@@ -140,4 +135,6 @@ class ExponentialMovingWindow(_RollingBase):
         # passing them in.
         to_libcudf_column = sr._column.astype("float64").nans_to_nulls()
 
-        return scan(agg_name, to_libcudf_column, True, **kws)
+        return scan(
+            agg_name, to_libcudf_column, True, com=self.com, adjust=self.adjust
+        )
