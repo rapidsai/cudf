@@ -287,18 +287,15 @@ std::unique_ptr<column> ewma(std::unique_ptr<aggregation> const& agg,
   // better expressed in terms of the derived parameter `beta`
   T beta = com / (com + 1.0);
 
-  // rmm::device_uvector<T> data(input.size(), stream, mr);
-  if (history == cudf::ewm_history::INFINITE) {
-    return std::make_unique<column>(
-      cudf::data_type(cudf::type_to_id<T>()),
-      input.size(),
-      std::move(compute_ewma_adjust(input, beta, stream, mr).release()));
-  } else {
-    return std::make_unique<column>(
-      cudf::data_type(cudf::type_to_id<T>()),
-      input.size(),
-      std::move(compute_ewma_noadjust(input, beta, stream, mr).release()));
-  }
+  auto result = [&]() {
+    if (history == cudf::ewm_history::INFINITE) {
+      return compute_ewma_adjust(input, beta, stream, mr).release();
+    } else {
+      return compute_ewma_noadjust(input, beta, stream, mr).release();
+    }
+  }();
+  return std::make_unique<column>(
+    cudf::data_type(cudf::type_to_id<T>()), input.size(), std::move(result));
 }
 
 struct ewma_functor {
