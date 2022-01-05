@@ -980,30 +980,6 @@ class Frame:
 
         return self.where(cond=~cond, other=other, inplace=inplace)
 
-    def _partition(self, scatter_map, npartitions, keep_index=True):
-
-        data, index, output_offsets = libcudf.partitioning.partition(
-            self, scatter_map, npartitions, keep_index
-        )
-        partitioned = self.__class__._from_data(data, index)
-
-        # due to the split limitation mentioned
-        # here: https://github.com/rapidsai/cudf/issues/4607
-        # we need to remove first & last elements in offsets.
-        # TODO: Remove this after the above issue is fixed.
-        output_offsets = output_offsets[1:-1]
-
-        result = partitioned._split(output_offsets, keep_index=keep_index)
-
-        for frame in result:
-            frame._copy_type_metadata(self, include_index=keep_index)
-
-        if npartitions:
-            for _ in range(npartitions - len(result)):
-                result.append(self._empty_like(keep_index))
-
-        return result
-
     def pipe(self, func, *args, **kwargs):
         """
         Apply ``func(self, *args, **kwargs)``.
@@ -1110,9 +1086,29 @@ class Frame:
                     f"ERROR: map_size must be >= {count} (got {map_size})."
                 )
 
-        tables = self._partition(map_index, map_size, keep_index)
+        data, index, output_offsets = libcudf.partitioning.partition(
+            self, map_index, map_size, keep_index
+        )
+        partitioned = self.__class__._from_data(data, index)
 
-        return tables
+        # due to the split limitation mentioned
+        # here: https://github.com/rapidsai/cudf/issues/4607
+        # we need to remove first & last elements in offsets.
+        # TODO: Remove this after the above issue is fixed.
+        output_offsets = output_offsets[1:-1]
+
+        result = partitioned._split(output_offsets, keep_index=keep_index)
+
+        for frame in result:
+            frame._copy_type_metadata(self, include_index=keep_index)
+
+        if map_size:
+            result += [
+                self._empty_like(keep_index)
+                for _ in range(map_size - len(result))
+            ]
+
+        return result
 
     def dropna(
         self, axis=0, how="any", thresh=None, subset=None, inplace=False
