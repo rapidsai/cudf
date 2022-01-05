@@ -422,6 +422,4 @@ Serialization / IO / conversion
    Series.from_categorical
    Series.from_masked_array
    Series.from_pandas
-   Series.hash_encode
    Series.hash_values
-   
