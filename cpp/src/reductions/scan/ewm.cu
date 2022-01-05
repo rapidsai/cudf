@@ -79,10 +79,12 @@ rmm::device_uvector<cudf::size_type> null_roll_up(column_view const& input,
 
 /**
 * @brief modify the source pairs that eventually yield the numerator
-* and denominator to account for nan values. Pairs at nan indices
-* become the identity operator (1, 0). The first pair after a nan
-* value or sequence of nan values has its first element multiplied by
-* N factors of beta, where N is the number of preceeding NaNs.
+* and denominator to account for nan values.
+
+* Pairs at nan indices become the identity operator (1, 0). The first
+* pair after a nan value or sequence of nan values has its first element
+* multiplied by N factors of beta, where N is the number of preceeding
+* NaNs.
 *
 * This function requires that the null rollup be passed in as a
 * precomputed device vector. This is because, as in the case with
@@ -94,7 +96,7 @@ rmm::device_uvector<cudf::size_type> null_roll_up(column_view const& input,
 template <typename T>
 void pair_beta_adjust(column_view const& input,
                       rmm::device_uvector<pair_type<T>>& pairs,
-                      rmm::device_uvector<cudf::size_type>& nullcnt,
+                      rmm::device_uvector<cudf::size_type> const& nullcnt,
                       rmm::cuda_stream_view stream)
 {
   auto device_view       = column_device_view::create(input);
@@ -107,7 +109,7 @@ void pair_beta_adjust(column_view const& input,
     valid_and_nullcnt + input.size(),
     pairs.begin(),
     pairs.begin(),
-    [] __device__(thrust::tuple<bool, int> valid_and_nullcnt, pair_type<T> pair) -> pair_type<T> {
+    [] __device__(thrust::tuple<bool, int> const valid_and_nullcnt, pair_type<T> const pair) -> pair_type<T> {
       bool const valid = thrust::get<0>(valid_and_nullcnt);
       int const exp    = thrust::get<1>(valid_and_nullcnt);
       if (valid and (exp != 0)) {
@@ -243,14 +245,13 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
     y_{i+1} = (1 - alpha)x_{i-1} + alpha x_i, but really there is a "denominator"
     which is the sum of the weights: alpha + (1 - alpha) == 1. If a null is
     encountered, that means that the "previous" value is downweighted by a
-    factor (for each missing value). For example this would y_2 be for one NULL:
+    factor (for each missing value). For example this would y_2 be for one null:
     data = {x_0, NULL, x_1},
     y_2 = (1 - alpha)**2 x_0 + alpha * x_2 / (alpha + (1-alpha)**2)
 
     As such, the pairs must be updated before summing like the adjusted case to
     properly downweight the previous values. But now but we also need to compute
     the normalization factors and divide the results into them at the end.
-
     */
 
     rmm::device_uvector<cudf::size_type> nullcnt = null_roll_up(input, stream);
@@ -319,7 +320,7 @@ std::unique_ptr<column> ewma(std::unique_ptr<aggregation> const& agg,
   T com                     = (dynamic_cast<ewma_aggregation*>(agg.get()))->com;
   // center of mass is easier for the user, but the recurrences are
   // better expressed in terms of the derived parameter `beta`
-  T beta = 1.0 - (1.0 / (com + 1.0));
+  T beta = com / (com + 1.0);
 
   // rmm::device_uvector<T> data(input.size(), stream, mr);
   if (history == cudf::ewm_history::INFINITE) {
