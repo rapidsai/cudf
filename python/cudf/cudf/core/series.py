@@ -3120,45 +3120,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             res = res / float(res._column.sum())
         return res
 
-    def hash_values(self, method="murmur3"):
-        """Compute the hash of values in this column.
-
-        Parameters
-        ----------
-        method : {'murmur3', 'md5'}, default 'murmur3'
-            Hash function to use:
-            * murmur3: MurmurHash3 hash function.
-            * md5: MD5 hash function.
-
-        Returns
-        -------
-        Series
-            A Series with hash values.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([10, 120, 30])
-        >>> series
-        0     10
-        1    120
-        2     30
-        dtype: int64
-        >>> series.hash_values(method="murmur3")
-        0   -1930516747
-        1     422619251
-        2    -941520876
-        dtype: int32
-        >>> series.hash_values(method="md5")
-        0    7be4bbacbfdb05fb3044e36c22b41e8b
-        1    947ca8d2c5f0f27437f156cfbfab0969
-        2    d0580ef52d27c043c8e341fd5039b166
-        dtype: object
-        """
-        return Series._from_data(
-            {None: self._hash(method=method)}, index=self.index
-        )
-
     def quantile(
         self, q=0.5, interpolation="linear", exact=True, quant_index=True
     ):
