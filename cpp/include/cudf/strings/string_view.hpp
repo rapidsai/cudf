@@ -55,7 +55,7 @@ class string_view {
   /**
    * @brief Return the number of characters in this string
    */
-  CUDF_DI size_type length() const;
+  __device__ inline size_type length() const;
   /**
    * @brief Return a pointer to the internal device array
    */
@@ -76,28 +76,28 @@ class string_view {
     using reference         = char_utf8&;
     using pointer           = char_utf8*;
     using iterator_category = std::input_iterator_tag;
-    CUDF_DI const_iterator(const string_view& str, size_type pos);
+    __device__ inline const_iterator(const string_view& str, size_type pos);
     const_iterator(const const_iterator& mit) = default;
     const_iterator(const_iterator&& mit)      = default;
     const_iterator& operator=(const const_iterator&) = default;
     const_iterator& operator=(const_iterator&&) = default;
-    CUDF_DI const_iterator& operator++();
-    CUDF_DI const_iterator operator++(int);
-    CUDF_DI const_iterator& operator+=(difference_type);
-    CUDF_DI const_iterator operator+(difference_type);
-    CUDF_DI const_iterator& operator--();
-    CUDF_DI const_iterator operator--(int);
-    CUDF_DI const_iterator& operator-=(difference_type);
-    CUDF_DI const_iterator operator-(difference_type);
-    CUDF_DI bool operator==(const const_iterator&) const;
-    CUDF_DI bool operator!=(const const_iterator&) const;
-    CUDF_DI bool operator<(const const_iterator&) const;
-    CUDF_DI bool operator<=(const const_iterator&) const;
-    CUDF_DI bool operator>(const const_iterator&) const;
-    CUDF_DI bool operator>=(const const_iterator&) const;
-    CUDF_DI char_utf8 operator*() const;
-    CUDF_DI size_type position() const;
-    CUDF_DI size_type byte_offset() const;
+    __device__ inline const_iterator& operator++();
+    __device__ inline const_iterator operator++(int);
+    __device__ inline const_iterator& operator+=(difference_type);
+    __device__ inline const_iterator operator+(difference_type);
+    __device__ inline const_iterator& operator--();
+    __device__ inline const_iterator operator--(int);
+    __device__ inline const_iterator& operator-=(difference_type);
+    __device__ inline const_iterator operator-(difference_type);
+    __device__ inline bool operator==(const const_iterator&) const;
+    __device__ inline bool operator!=(const const_iterator&) const;
+    __device__ inline bool operator<(const const_iterator&) const;
+    __device__ inline bool operator<=(const const_iterator&) const;
+    __device__ inline bool operator>(const const_iterator&) const;
+    __device__ inline bool operator>=(const const_iterator&) const;
+    __device__ inline char_utf8 operator*() const;
+    __device__ inline size_type position() const;
+    __device__ inline size_type byte_offset() const;
 
    private:
     const char* p{};
@@ -109,24 +109,24 @@ class string_view {
   /**
    * @brief Return new iterator pointing to the beginning of this string
    */
-  CUDF_DI const_iterator begin() const;
+  __device__ inline const_iterator begin() const;
   /**
    * @brief Return new iterator pointing past the end of this string
    */
-  CUDF_DI const_iterator end() const;
+  __device__ inline const_iterator end() const;
 
   /**
    * @brief Return single UTF-8 character at the given character position
    *
    * @param pos Character position
    */
-  CUDF_DI char_utf8 operator[](size_type pos) const;
+  __device__ inline char_utf8 operator[](size_type pos) const;
   /**
    * @brief Return the byte offset from data() for a given character position
    *
    * @param pos Character position
    */
-  CUDF_DI size_type byte_offset(size_type pos) const;
+  __device__ inline size_type byte_offset(size_type pos) const;
 
   /**
    * @brief Comparing target string with this string. Each character is compared
@@ -141,7 +141,7 @@ class string_view {
    *            not match is greater in the arg string, or all compared characters
    *            match but the arg string is longer.
    */
-  CUDF_DI int compare(const string_view& str) const;
+  __device__ inline int compare(const string_view& str) const;
   /**
    * @brief Comparing target string with this string. Each character is compared
    * as a UTF-8 code-point value.
@@ -156,32 +156,32 @@ class string_view {
    *            not match is greater in the arg string, or all compared characters
    *            match but the arg string is longer.
    */
-  CUDF_DI int compare(const char* str, size_type bytes) const;
+  __device__ inline int compare(const char* str, size_type bytes) const;
 
   /**
    * @brief Returns true if rhs matches this string exactly.
    */
-  CUDF_DI bool operator==(const string_view& rhs) const;
+  __device__ inline bool operator==(const string_view& rhs) const;
   /**
    * @brief Returns true if rhs does not match this string.
    */
-  CUDF_DI bool operator!=(const string_view& rhs) const;
+  __device__ inline bool operator!=(const string_view& rhs) const;
   /**
    * @brief Returns true if this string is ordered before rhs.
    */
-  CUDF_DI bool operator<(const string_view& rhs) const;
+  __device__ inline bool operator<(const string_view& rhs) const;
   /**
    * @brief Returns true if rhs is ordered before this string.
    */
-  CUDF_DI bool operator>(const string_view& rhs) const;
+  __device__ inline bool operator>(const string_view& rhs) const;
   /**
    * @brief Returns true if this string matches or is ordered before rhs.
    */
-  CUDF_DI bool operator<=(const string_view& rhs) const;
+  __device__ inline bool operator<=(const string_view& rhs) const;
   /**
    * @brief Returns true if rhs matches or is ordered before this string.
    */
-  CUDF_DI bool operator>=(const string_view& rhs) const;
+  __device__ inline bool operator>=(const string_view& rhs) const;
 
   /**
    * @brief Returns the character position of the first occurrence where the
@@ -193,7 +193,9 @@ class string_view {
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if str is not found in this string.
    */
-  CUDF_DI size_type find(const string_view& str, size_type pos = 0, size_type count = -1) const;
+  __device__ inline size_type find(const string_view& str,
+                                   size_type pos   = 0,
+                                   size_type count = -1) const;
   /**
    * @brief Returns the character position of the first occurrence where the
    * array str is found in this string within the character range [pos,pos+n).
@@ -205,10 +207,10 @@ class string_view {
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if arg string is not found in this string.
    */
-  CUDF_DI size_type find(const char* str,
-                         size_type bytes,
-                         size_type pos   = 0,
-                         size_type count = -1) const;
+  __device__ inline size_type find(const char* str,
+                                   size_type bytes,
+                                   size_type pos   = 0,
+                                   size_type count = -1) const;
   /**
    * @brief Returns the character position of the first occurrence where
    * character is found in this string within the character range [pos,pos+n).
@@ -219,7 +221,9 @@ class string_view {
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if arg string is not found in this string.
    */
-  CUDF_DI size_type find(char_utf8 character, size_type pos = 0, size_type count = -1) const;
+  __device__ inline size_type find(char_utf8 character,
+                                   size_type pos   = 0,
+                                   size_type count = -1) const;
   /**
    * @brief Returns the character position of the last occurrence where the
    * argument str is found in this string within the character range [pos,pos+n).
@@ -230,7 +234,9 @@ class string_view {
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if arg string is not found in this string.
    */
-  CUDF_DI size_type rfind(const string_view& str, size_type pos = 0, size_type count = -1) const;
+  __device__ inline size_type rfind(const string_view& str,
+                                    size_type pos   = 0,
+                                    size_type count = -1) const;
   /**
    * @brief Returns the character position of the last occurrence where the
    * array str is found in this string within the character range [pos,pos+n).
@@ -242,10 +248,10 @@ class string_view {
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if arg string is not found in this string.
    */
-  CUDF_DI size_type rfind(const char* str,
-                          size_type bytes,
-                          size_type pos   = 0,
-                          size_type count = -1) const;
+  __device__ inline size_type rfind(const char* str,
+                                    size_type bytes,
+                                    size_type pos   = 0,
+                                    size_type count = -1) const;
   /**
    * @brief Returns the character position of the last occurrence where
    * character is found in this string within the character range [pos,pos+n).
@@ -256,7 +262,9 @@ class string_view {
    *              Specify -1 to indicate to the end of the string.
    * @return -1 if arg string is not found in this string.
    */
-  CUDF_DI size_type rfind(char_utf8 character, size_type pos = 0, size_type count = -1) const;
+  __device__ inline size_type rfind(char_utf8 character,
+                                    size_type pos   = 0,
+                                    size_type count = -1) const;
 
   /**
    * @brief Return a sub-string of this string. The original string and device
@@ -266,7 +274,7 @@ class string_view {
    * @param length Number of characters from start to include in the sub-string.
    * @return New instance pointing to a subset of the characters within this instance.
    */
-  CUDF_DI string_view substr(size_type start, size_type length) const;
+  __device__ inline string_view substr(size_type start, size_type length) const;
 
   /**
    * @brief Return minimum value associated with the string type
@@ -322,7 +330,7 @@ class string_view {
    * @param bytepos Byte position from start of _data.
    * @return The character position for the specified byte.
    */
-  CUDF_DI size_type character_offset(size_type bytepos) const;
+  __device__ inline size_type character_offset(size_type bytepos) const;
 };
 
 namespace strings {

@@ -107,8 +107,7 @@ struct null_replaced_value_accessor {
     if (has_nulls) CUDF_EXPECTS(col.nullable(), "column with nulls must have a validity bitmask");
   }
 
-  CUDF_DI
-  Element operator()(cudf::size_type i) const
+  __device__ inline Element operator()(cudf::size_type i) const
   {
     return has_nulls && col.is_null_nocheck(i) ? null_replacement : col.element<Element>(i);
   }
@@ -135,8 +134,7 @@ struct validity_accessor {
     CUDF_EXPECTS(_col.nullable(), "Unexpected non-nullable column.");
   }
 
-  CUDF_DI
-  bool operator()(cudf::size_type i) const { return col.is_valid_nocheck(i); }
+  __device__ inline bool operator()(cudf::size_type i) const { return col.is_valid_nocheck(i); }
 };
 
 /**
@@ -344,8 +342,7 @@ struct scalar_value_accessor {
    *
    * @return value of the scalar.
    */
-  CUDF_DI
-  const Element operator()(size_type) const
+  __device__ inline const Element operator()(size_type) const
   {
 #if defined(__CUDA_ARCH__)
     return dscalar.value();
@@ -509,8 +506,7 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
    *
    * @return a pair with representative value and validity of the scalar.
    */
-  CUDF_DI
-  const value_type operator()(size_type) const
+  __device__ inline const value_type operator()(size_type) const
   {
     return {get_rep(base::dscalar), base::dscalar.is_valid()};
   }
@@ -518,14 +514,14 @@ struct scalar_representation_pair_accessor : public scalar_value_accessor<Elemen
  private:
   template <typename DeviceScalar,
             std::enable_if_t<!has_rep_member<DeviceScalar>::value, void>* = nullptr>
-  CUDF_DI rep_type get_rep(DeviceScalar const& dscalar) const
+  __device__ inline rep_type get_rep(DeviceScalar const& dscalar) const
   {
     return dscalar.value();
   }
 
   template <typename DeviceScalar,
             std::enable_if_t<has_rep_member<DeviceScalar>::value, void>* = nullptr>
-  CUDF_DI rep_type get_rep(DeviceScalar const& dscalar) const
+  __device__ inline rep_type get_rep(DeviceScalar const& dscalar) const
   {
     return dscalar.rep();
   }

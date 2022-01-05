@@ -79,8 +79,7 @@ struct permuted_row_equality_comparator {
    * @param rhs The index of the second row
    * @returns true if the two specified rows in the permuted order are equivalent
    */
-  CUDF_DI
-  bool operator()(cudf::size_type lhs, cudf::size_type rhs)
+  __device__ inline bool operator()(cudf::size_type lhs, cudf::size_type rhs)
   {
     return _comparator(_map[lhs], _map[rhs]);
   }

@@ -235,7 +235,7 @@ struct input_indexalator : base_indexalator<input_indexalator> {
   /**
    * @brief Indirection operator returns the value at the current iterator position.
    */
-  CUDF_DI size_type operator*() const { return operator[](0); }
+  __device__ inline size_type operator*() const { return operator[](0); }
 
   /**
    * @brief Dispatch functor for resolving a size_type value from any index type.
@@ -257,7 +257,7 @@ struct input_indexalator : base_indexalator<input_indexalator> {
    * @brief Array subscript operator returns a value at the input
    * `idx` position as a `size_type` value.
    */
-  CUDF_DI size_type operator[](size_type idx) const
+  __device__ inline size_type operator[](size_type idx) const
   {
     void const* tp = p_ + (idx * width_);
     return type_dispatcher(dtype_, index_as_size_type{}, tp);
@@ -321,14 +321,14 @@ struct output_indexalator : base_indexalator<output_indexalator> {
    * @brief Indirection operator returns this iterator instance in order
    * to capture the `operator=(size_type)` calls.
    */
-  CUDF_DI output_indexalator const& operator*() const { return *this; }
+  __device__ inline output_indexalator const& operator*() const { return *this; }
 
   /**
    * @brief Array subscript operator returns an iterator instance at the specified `idx` position.
    *
    * This allows capturing the subsequent `operator=(size_type)` call in this class.
    */
-  CUDF_DI output_indexalator const operator[](size_type idx) const
+  __device__ inline output_indexalator const operator[](size_type idx) const
   {
     output_indexalator tmp{*this};
     tmp.p_ += (idx * width_);
@@ -354,7 +354,7 @@ struct output_indexalator : base_indexalator<output_indexalator> {
   /**
    * @brief Assign a size_type value to the current iterator position.
    */
-  CUDF_DI output_indexalator const& operator=(size_type const value) const
+  __device__ inline output_indexalator const& operator=(size_type const value) const
   {
     void* tp = p_;
     type_dispatcher(dtype_, size_type_to_index{}, tp, value);
