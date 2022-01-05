@@ -130,9 +130,7 @@ struct tokenizer_result {
  *        larger than the max value for cudf::size_type
  *
  * @param strings The input strings to tokenize.
- * @param filename_hashed_vocabulary A path to the preprocessed vocab.txt file.
- *        Note that this is the file AFTER python/perfect_hash.py has been used
- *        for preprocessing.
+ * @param vocabulary_table The vocabulary table pre-loaded into this object.
  * @param max_sequence_length Limit of the number of token-ids per row in final tensor
  *        for each string.
  * @param stride Each row in the output token-ids will replicate `max_sequence_length - stride`
@@ -149,25 +147,6 @@ struct tokenizer_result {
  *        If the output generates a larger number of rows, behavior is undefined.
  * @param mr Memory resource to allocate any returned objects.
  * @return token-ids, attention-mask, and metadata
- */
-tokenizer_result subword_tokenize(
-  cudf::strings_column_view const& strings,
-  std::string const& filename_hashed_vocabulary,
-  uint32_t max_sequence_length,
-  uint32_t stride,
-  bool do_lower_case,
-  bool do_truncate,
-  uint32_t max_rows_tensor,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @copydoc subword_tokenize()
- *
- * This function differs from the one above by only the hashed vocabulary parameter.
- * The file can be pre-loaded using the @ref load_vocabulary_file API and then
- * passed in place of the file name in a call to this API.
- *
- * @param vocabulary_table The vocabulary table pre-loaded into this object.
  */
 tokenizer_result subword_tokenize(
   cudf::strings_column_view const& strings,

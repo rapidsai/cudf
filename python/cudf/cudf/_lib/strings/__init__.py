@@ -12,7 +12,6 @@ from cudf._lib.nvtext.stemmer import (
     is_letter_multi,
     porter_stemmer_measure,
 )
-from cudf._lib.nvtext.subword_tokenize import subword_tokenize_vocab_file
 from cudf._lib.nvtext.tokenize import (
     _count_tokens_column,
     _count_tokens_scalar,
