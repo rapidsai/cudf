@@ -27,6 +27,7 @@ RMM_LOGGING_LEVEL=${RMM_LOGGING_LEVEL:-OFF}
 ENABLE_NVTX=${ENABLE_NVTX:-ON}
 ENABLE_GDS=${ENABLE_GDS:-OFF}
 OUT=${OUT:-out}
+CMAKE_GENERATOR=${CMAKE_GENERATOR:-Ninja}
 
 SIGN_FILE=$1
 #Set absolute path for OUT_PATH
@@ -53,7 +54,7 @@ export LIBCUDF_KERNEL_CACHE_PATH=/rapids
 rm -rf "$WORKSPACE/cpp/build"
 mkdir -p "$WORKSPACE/cpp/build"
 cd "$WORKSPACE/cpp/build"
-cmake .. -GNinja \
+cmake .. -G"${CMAKE_GENERATOR}" \
          -DCMAKE_INSTALL_PREFIX=$INSTALL_PREFIX \
          -DUSE_NVTX=$ENABLE_NVTX \
          -DCUDF_USE_ARROW_STATIC=ON \
@@ -64,10 +65,11 @@ cmake .. -GNinja \
          -DBUILD_SHARED_LIBS=OFF
 
 if [[ -z "${PARALLEL_LEVEL}" ]]; then
-    ninja install
+    cmake --build .
 else
-    ninja -j $PARALLEL_LEVEL install
+    cmake --build . --parallel $PARALLEL_LEVEL
 fi
+cmake --install .
 
 ###### Build cudf jar ######
 BUILD_ARG="-Dmaven.repo.local=\"$WORKSPACE/.m2\"\
