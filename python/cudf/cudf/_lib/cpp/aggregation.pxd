@@ -61,6 +61,10 @@ cdef extern from "cudf/aggregation.hpp" namespace "cudf" nogil:
         KENDALL 'cudf::correlation_type::KENDALL'
         SPEARMAN 'cudf::correlation_type::SPEARMAN'
 
+    ctypedef enum ewm_history:
+        INFINITE 'cudf::ewm_history::INFINITE'
+        FINITE 'cudf::ewm_history::FINITE'
+
     cdef unique_ptr[T] make_sum_aggregation[T]() except +
 
     cdef unique_ptr[T] make_product_aggregation[T]() except +

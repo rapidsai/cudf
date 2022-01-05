@@ -609,12 +609,12 @@ template std::unique_ptr<rolling_aggregation> make_row_number_aggregation<rollin
 
 /// Factory to create an EWMA aggregation
 template <typename Base>
-std::unique_ptr<Base> make_ewma_aggregation(double const com, bool const adjust)
+std::unique_ptr<Base> make_ewma_aggregation(double const com, cudf::ewm_history history)
 {
-  return std::make_unique<detail::ewma_aggregation>(com, adjust);
+  return std::make_unique<detail::ewma_aggregation>(com, history);
 }
 template std::unique_ptr<aggregation> make_ewma_aggregation<aggregation>(double const com,
-                                                                         bool const adjust);
+                                                                         cudf::ewm_history history);
 
 /// Factory to create a RANK aggregation
 template <typename Base>

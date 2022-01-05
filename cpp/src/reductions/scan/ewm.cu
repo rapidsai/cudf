@@ -34,6 +34,12 @@ namespace detail {
 template <typename T>
 using pair_type = thrust::pair<T, T>;
 
+/**
+ * @brief functor to be summed over in a prefix sum such that
+ * the recurrence in question is solved.
+ * see https://www.cs.cmu.edu/~guyb/papers/Ble93.pdf S. 1.4
+ * for details
+ */
 template <typename T>
 class recurrence_functor {
  public:
@@ -63,8 +69,7 @@ void compute_recurrence(rmm::device_uvector<pair_type<T>>& input, rmm::cuda_stre
 rmm::device_uvector<cudf::size_type> null_roll_up(column_view const& input,
                                                   rmm::cuda_stream_view stream)
 {
-  rmm::device_uvector<cudf::size_type> output(
-    input.size(), stream);
+  rmm::device_uvector<cudf::size_type> output(input.size(), stream);
 
   auto device_view = column_device_view::create(input);
   auto valid_it    = cudf::detail::make_validity_iterator(*device_view);
@@ -314,33 +319,24 @@ std::unique_ptr<column> ewma(std::unique_ptr<aggregation> const& agg,
                              rmm::mr::device_memory_resource* mr)
 {
   CUDF_EXPECTS(cudf::is_floating_point(input.type()), "Column must be floating point type");
-  bool adjust = (dynamic_cast<ewma_aggregation*>(agg.get()))->adjust;
-  T com       = (dynamic_cast<ewma_aggregation*>(agg.get()))->com;
+  cudf::ewm_history history = (dynamic_cast<ewma_aggregation*>(agg.get()))->history;
+  T com                     = (dynamic_cast<ewma_aggregation*>(agg.get()))->com;
   // center of mass is easier for the user, but the recurrences are
   // better expressed in terms of the derived parameter `beta`
   T beta = 1.0 - (1.0 / (com + 1.0));
 
-  //rmm::device_uvector<T> data(input.size(), stream, mr);
-  if (adjust) {
+  // rmm::device_uvector<T> data(input.size(), stream, mr);
+  if (history == cudf::ewm_history::INFINITE) {
     return std::make_unique<column>(
-      cudf::data_type(
-        cudf::type_to_id<T>()), 
-        input.size(), 
-        std::move(
-          compute_ewma_adjust(input, beta, stream, mr).release()
-        )
-    );
+      cudf::data_type(cudf::type_to_id<T>()),
+      input.size(),
+      std::move(compute_ewma_adjust(input, beta, stream, mr).release()));
   } else {
     return std::make_unique<column>(
-      cudf::data_type(
-        cudf::type_to_id<T>()), 
-        input.size(), 
-        std::move(
-          compute_ewma_noadjust(input, beta, stream, mr).release()
-        )
-    );
+      cudf::data_type(cudf::type_to_id<T>()),
+      input.size(),
+      std::move(compute_ewma_noadjust(input, beta, stream, mr).release()));
   }
-
 }
 
 struct ewma_functor {

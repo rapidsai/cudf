@@ -290,10 +290,16 @@ cdef class Aggregation:
 
     @classmethod
     def ewma(cls, com=1.0, adjust=True):
+        cdef libcudf_aggregation.ewm_history history
+        if adjust:
+            history = libcudf_aggregation.ewm_history.INFINITE
+        else:
+            history = libcudf_aggregation.ewm_history.FINITE
+
         cdef Aggregation agg = cls()
         agg.c_obj = move(
             libcudf_aggregation.make_ewma_aggregation[aggregation](
-                com, adjust
+                com, history
             )
         )
         return agg
@@ -988,3 +994,7 @@ cdef GroupbyScanAggregation make_groupby_scan_aggregation(op, kwargs=None):
     else:
         raise TypeError(f"Unknown aggregation {op}")
     return agg
+
+def test_enum():
+    cdef libcudf_aggregation.ewm_history hist = libcudf_aggregation.ewm_history.INFINITE
+    print('hello world!')

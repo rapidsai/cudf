@@ -150,6 +150,7 @@ class groupby_scan_aggregation : public virtual aggregation {
 
 enum class udf_type : bool { CUDA, PTX };
 enum class correlation_type : int32_t { PEARSON, KENDALL, SPEARMAN };
+enum class ewm_history : int32_t { INFINITE, FINITE };
 
 /// Factory to create a SUM aggregation
 template <typename Base = aggregation>
@@ -319,7 +320,7 @@ std::unique_ptr<Base> make_row_number_aggregation();
  * @param adjust which assumption to make about the first value
  */
 template <typename Base = aggregation>
-std::unique_ptr<Base> make_ewma_aggregation(double const com, bool const adjust);
+std::unique_ptr<Base> make_ewma_aggregation(double const com, ewm_history history);
 
 /**
  * @brief Factory to create a RANK aggregation

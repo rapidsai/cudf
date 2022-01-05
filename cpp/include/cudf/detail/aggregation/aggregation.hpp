@@ -613,10 +613,10 @@ class row_number_aggregation final : public rolling_aggregation {
 class ewma_aggregation final : public rolling_aggregation {
  public:
   double const com;
-  bool const adjust;
+  cudf::ewm_history history;
 
-  ewma_aggregation(double const com, bool const adjust)
-    : aggregation{EWMA}, com{com}, adjust{adjust}
+  ewma_aggregation(double const com, cudf::ewm_history history)
+    : aggregation{EWMA}, com{com}, history{history}
   {
   }
 
@@ -635,7 +635,7 @@ class ewma_aggregation final : public rolling_aggregation {
   {
     if (!this->aggregation::is_equal(_other)) { return false; }
     auto const& other = dynamic_cast<ewma_aggregation const&>(_other);
-    return this->com == other.com and this->adjust == other.adjust;
+    return this->com == other.com and this->history == other.history;
   }
 
   void finalize(aggregation_finalizer& finalizer) const override { finalizer.visit(*this); }
