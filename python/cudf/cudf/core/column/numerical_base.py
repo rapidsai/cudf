@@ -77,10 +77,13 @@ class NumericalBaseColumn(ColumnBase):
             "sum_of_squares", skipna=skipna, dtype=dtype, min_count=min_count
         )
 
+    def _can_return_nan(self, skipna: bool = None) -> bool:
+        return not skipna and self.has_nulls()
+
     def kurtosis(self, skipna: bool = None) -> float:
         skipna = True if skipna is None else skipna
 
-        if len(self) == 0 or (not skipna and self.has_nulls):
+        if len(self) == 0 or self._can_return_nan(skipna=skipna):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
         self = self.nans_to_nulls().dropna()  # type: ignore
@@ -105,7 +108,7 @@ class NumericalBaseColumn(ColumnBase):
     def skew(self, skipna: bool = None) -> ScalarLike:
         skipna = True if skipna is None else skipna
 
-        if len(self) == 0 or (not skipna and self.has_nulls):
+        if len(self) == 0 or self._can_return_nan(skipna=skipna):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
         self = self.nans_to_nulls().dropna()  # type: ignore
@@ -148,7 +151,7 @@ class NumericalBaseColumn(ColumnBase):
     def median(self, skipna: bool = None) -> NumericalBaseColumn:
         skipna = True if skipna is None else skipna
 
-        if not skipna and self.has_nulls:
+        if self._can_return_nan(skipna=skipna):
             return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
         # enforce linear in case the default ever changes

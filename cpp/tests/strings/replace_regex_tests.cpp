@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-#include <tests/strings/utilities.h>
 #include <cudf/strings/replace_re.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <tests/strings/utilities.h>
 
 #include <vector>
 
@@ -131,6 +131,58 @@ TEST_F(StringsReplaceRegexTest, WithEmptyPattern)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
   results = cudf::strings::replace_re(strings_view, "", cudf::string_scalar("bbb"));
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*results, strings);
+}
+
+TEST_F(StringsReplaceRegexTest, MultiReplacement)
+{
+  cudf::test::strings_column_wrapper input({"aba bcd aba", "abababa abababa"});
+  auto results =
+    cudf::strings::replace_re(cudf::strings_column_view(input), "aba", cudf::string_scalar("_"), 2);
+  cudf::test::strings_column_wrapper expected({"_ bcd _", "_b_ abababa"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+  results =
+    cudf::strings::replace_re(cudf::strings_column_view(input), "aba", cudf::string_scalar(""), 0);
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, input);
+}
+
+TEST_F(StringsReplaceRegexTest, Multiline)
+{
+  auto const multiline = cudf::strings::regex_flags::MULTILINE;
+
+  cudf::test::strings_column_wrapper input({"bcd\naba\nefg", "aba\naba abab\naba", "aba"});
+  auto sv = cudf::strings_column_view(input);
+
+  // single-replace
+  auto results =
+    cudf::strings::replace_re(sv, "^aba$", cudf::string_scalar("_"), std::nullopt, multiline);
+  cudf::test::strings_column_wrapper expected_ml({"bcd\n_\nefg", "_\naba abab\n_", "_"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected_ml);
+
+  results = cudf::strings::replace_re(sv, "^aba$", cudf::string_scalar("_"));
+  cudf::test::strings_column_wrapper expected({"bcd\naba\nefg", "aba\naba abab\naba", "_"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, expected);
+
+  // multi-replace
+  std::vector<std::string> patterns({"aba$", "^aba"});
+  cudf::test::strings_column_wrapper repls({">", "<"});
+  results = cudf::strings::replace_re(sv, patterns, cudf::strings_column_view(repls), multiline);
+  cudf::test::strings_column_wrapper multi_expected_ml({"bcd\n>\nefg", ">\n< abab\n>", ">"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, multi_expected_ml);
+
+  results = cudf::strings::replace_re(sv, patterns, cudf::strings_column_view(repls));
+  cudf::test::strings_column_wrapper multi_expected({"bcd\naba\nefg", "<\naba abab\n>", ">"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, multi_expected);
+
+  // backref-replace
+  results = cudf::strings::replace_with_backrefs(sv, "(^aba)", "[\\1]", multiline);
+  cudf::test::strings_column_wrapper br_expected_ml(
+    {"bcd\n[aba]\nefg", "[aba]\n[aba] abab\n[aba]", "[aba]"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, br_expected_ml);
+
+  results = cudf::strings::replace_with_backrefs(sv, "(^aba)", "[\\1]");
+  cudf::test::strings_column_wrapper br_expected(
+    {"bcd\naba\nefg", "[aba]\naba abab\naba", "[aba]"});
+  CUDF_TEST_EXPECT_COLUMNS_EQUIVALENT(*results, br_expected);
 }
 
 TEST_F(StringsReplaceRegexTest, ReplaceBackrefsRegexTest)

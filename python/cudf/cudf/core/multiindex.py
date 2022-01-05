@@ -386,7 +386,7 @@ class MultiIndex(Frame, BaseIndex):
         else:
             preprocess = self.copy(deep=False)
 
-        if any(col.has_nulls for col in preprocess._data.columns):
+        if any(col.has_nulls() for col in preprocess._data.columns):
             preprocess_df = preprocess.to_frame(index=False)
             for name, col in preprocess._data.items():
                 if isinstance(
