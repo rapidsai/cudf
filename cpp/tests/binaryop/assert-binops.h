@@ -19,9 +19,9 @@
 
 #pragma once
 
-#include <tests/binaryop/util/operation.h>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/cudf_gtest.hpp>
+#include <tests/binaryop/util/operation.h>
 
 #include <cudf/scalar/scalar.hpp>
 #include <cudf/utilities/traits.hpp>

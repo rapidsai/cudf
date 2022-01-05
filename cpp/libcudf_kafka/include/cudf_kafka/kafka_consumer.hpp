@@ -15,10 +15,10 @@
  */
 #pragma once
 
-#include <librdkafka/rdkafkacpp.h>
 #include <algorithm>
 #include <chrono>
 #include <cudf/io/datasource.hpp>
+#include <librdkafka/rdkafkacpp.h>
 #include <map>
 #include <memory>
 #include <string>

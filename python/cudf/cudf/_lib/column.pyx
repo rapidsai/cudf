@@ -146,8 +146,7 @@ cdef class Column:
     def nullable(self):
         return self.base_mask is not None
 
-    @property
-    def has_nulls(self):
+    def has_nulls(self, include_nan=False):
         return self.null_count != 0
 
     @property

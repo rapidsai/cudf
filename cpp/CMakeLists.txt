@@ -25,7 +25,7 @@ rapids_cuda_init_architectures(CUDF)
 
 project(
   CUDF
-  VERSION 21.12.00
+  VERSION 22.02.00
   LANGUAGES C CXX CUDA
 )
 
@@ -185,6 +185,7 @@ add_library(
   src/binaryop/compiled/LogicalOr.cu
   src/binaryop/compiled/Mod.cu
   src/binaryop/compiled/Mul.cu
+  src/binaryop/compiled/NullEquals.cu
   src/binaryop/compiled/NullMax.cu
   src/binaryop/compiled/NullMin.cu
   src/binaryop/compiled/PMod.cu
@@ -342,6 +343,7 @@ add_library(
   src/lists/lists_column_factories.cu
   src/lists/lists_column_view.cu
   src/lists/segmented_sort.cu
+  src/lists/sequences.cu
   src/merge/merge.cu
   src/partitioning/partitioning.cu
   src/partitioning/round_robin.cu
@@ -415,7 +417,8 @@ add_library(
   src/strings/copying/concatenate.cu
   src/strings/copying/copying.cu
   src/strings/copying/shift.cu
-  src/strings/extract.cu
+  src/strings/extract/extract.cu
+  src/strings/extract/extract_all.cu
   src/strings/filling/fill.cu
   src/strings/filter_chars.cu
   src/strings/findall.cu

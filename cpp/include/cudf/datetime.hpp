@@ -285,189 +285,66 @@ std::unique_ptr<cudf::column> extract_quarter(
   cudf::column_view const& column,
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
+/**
+ * @brief Fixed frequencies supported by datetime rounding functions ceil, floor, round.
+ *
+ */
+enum class rounding_frequency : int32_t {
+  DAY,
+  HOUR,
+  MINUTE,
+  SECOND,
+  MILLISECOND,
+  MICROSECOND,
+  NANOSECOND
+};
+
+/**
+ * @brief Round datetimes up to the nearest multiple of the given frequency.
+ *
+ * @param column cudf::column_view of the input datetime values.
+ * @param freq rounding_frequency indicating the frequency to round up to.
+ * @param mr Device memory resource used to allocate device memory of the returned column.
+ *
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP.
+ * @return cudf::column of the same datetime resolution as the input column.
+ */
+std::unique_ptr<cudf::column> ceil_datetimes(
+  cudf::column_view const& column,
+  rounding_frequency freq,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Round datetimes down to the nearest multiple of the given frequency.
+ *
+ * @param column cudf::column_view of the input datetime values.
+ * @param freq rounding_frequency indicating the frequency to round down to.
+ * @param mr Device memory resource used to allocate device memory of the returned column.
+ *
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP.
+ * @return cudf::column of the same datetime resolution as the input column.
+ */
+std::unique_ptr<cudf::column> floor_datetimes(
+  cudf::column_view const& column,
+  rounding_frequency freq,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
+ * @brief Round datetimes to the nearest multiple of the given frequency.
+ *
+ * @param column cudf::column_view of the input datetime values.
+ * @param freq rounding_frequency indicating the frequency to round to.
+ * @param mr Device memory resource used to allocate device memory of the returned column.
+ *
+ * @throw cudf::logic_error if input column datatype is not TIMESTAMP.
+ * @return cudf::column of the same datetime resolution as the input column.
+ */
+std::unique_ptr<cudf::column> round_datetimes(
+  cudf::column_view const& column,
+  rounding_frequency freq,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
 /** @} */  // end of group
-
-/**
- * @brief Round up to the nearest day
- *
- * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
- *
- * @throw cudf::logic_error if input column datatype is not TIMESTAMP
- * @return cudf::column of the same datetime resolution as the input column
- */
-std::unique_ptr<cudf::column> ceil_day(
-  cudf::column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Round up to the nearest hour
- *
- * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
- *
- * @throw cudf::logic_error if input column datatype is not TIMESTAMP
- * @return cudf::column of the same datetime resolution as the input column
- */
-std::unique_ptr<cudf::column> ceil_hour(
-  cudf::column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Round up to the nearest minute
- *
- * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
- *
- * @throw cudf::logic_error if input column datatype is not TIMESTAMP
- * @return cudf::column of the same datetime resolution as the input column
- */
-std::unique_ptr<cudf::column> ceil_minute(
-  cudf::column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Round up to the nearest second
- *
- * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
- *
- * @throw cudf::logic_error if input column datatype is not TIMESTAMP
- * @return cudf::column of the same datetime resolution as the input column
- */
-std::unique_ptr<cudf::column> ceil_second(
-  cudf::column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Round up to the nearest millisecond
- *
- * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
- *
- * @throw cudf::logic_error if input column datatype is not TIMESTAMP
- * @return cudf::column of the same datetime resolution as the input column
- */
-std::unique_ptr<column> ceil_millisecond(
-  column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Round up to the nearest microsecond
- *
- * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
- *
- * @throw cudf::logic_error if input column datatype is not TIMESTAMP
- * @return cudf::column of the same datetime resolution as the input column
- */
-std::unique_ptr<column> ceil_microsecond(
-  column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Round up to the nearest nanosecond
- *
- * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
- *
- * @throw cudf::logic_error if input column datatype is not TIMESTAMP
- * @return cudf::column of the same datetime resolution as the input column
- */
-std::unique_ptr<column> ceil_nanosecond(
-  column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Round down to the nearest day
- *
- * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
- *
- * @throw cudf::logic_error if input column datatype is not TIMESTAMP
- * @return cudf::column of the same datetime resolution as the input column
- */
-std::unique_ptr<cudf::column> floor_day(
-  cudf::column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Round down to the nearest hour
- *
- * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
- *
- * @throw cudf::logic_error if input column datatype is not TIMESTAMP
- * @return cudf::column of the same datetime resolution as the input column
- */
-std::unique_ptr<cudf::column> floor_hour(
-  cudf::column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Round down to the nearest minute
- *
- * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
- *
- * @throw cudf::logic_error if input column datatype is not TIMESTAMP
- * @return cudf::column of the same datetime resolution as the input column
- */
-std::unique_ptr<cudf::column> floor_minute(
-  cudf::column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Round down to the nearest second
- *
- * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
- *
- * @throw cudf::logic_error if input column datatype is not TIMESTAMP
- * @return cudf::column of the same datetime resolution as the input column
- */
-std::unique_ptr<cudf::column> floor_second(
-  cudf::column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Round down to the nearest millisecond
- *
- * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
- *
- * @throw cudf::logic_error if input column datatype is not TIMESTAMP
- * @return cudf::column of the same datetime resolution as the input column
- */
-std::unique_ptr<column> floor_millisecond(
-  column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Round down to the nearest microsecond
- *
- * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
- *
- * @throw cudf::logic_error if input column datatype is not TIMESTAMP
- * @return cudf::column of the same datetime resolution as the input column
- */
-std::unique_ptr<column> floor_microsecond(
-  column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
-
-/**
- * @brief Round down to the nearest nanosecond
- *
- * @param column cudf::column_view of the input datetime values
- * @param mr Device memory resource used to allocate device memory of the returned column.
- *
- * @throw cudf::logic_error if input column datatype is not TIMESTAMP
- * @return cudf::column of the same datetime resolution as the input column
- */
-std::unique_ptr<column> floor_nanosecond(
-  column_view const& column,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 }  // namespace datetime
 }  // namespace cudf

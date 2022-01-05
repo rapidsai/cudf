@@ -7,7 +7,6 @@ import inspect
 import pickle
 import warnings
 from collections import abc as abc
-from hashlib import sha256
 from numbers import Number
 from shutil import get_terminal_size
 from typing import Any, MutableMapping, Optional, Set, Union
@@ -1469,7 +1468,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> series.dropna().has_nulls
         False
         """
-        return self._column.has_nulls
+        return self._column.has_nulls()
 
     def dropna(self, axis=0, inplace=False, how=None):
         """
@@ -1624,7 +1623,23 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         return self._mimic_inplace(result, inplace=inplace)
 
     def fill(self, fill_value, begin=0, end=-1, inplace=False):
-        return self._fill([fill_value], begin, end, inplace)
+        warnings.warn(
+            "The fill method will be removed in a future cuDF release.",
+            FutureWarning,
+        )
+        fill_values = [fill_value]
+        col_and_fill = zip(self._columns, fill_values)
+
+        if not inplace:
+            data_columns = (c._fill(v, begin, end) for (c, v) in col_and_fill)
+            return self.__class__._from_data(
+                zip(self._column_names, data_columns), self._index
+            )
+
+        for (c, v) in col_and_fill:
+            c.fill(v, begin, end, inplace=True)
+
+        return self
 
     def fillna(
         self, value=None, method=None, axis=None, inplace=False, limit=None
@@ -2783,6 +2798,14 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         return lhs._column.cov(rhs._column)
 
+    def transpose(self):
+        """Return the transpose, which is by definition self.
+        """
+
+        return self
+
+    T = property(transpose, doc=transpose.__doc__)
+
     def corr(self, other, method="pearson", min_periods=None):
         """Calculates the sample correlation between two Series,
         excluding missing values.
@@ -2810,6 +2833,31 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         lhs, rhs = _align_indices([lhs, rhs], how="inner")
 
         return lhs._column.corr(rhs._column)
+
+    def autocorr(self, lag=1):
+        """Compute the lag-N autocorrelation. This method computes the Pearson
+        correlation between the Series and its shifted self.
+
+        Parameters
+        ----------
+        lag : int, default 1
+            Number of lags to apply before performing autocorrelation.
+
+        Returns
+        -------
+        result : float
+            The Pearson correlation between self and self.shift(lag).
+
+        Examples
+        --------
+        >>> import cudf
+        >>> s = cudf.Series([0.25, 0.5, 0.2, -0.05])
+        >>> s.autocorr()
+        0.10355263309024071
+        >>> s.autocorr(lag=2)
+        -0.9999999999999999
+        """
+        return self.corr(self.shift(lag))
 
     def isin(self, values):
         """Check whether values are contained in Series.
@@ -3106,82 +3154,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             {None: self._hash(method=method)}, index=self.index
         )
 
-    def hash_encode(self, stop, use_name=False):
-        """Encode column values as ints in [0, stop) using hash function.
-
-        This method is deprecated. Replace ``series.hash_encode(stop,
-        use_name=False)`` with ``series.hash_values(method="murmur3") % stop``.
-
-        Parameters
-        ----------
-        stop : int
-            The upper bound on the encoding range.
-        use_name : bool
-            If ``True`` then combine hashed column values
-            with hashed column name. This is useful for when the same
-            values in different columns should be encoded
-            with different hashed values.
-
-        Returns
-        -------
-        result : Series
-            The encoded Series.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> series = cudf.Series([10, 120, 30])
-        >>> series.hash_encode(stop=200)
-        0     53
-        1     51
-        2    124
-        dtype: int32
-
-        You can choose to include name while hash
-        encoding by specifying `use_name=True`
-
-        >>> series.hash_encode(stop=200, use_name=True)
-        0    131
-        1     29
-        2     76
-        dtype: int32
-        """
-        warnings.warn(
-            "The `hash_encode` method will be removed in a future cuDF "
-            "release. Replace `series.hash_encode(stop, use_name=False)` "
-            'with `series.hash_values(method="murmur3") % stop`.',
-            FutureWarning,
-        )
-
-        if not stop > 0:
-            raise ValueError("stop must be a positive integer.")
-
-        if use_name:
-            name_hasher = sha256()
-            name_hasher.update(str(self.name).encode())
-            name_hash_bytes = name_hasher.digest()[:4]
-            name_hash_int = (
-                int.from_bytes(name_hash_bytes, "little", signed=False)
-                & 0xFFFFFFFF
-            )
-            initial_hash = [name_hash_int]
-        else:
-            initial_hash = None
-
-        hashed_values = Series._from_data(
-            {
-                self.name: self._hash(
-                    method="murmur3", initial_hash=initial_hash
-                )
-            },
-            self.index,
-        )
-
-        if hashed_values.has_nulls:
-            raise ValueError("Column must have no nulls.")
-
-        return hashed_values % stop
-
     def quantile(
         self, q=0.5, interpolation="linear", exact=True, quant_index=True
     ):
@@ -3274,51 +3246,55 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             return ["{0}%".format(int(x * 100)) for x in percentiles]
 
         def _format_stats_values(stats_data):
-            return list(map(lambda x: round(x, 6), stats_data))
+            return map(lambda x: round(x, 6), stats_data)
 
         def _describe_numeric(self):
             # mimicking pandas
-            index = (
-                ["count", "mean", "std", "min"]
-                + _format_percentile_names(percentiles)
-                + ["max"]
-            )
-            data = (
-                [self.count(), self.mean(), self.std(), self.min()]
-                + self.quantile(percentiles).to_numpy(na_value=np.nan).tolist()
-                + [self.max()]
-            )
-            data = _format_stats_values(data)
+            data = {
+                "count": self.count(),
+                "mean": self.mean(),
+                "std": self.std(),
+                "min": self.min(),
+                **dict(
+                    zip(
+                        _format_percentile_names(percentiles),
+                        self.quantile(percentiles)
+                        .to_numpy(na_value=np.nan)
+                        .tolist(),
+                    )
+                ),
+                "max": self.max(),
+            }
 
             return Series(
-                data=data, index=index, nan_as_null=False, name=self.name,
+                data=_format_stats_values(data.values()),
+                index=data.keys(),
+                nan_as_null=False,
+                name=self.name,
             )
 
         def _describe_timedelta(self):
             # mimicking pandas
-            index = (
-                ["count", "mean", "std", "min"]
-                + _format_percentile_names(percentiles)
-                + ["max"]
-            )
-
-            data = (
-                [
-                    str(self.count()),
-                    str(self.mean()),
-                    str(self.std()),
-                    str(pd.Timedelta(self.min())),
-                ]
-                + self.quantile(percentiles)
-                .astype("str")
-                .to_numpy(na_value=None)
-                .tolist()
-                + [str(pd.Timedelta(self.max()))]
-            )
+            data = {
+                "count": str(self.count()),
+                "mean": str(self.mean()),
+                "std": str(self.std()),
+                "min": str(pd.Timedelta(self.min())),
+                **dict(
+                    zip(
+                        _format_percentile_names(percentiles),
+                        self.quantile(percentiles)
+                        .astype("str")
+                        .to_numpy(na_value=np.nan)
+                        .tolist(),
+                    )
+                ),
+                "max": str(pd.Timedelta(self.max())),
+            }
 
             return Series(
-                data=data,
-                index=index,
+                data=data.values(),
+                index=data.keys(),
                 dtype="str",
                 nan_as_null=False,
                 name=self.name,
@@ -3327,51 +3303,55 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         def _describe_categorical(self):
             # blocked by StringColumn/DatetimeColumn support for
             # value_counts/unique
-            index = ["count", "unique", "top", "freq"]
-            val_counts = self.value_counts(ascending=False)
-            data = [self.count(), self.unique().size]
-
-            if data[1] > 0:
-                top, freq = val_counts.index[0], val_counts.iloc[0]
-                data += [str(top), freq]
-            # If the DataFrame is empty, set 'top' and 'freq' to None
-            # to maintain output shape consistency
-            else:
-                data += [None, None]
+            data = {
+                "count": self.count(),
+                "unique": len(self.unique()),
+                "top": None,
+                "freq": None,
+            }
+            if data["count"] > 0:
+                # In case there's a tie, break the tie by sorting the index
+                # and take the top.
+                val_counts = self.value_counts(ascending=False)
+                tied_val_counts = val_counts[
+                    val_counts == val_counts.iloc[0]
+                ].sort_index()
+                data.update(
+                    {
+                        "top": tied_val_counts.index[0],
+                        "freq": tied_val_counts.iloc[0],
+                    }
+                )
 
             return Series(
-                data=data,
+                data=data.values(),
                 dtype="str",
-                index=index,
+                index=data.keys(),
                 nan_as_null=False,
                 name=self.name,
             )
 
         def _describe_timestamp(self):
-
-            index = (
-                ["count", "mean", "min"]
-                + _format_percentile_names(percentiles)
-                + ["max"]
-            )
-
-            data = (
-                [
-                    str(self.count()),
-                    str(self.mean().to_numpy().astype("datetime64[ns]")),
-                    str(pd.Timestamp(self.min().astype("datetime64[ns]"))),
-                ]
-                + self.quantile(percentiles)
-                .astype("str")
-                .to_numpy(na_value=None)
-                .tolist()
-                + [str(pd.Timestamp((self.max()).astype("datetime64[ns]")))]
-            )
+            data = {
+                "count": str(self.count()),
+                "mean": str(pd.Timestamp(self.mean())),
+                "min": str(pd.Timestamp(self.min())),
+                **dict(
+                    zip(
+                        _format_percentile_names(percentiles),
+                        self.quantile(percentiles)
+                        .astype(self.dtype)
+                        .astype("str")
+                        .to_numpy(na_value=np.nan),
+                    )
+                ),
+                "max": str(pd.Timestamp((self.max()))),
+            }
 
             return Series(
-                data=data,
+                data=data.values(),
                 dtype="str",
-                index=index,
+                index=data.keys(),
                 nan_as_null=False,
                 name=self.name,
             )
@@ -3654,6 +3634,16 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             suffixes=suffixes,
         )
 
+        return result
+
+    def add_prefix(self, prefix):
+        result = self.copy(deep=True)
+        result.index = prefix + self.index.astype(str)
+        return result
+
+    def add_suffix(self, suffix):
+        result = self.copy(deep=True)
+        result.index = self.index.astype(str) + suffix
         return result
 
     def keys(self):
@@ -4654,6 +4644,45 @@ class DatetimeProperties(object):
         dtype: datetime64[ns]
         """
         out_column = self.series._column.floor(freq)
+
+        return Series._from_data(
+            data={self.series.name: out_column}, index=self.series._index
+        )
+
+    def round(self, freq):
+        """
+        Perform round operation on the data to the specified freq.
+
+        Parameters
+        ----------
+        freq : str
+            One of ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"].
+            Must be a fixed frequency like 'S' (second) not 'ME' (month end).
+            See `frequency aliases <https://pandas.pydata.org/docs/\
+                user_guide/timeseries.html#timeseries-offset-aliases>`__
+            for more details on these aliases.
+
+        Returns
+        -------
+        Series
+            Series with all timestamps rounded to the specified frequency.
+            The index is preserved.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> dt_sr = cudf.Series([
+        ...     "2001-01-01 00:04:45",
+        ...     "2001-01-01 00:04:58",
+        ...     "2001-01-01 00:05:04",
+        ... ], dtype="datetime64[ns]")
+        >>> dt_sr.dt.round("T")
+        0   2001-01-01 00:05:00
+        1   2001-01-01 00:05:00
+        2   2001-01-01 00:05:00
+        dtype: datetime64[ns]
+        """
+        out_column = self.series._column.round(freq)
 
         return Series._from_data(
             data={self.series.name: out_column}, index=self.series._index
