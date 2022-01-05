@@ -50,17 +50,6 @@ class recurrence_functor {
 };
 
 /**
- * @brief Solve a recurrence relation using a blelloch scan
- * The second elements of the pairs will contain the result
- */
-template <typename T>
-void compute_recurrence(rmm::device_uvector<pair_type<T>>& input, rmm::cuda_stream_view stream)
-{
-  thrust::inclusive_scan(
-    rmm::exec_policy(stream), input.begin(), input.end(), input.begin(), recurrence_functor<T>{});
-}
-
-/**
 * @brief Return an array whose values y_i are the number of null entries
 * in between the last valid entry of the input and the current index.
 * Example: {1, NULL, 3, 4, NULL, NULL, 7}
@@ -159,7 +148,8 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                       });
 
     pair_beta_adjust(input, pairs, nullcnt, stream);
-    compute_recurrence(pairs, stream);
+    thrust::inclusive_scan(
+      rmm::exec_policy(stream), pairs.begin(), pairs.end(), pairs.begin(), recurrence_functor<T>{});
 
     // copy the second elements to the output for now
     thrust::transform(rmm::exec_policy(stream),
@@ -173,7 +163,8 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
     thrust::fill(rmm::exec_policy(stream), pairs.begin(), pairs.end(), pair_type<T>(beta, 1.0));
 
     pair_beta_adjust(input, pairs, nullcnt, stream);
-    compute_recurrence(pairs, stream);
+    thrust::inclusive_scan(
+      rmm::exec_policy(stream), pairs.begin(), pairs.end(), pairs.begin(), recurrence_functor<T>{});
 
     thrust::transform(
       rmm::exec_policy(stream),
@@ -193,7 +184,8 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
                       [beta] __device__(T input) -> pair_type<T> {
                         return {beta, input};
                       });
-    compute_recurrence(pairs, stream);
+    thrust::inclusive_scan(
+      rmm::exec_policy(stream), pairs.begin(), pairs.end(), pairs.begin(), recurrence_functor<T>{});
 
     // copy the second elements to the output for now
     thrust::transform(rmm::exec_policy(stream),
@@ -205,7 +197,8 @@ rmm::device_uvector<T> compute_ewma_adjust(column_view const& input,
     // Denominator
     // Fill with pairs
     thrust::fill(rmm::exec_policy(stream), pairs.begin(), pairs.end(), pair_type<T>(beta, 1.0));
-    compute_recurrence(pairs, stream);
+    thrust::inclusive_scan(
+      rmm::exec_policy(stream), pairs.begin(), pairs.end(), pairs.begin(), recurrence_functor<T>{});
 
     thrust::transform(
       rmm::exec_policy(stream),
@@ -302,7 +295,10 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
         }
       });
   }
-  compute_recurrence(pairs, stream);
+
+  thrust::inclusive_scan(
+    rmm::exec_policy(stream), pairs.begin(), pairs.end(), pairs.begin(), recurrence_functor<T>{});
+
   // copy the second elements to the output for now
   thrust::transform(rmm::exec_policy(stream),
                     pairs.begin(),
