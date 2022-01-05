@@ -19,13 +19,13 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/substring.hpp>
 
-#include <tests/strings/utilities.h>
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
+#include <tests/strings/utilities.h>
 
-#include <thrust/sequence.h>
 #include <string>
+#include <thrust/sequence.h>
 #include <vector>
 
 struct StringsSubstringsTest : public cudf::test::BaseFixture {
