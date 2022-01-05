@@ -564,16 +564,6 @@ class Frame:
         result._copy_type_metadata(self)
         return result
 
-    def _hash_partition(
-        self, columns_to_hash, num_partitions, keep_index=True
-    ):
-        output_data, output_index, offsets = libcudf.hash.hash_partition(
-            self, columns_to_hash, num_partitions, keep_index
-        )
-        output = self.__class__._from_data(output_data, output_index)
-        output._copy_type_metadata(self, include_index=keep_index)
-        return output, offsets
-
     def _as_column(self):
         """
         _as_column : Converts a single columned Frame to Column

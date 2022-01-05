@@ -4173,7 +4173,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             else self._index._num_columns
         )
         key_indices = [self._data.names.index(k) + idx for k in columns]
-        outdf, offsets = self._hash_partition(key_indices, nparts, keep_index)
+
+        output_data, output_index, offsets = libcudf.hash.hash_partition(
+            self, key_indices, nparts, keep_index
+        )
+        outdf = self.__class__._from_data(output_data, output_index)
+        outdf._copy_type_metadata(self, include_index=keep_index)
+
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
