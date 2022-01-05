@@ -15,9 +15,9 @@
  */
 #pragma once
 
+#include "orc.h"
 #include <numeric>
 #include <string>
-#include "orc.h"
 
 /**
  * @file orc_field_writer.hpp
