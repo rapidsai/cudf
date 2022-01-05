@@ -58,9 +58,7 @@ def _write_parquet(
     }
     if all([ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs]):
         with ExitStack() as stack:
-            fsspec_objs = [
-                stack.enter_context(open(file)) for file in paths_or_bufs
-            ]
+            fsspec_objs = [stack.enter_context(file) for file in paths_or_bufs]
             file_objs = [
                 ioutils.get_IOBase_writer(file_obj) for file_obj in fsspec_objs
             ]
