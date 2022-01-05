@@ -79,12 +79,12 @@ parquet::Compression to_parquet_compression(compression_type compression)
 
 }  // namespace
 
-struct aggregate_metadata {
-  aggregate_metadata(std::vector<partition_info> const& partitions,
-                     size_type num_columns,
-                     std::vector<SchemaElement> schema,
-                     statistics_freq stats_granularity,
-                     std::vector<std::map<std::string, std::string>> const& kv_md)
+struct aggregate_writer_metadata {
+  aggregate_writer_metadata(std::vector<partition_info> const& partitions,
+                            size_type num_columns,
+                            std::vector<SchemaElement> schema,
+                            statistics_freq stats_granularity,
+                            std::vector<std::map<std::string, std::string>> const& kv_md)
     : version(1), schema(std::move(schema)), files(partitions.size())
   {
     for (size_t i = 0; i < partitions.size(); ++i) {
@@ -1226,7 +1226,7 @@ void writer::impl::write(table_view const& table, std::vector<partition_info> co
   std::vector<SchemaElement> this_table_schema(schema_tree.begin(), schema_tree.end());
 
   if (!md) {
-    md = std::make_unique<aggregate_metadata>(
+    md = std::make_unique<aggregate_writer_metadata>(
       partitions, num_columns, std::move(this_table_schema), stats_granularity_, kv_md);
   } else {
     // verify the user isn't passing mismatched tables
