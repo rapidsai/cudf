@@ -269,7 +269,7 @@ __device__ double scale_func_k1(double quantile, double delta_norm)
  * cluster sizes and total # of clusters, and once to compute the actual
  * weight limits per cluster.
  *
- * @param delta_              tdigest compression level
+ * @param delta               tdigest compression level
  * @param num_groups          The number of input groups
  * @param nearest_weight      A functor which returns the nearest weight in the input
  * stream that falls before our current cluster limit
@@ -283,7 +283,7 @@ __device__ double scale_func_k1(double quantile, double delta_norm)
  */
 
 template <typename GroupInfo, typename NearestWeightFunc, typename CumulativeWeight>
-__global__ void generate_cluster_limits_kernel(int delta_,
+__global__ void generate_cluster_limits_kernel(int delta,
                                                size_type num_groups,
                                                NearestWeightFunc nearest_weight,
                                                GroupInfo group_info,
@@ -299,8 +299,7 @@ __global__ void generate_cluster_limits_kernel(int delta_,
   if (group_index >= num_groups) { return; }
 
   // we will generate at most delta clusters.
-  double const delta      = static_cast<double>(delta_);
-  double const delta_norm = delta / (2.0 * M_PI);
+  double const delta_norm = static_cast<double>(delta) / (2.0 * M_PI);
   double total_weight;
   size_type group_size, group_start;
   thrust::tie(total_weight, group_size, group_start) = group_info(group_index);
@@ -384,10 +383,8 @@ __global__ void generate_cluster_limits_kernel(int delta_,
         // the "adjusted" weight must be high enough so that this value will fall in the bucket.
         // NOTE: cumulative_weight expects an absolute index into the input value stream, not a
         // group-relative index
-        auto [r, i, adjusted] = cumulative_weight(nearest_w_index + group_start);
-        adjusted_next_limit   = max(next_limit, adjusted);
-        (void)r;
-        (void)i;
+        [[maybe_unused]] auto [r, i, adjusted] = cumulative_weight(nearest_w_index + group_start);
+        adjusted_next_limit                    = max(next_limit, adjusted);
       }
       cluster_wl[group_num_clusters[group_index]] = adjusted_next_limit;
       last_inserted_index                         = nearest_w_index;
@@ -634,9 +631,8 @@ std::unique_ptr<column> compute_tdigests(int delta,
      group_cluster_offsets = group_cluster_offsets->view().begin<offset_type>(),
      group_cumulative_weight] __device__(size_type value_index) -> size_type {
       // get group index, relative value index within the group and cumulative weight.
-      auto [group_index, relative_value_index, cumulative_weight] =
+      [[maybe_unused]] auto [group_index, relative_value_index, cumulative_weight] =
         group_cumulative_weight(value_index);
-      (void)relative_value_index;
 
       auto const num_clusters =
         group_cluster_offsets[group_index + 1] - group_cluster_offsets[group_index];
