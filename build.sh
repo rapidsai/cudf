@@ -213,6 +213,8 @@ if buildAll || hasArg libcudf; then
         fi
         MSG="${MSG}<br/>parallel setting: $PARALLEL_LEVEL"
         MSG="${MSG}<br/>parallel build time: $compile_total seconds"
+        LIBCUDF_FS=$(ls -lh ${LIB_BUILD_DIR}/libcudf.so | awk '{print $5}')
+        MSG="${MSG}<br/>libcudf.so size: $LIBCUDF_FS"
         echo "$MSG"
         python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt html --msg "$MSG" > ${LIB_BUILD_DIR}/ninja_log.html
     fi
