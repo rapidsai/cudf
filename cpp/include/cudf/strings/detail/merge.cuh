@@ -68,8 +68,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
 
   // build offsets column
   auto offsets_transformer = [d_lhs, d_rhs] __device__(auto index_pair) {
-    auto side  = thrust::get<0>(index_pair);
-    auto index = thrust::get<1>(index_pair);
+    auto const [side, index] = index_pair;
     if (side == side::LEFT ? d_lhs.is_null(index) : d_rhs.is_null(index)) return 0;
     auto d_str =
       side == side::LEFT ? d_lhs.element<string_view>(index) : d_rhs.element<string_view>(index);
@@ -90,9 +89,7 @@ std::unique_ptr<column> merge(strings_column_view const& lhs,
                      thrust::make_counting_iterator<size_type>(0),
                      strings_count,
                      [d_lhs, d_rhs, begin, d_offsets, d_chars] __device__(size_type idx) {
-                       index_type index_pair = begin[idx];
-                       auto side             = thrust::get<0>(index_pair);
-                       auto index            = thrust::get<1>(index_pair);
+                       auto const [side, index] = begin[idx];
                        if (side == side::LEFT ? d_lhs.is_null(index) : d_rhs.is_null(index)) return;
                        auto d_str = side == side::LEFT ? d_lhs.element<string_view>(index)
                                                        : d_rhs.element<string_view>(index);

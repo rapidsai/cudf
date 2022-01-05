@@ -16,6 +16,7 @@
 
 #include <benchmark/benchmark.h>
 #include <benchmarks/fixture/benchmark_fixture.hpp>
+#include <benchmarks/fixture/templated_benchmark_fixture.hpp>
 #include <benchmarks/synchronization/synchronization.hpp>
 
 #include <cudf/column/column_view.hpp>
@@ -66,7 +67,6 @@ cudf::test::strings_column_wrapper generate_column(cudf::size_type num_rows,
   return cudf::test::strings_column_wrapper(strings.begin(), strings.end());
 }
 
-template <int esc_seq_pct>
 class UrlDecode : public cudf::benchmark {
 };
 
@@ -88,15 +88,13 @@ void BM_url_decode(benchmark::State& state)
                           (chars_per_row + sizeof(cudf::size_type)));
 }
 
-#define URLD_BENCHMARK_DEFINE(name, esc_seq_pct)                      \
-  BENCHMARK_TEMPLATE_DEFINE_F(UrlDecode, name, esc_seq_pct)           \
-  (::benchmark::State & state) { BM_url_decode<esc_seq_pct>(state); } \
-  BENCHMARK_REGISTER_F(UrlDecode, name)                               \
-    ->Args({100000000, 10})                                           \
-    ->Args({10000000, 100})                                           \
-    ->Args({1000000, 1000})                                           \
-    ->Unit(benchmark::kMillisecond)                                   \
+#define URLD_BENCHMARK_DEFINE(esc_seq_pct)                     \
+  TEMPLATED_BENCHMARK_F(UrlDecode, BM_url_decode, esc_seq_pct) \
+    ->Args({100000000, 10})                                    \
+    ->Args({10000000, 100})                                    \
+    ->Args({1000000, 1000})                                    \
+    ->Unit(benchmark::kMillisecond)                            \
     ->UseManualTime();
 
-URLD_BENCHMARK_DEFINE(url_decode_10pct, 10)
-URLD_BENCHMARK_DEFINE(url_decode_50pct, 50)
+URLD_BENCHMARK_DEFINE(10)
+URLD_BENCHMARK_DEFINE(50)

@@ -42,6 +42,14 @@ add_library(
                                synchronization/synchronization.cpp io/cuio_benchmark_common.cpp
 )
 target_link_libraries(cudf_benchmark_common PRIVATE cudf_datagen)
+add_custom_command(
+  OUTPUT CUDF_BENCHMARKS
+  COMMAND echo Running benchmarks
+  COMMAND mkdir -p results
+  VERBATIM
+  COMMENT "Running cudf benchmarks."
+  USES_TERMINAL
+)
 
 # This function takes in a benchmark name and benchmark source and handles setting all of the
 # associated properties and linking to build the benchmark
@@ -53,6 +61,13 @@ function(ConfigureBench CMAKE_BENCH_NAME)
   )
   target_link_libraries(
     ${CMAKE_BENCH_NAME} PRIVATE cudf_benchmark_common cudf_datagen benchmark::benchmark_main
+  )
+  add_custom_command(
+    OUTPUT CUDF_BENCHMARKS
+    COMMAND ${CMAKE_BENCH_NAME} --benchmark_out_format=json
+            --benchmark_out=results/${CMAKE_BENCH_NAME}.json
+    APPEND
+    COMMENT "Adding ${CMAKE_BENCH_NAME}"
   )
 endfunction()
 
@@ -156,8 +171,12 @@ ConfigureBench(FILL_BENCH filling/repeat_benchmark.cpp)
 # ##################################################################################################
 # * groupby benchmark -----------------------------------------------------------------------------
 ConfigureBench(
-  GROUPBY_BENCH groupby/group_sum_benchmark.cu groupby/group_nth_benchmark.cu
-  groupby/group_shift_benchmark.cu groupby/group_struct_benchmark.cu
+  GROUPBY_BENCH
+  groupby/group_sum_benchmark.cu
+  groupby/group_nth_benchmark.cu
+  groupby/group_shift_benchmark.cu
+  groupby/group_struct_benchmark.cu
+  groupby/group_no_requests_benchmark.cu
 )
 
 # ##################################################################################################
@@ -254,3 +273,9 @@ ConfigureBench(JSON_BENCH string/json_benchmark.cpp)
 # ##################################################################################################
 # * io benchmark ---------------------------------------------------------------------
 ConfigureBench(MULTIBYTE_SPLIT_BENCHMARK io/text/multibyte_split_benchmark.cpp)
+
+add_custom_target(
+  run_benchmarks
+  DEPENDS CUDF_BENCHMARKS
+  COMMENT "Custom command for running cudf benchmarks."
+)

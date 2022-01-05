@@ -30,6 +30,9 @@ export CONDA_ARTIFACT_PATH="$WORKSPACE/ci/artifacts/cudf/cpu/.conda-bld/"
 export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 
+# ucx-py version
+export UCX_PY_VERSION='0.24.*'
+
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
 ################################################################################
@@ -80,7 +83,7 @@ gpuci_conda_retry install -y \
                   "rapids-notebook-env=$MINOR_VERSION.*" \
                   "dask-cuda=${MINOR_VERSION}" \
                   "rmm=$MINOR_VERSION.*" \
-                  "ucx-py=0.23.*" \
+                  "ucx-py=${UCX_PY_VERSION}" \
                   "openjdk=8.*" \
                   "maven"
 

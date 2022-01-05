@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <io/orc/orc.h>
 #include <algorithm>
 #include <cudf/detail/nvtx/ranges.hpp>
 #include <cudf/io/avro.hpp>
@@ -32,6 +31,7 @@
 #include <cudf/io/parquet.hpp>
 #include <cudf/table/table.hpp>
 #include <cudf/utilities/error.hpp>
+#include <io/orc/orc.h>
 
 namespace cudf {
 namespace io {
@@ -111,27 +111,33 @@ std::vector<std::unique_ptr<cudf::io::datasource>> make_datasources(source_info 
                                                                     size_t range_offset = 0,
                                                                     size_t range_size   = 0)
 {
-  switch (info.type) {
+  switch (info.type()) {
     case io_type::FILEPATH: {
       auto sources = std::vector<std::unique_ptr<cudf::io::datasource>>();
-      for (auto const& filepath : info.filepaths) {
+      for (auto const& filepath : info.filepaths()) {
         sources.emplace_back(cudf::io::datasource::create(filepath, range_offset, range_size));
       }
       return sources;
     }
-    case io_type::HOST_BUFFER: return cudf::io::datasource::create(info.buffers);
-    case io_type::USER_IMPLEMENTED: return cudf::io::datasource::create(info.user_sources);
+    case io_type::HOST_BUFFER: return cudf::io::datasource::create(info.buffers());
+    case io_type::USER_IMPLEMENTED: return cudf::io::datasource::create(info.user_sources());
     default: CUDF_FAIL("Unsupported source type");
   }
 }
 
-std::unique_ptr<data_sink> make_datasink(sink_info const& info)
+std::vector<std::unique_ptr<data_sink>> make_datasinks(sink_info const& info)
 {
-  switch (info.type) {
-    case io_type::FILEPATH: return cudf::io::data_sink::create(info.filepath);
-    case io_type::HOST_BUFFER: return cudf::io::data_sink::create(info.buffer);
-    case io_type::VOID: return cudf::io::data_sink::create();
-    case io_type::USER_IMPLEMENTED: return cudf::io::data_sink::create(info.user_sink);
+  switch (info.type()) {
+    case io_type::FILEPATH: return cudf::io::data_sink::create(info.filepaths());
+    case io_type::HOST_BUFFER: return cudf::io::data_sink::create(info.buffers());
+    case io_type::VOID: {
+      std::vector<std::unique_ptr<data_sink>> sinks;
+      for (size_t i = 0; i < info.num_sinks(); ++i) {
+        sinks.push_back(cudf::io::data_sink::create());
+      }
+      return sinks;
+    }
+    case io_type::USER_IMPLEMENTED: return cudf::io::data_sink::create(info.user_sinks());
     default: CUDF_FAIL("Unsupported sink type");
   }
 }
@@ -156,9 +162,9 @@ compression_type infer_compression_type(compression_type compression, source_inf
 {
   if (compression != compression_type::AUTO) { return compression; }
 
-  if (info.type != io_type::FILEPATH) { return compression_type::NONE; }
+  if (info.type() != io_type::FILEPATH) { return compression_type::NONE; }
 
-  auto filepath = info.filepaths[0];
+  auto filepath = info.filepaths()[0];
 
   // Attempt to infer from the file extension
   const auto pos = filepath.find_last_of('.');
@@ -218,10 +224,11 @@ void write_csv(csv_writer_options const& options, rmm::mr::device_memory_resourc
 {
   using namespace cudf::io::detail;
 
-  auto sink = make_datasink(options.get_sink());
+  auto sinks = make_datasinks(options.get_sink());
+  CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for CSV writing");
 
   return csv::write_csv(  //
-    sink.get(),
+    sinks[0].get(),
     options.get_table(),
     options.get_metadata(),
     options,
@@ -235,15 +242,16 @@ raw_orc_statistics read_raw_orc_statistics(source_info const& src_info)
 {
   // Get source to read statistics from
   std::unique_ptr<datasource> source;
-  if (src_info.type == io_type::FILEPATH) {
-    CUDF_EXPECTS(src_info.filepaths.size() == 1, "Only a single source is currently supported.");
-    source = cudf::io::datasource::create(src_info.filepaths[0]);
-  } else if (src_info.type == io_type::HOST_BUFFER) {
-    CUDF_EXPECTS(src_info.buffers.size() == 1, "Only a single source is currently supported.");
-    source = cudf::io::datasource::create(src_info.buffers[0]);
-  } else if (src_info.type == io_type::USER_IMPLEMENTED) {
-    CUDF_EXPECTS(src_info.user_sources.size() == 1, "Only a single source is currently supported.");
-    source = cudf::io::datasource::create(src_info.user_sources[0]);
+  if (src_info.type() == io_type::FILEPATH) {
+    CUDF_EXPECTS(src_info.filepaths().size() == 1, "Only a single source is currently supported.");
+    source = cudf::io::datasource::create(src_info.filepaths()[0]);
+  } else if (src_info.type() == io_type::HOST_BUFFER) {
+    CUDF_EXPECTS(src_info.buffers().size() == 1, "Only a single source is currently supported.");
+    source = cudf::io::datasource::create(src_info.buffers()[0]);
+  } else if (src_info.type() == io_type::USER_IMPLEMENTED) {
+    CUDF_EXPECTS(src_info.user_sources().size() == 1,
+                 "Only a single source is currently supported.");
+    source = cudf::io::datasource::create(src_info.user_sources()[0]);
   } else {
     CUDF_FAIL("Unsupported source type");
   }
@@ -350,9 +358,11 @@ void write_orc(orc_writer_options const& options, rmm::mr::device_memory_resourc
 
   CUDF_FUNC_RANGE();
 
-  auto sink   = make_datasink(options.get_sink());
+  auto sinks = make_datasinks(options.get_sink());
+  CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for ORC writing");
+
   auto writer = std::make_unique<detail_orc::writer>(
-    std::move(sink), options, io_detail::SingleWriteMode::YES, rmm::cuda_stream_default, mr);
+    std::move(sinks[0]), options, io_detail::SingleWriteMode::YES, rmm::cuda_stream_default, mr);
 
   writer->write(options.get_table());
 }
@@ -365,10 +375,11 @@ orc_chunked_writer::orc_chunked_writer(chunked_orc_writer_options const& options
 {
   namespace io_detail = cudf::io::detail;
 
-  auto sink = make_datasink(options.get_sink());
+  auto sinks = make_datasinks(options.get_sink());
+  CUDF_EXPECTS(sinks.size() == 1, "Multiple sinks not supported for ORC writing");
 
   writer = std::make_unique<detail_orc::writer>(
-    std::move(sink), options, io_detail::SingleWriteMode::NO, rmm::cuda_stream_default, mr);
+    std::move(sinks[0]), options, io_detail::SingleWriteMode::NO, rmm::cuda_stream_default, mr);
 }
 
 /**
@@ -402,8 +413,7 @@ table_with_metadata read_parquet(parquet_reader_options const& options,
   CUDF_FUNC_RANGE();
 
   auto datasources = make_datasources(options.get_source());
-  auto reader      = std::make_unique<detail_parquet::reader>(
-    std::move(datasources), options, rmm::cuda_stream_default, mr);
+  auto reader      = std::make_unique<detail_parquet::reader>(std::move(datasources), options, mr);
 
   return reader->read(options);
 }
@@ -418,9 +428,7 @@ std::unique_ptr<std::vector<uint8_t>> merge_row_group_metadata(
   return detail_parquet::writer::merge_row_group_metadata(metadata_list);
 }
 
-table_input_metadata::table_input_metadata(table_view const& table,
-                                           std::map<std::string, std::string> user_data)
-  : user_data{std::move(user_data)}
+table_input_metadata::table_input_metadata(table_view const& table)
 {
   // Create a metadata hierarchy using `table`
   std::function<column_in_metadata(column_view const&)> get_children = [&](column_view const& col) {
@@ -444,13 +452,13 @@ std::unique_ptr<std::vector<uint8_t>> write_parquet(parquet_writer_options const
 
   CUDF_FUNC_RANGE();
 
-  auto sink   = make_datasink(options.get_sink());
+  auto sinks  = make_datasinks(options.get_sink());
   auto writer = std::make_unique<detail_parquet::writer>(
-    std::move(sink), options, io_detail::SingleWriteMode::YES, rmm::cuda_stream_default, mr);
+    std::move(sinks), options, io_detail::SingleWriteMode::YES, rmm::cuda_stream_default, mr);
 
-  writer->write(options.get_table());
+  writer->write(options.get_table(), options.get_partitions());
 
-  return writer->close(options.get_column_chunks_file_path());
+  return writer->close(options.get_column_chunks_file_paths());
 }
 
 /**
@@ -461,20 +469,21 @@ parquet_chunked_writer::parquet_chunked_writer(chunked_parquet_writer_options co
 {
   namespace io_detail = cudf::io::detail;
 
-  auto sink = make_datasink(options.get_sink());
+  auto sinks = make_datasinks(options.get_sink());
 
   writer = std::make_unique<detail_parquet::writer>(
-    std::move(sink), options, io_detail::SingleWriteMode::NO, rmm::cuda_stream_default, mr);
+    std::move(sinks), options, io_detail::SingleWriteMode::NO, rmm::cuda_stream_default, mr);
 }
 
 /**
  * @copydoc cudf::io::parquet_chunked_writer::write
  */
-parquet_chunked_writer& parquet_chunked_writer::write(table_view const& table)
+parquet_chunked_writer& parquet_chunked_writer::write(table_view const& table,
+                                                      std::vector<partition_info> const& partitions)
 {
   CUDF_FUNC_RANGE();
 
-  writer->write(table);
+  writer->write(table, partitions);
 
   return *this;
 }
@@ -483,7 +492,7 @@ parquet_chunked_writer& parquet_chunked_writer::write(table_view const& table)
  * @copydoc cudf::io::parquet_chunked_writer::close
  */
 std::unique_ptr<std::vector<uint8_t>> parquet_chunked_writer::close(
-  std::string const& column_chunks_file_path)
+  std::vector<std::string> const& column_chunks_file_path)
 {
   CUDF_FUNC_RANGE();
   return writer->close(column_chunks_file_path);

@@ -31,9 +31,9 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
-#include <thrust/binary_search.h>
 #include <algorithm>
 #include <iterator>
+#include <thrust/binary_search.h>
 
 namespace cudf {
 namespace dictionary {

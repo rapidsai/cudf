@@ -70,13 +70,8 @@ cdef extern from "cudf/io/types.hpp" \
     cdef cppclass table_input_metadata:
         table_input_metadata() except +
         table_input_metadata(const cudf_table_view.table_view& table) except +
-        table_input_metadata(
-            const cudf_table_view.table_view& table,
-            map[string, string] user_data
-        ) except +
 
         vector[column_in_metadata] column_metadata
-        map[string, string] user_data
 
     cdef cppclass host_buffer:
         const char* data
@@ -87,8 +82,8 @@ cdef extern from "cudf/io/types.hpp" \
 
     cdef cppclass source_info:
         io_type type
-        vector[string] filepaths
-        vector[host_buffer] buffers
+        const vector[string]& filepaths() except +
+        const vector[host_buffer]& buffers() except +
         vector[shared_ptr[CRandomAccessFile]] files
 
         source_info() except +
@@ -98,9 +93,9 @@ cdef extern from "cudf/io/types.hpp" \
 
     cdef cppclass sink_info:
         io_type type
-        string filepath
-        vector[char] * buffer
-        data_sink * user_sink
+        const vector[string]& filepaths()
+        const vector[vector[char] *]& buffers()
+        const vector[data_sink *]& user_sinks()
 
         sink_info() except +
         sink_info(string file_path) except +

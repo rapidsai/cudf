@@ -29,7 +29,9 @@ namespace detail {
 
 template <typename RequestType>
 inline std::vector<aggregation_result> extract_results(host_span<RequestType const> requests,
-                                                       cudf::detail::result_cache& cache)
+                                                       cudf::detail::result_cache& cache,
+                                                       rmm::cuda_stream_view stream,
+                                                       rmm::mr::device_memory_resource* mr)
 {
   std::vector<aggregation_result> results(requests.size());
   std::unordered_map<std::pair<column_view, std::reference_wrapper<aggregation const>>,
@@ -45,7 +47,7 @@ inline std::vector<aggregation_result> extract_results(host_span<RequestType con
       } else {
         auto it = repeated_result.find({requests[i].values, *agg});
         if (it != repeated_result.end()) {
-          results[i].results.emplace_back(std::make_unique<column>(it->second));
+          results[i].results.emplace_back(std::make_unique<column>(it->second, stream, mr));
         } else {
           CUDF_FAIL("Cannot extract result from the cache");
         }

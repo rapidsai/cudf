@@ -103,8 +103,7 @@ parquet::ConvertedType logical_type_to_converted_type(parquet::LogicalType const
  */
 type_id to_type_id(SchemaElement const& schema,
                    bool strings_to_categorical,
-                   type_id timestamp_type_id,
-                   bool strict_decimal_types)
+                   type_id timestamp_type_id)
 {
   parquet::Type physical                = schema.type;
   parquet::ConvertedType converted_type = schema.converted_type;
@@ -138,16 +137,20 @@ type_id to_type_id(SchemaElement const& schema,
       return (timestamp_type_id != type_id::EMPTY) ? timestamp_type_id
                                                    : type_id::TIMESTAMP_MILLISECONDS;
     case parquet::DECIMAL:
-      if (physical == parquet::INT32)
-        return type_id::DECIMAL32;
-      else if (physical == parquet::INT64)
-        return type_id::DECIMAL64;
-      else if (physical == parquet::FIXED_LEN_BYTE_ARRAY && schema.type_length <= 8) {
-        return type_id::DECIMAL64;
-      } else {
-        CUDF_EXPECTS(strict_decimal_types == false, "Unsupported decimal type read!");
-        return type_id::FLOAT64;
+      if (physical == parquet::INT32) { return type_id::DECIMAL32; }
+      if (physical == parquet::INT64) { return type_id::DECIMAL64; }
+      if (physical == parquet::FIXED_LEN_BYTE_ARRAY) {
+        if (schema.type_length <= static_cast<int32_t>(sizeof(int32_t))) {
+          return type_id::DECIMAL32;
+        }
+        if (schema.type_length <= static_cast<int32_t>(sizeof(int64_t))) {
+          return type_id::DECIMAL64;
+        }
+        if (schema.type_length <= static_cast<int32_t>(sizeof(__int128_t))) {
+          return type_id::DECIMAL128;
+        }
       }
+      CUDF_FAIL("Invalid representation of decimal type");
       break;
 
     // maps are just List<Struct<>>.
@@ -180,6 +183,16 @@ type_id to_type_id(SchemaElement const& schema,
   }
 
   return type_id::EMPTY;
+}
+
+/**
+ * @brief Converts cuDF type enum to column logical type
+ */
+data_type to_data_type(type_id t_id, SchemaElement const& schema)
+{
+  return t_id == type_id::DECIMAL32 || t_id == type_id::DECIMAL64 || t_id == type_id::DECIMAL128
+           ? data_type{t_id, numeric::scale_type{-schema.decimal_scale}}
+           : data_type{t_id};
 }
 
 /**
@@ -288,7 +301,7 @@ struct metadata : public FileMetaData {
   }
 };
 
-class aggregate_metadata {
+class aggregate_reader_metadata {
   std::vector<metadata> const per_file_metadata;
   std::map<std::string, std::string> const agg_keyval_map;
   size_type const num_rows;
@@ -344,7 +357,7 @@ class aggregate_metadata {
   }
 
  public:
-  aggregate_metadata(std::vector<std::unique_ptr<datasource>> const& sources)
+  aggregate_reader_metadata(std::vector<std::unique_ptr<datasource>> const& sources)
     : per_file_metadata(metadatas_from_sources(sources)),
       agg_keyval_map(merge_keyval_metadata()),
       num_rows(calc_num_rows()),
@@ -411,6 +424,9 @@ class aggregate_metadata {
     // walk upwards, skipping repeated fields
     while (schema_index > 0) {
       if (!pfm.schema[schema_index].is_stub()) { depth++; }
+      // schema of one-level encoding list doesn't contain nesting information, so we need to
+      // manually add an extra nesting level
+      if (pfm.schema[schema_index].is_one_level_list()) { depth++; }
       schema_index = pfm.schema[schema_index].parent_idx;
     }
     return depth;
@@ -550,7 +566,6 @@ class aggregate_metadata {
    * @param include_index Whether to always include the PANDAS index column(s)
    * @param strings_to_categorical Type conversion parameter
    * @param timestamp_type_id Type conversion parameter
-   * @param strict_decimal_types Type conversion parameter
    *
    * @return input column information, output column information, list of output column schema
    * indices
@@ -558,8 +573,7 @@ class aggregate_metadata {
   auto select_columns(std::vector<std::string> const& use_names,
                       bool include_index,
                       bool strings_to_categorical,
-                      type_id timestamp_type_id,
-                      bool strict_decimal_types) const
+                      type_id timestamp_type_id) const
   {
     auto find_schema_child = [&](SchemaElement const& schema_elem, std::string const& name) {
       auto const& col_schema_idx = std::find_if(
@@ -596,10 +610,10 @@ class aggregate_metadata {
 
         // if we're at the root, this is a new output column
         auto const col_type =
-          to_type_id(schema_elem, strings_to_categorical, timestamp_type_id, strict_decimal_types);
-        auto const dtype = col_type == type_id::DECIMAL32 || col_type == type_id::DECIMAL64
-                             ? data_type{col_type, numeric::scale_type{-schema_elem.decimal_scale}}
-                             : data_type{col_type};
+          schema_elem.is_one_level_list()
+            ? type_id::LIST
+            : to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
+        auto const dtype = to_data_type(col_type, schema_elem);
 
         column_buffer output_col(dtype, schema_elem.repetition_type == OPTIONAL);
         // store the index of this element if inserted in out_col_array
@@ -629,6 +643,23 @@ class aggregate_metadata {
         if (schema_elem.num_children == 0) {
           input_column_info& input_col =
             input_columns.emplace_back(input_column_info{schema_idx, schema_elem.name});
+
+          // set up child output column for one-level encoding list
+          if (schema_elem.is_one_level_list()) {
+            // determine the element data type
+            auto const element_type =
+              to_type_id(schema_elem, strings_to_categorical, timestamp_type_id);
+            auto const element_dtype = to_data_type(element_type, schema_elem);
+
+            column_buffer element_col(element_dtype, schema_elem.repetition_type == OPTIONAL);
+            // store the index of this element
+            nesting.push_back(static_cast<int>(output_col.children.size()));
+            // TODO: not sure if we should assign a name or leave it blank
+            element_col.name = "element";
+
+            output_col.children.push_back(std::move(element_col));
+          }
+
           std::copy(nesting.cbegin(), nesting.cend(), std::back_inserter(input_col.nesting));
           path_is_valid = true;  // If we're able to reach leaf then path is valid
         }
@@ -791,7 +822,7 @@ class aggregate_metadata {
  */
 void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::vector<int>>>& remap,
                                int src_col_schema,
-                               aggregate_metadata const& md)
+                               aggregate_reader_metadata const& md)
 {
   // already generated for this level
   if (remap.find(src_col_schema) != remap.end()) { return; }
@@ -848,6 +879,10 @@ void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::ve
         if (cur_schema.max_repetition_level == r) {
           // if this is a repeated field, map it one level deeper
           shallowest = cur_schema.is_stub() ? cur_depth + 1 : cur_depth;
+        }
+        // if it's one-level encoding list
+        else if (cur_schema.is_one_level_list()) {
+          shallowest = cur_depth - 1;
         }
         if (!cur_schema.is_stub()) { cur_depth--; }
         schema_idx = cur_schema.parent_idx;
@@ -1552,14 +1587,12 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
   : _mr(mr), _sources(std::move(sources))
 {
   // Open and parse the source dataset metadata
-  _metadata = std::make_unique<aggregate_metadata>(_sources);
+  _metadata = std::make_unique<aggregate_reader_metadata>(_sources);
 
   // Override output timestamp resolution if requested
   if (options.get_timestamp_type().id() != type_id::EMPTY) {
     _timestamp_type = options.get_timestamp_type();
   }
-
-  _strict_decimal_types = options.is_enabled_strict_decimal_types();
 
   // Strings may be returned as either string or categorical columns
   _strings_to_categorical = options.is_enabled_convert_strings_to_categories();
@@ -1569,8 +1602,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
     _metadata->select_columns(options.get_columns(),
                               options.is_enabled_use_pandas_metadata(),
                               _strings_to_categorical,
-                              _timestamp_type.id(),
-                              _strict_decimal_types);
+                              _timestamp_type.id());
 }
 
 table_with_metadata reader::impl::read(size_type skip_rows,
@@ -1638,12 +1670,12 @@ table_with_metadata reader::impl::read(size_type skip_rows,
         int32_t clock_rate;
         int8_t converted_type;
 
-        std::tie(type_width, clock_rate, converted_type) = conversion_info(
-          to_type_id(schema, _strings_to_categorical, _timestamp_type.id(), _strict_decimal_types),
-          _timestamp_type.id(),
-          schema.type,
-          schema.converted_type,
-          schema.type_length);
+        std::tie(type_width, clock_rate, converted_type) =
+          conversion_info(to_type_id(schema, _strings_to_categorical, _timestamp_type.id()),
+                          _timestamp_type.id(),
+                          schema.type,
+                          schema.converted_type,
+                          schema.type_length);
 
         column_chunk_offsets[chunks.size()] =
           (col_meta.dictionary_page_offset != 0)
@@ -1772,7 +1804,6 @@ table_with_metadata reader::impl::read(size_type skip_rows,
 // Forward to implementation
 reader::reader(std::vector<std::unique_ptr<cudf::io::datasource>>&& sources,
                parquet_reader_options const& options,
-               rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
   : _impl(std::make_unique<impl>(std::move(sources), options, mr))
 {
