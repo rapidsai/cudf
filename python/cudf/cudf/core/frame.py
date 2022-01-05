@@ -1466,8 +1466,6 @@ class Frame:
         Applies boolean mask to each row of `self`,
         rows corresponding to `False` is dropped
         """
-        boolean_mask = as_column(boolean_mask)
-
         result = self.__class__._from_data(
             *libcudf.stream_compaction.apply_boolean_mask(
                 self, as_column(boolean_mask)
