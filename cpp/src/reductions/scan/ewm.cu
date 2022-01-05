@@ -194,18 +194,14 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
   thrust::transform(rmm::exec_policy(stream),
                     input.begin<T>(),
                     input.end<T>(),
+                    thrust::make_counting_iterator<size_type>(0),
                     pairs.begin(),
-                    [beta] __device__(T input) -> pair_type<T> {
-                      return {beta, (1.0 - beta) * input};
-                    });
-
-  // TODO: the first pair is WRONG using the above. Reset just that pair
-  thrust::transform(rmm::exec_policy(stream),
-                    input.begin<T>(),
-                    std::next(input.begin<T>()),
-                    pairs.begin(),
-                    [beta] __device__(T input) -> pair_type<T> {
-                      return {beta, input};
+                    [beta] __device__(T input, size_type index) -> pair_type<T> {
+                      if (index == 0) {
+                        return {beta, input};
+                      } else {
+                        return {beta, (1.0 - beta) * input};
+                      }
                     });
 
   if (input.has_nulls()) {
