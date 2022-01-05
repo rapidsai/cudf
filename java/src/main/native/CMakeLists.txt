@@ -225,6 +225,7 @@ add_library(
   src/CudaJni.cpp
   src/ColumnVectorJni.cpp
   src/ColumnViewJni.cpp
+  src/ColumnViewJni.cu
   src/CompiledExpression.cpp
   src/ContiguousTableJni.cpp
   src/HashJoinJni.cpp

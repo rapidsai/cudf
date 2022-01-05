@@ -580,8 +580,8 @@ class Frame:
         result._copy_type_metadata(self)
         return result
 
-    def _hash(self, method, initial_hash=None):
-        return libcudf.hash.hash(self, method, initial_hash)
+    def _hash(self, method):
+        return libcudf.hash.hash(self, method)
 
     def _hash_partition(
         self, columns_to_hash, num_partitions, keep_index=True
@@ -1783,40 +1783,27 @@ class Frame:
                 "Only axis=`None` supported at this time."
             )
 
-        return self._repeat(repeats)
-
-    def _repeat(self, count):
-        if not is_scalar(count):
-            count = as_column(count)
+        if not is_scalar(repeats):
+            repeats = as_column(repeats)
 
         result = self.__class__._from_data(
-            *libcudf.filling.repeat(self, count)
+            *libcudf.filling.repeat(self, repeats)
         )
 
         result._copy_type_metadata(self)
         return result
 
-    def _fill(self, fill_values, begin, end, inplace):
-        col_and_fill = zip(self._columns, fill_values)
-
-        if not inplace:
-            data_columns = (c._fill(v, begin, end) for (c, v) in col_and_fill)
-            return self.__class__._from_data(
-                zip(self._column_names, data_columns), self._index
-            )
-
-        for (c, v) in col_and_fill:
-            c.fill(v, begin, end, inplace=True)
-
-        return self
-
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
         """Shift values by `periods` positions."""
-        assert axis in (None, 0) and freq is None
-        return self._shift(periods)
+        axis = self._get_axis_from_axis_arg(axis)
+        if axis != 0:
+            raise ValueError("Only axis=0 is supported.")
+        if freq is not None:
+            raise ValueError("The freq argument is not yet supported.")
 
-    def _shift(self, offset, fill_value=None):
-        data_columns = (col.shift(offset, fill_value) for col in self._columns)
+        data_columns = (
+            col.shift(periods, fill_value) for col in self._columns
+        )
         return self.__class__._from_data(
             zip(self._column_names, data_columns), self._index
         )
