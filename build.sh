@@ -37,6 +37,8 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [tests] [libcudf_kafk
    --disable_nvtx                - disable inserting NVTX profiling ranges
    --show_depr_warn              - show cmake deprecation warnings
    --ptds                        - enable per-thread default stream
+   --build_metrics               - generate build metrics report for libcudf
+   --incl_cache_stats            - include cache statistics in build metrics report
    --cmake-args=\\\"<args>\\\"   - pass arbitrary list of CMake configuration options (escape all quotes in argument)
    -h | --h[elp]                 - print this text
 
@@ -61,6 +63,8 @@ BUILD_NVTX=ON
 BUILD_TESTS=OFF
 BUILD_DISABLE_DEPRECATION_WARNING=ON
 BUILD_PER_THREAD_DEFAULT_STREAM=OFF
+BUILD_REPORT_METRICS=ON
+BUILD_REPORT_INCL_CACHE_STATS=ON
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -144,6 +148,14 @@ fi
 if hasArg --ptds; then
     BUILD_PER_THREAD_DEFAULT_STREAM=ON
 fi
+if hasArg --build_metrics; then
+    BUILD_REPORT_METRICS=ON
+fi
+
+if hasArg --incl_cache_stats; then
+    BUILD_REPORT_INCL_CACHE_STATS=ON
+fi
+
 
 # If clean given, run it prior to any other steps
 if hasArg clean; then
@@ -174,7 +186,7 @@ if buildAll || hasArg libcudf; then
 
     # get the current count before the compile starts
     FILES_IN_CCACHE=""
-    if [ -x "$(command -v ccache)" ]; then
+    if [[ "$BUILD_REPORT_INCL_CACHE_STATS"=="ON" && -x "$(command -v ccache)" ]]; then
         FILES_IN_CCACHE=$(ccache -s | grep "files in cache")
         echo "$FILES_IN_CCACHE"
         # zero the ccache statistics
@@ -201,12 +213,12 @@ if buildAll || hasArg libcudf; then
     compile_total=$(( compile_end - compile_start ))
 
     # Record build times
-    if [[ -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
+    if [[ "$BUILD_REPORT_METRICS"=="ON" && -f "${LIB_BUILD_DIR}/.ninja_log" ]]; then
         echo "Formatting build metrics"
         python ${REPODIR}/cpp/scripts/sort_ninja_log.py ${LIB_BUILD_DIR}/.ninja_log --fmt xml > ${LIB_BUILD_DIR}/ninja_log.xml
         MSG="<p>"
         # get some ccache stats after the compile
-        if [ -x "$(command -v ccache)" ]; then
+        if [[ "$BUILD_REPORT_INCL_CACHE_STATS"=="ON" && -x "$(command -v ccache)" ]]; then
            MSG="${MSG}<br/>$FILES_IN_CCACHE"
            HIT_RATE=$(ccache -s | grep "cache hit rate")
            MSG="${MSG}<br/>${HIT_RATE}"
