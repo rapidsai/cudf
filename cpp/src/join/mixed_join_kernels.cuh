@@ -135,20 +135,32 @@ class pair_expression_equality {
 /**
  * @brief Computes the output size of joining the left table to the right table.
  *
- * This method uses a nested loop to iterate over the left and right tables and count the number of
- * matches according to a boolean expression.
+ * This method probes the hash table with each row in the probe table using a
+ * custom equality comparator that also checks that the conditional expression
+ * evaluates to true between the left/right tables when a match is found
+ * between probe and build rows.
  *
  * @tparam block_size The number of threads per block for this kernel
  * @tparam has_nulls Whether or not the inputs may contain nulls.
  *
  * @param[in] left_table The left table
  * @param[in] right_table The right table
+ * @param[in] probe The table with which to probe the hash table for matches.
+ * @param[in] build The table with which the hash table was built.
+ * @param[in] compare_nulls Controls whether null join-key values should match or not.
  * @param[in] join_type The type of join to be performed
+ * @param[in] hash_table_view The hash table built from `build`.
  * @param[in] device_expression_data Container of device data required to evaluate the desired
  * expression.
  * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
  * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
  * @param[out] output_size The resulting output size
+ * @param[out] matches_per_row The number of matches in one pair of
+ * equality/conditional tables for each row in the other pair of tables. If
+ * swap_tables is true, matches_per_row corresponds to the right_table,
+ * otherwise it corresponds to the left_table. Note that corresponding swap of
+ * left/right tables to determine which is the build table and which is the
+ * probe table has already happened on the host.
  */
 template <int block_size, bool has_nulls>
 __global__ void compute_mixed_join_output_size(
@@ -175,8 +187,8 @@ __global__ void compute_mixed_join_output_size(
     intermediate_storage + (threadIdx.x * device_expression_data.num_intermediates);
 
   std::size_t thread_counter{0};
-  cudf::size_type const start_idx      = threadIdx.x + blockIdx.x * blockDim.x;
-  cudf::size_type const stride         = blockDim.x * gridDim.x;
+  cudf::size_type const start_idx      = threadIdx.x + blockIdx.x * block_size;
+  cudf::size_type const stride         = block_size * gridDim.x;
   cudf::size_type const left_num_rows  = left_table.num_rows();
   cudf::size_type const right_num_rows = right_table.num_rows();
   auto const outer_num_rows            = (swap_tables ? right_num_rows : left_num_rows);
@@ -221,23 +233,33 @@ __global__ void compute_mixed_join_output_size(
 }
 
 /**
- * @brief Performs a join conditioned on a predicate to find all matching rows
- * between the left and right tables and generate the output for the desired
- * Join operation.
+ * @brief Performs a join using the combination of a hash lookup to identify
+ * equal rows between one pair of tables and the evaluation of an expression
+ * containing an arbitrary expression.
+ *
+ * This method probes the hash table with each row in the probe table using a
+ * custom equality comparator that also checks that the conditional expression
+ * evaluates to true between the left/right tables when a match is found
+ * between probe and build rows.
  *
  * @tparam block_size The number of threads per block for this kernel
  * @tparam output_cache_size The side of the shared memory buffer to cache join
- * output results
  * @tparam has_nulls Whether or not the inputs may contain nulls.
  *
  * @param[in] left_table The left table
  * @param[in] right_table The right table
+ * @param[in] probe The table with which to probe the hash table for matches.
+ * @param[in] build The table with which the hash table was built.
+ * @param[in] compare_nulls Controls whether null join-key values should match or not.
  * @param[in] join_type The type of join to be performed
+ * @param[in] hash_table_view The hash table built from `build`.
  * @param[out] join_output_l The left result of the join operation
  * @param[out] join_output_r The right result of the join operation
- * writes to the global output
- * @param device_expression_data Container of device data required to evaluate the desired
+ * @param[in] device_expression_data Container of device data required to evaluate the desired
  * expression.
+ * @param[in] join_result_offsets The starting indices in join_output[l|r]
+ * where the matches for each row begin. Equivalent to a prefix sum of
+ * matches_per_row.
  * @param[in] swap_tables If true, the kernel was launched with one thread per right row and
  * the kernel needs to internally loop over left rows. Otherwise, loop over right rows.
  */
@@ -256,7 +278,6 @@ __global__ void mixed_join(table_device_view left_table,
                            OutputIt1 join_output_l,
                            OutputIt2 join_output_r,
                            cudf::ast::detail::expression_device_view device_expression_data,
-                           cudf::size_type const* matches_per_row,
                            cudf::size_type const* join_result_offsets,
                            bool const swap_tables)
 {
@@ -274,7 +295,7 @@ __global__ void mixed_join(table_device_view left_table,
   cudf::size_type const right_num_rows = right_table.num_rows();
   auto const outer_num_rows            = (swap_tables ? right_num_rows : left_num_rows);
 
-  cudf::size_type outer_row_index = threadIdx.x + blockIdx.x * blockDim.x;
+  cudf::size_type outer_row_index = threadIdx.x + blockIdx.x * block_size;
 
   unsigned int const activemask = __ballot_sync(0xffffffff, outer_row_index < outer_num_rows);
 

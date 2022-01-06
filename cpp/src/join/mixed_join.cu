@@ -235,7 +235,6 @@ mixed_join(table_view const& left_equality,
         join_output_l,
         join_output_r,
         parser.device_expression_data,
-        matches_view.data<size_type>(),
         join_result_offsets->data(),
         swap_tables);
   } else {
@@ -251,7 +250,6 @@ mixed_join(table_view const& left_equality,
         join_output_l,
         join_output_r,
         parser.device_expression_data,
-        matches_view.data<size_type>(),
         join_result_offsets->data(),
         swap_tables);
   }
