@@ -31,8 +31,6 @@ namespace cudf {
  *
  * @param input The table of columns to hash.
  * @param hash_function The hash function enum to use.
- * @param initial_hash Optional host_span of initial hash values for each column.
- * If this span is empty then each element will be hashed as-is.
  * @param seed Optional seed value to use for the hash function.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  *
@@ -40,10 +38,9 @@ namespace cudf {
  */
 std::unique_ptr<column> hash(
   table_view const& input,
-  hash_id hash_function                        = hash_id::HASH_MURMUR3,
-  cudf::host_span<uint32_t const> initial_hash = {},
-  uint32_t seed                                = DEFAULT_HASH_SEED,
-  rmm::mr::device_memory_resource* mr          = rmm::mr::get_current_device_resource());
+  hash_id hash_function               = hash_id::HASH_MURMUR3,
+  uint32_t seed                       = DEFAULT_HASH_SEED,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /** @} */  // end of group
 }  // namespace cudf

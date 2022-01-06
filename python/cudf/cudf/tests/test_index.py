@@ -2496,3 +2496,35 @@ def test_index_datetime_floor(resolution):
     cuidx_floor = cuidx.floor(resolution)
 
     assert_eq(pidx_floor, cuidx_floor)
+
+
+@pytest.mark.parametrize(
+    "resolution", ["D", "H", "T", "min", "S", "L", "ms", "U", "us", "N"]
+)
+def test_index_datetime_round(resolution):
+    cuidx = cudf.DatetimeIndex([1000000, 2000000, 3000000, 4000000, 5000000])
+    pidx = cuidx.to_pandas()
+
+    pidx_floor = pidx.round(resolution)
+    cuidx_floor = cuidx.round(resolution)
+
+    assert_eq(pidx_floor, cuidx_floor)
+
+
+@pytest.mark.parametrize(
+    "data,nan_idx,NA_idx",
+    [([1, 2, 3, None], None, 3), ([2, 3, np.nan, None], 2, 3)],
+)
+@pytest.mark.parametrize("nan_as_null", [True, False])
+def test_index_nan_as_null(data, nan_idx, NA_idx, nan_as_null):
+    idx = cudf.Index(data, nan_as_null=nan_as_null)
+
+    if nan_as_null:
+        if nan_idx is not None:
+            assert idx[nan_idx] is cudf.NA
+    else:
+        if nan_idx is not None:
+            assert np.isnan(idx[nan_idx])
+
+    if NA_idx is not None:
+        assert idx[NA_idx] is cudf.NA

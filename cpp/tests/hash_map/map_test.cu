@@ -26,13 +26,13 @@
 
 #include <thrust/logical.h>
 
+#include "rmm/exec_policy.hpp"
 #include <cstdlib>
 #include <iostream>
 #include <limits>
 #include <random>
 #include <unordered_map>
 #include <vector>
-#include "rmm/exec_policy.hpp"
 
 template <typename K, typename V>
 struct key_value_types {

@@ -13,32 +13,26 @@ cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:
     cdef unique_ptr[column] extract_hour(const column_view& column) except +
     cdef unique_ptr[column] extract_minute(const column_view& column) except +
     cdef unique_ptr[column] extract_second(const column_view& column) except +
-    cdef unique_ptr[column] ceil_day(const column_view& column) except +
-    cdef unique_ptr[column] ceil_hour(const column_view& column) except +
-    cdef unique_ptr[column] ceil_minute(const column_view& column) except +
-    cdef unique_ptr[column] ceil_second(const column_view& column) except +
-    cdef unique_ptr[column] ceil_millisecond(
-        const column_view& column
+
+    ctypedef enum rounding_frequency "cudf::datetime::rounding_frequency":
+        DAY "cudf::datetime::rounding_frequency::DAY"
+        HOUR "cudf::datetime::rounding_frequency::HOUR"
+        MINUTE "cudf::datetime::rounding_frequency::MINUTE"
+        SECOND "cudf::datetime::rounding_frequency::SECOND"
+        MILLISECOND "cudf::datetime::rounding_frequency::MILLISECOND"
+        MICROSECOND "cudf::datetime::rounding_frequency::MICROSECOND"
+        NANOSECOND "cudf::datetime::rounding_frequency::NANOSECOND"
+
+    cdef unique_ptr[column] ceil_datetimes(
+        const column_view& column, rounding_frequency freq
     ) except +
-    cdef unique_ptr[column] ceil_microsecond(
-        const column_view& column
+    cdef unique_ptr[column] floor_datetimes(
+        const column_view& column, rounding_frequency freq
     ) except +
-    cdef unique_ptr[column] ceil_nanosecond(
-        const column_view& column
+    cdef unique_ptr[column] round_datetimes(
+        const column_view& column, rounding_frequency freq
     ) except +
-    cdef unique_ptr[column] floor_day(const column_view& column) except +
-    cdef unique_ptr[column] floor_hour(const column_view& column) except +
-    cdef unique_ptr[column] floor_minute(const column_view& column) except +
-    cdef unique_ptr[column] floor_second(const column_view& column) except +
-    cdef unique_ptr[column] floor_millisecond(
-        const column_view& column
-    ) except +
-    cdef unique_ptr[column] floor_microsecond(
-        const column_view& column
-    ) except +
-    cdef unique_ptr[column] floor_nanosecond(
-        const column_view& column
-    ) except +
+
     cdef unique_ptr[column] add_calendrical_months(
         const column_view& timestamps,
         const column_view& months

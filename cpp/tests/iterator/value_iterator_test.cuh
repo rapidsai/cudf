@@ -12,8 +12,8 @@
  * or implied. See the License for the specific language governing permissions and limitations under
  * the License.
  */
-#include <tests/iterator/iterator_tests.cuh>
 #include "cudf/detail/utilities/vector_factories.hpp"
+#include <tests/iterator/iterator_tests.cuh>
 
 // tests for non-null iterator (pointer of device array)
 template <typename T>

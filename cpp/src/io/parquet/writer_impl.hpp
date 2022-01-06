@@ -45,6 +45,7 @@ namespace detail {
 namespace parquet {
 // Forward internal classes
 struct parquet_column_view;
+struct aggregate_writer_metadata;
 
 using namespace cudf::io::parquet;
 using namespace cudf::io;
@@ -60,13 +61,13 @@ class writer::impl {
   /**
    * @brief Constructor with writer options.
    *
-   * @param sink data_sink for storing dataset
+   * @param sink data_sink's for storing dataset
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::unique_ptr<data_sink> sink,
+  explicit impl(std::vector<std::unique_ptr<data_sink>> sinks,
                 parquet_writer_options const& options,
                 SingleWriteMode mode,
                 rmm::cuda_stream_view stream,
@@ -75,13 +76,13 @@ class writer::impl {
   /**
    * @brief Constructor with chunked writer options.
    *
-   * @param sink data_sink for storing dataset
+   * @param sink data_sink's for storing dataset
    * @param options Settings for controlling behavior
    * @param mode Option to write at once or in chunks
    * @param stream CUDA stream used for device memory operations and kernel launches
    * @param mr Device memory resource to use for device memory allocation
    */
-  explicit impl(std::unique_ptr<data_sink> sink,
+  explicit impl(std::vector<std::unique_ptr<data_sink>> sinks,
                 chunked_parquet_writer_options const& options,
                 SingleWriteMode mode,
                 rmm::cuda_stream_view stream,
@@ -102,8 +103,10 @@ class writer::impl {
    * normally used for chunked writing.
    *
    * @param[in] table The table information to be written
+   * @param[in] partitions Optional partitions to divide the table into. If specified, must be same
+   * size as number of sinks.
    */
-  void write(table_view const& table);
+  void write(table_view const& table, std::vector<partition_info> const& partitions);
 
   /**
    * @brief Finishes the chunked/streamed write process.
@@ -112,7 +115,8 @@ class writer::impl {
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list only if
    * `column_chunks_file_path` is provided, else null.
    */
-  std::unique_ptr<std::vector<uint8_t>> close(std::string const& column_chunks_file_path = "");
+  std::unique_ptr<std::vector<uint8_t>> close(
+    std::vector<std::string> const& column_chunks_file_path = {});
 
  private:
   /**
@@ -120,12 +124,14 @@ class writer::impl {
    *
    * @param frag Destination page fragments
    * @param col_desc column description array
-   * @param num_rows Total number of rows
+   * @param[in] partitions Information about partitioning of table
+   * @param[in] part_frag_offset A Partition's offset into fragment array
    * @param fragment_size Number of rows per fragment
    */
   void init_page_fragments(hostdevice_2dvector<gpu::PageFragment>& frag,
                            device_span<gpu::parquet_column_device_view const> col_desc,
-                           uint32_t num_rows,
+                           host_span<partition_info const> partitions,
+                           device_span<int const> part_frag_offset,
                            uint32_t fragment_size);
 
   /**
@@ -208,19 +214,22 @@ class writer::impl {
   statistics_freq stats_granularity_ = statistics_freq::STATISTICS_NONE;
   bool int96_timestamps              = false;
   // Overall file metadata.  Filled in during the process and written during write_chunked_end()
-  cudf::io::parquet::FileMetaData md;
+  std::unique_ptr<aggregate_writer_metadata> md;
+  // File footer key-value metadata. Written during write_chunked_end()
+  std::vector<std::map<std::string, std::string>> kv_md;
   // optional user metadata
   std::unique_ptr<table_input_metadata> table_meta;
   // to track if the output has been written to sink
   bool closed = false;
+  // To track if the last write(table) call completed successfully
+  bool last_write_successful = false;
   // current write position for rowgroups/chunks
-  std::size_t current_chunk_offset;
+  std::vector<std::size_t> current_chunk_offset;
   // special parameter only used by detail::write() to indicate that we are guaranteeing
   // a single table write.  this enables some internal optimizations.
   bool const single_write_mode = true;
 
-  std::vector<uint8_t> buffer_;
-  std::unique_ptr<data_sink> out_sink_;
+  std::vector<std::unique_ptr<data_sink>> out_sink_;
 };
 
 }  // namespace parquet
