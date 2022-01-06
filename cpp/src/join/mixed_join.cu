@@ -551,25 +551,4 @@ mixed_full_join(table_view const& left_equality,
                             mr);
 }
 
-std::pair<std::size_t, std::unique_ptr<column>> mixed_full_join_size(
-  table_view const& left_equality,
-  table_view const& right_equality,
-  table_view const& left_conditional,
-  table_view const& right_conditional,
-  ast::expression const& binary_predicate,
-  null_equality compare_nulls,
-  rmm::mr::device_memory_resource* mr)
-{
-  CUDF_FUNC_RANGE();
-  return detail::compute_mixed_join_output_size(left_equality,
-                                                right_equality,
-                                                left_conditional,
-                                                right_conditional,
-                                                binary_predicate,
-                                                compare_nulls,
-                                                detail::join_kind::FULL_JOIN,
-                                                rmm::cuda_stream_default,
-                                                mr);
-}
-
 }  // namespace cudf
