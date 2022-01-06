@@ -18,6 +18,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
+#include <cudf/detail/valid_if.cuh>
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/span.hpp>
@@ -279,7 +280,8 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
                                                     OffsetIterator first_bit_indices_end,
                                                     OffsetIterator last_bit_indices_begin,
                                                     count_bits_policy count_bits,
-                                                    rmm::cuda_stream_view stream)
+                                                    rmm::cuda_stream_view stream,
+                                                    rmm::mr::device_memory_resource* mr)
 {
   auto const num_ranges =
     static_cast<size_type>(std::distance(first_bit_indices_begin, first_bit_indices_end));
@@ -329,14 +331,15 @@ rmm::device_uvector<size_type> segmented_count_bits(bitmask_type const* bitmask,
     // set bits from the length of the segment.
     auto segments_begin =
       thrust::make_zip_iterator(first_bit_indices_begin, last_bit_indices_begin);
-    auto segments_size = thrust::transform_iterator(segments_begin, [] __device__(auto segment) {
-      auto const begin = thrust::get<0>(segment);
-      auto const end   = thrust::get<1>(segment);
-      return end - begin;
-    });
+    auto segment_length_iterator =
+      thrust::transform_iterator(segments_begin, [] __device__(auto const& segment) {
+        auto const begin = thrust::get<0>(segment);
+        auto const end   = thrust::get<1>(segment);
+        return end - begin;
+      });
     thrust::transform(rmm::exec_policy(stream),
-                      segments_size,
-                      segments_size + num_ranges,
+                      segment_length_iterator,
+                      segment_length_iterator + num_ranges,
                       d_bit_counts.data(),
                       d_bit_counts.data(),
                       [] __device__(auto segment_size, auto segment_bit_count) {
@@ -438,7 +441,8 @@ std::vector<size_type> segmented_count_bits(bitmask_type const* bitmask,
                                        first_bit_indices_end,
                                        last_bit_indices_begin,
                                        count_bits,
-                                       stream);
+                                       stream,
+                                       rmm::mr::get_current_device_resource());
 
   // Copy the results back to the host.
   return make_std_vector_sync(d_bit_counts, stream);
@@ -499,6 +503,110 @@ std::vector<size_type> segmented_null_count(bitmask_type const* bitmask,
     return std::vector<size_type>(num_segments, 0);
   }
   return detail::segmented_count_unset_bits(bitmask, indices_begin, indices_end, stream);
+}
+
+/**
+ * @brief Reduce an input null mask using segments defined by offset indices
+ * into an output null mask.
+ *
+ * @tparam OffsetIterator Random-access input iterator type.
+ * @param bitmask Null mask residing in device memory whose segments will be
+ * reduced into a new mask.
+ * @param first_bit_indices_begin Random-access input iterator to the beginning
+ * of a sequence of indices of the first bit in each segment (inclusive).
+ * @param first_bit_indices_end Random-access input iterator to the end of a
+ * sequence of indices of the first bit in each segment (inclusive).
+ * @param last_bit_indices_begin Random-access input iterator to the beginning
+ * of a sequence of indices of the last bit in each segment (exclusive).
+ * @param null_handling If `INCLUDE`, all elements in a segment must be valid
+ * for the reduced value to be valid. If `EXCLUDE`, the reduction is valid if
+ * any element in the segment is valid.
+ * @param stream CUDA stream used for device memory operations and kernel launches.
+ * @param mr Device memory resource used to allocate the returned buffer's device memory.
+ * @return A pair containing the reduced null mask and number of nulls.
+ */
+template <typename OffsetIterator>
+std::pair<rmm::device_buffer, size_type> segmented_null_mask_reduction(
+  bitmask_type const* bitmask,
+  OffsetIterator first_bit_indices_begin,
+  OffsetIterator first_bit_indices_end,
+  OffsetIterator last_bit_indices_begin,
+  null_policy null_handling,
+  rmm::cuda_stream_view stream,
+  rmm::mr::device_memory_resource* mr)
+{
+  auto const segments_begin =
+    thrust::make_zip_iterator(first_bit_indices_begin, last_bit_indices_begin);
+  auto const segment_length_iterator =
+    thrust::make_transform_iterator(segments_begin, [] __device__(auto const& segment) {
+      auto const begin = thrust::get<0>(segment);
+      auto const end   = thrust::get<1>(segment);
+      return end - begin;
+    });
+
+  // Empty segments are always null in the output mask
+  auto const num_segments = std::distance(first_bit_indices_begin, first_bit_indices_end);
+  auto [output_null_mask, output_null_count] = cudf::detail::valid_if(
+    segment_length_iterator,
+    segment_length_iterator + num_segments,
+    [] __device__(auto const& len) { return len > 0; },
+    stream,
+    mr);
+
+  if (bitmask != nullptr) {
+    [[maybe_unused]] auto const [null_policy_bitmask, _] = [&]() {
+      if (null_handling == null_policy::EXCLUDE) {
+        // Output null mask should be valid if any element in the segment is
+        // valid and the segment is non-empty.
+        auto const valid_counts =
+          cudf::detail::segmented_count_bits(bitmask,
+                                             first_bit_indices_begin,
+                                             first_bit_indices_end,
+                                             last_bit_indices_begin,
+                                             cudf::detail::count_bits_policy::SET_BITS,
+                                             stream,
+                                             rmm::mr::get_current_device_resource());
+        return cudf::detail::valid_if(
+          valid_counts.begin(),
+          valid_counts.end(),
+          [] __device__(auto const valid_count) { return valid_count > 0; },
+          stream);
+      } else {
+        // Output null mask should be valid if all elements in the segment are
+        // valid and the segment is non-empty.
+        auto const null_counts =
+          cudf::detail::segmented_count_bits(bitmask,
+                                             first_bit_indices_begin,
+                                             first_bit_indices_end,
+                                             last_bit_indices_begin,
+                                             cudf::detail::count_bits_policy::UNSET_BITS,
+                                             stream,
+                                             rmm::mr::get_current_device_resource());
+        return cudf::detail::valid_if(
+          null_counts.begin(),
+          null_counts.end(),
+          [] __device__(auto const null_count) { return null_count == 0; },
+          stream);
+      }
+    }();
+
+    std::vector<bitmask_type const*> masks{
+      reinterpret_cast<bitmask_type const*>(output_null_mask.data()),
+      reinterpret_cast<bitmask_type const*>(null_policy_bitmask.data())};
+    std::vector<size_type> begin_bits{0, 0};
+    cudf::detail::inplace_bitmask_and(
+      device_span<bitmask_type>(reinterpret_cast<bitmask_type*>(output_null_mask.data()),
+                                num_bitmask_words(num_segments)),
+      masks,
+      begin_bits,
+      num_segments,
+      stream,
+      mr);
+
+    // TODO: inplace_bitmask_and should return its null count (PR 9904)
+    output_null_count = cudf::UNKNOWN_NULL_COUNT;
+  }
+  return std::make_pair(std::move(output_null_mask), output_null_count);
 }
 
 }  // namespace detail

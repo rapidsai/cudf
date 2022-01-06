@@ -49,6 +49,9 @@ namespace detail {
 
  * @param col Input column of data to reduce
  * @param offsets Indices to segment boundaries
+ * @param null_handling If `INCLUDE`, all elements in a segment must be valid
+ * for the reduced value to be valid. If `EXCLUDE`, the reduction is valid if
+ * any element in the segment is valid.
  * @param stream Used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory
  * @return Output column in device memory
@@ -79,85 +82,20 @@ std::unique_ptr<column> simple_segmented_reduction(column_view const& col,
     }
   }();
 
-  // Compute output null mask
-  auto const bitmask = col.null_mask();
-
-  // Compute segment lengths to get the output null mask
+  // Compute the output null mask
+  auto const bitmask                 = col.null_mask();
   auto const first_bit_indices_begin = offsets.begin<size_type>();
   auto const first_bit_indices_end   = offsets.end<size_type>() - 1;
   auto const last_bit_indices_begin  = offsets.begin<size_type>() + 1;
-
-  // TODO: Investigate segment length iterator? Seems reusable.
-  auto const indices_start_end_pair_iterator =
-    thrust::make_zip_iterator(first_bit_indices_begin, last_bit_indices_begin);
-  auto const segment_length_iterator =
-    thrust::make_transform_iterator(indices_start_end_pair_iterator, [] __device__(auto const& p) {
-      auto const start = thrust::get<0>(p);
-      auto const end   = thrust::get<1>(p);
-      return end - start;
-    });
-
-  [[maybe_unused]] auto [output_null_mask, _] = cudf::detail::valid_if(
-    segment_length_iterator,
-    segment_length_iterator + col.size(),
-    [] __device__(auto const& len) { return len > 0; },
-    stream,
-    mr);
-
-  if (bitmask != nullptr) {
-    [[maybe_unused]] auto const [null_policy_bitmask, _] = [&]() {
-      if (null_handling == null_policy::EXCLUDE) {
-        // Output null mask should be valid if any element in the segment is
-        // valid and the segment is non-empty.
-
-        // TODO: This needs a nicer function wrapping segmented_count_bits on device
-        auto const valid_counts =
-          cudf::detail::segmented_count_bits(bitmask,
-                                             first_bit_indices_begin,
-                                             first_bit_indices_end,
-                                             last_bit_indices_begin,
-                                             cudf::detail::count_bits_policy::SET_BITS,
-                                             stream);
-        return cudf::detail::valid_if(
-          valid_counts.begin(),
-          valid_counts.end(),
-          [] __device__(auto const valid_count) { return valid_count > 0; },
-          stream);
-      } else {
-        // Output null mask should be valid if all elements in the segment are
-        // valid and the segment is non-empty.
-
-        // TODO: This needs a nicer function wrapping segmented_count_bits on device
-        auto const null_counts =
-          cudf::detail::segmented_count_bits(bitmask,
-                                             first_bit_indices_begin,
-                                             first_bit_indices_end,
-                                             last_bit_indices_begin,
-                                             cudf::detail::count_bits_policy::UNSET_BITS,
-                                             stream);
-        return cudf::detail::valid_if(
-          null_counts.begin(),
-          null_counts.end(),
-          [] __device__(auto const null_count) { return null_count == 0; },
-          stream);
-      }
-    }();
-
-    // TODO: inplace_bitmask_and should return its null count (bdice working on PR)
-    std::vector<bitmask_type const*> masks{
-      reinterpret_cast<bitmask_type const*>(output_null_mask.data()),
-      reinterpret_cast<bitmask_type const*>(null_policy_bitmask.data())};
-    std::vector<size_type> begin_bits{0, 0};
-    cudf::detail::inplace_bitmask_and(
-      device_span<bitmask_type>(reinterpret_cast<bitmask_type*>(output_null_mask.data()),
-                                num_bitmask_words(col.size())),
-      masks,
-      begin_bits,
-      col.size(),
-      stream,
-      mr);
-  }
-  result->set_null_mask(output_null_mask, cudf::UNKNOWN_NULL_COUNT, stream);
+  auto const [output_null_mask, output_null_count] =
+    cudf::detail::segmented_null_mask_reduction(bitmask,
+                                                first_bit_indices_begin,
+                                                first_bit_indices_end,
+                                                last_bit_indices_begin,
+                                                null_handling,
+                                                stream,
+                                                mr);
+  result->set_null_mask(output_null_mask, output_null_count, stream);
 
   return result;
 }
