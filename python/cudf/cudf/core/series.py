@@ -855,7 +855,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         13    d
         dtype: object
         >>> series.reset_index()
-        index  0
+           index  0
         0     10  a
         1     11  b
         2     12  c
@@ -879,12 +879,12 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         >>> s2
         a    b
         bar  one    0
-            two    1
+             two    1
         baz  one    2
-            two    3
+             two    3
         Name: foo, dtype: int64
         >>> s2.reset_index(level='a')
-            a  foo
+               a  foo
         b
         one  bar    0
         two  bar    1
