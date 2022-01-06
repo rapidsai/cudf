@@ -98,15 +98,9 @@ def test_full_dataframe_20(dtype, nrows, ncols):
     ).astype(dtype)
     gdf = cudf.from_pandas(pdf)
 
-    ncols, nrows = gdf._repr_pandas025_formatting(ncols, nrows, dtype)
-    pd.options.display.max_rows = int(nrows)
-    pd.options.display.max_columns = int(ncols)
-
     assert pdf.__repr__() == gdf.__repr__()
     assert pdf._repr_html_() == gdf._repr_html_()
     assert pdf._repr_latex_() == gdf._repr_latex_()
-    pd.reset_option("display.max_rows")
-    pd.reset_option("display.max_columns")
 
 
 @pytest.mark.parametrize("dtype", repr_categories)

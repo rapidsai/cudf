@@ -442,6 +442,7 @@ ConfigureTest(
   lists/drop_list_duplicates_tests.cpp
   lists/explode_tests.cpp
   lists/extract_tests.cpp
+  lists/sequences_tests.cpp
   lists/sort_lists_tests.cpp
 )
 
