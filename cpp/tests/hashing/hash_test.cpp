@@ -116,13 +116,13 @@ TEST_F(HashTest, MultiValueNulls)
   EXPECT_EQ(input1.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 
-  auto const serial_output1 = cudf::hash(input1, cudf::hash_id::HASH_SERIAL_MURMUR3, {}, 0);
+  auto const serial_output1 = cudf::hash(input1, cudf::hash_id::HASH_SERIAL_MURMUR3, 0);
   auto const serial_output2 = cudf::hash(input2, cudf::hash_id::HASH_SERIAL_MURMUR3);
 
   EXPECT_EQ(input1.num_rows(), serial_output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(serial_output1->view(), serial_output2->view());
 
-  auto const spark_output1 = cudf::hash(input1, cudf::hash_id::HASH_SPARK_MURMUR3, {}, 0);
+  auto const spark_output1 = cudf::hash(input1, cudf::hash_id::HASH_SPARK_MURMUR3, 0);
   auto const spark_output2 = cudf::hash(input2, cudf::hash_id::HASH_SPARK_MURMUR3);
 
   EXPECT_EQ(input1.num_rows(), spark_output1->size());
@@ -147,13 +147,13 @@ TYPED_TEST(HashTestTyped, Equality)
   EXPECT_EQ(input.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 
-  auto const serial_output1 = cudf::hash(input, cudf::hash_id::HASH_SERIAL_MURMUR3, {}, 0);
+  auto const serial_output1 = cudf::hash(input, cudf::hash_id::HASH_SERIAL_MURMUR3, 0);
   auto const serial_output2 = cudf::hash(input, cudf::hash_id::HASH_SERIAL_MURMUR3);
 
   EXPECT_EQ(input.num_rows(), serial_output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(serial_output1->view(), serial_output2->view());
 
-  auto const spark_output1 = cudf::hash(input, cudf::hash_id::HASH_SPARK_MURMUR3, {}, 0);
+  auto const spark_output1 = cudf::hash(input, cudf::hash_id::HASH_SPARK_MURMUR3, 0);
   auto const spark_output2 = cudf::hash(input, cudf::hash_id::HASH_SPARK_MURMUR3);
 
   EXPECT_EQ(input.num_rows(), spark_output1->size());
@@ -177,13 +177,13 @@ TYPED_TEST(HashTestTyped, EqualityNulls)
   EXPECT_EQ(input1.num_rows(), output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(output1->view(), output2->view());
 
-  auto const serial_output1 = cudf::hash(input1, cudf::hash_id::HASH_SERIAL_MURMUR3, {}, 0);
+  auto const serial_output1 = cudf::hash(input1, cudf::hash_id::HASH_SERIAL_MURMUR3, 0);
   auto const serial_output2 = cudf::hash(input2, cudf::hash_id::HASH_SERIAL_MURMUR3);
 
   EXPECT_EQ(input1.num_rows(), serial_output1->size());
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(serial_output1->view(), serial_output2->view());
 
-  auto const spark_output1 = cudf::hash(input1, cudf::hash_id::HASH_SPARK_MURMUR3, {}, 0);
+  auto const spark_output1 = cudf::hash(input1, cudf::hash_id::HASH_SPARK_MURMUR3, 0);
   auto const spark_output2 = cudf::hash(input2, cudf::hash_id::HASH_SPARK_MURMUR3);
 
   EXPECT_EQ(input1.num_rows(), spark_output1->size());
@@ -222,7 +222,7 @@ TYPED_TEST(HashTestFloatTyped, TestExtremes)
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_col, *hash_col_neg_nan, verbosity);
 
   constexpr auto serial_hasher   = cudf::hash_id::HASH_SERIAL_MURMUR3;
-  auto const serial_col          = cudf::hash(table_col, serial_hasher, {}, 0);
+  auto const serial_col          = cudf::hash(table_col, serial_hasher, 0);
   auto const serial_col_neg_zero = cudf::hash(table_col_neg_zero, serial_hasher);
   auto const serial_col_neg_nan  = cudf::hash(table_col_neg_nan, serial_hasher);
 
@@ -231,7 +231,7 @@ TYPED_TEST(HashTestFloatTyped, TestExtremes)
 
   // Spark hash is sensitive to 0 and -0
   constexpr auto spark_hasher  = cudf::hash_id::HASH_SPARK_MURMUR3;
-  auto const spark_col         = cudf::hash(table_col, spark_hasher, {}, 0);
+  auto const spark_col         = cudf::hash(table_col, spark_hasher, 0);
   auto const spark_col_neg_nan = cudf::hash(table_col_neg_nan, spark_hasher);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*spark_col, *spark_col_neg_nan);
@@ -269,8 +269,8 @@ TEST_F(SerialMurmurHash3Test, MultiValueWithSeeds)
   auto const combo2 = cudf::table_view({strings_col, ints_col, bools_col2});
 
   constexpr auto hasher   = cudf::hash_id::HASH_SERIAL_MURMUR3;
-  auto const strings_hash = cudf::hash(cudf::table_view({strings_col}), hasher, {}, 314);
-  auto const ints_hash    = cudf::hash(cudf::table_view({ints_col}), hasher, {}, 42);
+  auto const strings_hash = cudf::hash(cudf::table_view({strings_col}), hasher, 314);
+  auto const ints_hash    = cudf::hash(cudf::table_view({ints_col}), hasher, 42);
   auto const combo1_hash  = cudf::hash(combo1, hasher, {});
   auto const combo2_hash  = cudf::hash(combo2, hasher, {});
   auto const structs_hash = cudf::hash(cudf::table_view({structs_col}), hasher, {});
