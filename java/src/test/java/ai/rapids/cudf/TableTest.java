@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -307,6 +307,24 @@ public class TableTest extends CudfTestBase {
         .column(null, 30, 19)
         .build();
         Table table = Table.readJSON(schema, opts, TEST_SIMPLE_JSON_FILE)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadJSONFileWithDifferentColumnOrder() {
+    Schema schema = Schema.builder()
+        .column(DType.INT32, "age")
+        .column(DType.STRING, "name")
+        .build();
+    JSONOptions opts = JSONOptions.builder()
+        .withLines(true)
+        .build();
+    try (Table expected = new Table.TestBuilder()
+        .column(null, 30, 19)
+        .column("Michael", "Andy", "Justin")
+        .build();
+         Table table = Table.readJSON(schema, opts, TEST_SIMPLE_JSON_FILE)) {
       assertTablesAreEqual(expected, table);
     }
   }

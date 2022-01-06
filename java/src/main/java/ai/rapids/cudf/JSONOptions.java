@@ -1,6 +1,6 @@
 /*
  *
- *  Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ *  Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  *  Licensed under the Apache License, Version 2.0 (the "License");
  *  you may not use this file except in compliance with the License.
@@ -69,11 +69,12 @@ public final class JSONOptions extends ColumnFilterOptions {
 
     /**
      * Whether to read the file as a json object per line
-     * @param lines true: per line, false: not per line
+     * @param perLine true: per line, false: multi-line
      * @return builder for chaining
      */
-    public Builder withLines(boolean lines) {
-      this.lines = lines;
+    public Builder withLines(boolean perLine) {
+      assert perLine == true : "Cudf does not support multi-line";
+      this.lines = perLine;
       return this;
     }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1369,7 +1369,41 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
     }
 
     cudf::io::table_with_metadata result = cudf::io::read_json(opts.build());
-    return cudf::jni::convert_table_for_return(env, result.tbl);
+
+    if (result.metadata.column_names.empty()) {
+      return cudf::jni::convert_table_for_return(env, result.tbl);
+    } else {
+      // json reader will not return the correct column order,
+      // so we need to re-order the column of table according to table meta.
+
+      // turn name and its index in table into map<name, index>
+      std::map<std::string, cudf::size_type> m;
+      for (size_t i = 0; i < result.metadata.column_names.size(); i++) {
+        m.insert(std::make_pair(result.metadata.column_names[i], i));
+      }
+
+      auto col_names_vec = n_col_names.as_cpp_vector();
+      std::vector<cudf::size_type> indices;
+
+      bool match = true;
+      for (size_t i = 0; i < col_names_vec.size(); i++) {
+        if (m.find(col_names_vec[i]) == m.end()) {
+          match = false;
+          break;
+        } else {
+          indices.push_back(m.at(col_names_vec[i]));
+        }
+      }
+
+      if (!match) {
+        // can't find some input column names in table meta, return what json reader reads.
+        return cudf::jni::convert_table_for_return(env, result.tbl);
+      } else {
+        auto tbv = result.tbl->view().select(std::move(indices));
+        auto table = std::make_unique<cudf::table>(tbv);
+        return cudf::jni::convert_table_for_return(env, table);
+      }
+    }
   }
   CATCH_STD(env, NULL);
 }
