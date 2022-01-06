@@ -55,6 +55,9 @@ struct scan_result_functor final : store_result_functor {
  private:
   column_view get_grouped_values()
   {
+    // early exit if presorted
+    if (is_presorted()) { return values; }
+
     // TODO (dm): After implementing single pass multi-agg, explore making a
     //            cache of all grouped value columns rather than one at a time
     if (grouped_values)
