@@ -1,7 +1,7 @@
 from typing import Callable
 
 import numpy as np
-from numba import typeof
+from numba import cuda, typeof
 from numba.np import numpy_support
 from numba.types import Tuple, boolean, int64, void
 from nvtx import annotate
@@ -21,6 +21,7 @@ JIT_SUPPORTED_TYPES = (
 )
 
 libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
+MASK_BITSIZE = np.dtype("int32").itemsize * 8
 
 
 @annotate("NUMBA JIT", color="green", domain="cudf_python")
@@ -122,3 +123,8 @@ def construct_signature(frame, return_type, args):
     sig = void(*(sig + offsets + [typeof(arg) for arg in args]))
 
     return sig
+
+
+@cuda.jit(device=True)
+def mask_get(mask, pos):
+    return (mask[pos // MASK_BITSIZE] >> (pos % MASK_BITSIZE)) & 1

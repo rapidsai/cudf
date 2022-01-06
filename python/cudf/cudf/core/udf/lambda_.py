@@ -6,8 +6,7 @@ from numba.np import numpy_support
 from numba.types import Tuple, boolean, int64, void
 
 import cudf
-from cudf.core.udf.api import Masked
-from cudf.core.udf.pipeline import mask_get, pack_return
+from cudf.core.udf.api import Masked, pack_return
 from cudf.core.udf.templates import (
     lambda_kernel_template,
     masked_input_initializer_template,
@@ -17,6 +16,7 @@ from cudf.core.udf.typing import MaskedType
 from cudf.core.udf.utils import (
     construct_signature,
     get_udf_return_type,
+    mask_get,
     masked_array_type_from_col,
     supported_cols_from_frame,
 )

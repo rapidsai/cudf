@@ -22,12 +22,12 @@ from cudf.core.udf.utils import (
     all_dtypes_from_frame,
     construct_signature,
     get_udf_return_type,
+    mask_get,
     supported_cols_from_frame,
     supported_dtypes_from_frame,
 )
 from cudf.utils import cudautils
 
-MASK_BITSIZE = np.dtype("int32").itemsize * 8
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
 
 
@@ -92,11 +92,6 @@ def get_frame_row_type(dtype):
     # Numba requires that structures are aligned for the CUDA target
     _is_aligned_struct = True
     return Record(fields, offset, _is_aligned_struct)
-
-
-@cuda.jit(device=True)
-def mask_get(mask, pos):
-    return (mask[pos // MASK_BITSIZE] >> (pos % MASK_BITSIZE)) & 1
 
 
 def _define_function(frame, row_type, args):
