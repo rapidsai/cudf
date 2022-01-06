@@ -366,6 +366,7 @@ cpdef write_parquet(
         .build()
     )
     if partitions_info is not None:
+        partitions.reserve(len(partitions_info))
         for part in partitions_info:
             partitions.push_back(
                 cudf_io_types.partition_info(part[0], part[1])
