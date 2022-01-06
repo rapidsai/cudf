@@ -34,6 +34,12 @@ namespace strings {
 namespace detail {
 
 /**
+ * @brief Basic type expected for iterators passed to `make_strings_column` that represent string
+ * data in device memory.
+ */
+using string_index_pair = thrust::pair<const char*, size_type>;
+
+/**
  * @brief Average string byte-length threshold for deciding character-level
  * vs. row-level parallel algorithm.
  *
@@ -63,8 +69,6 @@ std::unique_ptr<column> make_strings_column(IndexPairIterator begin,
   CUDF_FUNC_RANGE();
   size_type strings_count = thrust::distance(begin, end);
   if (strings_count == 0) return make_empty_column(type_id::STRING);
-
-  using string_index_pair = thrust::pair<const char*, size_type>;
 
   // check total size is not too large for cudf column
   auto size_checker = [] __device__(string_index_pair const& item) {
