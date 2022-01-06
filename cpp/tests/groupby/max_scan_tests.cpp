@@ -74,7 +74,7 @@ TYPED_TEST(groupby_max_scan_test, pre_sorted)
 
   auto agg = cudf::make_max_aggregation<groupby_scan_aggregation>();
   test_single_scan(
-    keys, vals, expect_keys, expect_vals, std::move(agg), nulls_policy::EXCLUE, sorted::YES);
+    keys, vals, expect_keys, expect_vals, std::move(agg), null_policy::EXCLUDE, sorted::YES);
 }
 
 TYPED_TEST(groupby_max_scan_test, empty_cols)
