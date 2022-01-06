@@ -195,8 +195,8 @@ bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& 
 
   // The struct scalar only contains the struct member columns.
   // Thus, if there is any null in the input, we must exclude the first column in the flattenned
-  // table of the input column from searching (because that column is the materialized bitmask of
-  // the input structs column).
+  // table of the input column from searching because that column is the materialized bitmask of
+  // the input structs column.
   auto const col_flattened_content  = col_flattened.flattened_columns();
   auto const col_flattened_children = table_view{std::vector<column_view>{
     col_flattened_content.begin() + has_null_elements, col_flattened_content.end()}};
