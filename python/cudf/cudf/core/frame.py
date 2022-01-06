@@ -47,7 +47,8 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import Merge, MergeSemi
-from cudf.core.udf.pipeline import compile_or_get, supported_cols_from_frame
+from cudf.core.udf.pipeline import compile_or_get
+from cudf.core.udf.utils import supported_cols_from_frame
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
 from cudf.utils.docutils import copy_docstring
