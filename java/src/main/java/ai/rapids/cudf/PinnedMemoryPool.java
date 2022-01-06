@@ -52,11 +52,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
   private static class SortedBySize implements Comparator<MemorySection> {
     @Override
     public int compare(MemorySection s0, MemorySection s1) {
-      int ret = Long.compare(s0.size, s1.size);
-      if (ret == 0) {
-        ret = Long.compare(s0.baseAddress, s1.baseAddress);
-      }
-      return ret;
+      return Long.compare(s0.size, s1.size);
     }
   }
 
@@ -287,11 +283,10 @@ public final class PinnedMemoryPool implements AutoCloseable {
         .findFirst();
     if (!firstFit.isPresent()) {
       if (log.isDebugEnabled()) {
-        long largest = freeHeap.stream()
+        MemorySection largest = freeHeap.stream()
             .max(new SortedBySize())
-            .orElse(new MemorySection(0, 0))
-            .size;
-        log.debug("Insufficient pinned memory. {} needed, {} found", alignedBytes, largest);
+            .orElse(new MemorySection(0, 0));
+        log.debug("Insufficient pinned memory. {} needed, {} found", alignedBytes, largest.size);
       }
       return null;
     }
@@ -316,7 +311,8 @@ public final class PinnedMemoryPool implements AutoCloseable {
   private synchronized void free(MemorySection section) {
     log.debug("Freeing {} with {} outstanding {}", section, freeHeap, numAllocatedSections);
     availableBytes += section.size;
-    for (Iterator<MemorySection> it = freeHeap.iterator(); it.hasNext(); ) {
+    Iterator<MemorySection> it = freeHeap.iterator();
+    while(it.hasNext()) {
       MemorySection current = it.next();
       if (section.canCombine(current)) {
         it.remove();
