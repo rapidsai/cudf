@@ -41,21 +41,21 @@ struct store_result_functor {
                        cudf::detail::result_cache& cache,
                        rmm::cuda_stream_view stream,
                        rmm::mr::device_memory_resource* mr,
-                       sorted values_pre_sorted = sorted::NO)
+                       sorted keys_are_sorted = sorted::NO)
     : helper(helper),
       cache(cache),
       values(values),
       stream(stream),
       mr(mr),
-      values_pre_sorted(values_pre_sorted)
+      keys_are_sorted(keys_are_sorted)
   {
   }
 
  protected:
   /**
-   * @brief Check if the groupby values are presorted
+   * @brief Check if the groupby keys are presorted
    */
-  bool is_presorted() const { return values_pre_sorted == sorted::YES; }
+  bool is_presorted() const { return keys_are_sorted == sorted::YES; }
 
   /**
    * @brief Get the grouped values
@@ -100,7 +100,7 @@ struct store_result_functor {
   rmm::cuda_stream_view stream;         ///< CUDA stream on which to execute kernels
   rmm::mr::device_memory_resource* mr;  ///< Memory resource to allocate space for results
 
-  sorted values_pre_sorted;                ///< Whether the values are sorted
+  sorted keys_are_sorted;                  ///< Whether the keys are sorted
   std::unique_ptr<column> sorted_values;   ///< Memoised grouped and sorted values
   std::unique_ptr<column> grouped_values;  ///< Memoised grouped values
 };
