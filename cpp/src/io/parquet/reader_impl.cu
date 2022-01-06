@@ -301,7 +301,7 @@ struct metadata : public FileMetaData {
   }
 };
 
-class aggregate_metadata {
+class aggregate_reader_metadata {
   std::vector<metadata> const per_file_metadata;
   std::map<std::string, std::string> const agg_keyval_map;
   size_type const num_rows;
@@ -357,7 +357,7 @@ class aggregate_metadata {
   }
 
  public:
-  aggregate_metadata(std::vector<std::unique_ptr<datasource>> const& sources)
+  aggregate_reader_metadata(std::vector<std::unique_ptr<datasource>> const& sources)
     : per_file_metadata(metadatas_from_sources(sources)),
       agg_keyval_map(merge_keyval_metadata()),
       num_rows(calc_num_rows()),
@@ -822,7 +822,7 @@ class aggregate_metadata {
  */
 void generate_depth_remappings(std::map<int, std::pair<std::vector<int>, std::vector<int>>>& remap,
                                int src_col_schema,
-                               aggregate_metadata const& md)
+                               aggregate_reader_metadata const& md)
 {
   // already generated for this level
   if (remap.find(src_col_schema) != remap.end()) { return; }
@@ -1587,7 +1587,7 @@ reader::impl::impl(std::vector<std::unique_ptr<datasource>>&& sources,
   : _mr(mr), _sources(std::move(sources))
 {
   // Open and parse the source dataset metadata
-  _metadata = std::make_unique<aggregate_metadata>(_sources);
+  _metadata = std::make_unique<aggregate_reader_metadata>(_sources);
 
   // Override output timestamp resolution if requested
   if (options.get_timestamp_type().id() != type_id::EMPTY) {
