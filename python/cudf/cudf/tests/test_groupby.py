@@ -2390,4 +2390,16 @@ def test_groupby_select_then_shift():
     assert_groupby_results_equal(expected, actual)
 
 
+def test_groupby_select_then_diff():
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 1, 2, 2], "b": [1, 2, 3, 4, 5], "c": [3, 4, 5, 6, 7]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    expected = pdf.groupby("a")["c"].diff(1)
+    actual = gdf.groupby("a")["c"].diff(1)
+
+    assert_groupby_results_equal(expected, actual)
+
+
 # TODO: Add a test including datetime64[ms] column in input data
