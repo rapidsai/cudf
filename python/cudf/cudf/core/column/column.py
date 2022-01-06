@@ -34,7 +34,11 @@ from cudf._lib.null_mask import (
     create_null_mask,
 )
 from cudf._lib.scalar import as_device_scalar
-from cudf._lib.stream_compaction import distinct_count as cpp_distinct_count
+from cudf._lib.stream_compaction import (
+    distinct_count as cpp_distinct_count,
+    drop_duplicates,
+    drop_nulls,
+)
 from cudf._lib.transform import bools_to_mask
 from cudf._typing import BinaryOperand, ColumnLike, Dtype, ScalarLike
 from cudf.api.types import (
@@ -71,7 +75,7 @@ from cudf.utils.dtypes import (
     pandas_dtypes_alias_to_cudf_alias,
     pandas_dtypes_to_np_dtypes,
 )
-from cudf.utils.utils import mask_dtype
+from cudf.utils.utils import _gather_map_is_valid, mask_dtype
 
 T = TypeVar("T", bound="ColumnBase")
 
@@ -135,7 +139,7 @@ class ColumnBase(Column, Serializable):
         if len(self) == 0:
             return np.array([], dtype=self.dtype)
 
-        if self.has_nulls:
+        if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
         return self.data_array_view.copy_to_host()
@@ -148,7 +152,7 @@ class ColumnBase(Column, Serializable):
         if len(self) == 0:
             return cupy.array([], dtype=self.dtype)
 
-        if self.has_nulls:
+        if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
         return cupy.asarray(self.data_array_view)
@@ -189,7 +193,7 @@ class ColumnBase(Column, Serializable):
     def any(self, skipna: bool = True) -> bool:
         # Early exit for fast cases.
         result_col = self.nans_to_nulls() if skipna else self
-        if not skipna and result_col.has_nulls:
+        if not skipna and result_col.has_nulls():
             return True
         elif skipna and result_col.null_count == result_col.size:
             return False
@@ -200,11 +204,8 @@ class ColumnBase(Column, Serializable):
         return result_col
 
     def dropna(self, drop_nan: bool = False) -> ColumnBase:
-        if drop_nan:
-            col = self.nans_to_nulls()
-        else:
-            col = self
-        return col.as_frame()._drop_na_rows(drop_nan=drop_nan)._as_column()
+        col = self.nans_to_nulls() if drop_nan else self
+        return drop_nulls([col])[0]
 
     def to_arrow(self) -> pa.Array:
         """Convert to PyArrow Array
@@ -686,28 +687,27 @@ class ColumnBase(Column, Serializable):
         raise TypeError(f"cannot perform median with type {self.dtype}")
 
     def take(
-        self: T,
-        indices: ColumnBase,
-        keep_index: bool = True,
-        nullify: bool = False,
+        self: T, indices: ColumnBase, nullify: bool = False, check_bounds=True
     ) -> T:
-        """Return Column by taking values from the corresponding *indices*."""
+        """Return Column by taking values from the corresponding *indices*.
+
+        Skip bounds checking if check_bounds is False.
+        Set rows to null for all out of bound indices if nullify is `True`.
+        """
         # Handle zero size
         if indices.size == 0:
             return cast(T, column_empty_like(self, newsize=0))
-        try:
-            return (
-                self.as_frame()
-                ._gather(indices, keep_index=keep_index, nullify=nullify)
-                ._as_column()
-                ._with_type_metadata(self.dtype)
-            )
-        except RuntimeError as e:
-            if "out of bounds" in str(e):
-                raise IndexError(
-                    f"index out of bounds for column of size {len(self)}"
-                ) from e
-            raise
+
+        # TODO: For performance, the check and conversion of gather map should
+        # be done by the caller. This check will be removed in future release.
+        if not is_integer_dtype(indices.dtype):
+            indices = indices.astype("int32")
+        if not _gather_map_is_valid(indices, len(self), check_bounds, nullify):
+            raise IndexError("Gather map index is out of bounds.")
+
+        return libcudf.copying.gather([self], indices, nullify=nullify)[
+            0
+        ]._with_type_metadata(self.dtype)
 
     def isin(self, values: Sequence) -> ColumnBase:
         """Check whether values are contained in the Column.
@@ -786,7 +786,7 @@ class ColumnBase(Column, Serializable):
         Buffer
         """
 
-        if self.has_nulls:
+        if self.has_nulls():
             raise ValueError("Column must have no nulls.")
 
         return bools_to_mask(self)
@@ -797,13 +797,13 @@ class ColumnBase(Column, Serializable):
 
     @property
     def is_monotonic_increasing(self) -> bool:
-        return not self.has_nulls and self.as_frame()._is_sorted(
+        return not self.has_nulls() and self.as_frame()._is_sorted(
             ascending=None, null_position=None
         )
 
     @property
     def is_monotonic_decreasing(self) -> bool:
-        return not self.has_nulls and self.as_frame()._is_sorted(
+        return not self.has_nulls() and self.as_frame()._is_sorted(
             ascending=[False], null_position=None
         )
 
@@ -942,7 +942,7 @@ class ColumnBase(Column, Serializable):
         )
 
         # columns include null index in factorization; remove:
-        if self.has_nulls:
+        if self.has_nulls():
             cats = cats._column.dropna(drop_nan=False)
             min_type = min_unsigned_type(len(cats), 8)
             labels = labels - 1
@@ -1098,11 +1098,7 @@ class ColumnBase(Column, Serializable):
         # the following issue resolved:
         # https://github.com/rapidsai/cudf/issues/5286
 
-        return (
-            self.as_frame()
-            .drop_duplicates(keep="first", ignore_index=True)
-            ._as_column()
-        )
+        return drop_duplicates([self], keep="first")[0]
 
     def serialize(self) -> Tuple[dict, list]:
         header: Dict[Any, Any] = {}
@@ -1220,10 +1216,10 @@ class ColumnBase(Column, Serializable):
 
         if skipna:
             result_col = self.nans_to_nulls()
-            if result_col.has_nulls:
+            if result_col.has_nulls():
                 result_col = result_col.dropna()
         else:
-            if self.has_nulls:
+            if self.has_nulls():
                 return cudf.utils.dtypes._get_nan_for_dtype(self.dtype)
 
             result_col = self
@@ -1656,6 +1652,27 @@ def build_struct_column(
     return cast("cudf.core.column.StructColumn", result)
 
 
+def _make_copy_replacing_NaT_with_null(column):
+    """Return a copy with NaT values replaced with nulls."""
+    if np.issubdtype(column.dtype, np.timedelta64):
+        na_value = np.timedelta64("NaT", column.time_unit)
+    elif np.issubdtype(column.dtype, np.datetime64):
+        na_value = np.datetime64("NaT", column.time_unit)
+    else:
+        raise ValueError("This type does not support replacing NaT with null.")
+
+    null = column_empty_like(column, masked=True, newsize=1)
+    out_col = cudf._lib.replace.replace(
+        column,
+        build_column(
+            Buffer(np.array([na_value], dtype=column.dtype).view("|u1")),
+            dtype=column.dtype,
+        ),
+        null,
+    )
+    return out_col
+
+
 def as_column(
     arbitrary: Any,
     nan_as_null: bool = None,
@@ -1757,9 +1774,7 @@ def as_column(
                 col = col.set_mask(mask)
         elif np.issubdtype(col.dtype, np.datetime64):
             if nan_as_null or (mask is None and nan_as_null is None):
-                # Ignore typing error since this method is only defined for
-                # DatetimeColumn, not the ColumnBase class.
-                col = col._make_copy_with_na_as_null()  # type: ignore
+                col = _make_copy_replacing_NaT_with_null(col)
         return col
 
     elif isinstance(arbitrary, (pa.Array, pa.ChunkedArray)):
@@ -1770,12 +1785,20 @@ def as_column(
                 "https://issues.apache.org/jira/browse/ARROW-3802"
             )
         col = ColumnBase.from_arrow(arbitrary)
+
         if isinstance(arbitrary, pa.NullArray):
-            if type(dtype) == str and dtype == "empty":
-                new_dtype = cudf.dtype(arbitrary.type.to_pandas_dtype())
+            new_dtype = cudf.dtype(arbitrary.type.to_pandas_dtype())
+            if dtype is not None:
+                # Cast the column to the `dtype` if specified.
+                col = col.astype(dtype)
+            elif len(arbitrary) == 0:
+                # If the column is empty, it has to be
+                # a `float64` dtype.
+                col = col.astype("float64")
             else:
-                new_dtype = cudf.dtype(dtype)
-            col = col.astype(new_dtype)
+                # If the null column is not empty, it has to
+                # be of `object` dtype.
+                col = col.astype(new_dtype)
 
         return col
 
@@ -1882,7 +1905,7 @@ def as_column(
             mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = build_column(buffer, dtype=arbitrary.dtype)
-                data = data._make_copy_with_na_as_null()
+                data = _make_copy_replacing_NaT_with_null(data)
                 mask = data.mask
 
             data = cudf.core.column.datetime.DatetimeColumn(
@@ -1900,7 +1923,7 @@ def as_column(
             mask = None
             if nan_as_null is None or nan_as_null is True:
                 data = build_column(buffer, dtype=arbitrary.dtype)
-                data = data._make_copy_with_na_as_null()
+                data = _make_copy_replacing_NaT_with_null(data)
                 mask = data.mask
 
             data = cudf.core.column.timedelta.TimeDeltaColumn(

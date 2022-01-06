@@ -177,13 +177,14 @@ std::unique_ptr<column> rescale(column_view input,
   using namespace numeric;
 
   if (input.type().scale() >= scale) {
-    auto const scalar = make_fixed_point_scalar<T>(0, scale_type{scale});
+    auto const scalar = make_fixed_point_scalar<T>(0, scale_type{scale}, rmm::cuda_stream_default);
     auto const type   = cudf::data_type{cudf::type_to_id<T>(), scale};
     return detail::binary_operation(input, *scalar, binary_operator::ADD, type, stream, mr);
   } else {
-    auto const diff   = input.type().scale() - scale;
-    auto const scalar = make_fixed_point_scalar<T>(std::pow(10, -diff), scale_type{diff});
-    auto const type   = cudf::data_type{cudf::type_to_id<T>(), scale};
+    auto const diff = input.type().scale() - scale;
+    auto const scalar =
+      make_fixed_point_scalar<T>(std::pow(10, -diff), scale_type{diff}, rmm::cuda_stream_default);
+    auto const type = cudf::data_type{cudf::type_to_id<T>(), scale};
     return detail::binary_operation(input, *scalar, binary_operator::DIV, type, stream, mr);
   }
 };
@@ -290,7 +291,9 @@ struct dispatch_unary_cast_to {
                                      rmm::cuda_stream_view stream,
                                      rmm::mr::device_memory_resource* mr)
   {
-    if (input.type() == type) return std::make_unique<column>(input);  // TODO add test for this
+    if (input.type() == type) {
+      return std::make_unique<column>(input, stream, mr);  // TODO add test for this
+    }
 
     return detail::rescale<TargetT>(input, numeric::scale_type{type.scale()}, stream, mr);
   }
@@ -305,28 +308,39 @@ struct dispatch_unary_cast_to {
                                      rmm::mr::device_memory_resource* mr)
   {
     using namespace numeric;
-
-    auto const size = input.size();
-    auto temporary =
-      std::make_unique<column>(cudf::data_type{type.id(), input.type().scale()},
-                               size,
-                               rmm::device_buffer{size * cudf::size_of(type), stream},
-                               copy_bitmask(input, stream),
-                               input.null_count());
-
     using SourceDeviceT = device_storage_type_t<SourceT>;
     using TargetDeviceT = device_storage_type_t<TargetT>;
 
-    mutable_column_view output_mutable = *temporary;
+    auto casted = [&]() {
+      auto const size = input.size();
+      auto output     = std::make_unique<column>(cudf::data_type{type.id(), input.type().scale()},
+                                             size,
+                                             rmm::device_buffer{size * cudf::size_of(type), stream},
+                                             copy_bitmask(input, stream),
+                                             input.null_count());
 
-    thrust::transform(rmm::exec_policy(stream),
-                      input.begin<SourceDeviceT>(),
-                      input.end<SourceDeviceT>(),
-                      output_mutable.begin<TargetDeviceT>(),
-                      device_cast<SourceDeviceT, TargetDeviceT>{});
+      mutable_column_view output_mutable = *output;
 
-    // clearly there is a more efficient way to do this, can optimize in the future
-    return rescale<TargetT>(*temporary, numeric::scale_type{type.scale()}, stream, mr);
+      thrust::transform(rmm::exec_policy(stream),
+                        input.begin<SourceDeviceT>(),
+                        input.end<SourceDeviceT>(),
+                        output_mutable.begin<TargetDeviceT>(),
+                        device_cast<SourceDeviceT, TargetDeviceT>{});
+
+      return output;
+    };
+
+    if (input.type().scale() == type.scale()) return casted();
+
+    if constexpr (sizeof(SourceDeviceT) < sizeof(TargetDeviceT)) {
+      // device_cast BEFORE rescale when SourceDeviceT is < TargetDeviceT
+      auto temporary = casted();
+      return detail::rescale<TargetT>(*temporary, scale_type{type.scale()}, stream, mr);
+    } else {
+      // device_cast AFTER rescale when SourceDeviceT is > TargetDeviceT to avoid overflow
+      auto temporary = detail::rescale<SourceT>(input, scale_type{type.scale()}, stream, mr);
+      return detail::cast(*temporary, type, stream, mr);
+    }
   }
 
   template <typename TargetT,

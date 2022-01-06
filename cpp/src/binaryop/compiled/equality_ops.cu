@@ -28,19 +28,32 @@ void dispatch_equality_op(mutable_column_device_view& outd,
   auto common_dtype = get_common_type(outd.type(), lhsd.type(), rhsd.type());
 
   // Execute it on every element
-  for_each(
-    stream,
-    outd.size(),
-    [op, outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, common_dtype] __device__(size_type i) {
-      // clang-format off
-      // Similar enabled template types should go together (better performance)
-      switch (op) {
-      case binary_operator::EQUAL:         device_type_dispatcher<ops::Equal>{outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, common_dtype}(i); break;
-      case binary_operator::NOT_EQUAL:     device_type_dispatcher<ops::NotEqual>{outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, common_dtype}(i); break;
-      case binary_operator::NULL_EQUALS:   device_type_dispatcher<ops::NullEquals>{outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar, common_dtype}(i); break;
-      default:;
-      }
-      // clang-format on
-    });
+
+  if (common_dtype) {
+    if (op == binary_operator::EQUAL) {
+      for_each(stream,
+               outd.size(),
+               binary_op_device_dispatcher<ops::Equal>{
+                 *common_dtype, outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar});
+    } else if (op == binary_operator::NOT_EQUAL) {
+      for_each(stream,
+               outd.size(),
+               binary_op_device_dispatcher<ops::NotEqual>{
+                 *common_dtype, outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar});
+    }
+  } else {
+    if (op == binary_operator::EQUAL) {
+      for_each(stream,
+               outd.size(),
+               binary_op_double_device_dispatcher<ops::Equal>{
+                 outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar});
+    } else if (op == binary_operator::NOT_EQUAL) {
+      for_each(stream,
+               outd.size(),
+               binary_op_double_device_dispatcher<ops::NotEqual>{
+                 outd, lhsd, rhsd, is_lhs_scalar, is_rhs_scalar});
+    }
+  }
 }
+
 }  // namespace cudf::binops::compiled

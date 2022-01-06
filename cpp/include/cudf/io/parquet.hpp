@@ -46,7 +46,7 @@ constexpr size_type default_row_group_size_rows = 1000000;
 class parquet_reader_options_builder;
 
 /**
- * @brief Settings or `read_parquet()`.
+ * @brief Settings for `read_parquet()`.
  */
 class parquet_reader_options {
   source_info _source;
@@ -67,10 +67,6 @@ class parquet_reader_options {
   bool _use_pandas_metadata = true;
   // Cast timestamp columns to a specific type
   data_type _timestamp_type{type_id::EMPTY};
-
-  // force decimal reading to error if resorting to
-  // doubles for storage of types unsupported by cudf
-  bool _strict_decimal_types = false;
 
   /**
    * @brief Constructor from source info.
@@ -137,12 +133,6 @@ class parquet_reader_options {
    * @brief Returns timestamp type used to cast timestamp columns.
    */
   data_type get_timestamp_type() const { return _timestamp_type; }
-
-  /**
-   * @brief Returns true if strict decimal types is set, which errors if reading
-   * a decimal type that is unsupported.
-   */
-  bool is_enabled_strict_decimal_types() const { return _strict_decimal_types; }
 
   /**
    * @brief Sets names of the columns to be read.
@@ -213,14 +203,6 @@ class parquet_reader_options {
    * @param type The timestamp data_type to which all timestamp columns need to be cast.
    */
   void set_timestamp_type(data_type type) { _timestamp_type = type; }
-
-  /**
-   * @brief Enables/disables strict decimal type checking.
-   *
-   * @param val If true, cudf will error if reading a decimal type that is unsupported. If false,
-   * cudf will convert unsupported types to double.
-   */
-  void set_strict_decimal_types(bool val) { _strict_decimal_types = val; }
 };
 
 class parquet_reader_options_builder {
@@ -326,18 +308,6 @@ class parquet_reader_options_builder {
   }
 
   /**
-   * @brief Sets to enable/disable error with unsupported decimal types.
-   *
-   * @param val Boolean value whether to error with unsupported decimal types.
-   * @return this for chaining.
-   */
-  parquet_reader_options_builder& use_strict_decimal_types(bool val)
-  {
-    options._strict_decimal_types = val;
-    return *this;
-  }
-
-  /**
    * @brief move parquet_reader_options member once it's built.
    */
   operator parquet_reader_options&&() { return std::move(options); }
@@ -394,13 +364,17 @@ class parquet_writer_options {
   statistics_freq _stats_level = statistics_freq::STATISTICS_ROWGROUP;
   // Sets of columns to output
   table_view _table;
+  // Partitions described as {start_row, num_rows} pairs
+  std::vector<partition_info> _partitions;
   // Optional associated metadata
   table_input_metadata const* _metadata = nullptr;
+  // Optional footer key_value_metadata
+  std::vector<std::map<std::string, std::string>> _user_data;
   // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
   // If true then overrides any per-column setting in _metadata.
   bool _write_timestamps_as_int96 = false;
-  // Column chunks file path to be set in the raw output metadata
-  std::string _column_chunks_file_path;
+  // Column chunks file paths to be set in the raw output metadata. One per output file
+  std::vector<std::string> _column_chunks_file_paths;
   // Maximum size of each row group (unless smaller than a single page)
   size_t _row_group_size_bytes = default_row_group_size_bytes;
   // Maximum number of rows in row group (unless smaller than a single page)
@@ -465,9 +439,22 @@ class parquet_writer_options {
   table_view get_table() const { return _table; }
 
   /**
+   * @brief Returns partitions.
+   */
+  std::vector<partition_info> const& get_partitions() const { return _partitions; }
+
+  /**
    * @brief Returns associated metadata.
    */
   table_input_metadata const* get_metadata() const { return _metadata; }
+
+  /**
+   * @brief Returns Key-Value footer metadata information.
+   */
+  std::vector<std::map<std::string, std::string>> const& get_key_value_metadata() const
+  {
+    return _user_data;
+  }
 
   /**
    * @brief Returns `true` if timestamps will be written as INT96
@@ -475,9 +462,12 @@ class parquet_writer_options {
   bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
 
   /**
-   * @brief Returns Column chunks file path to be set in the raw output metadata.
+   * @brief Returns Column chunks file paths to be set in the raw output metadata.
    */
-  std::string get_column_chunks_file_path() const { return _column_chunks_file_path; }
+  std::vector<std::string> const& get_column_chunks_file_paths() const
+  {
+    return _column_chunks_file_paths;
+  }
 
   /**
    * @brief Returns maximum row group size, in bytes.
@@ -490,11 +480,36 @@ class parquet_writer_options {
   auto get_row_group_size_rows() const { return _row_group_size_rows; }
 
   /**
+   * @brief Sets partitions.
+   *
+   * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
+   * be same size as number of sinks in sink_info
+   */
+  void set_partitions(std::vector<partition_info> partitions)
+  {
+    CUDF_EXPECTS(partitions.size() == _sink.num_sinks(),
+                 "Mismatch between number of sinks and number of partitions");
+    _partitions = std::move(partitions);
+  }
+
+  /**
    * @brief Sets metadata.
    *
    * @param metadata Associated metadata.
    */
   void set_metadata(table_input_metadata const* metadata) { _metadata = metadata; }
+
+  /**
+   * @brief Sets metadata.
+   *
+   * @param metadata Key-Value footer metadata
+   */
+  void set_key_value_metadata(std::vector<std::map<std::string, std::string>> metadata)
+  {
+    CUDF_EXPECTS(metadata.size() == _sink.num_sinks(),
+                 "Mismatch between number of sinks and number of metadata maps");
+    _user_data = std::move(metadata);
+  }
 
   /**
    * @brief Sets the level of statistics.
@@ -521,11 +536,14 @@ class parquet_writer_options {
   /**
    * @brief Sets column chunks file path to be set in the raw output metadata.
    *
-   * @param file_path String which indicates file path.
+   * @param file_paths Vector of Strings which indicates file path. Must be same size as number of
+   * data sinks in sink info
    */
-  void set_column_chunks_file_path(std::string file_path)
+  void set_column_chunks_file_paths(std::vector<std::string> file_paths)
   {
-    _column_chunks_file_path.assign(file_path);
+    CUDF_EXPECTS(file_paths.size() == _sink.num_sinks(),
+                 "Mismatch between number of sinks and number of chunk paths to set");
+    _column_chunks_file_paths = std::move(file_paths);
   }
 
   /**
@@ -574,6 +592,21 @@ class parquet_writer_options_builder {
   }
 
   /**
+   * @brief Sets partitions in parquet_writer_options.
+   *
+   * @param partitions Partitions of input table in {start_row, num_rows} pairs. If specified, must
+   * be same size as number of sinks in sink_info
+   * @return this for chaining.
+   */
+  parquet_writer_options_builder& partitions(std::vector<partition_info> partitions)
+  {
+    CUDF_EXPECTS(partitions.size() == options._sink.num_sinks(),
+                 "Mismatch between number of sinks and number of partitions");
+    options.set_partitions(std::move(partitions));
+    return *this;
+  }
+
+  /**
    * @brief Sets metadata in parquet_writer_options.
    *
    * @param metadata Associated metadata.
@@ -582,6 +615,21 @@ class parquet_writer_options_builder {
   parquet_writer_options_builder& metadata(table_input_metadata const* metadata)
   {
     options._metadata = metadata;
+    return *this;
+  }
+
+  /**
+   * @brief Sets Key-Value footer metadata in parquet_writer_options.
+   *
+   * @param metadata Key-Value footer metadata
+   * @return this for chaining.
+   */
+  parquet_writer_options_builder& key_value_metadata(
+    std::vector<std::map<std::string, std::string>> metadata)
+  {
+    CUDF_EXPECTS(metadata.size() == options._sink.num_sinks(),
+                 "Mismatch between number of sinks and number of metadata maps");
+    options._user_data = std::move(metadata);
     return *this;
   }
 
@@ -612,12 +660,15 @@ class parquet_writer_options_builder {
   /**
    * @brief Sets column chunks file path to be set in the raw output metadata.
    *
-   * @param file_path String which indicates file path.
+   * @param file_paths Vector of Strings which indicates file path. Must be same size as number of
+   * data sinks
    * @return this for chaining.
    */
-  parquet_writer_options_builder& column_chunks_file_path(std::string file_path)
+  parquet_writer_options_builder& column_chunks_file_paths(std::vector<std::string> file_paths)
   {
-    options._column_chunks_file_path.assign(file_path);
+    CUDF_EXPECTS(file_paths.size() == options._sink.num_sinks(),
+                 "Mismatch between number of sinks and number of chunk paths to set");
+    options.set_column_chunks_file_paths(std::move(file_paths));
     return *this;
   }
 
@@ -720,6 +771,8 @@ class chunked_parquet_writer_options {
   statistics_freq _stats_level = statistics_freq::STATISTICS_ROWGROUP;
   // Optional associated metadata.
   table_input_metadata const* _metadata = nullptr;
+  // Optional footer key_value_metadata
+  std::vector<std::map<std::string, std::string>> _user_data;
   // Parquet writer can write INT96 or TIMESTAMP_MICROS. Defaults to TIMESTAMP_MICROS.
   // If true then overrides any per-column setting in _metadata.
   bool _write_timestamps_as_int96 = false;
@@ -766,6 +819,14 @@ class chunked_parquet_writer_options {
   table_input_metadata const* get_metadata() const { return _metadata; }
 
   /**
+   * @brief Returns Key-Value footer metadata information.
+   */
+  std::vector<std::map<std::string, std::string>> const& get_key_value_metadata() const
+  {
+    return _user_data;
+  }
+
+  /**
    * @brief Returns `true` if timestamps will be written as INT96
    */
   bool is_enabled_int96_timestamps() const { return _write_timestamps_as_int96; }
@@ -786,6 +847,18 @@ class chunked_parquet_writer_options {
    * @param metadata Associated metadata.
    */
   void set_metadata(table_input_metadata const* metadata) { _metadata = metadata; }
+
+  /**
+   * @brief Sets Key-Value footer metadata.
+   *
+   * @param metadata Key-Value footer metadata
+   */
+  void set_key_value_metadata(std::vector<std::map<std::string, std::string>> metadata)
+  {
+    CUDF_EXPECTS(metadata.size() == _sink.num_sinks(),
+                 "Mismatch between number of sinks and number of metadata maps");
+    _user_data = std::move(metadata);
+  }
 
   /**
    * @brief Sets the level of statistics in parquet_writer_options.
@@ -868,6 +941,21 @@ class chunked_parquet_writer_options_builder {
   chunked_parquet_writer_options_builder& metadata(table_input_metadata const* metadata)
   {
     options._metadata = metadata;
+    return *this;
+  }
+
+  /**
+   * @brief Sets Key-Value footer metadata in parquet_writer_options.
+   *
+   * @param metadata Key-Value footer metadata
+   * @return this for chaining.
+   */
+  chunked_parquet_writer_options_builder& key_value_metadata(
+    std::vector<std::map<std::string, std::string>> metadata)
+  {
+    CUDF_EXPECTS(metadata.size() == options._sink.num_sinks(),
+                 "Mismatch between number of sinks and number of metadata maps");
+    options.set_key_value_metadata(std::move(metadata));
     return *this;
   }
 
@@ -988,18 +1076,25 @@ class parquet_chunked_writer {
    * @brief Writes table to output.
    *
    * @param[in] table Table that needs to be written
+   * @param[in] partitions Optional partitions to divide the table into. If specified, must be same
+   * size as number of sinks.
+   *
+   * @throws cudf::logic_error If the number of partitions is not the smae as number of sinks
    * @return returns reference of the class object
    */
-  parquet_chunked_writer& write(table_view const& table);
+  parquet_chunked_writer& write(table_view const& table,
+                                std::vector<partition_info> const& partitions = {});
 
   /**
    * @brief Finishes the chunked/streamed write process.
    *
-   * @param[in] column_chunks_file_path Column chunks file path to be set in the raw output metadata
+   * @param[in] column_chunks_file_paths Column chunks file path to be set in the raw output
+   * metadata
    * @return A parquet-compatible blob that contains the data for all rowgroups in the list only if
-   * `column_chunks_file_path` is provided, else null.
+   * `column_chunks_file_paths` is provided, else null.
    */
-  std::unique_ptr<std::vector<uint8_t>> close(std::string const& column_chunks_file_path = "");
+  std::unique_ptr<std::vector<uint8_t>> close(
+    std::vector<std::string> const& column_chunks_file_paths = {});
 
   // Unique pointer to impl writer class
   std::unique_ptr<cudf::io::detail::parquet::writer> writer;

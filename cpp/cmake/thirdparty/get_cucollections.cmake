@@ -21,7 +21,7 @@ function(find_and_configure_cucollections)
     cuco 0.0
     GLOBAL_TARGETS cuco::cuco
     CPM_ARGS GITHUB_REPOSITORY NVIDIA/cuCollections
-    GIT_TAG f0eecb203590f1f4ac4a9f1700229f4434ac64dc
+    GIT_TAG 193de1aa74f5721717f991ca757dc610c852bb17
     OPTIONS "BUILD_TESTS OFF" "BUILD_BENCHMARKS OFF" "BUILD_EXAMPLES OFF"
   )
 

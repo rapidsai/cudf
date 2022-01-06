@@ -19,14 +19,15 @@
  * @brief cuDF-IO parquet writer class implementation
  */
 
-#include <io/statistics/column_statistics.cuh>
 #include "writer_impl.hpp"
+#include <io/statistics/column_statistics.cuh>
 
+#include "compact_protocol_writer.hpp"
 #include <io/utilities/column_utils.cuh>
 #include <io/utilities/config_utils.hpp>
-#include "compact_protocol_writer.hpp"
 
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/detail/iterator.cuh>
 #include <cudf/detail/utilities/vector_factories.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/null_mask.hpp>
@@ -39,6 +40,8 @@
 #include <rmm/device_uvector.hpp>
 
 #include <nvcomp/snappy.h>
+
+#include <thrust/binary_search.h>
 
 #include <algorithm>
 #include <cstring>
@@ -75,6 +78,113 @@ parquet::Compression to_parquet_compression(compression_type compression)
 }
 
 }  // namespace
+
+struct aggregate_writer_metadata {
+  aggregate_writer_metadata(std::vector<partition_info> const& partitions,
+                            size_type num_columns,
+                            std::vector<SchemaElement> schema,
+                            statistics_freq stats_granularity,
+                            std::vector<std::map<std::string, std::string>> const& kv_md)
+    : version(1), schema(std::move(schema)), files(partitions.size())
+  {
+    for (size_t i = 0; i < partitions.size(); ++i) {
+      this->files[i].num_rows = partitions[i].num_rows;
+    }
+    this->column_order_listsize =
+      (stats_granularity != statistics_freq::STATISTICS_NONE) ? num_columns : 0;
+
+    for (size_t p = 0; p < kv_md.size(); ++p) {
+      std::transform(kv_md[p].begin(),
+                     kv_md[p].end(),
+                     std::back_inserter(this->files[p].key_value_metadata),
+                     [](auto const& kv) {
+                       return KeyValue{kv.first, kv.second};
+                     });
+    }
+  }
+
+  void update_files(std::vector<partition_info> const& partitions)
+  {
+    CUDF_EXPECTS(partitions.size() == this->files.size(),
+                 "New partitions must be same size as previously passed number of partitions");
+    for (size_t i = 0; i < partitions.size(); ++i) {
+      this->files[i].num_rows += partitions[i].num_rows;
+    }
+  }
+
+  FileMetaData get_metadata(size_t part)
+  {
+    CUDF_EXPECTS(part < files.size(), "Invalid part index queried");
+    FileMetaData meta{};
+    meta.version               = this->version;
+    meta.schema                = this->schema;
+    meta.num_rows              = this->files[part].num_rows;
+    meta.row_groups            = this->files[part].row_groups;
+    meta.key_value_metadata    = this->files[part].key_value_metadata;
+    meta.created_by            = this->created_by;
+    meta.column_order_listsize = this->column_order_listsize;
+    return meta;
+  }
+
+  void set_file_paths(std::vector<std::string> const& column_chunks_file_path)
+  {
+    for (size_t p = 0; p < this->files.size(); ++p) {
+      auto& file            = this->files[p];
+      auto const& file_path = column_chunks_file_path[p];
+      for (auto& rowgroup : file.row_groups) {
+        for (auto& col : rowgroup.columns) {
+          col.file_path = file_path;
+        }
+      }
+    }
+  }
+
+  FileMetaData get_merged_metadata()
+  {
+    FileMetaData merged_md;
+    for (size_t p = 0; p < this->files.size(); ++p) {
+      auto& file = this->files[p];
+      if (p == 0) {
+        merged_md = this->get_metadata(0);
+      } else {
+        merged_md.row_groups.insert(merged_md.row_groups.end(),
+                                    std::make_move_iterator(file.row_groups.begin()),
+                                    std::make_move_iterator(file.row_groups.end()));
+        merged_md.num_rows += file.num_rows;
+      }
+    }
+    return merged_md;
+  }
+
+  std::vector<size_t> num_row_groups_per_file()
+  {
+    std::vector<size_t> global_rowgroup_base;
+    std::transform(this->files.begin(),
+                   this->files.end(),
+                   std::back_inserter(global_rowgroup_base),
+                   [](auto const& part) { return part.row_groups.size(); });
+    return global_rowgroup_base;
+  }
+
+  bool schema_matches(std::vector<SchemaElement> const& schema) const
+  {
+    return this->schema == schema;
+  }
+  auto& file(size_t p) { return files[p]; }
+  size_t num_files() const { return files.size(); }
+
+ private:
+  int32_t version = 0;
+  std::vector<SchemaElement> schema;
+  struct per_file_metadata {
+    int64_t num_rows = 0;
+    std::vector<RowGroup> row_groups;
+    std::vector<KeyValue> key_value_metadata;
+  };
+  std::vector<per_file_metadata> files;
+  std::string created_by         = "";
+  uint32_t column_order_listsize = 0;
+};
 
 struct linked_column_view;
 
@@ -343,7 +453,9 @@ struct leaf_schema_fn {
       col_schema.type        = Type::INT64;
       col_schema.stats_dtype = statistics_dtype::dtype_decimal64;
     } else if (std::is_same_v<T, numeric::decimal128>) {
-      CUDF_FAIL("decimal128 currently not supported for parquet writer");
+      col_schema.type        = Type::FIXED_LEN_BYTE_ARRAY;
+      col_schema.type_length = sizeof(__int128_t);
+      col_schema.stats_dtype = statistics_dtype::dtype_decimal128;
     } else {
       CUDF_FAIL("Unsupported fixed point type for parquet writer");
     }
@@ -673,12 +785,7 @@ parquet_column_view::parquet_column_view(schema_tree_node const& schema_node,
   _nullability = std::vector<uint8_t>(r_nullability.crbegin(), r_nullability.crend());
   // TODO(cp): Explore doing this for all columns in a single go outside this ctor. Maybe using
   // hostdevice_vector. Currently this involves a cudaMemcpyAsync for each column.
-  _d_nullability = rmm::device_uvector<uint8_t>(_nullability.size(), stream);
-  CUDA_TRY(cudaMemcpyAsync(_d_nullability.data(),
-                           _nullability.data(),
-                           _nullability.size() * sizeof(uint8_t),
-                           cudaMemcpyHostToDevice,
-                           stream.value()));
+  _d_nullability = cudf::detail::make_device_uvector_async(_nullability, stream);
 
   _is_list = (_max_rep_level > 0);
 
@@ -729,7 +836,7 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(
     desc.def_values    = _def_level.data();
   }
   desc.num_rows      = cudf_col.size();
-  desc.physical_type = static_cast<uint8_t>(physical_type());
+  desc.physical_type = physical_type();
 
   desc.level_bits = CompactProtocolReader::NumRequiredBits(max_rep_level()) << 4 |
                     CompactProtocolReader::NumRequiredBits(max_def_level());
@@ -739,10 +846,12 @@ gpu::parquet_column_device_view parquet_column_view::get_device_view(
 
 void writer::impl::init_page_fragments(cudf::detail::hostdevice_2dvector<gpu::PageFragment>& frag,
                                        device_span<gpu::parquet_column_device_view const> col_desc,
-                                       uint32_t num_rows,
+                                       host_span<partition_info const> partitions,
+                                       device_span<int const> part_frag_offset,
                                        uint32_t fragment_size)
 {
-  gpu::InitPageFragments(frag, col_desc, fragment_size, num_rows, stream);
+  auto d_partitions = cudf::detail::make_device_uvector_async(partitions, stream);
+  gpu::InitPageFragments(frag, col_desc, d_partitions, part_frag_offset, fragment_size, stream);
   frag.device_to_host(stream, true);
 }
 
@@ -774,7 +883,7 @@ void writer::impl::init_page_sizes(hostdevice_2dvector<gpu::EncColumnChunk>& chu
 
 auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
                               host_span<gpu::parquet_column_device_view const> col_desc,
-                              uint32_t num_rows,
+                              device_2dspan<gpu::PageFragment const> frags,
                               rmm::cuda_stream_view stream)
 {
   // At this point, we know all chunks and their sizes. We want to allocate dictionaries for each
@@ -804,7 +913,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   chunks.host_to_device(stream);
 
   gpu::initialize_chunk_hash_maps(chunks.device_view().flat_view(), stream);
-  gpu::populate_chunk_hash_maps(chunks, num_rows, stream);
+  gpu::populate_chunk_hash_maps(chunks, frags, stream);
 
   chunks.device_to_host(stream, true);
 
@@ -853,7 +962,7 @@ auto build_chunk_dictionaries(hostdevice_2dvector<gpu::EncColumnChunk>& chunks,
   }
   chunks.host_to_device(stream);
   gpu::collect_map_entries(chunks.device_view().flat_view(), stream);
-  gpu::get_dictionary_indices(chunks.device_view(), num_rows, stream);
+  gpu::get_dictionary_indices(chunks.device_view(), frags, stream);
 
   return std::make_pair(std::move(dict_data), std::move(dict_index));
 }
@@ -1019,7 +1128,7 @@ void writer::impl::encode_pages(hostdevice_2dvector<gpu::EncColumnChunk>& chunks
   stream.synchronize();
 }
 
-writer::impl::impl(std::unique_ptr<data_sink> sink,
+writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    parquet_writer_options const& options,
                    SingleWriteMode mode,
                    rmm::cuda_stream_view stream,
@@ -1031,8 +1140,9 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
-    out_sink_(std::move(sink)),
-    single_write_mode(mode == SingleWriteMode::YES)
+    kv_md(options.get_key_value_metadata()),
+    single_write_mode(mode == SingleWriteMode::YES),
+    out_sink_(std::move(sinks))
 {
   if (options.get_metadata()) {
     table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
@@ -1040,7 +1150,7 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
   init_state();
 }
 
-writer::impl::impl(std::unique_ptr<data_sink> sink,
+writer::impl::impl(std::vector<std::unique_ptr<data_sink>> sinks,
                    chunked_parquet_writer_options const& options,
                    SingleWriteMode mode,
                    rmm::cuda_stream_view stream,
@@ -1052,8 +1162,9 @@ writer::impl::impl(std::unique_ptr<data_sink> sink,
     compression_(to_parquet_compression(options.get_compression())),
     stats_granularity_(options.get_stats_level()),
     int96_timestamps(options.is_enabled_int96_timestamps()),
+    kv_md(options.get_key_value_metadata()),
     single_write_mode(mode == SingleWriteMode::YES),
-    out_sink_(std::move(sink))
+    out_sink_(std::move(sinks))
 {
   if (options.get_metadata()) {
     table_meta = std::make_unique<table_input_metadata>(*options.get_metadata());
@@ -1065,18 +1176,20 @@ writer::impl::~impl() { close(); }
 
 void writer::impl::init_state()
 {
+  current_chunk_offset.resize(out_sink_.size());
   // Write file header
   file_header_s fhdr;
   fhdr.magic = parquet_magic;
-  out_sink_->host_write(&fhdr, sizeof(fhdr));
-  current_chunk_offset = sizeof(file_header_s);
+  for (auto& sink : out_sink_) {
+    sink->host_write(&fhdr, sizeof(fhdr));
+  }
+  std::fill_n(current_chunk_offset.begin(), current_chunk_offset.size(), sizeof(file_header_s));
 }
 
-void writer::impl::write(table_view const& table)
+void writer::impl::write(table_view const& table, std::vector<partition_info> const& partitions)
 {
+  last_write_successful = false;
   CUDF_EXPECTS(not closed, "Data has already been flushed to out and closed");
-
-  size_type num_rows = table.num_rows();
 
   if (not table_meta) { table_meta = std::make_unique<table_input_metadata>(table); }
 
@@ -1112,25 +1225,15 @@ void writer::impl::write(table_view const& table)
 
   std::vector<SchemaElement> this_table_schema(schema_tree.begin(), schema_tree.end());
 
-  if (md.version == 0) {
-    md.version  = 1;
-    md.num_rows = num_rows;
-    md.column_order_listsize =
-      (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? num_columns : 0;
-    std::transform(table_meta->user_data.begin(),
-                   table_meta->user_data.end(),
-                   std::back_inserter(md.key_value_metadata),
-                   [](auto const& kv) {
-                     return KeyValue{kv.first, kv.second};
-                   });
-    md.schema = this_table_schema;
+  if (!md) {
+    md = std::make_unique<aggregate_writer_metadata>(
+      partitions, num_columns, std::move(this_table_schema), stats_granularity_, kv_md);
   } else {
     // verify the user isn't passing mismatched tables
-    CUDF_EXPECTS(md.schema == this_table_schema,
+    CUDF_EXPECTS(md->schema_matches(this_table_schema),
                  "Mismatch in schema between multiple calls to write_chunk");
 
-    // increment num rows
-    md.num_rows += num_rows;
+    md->update_files(partitions);
   }
   // Create table_device_view so that corresponding column_device_view data
   // can be written into col_desc members
@@ -1152,7 +1255,22 @@ void writer::impl::write(table_view const& table)
   // compression/decompression performance).
   using cudf::io::parquet::gpu::max_page_fragment_size;
 
-  size_type const num_fragments = (num_rows + max_page_fragment_size - 1) / max_page_fragment_size;
+  std::vector<int> num_frag_in_part;
+  std::transform(partitions.begin(),
+                 partitions.end(),
+                 std::back_inserter(num_frag_in_part),
+                 [](auto const& part) {
+                   return util::div_rounding_up_unsafe(part.num_rows, max_page_fragment_size);
+                 });
+
+  size_type num_fragments = std::reduce(num_frag_in_part.begin(), num_frag_in_part.end());
+
+  std::vector<int> part_frag_offset;  // Store the idx of the first fragment in each partition
+  std::exclusive_scan(
+    num_frag_in_part.begin(), num_frag_in_part.end(), std::back_inserter(part_frag_offset), 0);
+  part_frag_offset.push_back(part_frag_offset.back() + num_frag_in_part.back());
+
+  auto d_part_frag_offset = cudf::detail::make_device_uvector_async(part_frag_offset, stream);
   cudf::detail::hostdevice_2dvector<gpu::PageFragment> fragments(
     num_columns, num_fragments, stream);
 
@@ -1162,36 +1280,50 @@ void writer::impl::write(table_view const& table)
     leaf_column_views = create_leaf_column_device_views<gpu::parquet_column_device_view>(
       col_desc, *parent_column_table_device_view, stream);
 
-    init_page_fragments(fragments, col_desc, num_rows, max_page_fragment_size);
+    init_page_fragments(
+      fragments, col_desc, partitions, d_part_frag_offset, max_page_fragment_size);
   }
 
-  auto const global_rowgroup_base = static_cast<size_type>(md.row_groups.size());
+  std::vector<size_t> const global_rowgroup_base = md->num_row_groups_per_file();
 
   // Decide row group boundaries based on uncompressed data size
-  auto rowgroup_size = 0ul;
-  auto num_rowgroups = 0;
-  for (auto f = 0, global_r = global_rowgroup_base, rowgroup_start = 0; f < num_fragments; f++) {
-    auto fragment_data_size = 0ul;
-    // Replace with STL algorithm to transform and sum
-    for (auto i = 0; i < num_columns; i++) {
-      fragment_data_size += fragments[i][f].fragment_data_size;
-    }
-    if (f > rowgroup_start &&
-        (rowgroup_size + fragment_data_size > max_row_group_size ||
-         (f + 1 - rowgroup_start) * max_page_fragment_size > max_row_group_rows)) {
-      // update schema
-      md.row_groups.resize(md.row_groups.size() + 1);
-      md.row_groups[global_r++].num_rows = (f - rowgroup_start) * max_page_fragment_size;
-      num_rowgroups++;
-      rowgroup_start = f;
-      rowgroup_size  = 0;
-    }
-    rowgroup_size += fragment_data_size;
-    if (f + 1 == num_fragments) {
-      // update schema
-      md.row_groups.resize(md.row_groups.size() + 1);
-      md.row_groups[global_r++].num_rows = num_rows - rowgroup_start * max_page_fragment_size;
-      num_rowgroups++;
+  int num_rowgroups = 0;
+
+  std::vector<int> num_rg_in_part(partitions.size());
+  for (size_t p = 0; p < partitions.size(); ++p) {
+    size_type curr_rg_num_rows = 0;
+    size_t curr_rg_data_size   = 0;
+    int first_frag_in_rg       = part_frag_offset[p];
+    int last_frag_in_part      = part_frag_offset[p + 1] - 1;
+    for (auto f = first_frag_in_rg; f <= last_frag_in_part; ++f) {
+      size_t fragment_data_size = 0;
+      for (auto c = 0; c < num_columns; c++) {
+        fragment_data_size += fragments[c][f].fragment_data_size;
+      }
+      size_type fragment_num_rows = fragments[0][f].num_rows;
+
+      // If the fragment size gets larger than rg limit then break off a rg
+      if (f > first_frag_in_rg &&  // There has to be at least one fragment in row group
+          (curr_rg_data_size + fragment_data_size > max_row_group_size ||
+           curr_rg_num_rows + fragment_num_rows > max_row_group_rows)) {
+        auto& rg    = md->file(p).row_groups.emplace_back();
+        rg.num_rows = curr_rg_num_rows;
+        num_rowgroups++;
+        num_rg_in_part[p]++;
+        curr_rg_num_rows  = 0;
+        curr_rg_data_size = 0;
+        first_frag_in_rg  = f;
+      }
+      curr_rg_num_rows += fragment_num_rows;
+      curr_rg_data_size += fragment_data_size;
+
+      // TODO: (wishful) refactor to consolidate with above if block
+      if (f == last_frag_in_part) {
+        auto& rg    = md->file(p).row_groups.emplace_back();
+        rg.num_rows = curr_rg_num_rows;
+        num_rowgroups++;
+        num_rg_in_part[p]++;
+      }
     }
   }
 
@@ -1199,58 +1331,79 @@ void writer::impl::write(table_view const& table)
   rmm::device_uvector<statistics_chunk> frag_stats(0, stream);
   if (stats_granularity_ != statistics_freq::STATISTICS_NONE) {
     frag_stats.resize(num_fragments * num_columns, stream);
-    if (frag_stats.size() != 0) {
+    if (not frag_stats.is_empty()) {
       auto frag_stats_2dview =
         device_2dspan<statistics_chunk>(frag_stats.data(), num_columns, num_fragments);
       gather_fragment_statistics(frag_stats_2dview, fragments, col_desc, num_fragments);
     }
   }
+
+  std::vector<int> first_rg_in_part;
+  std::exclusive_scan(
+    num_rg_in_part.begin(), num_rg_in_part.end(), std::back_inserter(first_rg_in_part), 0);
+
   // Initialize row groups and column chunks
   auto const num_chunks = num_rowgroups * num_columns;
   hostdevice_2dvector<gpu::EncColumnChunk> chunks(num_rowgroups, num_columns, stream);
-  for (auto r = 0, global_r = global_rowgroup_base, f = 0, start_row = 0; r < num_rowgroups;
-       r++, global_r++) {
-    size_type const fragments_in_chunk =
-      (md.row_groups[global_r].num_rows + max_page_fragment_size - 1) / max_page_fragment_size;
-    md.row_groups[global_r].total_byte_size = 0;
-    md.row_groups[global_r].columns.resize(num_columns);
-    for (auto i = 0; i < num_columns; i++) {
-      gpu::EncColumnChunk* ck = &chunks[r][i];
 
-      *ck             = {};
-      ck->col_desc    = col_desc.device_ptr() + i;
-      ck->col_desc_id = i;
-      ck->fragments   = &fragments.device_view()[i][f];
-      ck->stats = (frag_stats.size() != 0) ? frag_stats.data() + i * num_fragments + f : nullptr;
-      ck->start_row        = start_row;
-      ck->num_rows         = (uint32_t)md.row_groups[global_r].num_rows;
-      ck->first_fragment   = i * num_fragments + f;
-      auto chunk_fragments = fragments[i].subspan(f, fragments_in_chunk);
-      ck->num_values =
-        std::accumulate(chunk_fragments.begin(), chunk_fragments.end(), 0, [](uint32_t l, auto r) {
-          return l + r.num_values;
-        });
-      ck->plain_data_size = std::accumulate(
-        chunk_fragments.begin(), chunk_fragments.end(), 0, [](int sum, gpu::PageFragment frag) {
-          return sum + frag.fragment_data_size;
-        });
-      md.row_groups[global_r].columns[i].meta_data.type      = parquet_columns[i].physical_type();
-      md.row_groups[global_r].columns[i].meta_data.encodings = {Encoding::PLAIN, Encoding::RLE};
-      md.row_groups[global_r].columns[i].meta_data.path_in_schema =
-        parquet_columns[i].get_path_in_schema();
-      md.row_groups[global_r].columns[i].meta_data.codec      = UNCOMPRESSED;
-      md.row_groups[global_r].columns[i].meta_data.num_values = ck->num_values;
+  for (size_t p = 0; p < partitions.size(); ++p) {
+    int f               = part_frag_offset[p];
+    size_type start_row = partitions[p].start_row;
+    for (int r = 0; r < num_rg_in_part[p]; r++) {
+      size_t global_r = global_rowgroup_base[p] + r;  // Number of rowgroups already in file/part
+      auto& row_group = md->file(p).row_groups[global_r];
+      uint32_t fragments_in_chunk =
+        util::div_rounding_up_unsafe(row_group.num_rows, max_page_fragment_size);
+      row_group.total_byte_size = 0;
+      row_group.columns.resize(num_columns);
+      for (int c = 0; c < num_columns; c++) {
+        gpu::EncColumnChunk& ck = chunks[r + first_rg_in_part[p]][c];
+
+        ck             = {};
+        ck.col_desc    = col_desc.device_ptr() + c;
+        ck.col_desc_id = c;
+        ck.fragments   = &fragments.device_view()[c][f];
+        ck.stats =
+          (not frag_stats.is_empty()) ? frag_stats.data() + c * num_fragments + f : nullptr;
+        ck.start_row         = start_row;
+        ck.num_rows          = (uint32_t)row_group.num_rows;
+        ck.first_fragment    = c * num_fragments + f;
+        auto chunk_fragments = fragments[c].subspan(f, fragments_in_chunk);
+        // In fragment struct, add a pointer to the chunk it belongs to
+        // In each fragment in chunk_fragments, update the chunk pointer here.
+        for (auto& frag : chunk_fragments) {
+          frag.chunk = &chunks.device_view()[r + first_rg_in_part[p]][c];
+        }
+        ck.num_values = std::accumulate(
+          chunk_fragments.begin(), chunk_fragments.end(), 0, [](uint32_t l, auto r) {
+            return l + r.num_values;
+          });
+        ck.plain_data_size = std::accumulate(
+          chunk_fragments.begin(), chunk_fragments.end(), 0, [](int sum, gpu::PageFragment frag) {
+            return sum + frag.fragment_data_size;
+          });
+        auto& column_chunk_meta          = row_group.columns[c].meta_data;
+        column_chunk_meta.type           = parquet_columns[c].physical_type();
+        column_chunk_meta.encodings      = {Encoding::PLAIN, Encoding::RLE};
+        column_chunk_meta.path_in_schema = parquet_columns[c].get_path_in_schema();
+        column_chunk_meta.codec          = UNCOMPRESSED;
+        column_chunk_meta.num_values     = ck.num_values;
+      }
+      f += fragments_in_chunk;
+      start_row += (uint32_t)row_group.num_rows;
     }
-    f += fragments_in_chunk;
-    start_row += (uint32_t)md.row_groups[global_r].num_rows;
   }
 
-  auto dict_info_owner = build_chunk_dictionaries(chunks, col_desc, num_rows, stream);
-  for (auto rg = 0, global_rg = global_rowgroup_base; rg < num_rowgroups; rg++, global_rg++) {
-    for (auto col = 0; col < num_columns; col++) {
-      if (chunks.host_view()[rg][col].use_dictionary) {
-        md.row_groups[global_rg].columns[col].meta_data.encodings.push_back(
-          Encoding::PLAIN_DICTIONARY);
+  fragments.host_to_device(stream);
+  auto dict_info_owner = build_chunk_dictionaries(chunks, col_desc, fragments, stream);
+  for (size_t p = 0; p < partitions.size(); p++) {
+    for (int rg = 0; rg < num_rg_in_part[p]; rg++) {
+      size_t global_rg = global_rowgroup_base[p] + rg;
+      for (int col = 0; col < num_columns; col++) {
+        if (chunks.host_view()[rg][col].use_dictionary) {
+          md->file(p).row_groups[global_rg].columns[col].meta_data.encodings.push_back(
+            Encoding::PLAIN_DICTIONARY);
+        }
       }
     }
   }
@@ -1273,6 +1426,12 @@ void writer::impl::write(table_view const& table)
       max_page_uncomp_data_size, nvcompBatchedSnappyDefaultOpts, &max_page_comp_data_size);
     CUDF_EXPECTS(status == nvcompStatus_t::nvcompSuccess,
                  "Error in getting compressed size from nvcomp");
+  }
+
+  // Find which partition a rg belongs to
+  std::vector<int> rg_to_part;
+  for (size_t p = 0; p < num_rg_in_part.size(); ++p) {
+    std::fill_n(std::back_inserter(rg_to_part), num_rg_in_part[p], p);
   }
 
   // Initialize batches of rowgroups to encode (mainly to limit peak memory usage)
@@ -1338,11 +1497,11 @@ void writer::impl::write(table_view const& table)
     auto bfr_c = static_cast<uint8_t*>(comp_bfr.data());
     for (auto j = 0; j < batch_list[b]; j++, r++) {
       for (auto i = 0; i < num_columns; i++) {
-        gpu::EncColumnChunk* ck = &chunks[r][i];
-        ck->uncompressed_bfr    = bfr;
-        ck->compressed_bfr      = bfr_c;
-        bfr += ck->bfr_size;
-        bfr_c += ck->compressed_size;
+        gpu::EncColumnChunk& ck = chunks[r][i];
+        ck.uncompressed_bfr     = bfr;
+        ck.compressed_bfr       = bfr_c;
+        bfr += ck.bfr_size;
+        bfr_c += ck.compressed_size;
       }
     }
   }
@@ -1362,9 +1521,7 @@ void writer::impl::write(table_view const& table)
   pinned_buffer<uint8_t> host_bfr{nullptr, cudaFreeHost};
 
   // Encode row groups in batches
-  for (auto b = 0, r = 0, global_r = global_rowgroup_base;
-       b < static_cast<size_type>(batch_list.size());
-       b++) {
+  for (auto b = 0, r = 0; b < static_cast<size_type>(batch_list.size()); b++) {
     // Count pages in this batch
     auto const rnext               = r + batch_list[b];
     auto const first_page_in_batch = chunks[r][0].first_page;
@@ -1384,30 +1541,33 @@ void writer::impl::write(table_view const& table)
       (stats_granularity_ != statistics_freq::STATISTICS_NONE) ? page_stats.data() + num_pages
                                                                : nullptr);
     std::vector<std::future<void>> write_tasks;
-    for (; r < rnext; r++, global_r++) {
+    for (; r < rnext; r++) {
+      int p           = rg_to_part[r];
+      int global_r    = global_rowgroup_base[p] + r - first_rg_in_part[p];
+      auto& row_group = md->file(p).row_groups[global_r];
       for (auto i = 0; i < num_columns; i++) {
-        gpu::EncColumnChunk* ck = &chunks[r][i];
+        gpu::EncColumnChunk& ck = chunks[r][i];
+        auto& column_chunk_meta = row_group.columns[i].meta_data;
         uint8_t* dev_bfr;
-        if (ck->is_compressed) {
-          md.row_groups[global_r].columns[i].meta_data.codec = compression_;
-          dev_bfr                                            = ck->compressed_bfr;
+        if (ck.is_compressed) {
+          column_chunk_meta.codec = compression_;
+          dev_bfr                 = ck.compressed_bfr;
         } else {
-          dev_bfr = ck->uncompressed_bfr;
+          dev_bfr = ck.uncompressed_bfr;
         }
 
-        if (out_sink_->is_device_write_preferred(ck->compressed_size)) {
+        if (out_sink_[p]->is_device_write_preferred(ck.compressed_size)) {
           // let the writer do what it wants to retrieve the data from the gpu.
-          write_tasks.push_back(
-            out_sink_->device_write_async(dev_bfr + ck->ck_stat_size, ck->compressed_size, stream));
+          write_tasks.push_back(out_sink_[p]->device_write_async(
+            dev_bfr + ck.ck_stat_size, ck.compressed_size, stream));
           // we still need to do a (much smaller) memcpy for the statistics.
-          if (ck->ck_stat_size != 0) {
-            md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
-            CUDA_TRY(
-              cudaMemcpyAsync(md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(),
-                              dev_bfr,
-                              ck->ck_stat_size,
-                              cudaMemcpyDeviceToHost,
-                              stream.value()));
+          if (ck.ck_stat_size != 0) {
+            column_chunk_meta.statistics_blob.resize(ck.ck_stat_size);
+            CUDA_TRY(cudaMemcpyAsync(column_chunk_meta.statistics_blob.data(),
+                                     dev_bfr,
+                                     ck.ck_stat_size,
+                                     cudaMemcpyDeviceToHost,
+                                     stream.value()));
             stream.synchronize();
           }
         } else {
@@ -1422,86 +1582,91 @@ void writer::impl::write(table_view const& table)
           // copy the full data
           CUDA_TRY(cudaMemcpyAsync(host_bfr.get(),
                                    dev_bfr,
-                                   ck->ck_stat_size + ck->compressed_size,
+                                   ck.ck_stat_size + ck.compressed_size,
                                    cudaMemcpyDeviceToHost,
                                    stream.value()));
           stream.synchronize();
-          out_sink_->host_write(host_bfr.get() + ck->ck_stat_size, ck->compressed_size);
-          if (ck->ck_stat_size != 0) {
-            md.row_groups[global_r].columns[i].meta_data.statistics_blob.resize(ck->ck_stat_size);
-            memcpy(md.row_groups[global_r].columns[i].meta_data.statistics_blob.data(),
-                   host_bfr.get(),
-                   ck->ck_stat_size);
+          out_sink_[p]->host_write(host_bfr.get() + ck.ck_stat_size, ck.compressed_size);
+          if (ck.ck_stat_size != 0) {
+            column_chunk_meta.statistics_blob.resize(ck.ck_stat_size);
+            memcpy(column_chunk_meta.statistics_blob.data(), host_bfr.get(), ck.ck_stat_size);
           }
         }
-        md.row_groups[global_r].total_byte_size += ck->compressed_size;
-        md.row_groups[global_r].columns[i].meta_data.data_page_offset =
-          current_chunk_offset + ((ck->use_dictionary) ? ck->dictionary_size : 0);
-        md.row_groups[global_r].columns[i].meta_data.dictionary_page_offset =
-          (ck->use_dictionary) ? current_chunk_offset : 0;
-        md.row_groups[global_r].columns[i].meta_data.total_uncompressed_size = ck->bfr_size;
-        md.row_groups[global_r].columns[i].meta_data.total_compressed_size   = ck->compressed_size;
-        current_chunk_offset += ck->compressed_size;
+        row_group.total_byte_size += ck.compressed_size;
+        column_chunk_meta.data_page_offset =
+          current_chunk_offset[p] + ((ck.use_dictionary) ? ck.dictionary_size : 0);
+        column_chunk_meta.dictionary_page_offset =
+          (ck.use_dictionary) ? current_chunk_offset[p] : 0;
+        column_chunk_meta.total_uncompressed_size = ck.bfr_size;
+        column_chunk_meta.total_compressed_size   = ck.compressed_size;
+        current_chunk_offset[p] += ck.compressed_size;
       }
     }
     for (auto const& task : write_tasks) {
       task.wait();
     }
   }
+  last_write_successful = true;
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::impl::close(
-  std::string const& column_chunks_file_path)
+  std::vector<std::string> const& column_chunks_file_path)
 {
   if (closed) { return nullptr; }
   closed = true;
-  CompactProtocolWriter cpw(&buffer_);
-  file_ender_s fendr;
-  buffer_.resize(0);
-  fendr.footer_len = static_cast<uint32_t>(cpw.write(md));
-  fendr.magic      = parquet_magic;
-  out_sink_->host_write(buffer_.data(), buffer_.size());
-  out_sink_->host_write(&fendr, sizeof(fendr));
-  out_sink_->flush();
+  if (not last_write_successful) { return nullptr; }
+  for (size_t p = 0; p < out_sink_.size(); p++) {
+    std::vector<uint8_t> buffer;
+    CompactProtocolWriter cpw(&buffer);
+    file_ender_s fendr;
+    buffer.resize(0);
+    fendr.footer_len = static_cast<uint32_t>(cpw.write(md->get_metadata(p)));
+    fendr.magic      = parquet_magic;
+    out_sink_[p]->host_write(buffer.data(), buffer.size());
+    out_sink_[p]->host_write(&fendr, sizeof(fendr));
+    out_sink_[p]->flush();
+  }
 
   // Optionally output raw file metadata with the specified column chunk file path
-  if (column_chunks_file_path.length() > 0) {
+  if (column_chunks_file_path.size() > 0) {
+    CUDF_EXPECTS(column_chunks_file_path.size() == md->num_files(),
+                 "Expected one column chunk path per output file");
+    md->set_file_paths(column_chunks_file_path);
     file_header_s fhdr = {parquet_magic};
-    buffer_.resize(0);
-    buffer_.insert(buffer_.end(),
-                   reinterpret_cast<const uint8_t*>(&fhdr),
-                   reinterpret_cast<const uint8_t*>(&fhdr) + sizeof(fhdr));
-    for (auto& rowgroup : md.row_groups) {
-      for (auto& col : rowgroup.columns) {
-        col.file_path = column_chunks_file_path;
-      }
-    }
-    fendr.footer_len = static_cast<uint32_t>(cpw.write(md));
-    buffer_.insert(buffer_.end(),
-                   reinterpret_cast<const uint8_t*>(&fendr),
-                   reinterpret_cast<const uint8_t*>(&fendr) + sizeof(fendr));
-    return std::make_unique<std::vector<uint8_t>>(std::move(buffer_));
+    std::vector<uint8_t> buffer;
+    CompactProtocolWriter cpw(&buffer);
+    buffer.insert(buffer.end(),
+                  reinterpret_cast<const uint8_t*>(&fhdr),
+                  reinterpret_cast<const uint8_t*>(&fhdr) + sizeof(fhdr));
+    file_ender_s fendr;
+    fendr.magic      = parquet_magic;
+    fendr.footer_len = static_cast<uint32_t>(cpw.write(md->get_merged_metadata()));
+    buffer.insert(buffer.end(),
+                  reinterpret_cast<const uint8_t*>(&fendr),
+                  reinterpret_cast<const uint8_t*>(&fendr) + sizeof(fendr));
+    return std::make_unique<std::vector<uint8_t>>(std::move(buffer));
   } else {
     return {nullptr};
   }
+  return nullptr;
 }
 
 // Forward to implementation
-writer::writer(std::unique_ptr<data_sink> sink,
+writer::writer(std::vector<std::unique_ptr<data_sink>> sinks,
                parquet_writer_options const& options,
                SingleWriteMode mode,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
-  : _impl(std::make_unique<impl>(std::move(sink), options, mode, stream, mr))
+  : _impl(std::make_unique<impl>(std::move(sinks), options, mode, stream, mr))
 {
 }
 
-writer::writer(std::unique_ptr<data_sink> sink,
+writer::writer(std::vector<std::unique_ptr<data_sink>> sinks,
                chunked_parquet_writer_options const& options,
                SingleWriteMode mode,
                rmm::cuda_stream_view stream,
                rmm::mr::device_memory_resource* mr)
-  : _impl(std::make_unique<impl>(std::move(sink), options, mode, stream, mr))
+  : _impl(std::make_unique<impl>(std::move(sinks), options, mode, stream, mr))
 {
 }
 
@@ -1509,16 +1674,21 @@ writer::writer(std::unique_ptr<data_sink> sink,
 writer::~writer() = default;
 
 // Forward to implementation
-void writer::write(table_view const& table) { _impl->write(table); }
+void writer::write(table_view const& table, std::vector<partition_info> const& partitions)
+{
+  _impl->write(
+    table, partitions.empty() ? std::vector<partition_info>{{0, table.num_rows()}} : partitions);
+}
 
 // Forward to implementation
-std::unique_ptr<std::vector<uint8_t>> writer::close(std::string const& column_chunks_file_path)
+std::unique_ptr<std::vector<uint8_t>> writer::close(
+  std::vector<std::string> const& column_chunks_file_path)
 {
   return _impl->close(column_chunks_file_path);
 }
 
 std::unique_ptr<std::vector<uint8_t>> writer::merge_row_group_metadata(
-  const std::vector<std::unique_ptr<std::vector<uint8_t>>>& metadata_list)
+  std::vector<std::unique_ptr<std::vector<uint8_t>>> const& metadata_list)
 {
   std::vector<uint8_t> output;
   CompactProtocolWriter cpw(&output);

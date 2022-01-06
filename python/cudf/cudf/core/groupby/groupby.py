@@ -1,6 +1,7 @@
 # Copyright (c) 2020-2021, NVIDIA CORPORATION.
 
 import collections
+import itertools
 import pickle
 import warnings
 
@@ -13,7 +14,8 @@ from cudf._lib import groupby as libgroupby
 from cudf._typing import DataFrameOrSeries
 from cudf.api.types import is_list_like
 from cudf.core.abc import Serializable
-from cudf.core.column.column import arange
+from cudf.core.column.column import arange, as_column
+from cudf.core.multiindex import MultiIndex
 from cudf.utils.utils import GetAttrGetItemMixin, cached_property
 
 
@@ -69,6 +71,8 @@ class GroupBy(Serializable):
         """
         self.obj = obj
         self._as_index = as_index
+        self._by = by
+        self._level = level
         self._sort = sort
         self._dropna = dropna
 
@@ -777,6 +781,121 @@ class GroupBy(Serializable):
         """Get the column-wise median of the values in each group."""
         return self.agg("median")
 
+    def corr(self, method="pearson", min_periods=1):
+        """
+        Compute pairwise correlation of columns, excluding NA/null values.
+
+        Parameters
+        ----------
+        method: {"pearson", "kendall", "spearman"} or callable,
+            default "pearson". Currently only the pearson correlation
+            coefficient is supported.
+
+        min_periods: int, optional
+            Minimum number of observations required per pair of columns
+            to have a valid result.
+
+        Returns
+        ----------
+        DataFrame
+            Correlation matrix.
+
+        Examples
+        --------
+        >>> import cudf
+        >>> gdf = cudf.DataFrame({
+        ...             "id": ["a", "a", "a", "b", "b", "b", "c", "c", "c"],
+        ...             "val1": [5, 4, 6, 4, 8, 7, 4, 5, 2],
+        ...             "val2": [4, 5, 6, 1, 2, 9, 8, 5, 1],
+        ...             "val3": [4, 5, 6, 1, 2, 9, 8, 5, 1]})
+        >>> gdf
+        id  val1  val2  val3
+        0  a     5     4     4
+        1  a     4     5     5
+        2  a     6     6     6
+        3  b     4     1     1
+        4  b     8     2     2
+        5  b     7     9     9
+        6  c     4     8     8
+        7  c     5     5     5
+        8  c     2     1     1
+        >>> gdf.groupby("id").corr(method="pearson")
+                    val1      val2      val3
+        id
+        a   val1  1.000000  0.500000  0.500000
+            val2  0.500000  1.000000  1.000000
+            val3  0.500000  1.000000  1.000000
+        b   val1  1.000000  0.385727  0.385727
+            val2  0.385727  1.000000  1.000000
+            val3  0.385727  1.000000  1.000000
+        c   val1  1.000000  0.714575  0.714575
+            val2  0.714575  1.000000  1.000000
+            val3  0.714575  1.000000  1.000000
+        """
+
+        if not method.lower() in ("pearson",):
+            raise NotImplementedError(
+                "Only pearson correlation is currently supported"
+            )
+
+        # create expanded dataframe consisting all combinations of the
+        # struct columns-pairs to be correlated
+        # i.e (('col1', 'col1'), ('col1', 'col2'), ('col2', 'col2'))
+        _cols = self.grouping.values.columns.tolist()
+        len_cols = len(_cols)
+
+        new_df_data = {}
+        for x, y in itertools.combinations_with_replacement(_cols, 2):
+            new_df_data[(x, y)] = cudf.DataFrame._from_data(
+                {"x": self.obj._data[x], "y": self.obj._data[y]}
+            ).to_struct()
+        new_gb = cudf.DataFrame._from_data(new_df_data).groupby(
+            by=self.grouping.keys
+        )
+
+        try:
+            gb_corr = new_gb.agg(lambda x: x.corr(method, min_periods))
+        except RuntimeError as e:
+            if "Unsupported groupby reduction type-agg combination" in str(e):
+                raise TypeError(
+                    "Correlation accepts only numerical column-pairs"
+                )
+            raise
+
+        # ensure that column-pair labels are arranged in ascending order
+        cols_list = [
+            (y, x) if i > j else (x, y)
+            for j, y in enumerate(_cols)
+            for i, x in enumerate(_cols)
+        ]
+        cols_split = [
+            cols_list[i : i + len_cols]
+            for i in range(0, len(cols_list), len_cols)
+        ]
+
+        # interleave: combine the correlation results for each column-pair
+        # into a single column
+        res = cudf.DataFrame._from_data(
+            {
+                x: gb_corr.loc[:, i].interleave_columns()
+                for i, x in zip(cols_split, _cols)
+            }
+        )
+
+        # create a multiindex for the groupby correlated dataframe,
+        # to match pandas behavior
+        unsorted_idx = gb_corr.index.repeat(len_cols)
+        idx_sort_order = unsorted_idx._get_sorted_inds()
+        sorted_idx = unsorted_idx._gather(idx_sort_order)
+        if len(gb_corr):
+            # TO-DO: Should the operation below be done on the CPU instead?
+            sorted_idx._data[None] = as_column(
+                cudf.Series(_cols).tile(len(gb_corr.index))
+            )
+        res.index = MultiIndex._from_data(sorted_idx._data)
+
+        return res
+
     def var(self, ddof=1):
         """Compute the column-wise variance of the values in each group.
 
@@ -1071,7 +1190,7 @@ class GroupBy(Serializable):
 
         result = self.obj.__class__._from_data(
             *self._groupby.shift(
-                cudf.core.frame.Frame(value_columns), periods, fill_value
+                cudf.core.frame.Frame(value_columns._data), periods, fill_value
             )
         )
         result = self._mimic_pandas_order(result)
@@ -1180,7 +1299,7 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
 
     def __getitem__(self, key):
         return self.obj[key].groupby(
-            self.grouping, dropna=self._dropna, sort=self._sort
+            by=self.grouping.keys, dropna=self._dropna, sort=self._sort
         )
 
     def nunique(self):

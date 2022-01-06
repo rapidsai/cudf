@@ -107,7 +107,7 @@ Examples
 
 See Also
 --------
-cudf.io.parquet.read_parquet
+cudf.read_parquet
 """
 doc_read_parquet_metadata = docfmt_partial(
     docstring=_docstring_read_parquet_metadata
@@ -154,6 +154,9 @@ num_rows : int, default None
 strings_to_categorical : boolean, default False
     If True, return string columns as GDF_CATEGORY dtype; if False, return a
     as GDF_STRING dtype.
+categorical_partitions : boolean, default True
+    Whether directory-partitioned columns should be interpreted as categorical
+    or raw dtypes.
 use_pandas_metadata : boolean, default True
     If True and dataset has custom PANDAS schema metadata, ensure that index
     columns are also loaded.
@@ -183,7 +186,7 @@ Examples
 See Also
 --------
 cudf.io.parquet.read_parquet_metadata
-cudf.io.parquet.to_parquet
+cudf.DataFrame.to_parquet
 cudf.read_orc
 """.format(
     remote_data_sources=_docstring_remote_sources
@@ -231,7 +234,7 @@ row_group_size_rows: integer or None, default None
 
 See Also
 --------
-cudf.io.parquet.read_parquet
+cudf.read_parquet
 cudf.read_orc
 """
 doc_to_parquet = docfmt_partial(docstring=_docstring_to_parquet)
@@ -250,7 +253,7 @@ Combined parquet metadata blob
 
 See Also
 --------
-cudf.io.parquet.to_parquet
+cudf.DataFrame.to_parquet
 """
 doc_merge_parquet_filemetadata = docfmt_partial(
     docstring=_docstring_merge_parquet_filemetadata
@@ -389,8 +392,8 @@ Examples
 
 See Also
 --------
-cudf.io.parquet.read_parquet
-cudf.io.parquet.to_parquet
+cudf.read_parquet
+cudf.DataFrame.to_parquet
 """.format(
     remote_data_sources=_docstring_remote_sources
 )
@@ -657,7 +660,7 @@ item : object
 
 See Also
 --------
-cudf.io.hdf.to_hdf : Write a HDF file from a DataFrame.
+cudf.DataFrame.to_hdf : Write a HDF file from a DataFrame.
 """
 doc_read_hdf = docfmt_partial(docstring=_docstring_read_hdf)
 
@@ -728,8 +731,8 @@ errors : str, default 'strict'
 See Also
 --------
 cudf.read_hdf : Read from HDF file.
-cudf.io.parquet.to_parquet : Write a DataFrame to the binary parquet format.
-cudf.io.feather.to_feather : Write out feather-format for DataFrames.
+cudf.DataFrame.to_parquet : Write a DataFrame to the binary parquet format.
+cudf.DataFrame.to_feather : Write out feather-format for DataFrames.
 """
 doc_to_hdf = docfmt_partial(docstring=_docstring_to_hdf)
 
@@ -759,7 +762,7 @@ Examples
 
 See Also
 --------
-cudf.io.feather.to_feather
+cudf.DataFrame.to_feather
 """
 doc_read_feather = docfmt_partial(docstring=_docstring_read_feather)
 
@@ -773,7 +776,7 @@ path : str
 
 See Also
 --------
-cudf.io.feather.read_feather
+cudf.read_feather
 """
 doc_to_feather = docfmt_partial(docstring=_docstring_to_feather)
 
@@ -942,7 +945,7 @@ Read the file with ``cudf.read_csv``
 
 See Also
 --------
-cudf.io.csv.to_csv
+cudf.DataFrame.to_csv
 """.format(
     remote_data_sources=_docstring_remote_sources
 )
@@ -1129,7 +1132,7 @@ def ensure_single_filepath_or_buffer(path_or_data, **kwargs):
         storage_options = kwargs.get("storage_options")
         path_or_data = os.path.expanduser(path_or_data)
         try:
-            fs, _, paths = fsspec.get_fs_token_paths(
+            fs, _, paths = get_fs_token_paths(
                 path_or_data, mode="rb", storage_options=storage_options
             )
         except ValueError as e:
@@ -1153,9 +1156,9 @@ def is_directory(path_or_data, **kwargs):
         storage_options = kwargs.get("storage_options")
         path_or_data = os.path.expanduser(path_or_data)
         try:
-            fs, _, paths = fsspec.get_fs_token_paths(
+            fs = get_fs_token_paths(
                 path_or_data, mode="rb", storage_options=storage_options
-            )
+            )[0]
         except ValueError as e:
             if str(e).startswith("Protocol not known"):
                 return False
@@ -1189,10 +1192,8 @@ def _get_filesystem_and_paths(path_or_data, **kwargs):
         else:
             path_or_data = [path_or_data]
 
-        # Pyarrow did not support the protocol or storage options.
-        # Fall back to fsspec
         try:
-            fs, _, fs_paths = fsspec.get_fs_token_paths(
+            fs, _, fs_paths = get_fs_token_paths(
                 path_or_data, mode="rb", storage_options=storage_options
             )
             return_paths = fs_paths
@@ -1322,9 +1323,9 @@ def get_writer_filepath_or_buffer(path_or_data, mode, **kwargs):
     if isinstance(path_or_data, str):
         storage_options = kwargs.get("storage_options", {})
         path_or_data = os.path.expanduser(path_or_data)
-        fs, _, _ = fsspec.get_fs_token_paths(
+        fs = get_fs_token_paths(
             path_or_data, mode=mode or "w", storage_options=storage_options
-        )
+        )[0]
 
         if not _is_local_filesystem(fs):
             filepath_or_buffer = fsspec.open(
@@ -1513,11 +1514,12 @@ def _prepare_filters(filters):
     return filters
 
 
-def _ensure_filesystem(passed_filesystem, path):
+def _ensure_filesystem(passed_filesystem, path, **kwargs):
     if passed_filesystem is None:
-        return get_fs_token_paths(path[0] if isinstance(path, list) else path)[
-            0
-        ]
+        return get_fs_token_paths(
+            path[0] if isinstance(path, list) else path,
+            storage_options=kwargs.get("storage_options", {}),
+        )[0]
     return passed_filesystem
 
 

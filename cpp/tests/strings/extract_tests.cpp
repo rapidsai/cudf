@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2021, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,13 +15,16 @@
  */
 
 #include <tests/strings/utilities.h>
-#include <cudf/strings/extract.hpp>
-#include <cudf/strings/strings_column_view.hpp>
-#include <cudf/table/table_view.hpp>
+
 #include <cudf_test/base_fixture.hpp>
 #include <cudf_test/column_utilities.hpp>
 #include <cudf_test/column_wrapper.hpp>
 #include <cudf_test/table_utilities.hpp>
+
+#include <cudf/detail/iterator.cuh>
+#include <cudf/strings/extract.hpp>
+#include <cudf/strings/strings_column_view.hpp>
+#include <cudf/table/table_view.hpp>
 
 #include <vector>
 
@@ -167,6 +170,38 @@ TEST_F(StringsExtractTests, EmptyExtractTest)
   columns.push_back(expected.release());
   cudf::table table_expected(std::move(columns));
   CUDF_TEST_EXPECT_TABLES_EQUAL(*results, table_expected);
+}
+
+TEST_F(StringsExtractTests, ExtractAllTest)
+{
+  std::vector<const char*> h_input(
+    {"123 banana 7 eleven", "41 apple", "6 pear 0 pair", nullptr, "", "bees", "4 pare"});
+  auto validity =
+    thrust::make_transform_iterator(h_input.begin(), [](auto str) { return str != nullptr; });
+  cudf::test::strings_column_wrapper input(h_input.begin(), h_input.end(), validity);
+  auto sv = cudf::strings_column_view(input);
+
+  auto results = cudf::strings::extract_all(sv, "(\\d+) (\\w+)");
+
+  bool valids[] = {1, 1, 1, 0, 0, 0, 1};
+  using LCW     = cudf::test::lists_column_wrapper<cudf::string_view>;
+  LCW expected({LCW{"123", "banana", "7", "eleven"},
+                LCW{"41", "apple"},
+                LCW{"6", "pear", "0", "pair"},
+                LCW{},
+                LCW{},
+                LCW{},
+                LCW{"4", "pare"}},
+               valids);
+  CUDF_TEST_EXPECT_COLUMNS_EQUAL(results->view(), expected);
+}
+
+TEST_F(StringsExtractTests, Errors)
+{
+  cudf::test::strings_column_wrapper input({"this column intentionally left blank"});
+  auto sv = cudf::strings_column_view(input);
+  EXPECT_THROW(cudf::strings::extract(sv, "\\w+"), cudf::logic_error);
+  EXPECT_THROW(cudf::strings::extract_all(sv, "\\w+"), cudf::logic_error);
 }
 
 TEST_F(StringsExtractTests, MediumRegex)

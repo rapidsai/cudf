@@ -50,27 +50,15 @@ cudf::size_type distinct_count(table_view const& keys,
   auto sorted_row_index   = sorted_indices->view().data<cudf::size_type>();
   auto device_input_table = cudf::table_device_view::create(keys, stream);
 
-  if (cudf::has_nulls(keys)) {
-    row_equality_comparator<true> comp(
-      *device_input_table, *device_input_table, nulls_equal == null_equality::EQUAL);
-    return thrust::count_if(
-      rmm::exec_policy(stream),
-      thrust::counting_iterator<cudf::size_type>(0),
-      thrust::counting_iterator<cudf::size_type>(keys.num_rows()),
-      [sorted_row_index, comp] __device__(cudf::size_type i) {
-        return (i == 0 || not comp(sorted_row_index[i], sorted_row_index[i - 1]));
-      });
-  } else {
-    row_equality_comparator<false> comp(
-      *device_input_table, *device_input_table, nulls_equal == null_equality::EQUAL);
-    return thrust::count_if(
-      rmm::exec_policy(stream),
-      thrust::counting_iterator<cudf::size_type>(0),
-      thrust::counting_iterator<cudf::size_type>(keys.num_rows()),
-      [sorted_row_index, comp] __device__(cudf::size_type i) {
-        return (i == 0 || not comp(sorted_row_index[i], sorted_row_index[i - 1]));
-      });
-  }
+  row_equality_comparator comp(
+    nullate::DYNAMIC{cudf::has_nulls(keys)}, *device_input_table, *device_input_table, nulls_equal);
+  return thrust::count_if(
+    rmm::exec_policy(stream),
+    thrust::counting_iterator<cudf::size_type>(0),
+    thrust::counting_iterator<cudf::size_type>(keys.num_rows()),
+    [sorted_row_index, comp] __device__(cudf::size_type i) {
+      return (i == 0 || not comp(sorted_row_index[i], sorted_row_index[i - 1]));
+    });
 }
 
 /**

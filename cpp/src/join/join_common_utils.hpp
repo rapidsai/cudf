@@ -15,11 +15,15 @@
  */
 #pragma once
 
+#include <cudf/detail/utilities/device_atomics.cuh>
 #include <cudf/detail/utilities/hash_functions.cuh>
 #include <cudf/table/row_operators.cuh>
 #include <cudf/table/table_view.hpp>
 
-#include <hash/concurrent_unordered_multimap.cuh>
+#include <hash/hash_allocator.cuh>
+#include <hash/helper_functions.cuh>
+
+#include <rmm/mr/device/polymorphic_allocator.hpp>
 
 #include <cuco/static_multimap.cuh>
 
@@ -38,16 +42,18 @@ using pair_type = cuco::pair_type<hash_value_type, size_type>;
 
 using hash_type = cuco::detail::MurmurHash3_32<hash_value_type>;
 
+using hash_table_allocator_type = rmm::mr::stream_allocator_adaptor<default_allocator<char>>;
+
 using multimap_type =
   cuco::static_multimap<hash_value_type,
                         size_type,
                         cuda::thread_scope_device,
-                        default_allocator<char>,
+                        hash_table_allocator_type,
                         cuco::double_hashing<DEFAULT_JOIN_CG_SIZE, hash_type, hash_type>>;
 
-using row_hash = cudf::row_hasher<default_hash>;
+using row_hash = cudf::row_hasher<default_hash, cudf::nullate::DYNAMIC>;
 
-using row_equality = cudf::row_equality_comparator<true>;
+using row_equality = cudf::row_equality_comparator<cudf::nullate::DYNAMIC>;
 
 enum class join_kind { INNER_JOIN, LEFT_JOIN, FULL_JOIN, LEFT_SEMI_JOIN, LEFT_ANTI_JOIN };
 

@@ -27,12 +27,14 @@
 #include <rmm/device_uvector.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <thrust/sort.h>
+
 namespace cudf {
 namespace detail {
 
-template <bool has_nulls>
 auto is_sorted(cudf::table_view const& in,
                std::vector<order> const& column_order,
+               bool has_nulls,
                std::vector<null_order> const& null_precedence,
                rmm::cuda_stream_view stream)
 {
@@ -45,8 +47,11 @@ auto is_sorted(cudf::table_view const& in,
                                    ? make_device_uvector_async(flattened.null_orders(), stream)
                                    : rmm::device_uvector<null_order>(0, stream);
 
-  auto comparator = row_lexicographic_comparator<has_nulls>(
-    *d_input, *d_input, d_column_order.data(), d_null_precedence.data());
+  auto comparator = row_lexicographic_comparator(nullate::DYNAMIC{has_nulls},
+                                                 *d_input,
+                                                 *d_input,
+                                                 d_column_order.data(),
+                                                 d_null_precedence.data());
 
   auto sorted = thrust::is_sorted(rmm::exec_policy(stream),
                                   thrust::make_counting_iterator(0),
@@ -76,11 +81,8 @@ bool is_sorted(cudf::table_view const& in,
       "Number of columns in the table doesn't match the vector null_precedence's size .\n");
   }
 
-  if (has_nulls(in)) {
-    return detail::is_sorted<true>(in, column_order, null_precedence, rmm::cuda_stream_default);
-  } else {
-    return detail::is_sorted<false>(in, column_order, null_precedence, rmm::cuda_stream_default);
-  }
+  return detail::is_sorted(
+    in, column_order, has_nulls(in), null_precedence, rmm::cuda_stream_default);
 }
 
 }  // namespace cudf

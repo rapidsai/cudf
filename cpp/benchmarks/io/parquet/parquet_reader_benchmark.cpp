@@ -92,8 +92,10 @@ void BM_parq_read_varying_options(benchmark::State& state)
   auto const data_types =
     dtypes_for_column_selection(get_type_or_group({int32_t(type_group_id::INTEGRAL),
                                                    int32_t(type_group_id::FLOATING_POINT),
+                                                   int32_t(type_group_id::FIXED_POINT),
                                                    int32_t(type_group_id::TIMESTAMP),
-                                                   int32_t(cudf::type_id::STRING)}),
+                                                   int32_t(cudf::type_id::STRING),
+                                                   int32_t(cudf::type_id::LIST)}),
                                 col_sel);
   auto const tbl  = create_random_table(data_types, data_types.size(), table_size_bytes{data_size});
   auto const view = tbl->view();
@@ -160,6 +162,7 @@ void BM_parq_read_varying_options(benchmark::State& state)
 
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, integral, type_group_id::INTEGRAL);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, floats, type_group_id::FLOATING_POINT);
+RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, decimal, type_group_id::FIXED_POINT);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, timestamps, type_group_id::TIMESTAMP);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, string, cudf::type_id::STRING);
 RD_BENCHMARK_DEFINE_ALL_SOURCES(PARQ_RD_BM_INPUTS_DEFINE, list, cudf::type_id::LIST);
