@@ -23,6 +23,7 @@
 #include <cudf/ast/detail/expression_parser.hpp>
 #include <cudf/detail/utilities/cuda.cuh>
 #include <cudf/table/table_device_view.cuh>
+#include <cudf/utilities/span.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <cooperative_groups.h>
@@ -174,7 +175,7 @@ __global__ void compute_mixed_join_output_size(
   ast::detail::expression_device_view device_expression_data,
   bool const swap_tables,
   std::size_t* output_size,
-  cudf::size_type* matches_per_row)
+  cudf::device_span<cudf::size_type> matches_per_row)
 {
   // The (required) extern storage of the shared memory array leads to
   // conflicting declarations between different templates. The easiest

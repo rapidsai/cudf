@@ -164,6 +164,8 @@ mixed_join(table_view const& left_equality,
     matches_view                     = matches_per_row->view();
     auto matches_mutable_view        = matches_per_row->mutable_view();
     auto matches_per_row_mutable_ptr = matches_mutable_view.begin<size_type>();
+    auto matches_per_row_span        = cudf::device_span<size_type>{
+      matches_per_row_mutable_ptr, static_cast<std::size_t>(outer_num_rows)};
     if (has_nulls) {
       compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, true>
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -177,7 +179,7 @@ mixed_join(table_view const& left_equality,
           parser.device_expression_data,
           swap_tables,
           size.data(),
-          matches_per_row_mutable_ptr);
+          matches_per_row_span);
     } else {
       compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
         <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -191,7 +193,7 @@ mixed_join(table_view const& left_equality,
           parser.device_expression_data,
           swap_tables,
           size.data(),
-          matches_per_row_mutable_ptr);
+          matches_per_row_span);
     }
     CHECK_CUDA(stream.value());
     join_size = size.value(stream);
@@ -304,6 +306,8 @@ std::pair<std::size_t, std::unique_ptr<column>> compute_mixed_join_output_size(
     data_type(type_to_id<size_type>()), outer_num_rows, mask_state::UNALLOCATED, stream, mr);
   auto matches_mutable_view = matches_per_row->mutable_view();
   auto matches_device_view  = mutable_column_device_view::create(matches_mutable_view, stream);
+  auto matches_per_row_span = cudf::device_span<size_type>{
+    matches_mutable_view.begin<size_type>(), static_cast<std::size_t>(outer_num_rows)};
 
   // We can immediately filter out cases where one table is empty. In
   // some cases, we return all the rows of the other table with a corresponding
@@ -410,7 +414,7 @@ std::pair<std::size_t, std::unique_ptr<column>> compute_mixed_join_output_size(
         parser.device_expression_data,
         swap_tables,
         size.data(),
-        matches_device_view->data<size_type>());
+        matches_per_row_span);
   } else {
     compute_mixed_join_output_size<DEFAULT_JOIN_BLOCK_SIZE, false>
       <<<config.num_blocks, config.num_threads_per_block, shmem_size_per_block, stream.value()>>>(
@@ -424,7 +428,7 @@ std::pair<std::size_t, std::unique_ptr<column>> compute_mixed_join_output_size(
         parser.device_expression_data,
         swap_tables,
         size.data(),
-        matches_device_view->data<size_type>());
+        matches_per_row_span);
   }
   CHECK_CUDA(stream.value());
 
