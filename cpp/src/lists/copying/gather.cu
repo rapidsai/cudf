@@ -176,7 +176,9 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
                              std::move(child_gd.offsets),
                              std::move(child),
                              null_count,
-                             std::move(null_mask));
+                             std::move(null_mask),
+                             stream,
+                             mr);
   }
 
   // it's a leaf.  do a regular gather
@@ -187,7 +189,9 @@ std::unique_ptr<column> gather_list_nested(cudf::lists_column_view const& list,
                            std::move(child_gd.offsets),
                            std::move(child),
                            null_count,
-                           std::move(null_mask));
+                           std::move(null_mask),
+                           stream,
+                           mr);
 }
 
 }  // namespace detail

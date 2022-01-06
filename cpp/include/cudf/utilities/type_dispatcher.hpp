@@ -131,8 +131,7 @@ using dispatch_same_width_type =
   std::conditional_t<std::is_same_v<numeric::decimal32, T> or
                      std::is_same_v<timestamp_D, T> or
                      std::is_same_v<duration_D, T> or
-                     std::is_same_v<uint32_t, T> or
-                     std::is_same_v<float, T>, int32_t,
+                     std::is_same_v<uint32_t, T>, int32_t,
   std::conditional_t<std::is_same_v<numeric::decimal64, T> or
                      std::is_same_v<timestamp_s, T> or
                      std::is_same_v<timestamp_ms, T> or
@@ -142,8 +141,7 @@ using dispatch_same_width_type =
                      std::is_same_v<duration_ms, T> or
                      std::is_same_v<duration_us, T> or
                      std::is_same_v<duration_ns, T> or
-                     std::is_same_v<uint64_t, T> or
-                     std::is_same_v<double, T>, int64_t,
+                     std::is_same_v<uint64_t, T>, int64_t,
   std::conditional_t<std::is_same_v<uint8_t, T>, int8_t,
   std::conditional_t<std::is_same_v<uint16_t, T>, int16_t,
   std::conditional_t<std::is_same_v<numeric::decimal128, T>, __int128_t, T>>>>>;
@@ -183,8 +181,6 @@ bool type_id_matches_device_storage_width(type_id id)
   return id == type_to_id<T>() || (id == type_id::DECIMAL32 && sizeof(T) == sizeof(int32_t)) ||
          (id == type_id::DECIMAL64 && sizeof(T) == sizeof(int64_t)) ||
          (id == type_id::DECIMAL128 && sizeof(T) == sizeof(__int128_t)) ||
-         (id == type_id::FLOAT32 && sizeof(T) == sizeof(float)) ||
-         (id == type_id::FLOAT64 && sizeof(T) == sizeof(double)) ||
          (id == type_id::UINT8 && sizeof(T) == sizeof(uint8_t)) ||
          (id == type_id::UINT16 && sizeof(T) == sizeof(uint16_t)) ||
          (id == type_id::UINT32 && sizeof(T) == sizeof(uint32_t)) ||

@@ -33,6 +33,9 @@ export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 # Dask & Distributed git tag
 export DASK_DISTRIBUTED_GIT_TAG='2021.11.2'
 
+# ucx-py version
+export UCX_PY_VERSION='0.24.*'
+
 ################################################################################
 # TRAP - Setup trap for removing jitify cache
 ################################################################################
@@ -83,10 +86,10 @@ gpuci_mamba_retry install -y \
                   "rapids-notebook-env=$MINOR_VERSION.*" \
                   "dask-cuda=${MINOR_VERSION}" \
                   "rmm=$MINOR_VERSION.*" \
-                  "ucx-py=0.23.*"
+                  "ucx-py=${UCX_PY_VERSION}"
 
 # https://docs.rapids.ai/maintainers/depmgmt/
-# gpuci_mamba_retry remove --force rapids-build-env rapids-notebook-env
+# gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
 # gpuci_mamba_retry install -y "your-pkg=1.0.0"
 
 
@@ -166,15 +169,25 @@ else
     gpuci_logger "Check GPU usage"
     nvidia-smi
 
-    gpuci_logger "GoogleTests"
     set -x
     cd $LIB_BUILD_DIR
+
+    gpuci_logger "GoogleTests"
 
     for gt in gtests/* ; do
         test_name=$(basename ${gt})
         echo "Running GoogleTest $test_name"
         ${gt} --gtest_output=xml:"$WORKSPACE/test-results/"
     done
+
+    # Copy libcudf build time results
+    echo "Checking for build time log $LIB_BUILD_DIR/ninja_log.html"
+    if [[ -f "$LIB_BUILD_DIR/ninja_log.html" ]]; then
+        gpuci_logger "Copying build time results"
+        cp "$LIB_BUILD_DIR/ninja_log.xml" "$WORKSPACE/test-results/buildtimes-junit.xml"
+        mkdir -p "$WORKSPACE/build-metrics"
+        cp "$LIB_BUILD_DIR/ninja_log.html" "$WORKSPACE/build-metrics/BuildMetrics.html"
+    fi
 
     ################################################################################
     # MEMCHECK - Run compute-sanitizer on GoogleTest (only in nightly builds)
@@ -206,7 +219,7 @@ else
     KAFKA_CONDA_FILE=${KAFKA_CONDA_FILE//-/=} #convert to conda install
 
     gpuci_logger "Installing $CUDF_CONDA_FILE & $KAFKA_CONDA_FILE"
-    conda install -c ${CONDA_ARTIFACT_PATH} "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
+    gpuci_mamba_retry install -c ${CONDA_ARTIFACT_PATH} "$CUDF_CONDA_FILE" "$KAFKA_CONDA_FILE"
 
     install_dask
 

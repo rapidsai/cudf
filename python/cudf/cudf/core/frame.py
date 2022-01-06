@@ -84,13 +84,6 @@ class Frame:
         return len(self._data)
 
     @property
-    def _num_indices(self) -> int:
-        if self._index is None:
-            return 0
-        else:
-            return len(self._index_names)
-
-    @property
     def _num_rows(self) -> int:
         if self._index is not None:
             return len(self._index)
@@ -268,15 +261,6 @@ class Frame:
     def shape(self):
         """Returns a tuple representing the dimensionality of the DataFrame."""
         return self._num_rows, self._num_columns
-
-    @property
-    def _is_homogeneous(self):
-        # make sure that the dataframe has columns
-        if not self._data.columns:
-            return True
-
-        first_type = self._data.columns[0].dtype.name
-        return all(x.dtype.name == first_type for x in self._data.columns)
 
     @property
     def empty(self):
@@ -579,19 +563,6 @@ class Frame:
 
         result._copy_type_metadata(self)
         return result
-
-    def _hash(self, method, initial_hash=None):
-        return libcudf.hash.hash(self, method, initial_hash)
-
-    def _hash_partition(
-        self, columns_to_hash, num_partitions, keep_index=True
-    ):
-        output_data, output_index, offsets = libcudf.hash.hash_partition(
-            self, columns_to_hash, num_partitions, keep_index
-        )
-        output = self.__class__._from_data(output_data, output_index)
-        output._copy_type_metadata(self, include_index=keep_index)
-        return output, offsets
 
     def _as_column(self):
         """
@@ -1009,30 +980,6 @@ class Frame:
 
         return self.where(cond=~cond, other=other, inplace=inplace)
 
-    def _partition(self, scatter_map, npartitions, keep_index=True):
-
-        data, index, output_offsets = libcudf.partitioning.partition(
-            self, scatter_map, npartitions, keep_index
-        )
-        partitioned = self.__class__._from_data(data, index)
-
-        # due to the split limitation mentioned
-        # here: https://github.com/rapidsai/cudf/issues/4607
-        # we need to remove first & last elements in offsets.
-        # TODO: Remove this after the above issue is fixed.
-        output_offsets = output_offsets[1:-1]
-
-        result = partitioned._split(output_offsets, keep_index=keep_index)
-
-        for frame in result:
-            frame._copy_type_metadata(self, include_index=keep_index)
-
-        if npartitions:
-            for _ in range(npartitions - len(result)):
-                result.append(self._empty_like(keep_index))
-
-        return result
-
     def pipe(self, func, *args, **kwargs):
         """
         Apply ``func(self, *args, **kwargs)``.
@@ -1139,9 +1086,29 @@ class Frame:
                     f"ERROR: map_size must be >= {count} (got {map_size})."
                 )
 
-        tables = self._partition(map_index, map_size, keep_index)
+        data, index, output_offsets = libcudf.partitioning.partition(
+            self, map_index, map_size, keep_index
+        )
+        partitioned = self.__class__._from_data(data, index)
 
-        return tables
+        # due to the split limitation mentioned
+        # here: https://github.com/rapidsai/cudf/issues/4607
+        # we need to remove first & last elements in offsets.
+        # TODO: Remove this after the above issue is fixed.
+        output_offsets = output_offsets[1:-1]
+
+        result = partitioned._split(output_offsets, keep_index=keep_index)
+
+        for frame in result:
+            frame._copy_type_metadata(self, include_index=keep_index)
+
+        if map_size:
+            result += [
+                self._empty_like(keep_index)
+                for _ in range(map_size - len(result))
+            ]
+
+        return result
 
     def dropna(
         self, axis=0, how="any", thresh=None, subset=None, inplace=False
@@ -1499,8 +1466,6 @@ class Frame:
         Applies boolean mask to each row of `self`,
         rows corresponding to `False` is dropped
         """
-        boolean_mask = as_column(boolean_mask)
-
         result = self.__class__._from_data(
             *libcudf.stream_compaction.apply_boolean_mask(
                 self, as_column(boolean_mask)
@@ -1798,156 +1763,29 @@ class Frame:
                 "Only axis=`None` supported at this time."
             )
 
-        return self._repeat(repeats)
-
-    def _repeat(self, count):
-        if not is_scalar(count):
-            count = as_column(count)
+        if not is_scalar(repeats):
+            repeats = as_column(repeats)
 
         result = self.__class__._from_data(
-            *libcudf.filling.repeat(self, count)
+            *libcudf.filling.repeat(self, repeats)
         )
 
         result._copy_type_metadata(self)
         return result
 
-    def _fill(self, fill_values, begin, end, inplace):
-        col_and_fill = zip(self._columns, fill_values)
-
-        if not inplace:
-            data_columns = (c._fill(v, begin, end) for (c, v) in col_and_fill)
-            return self.__class__._from_data(
-                zip(self._column_names, data_columns), self._index
-            )
-
-        for (c, v) in col_and_fill:
-            c.fill(v, begin, end, inplace=True)
-
-        return self
-
     def shift(self, periods=1, freq=None, axis=0, fill_value=None):
         """Shift values by `periods` positions."""
-        assert axis in (None, 0) and freq is None
-        return self._shift(periods)
+        axis = self._get_axis_from_axis_arg(axis)
+        if axis != 0:
+            raise ValueError("Only axis=0 is supported.")
+        if freq is not None:
+            raise ValueError("The freq argument is not yet supported.")
 
-    def _shift(self, offset, fill_value=None):
-        data_columns = (col.shift(offset, fill_value) for col in self._columns)
+        data_columns = (
+            col.shift(periods, fill_value) for col in self._columns
+        )
         return self.__class__._from_data(
             zip(self._column_names, data_columns), self._index
-        )
-
-    def round(self, decimals=0, how="half_even"):
-        """
-        Round to a variable number of decimal places.
-
-        Parameters
-        ----------
-        decimals : int, dict, Series
-            Number of decimal places to round each column to. This parameter
-            must be an int for a Series.  For a DataFrame, a dict or a Series
-            are also valid inputs. If an int is given, round each column to the
-            same number of places.  Otherwise dict and Series round to variable
-            numbers of places.  Column names should be in the keys if
-            `decimals` is a dict-like, or in the index if `decimals` is a
-            Series. Any columns not included in `decimals` will be left as is.
-            Elements of `decimals` which are not columns of the input will be
-            ignored.
-        how : str, optional
-            Type of rounding. Can be either "half_even" (default)
-            of "half_up" rounding.
-
-        Returns
-        -------
-        Series or DataFrame
-            A Series or DataFrame with the affected columns rounded to the
-            specified number of decimal places.
-
-        Examples
-        --------
-        **Series**
-
-        >>> s = cudf.Series([0.1, 1.4, 2.9])
-        >>> s.round()
-        0    0.0
-        1    1.0
-        2    3.0
-        dtype: float64
-
-        **DataFrame**
-
-        >>> df = cudf.DataFrame(
-                [(.21, .32), (.01, .67), (.66, .03), (.21, .18)],
-        ...     columns=['dogs', 'cats']
-        ... )
-        >>> df
-           dogs  cats
-        0  0.21  0.32
-        1  0.01  0.67
-        2  0.66  0.03
-        3  0.21  0.18
-
-        By providing an integer each column is rounded to the same number
-        of decimal places
-
-        >>> df.round(1)
-           dogs  cats
-        0   0.2   0.3
-        1   0.0   0.7
-        2   0.7   0.0
-        3   0.2   0.2
-
-        With a dict, the number of places for specific columns can be
-        specified with the column names as key and the number of decimal
-        places as value
-
-        >>> df.round({'dogs': 1, 'cats': 0})
-           dogs  cats
-        0   0.2   0.0
-        1   0.0   1.0
-        2   0.7   0.0
-        3   0.2   0.0
-
-        Using a Series, the number of places for specific columns can be
-        specified with the column names as index and the number of
-        decimal places as value
-
-        >>> decimals = cudf.Series([0, 1], index=['cats', 'dogs'])
-        >>> df.round(decimals)
-           dogs  cats
-        0   0.2   0.0
-        1   0.0   1.0
-        2   0.7   0.0
-        3   0.2   0.0
-        """
-
-        if isinstance(decimals, cudf.Series):
-            decimals = decimals.to_pandas()
-
-        if isinstance(decimals, pd.Series):
-            if not decimals.index.is_unique:
-                raise ValueError("Index of decimals must be unique")
-            decimals = decimals.to_dict()
-        elif isinstance(decimals, int):
-            decimals = {name: decimals for name in self._column_names}
-        elif not isinstance(decimals, abc.Mapping):
-            raise TypeError(
-                "decimals must be an integer, a dict-like or a Series"
-            )
-
-        cols = {
-            name: col.round(decimals[name], how=how)
-            if (name in decimals and _is_non_decimal_numeric_dtype(col.dtype))
-            else col.copy(deep=True)
-            for name, col in self._data.items()
-        }
-
-        return self.__class__._from_data(
-            data=cudf.core.column_accessor.ColumnAccessor(
-                cols,
-                multiindex=self._data.multiindex,
-                level_names=self._data.level_names,
-            ),
-            index=self._index,
         )
 
     @annotate("SAMPLE", color="orange", domain="cudf_python")
@@ -2629,18 +2467,6 @@ class Frame:
                     )
 
         return self
-
-    def _copy_interval_data(self, other, include_index=True):
-        for name, col, other_col in zip(
-            self._data.keys(), self._data.values(), other._data.values()
-        ):
-            if isinstance(other_col, cudf.core.column.IntervalColumn):
-                self._data[name] = cudf.core.column.IntervalColumn(col)
-
-    def _postprocess_columns(self, other, include_index=True):
-        self._copy_categories(other, include_index=include_index)
-        self._copy_struct_names(other, include_index=include_index)
-        self._copy_interval_data(other, include_index=include_index)
 
     def isnull(self):
         """
@@ -4869,7 +4695,7 @@ class Frame:
                 result_col = self._data[name].nans_to_nulls()
             else:
                 result_col = self._data[name].copy()
-                if result_col.has_nulls:
+                if result_col.has_nulls(include_nan=True):
                     # Workaround as find_first_value doesn't seem to work
                     # incase of bools.
                     first_index = int(

@@ -76,10 +76,14 @@ def test_leaves(data):
     pa_array = pa.array(data)
     while hasattr(pa_array, "flatten"):
         pa_array = pa_array.flatten()
-    dtype = "int8" if isinstance(pa_array, pa.NullArray) else None
-    expect = cudf.Series(pa_array, dtype=dtype)
+
+    expect = cudf.Series(pa_array)
     got = cudf.Series(data).list.leaves
-    assert_eq(expect, got)
+    assert_eq(
+        expect,
+        got,
+        check_dtype=False if isinstance(pa_array, pa.NullArray) else True,
+    )
 
 
 def test_list_to_pandas_nullable_true():
@@ -269,7 +273,10 @@ def test_get(data, index, expect):
     sr = cudf.Series(data)
     expect = cudf.Series(expect)
     got = sr.list.get(index)
-    assert_eq(expect, got)
+
+    assert_eq(
+        expect, got, check_dtype=False if expect.isnull().all() else True
+    )
 
 
 def test_get_nested_lists():
@@ -297,8 +304,8 @@ def test_get_nulls():
         ([[1, 2, 3], [], [3, 4, 5]], 6, [False, False, False],),
         ([[1.0, 2.0, 3.0], None, []], 2.0, [True, None, False],),
         ([[None, "b", "c"], [], ["b", "e", "f"]], "b", [True, False, True],),
-        ([[None, 2, 3], None, []], 1, [None, None, False]),
-        ([[None, "b", "c"], [], ["b", "e", "f"]], "d", [None, False, False],),
+        ([[None, 2, 3], None, []], 1, [False, None, False]),
+        ([[None, "b", "c"], [], ["b", "e", "f"]], "d", [False, False, False],),
     ],
 )
 def test_contains_scalar(data, scalar, expect):

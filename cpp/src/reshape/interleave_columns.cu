@@ -111,7 +111,7 @@ struct interleave_columns_impl<T, typename std::enable_if_t<std::is_same_v<T, cu
     }
 
     auto const create_mask_fn = [&] {
-      auto const input_dv_ptr = table_device_view::create(structs_columns);
+      auto const input_dv_ptr = table_device_view::create(structs_columns, stream);
       auto const validity_fn  = [input_dv = *input_dv_ptr, num_columns] __device__(auto const idx) {
         return input_dv.column(idx % num_columns).is_valid(idx / num_columns);
       };
@@ -224,8 +224,8 @@ struct interleave_columns_impl<T, typename std::enable_if_t<cudf::is_fixed_width
     auto output_size = input.num_columns() * input.num_rows();
     auto output =
       allocate_like(arch_column, output_size, mask_allocation_policy::NEVER, stream, mr);
-    auto device_input  = table_device_view::create(input);
-    auto device_output = mutable_column_device_view::create(*output);
+    auto device_input  = table_device_view::create(input, stream);
+    auto device_output = mutable_column_device_view::create(*output, stream);
     auto index_begin   = thrust::make_counting_iterator<size_type>(0);
     auto index_end     = thrust::make_counting_iterator<size_type>(output_size);
 

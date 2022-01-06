@@ -242,11 +242,9 @@ public final class Table implements AutoCloseable {
    * @param address            the address of the buffer to read from or 0 if we should not.
    * @param length             the length of the buffer to read from.
    * @param timeUnit           return type of TimeStamp in units
-   * @param strictDecimalTypes whether strictly reading all decimal columns as fixed-point decimal type
    */
   private static native long[] readParquet(String[] filterColumnNames, String filePath,
-                                           long address, long length, int timeUnit,
-                                           boolean strictDecimalTypes) throws CudfException;
+                                           long address, long length, int timeUnit) throws CudfException;
 
   /**
    * Setup everything to write parquet formatted data to a file.
@@ -651,6 +649,13 @@ public final class Table implements AutoCloseable {
 
   private static native long[] gather(long tableHandle, long gatherView, boolean checkBounds);
 
+  private static native long[] scatterTable(long srcTableHandle, long scatterView,
+                                            long targetTableHandle, boolean checkBounds)
+                                            throws CudfException;
+  private static native long[] scatterScalars(long[] srcScalarHandles, long scatterView,
+                                             long targetTableHandle, boolean checkBounds)
+                                             throws CudfException;
+
   private static native long[] convertToRows(long nativeHandle);
 
   private static native long[] convertFromRows(long nativeColumnView, int[] types, int[] scale);
@@ -809,8 +814,7 @@ public final class Table implements AutoCloseable {
    */
   public static Table readParquet(ParquetOptions opts, File path) {
     return new Table(readParquet(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId(),
-        opts.isStrictDecimalType()));
+        path.getAbsolutePath(), 0, 0, opts.timeUnit().typeId.getNativeId()));
   }
 
   /**
@@ -870,8 +874,7 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(readParquet(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId(),
-        opts.isStrictDecimalType()));
+        null, buffer.getAddress() + offset, len, opts.timeUnit().typeId.getNativeId()));
   }
 
   /**
@@ -1091,20 +1094,6 @@ public final class Table implements AutoCloseable {
     }
   }
 
-  /**
-   * Writes this table to a Parquet file on the host
-   *
-   * @param options parameters for the writer
-   * @param outputFile file to write the table to
-   * @deprecated please use writeParquetChunked instead
-   */
-  @Deprecated
-  public void writeParquet(ParquetWriterOptions options, File outputFile) {
-    try (TableWriter writer = writeParquetChunked(options, outputFile)) {
-      writer.write(this);
-    }
-  }
-
   private static class ORCTableWriter implements TableWriter {
     private long handle;
     HostBufferConsumer consumer;
@@ -1177,33 +1166,6 @@ public final class Table implements AutoCloseable {
    */
   public static TableWriter writeORCChunked(ORCWriterOptions options, HostBufferConsumer consumer) {
     return new ORCTableWriter(options, consumer);
-  }
-
-  /**
-   * Writes this table to a file on the host.
-   * @param outputFile - File to write the table to
-   * @deprecated please use writeORCChunked instead
-   */
-  @Deprecated
-  public void writeORC(File outputFile) {
-    // Need to specify the number of columns but leave all column names undefined
-    String[] names = new String[getNumberOfColumns()];
-    Arrays.fill(names, "");
-    ORCWriterOptions opts = ORCWriterOptions.builder().withColumns(true, names).build();
-    writeORC(opts, outputFile);
-  }
-
-  /**
-   * Writes this table to a file on the host.
-   * @param outputFile - File to write the table to
-   * @deprecated please use writeORCChunked instead
-   */
-  @Deprecated
-  public void writeORC(ORCWriterOptions options, File outputFile) {
-    assert options.getTopLevelChildren() == getNumberOfColumns() : "must specify names for all columns";
-    try (TableWriter writer = Table.writeORCChunked(options, outputFile)) {
-      writer.write(this);
-    }
   }
 
   private static class ArrowIPCTableWriter implements TableWriter {
@@ -2091,33 +2053,72 @@ public final class Table implements AutoCloseable {
    * A negative value `i` in the `gatherMap` is interpreted as `i+n`, where
    * `n` is the number of rows in this table.
    *
-   * @deprecated Use {@link #gather(ColumnView, OutOfBoundsPolicy)}
    * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
-   * @param checkBounds if true bounds checking is performed on the value. Be very careful
-   *                    when setting this to false.
-   * @return the resulting Table.
-   */
-  @Deprecated
-  public Table gather(ColumnView gatherMap, boolean checkBounds) {
-    return new Table(gather(nativeHandle, gatherMap.getNativeView(), checkBounds));
-  }
-
-  /**
-   * Gathers the rows of this table according to `gatherMap` such that row "i"
-   * in the resulting table's columns will contain row "gatherMap[i]" from this table.
-   * The number of rows in the result table will be equal to the number of elements in
-   * `gatherMap`.
-   *
-   * A negative value `i` in the `gatherMap` is interpreted as `i+n`, where
-   * `n` is the number of rows in this table.
-   *
-   * @param gatherMap the map of indexes.  Must be non-nullable and integral type.
-   * @param outOfBoundsPolicy policy to use when an out-of-range value is in `gatherMap`
+   * @param outOfBoundsPolicy policy to use when an out-of-range value is in `gatherMap`.
    * @return the resulting Table.
    */
   public Table gather(ColumnView gatherMap, OutOfBoundsPolicy outOfBoundsPolicy) {
     boolean checkBounds = outOfBoundsPolicy == OutOfBoundsPolicy.NULLIFY;
     return new Table(gather(nativeHandle, gatherMap.getNativeView(), checkBounds));
+  }
+
+  /**
+   * Scatters values from the source table into the target table out-of-place, returning a new
+   * result table. The scatter is performed according to a scatter map such that row `scatterMap[i]`
+   * of the destination table gets row `i` of the source table. All other rows of the destination
+   * table equal corresponding rows of the target table.
+   *
+   * The number of columns in source must match the number of columns in target and their
+   * corresponding data types must be the same.
+   *
+   * If the same index appears more than once in the scatter map, the result is undefined.
+   *
+   * A negative value `i` in the `scatterMap` is interpreted as `i + n`, where `n` is the number of
+   * rows in the `target` table.
+   *
+   * @param scatterMap The map of indexes. Must be non-nullable and integral type.
+   * @param target The table into which rows from the current table are to be scattered out-of-place.
+   * @param checkBounds Optionally perform bounds checking on the values of`scatterMap` and throw
+   *                    an exception if any of its values are out of bounds.
+   * @return A new table which is the result of out-of-place scattering the source table into the
+   *         target table.
+   */
+  public Table scatter(ColumnView scatterMap, Table target, boolean checkBounds) {
+    return new Table(scatterTable(nativeHandle, scatterMap.getNativeView(), target.getNativeView(),
+        checkBounds));
+  }
+
+  /**
+   * Scatters values from the source rows into the target table out-of-place, returning a new result
+   * table. The scatter is performed according to a scatter map such that row `scatterMap[i]` of the
+   * destination table is replaced by the source row `i`. All other rows of the destination table
+   * equal corresponding rows of the target table.
+   *
+   * The number of elements in source must match the number of columns in target and their
+   * corresponding data types must be the same.
+   *
+   * If the same index appears more than once in the scatter map, the result is undefined.
+   *
+   * A negative value `i` in the `scatterMap` is interpreted as `i + n`, where `n` is the number of
+   * rows in the `target` table.
+   *
+   * @param source The input scalars containing values to be scattered into the target table.
+   * @param scatterMap The map of indexes. Must be non-nullable and integral type.
+   * @param target The table into which the values from source are to be scattered out-of-place.
+   * @param checkBounds Optionally perform bounds checking on the values of`scatterMap` and throw
+   *                    an exception if any of its values are out of bounds.
+   * @return A new table which is the result of out-of-place scattering the source values into the
+   *         target table.
+   */
+  public static Table scatter(Scalar[] source, ColumnView scatterMap, Table target,
+                              boolean checkBounds) {
+    long[] srcScalarHandles = new long[source.length];
+    for(int i = 0; i < source.length; ++i) {
+      assert source[i] != null : "Scalar vectors passed in should not contain null";
+      srcScalarHandles[i] = source[i].getScalarHandle();
+    }
+    return new Table(scatterScalars(srcScalarHandles, scatterMap.getNativeView(),
+        target.getNativeView(), checkBounds));
   }
 
   private GatherMap[] buildJoinGatherMaps(long[] gatherMapData) {
@@ -2256,7 +2257,7 @@ public final class Table implements AutoCloseable {
    * the left and right tables, respectively, to produce the result of the left join.
    * It is the responsibility of the caller to close the resulting gather map instances.
    * This interface allows passing an output row count that was previously computed from
-   * {@link #conditionalLeftJoinRowCount(Table, CompiledExpression, boolean)}.
+   * {@link #conditionalLeftJoinRowCount(Table, CompiledExpression)}.
    * WARNING: Passing a row count that is smaller than the actual row count will result
    * in undefined behavior.
    * @param rightTable the right side table of the join in the join
@@ -2396,7 +2397,7 @@ public final class Table implements AutoCloseable {
    * the left and right tables, respectively, to produce the result of the inner join.
    * It is the responsibility of the caller to close the resulting gather map instances.
    * This interface allows passing an output row count that was previously computed from
-   * {@link #conditionalInnerJoinRowCount(Table, CompiledExpression, boolean)}.
+   * {@link #conditionalInnerJoinRowCount(Table, CompiledExpression)}.
    * WARNING: Passing a row count that is smaller than the actual row count will result
    * in undefined behavior.
    * @param rightTable the right side table of the join in the join
@@ -2588,7 +2589,7 @@ public final class Table implements AutoCloseable {
    * to produce the result of the left semi join.
    * It is the responsibility of the caller to close the resulting gather map instance.
    * This interface allows passing an output row count that was previously computed from
-   * {@link #conditionalLeftSemiJoinRowCount(Table, CompiledExpression, boolean)}.
+   * {@link #conditionalLeftSemiJoinRowCount(Table, CompiledExpression)}.
    * WARNING: Passing a row count that is smaller than the actual row count will result
    * in undefined behavior.
    * @param rightTable the right side table of the join
@@ -2667,7 +2668,7 @@ public final class Table implements AutoCloseable {
    * to produce the result of the left anti join.
    * It is the responsibility of the caller to close the resulting gather map instance.
    * This interface allows passing an output row count that was previously computed from
-   * {@link #conditionalLeftAntiJoinRowCount(Table, CompiledExpression, boolean)}.
+   * {@link #conditionalLeftAntiJoinRowCount(Table, CompiledExpression)}.
    * WARNING: Passing a row count that is smaller than the actual row count will result
    * in undefined behavior.
    * @param rightTable the right side table of the join
@@ -3449,14 +3450,6 @@ public final class Table implements AutoCloseable {
           groupByOptions.getKeysDescending(),
           groupByOptions.getKeysNullSmallest());
     }
-
-    /**
-     * @deprecated use aggregateWindowsOverRanges
-     */
-    @Deprecated
-    public Table aggregateWindowsOverTimeRanges(AggregationOverWindow... windowAggregates) {
-      return aggregateWindowsOverRanges(windowAggregates);
-    }
   }
 
   public static final class TableOperation {
@@ -3650,18 +3643,6 @@ public final class Table implements AutoCloseable {
           type.nativeId,
           partitionOffsets.length,
           partitionOffsets)), partitionOffsets);
-    }
-
-    /**
-     * Hash partition a table into the specified number of partitions.
-     * @deprecated Use {@link #hashPartition(int)}
-     * @param numberOfPartitions - number of partitions to use
-     * @return - {@link PartitionedTable} - Table that exposes a limited functionality of the
-     * {@link Table} class
-     */
-    @Deprecated
-    public PartitionedTable partition(int numberOfPartitions) {
-      return hashPartition(numberOfPartitions);
     }
   }
 
