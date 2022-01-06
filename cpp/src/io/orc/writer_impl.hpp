@@ -369,6 +369,8 @@ class writer::impl {
   bool const single_write_mode;
   // optional user metadata
   std::unique_ptr<table_input_metadata> table_meta;
+  // optional user metadata
+  std::map<std::string, std::string> kv_meta;
   // to track if the output has been written to sink
   bool closed = false;
 

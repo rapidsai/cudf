@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@
 #include <cudf/interop.hpp>
 #include <cudf/lists/combine.hpp>
 #include <cudf/lists/detail/concatenate.hpp>
+#include <cudf/lists/filling.hpp>
 #include <cudf/lists/lists_column_view.hpp>
 #include <cudf/reshape.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
@@ -48,6 +49,28 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_sequence(JNIEnv *env, j
       col = cudf::sequence(row_count, *initial_val, *step);
     } else {
       col = cudf::sequence(row_count, *initial_val);
+    }
+    return reinterpret_cast<jlong>(col.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_sequences(JNIEnv *env, jclass,
+                                                                   jlong j_start_handle,
+                                                                   jlong j_size_handle,
+                                                                   jlong j_step_handle) {
+  JNI_NULL_CHECK(env, j_start_handle, "start is null", 0);
+  JNI_NULL_CHECK(env, j_size_handle, "size is null", 0);
+  try {
+    cudf::jni::auto_set_device(env);
+    auto start = reinterpret_cast<cudf::column_view const *>(j_start_handle);
+    auto size = reinterpret_cast<cudf::column_view const *>(j_size_handle);
+    auto step = reinterpret_cast<cudf::column_view const *>(j_step_handle);
+    std::unique_ptr<cudf::column> col;
+    if (step) {
+      col = cudf::lists::sequences(*start, *step, *size);
+    } else {
+      col = cudf::lists::sequences(*start, *size);
     }
     return reinterpret_cast<jlong>(col.release());
   }
@@ -327,10 +350,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatenate(JNIEnv *env
 
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env, jobject j_object,
                                                               jlongArray column_handles,
-                                                              jint hash_function_id,
-                                                              jintArray initial_values, jint seed) {
+                                                              jint hash_function_id, jint seed) {
   JNI_NULL_CHECK(env, column_handles, "array of column handles is null", 0);
-  JNI_NULL_CHECK(env, initial_values, "array of initial values is null", 0);
 
   try {
     cudf::jni::native_jpointerArray<cudf::column_view> n_cudf_columns(env, column_handles);
@@ -340,13 +361,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env, jobje
                    [](auto const &p_column) { return *p_column; });
     cudf::table_view *input_table = new cudf::table_view(column_views);
 
-    cudf::jni::native_jintArray native_iv(env, initial_values);
-    std::vector<uint32_t> vector_iv;
-    std::transform(native_iv.data(), native_iv.data() + native_iv.size(),
-                   std::back_inserter(vector_iv), [](auto const &iv) { return iv; });
-
     std::unique_ptr<cudf::column> result =
-        cudf::hash(*input_table, static_cast<cudf::hash_id>(hash_function_id), vector_iv, seed);
+        cudf::hash(*input_table, static_cast<cudf::hash_id>(hash_function_id), seed);
     return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
