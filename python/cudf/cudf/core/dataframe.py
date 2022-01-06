@@ -4078,45 +4078,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             tpb=tpb,
         )
 
-    def hash_values(self, method="murmur3"):
-        """Compute the hash of values in each row.
-
-        Parameters
-        ----------
-        method : {'murmur3', 'md5'}, default 'murmur3'
-            Hash function to use:
-            * murmur3: MurmurHash3 hash function.
-            * md5: MD5 hash function.
-
-        Returns
-        -------
-        Series
-            A Series with hash values.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({"a": [10, 120, 30], "b": [0.0, 0.25, 0.50]})
-        >>> df
-             a     b
-        0   10  0.00
-        1  120  0.25
-        2   30  0.50
-        >>> df.hash_values(method="murmur3")
-        0    -330519225
-        1    -397962448
-        2   -1345834934
-        dtype: int32
-        >>> df.hash_values(method="md5")
-        0    57ce879751b5169c525907d5c563fae1
-        1    948d6221a7c4963d4be411bcead7e32b
-        2    fe061786ea286a515b772d91b0dfcd70
-        dtype: object
-        """
-        return Series._from_data(
-            {None: self._hash(method=method)}, index=self.index
-        )
-
     def partition_by_hash(self, columns, nparts, keep_index=True):
         """Partition the dataframe by the hashed value of data in *columns*.
 
@@ -4140,7 +4101,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             else self._index._num_columns
         )
         key_indices = [self._data.names.index(k) + idx for k in columns]
-        outdf, offsets = self._hash_partition(key_indices, nparts, keep_index)
+
+        output_data, output_index, offsets = libcudf.hash.hash_partition(
+            self, key_indices, nparts, keep_index
+        )
+        outdf = self.__class__._from_data(output_data, output_index)
+        outdf._copy_type_metadata(self, include_index=keep_index)
+
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
