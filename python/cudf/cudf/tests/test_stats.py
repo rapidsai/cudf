@@ -460,7 +460,8 @@ def test_df_corr():
 @pytest.mark.parametrize("skipna", [True, False, None])
 def test_nans_stats(data, ops, skipna):
     psr = cudf.utils.utils._create_pandas_series(data=data)
-    gsr = cudf.Series(data)
+    gsr = cudf.Series(data, nan_as_null=False)
+
     assert_eq(
         getattr(psr, ops)(skipna=skipna), getattr(gsr, ops)(skipna=skipna)
     )
@@ -486,7 +487,7 @@ def test_nans_stats(data, ops, skipna):
 @pytest.mark.parametrize("min_count", [-10, -1, 0, 1, 2, 3, 5, 10])
 def test_min_count_ops(data, ops, skipna, min_count):
     psr = pd.Series(data)
-    gsr = cudf.Series(data)
+    gsr = cudf.Series(data, nan_as_null=False)
 
     assert_eq(
         getattr(psr, ops)(skipna=skipna, min_count=min_count),
