@@ -47,7 +47,6 @@ from cudf.core.column import (
 )
 from cudf.core.column_accessor import ColumnAccessor
 from cudf.core.join import Merge, MergeSemi
-from cudf.core.udf.row_function import compile_or_get
 from cudf.core.udf.utils import supported_cols_from_frame
 from cudf.core.window import Rolling
 from cudf.utils import ioutils
@@ -1612,11 +1611,10 @@ class Frame:
         return result
 
     @annotate("APPLY", color="purple", domain="cudf_python")
-    def _apply(self, func, *args):
+    def _apply(self, kernel, retty, *args):
         """
         Apply `func` across the rows of the frame.
         """
-        kernel, retty = compile_or_get(self, func, args)
 
         # Mask and data column preallocated
         ans_col = cupy.empty(len(self), dtype=retty)

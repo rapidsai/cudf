@@ -11,12 +11,9 @@ from numbers import Number
 from shutil import get_terminal_size
 from typing import Any, MutableMapping, Optional, Set, Union
 
-from cudf.core.udf.lambda_function import compile_or_get_lambda_udf
-
 import cupy
 import numpy as np
 import pandas as pd
-from numba import cuda
 from pandas._config import get_option
 
 import cudf
@@ -68,6 +65,7 @@ from cudf.core.indexed_frame import (
     _indices_from_labels,
 )
 from cudf.core.single_column_frame import SingleColumnFrame
+from cudf.core.udf.lambda_function import compile_or_get_lambda_function
 from cudf.utils import cudautils, docutils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -2531,32 +2529,13 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         dtype: float64
         """
         if kwargs:
-            raise ValueError(
-                "UDFs using **kwargs are not yet supported."
-            )
+            raise ValueError("UDFs using **kwargs are not yet supported.")
 
-        # these functions are generally written as functions of scalar
-        # values rather than rows. Rather than writing an entirely separate
-        # numba kernel that is not built around a row object, its simpler
-        # to just turn this into the equivalent single column dataframe case
-        kernel, retty = compile_or_get_lambda_udf(self, func, args=args)
-        ans_col = cupy.empty(len(self), dtype=retty)
-        ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
-        launch_args = [
-            (ans_col, ans_mask), 
-            len(self),
-            (self._column.data, self._column.mask) if self._column.mask else self._column.data,
-            self._column.offset,
-            *list(args)
-        ]
-
-        kernel.forall(len(self))(*launch_args)
-        col = as_column(ans_col)
-        col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
-        result = cudf.Series._from_data({None: col}, self._index)
-        return result
+        kernel, retty = compile_or_get_lambda_function(self, func, *args)
+        result = self._apply(kernel, retty, *args)
 
         return result
+
     def applymap(self, udf, out_dtype=None):
         """Apply an elementwise function to transform the values in the Column.
 

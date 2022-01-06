@@ -62,6 +62,7 @@ from cudf.core.indexed_frame import (
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import DataFrameResampler
 from cudf.core.series import Series
+from cudf.core.udf.row_function import compile_or_get_row_function
 from cudf.utils import applyutils, docutils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
@@ -4003,7 +4004,8 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         if kwargs:
             raise ValueError("UDFs using **kwargs are not yet supported.")
 
-        return self._apply(func, *args)
+        kernel, retty = compile_or_get_row_function(self, func, args=args)
+        return self._apply(kernel, retty, *args)
 
     @applyutils.doc_apply()
     def apply_rows(

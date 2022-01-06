@@ -3,12 +3,11 @@ from typing import Callable
 
 import cachetools
 import numpy as np
-from numba import cuda, typeof
+from numba import cuda
 from numba.np import numpy_support
-from numba.types import Poison, Record, Tuple, boolean, int64, void
+from numba.types import Poison, Record
 from nvtx import annotate
 
-from cudf.core.dtypes import CategoricalDtype
 from cudf.core.udf.api import Masked, pack_return
 from cudf.core.udf.templates import (
     masked_input_initializer_template,
@@ -18,7 +17,6 @@ from cudf.core.udf.templates import (
 )
 from cudf.core.udf.typing import MaskedType
 from cudf.core.udf.utils import (
-    _is_jit_supported_type,
     all_dtypes_from_frame,
     construct_signature,
     get_udf_return_type,
@@ -167,7 +165,7 @@ def _define_function(frame, row_type, args):
 
 
 @annotate("UDF COMPILATION", color="darkgreen", domain="cudf_python")
-def compile_or_get(frame, func, args):
+def compile_or_get_row_function(frame, func, args):
     """
     Return a compiled kernel in terms of MaskedTypes that launches a
     kernel equivalent of `f` for the dtypes of `df`. The kernel uses

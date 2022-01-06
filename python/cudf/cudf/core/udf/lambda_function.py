@@ -1,11 +1,6 @@
-import numba
-import numpy as np
-from numba import cuda, typeof
-from numba.core.typing import signature
+from numba import cuda
 from numba.np import numpy_support
-from numba.types import Tuple, boolean, int64, void
 
-import cudf
 from cudf.core.udf.api import Masked, pack_return
 from cudf.core.udf.templates import (
     lambda_kernel_template,
@@ -17,13 +12,10 @@ from cudf.core.udf.utils import (
     construct_signature,
     get_udf_return_type,
     mask_get,
-    masked_array_type_from_col,
-    supported_cols_from_frame,
 )
-from cudf.utils import cudautils
 
 
-def make_kernel(sr, args=()):
+def make_kernel(sr, args):
     extra_args = ", ".join([f"extra_arg_{i}" for i in range(len(args))])
 
     masked_initializer = (
@@ -38,7 +30,7 @@ def make_kernel(sr, args=()):
     )
 
 
-def compile_or_get_lambda_udf(sr, func, args=()):
+def compile_or_get_lambda_function(sr, func, *args):
 
     sr_type = MaskedType(numpy_support.from_dtype(sr.dtype))
     udf_return_type = get_udf_return_type(sr_type, func, args)
