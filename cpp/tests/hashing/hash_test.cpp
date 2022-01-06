@@ -409,21 +409,21 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
     numeric::scale_type{-11});
 
   constexpr auto hasher      = cudf::hash_id::HASH_SPARK_MURMUR3;
-  auto const hash_structs    = cudf::hash(cudf::table_view({structs_col}), hasher, {}, 42);
-  auto const hash_strings    = cudf::hash(cudf::table_view({strings_col}), hasher, {}, 314);
-  auto const hash_doubles    = cudf::hash(cudf::table_view({doubles_col}), hasher, {}, 42);
-  auto const hash_timestamps = cudf::hash(cudf::table_view({timestamps_col}), hasher, {}, 42);
-  auto const hash_decimal64  = cudf::hash(cudf::table_view({decimal64_col}), hasher, {}, 42);
-  auto const hash_longs      = cudf::hash(cudf::table_view({longs_col}), hasher, {}, 42);
-  auto const hash_floats     = cudf::hash(cudf::table_view({floats_col}), hasher, {}, 42);
-  auto const hash_dates      = cudf::hash(cudf::table_view({dates_col}), hasher, {}, 42);
-  auto const hash_decimal32  = cudf::hash(cudf::table_view({decimal32_col}), hasher, {}, 42);
-  auto const hash_ints       = cudf::hash(cudf::table_view({ints_col}), hasher, {}, 42);
-  auto const hash_shorts     = cudf::hash(cudf::table_view({shorts_col}), hasher, {}, 42);
-  auto const hash_bytes      = cudf::hash(cudf::table_view({bytes_col}), hasher, {}, 42);
-  auto const hash_bools1     = cudf::hash(cudf::table_view({bools_col1}), hasher, {}, 42);
-  auto const hash_bools2     = cudf::hash(cudf::table_view({bools_col2}), hasher, {}, 42);
-  auto const hash_decimal128 = cudf::hash(cudf::table_view({decimal128_col}), hasher, {}, 42);
+  auto const hash_structs    = cudf::hash(cudf::table_view({structs_col}), hasher, 42);
+  auto const hash_strings    = cudf::hash(cudf::table_view({strings_col}), hasher, 314);
+  auto const hash_doubles    = cudf::hash(cudf::table_view({doubles_col}), hasher, 42);
+  auto const hash_timestamps = cudf::hash(cudf::table_view({timestamps_col}), hasher, 42);
+  auto const hash_decimal64  = cudf::hash(cudf::table_view({decimal64_col}), hasher, 42);
+  auto const hash_longs      = cudf::hash(cudf::table_view({longs_col}), hasher, 42);
+  auto const hash_floats     = cudf::hash(cudf::table_view({floats_col}), hasher, 42);
+  auto const hash_dates      = cudf::hash(cudf::table_view({dates_col}), hasher, 42);
+  auto const hash_decimal32  = cudf::hash(cudf::table_view({decimal32_col}), hasher, 42);
+  auto const hash_ints       = cudf::hash(cudf::table_view({ints_col}), hasher, 42);
+  auto const hash_shorts     = cudf::hash(cudf::table_view({shorts_col}), hasher, 42);
+  auto const hash_bytes      = cudf::hash(cudf::table_view({bytes_col}), hasher, 42);
+  auto const hash_bools1     = cudf::hash(cudf::table_view({bools_col1}), hasher, 42);
+  auto const hash_bools2     = cudf::hash(cudf::table_view({bools_col2}), hasher, 42);
+  auto const hash_decimal128 = cudf::hash(cudf::table_view({decimal128_col}), hasher, 42);
 
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_structs, hash_structs_expected, verbosity);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_strings, hash_strings_expected, verbosity);
@@ -455,7 +455,7 @@ TEST_F(SparkMurmurHash3Test, MultiValueWithSeeds)
                                                 bytes_col,
                                                 bools_col2,
                                                 decimal128_col});
-  auto const hash_combined  = cudf::hash(combined_table, hasher, {}, 42);
+  auto const hash_combined  = cudf::hash(combined_table, hasher, 42);
   CUDF_TEST_EXPECT_COLUMNS_EQUAL(*hash_combined, hash_combined_expected, verbosity);
 }
 
