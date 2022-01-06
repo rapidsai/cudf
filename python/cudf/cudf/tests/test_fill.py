@@ -50,7 +50,7 @@ def test_fill(data, fill_value, begin, end, inplace):
 
         begin = max(0, min(len(gs), begin))
         end = max(0, min(len(gs), end))
-        actual = gs._fill([fill_value], begin, end, False)
+        actual = gs.fill(fill_value, begin, end, False)
         assert actual is not gs
 
     ps[begin:end] = fill_value

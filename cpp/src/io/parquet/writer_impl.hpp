@@ -45,7 +45,7 @@ namespace detail {
 namespace parquet {
 // Forward internal classes
 struct parquet_column_view;
-struct aggregate_metadata;
+struct aggregate_writer_metadata;
 
 using namespace cudf::io::parquet;
 using namespace cudf::io;
@@ -214,7 +214,7 @@ class writer::impl {
   statistics_freq stats_granularity_ = statistics_freq::STATISTICS_NONE;
   bool int96_timestamps              = false;
   // Overall file metadata.  Filled in during the process and written during write_chunked_end()
-  std::unique_ptr<aggregate_metadata> md;
+  std::unique_ptr<aggregate_writer_metadata> md;
   // File footer key-value metadata. Written during write_chunked_end()
   std::vector<std::map<std::string, std::string>> kv_md;
   // optional user metadata
