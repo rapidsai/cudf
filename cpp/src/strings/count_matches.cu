@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.
+ * Copyright (c) 2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,16 +14,13 @@
  * limitations under the License.
  */
 
-#pragma once
-
+#include <strings/count_matches.hpp>
 #include <strings/regex/regex.cuh>
 
-#include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/string_view.cuh>
 
-#include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
 #include <thrust/transform.h>
@@ -32,6 +29,7 @@ namespace cudf {
 namespace strings {
 namespace detail {
 
+namespace {
 /**
  * @brief Functor counts the total matches to the given regex in each string.
  */
@@ -56,6 +54,7 @@ struct count_matches_fn {
     return count;
   }
 };
+}  // namespace
 
 /**
  * @brief Returns a column of regex match counts for each string in the given column.
@@ -67,11 +66,10 @@ struct count_matches_fn {
  * @param stream CUDA stream used for device memory operations and kernel launches.
  * @param mr Device memory resource used to allocate the returned column's device memory.
  */
-std::unique_ptr<column> count_matches(
-  column_device_view const& d_strings,
-  reprog_device const& d_prog,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource())
+std::unique_ptr<column> count_matches(column_device_view const& d_strings,
+                                      reprog_device const& d_prog,
+                                      rmm::cuda_stream_view stream,
+                                      rmm::mr::device_memory_resource* mr)
 {
   // Create output column
   auto counts = make_numeric_column(

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <strings/count_matches.cuh>
+#include <strings/count_matches.hpp>
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
