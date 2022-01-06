@@ -72,7 +72,7 @@ std::unique_ptr<table> findall(
  *    null ]
  * @endcode
  *
- * A null output row results if the pattern is not contained in the corresponding row
+ * A null output row results if the pattern is not found in the corresponding row
  * input string.
  *
  * See the @ref md_regex "Regex Features" page for details on patterns supported by this API.

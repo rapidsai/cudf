@@ -48,7 +48,7 @@ struct count_matches_fn {
     int32_t end   = d_str.length();
     while ((begin < end) && (prog.find<stack_size>(idx, d_str, begin, end) > 0)) {
       ++count;
-      begin = end + static_cast<int32_t>(begin == end);
+      begin = end + (begin == end);
       end   = d_str.length();
     }
     return count;

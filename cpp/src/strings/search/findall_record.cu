@@ -69,7 +69,7 @@ struct findall_fn {
 
       d_output[output_idx++] = string_index_pair{d_str.data() + spos, (epos - spos)};
 
-      begin = end;
+      begin = end + (begin == end);
       end   = d_str.length();
     }
   }
