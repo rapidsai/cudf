@@ -621,7 +621,7 @@ def test_mask_udf_scalar_args_binops_series(data, op):
 )
 @pytest.mark.parametrize("op", arith_ops + comparison_ops)
 def test_masked_udf_scalar_args_binops_multiple_series(data, op):
-    data = cudf.DataFrame(data)
+    data = cudf.Series(data)
 
     def func(data, c, k):
         x = op(data, c)
