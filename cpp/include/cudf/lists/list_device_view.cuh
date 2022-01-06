@@ -215,7 +215,7 @@ class list_device_view {
      *
      * @param _list The `list_device_view` whose rows are being accessed.
      */
-    explicit CUDF_HDI pair_accessor(list_device_view const& _list) : list{_list} {}
+    explicit CUDF_HOST_DEVICE inline pair_accessor(list_device_view const& _list) : list{_list} {}
 
     /**
      * @brief Accessor for the {data, validity} pair at the specified index
@@ -252,7 +252,9 @@ class list_device_view {
      *
      * @param _list The `list_device_view` whose rows are being accessed.
      */
-    explicit CUDF_HDI pair_rep_accessor(list_device_view const& _list) : list{_list} {}
+    explicit CUDF_HOST_DEVICE inline pair_rep_accessor(list_device_view const& _list) : list{_list}
+    {
+    }
 
     /**
      * @brief Accessor for the {rep_data, validity} pair at the specified index
@@ -286,7 +288,7 @@ class list_device_view {
  */
 struct list_size_functor {
   column_device_view const d_column;
-  CUDF_HDI list_size_functor(column_device_view const& d_col) : d_column(d_col)
+  CUDF_HOST_DEVICE inline list_size_functor(column_device_view const& d_col) : d_column(d_col)
   {
 #if defined(__CUDA_ARCH__)
     cudf_assert(d_col.type().id() == type_id::LIST && "Only list type column is supported");

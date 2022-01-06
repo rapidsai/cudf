@@ -420,8 +420,7 @@ struct scalar_optional_accessor : public scalar_value_accessor<Element> {
    *
    * @return a thrust::optional<Element> for the scalar value.
    */
-  CUDF_HDI
-  const value_type operator()(size_type) const
+  CUDF_HOST_DEVICE inline const value_type operator()(size_type) const
   {
     if (has_nulls) {
       return (super_t::dscalar.is_valid()) ? Element{super_t::dscalar.value()}
@@ -454,8 +453,7 @@ struct scalar_pair_accessor : public scalar_value_accessor<Element> {
    *
    * @return a pair with value and validity of the scalar.
    */
-  CUDF_HDI
-  const value_type operator()(size_type) const
+  CUDF_HOST_DEVICE inline const value_type operator()(size_type) const
   {
 #if defined(__CUDA_ARCH__)
     return {Element(super_t::dscalar.value()), super_t::dscalar.is_valid()};

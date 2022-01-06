@@ -46,7 +46,7 @@ class lists_column_device_view {
   /**
    * @brief Fetches number of rows in the lists column
    */
-  CUDF_HDI cudf::size_type size() const { return underlying.size(); }
+  CUDF_HOST_DEVICE inline cudf::size_type size() const { return underlying.size(); }
 
   /**
    * @brief Fetches the offsets column of the underlying list column.

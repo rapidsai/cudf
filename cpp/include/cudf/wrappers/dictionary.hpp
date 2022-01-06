@@ -56,22 +56,22 @@ struct dictionary_wrapper {
   dictionary_wrapper& operator=(const dictionary_wrapper&) = default;
 
   // construct object from type
-  CUDF_HDI constexpr explicit dictionary_wrapper(value_type v) : _value{v} {}
+  CUDF_HOST_DEVICE inline constexpr explicit dictionary_wrapper(value_type v) : _value{v} {}
 
   // conversion operator
-  CUDF_HDI explicit operator value_type() const { return _value; }
+  CUDF_HOST_DEVICE inline explicit operator value_type() const { return _value; }
   // simple accessor
-  CUDF_HDI value_type value() const { return _value; }
+  CUDF_HOST_DEVICE inline value_type value() const { return _value; }
 
-  static CUDF_HDI constexpr value_type max_value()
+  static CUDF_HOST_DEVICE inline constexpr value_type max_value()
   {
     return std::numeric_limits<value_type>::max();
   }
-  static CUDF_HDI constexpr value_type min_value()
+  static CUDF_HOST_DEVICE inline constexpr value_type min_value()
   {
     return std::numeric_limits<value_type>::min();
   }
-  static CUDF_HDI constexpr value_type lowest_value()
+  static CUDF_HOST_DEVICE inline constexpr value_type lowest_value()
   {
     return std::numeric_limits<IndexType>::lowest();
   }
@@ -82,43 +82,43 @@ struct dictionary_wrapper {
 
 // comparison operators
 template <typename Integer>
-CUDF_HDI bool operator==(dictionary_wrapper<Integer> const& lhs,
-                         dictionary_wrapper<Integer> const& rhs)
+CUDF_HOST_DEVICE inline bool operator==(dictionary_wrapper<Integer> const& lhs,
+                                        dictionary_wrapper<Integer> const& rhs)
 {
   return lhs.value() == rhs.value();
 }
 
 template <typename Integer>
-CUDF_HDI bool operator!=(dictionary_wrapper<Integer> const& lhs,
-                         dictionary_wrapper<Integer> const& rhs)
+CUDF_HOST_DEVICE inline bool operator!=(dictionary_wrapper<Integer> const& lhs,
+                                        dictionary_wrapper<Integer> const& rhs)
 {
   return lhs.value() != rhs.value();
 }
 
 template <typename Integer>
-CUDF_HDI bool operator<=(dictionary_wrapper<Integer> const& lhs,
-                         dictionary_wrapper<Integer> const& rhs)
+CUDF_HOST_DEVICE inline bool operator<=(dictionary_wrapper<Integer> const& lhs,
+                                        dictionary_wrapper<Integer> const& rhs)
 {
   return lhs.value() <= rhs.value();
 }
 
 template <typename Integer>
-CUDF_HDI bool operator>=(dictionary_wrapper<Integer> const& lhs,
-                         dictionary_wrapper<Integer> const& rhs)
+CUDF_HOST_DEVICE inline bool operator>=(dictionary_wrapper<Integer> const& lhs,
+                                        dictionary_wrapper<Integer> const& rhs)
 {
   return lhs.value() >= rhs.value();
 }
 
 template <typename Integer>
-CUDF_HDI constexpr bool operator<(dictionary_wrapper<Integer> const& lhs,
-                                  dictionary_wrapper<Integer> const& rhs)
+CUDF_HOST_DEVICE inline constexpr bool operator<(dictionary_wrapper<Integer> const& lhs,
+                                                 dictionary_wrapper<Integer> const& rhs)
 {
   return lhs.value() < rhs.value();
 }
 
 template <typename Integer>
-CUDF_HDI bool operator>(dictionary_wrapper<Integer> const& lhs,
-                        dictionary_wrapper<Integer> const& rhs)
+CUDF_HOST_DEVICE inline bool operator>(dictionary_wrapper<Integer> const& lhs,
+                                       dictionary_wrapper<Integer> const& rhs)
 {
   return lhs.value() > rhs.value();
 }

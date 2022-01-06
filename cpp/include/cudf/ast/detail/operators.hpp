@@ -49,7 +49,7 @@ constexpr bool is_valid_unary_op = cuda::std::is_invocable<Op, T>::value;
  * @param args Forwarded arguments to `operator()` of `f`.
  */
 template <typename F, typename... Ts>
-CUDF_HDI constexpr void ast_operator_dispatcher(ast_operator op, F&& f, Ts&&... args)
+CUDF_HOST_DEVICE inline constexpr void ast_operator_dispatcher(ast_operator op, F&& f, Ts&&... args)
 {
   switch (op) {
     case ast_operator::ADD:
@@ -920,7 +920,7 @@ struct single_dispatch_binary_operator_types {
             typename F,
             typename... Ts,
             std::enable_if_t<is_valid_binary_op<OperatorFunctor, LHS, LHS>>* = nullptr>
-  CUDF_HDI void operator()(F&& f, Ts&&... args)
+  CUDF_HOST_DEVICE inline void operator()(F&& f, Ts&&... args)
   {
     f.template operator()<OperatorFunctor, LHS, LHS>(std::forward<Ts>(args)...);
   }
@@ -929,7 +929,7 @@ struct single_dispatch_binary_operator_types {
             typename F,
             typename... Ts,
             std::enable_if_t<!is_valid_binary_op<OperatorFunctor, LHS, LHS>>* = nullptr>
-  CUDF_HDI void operator()(F&& f, Ts&&... args)
+  CUDF_HOST_DEVICE inline void operator()(F&& f, Ts&&... args)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid binary operation.");
@@ -958,7 +958,10 @@ struct type_dispatch_binary_op {
    * @param args Forwarded arguments to `operator()` of `f`.
    */
   template <ast_operator op, typename F, typename... Ts>
-  CUDF_HDI void operator()(cudf::data_type lhs_type, cudf::data_type rhs_type, F&& f, Ts&&... args)
+  CUDF_HOST_DEVICE inline void operator()(cudf::data_type lhs_type,
+                                          cudf::data_type rhs_type,
+                                          F&& f,
+                                          Ts&&... args)
   {
     // Single dispatch (assume lhs_type == rhs_type)
     type_dispatcher(
@@ -981,7 +984,7 @@ struct type_dispatch_binary_op {
  * @param args Forwarded arguments to `operator()` of `f`.
  */
 template <typename F, typename... Ts>
-CUDF_HDI constexpr void binary_operator_dispatcher(
+CUDF_HOST_DEVICE inline constexpr void binary_operator_dispatcher(
   ast_operator op, cudf::data_type lhs_type, cudf::data_type rhs_type, F&& f, Ts&&... args)
 {
   ast_operator_dispatcher(op,
@@ -1006,7 +1009,7 @@ struct dispatch_unary_operator_types {
             typename F,
             typename... Ts,
             std::enable_if_t<is_valid_unary_op<OperatorFunctor, InputT>>* = nullptr>
-  CUDF_HDI void operator()(F&& f, Ts&&... args)
+  CUDF_HOST_DEVICE inline void operator()(F&& f, Ts&&... args)
   {
     f.template operator()<OperatorFunctor, InputT>(std::forward<Ts>(args)...);
   }
@@ -1015,7 +1018,7 @@ struct dispatch_unary_operator_types {
             typename F,
             typename... Ts,
             std::enable_if_t<!is_valid_unary_op<OperatorFunctor, InputT>>* = nullptr>
-  CUDF_HDI void operator()(F&& f, Ts&&... args)
+  CUDF_HOST_DEVICE inline void operator()(F&& f, Ts&&... args)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid unary operation.");
@@ -1030,7 +1033,7 @@ struct dispatch_unary_operator_types {
  */
 struct type_dispatch_unary_op {
   template <ast_operator op, typename F, typename... Ts>
-  CUDF_HDI void operator()(cudf::data_type input_type, F&& f, Ts&&... args)
+  CUDF_HOST_DEVICE inline void operator()(cudf::data_type input_type, F&& f, Ts&&... args)
   {
     type_dispatcher(
       input_type,
@@ -1051,10 +1054,10 @@ struct type_dispatch_unary_op {
  * @param args Forwarded arguments to `operator()` of `f`.
  */
 template <typename F, typename... Ts>
-CUDF_HDI constexpr void unary_operator_dispatcher(ast_operator op,
-                                                  cudf::data_type input_type,
-                                                  F&& f,
-                                                  Ts&&... args)
+CUDF_HOST_DEVICE inline constexpr void unary_operator_dispatcher(ast_operator op,
+                                                                 cudf::data_type input_type,
+                                                                 F&& f,
+                                                                 Ts&&... args)
 {
   ast_operator_dispatcher(op,
                           detail::type_dispatch_unary_op{},
@@ -1079,7 +1082,7 @@ struct return_type_functor {
             typename LHS,
             typename RHS,
             std::enable_if_t<is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
-  CUDF_HDI void operator()(cudf::data_type& result)
+  CUDF_HOST_DEVICE inline void operator()(cudf::data_type& result)
   {
     using Out = cuda::std::invoke_result_t<OperatorFunctor, LHS, RHS>;
     result    = cudf::data_type(cudf::type_to_id<Out>());
@@ -1089,7 +1092,7 @@ struct return_type_functor {
             typename LHS,
             typename RHS,
             std::enable_if_t<!is_valid_binary_op<OperatorFunctor, LHS, RHS>>* = nullptr>
-  CUDF_HDI void operator()(cudf::data_type& result)
+  CUDF_HOST_DEVICE inline void operator()(cudf::data_type& result)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid binary operation. Return type cannot be determined.");
@@ -1108,7 +1111,7 @@ struct return_type_functor {
   template <typename OperatorFunctor,
             typename T,
             std::enable_if_t<is_valid_unary_op<OperatorFunctor, T>>* = nullptr>
-  CUDF_HDI void operator()(cudf::data_type& result)
+  CUDF_HOST_DEVICE inline void operator()(cudf::data_type& result)
   {
     using Out = cuda::std::invoke_result_t<OperatorFunctor, T>;
     result    = cudf::data_type(cudf::type_to_id<Out>());
@@ -1117,7 +1120,7 @@ struct return_type_functor {
   template <typename OperatorFunctor,
             typename T,
             std::enable_if_t<!is_valid_unary_op<OperatorFunctor, T>>* = nullptr>
-  CUDF_HDI void operator()(cudf::data_type& result)
+  CUDF_HOST_DEVICE inline void operator()(cudf::data_type& result)
   {
 #ifndef __CUDA_ARCH__
     CUDF_FAIL("Invalid unary operation. Return type cannot be determined.");
@@ -1156,7 +1159,7 @@ inline cudf::data_type ast_operator_return_type(ast_operator op,
  */
 struct arity_functor {
   template <ast_operator op>
-  CUDF_HDI void operator()(cudf::size_type& result)
+  CUDF_HOST_DEVICE inline void operator()(cudf::size_type& result)
   {
     // Arity is not dependent on null handling, so just use the false implementation here.
     result = operator_functor<op, false>::arity;
@@ -1169,7 +1172,7 @@ struct arity_functor {
  * @param op Operator used to determine arity.
  * @return Arity of the operator.
  */
-CUDF_HDI cudf::size_type ast_operator_arity(ast_operator op)
+CUDF_HOST_DEVICE inline cudf::size_type ast_operator_arity(ast_operator op)
 {
   auto result = cudf::size_type(0);
   ast_operator_dispatcher(op, detail::arity_functor{}, result);

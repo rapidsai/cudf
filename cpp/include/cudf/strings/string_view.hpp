@@ -51,7 +51,7 @@ class string_view {
   /**
    * @brief Return the number of bytes in this string
    */
-  CUDF_HDI size_type size_bytes() const { return _bytes; }
+  CUDF_HOST_DEVICE inline size_type size_bytes() const { return _bytes; }
   /**
    * @brief Return the number of characters in this string
    */
@@ -59,12 +59,12 @@ class string_view {
   /**
    * @brief Return a pointer to the internal device array
    */
-  CUDF_HDI const char* data() const { return _data; }
+  CUDF_HOST_DEVICE inline const char* data() const { return _data; }
 
   /**
    * @brief Return true if string has no characters
    */
-  CUDF_HDI bool empty() const { return size_bytes() == 0; }
+  CUDF_HOST_DEVICE inline bool empty() const { return size_bytes() == 0; }
 
   /**
    * @brief Handy iterator for navigating through encoded characters.
@@ -284,7 +284,7 @@ class string_view {
    *
    * @return An empty string
    */
-  CUDF_HDI static string_view min();
+  CUDF_HOST_DEVICE inline static string_view min();
 
   /**
    * @brief Return maximum value associated with the string type
@@ -295,12 +295,12 @@ class string_view {
    * @return A string value which represents the highest possible valid UTF-8 encoded
    * character.
    */
-  CUDF_HDI static string_view max();
+  CUDF_HOST_DEVICE inline static string_view max();
 
   /**
    * @brief Default constructor represents an empty string.
    */
-  CUDF_HDI string_view() : _data(""), _bytes(0), _length(0) {}
+  CUDF_HOST_DEVICE inline string_view() : _data(""), _bytes(0), _length(0) {}
 
   /**
    * @brief Create instance from existing device char array.
@@ -308,7 +308,7 @@ class string_view {
    * @param data Device char array encoded in UTF8.
    * @param bytes Number of bytes in data array.
    */
-  CUDF_HDI string_view(const char* data, size_type bytes)
+  CUDF_HOST_DEVICE inline string_view(const char* data, size_type bytes)
     : _data(data), _bytes(bytes), _length(UNKNOWN_STRING_LENGTH)
   {
   }
@@ -386,7 +386,7 @@ constexpr size_type bytes_in_utf8_byte(uint8_t byte)
  * @param[out] character Single char_utf8 value.
  * @return The number of bytes in the character
  */
-CUDF_HDI size_type to_char_utf8(const char* str, char_utf8& character)
+CUDF_HOST_DEVICE inline size_type to_char_utf8(const char* str, char_utf8& character)
 {
   size_type const chr_width = bytes_in_utf8_byte(static_cast<uint8_t>(*str));
 
@@ -413,7 +413,7 @@ CUDF_HDI size_type to_char_utf8(const char* str, char_utf8& character)
  * @param[out] str Allocated char array with enough space to hold the encoded character.
  * @return The number of bytes in the character
  */
-CUDF_HDI size_type from_char_utf8(char_utf8 character, char* str)
+CUDF_HOST_DEVICE inline size_type from_char_utf8(char_utf8 character, char* str)
 {
   size_type const chr_width = bytes_in_char_utf8(character);
   for (size_type idx = 0; idx < chr_width; ++idx) {

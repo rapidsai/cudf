@@ -55,7 +55,7 @@ struct base_indexalator {
   /**
    * @brief Prefix increment operator.
    */
-  CUDF_HDI T& operator++()
+  CUDF_HOST_DEVICE inline T& operator++()
   {
     T& derived = static_cast<T&>(*this);
     derived.p_ += width_;
@@ -65,7 +65,7 @@ struct base_indexalator {
   /**
    * @brief Postfix increment operator.
    */
-  CUDF_HDI T operator++(int)
+  CUDF_HOST_DEVICE inline T operator++(int)
   {
     T tmp{static_cast<T&>(*this)};
     operator++();
@@ -75,7 +75,7 @@ struct base_indexalator {
   /**
    * @brief Prefix decrement operator.
    */
-  CUDF_HDI T& operator--()
+  CUDF_HOST_DEVICE inline T& operator--()
   {
     T& derived = static_cast<T&>(*this);
     derived.p_ -= width_;
@@ -85,7 +85,7 @@ struct base_indexalator {
   /**
    * @brief Postfix decrement operator.
    */
-  CUDF_HDI T operator--(int)
+  CUDF_HOST_DEVICE inline T operator--(int)
   {
     T tmp{static_cast<T&>(*this)};
     operator--();
@@ -95,7 +95,7 @@ struct base_indexalator {
   /**
    * @brief Compound assignment by sum operator.
    */
-  CUDF_HDI T& operator+=(difference_type offset)
+  CUDF_HOST_DEVICE inline T& operator+=(difference_type offset)
   {
     T& derived = static_cast<T&>(*this);
     derived.p_ += offset * width_;
@@ -105,7 +105,7 @@ struct base_indexalator {
   /**
    * @brief Increment by offset operator.
    */
-  CUDF_HDI T operator+(difference_type offset) const
+  CUDF_HOST_DEVICE inline T operator+(difference_type offset) const
   {
     auto tmp = T{static_cast<T const&>(*this)};
     tmp.p_ += (offset * width_);
@@ -115,7 +115,7 @@ struct base_indexalator {
   /**
    * @brief Addition assignment operator.
    */
-  CUDF_HDI friend T operator+(difference_type offset, T const& rhs)
+  CUDF_HOST_DEVICE inline friend T operator+(difference_type offset, T const& rhs)
   {
     T tmp{rhs};
     tmp.p_ += (offset * rhs.width_);
@@ -125,7 +125,7 @@ struct base_indexalator {
   /**
    * @brief Compound assignment by difference operator.
    */
-  CUDF_HDI T& operator-=(difference_type offset)
+  CUDF_HOST_DEVICE inline T& operator-=(difference_type offset)
   {
     T& derived = static_cast<T&>(*this);
     derived.p_ -= offset * width_;
@@ -135,7 +135,7 @@ struct base_indexalator {
   /**
    * @brief Decrement by offset operator.
    */
-  CUDF_HDI T operator-(difference_type offset) const
+  CUDF_HOST_DEVICE inline T operator-(difference_type offset) const
   {
     auto tmp = T{static_cast<T const&>(*this)};
     tmp.p_ -= (offset * width_);
@@ -145,7 +145,7 @@ struct base_indexalator {
   /**
    * @brief Subtraction assignment operator.
    */
-  CUDF_HDI friend T operator-(difference_type offset, T const& rhs)
+  CUDF_HOST_DEVICE inline friend T operator-(difference_type offset, T const& rhs)
   {
     T tmp{rhs};
     tmp.p_ -= (offset * rhs.width_);
@@ -155,7 +155,7 @@ struct base_indexalator {
   /**
    * @brief Compute offset from iterator difference operator.
    */
-  CUDF_HDI difference_type operator-(T const& rhs) const
+  CUDF_HOST_DEVICE inline difference_type operator-(T const& rhs) const
   {
     return (static_cast<T const&>(*this).p_ - rhs.p_) / width_;
   }
@@ -163,27 +163,45 @@ struct base_indexalator {
   /**
    * @brief Equals to operator.
    */
-  CUDF_HDI bool operator==(T const& rhs) const { return rhs.p_ == static_cast<T const&>(*this).p_; }
+  CUDF_HOST_DEVICE inline bool operator==(T const& rhs) const
+  {
+    return rhs.p_ == static_cast<T const&>(*this).p_;
+  }
   /**
    * @brief Not equals to operator.
    */
-  CUDF_HDI bool operator!=(T const& rhs) const { return rhs.p_ != static_cast<T const&>(*this).p_; }
+  CUDF_HOST_DEVICE inline bool operator!=(T const& rhs) const
+  {
+    return rhs.p_ != static_cast<T const&>(*this).p_;
+  }
   /**
    * @brief Less than operator.
    */
-  CUDF_HDI bool operator<(T const& rhs) const { return static_cast<T const&>(*this).p_ < rhs.p_; }
+  CUDF_HOST_DEVICE inline bool operator<(T const& rhs) const
+  {
+    return static_cast<T const&>(*this).p_ < rhs.p_;
+  }
   /**
    * @brief Greater than operator.
    */
-  CUDF_HDI bool operator>(T const& rhs) const { return static_cast<T const&>(*this).p_ > rhs.p_; }
+  CUDF_HOST_DEVICE inline bool operator>(T const& rhs) const
+  {
+    return static_cast<T const&>(*this).p_ > rhs.p_;
+  }
   /**
    * @brief Less than or equals to operator.
    */
-  CUDF_HDI bool operator<=(T const& rhs) const { return static_cast<T const&>(*this).p_ <= rhs.p_; }
+  CUDF_HOST_DEVICE inline bool operator<=(T const& rhs) const
+  {
+    return static_cast<T const&>(*this).p_ <= rhs.p_;
+  }
   /**
    * @brief Greater than or equals to operator.
    */
-  CUDF_HDI bool operator>=(T const& rhs) const { return static_cast<T const&>(*this).p_ >= rhs.p_; }
+  CUDF_HOST_DEVICE inline bool operator>=(T const& rhs) const
+  {
+    return static_cast<T const&>(*this).p_ >= rhs.p_;
+  }
 
  protected:
   /**

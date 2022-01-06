@@ -62,13 +62,13 @@ constexpr auto abs(T value)
 }
 
 template <typename T>
-CUDF_HDI auto min(T lhs, T rhs)
+CUDF_HOST_DEVICE inline auto min(T lhs, T rhs)
 {
   return lhs < rhs ? lhs : rhs;
 }
 
 template <typename T>
-CUDF_HDI auto max(T lhs, T rhs)
+CUDF_HOST_DEVICE inline auto max(T lhs, T rhs)
 {
   return lhs > rhs ? lhs : rhs;
 }
