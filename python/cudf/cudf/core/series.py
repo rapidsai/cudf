@@ -11,7 +11,7 @@ from numbers import Number
 from shutil import get_terminal_size
 from typing import Any, MutableMapping, Optional, Set, Union
 
-from cudf.core.udf.lambda_ import compile_or_get_lambda_udf
+from cudf.core.udf.lambda_function import compile_or_get_lambda_udf
 
 import cupy
 import numpy as np
