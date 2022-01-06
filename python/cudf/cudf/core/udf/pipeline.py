@@ -20,6 +20,8 @@ from cudf.utils.dtypes import (
     TIMEDELTA_TYPES,
 )
 
+from cudf.core.udf.utils import get_udf_return_type
+
 libcudf_bitmask_type = numpy_support.from_dtype(np.dtype("int32"))
 MASK_BITSIZE = np.dtype("int32").itemsize * 8
 precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
@@ -122,43 +124,6 @@ def get_frame_row_type(dtype):
     # Numba requires that structures are aligned for the CUDA target
     _is_aligned_struct = True
     return Record(fields, offset, _is_aligned_struct)
-
-
-@annotate("NUMBA JIT", color="green", domain="cudf_python")
-def get_udf_return_type(frame, func: Callable, args=()):
-
-    """
-    Get the return type of a masked UDF for a given set of argument dtypes. It
-    is assumed that the function consumes a dictionary whose keys are strings
-    and whose values are of MaskedType. Initially assume that the UDF may be
-    written to utilize any field in the row - including those containing an
-    unsupported dtype. If an unsupported dtype is actually used in the function
-    the compilation should fail at `compile_udf`. If compilation succeeds, one
-    can infer that the function does not use any of the columns of unsupported
-    dtype - meaning we can drop them going forward and the UDF will still end
-    up getting fed rows containing all the fields it actually needs to use to
-    compute the answer for that row.
-    """
-
-    # present a row containing all fields to the UDF and try and compile
-    row_type = get_frame_row_type(
-        np.dtype(list(all_dtypes_from_frame(frame).items()))
-    )
-    compile_sig = (row_type, *(typeof(arg) for arg in args))
-
-    # Get the return type. The PTX is also returned by compile_udf, but is not
-    # needed here.
-    ptx, output_type = cudautils.compile_udf(func, compile_sig)
-    if not isinstance(output_type, MaskedType):
-        numba_output_type = numpy_support.from_dtype(np.dtype(output_type))
-    else:
-        numba_output_type = output_type
-
-    return (
-        numba_output_type
-        if not isinstance(numba_output_type, MaskedType)
-        else numba_output_type.value_type
-    )
 
 
 def masked_array_type_from_col(col):
@@ -304,7 +269,11 @@ def compile_or_get(frame, func, args):
 
     # precompile the user udf to get the right return type.
     # could be a MaskedType or a scalar type.
-    scalar_return_type = get_udf_return_type(frame, func, args)
+
+    row_type = get_frame_row_type(
+        np.dtype(list(all_dtypes_from_frame(frame).items()))
+    )
+    scalar_return_type = get_udf_return_type(row_type, func, args)
 
     # get_udf_return_type will throw a TypingError if the user tries to use
     # a field in the row containing an unsupported dtype, except in the

@@ -16,28 +16,13 @@ from cudf.core.udf.pipeline import (
     masked_array_type_from_col,
     pack_return,
 )
+
+from cudf.core.udf.utils import get_udf_return_type
+
 from cudf.core.udf.typing import MaskedType
 from cudf.utils import cudautils
 
-def get_udf_return_type_series(sr, func, args=()):
-    # args types are (typeof(input_col), typeof(arg0), typeof(arg1)...)
-    compile_sig = (
-        numpy_support.from_dtype(sr.dtype),
-        *(typeof(arg) for arg in args)
-    )
-    _, output_type = cudautils.compile_udf(func, compile_sig)
-    
-    if not isinstance(output_type, MaskedType):
-        numba_output_type = numpy_support.from_dtype(np.dtype(output_type))
-    else:
-        numba_output_type = output_type
 
-    return (
-        numba_output_type
-        if not isinstance(numba_output_type, MaskedType)
-        else numba_output_type.value_type
-    )
-    
     
 def construct_signature_from_series(series, return_type, args):
     """
@@ -65,7 +50,10 @@ def make_kernel(args=()):
 
 
 def compile_or_get_lambda_udf(sr, func, args=()):
-    udf_return_type = get_udf_return_type_series(sr, func, args)
+
+    sr_type = numpy_support.from_dtype(sr.dtype)
+
+    udf_return_type = get_udf_return_type(sr_type, func, args)
 
     sig = construct_signature_from_series(sr, udf_return_type, args=args)
 

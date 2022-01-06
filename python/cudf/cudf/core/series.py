@@ -2549,7 +2549,6 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
             self._column.offset,
             *list(args)
         ]
-        breakpoint()
         kernel.forall(len(self))(*launch_args)
         col = as_column(ans_col)
         col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
