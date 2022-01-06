@@ -240,7 +240,6 @@ bool contains(column_view const& col, scalar const& value, rmm::cuda_stream_view
   CUDF_EXPECTS(col.type() == value.type(), "scalar and column types must match");
 
   if (col.is_empty()) { return false; }
-
   if (not value.is_valid(stream)) { return col.has_nulls(); }
 
   return cudf::type_dispatcher(col.type(), contains_scalar_dispatch{}, col, value, stream);
@@ -301,20 +300,14 @@ struct multi_contains_dispatch {
 
 template <>
 std::unique_ptr<column> multi_contains_dispatch::operator()<list_view>(
-  column_view const& haystack,
-  column_view const& needles,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  column_view const&, column_view const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
 {
   CUDF_FAIL("list_view type not supported");
 }
 
 template <>
 std::unique_ptr<column> multi_contains_dispatch::operator()<struct_view>(
-  column_view const& haystack,
-  column_view const& needles,
-  rmm::cuda_stream_view stream,
-  rmm::mr::device_memory_resource* mr)
+  column_view const&, column_view const&, rmm::cuda_stream_view, rmm::mr::device_memory_resource*)
 {
   CUDF_FAIL("struct_view type not supported");
 }
