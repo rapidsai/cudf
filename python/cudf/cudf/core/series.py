@@ -2545,10 +2545,11 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         launch_args = [
             (ans_col, ans_mask), 
             len(self),
-            (self._column.data, self._column.mask),
+            (self._column.data, self._column.mask) if self._column.mask else self._column.data,
             self._column.offset,
             *list(args)
         ]
+
         kernel.forall(len(self))(*launch_args)
         col = as_column(ans_col)
         col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))

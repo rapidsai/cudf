@@ -40,7 +40,6 @@ def get_udf_return_type(argty, func: Callable, args=()):
     """
 
     # present a row containing all fields to the UDF and try and compile
-
     compile_sig = (argty, *(typeof(arg) for arg in args))
 
     # Get the return type. The PTX is also returned by compile_udf, but is not

@@ -40,7 +40,7 @@ def make_kernel(sr, args=()):
 
 def compile_or_get_lambda_udf(sr, func, args=()):
 
-    sr_type = numpy_support.from_dtype(sr.dtype)
+    sr_type = MaskedType(numpy_support.from_dtype(sr.dtype))
     udf_return_type = get_udf_return_type(sr_type, func, args)
     sig = construct_signature(sr, udf_return_type, args=args)
 
