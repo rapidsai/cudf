@@ -11,6 +11,7 @@ from nvtx import annotate
 from cudf.core.dtypes import CategoricalDtype
 from cudf.core.udf.api import Masked, pack_return
 from cudf.core.udf.typing import MaskedType
+from cudf.core.udf.templates import unmasked_input_initializer_template, masked_input_initializer_template, row_initializer_template, row_kernel_template
 from cudf.utils import cudautils
 from cudf.utils.dtypes import (
     BOOL_TYPES,
@@ -200,44 +201,6 @@ def mask_get(mask, pos):
     return (mask[pos // MASK_BITSIZE] >> (pos % MASK_BITSIZE)) & 1
 
 
-kernel_template = """\
-def _kernel(retval, size, {input_columns}, {input_offsets}, {extra_args}):
-    i = cuda.grid(1)
-    ret_data_arr, ret_mask_arr = retval
-    if i < size:
-        # Create a structured array with the desired fields
-        rows = cuda.local.array(1, dtype=row_type)
-
-        # one element of that array
-        row = rows[0]
-
-{masked_input_initializers}
-{row_initializers}
-
-        # pass the assembled row into the udf
-        ret = f_(row, {extra_args})
-
-        # pack up the return values and set them
-        ret_masked = pack_return(ret)
-        ret_data_arr[i] = ret_masked.value
-        ret_mask_arr[i] = ret_masked.valid
-"""
-
-unmasked_input_initializer_template = """\
-        d_{idx} = input_col_{idx}
-        masked_{idx} = Masked(d_{idx}[i], True)
-"""
-
-masked_input_initializer_template = """\
-        d_{idx}, m_{idx} = input_col_{idx}
-        masked_{idx} = Masked(d_{idx}[i], mask_get(m_{idx}, i + offset_{idx}))
-"""
-
-row_initializer_template = """\
-        row["{name}"] = masked_{idx}
-"""
-
-
 def _define_function(frame, row_type, args):
     """
     The kernel we want to JIT compile looks something like the following,
@@ -307,7 +270,7 @@ def _define_function(frame, row_type, args):
         "numba_rectype": row_type,  # from global
     }
 
-    return kernel_template.format(**d)
+    return row_kernel_template.format(**d)
 
 
 @annotate("UDF COMPILATION", color="darkgreen", domain="cudf_python")

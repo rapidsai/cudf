@@ -11,6 +11,8 @@ from numbers import Number
 from shutil import get_terminal_size
 from typing import Any, MutableMapping, Optional, Set, Union
 
+from cudf.core.udf.lambda_ import compile_or_get_lambda_udf
+
 import cupy
 import numpy as np
 import pandas as pd
@@ -2528,21 +2530,33 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
         2     4.5
         dtype: float64
         """
-        if args or kwargs:
+        if kwargs:
             raise ValueError(
-                "UDFs using *args or **kwargs are not yet supported."
+                "UDFs using **kwargs are not yet supported."
             )
 
         # these functions are generally written as functions of scalar
         # values rather than rows. Rather than writing an entirely separate
         # numba kernel that is not built around a row object, its simpler
         # to just turn this into the equivalent single column dataframe case
-        name = self.name or "__temp_srname"
-        df = cudf.DataFrame({name: self})
-        f_ = cuda.jit(device=True)(func)
+        kernel, retty = compile_or_get_lambda_udf(self, func, args=args)
+        ans_col = cupy.empty(len(self), dtype=retty)
+        ans_mask = cudf.core.column.column_empty(len(self), dtype="bool")
+        launch_args = [
+            (ans_col, ans_mask), 
+            len(self),
+            (self._column.data, self._column.mask),
+            self._column.offset,
+            *list(args)
+        ]
 
-        return df.apply(lambda row: f_(row[name]))
+        kernel.forall(len(self))(launch_args)
+        col = as_column(ans_col)
+        col.set_base_mask(libcudf.transform.bools_to_mask(ans_mask))
+        result = cudf.Series._from_data({None: col}, self._index)
+        return result
 
+        return result
     def applymap(self, udf, out_dtype=None):
         """Apply an elementwise function to transform the values in the Column.
 
