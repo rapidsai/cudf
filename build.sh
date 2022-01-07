@@ -204,7 +204,6 @@ if buildAll || hasArg libcudf; then
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} \
           ${CMAKE_ARGS}
 
-    echo "LIB_BUILD_DIR=$LIB_BUILD_DIR"
     cd ${LIB_BUILD_DIR}
 
     compile_start=$(date +%s)
