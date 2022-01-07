@@ -704,17 +704,19 @@ def to_parquet(
     if engine == "cudf":
         # Ensure that no columns dtype is 'category'
         for col in df.columns:
-            if df[col].dtype.name == "category":
-                raise ValueError(
-                    "'category' column dtypes are currently not "
-                    + "supported by the gpu accelerated parquet writer"
-                )
+            if partition_cols is None or col not in partition_cols:
+                if df[col].dtype.name == "category":
+                    raise ValueError(
+                        "'category' column dtypes are currently not "
+                        + "supported by the gpu accelerated parquet writer"
+                    )
 
         if partition_cols:
             if metadata_file_path is not None:
                 warnings.warn(
                     "metadata_file_path will be ignored/overwritten when "
-                    "partition_cols are provided"
+                    "partition_cols are provided. To request returning the "
+                    "metadata binary blob, pass `return_metadata=True`"
                 )
             kwargs.update(
                 {
@@ -725,7 +727,7 @@ def to_parquet(
                     "row_group_size_rows": row_group_size_rows,
                 }
             )
-            write_to_dataset(
+            return write_to_dataset(
                 df,
                 filename=partition_file_name,
                 partition_cols=partition_cols,
@@ -733,7 +735,6 @@ def to_parquet(
                 preserve_index=index,
                 **kwargs,
             )
-            return
 
         if partition_offsets:
             kwargs["partitions_info"] = [
