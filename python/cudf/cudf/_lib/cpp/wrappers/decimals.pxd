@@ -7,6 +7,8 @@ cdef extern from "cudf/fixed_point/fixed_point.hpp" namespace "numeric" nogil:
     ctypedef int64_t decimal64
     # cython type stub to help resolve to numeric::decimal32
     ctypedef int64_t decimal32
+    # cython type stub to help resolve to numeric::decimal128
+    ctypedef int64_t decimal128
 
     cdef cppclass scale_type:
         scale_type(int32_t)

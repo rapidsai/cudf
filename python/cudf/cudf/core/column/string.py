@@ -5197,6 +5197,9 @@ class StringColumn(column.ColumnBase):
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.Decimal64Column":
+        import pdb
+
+        pdb.set_trace()
         return libstrings.to_decimal(self, dtype)
 
     def as_string_column(
