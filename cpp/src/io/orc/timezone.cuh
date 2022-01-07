@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -107,10 +107,13 @@ inline __device__ int32_t get_gmt_offset(cudf::device_span<int64_t const> ttimes
   return get_gmt_offset_impl(ttimes.begin(), offsets.begin(), ttimes.size(), ts);
 }
 
-struct timezone_table {
+class timezone_table {
   int32_t gmt_offset = 0;
   rmm::device_uvector<int64_t> ttimes;
   rmm::device_uvector<int32_t> offsets;
+
+ public:
+  // Safe to use the default stream, device_uvectors will not change after they are created empty
   timezone_table() : ttimes{0, rmm::cuda_stream_default}, offsets{0, rmm::cuda_stream_default} {}
   timezone_table(int32_t gmt_offset,
                  rmm::device_uvector<int64_t>&& ttimes,
