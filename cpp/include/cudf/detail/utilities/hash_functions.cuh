@@ -443,21 +443,21 @@ SparkMurmurHash3_32<numeric::decimal128>::operator()(numeric::decimal128 const& 
   int32_t length          = 15;
 
   // Search for first non-zero byte in the unscaled value, shortening the hashed data
-  for (; length >= 0 && data[length] == zero_value; --length)
-    ;
+  for (; length >= 0 && data[length] == zero_value; --length) {}
   // Special case for 0 which does not shorten correctly
-  if (length == -1) return this->compute<uint8_t>(0);
+  if (length == -1) { return this->compute<uint8_t>(0); }
   // Preserve the 2's complement sign bit by adding a byte back on if necessary
-  // e.g. 0x0000FF would shorten to 0x00FF -- 0x00 byte retained to preserve sign
-  // 0x00007F would shorten to 0x7f -- no 0x00 byte retained because the leftmost bit is not set
+  // e.g. 0x0000FF would shorten to 0x00FF -- 0x00 byte retained to preserve sign bit
+  // 0x00007F would shorten to 0x7f -- no extra byte because the leftmost bit matches the sign bit
   // similarly for negative values 0xFFFF00 --> 0xFF00 and 0xFFFF80 --> 0x80
-  if (length != 15 && sign_bit ^ (data[length] & static_cast<int8_t>(0x80))) ++length;
+  if (length != 15 && sign_bit ^ (data[length] & static_cast<int8_t>(0x80))) { ++length; }
 
   // Convert resulting byte range to big endian
   __int128_t flipped = 0;
   int8_t* dflipped   = reinterpret_cast<int8_t*>(&flipped);
-  for (int i = 0; i <= length; i++)
+  for (int i = 0; i <= length; i++) {
     dflipped[i] = data[length - i];
+  }
 
   return this->compute_bytes(dflipped, length + 1);
 }
