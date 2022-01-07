@@ -1370,7 +1370,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_readJSON(
 
     cudf::io::table_with_metadata result = cudf::io::read_json(opts.build());
 
-    if (result.metadata.column_names.empty()) {
+    // there is no need to re-order columns when inferring schema
+    if (result.metadata.column_names.empty() || n_col_names.size() <= 0) {
       return cudf::jni::convert_table_for_return(env, result.tbl);
     } else {
       // json reader will not return the correct column order,
