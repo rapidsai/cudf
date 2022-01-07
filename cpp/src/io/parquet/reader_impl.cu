@@ -1060,6 +1060,16 @@ void decompress_check(gpu_inflate_status_s* outputs,
                                                               any_page_failure);
 }
 
+__global__ void convert_nvcomp_status(nvcompStatus_t* nvcomp_stats,
+                                      gpu_inflate_status_s* stats,
+                                      size_t num_pages)
+{
+  auto tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid < num_pages) {
+    stats[tid].status = static_cast<uint32_t>(nvcomp_stats[tid]);
+  }
+}
+
 void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
                        device_span<gpu_inflate_status_s> comp_stat,
                        size_t max_uncomp_page_size,
@@ -1115,12 +1125,11 @@ void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
                "unable to perform snappy decompression");
 
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator(0),
-                     num_comp_pages,
-                     [=] __device__(auto i) {
-                        comp_stat[i].status = static_cast<uint32_t>(statuses.data()[i]);
-                     });
+  dim3 block(128);
+  dim3 grid((num_comp_pages + block.x - 1) / block.x);
+  convert_nvcomp_status<<<grid, block, 0, stream.value()>>>(statuses.data(),
+                                                            comp_stat.data(),
+                                                            num_comp_pages);
 }
 
 /**

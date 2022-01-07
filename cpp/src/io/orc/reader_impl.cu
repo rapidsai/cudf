@@ -284,6 +284,18 @@ void decompress_check(gpu_inflate_status_s* outputs,
                                                               any_page_failure);
 }
 
+__global__ void convert_nvcomp_status(nvcompStatus_t* nvcomp_stats,
+                                      size_t* actual_uncompressed_sizes,
+                                      gpu_inflate_status_s* stats,
+                                      size_t num_pages)
+{
+  auto tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid < num_pages) {
+    stats[tid].status = static_cast<uint32_t>(nvcomp_stats[tid]);
+    stats[tid].bytes_written = actual_uncompressed_sizes[tid];
+  }
+}
+
 void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
                        device_span<gpu_inflate_status_s> comp_stat,
                        size_t max_uncomp_page_size,
@@ -331,13 +343,12 @@ void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
                                               stream.value());
   CUDF_EXPECTS(nvcompStatus_t::nvcompSuccess == status, "unable to perform snappy decompression");
 
-  thrust::for_each_n(rmm::exec_policy(stream),
-                     thrust::make_counting_iterator(0),
-                     num_blocks,
-                     [=] __device__(auto i) {
-                         comp_stat[i].status = static_cast<uint32_t>(statuses.data()[i]);
-                         comp_stat[i].bytes_written = actual_uncompressed_data_sizes.data()[i];
-                     });
+  dim3 block(128);
+  dim3 grid((num_blocks + block.x - 1) / block.x);
+  convert_nvcomp_status<<<grid, block, 0, stream.value()>>>(statuses.data(),
+                                                            actual_uncompressed_data_sizes.data(),
+                                                            comp_stat.data(),
+                                                            num_blocks);
 }
 
 rmm::device_buffer reader::impl::decompress_stripe_data(
@@ -427,21 +438,15 @@ rmm::device_buffer reader::impl::decompress_stripe_data(
                                                            num_compressed_blocks};
           device_span<gpu_inflate_status_s> inflate_out_view{inflate_out.data(),
                                                              num_compressed_blocks};
-          snappy_decompress(inflate_in_view,
-                            inflate_out_view,
-                            max_uncomp_block_size,
-                            stream);
+          snappy_decompress(inflate_in_view, inflate_out_view, max_uncomp_block_size, stream);
         } else {
           CUDA_TRY(
-            gpu_unsnap(inflate_in.data(),
-                       inflate_out.data(),
-                       num_compressed_blocks,
-                       stream);
+            gpu_unsnap(inflate_in.data(), inflate_out.data(), num_compressed_blocks, stream));
         }
         break;
       default: CUDF_EXPECTS(false, "Unexpected decompression dispatch"); break;
     }
-    decompress_check(inflate_out.device_ptr(start_pos), num_compressed_blocks, stream, any_page_failure.device_ptr());
+    decompress_check(inflate_out.data(), num_compressed_blocks, stream, any_page_failure.device_ptr());
   }
   if (num_uncompressed_blocks > 0) {
     CUDA_TRY(gpu_copy_uncompressed_blocks(
