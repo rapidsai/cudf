@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -195,7 +195,7 @@ struct row_offset_functor {
       : _fixed_width_only_row_size(fixed_width_only_row_size){};
 
   CUDA_DEVICE_CALLABLE
-  size_type operator()(int row_number, int tile_row_start) {
+  size_type operator()(int row_number, int tile_row_start) const {
     return (row_number - tile_row_start) * _fixed_width_only_row_size;
   }
 
@@ -1187,7 +1187,10 @@ static size_type compute_column_information(iterator begin, iterator end,
   auto validity_offset = fixed_width_size_per_row;
   column_starts.push_back(validity_offset);
 
-  return fixed_width_size_per_row;
+  return util::round_up_unsafe(
+      fixed_width_size_per_row +
+          util::div_rounding_up_safe(static_cast<size_type>(std::distance(begin, end)), 8),
+      JCUDF_ROW_ALIGNMENT);
 }
 
 /**
@@ -1224,6 +1227,7 @@ build_validity_tile_infos(size_type const &num_columns, size_type const &num_row
       std::min(num_rows, util::round_down_safe(shmem_limit_per_tile / bytes_per_row, 64));
 
   std::vector<detail::tile_info> validity_tile_infos;
+  validity_tile_infos.reserve(num_columns / column_stride * num_rows / row_stride);
   for (int col = 0; col < num_columns; col += column_stride) {
     int current_tile_row_batch = 0;
     int rows_left_in_batch = row_batches[current_tile_row_batch].row_count;
@@ -1245,13 +1249,21 @@ build_validity_tile_infos(size_type const &num_columns, size_type const &num_row
   return validity_tile_infos;
 }
 
+/**
+ * @brief functor that returns the size of a row or 0 is row is greater than the number of rows in the table
+ *
+ * @tparam RowSize iterator that returns the size of a specific row
+ */
 template <typename RowSize> struct row_size_functor {
-  RowSize _row_sizes;
-  size_type _num_rows;
-  row_size_functor(RowSize row_sizes) : _row_sizes(row_sizes){};
+  row_size_functor(size_type row_end, RowSize row_sizes, size_type last_row_end)
+      : _row_end(row_end), _row_sizes(row_sizes), _last_row_end(last_row_end) {}
 
   CUDA_DEVICE_CALLABLE
-  uint64_t operator()(int row_index) { return static_cast<uint64_t>(_row_sizes[row_index]); }
+  uint64_t operator()(int i) const { return i >= _row_end ? 0 : _row_sizes[i + _last_row_end]; }
+
+  size_type _row_end;
+  RowSize _row_sizes;
+  size_type _last_row_end;
 };
 
 /**
@@ -1266,14 +1278,10 @@ template <typename RowSize> struct row_size_functor {
  * @returns vector of size_type's that indicate row numbers for batch boundaries and a
  * device_uvector of row offsets
  */
-
 template <typename RowSize>
 batch_data build_batches(size_type num_rows, RowSize row_sizes, bool all_fixed_width,
                          rmm::cuda_stream_view stream, rmm::mr::device_memory_resource *mr) {
-  auto uint64_row_sizes =
-      cudf::detail::make_counting_transform_iterator(0, row_size_functor(row_sizes));
-  auto const total_size =
-      thrust::reduce(rmm::exec_policy(stream), uint64_row_sizes, uint64_row_sizes + num_rows);
+  auto const total_size = thrust::reduce(rmm::exec_policy(stream), row_sizes, row_sizes + num_rows);
   auto const num_batches = static_cast<int32_t>(
       util::div_rounding_up_safe(total_size, static_cast<uint64_t>(MAX_BATCH_SIZE)));
   auto const num_offsets = num_batches + 1;
@@ -1286,7 +1294,7 @@ batch_data build_batches(size_type num_rows, RowSize row_sizes, bool all_fixed_w
   batch_row_boundaries.push_back(0);
   size_type last_row_end = 0;
   device_uvector<uint64_t> cumulative_row_sizes(num_rows, stream);
-  thrust::inclusive_scan(rmm::exec_policy(stream), uint64_row_sizes, uint64_row_sizes + num_rows,
+  thrust::inclusive_scan(rmm::exec_policy(stream), row_sizes, row_sizes + num_rows,
                          cumulative_row_sizes.begin());
 
   while (static_cast<int>(batch_row_boundaries.size()) < num_offsets) {
@@ -1305,10 +1313,8 @@ batch_data build_batches(size_type num_rows, RowSize row_sizes, bool all_fixed_w
     auto const num_entries = row_end - last_row_end + 1;
     device_uvector<size_type> output_batch_row_offsets(num_entries, stream, mr);
 
-    auto row_size_iter_bounded = thrust::make_transform_iterator(
-        thrust::make_counting_iterator(0), [row_end, row_sizes, last_row_end] __device__(auto i) {
-          return i >= row_end ? 0 : row_sizes[i + last_row_end];
-        });
+    auto row_size_iter_bounded = cudf::detail::make_counting_transform_iterator(
+        0, row_size_functor(row_end, row_sizes, last_row_end));
 
     thrust::exclusive_scan(rmm::exec_policy(stream), row_size_iter_bounded,
                            row_size_iter_bounded + num_entries, output_batch_row_offsets.begin());
@@ -1568,13 +1574,7 @@ std::vector<std::unique_ptr<column>> convert_to_rows(table_view const &tbl,
   auto dev_col_starts = make_device_uvector_async(column_starts, stream, mr);
 
   // total encoded row size. This includes fixed-width data, validity, and variable-width data.
-  auto row_size_iter = cudf::detail::make_counting_transform_iterator(
-      0, [fixed_width_size_per_row, num_columns] __device__(auto i) {
-        auto const bytes_needed =
-            fixed_width_size_per_row + util::div_rounding_up_safe<size_type>(num_columns, 8);
-        return util::round_up_unsafe(bytes_needed, JCUDF_ROW_ALIGNMENT);
-      });
-
+  auto row_size_iter = thrust::make_constant_iterator<uint64_t>(fixed_width_size_per_row);
   auto batch_info = detail::build_batches(num_rows, row_size_iter, fixed_width_only, stream, mr);
 
   // the first batch always exists unless we were sent an empty table
@@ -1627,9 +1627,7 @@ std::vector<std::unique_ptr<column>> convert_to_rows(table_view const &tbl,
       util::div_rounding_up_unsafe(validity_tile_infos.size(), NUM_VALIDITY_TILES_PER_KERNEL));
   dim3 validity_threads(std::min(validity_tile_infos.size() * 32, 128lu));
 
-  auto const fixed_width_only_row_size = util::round_up_unsafe(
-      fixed_width_size_per_row + util::div_rounding_up_safe(num_columns, 8), 8);
-  detail::row_offset_functor offset_functor(fixed_width_only_row_size);
+  detail::row_offset_functor offset_functor(fixed_width_size_per_row);
 
   detail::copy_to_rows<<<blocks, threads, total_shmem_in_bytes, stream.value()>>>(
       num_rows, num_columns, shmem_limit_per_tile, gpu_tile_infos, dev_input_data.data(),
@@ -1764,14 +1762,10 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
   auto const fixed_width_size_per_row =
       detail::compute_column_information(iter, iter + num_columns, column_starts, column_sizes);
 
-  auto const validity_size = num_bitmask_words(num_columns) * 4;
-
-  auto const row_size =
-      util::round_up_unsafe(fixed_width_size_per_row + validity_size, JCUDF_ROW_ALIGNMENT);
-
   // Ideally we would check that the offsets are all the same, etc. but for now
   // this is probably fine
-  CUDF_EXPECTS(row_size * num_rows == child.size(), "The layout of the data appears to be off");
+  CUDF_EXPECTS(fixed_width_size_per_row * num_rows == child.size(),
+               "The layout of the data appears to be off");
   auto dev_col_starts = make_device_uvector_async(column_starts, stream, mr);
   auto dev_col_sizes = make_device_uvector_async(column_sizes, stream, mr);
 
@@ -1838,10 +1832,7 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
 
   dim3 validity_threads(std::min(validity_tile_infos.size() * 32, 128lu));
 
-  auto const fixed_width_only_row_size = util::round_up_unsafe(
-      fixed_width_size_per_row + util::div_rounding_up_safe(static_cast<size_type>(num_columns), 8),
-      8);
-  detail::row_offset_functor offset_functor(fixed_width_only_row_size);
+  detail::row_offset_functor offset_functor(fixed_width_size_per_row);
 
   detail::copy_from_rows<<<blocks, threads, total_shmem_in_bytes, stream.value()>>>(
       num_rows, num_columns, shmem_limit_per_tile, offset_functor, gpu_batch_row_boundaries.data(),
