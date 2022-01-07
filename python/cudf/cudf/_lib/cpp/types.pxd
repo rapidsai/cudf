@@ -103,3 +103,5 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
         HIGHER "cudf::interpolation::HIGHER"
         MIDPOINT "cudf::interpolation::MIDPOINT"
         NEAREST "cudf::interpolation::NEAREST"
+
+    ctypedef unsigned long long int128

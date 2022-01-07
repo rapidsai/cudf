@@ -190,16 +190,19 @@ cdef class DeviceScalar:
         cdtype = s.get_raw_ptr()[0].type()
         print(dtype, cdtype.id())
         if cdtype.id() == libcudf_types.DECIMAL64 and dtype is None:
+            print("193")
             raise TypeError(
                 "Must pass a dtype when constructing from a fixed-point scalar"
             )
         elif cdtype.id() == libcudf_types.STRUCT:
+            print("198")
             struct_table_view = (<struct_scalar*>s.get_raw_ptr())[0].view()
             s._dtype = StructDtype({
                 str(i): dtype_from_column_view(struct_table_view.column(i))
                 for i in range(struct_table_view.num_columns())
             })
         elif cdtype.id() == libcudf_types.LIST:
+            print("205")
             if (
                 <list_scalar*>s.get_raw_ptr()
             )[0].view().type().id() == libcudf_types.LIST:
@@ -216,7 +219,9 @@ cdef class DeviceScalar:
                     ]
                 )
         else:
+            print("222")
             if dtype is not None:
+                print("224", dtype, dtype.scale)
                 s._dtype = dtype
             else:
                 print(<underlying_type_t_type_id>(cdtype.id()))
@@ -335,7 +340,7 @@ cdef _set_decimal_from_scalar(unique_ptr[scalar]& s,
     elif isinstance(dtype, cudf.Decimal128Dtype):
         s.reset(
             new fixed_point_scalar[decimal128](
-                <int64_t>np.int64(value), scale_type(-dtype.scale), valid
+                <libcudf_types.int128>value, scale_type(-dtype.scale), valid
             )
         )
     else:
@@ -471,10 +476,11 @@ cdef _get_py_decimal_from_fixed_point(unique_ptr[scalar]& s):
         return cudf.NA
 
     cdef libcudf_types.data_type cdtype = s_ptr[0].type()
-
+    print(cdtype.scale())
     if cdtype.id() == libcudf_types.DECIMAL64:
         rep_val = int((<fixed_point_scalar[decimal64]*>s_ptr)[0].value())
         scale = int((<fixed_point_scalar[decimal64]*>s_ptr)[0].type().scale())
+        print(rep_val, scale)
         return decimal.Decimal(rep_val).scaleb(scale)
     elif cdtype.id() == libcudf_types.DECIMAL32:
         rep_val = int((<fixed_point_scalar[decimal32]*>s_ptr)[0].value())

@@ -45,6 +45,16 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return self
         return libcudf.unary.cast(self, dtype)
 
+    def as_string_column(
+        self, dtype: Dtype, format=None, **kwargs
+    ) -> "cudf.core.column.StringColumn":
+        if len(self) > 0:
+            return cpp_from_decimal(self)
+        else:
+            return cast(
+                "cudf.core.column.StringColumn", as_column([], dtype="object")
+            )
+
 
 class Decimal32Column(DecimalBaseColumn):
     dtype: Decimal32Dtype
@@ -267,16 +277,6 @@ class Decimal64Column(DecimalBaseColumn):
         self, dtype: Dtype, **kwargs
     ) -> "cudf.core.column.NumericalColumn":
         return libcudf.unary.cast(self, dtype)
-
-    def as_string_column(
-        self, dtype: Dtype, format=None, **kwargs
-    ) -> "cudf.core.column.StringColumn":
-        if len(self) > 0:
-            return cpp_from_decimal(self)
-        else:
-            return cast(
-                "cudf.core.column.StringColumn", as_column([], dtype="object")
-            )
 
     def fillna(
         self, value: Any = None, method: str = None, dtype: Dtype = None

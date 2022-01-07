@@ -59,6 +59,9 @@ cdef extern from "cudf/scalar/scalar.hpp" namespace "cudf" nogil:
         fixed_point_scalar(int64_t value,
                            scale_type scale,
                            bool is_valid) except +
+        fixed_point_scalar(data_type value,
+                           scale_type scale,
+                           bool is_valid) except +
         int64_t value() except +
         # TODO: Figure out how to add an int32 overload of value()
 
