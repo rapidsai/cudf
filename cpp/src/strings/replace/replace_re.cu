@@ -66,12 +66,12 @@ struct replace_regex_fn {
     auto const d_str = d_strings.element<string_view>(idx);
     auto nbytes      = d_str.size_bytes();                  // number of bytes in input string
     auto mxn = maxrepl < 0 ? d_str.length() + 1 : maxrepl;  // max possible replaces for this string
-    auto in_ptr  = d_str.data();                            // input pointer (i)
-    auto out_ptr = d_chars ? d_chars + d_offsets[idx] : nullptr;  // output pointer (o)
-
-    size_type lpos = 0;
-    int32_t begin  = 0;
-    int32_t end    = -1;  // matches final word-boundary if at the end of the string
+    auto in_ptr        = d_str.data();                      // input pointer (i)
+    auto out_ptr       = d_chars ? d_chars + d_offsets[idx]  // output pointer (o)
+                                 : nullptr;
+    size_type last_pos = 0;
+    int32_t begin      = 0;   // these are for calling prog.find
+    int32_t end        = -1;  // matches final word-boundary if at the end of the string
 
     // copy input to output replacing strings as we go
     while (mxn-- > 0)  // maximum number of replaces
@@ -80,23 +80,28 @@ struct replace_regex_fn {
         break;  // no more matches
       }
 
-      auto spos = d_str.byte_offset(begin);           // get offset for these
-      auto epos = d_str.byte_offset(end);             // character position values
-      nbytes += d_repl.size_bytes() - (epos - spos);  // and compute new size
+      auto const start_pos = d_str.byte_offset(begin);        // get offset for these
+      auto const end_pos   = d_str.byte_offset(end);          // character position values
+      nbytes += d_repl.size_bytes() - (end_pos - start_pos);  // and compute new size
 
-      if (out_ptr)                                                          // replace:
-      {                                                                     // i:bbbbsssseeee
-        out_ptr = copy_and_increment(out_ptr, in_ptr + lpos, spos - lpos);  // o:bbbb
-        out_ptr = copy_string(out_ptr, d_repl);                             // o:bbbbrrrrrr
-                                                                            //  out_ptr ---^
-        lpos = epos;                                                        // i:bbbbsssseeee
-      }                                                                     //  in_ptr --^
+      if (out_ptr)                                           // replace:
+      {                                                      // i:bbbbsssseeee
+        out_ptr = copy_and_increment(out_ptr,                //   ^
+                                     in_ptr + last_pos,      // o:bbbb
+                                     start_pos - last_pos);  //       ^
+        out_ptr = copy_string(out_ptr, d_repl);              // o:bbbbrrrrrr
+                                                             //  out_ptr ---^
+        last_pos = end_pos;                                  // i:bbbbsssseeee
+      }                                                      //  in_ptr --^
+
       begin = end + (begin == end);
       end   = -1;
     }
 
-    if (out_ptr) {                                                // copy the remainder
-      memcpy(out_ptr, in_ptr + lpos, d_str.size_bytes() - lpos);  // o:bbbbrrrrrreeee
+    if (out_ptr) {
+      memcpy(out_ptr,                         // copy the remainder
+             in_ptr + last_pos,               // o:bbbbrrrrrreeee
+             d_str.size_bytes() - last_pos);  //             ^   ^
     } else {
       d_offsets[idx] = static_cast<int32_t>(nbytes);
     }
