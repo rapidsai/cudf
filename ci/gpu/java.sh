@@ -86,6 +86,10 @@ gpuci_mamba_retry install -y \
                   "ucx-py=${UCX_PY_VERSION}" \
                   "openjdk=8.*" \
                   "maven"
+# "mamba install openjdk" adds an activation script to set JAVA_HOME but this is
+# not triggered on installation. Re-activating the conda environment will set
+# this environment variable so that CMake can find JNI.
+conda activate rapids
 
 # https://docs.rapids.ai/maintainers/depmgmt/
 # gpuci_conda_retry remove --force rapids-build-env rapids-notebook-env
