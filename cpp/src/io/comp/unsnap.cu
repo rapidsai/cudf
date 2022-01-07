@@ -707,6 +707,17 @@ __global__ void __launch_bounds__(block_size)
   }
 }
 
+__global__ void snappy_decompress_check(gpu_inflate_status_s* outputs,
+                                        int count,
+                                        bool* any_page_failure) {
+  auto tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid < count) {
+    if (outputs[tid].status != 0) {
+      any_page_failure[0] = true; // Doesn't need to be atomic
+    }
+  }
+}
+
 cudaError_t __host__ gpu_unsnap(gpu_inflate_input_s* inputs,
                                 gpu_inflate_status_s* outputs,
                                 int count,
