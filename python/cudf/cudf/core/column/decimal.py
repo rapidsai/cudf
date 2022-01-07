@@ -45,6 +45,48 @@ class DecimalBaseColumn(NumericalBaseColumn):
             return self
         return libcudf.unary.cast(self, dtype)
 
+    def binary_operator(self, op, other, reflect=False):
+        if reflect:
+            self, other = other, self
+
+        # Binary Arithmetics between decimal columns. `Scale` and `precision`
+        # are computed outside of libcudf
+        if op in ("add", "sub", "mul", "div"):
+            scale = _binop_scale(self.dtype, other.dtype, op)
+            output_type = Decimal64Dtype(
+                scale=scale, precision=Decimal64Dtype.MAX_PRECISION
+            )
+            result = libcudf.binaryop.binaryop(self, other, op, output_type)
+            result.dtype.precision = _binop_precision(
+                self.dtype, other.dtype, op
+            )
+        elif op in ("eq", "ne", "lt", "gt", "le", "ge"):
+            if not isinstance(
+                other,
+                (
+                    Decimal32Column,
+                    Decimal64Column,
+                    cudf.core.column.NumericalColumn,
+                    cudf.Scalar,
+                ),
+            ):
+                raise TypeError(
+                    f"Operator {op} not supported between"
+                    f"{str(type(self))} and {str(type(other))}"
+                )
+            if isinstance(
+                other, cudf.core.column.NumericalColumn
+            ) and not is_integer_dtype(other.dtype):
+                raise TypeError(
+                    f"Only decimal and integer column is supported for {op}."
+                )
+            if isinstance(other, cudf.core.column.NumericalColumn):
+                other = other.as_decimal_column(
+                    Decimal64Dtype(Decimal64Dtype.MAX_PRECISION, 0)
+                )
+            result = libcudf.binaryop.binaryop(self, other, op, bool)
+        return result
+
 
 class Decimal32Column(DecimalBaseColumn):
     dtype: Decimal32Dtype
@@ -155,47 +197,6 @@ class Decimal64Column(DecimalBaseColumn):
             length=self.size,
             buffers=[mask_buf, data_buf],
         )
-
-    def binary_operator(self, op, other, reflect=False):
-        if reflect:
-            self, other = other, self
-
-        # Binary Arithmetics between decimal columns. `Scale` and `precision`
-        # are computed outside of libcudf
-        if op in ("add", "sub", "mul", "div"):
-            scale = _binop_scale(self.dtype, other.dtype, op)
-            output_type = Decimal64Dtype(
-                scale=scale, precision=Decimal64Dtype.MAX_PRECISION
-            )  # precision will be ignored, libcudf has no notion of precision
-            result = libcudf.binaryop.binaryop(self, other, op, output_type)
-            result.dtype.precision = _binop_precision(
-                self.dtype, other.dtype, op
-            )
-        elif op in ("eq", "ne", "lt", "gt", "le", "ge"):
-            if not isinstance(
-                other,
-                (
-                    Decimal64Column,
-                    cudf.core.column.NumericalColumn,
-                    cudf.Scalar,
-                ),
-            ):
-                raise TypeError(
-                    f"Operator {op} not supported between"
-                    f"{str(type(self))} and {str(type(other))}"
-                )
-            if isinstance(
-                other, cudf.core.column.NumericalColumn
-            ) and not is_integer_dtype(other.dtype):
-                raise TypeError(
-                    f"Only decimal and integer column is supported for {op}."
-                )
-            if isinstance(other, cudf.core.column.NumericalColumn):
-                other = other.as_decimal_column(
-                    Decimal64Dtype(Decimal64Dtype.MAX_PRECISION, 0)
-                )
-            result = libcudf.binaryop.binaryop(self, other, op, bool)
-        return result
 
     def normalize_binop_value(self, other):
         if is_scalar(other) and isinstance(other, (int, np.int, Decimal)):
