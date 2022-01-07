@@ -3,9 +3,10 @@
 
 from __future__ import annotations
 
+import operator
 import warnings
 from collections import abc
-from typing import Type, TypeVar
+from typing import Callable, Type, TypeVar
 from uuid import uuid4
 
 import cupy as cp
@@ -109,6 +110,7 @@ class IndexedFrame(Frame):
     # mypy can't handle bound type variables as class members
     _loc_indexer_type: Type[_LocIndexerClass]  # type: ignore
     _iloc_indexer_type: Type[_IlocIndexerClass]  # type: ignore
+    _index: cudf.core.index.BaseIndex
 
     def __init__(self, data=None, index=None):
         super().__init__(data=data, index=index)
@@ -442,6 +444,70 @@ class IndexedFrame(Frame):
         if ignore_index is True:
             out = out.reset_index(drop=True)
         return self._mimic_inplace(out, inplace=inplace)
+
+    def hash_values(self, method="murmur3"):
+        """Compute the hash of values in this column.
+
+        Parameters
+        ----------
+        method : {'murmur3', 'md5'}, default 'murmur3'
+            Hash function to use:
+            * murmur3: MurmurHash3 hash function.
+            * md5: MD5 hash function.
+
+        Returns
+        -------
+        Series
+            A Series with hash values.
+
+        Examples
+        --------
+        **Series**
+
+        >>> import cudf
+        >>> series = cudf.Series([10, 120, 30])
+        >>> series
+        0     10
+        1    120
+        2     30
+        dtype: int64
+        >>> series.hash_values(method="murmur3")
+        0   -1930516747
+        1     422619251
+        2    -941520876
+        dtype: int32
+        >>> series.hash_values(method="md5")
+        0    7be4bbacbfdb05fb3044e36c22b41e8b
+        1    947ca8d2c5f0f27437f156cfbfab0969
+        2    d0580ef52d27c043c8e341fd5039b166
+        dtype: object
+
+        **DataFrame**
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({"a": [10, 120, 30], "b": [0.0, 0.25, 0.50]})
+        >>> df
+             a     b
+        0   10  0.00
+        1  120  0.25
+        2   30  0.50
+        >>> df.hash_values(method="murmur3")
+        0    -330519225
+        1    -397962448
+        2   -1345834934
+        dtype: int32
+        >>> df.hash_values(method="md5")
+        0    57ce879751b5169c525907d5c563fae1
+        1    948d6221a7c4963d4be411bcead7e32b
+        2    fe061786ea286a515b772d91b0dfcd70
+        dtype: object
+        """
+        # Note that both Series and DataFrame return Series objects from this
+        # calculation, necessitating the unfortunate circular reference to the
+        # child class here.
+        return cudf.Series._from_data(
+            {None: libcudf.hash.hash(self, method)}, index=self.index
+        )
 
     def _gather(
         self, gather_map, keep_index=True, nullify=False, check_bounds=True
@@ -1103,4 +1169,126 @@ class IndexedFrame(Frame):
             cudf.core.resample.SeriesResampler(self, by=by)
             if isinstance(self, cudf.Series)
             else cudf.core.resample.DataFrameResampler(self, by=by)
+        )
+
+    def _first_or_last(
+        self, offset, idx: int, op: Callable, side: str, slice_func: Callable
+    ) -> "IndexedFrame":
+        """Shared code path for ``first`` and ``last``."""
+        if not isinstance(self._index, cudf.core.index.DatetimeIndex):
+            raise TypeError("'first' only supports a DatetimeIndex index.")
+        if not isinstance(offset, str):
+            raise NotImplementedError(
+                f"Unsupported offset type {type(offset)}."
+            )
+
+        if len(self) == 0:
+            return self.copy()
+
+        pd_offset = pd.tseries.frequencies.to_offset(offset)
+        to_search = op(pd.Timestamp(self._index._column[idx]), pd_offset)
+        if (
+            idx == 0
+            and not isinstance(pd_offset, pd.tseries.offsets.Tick)
+            and pd_offset.is_on_offset(pd.Timestamp(self._index[0]))
+        ):
+            # Special handle is required when the start time of the index
+            # is on the end of the offset. See pandas gh29623 for detail.
+            to_search = to_search - pd_offset.base
+            return self.loc[:to_search]
+        end_point = int(
+            self._index._column.searchsorted(to_search, side=side)[0]
+        )
+        return slice_func(end_point)
+
+    def first(self, offset):
+        """Select initial periods of time series data based on a date offset.
+
+        When having a DataFrame with **sorted** dates as index, this function
+        can select the first few rows based on a date offset.
+
+        Parameters
+        ----------
+        offset: str
+            The offset length of the data that will be selected. For intance,
+            '1M' will display all rows having their index within the first
+            month.
+
+        Returns
+        -------
+        Series or DataFrame
+            A subset of the caller.
+
+        Raises
+        ------
+        TypeError
+            If the index is not a ``DatetimeIndex``
+
+        Examples
+        --------
+        >>> i = cudf.date_range('2018-04-09', periods=4, freq='2D')
+        >>> ts = cudf.DataFrame({'A': [1, 2, 3, 4]}, index=i)
+        >>> ts
+                    A
+        2018-04-09  1
+        2018-04-11  2
+        2018-04-13  3
+        2018-04-15  4
+        >>> ts.first('3D')
+                    A
+        2018-04-09  1
+        2018-04-11  2
+        """
+        return self._first_or_last(
+            offset,
+            idx=0,
+            op=operator.__add__,
+            side="left",
+            slice_func=lambda i: self.iloc[:i],
+        )
+
+    def last(self, offset):
+        """Select final periods of time series data based on a date offset.
+
+        When having a DataFrame with **sorted** dates as index, this function
+        can select the last few rows based on a date offset.
+
+        Parameters
+        ----------
+        offset: str
+            The offset length of the data that will be selected. For instance,
+            '3D' will display all rows having their index within the last 3
+            days.
+
+        Returns
+        -------
+        Series or DataFrame
+            A subset of the caller.
+
+        Raises
+        ------
+        TypeError
+            If the index is not a ``DatetimeIndex``
+
+        Examples
+        --------
+        >>> i = cudf.date_range('2018-04-09', periods=4, freq='2D')
+        >>> ts = cudf.DataFrame({'A': [1, 2, 3, 4]}, index=i)
+        >>> ts
+                    A
+        2018-04-09  1
+        2018-04-11  2
+        2018-04-13  3
+        2018-04-15  4
+        >>> ts.last('3D')
+                    A
+        2018-04-13  3
+        2018-04-15  4
+        """
+        return self._first_or_last(
+            offset,
+            idx=-1,
+            op=operator.__sub__,
+            side="right",
+            slice_func=lambda i: self.iloc[i:],
         )

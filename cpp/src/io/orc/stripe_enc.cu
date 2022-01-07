@@ -414,7 +414,7 @@ static __device__ uint32_t IntegerRLE(
         uint32_t mode1_w, mode2_w;
         typename std::make_unsigned<T>::type vrange_mode1, vrange_mode2;
         block_vmin = static_cast<uint64_t>(vmin);
-        if (sizeof(T) > 4) {
+        if constexpr (sizeof(T) > 4) {
           vrange_mode1 = (is_signed) ? max(zigzag(vmin), zigzag(vmax)) : vmax;
           vrange_mode2 = vmax - vmin;
           mode1_w      = 8 - min(CountLeadingBytes64(vrange_mode1), 7);
@@ -705,10 +705,7 @@ static __device__ void encode_null_mask(orcenc_state_s* s,
   }
 
   // reset shared state
-  if (t == 0) {
-    s->nnz     = 0;
-    s->numvals = 0;
-  }
+  if (t == 0) { s->nnz = 0; }
 }
 
 /**
