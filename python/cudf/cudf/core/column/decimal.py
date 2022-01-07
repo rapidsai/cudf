@@ -53,9 +53,14 @@ class DecimalBaseColumn(NumericalBaseColumn):
         # are computed outside of libcudf
         if op in ("add", "sub", "mul", "div"):
             scale = _binop_scale(self.dtype, other.dtype, op)
-            output_type = Decimal64Dtype(
-                scale=scale, precision=Decimal64Dtype.MAX_PRECISION
-            )
+            if self.dtype == other.dtype == cudf.Decimal32Dtype:
+                output_type = Decimal32Dtype(
+                    scale=scale, precision=Decimal32Dtype.MAX_PRECISION
+                )
+            if self.dtype == other.dtype == cudf.Decimal64Dtype:
+                output_type = Decimal64Dtype(
+                    scale=scale, precision=Decimal64Dtype.MAX_PRECISION
+                )
             result = libcudf.binaryop.binaryop(self, other, op, output_type)
             result.dtype.precision = _binop_precision(
                 self.dtype, other.dtype, op
@@ -322,4 +327,7 @@ def _binop_precision(l_dtype, r_dtype, op):
     else:
         raise NotImplementedError()
     # TODO
-    return min(result, cudf.Decimal64Dtype.MAX_PRECISION)
+    if l_dtype == r_dtype == Decimal32Dtype:
+        return min(result, cudf.Decimal32Dtype.MAX_PRECISION)
+    if l_dtype == r_dtype == Decimal64Dtype:
+        return min(result, cudf.Decimal64Dtype.MAX_PRECISION)
