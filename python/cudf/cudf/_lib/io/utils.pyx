@@ -85,11 +85,13 @@ cdef sink_info make_sinks_info(
     cdef vector[data_sink *] data_sinks
     cdef vector[string] paths
     if isinstance(src[0], io.StringIO):
+        data_sinks.reserve(len(src))
         for s in src:
             sink.push_back(unique_ptr[data_sink](new iobase_data_sink(s)))
             data_sinks.push_back(sink.back().get())
         return sink_info(data_sinks)
     elif isinstance(src[0], io.TextIOBase):
+        data_sinks.reserve(len(src))
         for s in src:
             # Files opened in text mode expect writes to be str rather than
             # bytes, which requires conversion from utf-8. If the underlying
@@ -103,11 +105,13 @@ cdef sink_info make_sinks_info(
             data_sinks.push_back(sink.back().get())
         return sink_info(data_sinks)
     elif isinstance(src[0], io.IOBase):
+        data_sinks.reserve(len(src))
         for s in src:
             sink.push_back(unique_ptr[data_sink](new iobase_data_sink(s)))
             data_sinks.push_back(sink.back().get())
         return sink_info(data_sinks)
     elif isinstance(src[0], (basestring, os.PathLike)):
+        paths.reserve(len(src))
         for s in src:
             paths.push_back(<string> os.path.expanduser(s).encode())
         return sink_info(move(paths))
