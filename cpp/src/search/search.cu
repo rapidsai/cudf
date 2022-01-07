@@ -175,6 +175,7 @@ bool contains_scalar_dispatch::operator()<cudf::struct_view>(column_view const& 
                                                              scalar const& value,
                                                              rmm::cuda_stream_view stream)
 {
+  CUDF_EXPECTS(col.type() == value.type(), "scalar and column types must match");
   auto const scalar_table = static_cast<struct_scalar const*>(&value)->view();
   CUDF_EXPECTS(col.num_children() == scalar_table.num_columns(),
                "struct scalar and structs column must have the same number of children");
@@ -237,8 +238,6 @@ bool contains_scalar_dispatch::operator()<cudf::dictionary32>(column_view const&
 namespace detail {
 bool contains(column_view const& col, scalar const& value, rmm::cuda_stream_view stream)
 {
-  CUDF_EXPECTS(col.type() == value.type(), "scalar and column types must match");
-
   if (col.is_empty()) { return false; }
   if (not value.is_valid(stream)) { return col.has_nulls(); }
 
