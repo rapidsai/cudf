@@ -1,11 +1,9 @@
 import math
-from typing import Callable
 
-import cachetools
 import numpy as np
 from numba import cuda
 from numba.np import numpy_support
-from numba.types import Poison, Record
+from numba.types import Record
 from nvtx import annotate
 
 from cudf.core.udf.api import Masked, pack_return
@@ -19,29 +17,13 @@ from cudf.core.udf.typing import MaskedType
 from cudf.core.udf.utils import (
     all_dtypes_from_frame,
     construct_signature,
+    generate_cache_key,
     get_udf_return_type,
     mask_get,
+    precompiled,
     supported_cols_from_frame,
     supported_dtypes_from_frame,
 )
-from cudf.utils import cudautils
-
-precompiled: cachetools.LRUCache = cachetools.LRUCache(maxsize=32)
-
-
-def generate_cache_key(frame, func: Callable):
-    """Create a cache key that uniquely identifies a compilation.
-
-    A new compilation is needed any time any of the following things change:
-    - The UDF itself as defined in python by the user
-    - The types of the columns utilized by the UDF
-    - The existence of the input columns masks
-    """
-    return (
-        *cudautils.make_cache_key(func, all_dtypes_from_frame(frame).values()),
-        *(col.mask is None for col in frame._data.values()),
-        *frame._data.keys(),
-    )
 
 
 def get_frame_row_type(dtype):
@@ -200,18 +182,6 @@ def compile_or_get_row_function(frame, func, args):
         np.dtype(list(all_dtypes_from_frame(frame).items()))
     )
     scalar_return_type = get_udf_return_type(row_type, func, args)
-
-    # get_udf_return_type will throw a TypingError if the user tries to use
-    # a field in the row containing an unsupported dtype, except in the
-    # edge case where all the function does is return that element:
-
-    # def f(row):
-    #    return row[<bad dtype key>]
-    # In this case numba is happy to return MaskedType(<bad dtype key>)
-    # because it relies on not finding overloaded operators for types to raise
-    # the exception, so we have to explicitly check for that case.
-    if isinstance(scalar_return_type, Poison):
-        raise TypeError(str(scalar_return_type))
 
     # this is the signature for the final full kernel compilation
     sig = construct_signature(frame, scalar_return_type, args)
