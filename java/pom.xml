@@ -381,6 +381,7 @@
                                 <exec dir="${native.build.path}"
                                       failonerror="true"
                                       executable="cmake">
+                                    <arg value="--trace-expand"/>
                                     <arg value="${basedir}/src/main/native"/>
                                     <arg value="-DCUDA_STATIC_RUNTIME=${CUDA_STATIC_RUNTIME}" />
                                     <arg value="-DPER_THREAD_DEFAULT_STREAM=${PER_THREAD_DEFAULT_STREAM}" />
