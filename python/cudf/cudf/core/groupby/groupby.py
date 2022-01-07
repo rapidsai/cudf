@@ -655,6 +655,30 @@ class GroupBy(Serializable):
         kwargs.update({"chunks": offsets})
         return grouped_values.apply_chunks(function, **kwargs)
 
+    def transform(self, function):
+        """Apply an aggregation, then broadcast the result to the group size.
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        """
+        try:
+            # first, try aggregating:
+            result = self.agg(function)
+        except TypeError as e:
+            raise NotImplementedError(
+                "Currently, `transform()` supports only aggregations."
+            ) from e
+
+        if not result.index.equals(self.grouping.keys):
+            result = result._align_to_index(
+                self.grouping.keys, how="right", allow_non_unique=True
+            )
+            result = result.reset_index(drop=True)
+        return result
+
     def rolling(self, *args, **kwargs):
         """
         Returns a `RollingGroupby` object that enables rolling window
