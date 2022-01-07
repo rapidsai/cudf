@@ -206,7 +206,7 @@ class writer::impl {
   // TODO : figure out if we want to keep this. It is currently unused.
   rmm::mr::device_memory_resource* _mr = nullptr;
   // Cuda stream to be used
-  rmm::cuda_stream_view stream = rmm::cuda_stream_default;
+  rmm::cuda_stream_view stream;
 
   size_t max_row_group_size          = default_row_group_size_bytes;
   size_type max_row_group_rows       = default_row_group_size_rows;

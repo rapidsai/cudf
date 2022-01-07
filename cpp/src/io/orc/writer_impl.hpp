@@ -349,7 +349,7 @@ class writer::impl {
  private:
   rmm::mr::device_memory_resource* _mr = nullptr;
   // Cuda stream to be used
-  rmm::cuda_stream_view stream = rmm::cuda_stream_default;
+  rmm::cuda_stream_view stream;
 
   stripe_size_limits max_stripe_size;
   size_type row_index_stride;
