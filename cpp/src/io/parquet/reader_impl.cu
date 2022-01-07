@@ -997,10 +997,23 @@ void reader::impl::decode_page_headers(hostdevice_vector<gpu::ColumnChunkDesc>& 
   pages.device_to_host(stream, true);
 }
 
+__global__ void nvcomp_snappy_decompress_check(nvcompStatus_t* statuses,
+                                               size_t num_pages,
+                                               bool* any_page_failure)
+{
+  auto tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid < num_pages) {
+    if (statuses[tid] != nvcompSuccess) {
+      any_page_failure[0] = true; // Doesn't need to be atomic
+    }
+  }
+}
+
 void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
                        device_span<gpu_inflate_status_s> comp_stat,
                        size_t max_uncomp_page_size,
-                       rmm::cuda_stream_view stream)
+                       rmm::cuda_stream_view stream,
+                       bool* any_page_failure)
 {
   size_t num_comp_pages = comp_in.size();
   size_t temp_size;
@@ -1052,16 +1065,11 @@ void snappy_decompress(device_span<gpu_inflate_input_s> comp_in,
   CUDF_EXPECTS(nvcomp_status == nvcompStatus_t::nvcompSuccess,
                "unable to perform snappy decompression");
 
-  CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
-                             uncompressed_data_sizes.begin(),
-                             uncompressed_data_sizes.end(),
-                             actual_uncompressed_data_sizes.begin()),
-               "Mismatch in expected and actual decompressed size during snappy decompression");
-  CUDF_EXPECTS(thrust::equal(rmm::exec_policy(stream),
-                             statuses.begin(),
-                             statuses.end(),
-                             thrust::make_constant_iterator(nvcompStatus_t::nvcompSuccess)),
-               "Error during snappy decompression");
+  dim3 block(128);
+  dim3 grid((num_comp_pages + block.x - 1) / block.x);
+  nvcomp_snappy_decompress_check<<<grid, block, 0, stream.value()>>>(statuses.data(),
+                                                                      num_comp_pages,
+                                                                      any_page_failure);
 }
 
 /**
@@ -1119,6 +1127,10 @@ rmm::device_buffer reader::impl::decompress_page_data(
   hostdevice_vector<gpu_inflate_input_s> inflate_in(0, num_comp_pages, stream);
   hostdevice_vector<gpu_inflate_status_s> inflate_out(0, num_comp_pages, stream);
 
+  hostdevice_vector<bool> any_page_failure(1, stream);
+  any_page_failure[0] = false;
+  any_page_failure.host_to_device(stream);
+
   device_span<gpu_inflate_input_s> inflate_in_view(inflate_in.device_ptr(), inflate_in.size());
   device_span<gpu_inflate_status_s> inflate_out_view(inflate_out.device_ptr(), inflate_out.size());
 
@@ -1168,12 +1180,14 @@ rmm::device_buffer reader::impl::decompress_page_data(
             snappy_decompress(inflate_in_view.subspan(start_pos, argc - start_pos),
                               inflate_out_view.subspan(start_pos, argc - start_pos),
                               codec.max_decompressed_size,
-                              stream);
+                              stream,
+                              any_page_failure.device_ptr());
           } else {
             CUDA_TRY(gpu_unsnap(inflate_in.device_ptr(start_pos),
                                 inflate_out.device_ptr(start_pos),
                                 argc - start_pos,
-                                stream));
+                                stream,
+                                any_page_failure.device_ptr()));
           }
           break;
         case parquet::BROTLI:
@@ -1193,7 +1207,9 @@ rmm::device_buffer reader::impl::decompress_page_data(
                                stream.value()));
     }
   }
-  stream.synchronize();
+
+  any_page_failure.device_to_host(stream, true); // synchronizes stream
+  CUDF_EXPECTS(any_page_failure[0] == false,  "Error during snappy decompression");
 
   // Update the page information in device memory with the updated value of
   // page_data; it now points to the uncompressed data buffer

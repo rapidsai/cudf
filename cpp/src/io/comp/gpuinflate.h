@@ -80,11 +80,13 @@ cudaError_t gpu_copy_uncompressed_blocks(gpu_inflate_input_s* inputs,
  * @param[out] outputs List of output status structures
  * @param[in] count Number of input/output structures, default 1
  * @param[in] stream CUDA stream to use, default 0
+ * @param[in] any_page_failure Indicates whether there was a failure decompressing any of the pages
  */
 cudaError_t gpu_unsnap(gpu_inflate_input_s* inputs,
                        gpu_inflate_status_s* outputs,
                        int count                    = 1,
-                       rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                       rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+                       bool* any_page_failure = nullptr);
 
 /**
  * @brief Computes the size of temporary memory for Brotli decompression

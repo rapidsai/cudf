@@ -707,16 +707,31 @@ __global__ void __launch_bounds__(block_size)
   }
 }
 
+__global__ void snappy_decompress_check(gpu_inflate_status_s* outputs,
+                                        int count,
+                                        bool* any_page_failure) {
+  auto tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid < count) {
+    if (outputs[tid].status != 0) {
+      any_page_failure[0] = true; // Doesn't need to be atomic
+    }
+  }
+}
+
 cudaError_t __host__ gpu_unsnap(gpu_inflate_input_s* inputs,
                                 gpu_inflate_status_s* outputs,
                                 int count,
-                                rmm::cuda_stream_view stream)
+                                rmm::cuda_stream_view stream,
+                                bool* any_page_failure)
 {
   uint32_t count32 = (count > 0) ? count : 0;
   dim3 dim_block(128, 1);     // 4 warps per stream, 1 stream per block
   dim3 dim_grid(count32, 1);  // TODO: Check max grid dimensions vs max expected count
 
   unsnap_kernel<128><<<dim_grid, dim_block, 0, stream.value()>>>(inputs, outputs);
+
+  dim3 grid((count + dim_block.x - 1) / dim_block.x);
+  snappy_decompress_check<<<grid, dim_block, 0, stream.value()>>>(outputs, count, any_page_failure);
 
   return cudaSuccess;
 }
