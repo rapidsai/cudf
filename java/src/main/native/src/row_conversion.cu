@@ -106,7 +106,7 @@ namespace detail {
  * NUM_TILES_PER_KERNEL_LOADED tiles at one time. The block will load
  * as many tiles as it can fit into shared memory and then wait on the
  * first tile to completely load before processing. Processing in this
- * case means coping the data from shared memory back out to device
+ * case means copying the data from shared memory back out to device
  * memory via memcpy_async. This kernel is completely memory bound.
  *
  * Batch Data:
