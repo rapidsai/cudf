@@ -4,7 +4,6 @@ import numpy as np
 from numba import cuda
 from numba.np import numpy_support
 from numba.types import Record
-from nvtx import annotate
 
 from cudf.core.udf.api import Masked, pack_return
 from cudf.core.udf.templates import (
@@ -17,10 +16,8 @@ from cudf.core.udf.typing import MaskedType
 from cudf.core.udf.utils import (
     all_dtypes_from_frame,
     construct_signature,
-    generate_cache_key,
     get_udf_return_type,
     mask_get,
-    precompiled,
     supported_cols_from_frame,
     supported_dtypes_from_frame,
 )
@@ -74,7 +71,7 @@ def get_frame_row_type(dtype):
     return Record(fields, offset, _is_aligned_struct)
 
 
-def _define_function(frame, row_type, args):
+def make_row_kernel(frame, row_type, args):
     """
     The kernel we want to JIT compile looks something like the following,
     which is an example for two columns that both have nulls present
@@ -146,38 +143,7 @@ def _define_function(frame, row_type, args):
     return row_kernel_template.format(**d)
 
 
-@annotate("UDF COMPILATION", color="darkgreen", domain="cudf_python")
-def compile_or_get_row_function(frame, func, args):
-    """
-    Return a compiled kernel in terms of MaskedTypes that launches a
-    kernel equivalent of `f` for the dtypes of `df`. The kernel uses
-    a thread for each row and calls `f` using that rows data / mask
-    to produce an output value and output validity for each row.
-
-    If the UDF has already been compiled for this requested dtypes,
-    a cached version will be returned instead of running compilation.
-
-    CUDA kernels are void and do not return values. Thus, we need to
-    preallocate a column of the correct dtype and pass it in as one of
-    the kernel arguments. This creates a chicken-and-egg problem where
-    we need the column type to compile the kernel, but normally we would
-    be getting that type FROM compiling the kernel (and letting numba
-    determine it as a return value). As a workaround, we compile the UDF
-    itself outside the final kernel to invoke a full typing pass, which
-    unfortunately is difficult to do without running full compilation.
-    we then obtain the return type from that separate compilation and
-    use it to allocate an output column of the right dtype.
-    """
-
-    # check to see if we already compiled this function
-    cache_key = generate_cache_key(frame, func)
-    if precompiled.get(cache_key) is not None:
-        kernel, masked_or_scalar = precompiled[cache_key]
-        return kernel, masked_or_scalar
-
-    # precompile the user udf to get the right return type.
-    # could be a MaskedType or a scalar type.
-
+def get_row_kernel(frame, func, args):
     row_type = get_frame_row_type(
         np.dtype(list(all_dtypes_from_frame(frame).items()))
     )
@@ -202,15 +168,11 @@ def compile_or_get_row_function(frame, func, args):
         "pack_return": pack_return,
         "row_type": row_type,
     }
-    exec(
-        _define_function(frame, row_type, args),
-        global_exec_context,
-        local_exec_context,
-    )
+
+    kernel_string = make_row_kernel(frame, row_type, args)
+    exec(kernel_string, global_exec_context, local_exec_context)
     # The python function definition representing the kernel
     _kernel = local_exec_context["_kernel"]
     kernel = cuda.jit(sig)(_kernel)
-    np_return_type = numpy_support.as_dtype(scalar_return_type)
-    precompiled[cache_key] = (kernel, np_return_type)
 
-    return kernel, np_return_type
+    return kernel, scalar_return_type

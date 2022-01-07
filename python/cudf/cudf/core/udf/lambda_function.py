@@ -10,14 +10,12 @@ from cudf.core.udf.templates import (
 from cudf.core.udf.typing import MaskedType
 from cudf.core.udf.utils import (
     construct_signature,
-    generate_cache_key,
     get_udf_return_type,
     mask_get,
-    precompiled,
 )
 
 
-def make_kernel(sr, args):
+def make_lambda_kernel(sr, args):
     """
     Function to write numba kernels for `Series.apply` as a string.
     Workaround until numba supports functions that use `*args`
@@ -32,19 +30,19 @@ def make_kernel(sr, args):
     can be only one column, the only thing that varies in the kinds of
     kernels that we want is the number of extra_args
 
-    def _kernel(retval, 
-                size, 
-                input_col_0, 
-                offset_0,    
+    def _kernel(retval,
+                size,
+                input_col_0,
+                offset_0,
                 extra_arg_0, # the extra arg `c`
                 extra_arg_1, # the extra arg `k`
     ):
         i = cuda.grid(1)
         ret_data_arr, ret_mask_arr = retval
-        
+
         if i < size:
             d_0, m_0 = input_col_0
-            masked_0 = Masked(d_0[i], mask_get(m_0, i + offset_0))
+            masked_0 = Masked(d_0[i], mask_get(m_0, i + offset_0)
 
             ret = f_(masked_0, extra_arg_0, extra_arg_1)
 
@@ -67,16 +65,8 @@ def make_kernel(sr, args):
     )
 
 
-def compile_or_get_lambda_function(sr, func, *args):
-
-    # check to see if we already compiled this function
-    cache_key = generate_cache_key(sr, func)
-    if precompiled.get(cache_key) is not None:
-        kernel, masked_or_scalar = precompiled[cache_key]
-        return kernel, masked_or_scalar
-
+def get_lambda_kernel(sr, func, args):
     sr_type = MaskedType(numpy_support.from_dtype(sr.dtype))
-
     scalar_return_type = get_udf_return_type(sr_type, func, args)
 
     sig = construct_signature(sr, scalar_return_type, args=args)
@@ -90,13 +80,12 @@ def compile_or_get_lambda_function(sr, func, *args):
         "pack_return": pack_return,
     }
     exec(
-        make_kernel(sr, args=args), global_exec_context, local_exec_context,
+        make_lambda_kernel(sr, args=args),
+        global_exec_context,
+        local_exec_context,
     )
 
-    _kernel = local_exec_context["_kernel"]
-    kernel = cuda.jit(sig)(_kernel)
-    np_return_type = numpy_support.as_dtype(scalar_return_type)
+    kernel_string = local_exec_context["_kernel"]
+    kernel = cuda.jit(sig)(kernel_string)
 
-    precompiled[cache_key] = (kernel, np_return_type)
-
-    return kernel, np_return_type
+    return kernel, scalar_return_type

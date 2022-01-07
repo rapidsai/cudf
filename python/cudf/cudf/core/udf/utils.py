@@ -160,3 +160,43 @@ def generate_cache_key(frame, func: Callable):
         *(col.mask is None for col in frame._data.values()),
         *frame._data.keys(),
     )
+
+
+@annotate("UDF COMPILATION", color="darkgreen", domain="cudf_python")
+def compile_or_get(frame, func, args, kernel_getter=None):
+    """
+    Return a compiled kernel in terms of MaskedTypes that launches a
+    kernel equivalent of `f` for the dtypes of `df`. The kernel uses
+    a thread for each row and calls `f` using that rows data / mask
+    to produce an output value and output validity for each row.
+
+    If the UDF has already been compiled for this requested dtypes,
+    a cached version will be returned instead of running compilation.
+
+    CUDA kernels are void and do not return values. Thus, we need to
+    preallocate a column of the correct dtype and pass it in as one of
+    the kernel arguments. This creates a chicken-and-egg problem where
+    we need the column type to compile the kernel, but normally we would
+    be getting that type FROM compiling the kernel (and letting numba
+    determine it as a return value). As a workaround, we compile the UDF
+    itself outside the final kernel to invoke a full typing pass, which
+    unfortunately is difficult to do without running full compilation.
+    we then obtain the return type from that separate compilation and
+    use it to allocate an output column of the right dtype.
+    """
+
+    # check to see if we already compiled this function
+    cache_key = generate_cache_key(frame, func)
+    if precompiled.get(cache_key) is not None:
+        kernel, masked_or_scalar = precompiled[cache_key]
+        return kernel, masked_or_scalar
+
+    # precompile the user udf to get the right return type.
+    # could be a MaskedType or a scalar type.
+
+    kernel, scalar_return_type = kernel_getter(frame, func, args)
+
+    np_return_type = numpy_support.as_dtype(scalar_return_type)
+    precompiled[cache_key] = (kernel, np_return_type)
+
+    return kernel, np_return_type
