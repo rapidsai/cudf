@@ -409,7 +409,7 @@ TEST_F(ToArrowTest, FixedPoint128Table)
   }
 }
 
-TEST_F(ToArrowTest, FixedPointTableLarge)
+TEST_F(ToArrowTest, FixedPoint64TableLarge)
 {
   using namespace numeric;
   auto constexpr BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
@@ -430,6 +430,39 @@ TEST_F(ToArrowTest, FixedPointTableLarge)
     // Note: For some reason, decimal_builder.AppendValues with NUM_ELEMENTS >= 1000 doesn't work
     for (int i = 0; i < NUM_ELEMENTS; ++i)
       decimal_builder.Append(reinterpret_cast<const uint8_t*>(expect_data.data() + 2 * i));
+
+    CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
+
+    auto const field                = arrow::field("a", arr->type());
+    auto const schema_vector        = std::vector<std::shared_ptr<arrow::Field>>({field});
+    auto const schema               = std::make_shared<arrow::Schema>(schema_vector);
+    auto const expected_arrow_table = arrow::Table::Make(schema, {arr});
+
+    auto got_arrow_table = cudf::to_arrow(input, {{"a"}});
+
+    ASSERT_TRUE(expected_arrow_table->Equals(*got_arrow_table, true));
+  }
+}
+
+TEST_F(ToArrowTest, FixedPoint128TableLarge)
+{
+  using namespace numeric;
+  auto constexpr NUM_ELEMENTS = 1000;
+
+  for (auto const i : {3, 2, 1, 0, -1, -2, -3}) {
+    auto iota        = thrust::make_counting_iterator(1);
+    auto const col   = fp_wrapper<__int128_t>(iota, iota + NUM_ELEMENTS, scale_type{i});
+    auto const input = cudf::table_view({col});
+
+    // auto every_other       = [](auto i) { return i % 2 == 0 ? i / 2 : 0; };
+    // auto transform         = cudf::detail::make_counting_transform_iterator(2, every_other);
+    auto const expect_data = std::vector<__int128_t>{iota, iota + NUM_ELEMENTS};
+    std::shared_ptr<arrow::Array> arr;
+    arrow::Decimal128Builder decimal_builder(arrow::decimal(18, -i), arrow::default_memory_pool());
+
+    // Note: For some reason, decimal_builder.AppendValues with NUM_ELEMENTS >= 1000 doesn't work
+    for (int i = 0; i < NUM_ELEMENTS; ++i)
+      decimal_builder.Append(reinterpret_cast<const uint8_t*>(expect_data.data() + i));
 
     CUDF_EXPECTS(decimal_builder.Finish(&arr).ok(), "Failed to build array");
 
