@@ -907,24 +907,6 @@ public final class ColumnVector extends ColumnView {
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
 
-  /**
-   * Close all non-null buffers. Exceptions that occur during the process will
-   * be aggregated into a single exception thrown at the end.
-   */
-  static void closeBuffers(AutoCloseable buffer) {
-    Throwable toThrow = null;
-    if (buffer != null) {
-      try {
-        buffer.close();
-      } catch (Throwable t) {
-        toThrow = t;
-      }
-    }
-    if (toThrow != null) {
-      throw new RuntimeException(toThrow);
-    }
-  }
-
   ////////
   // Native methods specific to cudf::column. These either take or create a cudf::column
   // instead of a cudf::column_view so they need to be used with caution. These should
@@ -1114,13 +1096,17 @@ public final class ColumnVector extends ColumnView {
       if (!toClose.isEmpty()) {
         try {
           for (MemoryBuffer toCloseBuff : toClose) {
-            closeBuffers(toCloseBuff);
-          }
-        } catch (Throwable t) {
-          if (toThrow != null) {
-            toThrow.addSuppressed(t);
-          } else {
-            toThrow = t;
+            if (toCloseBuff != null) {
+              try {
+                toCloseBuff.close();
+              } catch (Throwable t) {
+                if (toThrow != null) {
+                  toThrow.addSuppressed(t);
+                } else {
+                  toThrow = t;
+                }
+              }
+            }
           }
         } finally {
           toClose.clear();

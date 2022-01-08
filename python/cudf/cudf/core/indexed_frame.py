@@ -446,6 +446,70 @@ class IndexedFrame(Frame):
             out = out.reset_index(drop=True)
         return self._mimic_inplace(out, inplace=inplace)
 
+    def hash_values(self, method="murmur3"):
+        """Compute the hash of values in this column.
+
+        Parameters
+        ----------
+        method : {'murmur3', 'md5'}, default 'murmur3'
+            Hash function to use:
+            * murmur3: MurmurHash3 hash function.
+            * md5: MD5 hash function.
+
+        Returns
+        -------
+        Series
+            A Series with hash values.
+
+        Examples
+        --------
+        **Series**
+
+        >>> import cudf
+        >>> series = cudf.Series([10, 120, 30])
+        >>> series
+        0     10
+        1    120
+        2     30
+        dtype: int64
+        >>> series.hash_values(method="murmur3")
+        0   -1930516747
+        1     422619251
+        2    -941520876
+        dtype: int32
+        >>> series.hash_values(method="md5")
+        0    7be4bbacbfdb05fb3044e36c22b41e8b
+        1    947ca8d2c5f0f27437f156cfbfab0969
+        2    d0580ef52d27c043c8e341fd5039b166
+        dtype: object
+
+        **DataFrame**
+
+        >>> import cudf
+        >>> df = cudf.DataFrame({"a": [10, 120, 30], "b": [0.0, 0.25, 0.50]})
+        >>> df
+             a     b
+        0   10  0.00
+        1  120  0.25
+        2   30  0.50
+        >>> df.hash_values(method="murmur3")
+        0    -330519225
+        1    -397962448
+        2   -1345834934
+        dtype: int32
+        >>> df.hash_values(method="md5")
+        0    57ce879751b5169c525907d5c563fae1
+        1    948d6221a7c4963d4be411bcead7e32b
+        2    fe061786ea286a515b772d91b0dfcd70
+        dtype: object
+        """
+        # Note that both Series and DataFrame return Series objects from this
+        # calculation, necessitating the unfortunate circular reference to the
+        # child class here.
+        return cudf.Series._from_data(
+            {None: libcudf.hash.hash(self, method)}, index=self.index
+        )
+
     def _gather(
         self, gather_map, keep_index=True, nullify=False, check_bounds=True
     ):
