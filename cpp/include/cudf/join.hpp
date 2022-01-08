@@ -1124,6 +1124,45 @@ std::pair<std::size_t, std::unique_ptr<rmm::device_uvector<size_type>>> mixed_le
   rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
 
 /**
+ * @brief Returns the exact number of matches (rows) when performing a mixed
+ * left semi join between the specified tables where the columns of the
+ * equality table are equal and the predicate evaluates to true on the
+ * conditional tables.
+ *
+ * If the provided predicate returns NULL for a pair of rows (left, right),
+ * that pair is not included in the output. It is the user's responsiblity to
+ * choose a suitable compare_nulls value AND use appropriate null-safe
+ * operators in the expression.
+ *
+ * @throw cudf::logic_error If the binary predicate outputs a non-boolean result.
+ * @throw cudf::logic_error If the number of rows in left_equality and left_conditional do not
+ * match.
+ * @throw cudf::logic_error If the number of rows in right_equality and right_conditional do not
+ * match.
+ *
+ * @param left_equality The left table used for the equality join.
+ * @param right_equality The right table used for the equality join.
+ * @param left_conditional The left table used for the conditional join.
+ * @param right_conditional The right table used for the conditional join.
+ * @param binary_predicate The condition on which to join.
+ * @param compare_nulls Whether or not null values join to each other or not.
+ * @param output_size An optional pair of values indicating the exact output size and the number of
+ * matches for each row in the larger of the two input tables, left or right (may be precomputed
+ * using the corresponding mixed_inner_join_size API).
+ * @param mr Device memory resource used to allocate the returned table and columns' device memory
+ *
+ * @return TODO
+ */
+std::size_t mixed_left_semi_join_size(
+  table_view const& left_equality,
+  table_view const& right_equality,
+  table_view const& left_conditional,
+  table_view const& right_conditional,
+  ast::expression const& binary_predicate,
+  null_equality compare_nulls         = null_equality::EQUAL,
+  rmm::mr::device_memory_resource* mr = rmm::mr::get_current_device_resource());
+
+/**
  * @brief Returns the exact number of matches (rows) when performing a
  * conditional inner join between the specified tables where the predicate
  * evaluates to true.
