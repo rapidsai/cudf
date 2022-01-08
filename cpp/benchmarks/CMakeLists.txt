@@ -24,7 +24,7 @@ target_compile_options(
 
 target_link_libraries(
   cudf_datagen PUBLIC GTest::gmock GTest::gtest GTest::gmock_main GTest::gtest_main
-                      benchmark::benchmark nvbench::nvbench Threads::Threads cudf
+                      benchmark::benchmark nvbench::nvbench Threads::Threads cudf cudftestutil
 )
 
 target_include_directories(
@@ -156,8 +156,13 @@ ConfigureBench(TYPE_DISPATCHER_BENCH type_dispatcher/type_dispatcher_benchmark.c
 # ##################################################################################################
 # * reduction benchmark ---------------------------------------------------------------------------
 ConfigureBench(
-  REDUCTION_BENCH reduction/anyall_benchmark.cpp reduction/dictionary_benchmark.cpp
-  reduction/reduce_benchmark.cpp reduction/scan_benchmark.cpp reduction/minmax_benchmark.cpp
+  REDUCTION_BENCH
+  reduction/anyall_benchmark.cpp
+  reduction/dictionary_benchmark.cpp
+  reduction/reduce_benchmark.cpp
+  reduction/scan_benchmark.cpp
+  reduction/minmax_benchmark.cpp
+  reduction/segment_reduce_benchmark.cpp
 )
 
 # ##################################################################################################
