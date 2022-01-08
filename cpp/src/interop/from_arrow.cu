@@ -79,7 +79,7 @@ data_type arrow_to_cudf_type(arrow::DataType const& arrow_type)
     case arrow::Type::LIST: return data_type(type_id::LIST);
     case arrow::Type::DECIMAL: {
       auto const type = static_cast<arrow::Decimal128Type const*>(&arrow_type);
-      return data_type{type_id::DECIMAL64, -type->scale()};
+      return data_type{type_id::DECIMAL128, -type->scale()};
     }
     case arrow::Type::STRUCT: return data_type(type_id::STRUCT);
     default: CUDF_FAIL("Unsupported type_id conversion to cudf");
@@ -177,34 +177,26 @@ std::unique_ptr<column> get_column(arrow::Array const& array,
                                    rmm::mr::device_memory_resource* mr);
 
 template <>
-std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal64>(
+std::unique_ptr<column> dispatch_to_cudf_column::operator()<numeric::decimal128>(
   arrow::Array const& array,
   data_type type,
   bool skip_mask,
   rmm::cuda_stream_view stream,
   rmm::mr::device_memory_resource* mr)
 {
-  using DeviceType = int64_t;
+  using DeviceType = __int128_t;
 
-  auto constexpr BIT_WIDTH_RATIO = 2;  // Array::Type:type::DECIMAL (128) / int64_t
-  auto data_buffer               = array.data()->buffers[1];
-  auto const num_rows            = static_cast<size_type>(array.length());
+  auto data_buffer    = array.data()->buffers[1];
+  auto const num_rows = static_cast<size_type>(array.length());
 
-  rmm::device_uvector<DeviceType> buf(num_rows * BIT_WIDTH_RATIO, stream);
   rmm::device_uvector<DeviceType> out_buf(num_rows, stream, mr);
 
   CUDA_TRY(cudaMemcpyAsync(
-    reinterpret_cast<uint8_t*>(buf.data()),
+    reinterpret_cast<uint8_t*>(out_buf.data()),
     reinterpret_cast<const uint8_t*>(data_buffer->address()) + array.offset() * sizeof(DeviceType),
-    buf.size() * sizeof(DeviceType),
+    out_buf.size() * sizeof(DeviceType),
     cudaMemcpyDefault,
     stream.value()));
-
-  auto every_other = [] __device__(size_type i) { return 2 * i; };
-  auto gather_map  = cudf::detail::make_counting_transform_iterator(0, every_other);
-
-  thrust::gather(
-    rmm::exec_policy(stream), gather_map, gather_map + num_rows, buf.data(), out_buf.data());
 
   auto null_mask = [&] {
     if (not skip_mask and array.null_bitmap_data()) {
