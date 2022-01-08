@@ -454,8 +454,6 @@ TEST_F(ToArrowTest, FixedPoint128TableLarge)
     auto const col   = fp_wrapper<__int128_t>(iota, iota + NUM_ELEMENTS, scale_type{i});
     auto const input = cudf::table_view({col});
 
-    // auto every_other       = [](auto i) { return i % 2 == 0 ? i / 2 : 0; };
-    // auto transform         = cudf::detail::make_counting_transform_iterator(2, every_other);
     auto const expect_data = std::vector<__int128_t>{iota, iota + NUM_ELEMENTS};
     std::shared_ptr<arrow::Array> arr;
     arrow::Decimal128Builder decimal_builder(arrow::decimal(18, -i), arrow::default_memory_pool());
