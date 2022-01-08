@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <algorithm>
 #include <memory>
 #include <vector>
 
@@ -66,6 +67,24 @@ inline void check_java_exception(JNIEnv *const env) {
     // might fail.
     throw jni_exception("JNI Exception...");
   }
+}
+
+/**
+ * @brief Helper to convert a pointer to a jlong.
+ *
+ * This is useful when, for instance, converting a cudf::column pointer
+ * to a jlong, for use in JNI.
+ */
+template <typename T> jlong to_jlong(T *ptr) {
+  return reinterpret_cast<jlong>(ptr);
+}
+
+template <typename T> jlong to_jlong(std::unique_ptr<T> &&ptr) {
+  return to_jlong(ptr.release());
+}
+
+template <typename T> jlong to_jlong(std::unique_ptr<T> &ptr) {
+  return to_jlong(std::move(ptr));
 }
 
 class native_jdoubleArray_accessor {
@@ -335,6 +354,24 @@ public:
   const jlongArray get_jArray() const { return wrapped.get_jArray(); }
 
   jlongArray get_jArray() { return wrapped.get_jArray(); }
+
+  void assert_no_nulls() const {
+    if (std::any_of(data(), data() + size(), [](T *const ptr) { return ptr == NULL; })) {
+      throw_java_exception(env, NPE_CLASS, "pointer is NULL");
+    }
+  }
+
+  /**
+   * @brief Convert from `T*[]` to `vector<T>`.
+   */
+  std::vector<T> get_dereferenced() const {
+    assert_no_nulls();
+    auto ret = std::vector<T>{};
+    ret.reserve(size());
+    std::transform(data(), data() + size(), std::back_inserter(ret),
+                   [](T *const &p) { return *p; });
+    return ret;
+  }
 
   /**
    * @brief if data has been written back into this array, don't commit
