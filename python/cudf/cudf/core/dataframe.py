@@ -3048,78 +3048,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         )
         return self.as_gpu_matrix(columns=columns).copy_to_host()
 
-    def one_hot_encoding(
-        self, column, prefix, cats, prefix_sep="_", dtype="float64"
-    ):
-        """
-        Expand a column with one-hot-encoding.
-
-        Parameters
-        ----------
-
-        column : str
-            the source column with binary encoding for the data.
-        prefix : str
-            the new column name prefix.
-        cats : sequence of ints
-            the sequence of categories as integers.
-        prefix_sep : str
-            the separator between the prefix and the category.
-        dtype :
-            the dtype for the outputs; defaults to float64.
-
-        Returns
-        -------
-
-        a new dataframe with new columns append for each category.
-
-        Examples
-        --------
-        >>> import pandas as pd
-        >>> import cudf
-        >>> pet_owner = [1, 2, 3, 4, 5]
-        >>> pet_type = ['fish', 'dog', 'fish', 'bird', 'fish']
-        >>> df = pd.DataFrame({'pet_owner': pet_owner, 'pet_type': pet_type})
-        >>> df.pet_type = df.pet_type.astype('category')
-
-        Create a column with numerically encoded category values
-
-        >>> df['pet_codes'] = df.pet_type.cat.codes
-        >>> gdf = cudf.from_pandas(df)
-
-        Create the list of category codes to use in the encoding
-
-        >>> codes = gdf.pet_codes.unique()
-        >>> gdf.one_hot_encoding('pet_codes', 'pet_dummy', codes).head()
-          pet_owner  pet_type  pet_codes  pet_dummy_0  pet_dummy_1  pet_dummy_2
-        0         1      fish          2          0.0          0.0          1.0
-        1         2       dog          1          0.0          1.0          0.0
-        2         3      fish          2          0.0          0.0          1.0
-        3         4      bird          0          1.0          0.0          0.0
-        4         5      fish          2          0.0          0.0          1.0
-        """
-
-        warnings.warn(
-            "DataFrame.one_hot_encoding is deprecated and will be removed in "
-            "future, use `get_dummies` instead.",
-            FutureWarning,
-        )
-
-        if hasattr(cats, "to_arrow"):
-            cats = cats.to_arrow().to_pylist()
-        else:
-            cats = pd.Series(cats, dtype="object")
-
-        newnames = [
-            prefix_sep.join([prefix, "null" if cat is None else str(cat)])
-            for cat in cats
-        ]
-        newcols = self[column].one_hot_encoding(cats=cats, dtype=dtype)
-        outdf = self.copy()
-        for name, col in zip(newnames, newcols):
-            outdf.insert(len(outdf._data), name, col)
-        return outdf
-
     def label_encoding(
         self, column, prefix, cats, prefix_sep="_", dtype=None, na_sentinel=-1
     ):
@@ -4147,45 +4075,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             tpb=tpb,
         )
 
-    def hash_values(self, method="murmur3"):
-        """Compute the hash of values in each row.
-
-        Parameters
-        ----------
-        method : {'murmur3', 'md5'}, default 'murmur3'
-            Hash function to use:
-            * murmur3: MurmurHash3 hash function.
-            * md5: MD5 hash function.
-
-        Returns
-        -------
-        Series
-            A Series with hash values.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({"a": [10, 120, 30], "b": [0.0, 0.25, 0.50]})
-        >>> df
-             a     b
-        0   10  0.00
-        1  120  0.25
-        2   30  0.50
-        >>> df.hash_values(method="murmur3")
-        0    -330519225
-        1    -397962448
-        2   -1345834934
-        dtype: int32
-        >>> df.hash_values(method="md5")
-        0    57ce879751b5169c525907d5c563fae1
-        1    948d6221a7c4963d4be411bcead7e32b
-        2    fe061786ea286a515b772d91b0dfcd70
-        dtype: object
-        """
-        return Series._from_data(
-            {None: self._hash(method=method)}, index=self.index
-        )
-
     def partition_by_hash(self, columns, nparts, keep_index=True):
         """Partition the dataframe by the hashed value of data in *columns*.
 
@@ -4209,7 +4098,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             else self._index._num_columns
         )
         key_indices = [self._data.names.index(k) + idx for k in columns]
-        outdf, offsets = self._hash_partition(key_indices, nparts, keep_index)
+
+        output_data, output_index, offsets = libcudf.hash.hash_partition(
+            self, key_indices, nparts, keep_index
+        )
+        outdf = self.__class__._from_data(output_data, output_index)
+        outdf._copy_type_metadata(self, include_index=keep_index)
+
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 

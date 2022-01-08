@@ -1,4 +1,4 @@
-# Copyright (c) 2018-2021, NVIDIA CORPORATION.
+# Copyright (c) 2018-2022, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
@@ -26,7 +26,7 @@ requirements:
     - cmake >=3.20.1
   host:
     - libcudf {{version}}
-    - librdkafka >=1.6.0,<1.7.0a0
+    - librdkafka >=1.7.0,<1.8.0a0
   run:
     - {{ pin_compatible('librdkafka', max_pin='x.x') }} #TODO: librdkafka should be automatically included here by run_exports but is not
 
