@@ -73,6 +73,13 @@ cdef extern from "cudf/io/types.hpp" \
 
         vector[column_in_metadata] column_metadata
 
+    cdef cppclass partition_info:
+        size_type start_row
+        size_type num_rows
+
+        partition_info()
+        partition_info(size_type start_row, size_type num_rows) except +
+
     cdef cppclass host_buffer:
         const char* data
         size_t size
@@ -99,8 +106,10 @@ cdef extern from "cudf/io/types.hpp" \
 
         sink_info() except +
         sink_info(string file_path) except +
+        sink_info(vector[string] file_path) except +
         sink_info(vector[char] * buffer) except +
         sink_info(data_sink * user_sink) except +
+        sink_info(vector[data_sink *] user_sink) except +
 
 
 cdef extern from "cudf/io/data_sink.hpp" \
