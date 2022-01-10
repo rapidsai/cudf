@@ -259,46 +259,6 @@ rmm::device_uvector<T> compute_ewma_noadjust(column_view const& input,
           }
         }
       });
-
-    /*
-    rmm::device_uvector<T> nullcnt_factor(nullcnt.size(), stream);
-
-    thrust::transform(rmm::exec_policy(stream),
-                      nullcnt.begin(),
-                      nullcnt.end(),
-                      nullcnt_factor.begin(),
-                      [=] __device__(T exponent) -> T {
-                        // ex: 2 -> alpha + (1  - alpha)**2
-                        if (exponent != 0) {
-                          return (1.0 - beta) + pow(beta, exponent + 1);
-                        } else {
-                          return exponent;
-                        }
-                      });
-
-    valid_it    = detail::make_validity_iterator(*device_view);
-    auto null_and_null_count =
-      thrust::make_zip_iterator(thrust::make_tuple(valid_it, nullcnt_factor.begin()));
-    thrust::transform(
-      rmm::exec_policy(stream),
-      null_and_null_count,
-      null_and_null_count + input.size(),
-      pairs.begin(),
-      pairs.begin(),
-      [] __device__(thrust::tuple<bool, T> null_and_null_count, pair_type<T> pair) -> pair_type<T> {
-        bool const is_valid = thrust::get<0>(null_and_null_count);
-        T const factor      = thrust::get<1>(null_and_null_count);
-
-        T const ci = pair.first;
-        T const cj = pair.second;
-
-        if (is_valid and (factor != 0.0)) {
-          return {ci / factor, cj / factor};
-        } else {
-          return {ci, cj};
-        }
-      });
-  */
   }
 
   thrust::inclusive_scan(
