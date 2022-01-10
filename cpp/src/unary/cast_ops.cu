@@ -38,7 +38,7 @@ struct unary_cast {
             typename TargetT                                          = _TargetT,
             typename std::enable_if_t<(cudf::is_numeric<SourceT>() &&
                                        cudf::is_numeric<TargetT>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
+  __device__ inline TargetT operator()(SourceT const element)
   {
     return static_cast<TargetT>(element);
   }
@@ -47,7 +47,7 @@ struct unary_cast {
             typename TargetT                                            = _TargetT,
             typename std::enable_if_t<(cudf::is_timestamp<SourceT>() &&
                                        cudf::is_timestamp<TargetT>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
+  __device__ inline TargetT operator()(SourceT const element)
   {
     // Convert source tick counts into target tick counts without blindly truncating them
     // by dividing the respective duration time periods (which may not work for time before
@@ -59,7 +59,7 @@ struct unary_cast {
             typename TargetT                                           = _TargetT,
             typename std::enable_if_t<(cudf::is_duration<SourceT>() &&
                                        cudf::is_duration<TargetT>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
+  __device__ inline TargetT operator()(SourceT const element)
   {
     return TargetT{cuda::std::chrono::floor<TargetT>(element)};
   }
@@ -68,7 +68,7 @@ struct unary_cast {
             typename TargetT                                         = _TargetT,
             typename std::enable_if_t<cudf::is_numeric<SourceT>() &&
                                       cudf::is_duration<TargetT>()>* = nullptr>
-  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
+  __device__ inline TargetT operator()(SourceT const element)
   {
     return TargetT{static_cast<typename TargetT::rep>(element)};
   }
@@ -77,7 +77,7 @@ struct unary_cast {
             typename TargetT                                           = _TargetT,
             typename std::enable_if_t<(cudf::is_timestamp<SourceT>() &&
                                        cudf::is_duration<TargetT>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
+  __device__ inline TargetT operator()(SourceT const element)
   {
     return TargetT{cuda::std::chrono::floor<TargetT>(element.time_since_epoch())};
   }
@@ -86,7 +86,7 @@ struct unary_cast {
             typename TargetT                                        = _TargetT,
             typename std::enable_if_t<cudf::is_duration<SourceT>() &&
                                       cudf::is_numeric<TargetT>()>* = nullptr>
-  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
+  __device__ inline TargetT operator()(SourceT const element)
   {
     return static_cast<TargetT>(element.count());
   }
@@ -95,7 +95,7 @@ struct unary_cast {
             typename TargetT                                            = _TargetT,
             typename std::enable_if_t<(cudf::is_duration<SourceT>() &&
                                        cudf::is_timestamp<TargetT>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE TargetT operator()(SourceT const element)
+  __device__ inline TargetT operator()(SourceT const element)
   {
     return TargetT{cuda::std::chrono::floor<TargetT::duration>(element)};
   }
@@ -111,7 +111,7 @@ struct fixed_point_unary_cast {
             typename TargetT                                          = _TargetT,
             typename std::enable_if_t<(cudf::is_fixed_point<_SourceT>() &&
                                        cudf::is_numeric<TargetT>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE TargetT operator()(DeviceT const element)
+  __device__ inline TargetT operator()(DeviceT const element)
   {
     auto const fp = SourceT{numeric::scaled_integer<DeviceT>{element, scale}};
     return static_cast<TargetT>(fp);
@@ -121,7 +121,7 @@ struct fixed_point_unary_cast {
             typename TargetT                                              = _TargetT,
             typename std::enable_if_t<(cudf::is_numeric<_SourceT>() &&
                                        cudf::is_fixed_point<TargetT>())>* = nullptr>
-  CUDA_DEVICE_CALLABLE DeviceT operator()(SourceT const element)
+  __device__ inline DeviceT operator()(SourceT const element)
   {
     return TargetT{element, scale}.value();
   }
