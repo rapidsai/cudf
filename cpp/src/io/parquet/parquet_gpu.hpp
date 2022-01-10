@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -479,7 +479,7 @@ struct dremel_data {
 dremel_data get_dremel_data(column_view h_col,
                             rmm::device_uvector<uint8_t> const& d_nullability,
                             std::vector<uint8_t> const& nullability,
-                            rmm::cuda_stream_view stream = rmm::cuda_stream_default);
+                            rmm::cuda_stream_view stream);
 
 /**
  * @brief Launches kernel for initializing encoder page fragments
