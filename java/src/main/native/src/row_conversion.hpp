@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2020, NVIDIA CORPORATION.
+ * Copyright (c) 2020-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,13 @@
 #include <rmm/cuda_stream_view.hpp>
 
 namespace cudf {
-namespace java {
+namespace jni {
+
+std::vector<std::unique_ptr<cudf::column>> convert_to_rows_fixed_width_optimized(
+    cudf::table_view const &tbl,
+    // TODO need something for validity
+    rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
 std::vector<std::unique_ptr<cudf::column>>
 convert_to_rows(cudf::table_view const &tbl,
@@ -31,10 +37,15 @@ convert_to_rows(cudf::table_view const &tbl,
                 rmm::cuda_stream_view stream = rmm::cuda_stream_default,
                 rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
+std::unique_ptr<cudf::table> convert_from_rows_fixed_width_optimized(
+    cudf::lists_column_view const &input, std::vector<cudf::data_type> const &schema,
+    rmm::cuda_stream_view stream = rmm::cuda_stream_default,
+    rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
+
 std::unique_ptr<cudf::table>
 convert_from_rows(cudf::lists_column_view const &input, std::vector<cudf::data_type> const &schema,
                   rmm::cuda_stream_view stream = rmm::cuda_stream_default,
                   rmm::mr::device_memory_resource *mr = rmm::mr::get_current_device_resource());
 
-} // namespace java
+} // namespace jni
 } // namespace cudf
