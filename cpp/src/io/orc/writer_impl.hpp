@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2021, NVIDIA CORPORATION.
+ * Copyright (c) 2019-2022, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -349,7 +349,7 @@ class writer::impl {
  private:
   rmm::mr::device_memory_resource* _mr = nullptr;
   // Cuda stream to be used
-  rmm::cuda_stream_view stream = rmm::cuda_stream_default;
+  rmm::cuda_stream_view stream;
 
   stripe_size_limits max_stripe_size;
   size_type row_index_stride;

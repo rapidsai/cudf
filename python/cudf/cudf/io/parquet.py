@@ -4,6 +4,7 @@ import io
 import json
 import warnings
 from collections import defaultdict
+from contextlib import ExitStack
 from uuid import uuid4
 
 import fsspec
@@ -17,21 +18,59 @@ from cudf.core.column import as_column, build_categorical_column
 from cudf.utils import ioutils
 
 
-def _get_partition_groups(df, partition_cols, preserve_index=False):
-    # TODO: We can use groupby functionality here after cudf#4346.
-    #       Longer term, we want more slicing logic to be pushed down
-    #       into cpp.  For example, it would be best to pass libcudf
-    #       a single sorted table with group offsets).
-    df = df.sort_values(partition_cols)
-    if not preserve_index:
-        df = df.reset_index(drop=True)
-    divisions = df[partition_cols].drop_duplicates(ignore_index=True)
-    splits = df[partition_cols].searchsorted(divisions, side="left")
-    splits = splits.tolist() + [len(df[partition_cols])]
-    return [
-        df.iloc[splits[i] : splits[i + 1]].copy(deep=False)
-        for i in range(0, len(splits) - 1)
+def _write_parquet(
+    df,
+    paths,
+    compression="snappy",
+    index=None,
+    statistics="ROWGROUP",
+    metadata_file_path=None,
+    int96_timestamps=False,
+    row_group_size_bytes=None,
+    row_group_size_rows=None,
+    partitions_info=None,
+    **kwargs,
+):
+    if is_list_like(paths) and len(paths) > 1:
+        if partitions_info is None:
+            ValueError("partition info is required for multiple paths")
+        elif not is_list_like(partitions_info):
+            ValueError("partition info must be list-like for multiple paths")
+        elif not len(paths) == len(partitions_info):
+            ValueError("partitions_info and paths must be of same size")
+    if is_list_like(partitions_info) and len(partitions_info) > 1:
+        if not is_list_like(paths):
+            ValueError("paths must be list-like when partitions_info provided")
+
+    paths_or_bufs = [
+        ioutils.get_writer_filepath_or_buffer(path, mode="wb", **kwargs)
+        for path in paths
     ]
+    common_args = {
+        "index": index,
+        "compression": compression,
+        "statistics": statistics,
+        "metadata_file_path": metadata_file_path,
+        "int96_timestamps": int96_timestamps,
+        "row_group_size_bytes": row_group_size_bytes,
+        "row_group_size_rows": row_group_size_rows,
+        "partitions_info": partitions_info,
+    }
+    if all([ioutils.is_fsspec_open_file(buf) for buf in paths_or_bufs]):
+        with ExitStack() as stack:
+            fsspec_objs = [stack.enter_context(file) for file in paths_or_bufs]
+            file_objs = [
+                ioutils.get_IOBase_writer(file_obj) for file_obj in fsspec_objs
+            ]
+            write_parquet_res = libparquet.write_parquet(
+                df, filepaths_or_buffers=file_objs, **common_args
+            )
+    else:
+        write_parquet_res = libparquet.write_parquet(
+            df, filepaths_or_buffers=paths_or_bufs, **common_args
+        )
+
+    return write_parquet_res
 
 
 # Logic chosen to match: https://arrow.apache.org/
@@ -84,7 +123,6 @@ def write_to_dataset(
 
     fs = ioutils._ensure_filesystem(fs, root_path, **kwargs)
     fs.mkdirs(root_path, exist_ok=True)
-    metadata = []
 
     if partition_cols is not None and len(partition_cols) > 0:
 
@@ -92,64 +130,47 @@ def write_to_dataset(
         if len(data_cols) == 0:
             raise ValueError("No data left to save outside partition columns")
 
-        #  Loop through the partition groups
-        for _, sub_df in enumerate(
-            _get_partition_groups(
-                df, partition_cols, preserve_index=preserve_index
-            )
-        ):
-            if sub_df is None or len(sub_df) == 0:
-                continue
-            keys = tuple([sub_df[col].iloc[0] for col in partition_cols])
-            if not isinstance(keys, tuple):
-                keys = (keys,)
+        part_names, part_offsets, _, grouped_df = df.groupby(
+            partition_cols
+        )._grouped()
+        if not preserve_index:
+            grouped_df.reset_index(drop=True, inplace=True)
+        grouped_df.drop(columns=partition_cols, inplace=True)
+        # Copy the entire keys df in one operation rather than using iloc
+        part_names = part_names.to_pandas().to_frame(index=False)
+
+        full_paths = []
+        metadata_file_paths = []
+        for keys in part_names.itertuples(index=False):
             subdir = fs.sep.join(
-                [
-                    "{colname}={value}".format(colname=name, value=val)
-                    for name, val in zip(partition_cols, keys)
-                ]
+                [f"{name}={val}" for name, val in zip(partition_cols, keys)]
             )
             prefix = fs.sep.join([root_path, subdir])
             fs.mkdirs(prefix, exist_ok=True)
             filename = filename or uuid4().hex + ".parquet"
             full_path = fs.sep.join([prefix, filename])
-            write_df = sub_df.copy(deep=False)
-            write_df.drop(columns=partition_cols, inplace=True)
-            with fs.open(full_path, mode="wb") as fil:
-                fil = ioutils.get_IOBase_writer(fil)
-                if return_metadata:
-                    metadata.append(
-                        write_df.to_parquet(
-                            fil,
-                            index=preserve_index,
-                            metadata_file_path=fs.sep.join([subdir, filename]),
-                            **kwargs,
-                        )
-                    )
-                else:
-                    write_df.to_parquet(fil, index=preserve_index, **kwargs)
+            full_paths.append(full_path)
+            if return_metadata:
+                metadata_file_paths.append(fs.sep.join([subdir, filename]))
+
+        if return_metadata:
+            kwargs["metadata_file_path"] = metadata_file_paths
+        metadata = to_parquet(
+            grouped_df,
+            full_paths,
+            index=preserve_index,
+            partition_offsets=part_offsets,
+            **kwargs,
+        )
 
     else:
         filename = filename or uuid4().hex + ".parquet"
         full_path = fs.sep.join([root_path, filename])
         if return_metadata:
-            metadata.append(
-                df.to_parquet(
-                    full_path,
-                    index=preserve_index,
-                    metadata_file_path=filename,
-                    **kwargs,
-                )
-            )
-        else:
-            df.to_parquet(full_path, index=preserve_index, **kwargs)
+            kwargs["metadata_file_path"] = filename
+        metadata = df.to_parquet(full_path, index=preserve_index, **kwargs)
 
-    if metadata:
-        return (
-            merge_parquet_filemetadata(metadata)
-            if len(metadata) > 1
-            else metadata[0]
-        )
+    return metadata
 
 
 @ioutils.doc_read_parquet_metadata()
@@ -669,6 +690,7 @@ def to_parquet(
     index=None,
     partition_cols=None,
     partition_file_name=None,
+    partition_offsets=None,
     statistics="ROWGROUP",
     metadata_file_path=None,
     int96_timestamps=False,
@@ -680,8 +702,32 @@ def to_parquet(
     """{docstring}"""
 
     if engine == "cudf":
+        # Ensure that no columns dtype is 'category'
+        for col in df.columns:
+            if partition_cols is None or col not in partition_cols:
+                if df[col].dtype.name == "category":
+                    raise ValueError(
+                        "'category' column dtypes are currently not "
+                        + "supported by the gpu accelerated parquet writer"
+                    )
+
         if partition_cols:
-            write_to_dataset(
+            if metadata_file_path is not None:
+                warnings.warn(
+                    "metadata_file_path will be ignored/overwritten when "
+                    "partition_cols are provided. To request returning the "
+                    "metadata binary blob, pass `return_metadata=True`"
+                )
+            kwargs.update(
+                {
+                    "compression": compression,
+                    "statistics": statistics,
+                    "int96_timestamps": int96_timestamps,
+                    "row_group_size_bytes": row_group_size_bytes,
+                    "row_group_size_rows": row_group_size_rows,
+                }
+            )
+            return write_to_dataset(
                 df,
                 filename=partition_file_name,
                 partition_cols=partition_cols,
@@ -689,49 +735,34 @@ def to_parquet(
                 preserve_index=index,
                 **kwargs,
             )
-            return
 
-        # Ensure that no columns dtype is 'category'
-        for col in df.columns:
-            if df[col].dtype.name == "category":
-                raise ValueError(
-                    "'category' column dtypes are currently not "
-                    + "supported by the gpu accelerated parquet writer"
+        if partition_offsets:
+            kwargs["partitions_info"] = [
+                (
+                    partition_offsets[i],
+                    partition_offsets[i + 1] - partition_offsets[i],
                 )
+                for i in range(0, len(partition_offsets) - 1)
+            ]
 
-        path_or_buf = ioutils.get_writer_filepath_or_buffer(
-            path, mode="wb", **kwargs
+        return _write_parquet(
+            df,
+            paths=path if is_list_like(path) else [path],
+            compression=compression,
+            index=index,
+            statistics=statistics,
+            metadata_file_path=metadata_file_path,
+            int96_timestamps=int96_timestamps,
+            row_group_size_bytes=row_group_size_bytes,
+            row_group_size_rows=row_group_size_rows,
+            **kwargs,
         )
-        if ioutils.is_fsspec_open_file(path_or_buf):
-            with path_or_buf as file_obj:
-                file_obj = ioutils.get_IOBase_writer(file_obj)
-                write_parquet_res = libparquet.write_parquet(
-                    df,
-                    path=file_obj,
-                    index=index,
-                    compression=compression,
-                    statistics=statistics,
-                    metadata_file_path=metadata_file_path,
-                    int96_timestamps=int96_timestamps,
-                    row_group_size_bytes=row_group_size_bytes,
-                    row_group_size_rows=row_group_size_rows,
-                )
-        else:
-            write_parquet_res = libparquet.write_parquet(
-                df,
-                path=path_or_buf,
-                index=index,
-                compression=compression,
-                statistics=statistics,
-                metadata_file_path=metadata_file_path,
-                int96_timestamps=int96_timestamps,
-                row_group_size_bytes=row_group_size_bytes,
-                row_group_size_rows=row_group_size_rows,
-            )
-
-        return write_parquet_res
 
     else:
+        if partition_offsets is not None:
+            warnings.warn(
+                "partition_offsets will be ignored when engine is not cudf"
+            )
 
         # If index is empty set it to the expected default value of True
         if index is None:

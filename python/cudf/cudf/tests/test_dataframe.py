@@ -1109,34 +1109,6 @@ def test_assign():
 
 @pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
 @pytest.mark.parametrize("method", ["murmur3", "md5"])
-def test_dataframe_hash_columns(nrows, method):
-    gdf = cudf.DataFrame()
-    data = np.asarray(range(nrows))
-    data[0] = data[-1]  # make first and last the same
-    gdf["a"] = data
-    gdf["b"] = gdf.a + 100
-    with pytest.warns(FutureWarning):
-        out = gdf.hash_columns(["a", "b"])
-    assert isinstance(out, cudf.Series)
-    assert len(out) == nrows
-    assert out.dtype == np.int32
-
-    # Check default
-    with pytest.warns(FutureWarning):
-        out_all = gdf.hash_columns()
-    assert_eq(out, out_all)
-
-    # Check single column
-    with pytest.warns(FutureWarning):
-        out_one = gdf.hash_columns(["a"], method=method)
-    # First matches last
-    assert out_one.iloc[0] == out_one.iloc[-1]
-    # Equivalent to the cudf.Series.hash_values()
-    assert_eq(gdf["a"].hash_values(method=method), out_one)
-
-
-@pytest.mark.parametrize("nrows", [1, 8, 100, 1000])
-@pytest.mark.parametrize("method", ["murmur3", "md5"])
 def test_dataframe_hash_values(nrows, method):
     gdf = cudf.DataFrame()
     data = np.asarray(range(nrows))
@@ -1797,7 +1769,7 @@ def test_dataframe_shape_empty():
 
 @pytest.mark.parametrize("num_cols", [1, 2, 10])
 @pytest.mark.parametrize("num_rows", [1, 2, 20])
-@pytest.mark.parametrize("dtype", dtypes)
+@pytest.mark.parametrize("dtype", dtypes + ["object"])
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
 def test_dataframe_transpose(nulls, num_cols, num_rows, dtype):
     # In case of `bool` dtype: pandas <= 1.2.5 type-casts
@@ -2541,37 +2513,137 @@ def test_tail_for_string():
     assert_eq(gdf.tail(3), gdf.to_pandas().tail(3))
 
 
+@pytest.mark.parametrize("level", [None, 0, "l0", 1, ["l0", 1]])
 @pytest.mark.parametrize("drop", [True, False])
-def test_reset_index(pdf, gdf, drop):
-    assert_eq(
-        pdf.reset_index(drop=drop, inplace=False),
-        gdf.reset_index(drop=drop, inplace=False),
+@pytest.mark.parametrize(
+    "column_names",
+    [
+        ["v0", "v1"],
+        ["v0", "index"],
+        pd.MultiIndex.from_tuples([("x0", "x1"), ("y0", "y1")]),
+    ],
+)
+@pytest.mark.parametrize("inplace", [True, False])
+@pytest.mark.parametrize("col_level", [0, 1])
+@pytest.mark.parametrize("col_fill", ["", "some_lv"])
+def test_reset_index(level, drop, column_names, inplace, col_level, col_fill):
+    midx = pd.MultiIndex.from_tuples(
+        [("a", 1), ("a", 2), ("b", 1), ("b", 2)], names=["l0", None]
     )
-    assert_eq(
-        pdf.x.reset_index(drop=drop, inplace=False),
-        gdf.x.reset_index(drop=drop, inplace=False),
+    pdf = pd.DataFrame(
+        [[1, 2], [3, 4], [5, 6], [7, 8]], index=midx, columns=column_names
     )
+    gdf = cudf.from_pandas(pdf)
+
+    expect = pdf.reset_index(
+        level=level,
+        drop=drop,
+        inplace=inplace,
+        col_level=col_level,
+        col_fill=col_fill,
+    )
+    got = gdf.reset_index(
+        level=level,
+        drop=drop,
+        inplace=inplace,
+        col_level=col_level,
+        col_fill=col_fill,
+    )
+    if inplace:
+        expect = pdf
+        got = gdf
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("level", [None, 0, 1, [None]])
+@pytest.mark.parametrize("drop", [False, True])
+@pytest.mark.parametrize("inplace", [False, True])
+@pytest.mark.parametrize("col_level", [0, 1])
+@pytest.mark.parametrize("col_fill", ["", "some_lv"])
+def test_reset_index_dup_level_name(level, drop, inplace, col_level, col_fill):
+    # midx levels are named [None, None]
+    midx = pd.MultiIndex.from_tuples([("a", 1), ("a", 2), ("b", 1), ("b", 2)])
+    pdf = pd.DataFrame([[1, 2], [3, 4], [5, 6], [7, 8]], index=midx)
+    gdf = cudf.from_pandas(pdf)
+    if level == [None]:
+        assert_exceptions_equal(
+            lfunc=pdf.reset_index,
+            rfunc=gdf.reset_index,
+            lfunc_args_and_kwargs=(
+                [],
+                {"level": level, "drop": drop, "inplace": inplace},
+            ),
+            rfunc_args_and_kwargs=(
+                [],
+                {"level": level, "drop": drop, "inplace": inplace},
+            ),
+            expected_error_message="occurs multiple times, use a level number",
+        )
+        return
+
+    expect = pdf.reset_index(
+        level=level,
+        drop=drop,
+        inplace=inplace,
+        col_level=col_level,
+        col_fill=col_fill,
+    )
+    got = gdf.reset_index(
+        level=level,
+        drop=drop,
+        inplace=inplace,
+        col_level=col_level,
+        col_fill=col_fill,
+    )
+    if inplace:
+        expect = pdf
+        got = gdf
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("drop", [True, False])
-def test_reset_named_index(pdf, gdf, drop):
+@pytest.mark.parametrize("inplace", [False, True])
+@pytest.mark.parametrize("col_level", [0, 1])
+@pytest.mark.parametrize("col_fill", ["", "some_lv"])
+def test_reset_index_named(pdf, gdf, drop, inplace, col_level, col_fill):
     pdf.index.name = "cudf"
     gdf.index.name = "cudf"
-    assert_eq(
-        pdf.reset_index(drop=drop, inplace=False),
-        gdf.reset_index(drop=drop, inplace=False),
+
+    expect = pdf.reset_index(
+        drop=drop, inplace=inplace, col_level=col_level, col_fill=col_fill
     )
-    assert_eq(
-        pdf.x.reset_index(drop=drop, inplace=False),
-        gdf.x.reset_index(drop=drop, inplace=False),
+    got = gdf.reset_index(
+        drop=drop, inplace=inplace, col_level=col_level, col_fill=col_fill
     )
+    if inplace:
+        expect = pdf
+        got = gdf
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("drop", [True, False])
-def test_reset_index_inplace(pdf, gdf, drop):
-    pdf.reset_index(drop=drop, inplace=True)
-    gdf.reset_index(drop=drop, inplace=True)
-    assert_eq(pdf, gdf)
+@pytest.mark.parametrize("inplace", [False, True])
+@pytest.mark.parametrize("column_names", [["x", "y"], ["index", "y"]])
+@pytest.mark.parametrize("col_level", [0, 1])
+@pytest.mark.parametrize("col_fill", ["", "some_lv"])
+def test_reset_index_unnamed(
+    pdf, gdf, drop, inplace, column_names, col_level, col_fill
+):
+    pdf.columns = column_names
+    gdf.columns = column_names
+
+    expect = pdf.reset_index(
+        drop=drop, inplace=inplace, col_level=col_level, col_fill=col_fill
+    )
+    got = gdf.reset_index(
+        drop=drop, inplace=inplace, col_level=col_level, col_fill=col_fill
+    )
+    if inplace:
+        expect = pdf
+        got = gdf
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -8722,103 +8794,6 @@ def test_dataframe_init_from_series(data, columns, index):
         actual,
         check_index_type=False if len(expected) == 0 else True,
     )
-
-
-@pytest.mark.parametrize(
-    "data, expected",
-    [
-        ({"a": [1, 2, 3, 4], "b": [5, 6, 7, 8], "c": [1.2, 1, 2, 3]}, False),
-        ({"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}, True),
-        ({"a": ["a", "b", "c"], "b": [4, 5, 6], "c": [7, 8, 9]}, False),
-        ({"a": [True, False, False], "b": [False, False, True]}, True),
-        ({"a": [True, False, False]}, True),
-        ({"a": [[1, 2], [3, 4]]}, True),
-        ({"a": [[1, 2], [3, 4]], "b": ["a", "b"]}, False),
-        ({"a": [{"c": 5}, {"e": 5}], "b": [{"c": 5}, {"g": 7}]}, True),
-        ({}, True),
-    ],
-)
-def test_is_homogeneous_dataframe(data, expected):
-    actual = cudf.DataFrame(data)._is_homogeneous
-
-    assert actual == expected
-
-
-@pytest.mark.parametrize(
-    "data, indexes, expected",
-    [
-        (
-            {"a": [1, 2, 3, 4], "b": [5, 6, 7, 8], "c": [1.2, 1, 2, 3]},
-            ["a", "b"],
-            True,
-        ),
-        (
-            {
-                "a": [1, 2, 3, 4],
-                "b": [5, 6, 7, 8],
-                "c": [1.2, 1, 2, 3],
-                "d": ["hello", "world", "cudf", "rapids"],
-            },
-            ["a", "b"],
-            False,
-        ),
-        (
-            {
-                "a": ["a", "b", "c"],
-                "b": [4, 5, 6],
-                "c": [7, 8, 9],
-                "d": [1, 2, 3],
-            },
-            ["a", "b"],
-            True,
-        ),
-    ],
-)
-def test_is_homogeneous_multiIndex_dataframe(data, indexes, expected):
-    test_dataframe = cudf.DataFrame(data).set_index(indexes)
-    actual = cudf.DataFrame(test_dataframe)._is_homogeneous
-
-    assert actual == expected
-
-
-@pytest.mark.parametrize(
-    "data, expected", [([1, 2, 3, 4], True), ([True, False], True)]
-)
-def test_is_homogeneous_series(data, expected):
-    actual = cudf.Series(data)._is_homogeneous
-
-    assert actual == expected
-
-
-@pytest.mark.parametrize(
-    "levels, codes, expected",
-    [
-        (
-            [["lama", "cow", "falcon"], ["speed", "weight", "length"]],
-            [[0, 0, 0, 1, 1, 1, 2, 2, 2], [0, 1, 2, 0, 1, 2, 0, 1, 2]],
-            True,
-        ),
-        (
-            [[1, 2, 3], [True, False, True]],
-            [[0, 0, 0, 1, 1, 1, 2, 2, 2], [0, 1, 2, 0, 1, 2, 0, 1, 2]],
-            False,
-        ),
-    ],
-)
-def test_is_homogeneous_multiIndex(levels, codes, expected):
-    actual = cudf.MultiIndex(levels=levels, codes=codes)._is_homogeneous
-
-    assert actual == expected
-
-
-@pytest.mark.parametrize(
-    "data, expected",
-    [([1, 2, 3], True), (["Hello", "World"], True), ([True, False], True)],
-)
-def test_is_homogeneous_index(data, expected):
-    actual = cudf.Index(data)._is_homogeneous
-
-    assert actual == expected
 
 
 def test_frame_series_where():
