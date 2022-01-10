@@ -1235,7 +1235,7 @@ class GroupBy(Serializable):
 
         result = self.obj.__class__._from_data(
             *self._groupby.shift(
-                cudf.core.frame.Frame(value_columns), periods, fill_value
+                cudf.core.frame.Frame(value_columns._data), periods, fill_value
             )
         )
         result = self._mimic_pandas_order(result)
@@ -1344,7 +1344,7 @@ class DataFrameGroupBy(GroupBy, GetAttrGetItemMixin):
 
     def __getitem__(self, key):
         return self.obj[key].groupby(
-            self.grouping, dropna=self._dropna, sort=self._sort
+            by=self.grouping.keys, dropna=self._dropna, sort=self._sort
         )
 
     def nunique(self):

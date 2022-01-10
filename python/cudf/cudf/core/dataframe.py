@@ -58,6 +58,7 @@ from cudf.core.indexed_frame import (
     _FrameIndexer,
     _get_label_range_or_mask,
     _indices_from_labels,
+    doc_reset_index_template,
 )
 from cudf.core.multiindex import MultiIndex
 from cudf.core.resample import DataFrameResampler
@@ -2429,29 +2430,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         df.index = idx
         return df if not inplace else None
 
-    def reset_index(
-        self, level=None, drop=False, inplace=False, col_level=0, col_fill=""
-    ):
-        """
-        Reset the index.
-
-        Reset the index of the DataFrame, and use the default one instead.
-
-        Parameters
-        ----------
-        drop : bool, default False
-            Do not try to insert index into dataframe columns. This resets
-            the index to the default integer index.
-        inplace : bool, default False
-            Modify the DataFrame in place (do not create a new object).
-
-        Returns
-        -------
-        DataFrame or None
-            DataFrame with the new index or None if ``inplace=True``.
-
-        Examples
-        --------
+    @docutils.doc_apply(
+        doc_reset_index_template.format(
+            klass="DataFrame",
+            argument="",
+            return_type="DataFrame or None",
+            return_doc="",
+            example="""
         >>> df = cudf.DataFrame([('bird', 389.0),
         ...                    ('bird', 24.0),
         ...                    ('mammal', 80.5),
@@ -2476,45 +2461,51 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
         1    bird      24.0
         2  mammal      80.5
         3  mammal      <NA>
-        """
-        if level is not None:
-            raise NotImplementedError("level parameter is not supported yet.")
 
-        if col_level != 0:
-            raise NotImplementedError(
-                "col_level parameter is not supported yet."
-            )
+        You can also use ``reset_index`` with MultiIndex.
 
-        if col_fill != "":
-            raise NotImplementedError(
-                "col_fill parameter is not supported yet."
-            )
-
-        result = self if inplace else self.copy()
-
-        if not drop:
-            if isinstance(self.index, MultiIndex):
-                names = tuple(
-                    name if name is not None else f"level_{i}"
-                    for i, name in enumerate(self.index.names)
+        >>> index = cudf.MultiIndex.from_tuples([('bird', 'falcon'),
+        ...                                     ('bird', 'parrot'),
+        ...                                     ('mammal', 'lion'),
+        ...                                     ('mammal', 'monkey')],
+        ...                                     names=['class', 'name'])
+        >>> df = cudf.DataFrame([(389.0, 'fly'),
+        ...                      ( 24.0, 'fly'),
+        ...                      ( 80.5, 'run'),
+        ...                      (np.nan, 'jump')],
+        ...                      index=index,
+        ...                      columns=('speed', 'type'))
+        >>> df
+                       speed  type
+        class  name
+        bird   falcon  389.0   fly
+               parrot   24.0   fly
+        mammal lion     80.5   run
+               monkey   <NA>  jump
+        >>> df.reset_index(level='class')
+                 class  speed  type
+        name
+        falcon    bird  389.0   fly
+        parrot    bird   24.0   fly
+        lion    mammal   80.5   run
+        monkey  mammal   <NA>  jump
+        """,
+        )
+    )
+    def reset_index(
+        self, level=None, drop=False, inplace=False, col_level=0, col_fill=""
+    ):
+        return self._mimic_inplace(
+            DataFrame._from_data(
+                *self._reset_index(
+                    level=level,
+                    drop=drop,
+                    col_level=col_level,
+                    col_fill=col_fill,
                 )
-            else:
-                if self.index.name is None:
-                    if "index" in self._data.names:
-                        names = ("level_0",)
-                    else:
-                        names = ("index",)
-                else:
-                    names = (self.index.name,)
-
-            index_columns = self.index._data.columns
-            for name, index_column in zip(
-                reversed(names), reversed(index_columns)
-            ):
-                result.insert(0, name, index_column)
-        result.index = RangeIndex(len(self))
-        if not inplace:
-            return result
+            ),
+            inplace=inplace,
+        )
 
     def take(self, indices, axis=0, keep_index=None):
         axis = self._get_axis_from_axis_arg(axis)
@@ -4078,45 +4069,6 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             tpb=tpb,
         )
 
-    def hash_values(self, method="murmur3"):
-        """Compute the hash of values in each row.
-
-        Parameters
-        ----------
-        method : {'murmur3', 'md5'}, default 'murmur3'
-            Hash function to use:
-            * murmur3: MurmurHash3 hash function.
-            * md5: MD5 hash function.
-
-        Returns
-        -------
-        Series
-            A Series with hash values.
-
-        Examples
-        --------
-        >>> import cudf
-        >>> df = cudf.DataFrame({"a": [10, 120, 30], "b": [0.0, 0.25, 0.50]})
-        >>> df
-             a     b
-        0   10  0.00
-        1  120  0.25
-        2   30  0.50
-        >>> df.hash_values(method="murmur3")
-        0    -330519225
-        1    -397962448
-        2   -1345834934
-        dtype: int32
-        >>> df.hash_values(method="md5")
-        0    57ce879751b5169c525907d5c563fae1
-        1    948d6221a7c4963d4be411bcead7e32b
-        2    fe061786ea286a515b772d91b0dfcd70
-        dtype: object
-        """
-        return Series._from_data(
-            {None: self._hash(method=method)}, index=self.index
-        )
-
     def partition_by_hash(self, columns, nparts, keep_index=True):
         """Partition the dataframe by the hashed value of data in *columns*.
 
@@ -4140,7 +4092,13 @@ class DataFrame(IndexedFrame, Serializable, GetAttrGetItemMixin):
             else self._index._num_columns
         )
         key_indices = [self._data.names.index(k) + idx for k in columns]
-        outdf, offsets = self._hash_partition(key_indices, nparts, keep_index)
+
+        output_data, output_index, offsets = libcudf.hash.hash_partition(
+            self, key_indices, nparts, keep_index
+        )
+        outdf = self.__class__._from_data(output_data, output_index)
+        outdf._copy_type_metadata(self, include_index=keep_index)
+
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
