@@ -1804,10 +1804,11 @@ std::unique_ptr<table> convert_from_rows(lists_column_view const &input,
 
   // only ever get a single batch when going from rows, so boundaries
   // are 0, num_rows
-  device_uvector<size_type> gpu_batch_row_boundaries(2, stream);
+  constexpr auto num_batches = 2;
+  device_uvector<size_type> gpu_batch_row_boundaries(num_batches, stream);
 
   thrust::transform(rmm::exec_policy(stream), thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(2), gpu_batch_row_boundaries.begin(),
+                    thrust::make_counting_iterator(num_batches), gpu_batch_row_boundaries.begin(),
                     [num_rows] __device__(auto i) { return i == 0 ? 0 : num_rows; });
 
   int info_count = 0;
