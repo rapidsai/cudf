@@ -23,7 +23,6 @@
 #include <cudf/fixed_point/fixed_point.hpp>
 #include <cudf/fixed_point/temporary.hpp>
 #include <cudf/round.hpp>
-#include <cudf/scalar/scalar.hpp>
 #include <cudf/scalar/scalar_factories.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/error.hpp>
@@ -32,6 +31,7 @@
 #include <rmm/cuda_stream_view.hpp>
 #include <rmm/exec_policy.hpp>
 
+#include <cudf/detail/fill.hpp>
 #include <type_traits>
 
 namespace cudf {
@@ -253,13 +253,22 @@ std::unique_ptr<column> round_with(column_view const& input,
     result_type, input.size(), copy_bitmask(input, stream, mr), input.null_count(), stream, mr);
 
   auto out_view = result->mutable_view();
-  Type const n  = std::pow(10, std::abs(decimal_places + input.type().scale()));
 
-  thrust::transform(rmm::exec_policy(stream),
-                    input.begin<Type>(),
-                    input.end<Type>(),
-                    out_view.begin<Type>(),
-                    FixedPointRoundFunctor{n});
+  auto const scale_movement = -decimal_places - input.type().scale();
+  // If scale_movement is larger than max precision of current type, the pow operation will
+  // overflow. Under this circumstance, we can simply output a zero column because no digits can
+  // survive such a large scale movement.
+  if (scale_movement > cuda::std::numeric_limits<Type>::digits10) {
+    auto zero_scalar = make_fixed_point_scalar<T>(0, scale_type{-decimal_places});
+    detail::fill_in_place(out_view, 0, out_view.size(), *zero_scalar, stream);
+  } else {
+    Type const n = std::pow(10, scale_movement);
+    thrust::transform(rmm::exec_policy(stream),
+                      input.begin<Type>(),
+                      input.end<Type>(),
+                      out_view.begin<Type>(),
+                      FixedPointRoundFunctor{n});
+  }
 
   return result;
 }
