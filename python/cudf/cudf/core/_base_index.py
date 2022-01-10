@@ -1437,6 +1437,16 @@ class BaseIndex(Serializable):
         result._copy_type_metadata(self)
         return result
 
+    def _split_columns_by_levels(self, levels):
+        if isinstance(levels, int) and levels > 0:
+            raise ValueError(f"Out of bound level: {levels}")
+        return (
+            [self._data[self.name]],
+            [],
+            ["index" if self.name is None else self.name],
+            [],
+        )
+
 
 def _get_result_name(left_name, right_name):
     if left_name == right_name:

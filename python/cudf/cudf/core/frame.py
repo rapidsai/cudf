@@ -150,8 +150,8 @@ class Frame:
         n_index_columns = 0
         if index_names is not None:
             n_index_columns = len(index_names)
-            index = cudf.core.index._index_from_data(
-                dict(zip(range(n_index_columns), columns))
+            index = cudf.core.index._index_from_columns(
+                columns[:n_index_columns]
             )
             if isinstance(index, cudf.MultiIndex):
                 index.names = index_names
