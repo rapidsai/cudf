@@ -515,7 +515,9 @@ cdef class ParquetWriter:
                 table[name]._column, self.tbl_meta.get().column_metadata[i]
             )
 
-        index = False if isinstance(table._index, cudf.RangeIndex) else self.index
+        index = (
+            False if isinstance(table._index, cudf.RangeIndex) else self.index
+        )
         pandas_metadata = generate_pandas_metadata(table, index)
         cdef map[string, string] tmp_user_data
         tmp_user_data[str.encode("pandas")] = str.encode(pandas_metadata)
