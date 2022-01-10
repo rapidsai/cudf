@@ -1627,6 +1627,31 @@ def test_parquet_partitioned(tmpdir_factory, cols, filename):
                 assert fn == filename
 
 
+def test_parquet_writer_chunked_partitioned(tmpdir_factory):
+    pdf_dir = str(tmpdir_factory.mktemp("pdf_dir"))
+    gdf_dir = str(tmpdir_factory.mktemp("gdf_dir"))
+
+    df1 = cudf.DataFrame({"a": [1, 1, 2, 2, 1], "b": [9, 8, 7, 6, 5]})
+    df2 = cudf.DataFrame({"a": [1, 3, 3, 1, 3], "b": [4, 3, 2, 1, 0]})
+
+    cw = ParquetWriter(gdf_dir, partition_cols=["a"], index=False)
+    cw.write_table(df1)
+    cw.write_table(df2)
+    cw.close(metadata_file_path=True)
+
+    pdf = cudf.concat([df1, df2]).to_pandas()
+    pdf.to_parquet(pdf_dir, index=False, partition_cols=["a"])
+
+    # Read back with pandas to compare
+    expect_pd = pd.read_parquet(pdf_dir)
+    got_pd = pd.read_parquet(gdf_dir)
+    assert_eq(expect_pd, got_pd)
+
+    # Check that cudf and pd return the same read
+    got_cudf = cudf.read_parquet(gdf_dir)
+    assert_eq(got_pd, got_cudf)
+
+
 @pytest.mark.parametrize("cols", [None, ["b"]])
 def test_parquet_write_to_dataset(tmpdir_factory, cols):
     dir1 = tmpdir_factory.mktemp("dir1")
