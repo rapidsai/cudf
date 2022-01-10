@@ -77,6 +77,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         size_t get_row_group_size_bytes() except+
         size_type get_row_group_size_rows() except+
 
+        void set_partitions(
+            vector[cudf_io_types.partition_info] partitions
+        ) except +
         void set_metadata(
             cudf_io_types.table_input_metadata *m
         ) except +
@@ -107,6 +110,9 @@ cdef extern from "cudf/io/parquet.hpp" namespace "cudf::io" nogil:
         parquet_writer_options_builder(
             cudf_io_types.sink_info sink_,
             cudf_table_view.table_view table_
+        ) except +
+        parquet_writer_options_builder& partitions(
+            vector[cudf_io_types.partition_info] partitions
         ) except +
         parquet_writer_options_builder& metadata(
             cudf_io_types.table_input_metadata *m
