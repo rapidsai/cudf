@@ -913,5 +913,5 @@ def is_decimal128_dtype(obj):
             isinstance(obj, str)
             and obj == cudf.core.dtypes.Decimal128Dtype.name
         )
-        or (hasattr(obj, "dtype") and is_decimal64_dtype(obj.dtype))
+        or (hasattr(obj, "dtype") and is_decimal128_dtype(obj.dtype))
     )

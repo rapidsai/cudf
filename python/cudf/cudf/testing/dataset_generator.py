@@ -384,6 +384,22 @@ def rand_dataframe(
                     dtype=dtype,
                 )
             )
+        elif dtype == "decimal128":
+            max_precision = meta.get(
+                "max_precision", cudf.Decimal128Dtype.MAX_PRECISION
+            )
+            precision = np.random.randint(1, max_precision)
+            scale = np.random.randint(0, precision)
+            dtype = cudf.Decimal128Dtype(precision=precision, scale=scale)
+            column_params.append(
+                ColumnParameters(
+                    cardinality=cardinality,
+                    null_frequency=null_frequency,
+                    generator=decimal_generator(dtype=dtype, size=cardinality),
+                    is_sorted=False,
+                    dtype=dtype,
+                )
+            )
         elif dtype == "category":
             column_params.append(
                 ColumnParameters(

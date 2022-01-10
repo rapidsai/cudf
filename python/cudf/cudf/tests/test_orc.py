@@ -24,6 +24,7 @@ from cudf.testing._utils import (
 )
 
 
+# TODO: PREM
 @pytest.fixture(scope="module")
 def datadir(datadir):
     return datadir / "orc"
@@ -527,12 +528,6 @@ def test_orc_decimal_precision_fail(datadir):
         orcfile = pa.orc.ORCFile(file_path)
     except pa.ArrowIOError as e:
         pytest.skip(".orc file is not found: %s" % e)
-
-    # Max precision supported is 18 (Decimal64Dtype limit)
-    # and the data has the precision 19. This test should be removed
-    # once Decimal128Dtype is introduced.
-    with pytest.raises(RuntimeError):
-        cudf.read_orc(file_path)
 
     # Shouldn't cause failure if decimal column is not chosen to be read.
     pdf = orcfile.read(columns=["int"]).to_pandas()

@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+# TODO: PREM
 import cudf as gd
 from cudf.api.types import is_categorical_dtype
 from cudf.core.dtypes import Decimal64Dtype
@@ -1358,7 +1359,15 @@ def test_concat_single_object(ignore_index, typ):
 
 
 @pytest.mark.parametrize("ltype", [Decimal64Dtype(3, 1), Decimal64Dtype(7, 2)])
-@pytest.mark.parametrize("rtype", [Decimal64Dtype(3, 2), Decimal64Dtype(8, 4)])
+@pytest.mark.parametrize(
+    "rtype",
+    [
+        Decimal64Dtype(3, 2),
+        Decimal64Dtype(8, 4),
+        gd.Decimal128Dtype(3, 2),
+        gd.Decimal32Dtype(8, 4),
+    ],
+)
 def test_concat_decimal_dataframe(ltype, rtype):
     gdf1 = gd.DataFrame(
         {"id": np.random.randint(0, 10, 3), "val": ["22.3", "59.5", "81.1"]}

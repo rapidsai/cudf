@@ -2147,6 +2147,7 @@ def test_quantile(q, numeric_only):
         )
 
 
+# TODO: PREM
 @pytest.mark.parametrize("q", [0.2, 1, 0.001, [0.5], [], [0.005, 0.8, 0.03]])
 @pytest.mark.parametrize("interpolation", ["higher", "lower", "nearest"])
 def test_decimal_quantile(q, interpolation):

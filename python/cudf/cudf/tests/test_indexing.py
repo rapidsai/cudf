@@ -1475,6 +1475,7 @@ def test_iloc_before_zero_terminate(arg, pobj):
     assert_eq(pobj.iloc[arg], gobj.iloc[arg])
 
 
+# TODO: PREM
 def test_iloc_decimal():
     sr = cudf.Series(["1.00", "2.00", "3.00", "4.00"]).astype(
         cudf.Decimal64Dtype(scale=2, precision=3)

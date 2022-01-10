@@ -8,6 +8,7 @@ import random
 from io import BytesIO
 from string import ascii_letters
 
+# TODO: PREM
 import cupy
 import numpy as np
 import pandas as pd
@@ -629,29 +630,19 @@ def test_parquet_reader_spark_timestamps(datadir):
 def test_parquet_reader_spark_decimals(datadir):
     fname = datadir / "spark_decimal.parquet"
 
-    # expect = pd.read_parquet(fname)
-    with pytest.raises(
-        NotImplementedError,
-        match="Decimal type greater than Decimal64 is not yet supported",
-    ):
-        cudf.read_parquet(fname)
+    expect = pd.read_parquet(fname)
+    got = cudf.read_parquet(fname)
 
-    # Convert the decimal dtype from PyArrow to float64 for comparison to cuDF
-    # This is because cuDF returns as float64 as it lacks an equivalent dtype
-    # expect = expect.apply(pd.to_numeric)
-
-    # np.testing.assert_allclose(expect, got)
-    # assert_eq(expect, got)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize("columns", [["a"], ["b", "a"], None])
-def test_parquet_reader_decimal128_error_validation(datadir, columns):
+def test_parquet_reader_decimal128(datadir, columns):
     fname = datadir / "nested_decimal128_file.parquet"
-    with pytest.raises(
-        NotImplementedError,
-        match="Decimal type greater than Decimal64 is not yet supported",
-    ):
-        cudf.read_parquet(fname, columns=columns)
+    got = cudf.read_parquet(fname, columns=columns)
+    expect = cudf.read_parquet(fname, columns=columns)
+
+    assert_eq(expect, got)
 
 
 def test_parquet_reader_microsecond_timestamps(datadir):

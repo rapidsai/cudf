@@ -134,6 +134,7 @@ class _SeriesIlocIndexer(_FrameIndexer):
             not isinstance(
                 self._frame._column.dtype,
                 (
+                    cudf.Decimal128Dtype,
                     cudf.Decimal64Dtype,
                     cudf.Decimal32Dtype,
                     cudf.CategoricalDtype,
@@ -1448,7 +1449,7 @@ class Series(SingleColumnFrame, IndexedFrame, Serializable):
 
         col = concat_columns([o._column for o in objs])
 
-        if isinstance(col, cudf.core.column.Decimal64Column):
+        if isinstance(col, cudf.core.column.DecimalBaseColumn):
             col = col._with_type_metadata(objs[0]._column.dtype)
 
         if isinstance(col, cudf.core.column.StructColumn):

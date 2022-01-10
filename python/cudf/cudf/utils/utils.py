@@ -1,4 +1,4 @@
-# Copyright (c) 2020-2021, NVIDIA CORPORATION.
+# Copyright (c) 2020-2022, NVIDIA CORPORATION.
 
 import decimal
 import functools
@@ -58,7 +58,7 @@ def scalar_broadcast_to(scalar, size, dtype=None):
 
     if isinstance(scalar, decimal.Decimal):
         if dtype is None:
-            dtype = cudf.Decimal64Dtype._from_decimal(scalar)
+            dtype = cudf.Decimal128Dtype._from_decimal(scalar)
 
         out_col = column.column_empty(size, dtype=dtype)
         if out_col.size != 0:

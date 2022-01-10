@@ -295,8 +295,6 @@ class ColumnBase(Column, Serializable):
             array.type, pd.core.arrays._arrow_utils.ArrowIntervalType
         ):
             return cudf.core.column.IntervalColumn.from_arrow(array)
-        # elif isinstance(array.type, pa.Decimal128Type):
-        #     return cudf.core.column.Decimal128Column.from_arrow(array)
 
         result = libcudf.interop.from_arrow(data, data.column_names)[0]["None"]
 
@@ -985,6 +983,11 @@ class ColumnBase(Column, Serializable):
     def as_decimal_column(
         self, dtype: Dtype, **kwargs
     ) -> Union["cudf.core.column.decimal.DecimalBaseColumn"]:
+        raise NotImplementedError
+
+    def as_decimal128_column(
+        self, dtype: Dtype, **kwargs
+    ) -> "cudf.core.column.Decimal128Column":
         raise NotImplementedError
 
     def as_decimal64_column(
@@ -2102,6 +2105,16 @@ def as_column(
                             ),
                         )
                         return cudf.core.column.Decimal32Column.from_arrow(
+                            data
+                        )
+                    if isinstance(dtype, cudf.core.dtypes.Decimal128Dtype):
+                        data = pa.array(
+                            arbitrary,
+                            type=pa.decimal128(
+                                precision=dtype.precision, scale=dtype.scale
+                            ),
+                        )
+                        return cudf.core.column.Decimal128Column.from_arrow(
                             data
                         )
                     if is_bool_dtype(dtype):

@@ -9,7 +9,9 @@ import cudf
 from cudf.core.column import ColumnBase
 from cudf.core.dtypes import (
     CategoricalDtype,
+    Decimal32Dtype,
     Decimal64Dtype,
+    Decimal128Dtype,
     IntervalDtype,
     ListDtype,
     StructDtype,
@@ -138,12 +140,14 @@ def test_struct_dtype_fields(fields):
     assert_eq(dt.fields, fields)
 
 
+# TODO: PREM
 def test_decimal_dtype():
     dt = Decimal64Dtype(4, 2)
     assert dt.to_arrow() == pa.decimal128(4, 2)
     assert dt == Decimal64Dtype.from_arrow(pa.decimal128(4, 2))
 
 
+# TODO: PREM
 def test_max_precision():
     Decimal64Dtype(scale=0, precision=18)
     with pytest.raises(ValueError):
@@ -180,7 +184,9 @@ def assert_column_array_dtype_equal(column: ColumnBase, array: pa.array):
                 for i, child in enumerate(column.base_children)
             ]
         )
-    elif isinstance(column.dtype, Decimal64Dtype):
+    elif isinstance(
+        column.dtype, (Decimal128Dtype, Decimal64Dtype, Decimal32Dtype)
+    ):
         return array.type.equals(column.dtype.to_arrow())
     elif isinstance(column.dtype, CategoricalDtype):
         raise NotImplementedError()

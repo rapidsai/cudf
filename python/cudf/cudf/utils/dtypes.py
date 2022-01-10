@@ -164,6 +164,7 @@ def _find_common_type_decimal(dtypes):
     lhs = max([dtype.precision - dtype.scale for dtype in dtypes])
     # Combine to get the necessary precision and clip at the maximum
     # precision
+    # TODO : PREM
     p = min(cudf.Decimal64Dtype.MAX_PRECISION, s + lhs)
     return cudf.Decimal64Dtype(p, s)
 
@@ -212,7 +213,7 @@ def cudf_dtype_from_pa_type(typ):
     elif pa.types.is_struct(typ):
         return cudf.core.dtypes.StructDtype.from_arrow(typ)
     elif pa.types.is_decimal(typ):
-        return cudf.core.dtypes.Decimal64Dtype.from_arrow(typ)
+        return cudf.core.dtypes.Decimal128Dtype.from_arrow(typ)
     else:
         return cudf.api.types.pandas_dtype(typ.to_pandas_dtype())
 
@@ -588,6 +589,7 @@ def _can_cast(from_dtype, to_dtype):
 
     # TODO : Add precision & scale checking for
     # decimal types in future
+    # TODO: PREM
     if isinstance(from_dtype, cudf.core.dtypes.Decimal64Dtype):
         if isinstance(to_dtype, cudf.core.dtypes.Decimal64Dtype):
             return True
