@@ -686,7 +686,6 @@ class GroupBy(Serializable):
 
         """
         try:
-            # first, try aggregating:
             result = self.agg(function)
         except TypeError as e:
             raise NotImplementedError(

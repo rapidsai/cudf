@@ -224,7 +224,7 @@ Limitations
  Transform
 ---------
 
-The `.transform()` method aggregates per group, and broadcasts the
+The ``.transform()`` method aggregates per group, and broadcasts the
 result to the group size, resulting in a Series/DataFrame that is of
 the same size as the input Series/DataFrame.
 
