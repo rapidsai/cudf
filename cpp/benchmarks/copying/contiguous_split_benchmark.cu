@@ -36,10 +36,15 @@ void BM_contiguous_split_common(benchmark::State& state,
   // generate splits
   std::vector<cudf::size_type> splits;
   if (num_splits > 0) {
-    cudf::size_type split_stride = num_rows / num_splits;
-    for (int idx = 0; idx < num_rows; idx += split_stride) {
-      splits.push_back(std::min(idx + split_stride, static_cast<cudf::size_type>(num_rows)));
-    }
+    cudf::size_type const split_stride = num_rows / num_splits;
+    auto iter                          = thrust::make_counting_iterator(1);
+    splits.reserve(num_splits);
+    std::transform(iter,
+                   iter + num_splits,
+                   std::back_inserter(splits),
+                   [split_stride, num_rows](cudf::size_type i) {
+                     return std::min(i * split_stride, static_cast<cudf::size_type>(num_rows));
+                   });
   }
 
   std::vector<std::unique_ptr<cudf::column>> columns(src_cols.size());

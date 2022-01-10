@@ -732,10 +732,7 @@ struct dst_offset_output_iterator {
   using reference         = std::size_t&;
   using iterator_category = thrust::output_device_iterator_tag;
 
-  dst_offset_output_iterator operator+ __host__ __device__(int i)
-  {
-    return dst_offset_output_iterator{c + i};
-  }
+  dst_offset_output_iterator operator+ __host__ __device__(int i) { return {c + i}; }
 
   void operator++ __host__ __device__() { c++; }
 
@@ -817,26 +814,26 @@ void copy_data(int num_bufs,
   // them into much smaller chunks in order to drive up the number of blocks and overall occupancy.
   auto const desired_chunk_size = size_t{1 * 1024 * 1024};
   rmm::device_uvector<thrust::pair<size_t, size_t>> chunks(num_bufs, stream);
-  thrust::transform(rmm::exec_policy(stream),
-                    _d_dst_buf_info,
-                    _d_dst_buf_info + num_bufs,
-                    chunks.begin(),
-                    [desired_chunk_size] __device__(dst_buf_info const& buf) {
-                      // how many chunks do we want to subdivide this buffer into
-                      size_t const bytes = buf.num_elements * buf.element_size;
+  thrust::transform(
+    rmm::exec_policy(stream),
+    _d_dst_buf_info,
+    _d_dst_buf_info + num_bufs,
+    chunks.begin(),
+    [desired_chunk_size] __device__(dst_buf_info const& buf) -> thrust::pair<size_t, size_t> {
+      // how many chunks do we want to subdivide this buffer into
+      size_t const bytes = buf.num_elements * buf.element_size;
 
-                      // can happen for things like lists and strings (the root columns store no
-                      // data)
-                      if (bytes == 0) { return thrust::pair<size_t, size_t>{1, 0}; }
-                      size_t const num_chunks =
-                        max(size_t{1},
-                            util::round_up_unsafe(bytes, desired_chunk_size) / desired_chunk_size);
+      // can happen for things like lists and strings (the root columns store no
+      // data)
+      if (bytes == 0) { return {1, 0}; }
+      size_t const num_chunks =
+        max(size_t{1}, util::round_up_unsafe(bytes, desired_chunk_size) / desired_chunk_size);
 
-                      // NOTE: leaving chunk size as a separate parameter for future tuning
-                      // possibilities, even though in the current implemenetation it will be a
-                      // constant.
-                      return thrust::pair<size_t, size_t>{num_chunks, desired_chunk_size};
-                    });
+      // NOTE: leaving chunk size as a separate parameter for future tuning
+      // possibilities, even though in the current implemenetation it will be a
+      // constant.
+      return {num_chunks, desired_chunk_size};
+    });
 
   rmm::device_uvector<offset_type> chunk_offsets(num_bufs + 1, stream);
   auto buf_count_iter = cudf::detail::make_counting_transform_iterator(
