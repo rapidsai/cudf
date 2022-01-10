@@ -244,31 +244,18 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 f"Unsupported input arguments passed : {list(kwargs.keys())}"
             )
 
-        sort_kwargs = {
-            "by": by,
-            "ascending": ascending,
-            "na_position": na_position,
-        }
-        if sort_function is None:
-            sort_function = M.sort_values
-        if sort_function_kwargs is not None:
-            sort_kwargs.update(sort_function_kwargs)
-
-        if self.npartitions == 1:
-            df = self.map_partitions(sort_function, **sort_kwargs)
-        else:
-            df = sorting.sort_values(
-                self,
-                by,
-                max_branch=max_branch,
-                divisions=divisions,
-                set_divisions=set_divisions,
-                ignore_index=ignore_index,
-                ascending=ascending,
-                na_position=na_position,
-                sort_function=sort_function,
-                sort_function_kwargs=sort_kwargs,
-            )
+        df = sorting.sort_values(
+            self,
+            by,
+            max_branch=max_branch,
+            divisions=divisions,
+            set_divisions=set_divisions,
+            ignore_index=ignore_index,
+            ascending=ascending,
+            na_position=na_position,
+            sort_function=sort_function,
+            sort_function_kwargs=sort_function_kwargs,
+        )
 
         if ignore_index:
             return df.reset_index(drop=True)

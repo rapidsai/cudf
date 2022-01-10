@@ -10,6 +10,7 @@ from dask.dataframe import methods
 from dask.dataframe.core import DataFrame, Index, Series
 from dask.dataframe.shuffle import rearrange_by_column
 from dask.highlevelgraph import HighLevelGraph
+from dask.utils import M
 
 import cudf as gd
 from cudf.api.types import is_categorical_dtype
@@ -235,6 +236,21 @@ def sort_values(
         by = list(by)
     elif not isinstance(by, list):
         by = [by]
+
+    # parse custom sort function / kwargs if provided
+    sort_kwargs = {
+        "by": by,
+        "ascending": ascending,
+        "na_position": na_position,
+    }
+    if sort_function is None:
+        sort_function = M.sort_values
+    if sort_function_kwargs is not None:
+        sort_kwargs.update(sort_function_kwargs)
+
+    # handle single partition case
+    if npartitions == 1:
+        return df.map_partitions(sort_function, **sort_kwargs)
 
     # Step 1 - Calculate new divisions (if necessary)
     if divisions is None:
